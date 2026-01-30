@@ -149,32 +149,31 @@ class ClipboardManager {
     const platform = process.platform;
     let method = "unknown";
 
+    debugLogger.info("pasteText called", { textLength: text.length, textPreview: text.substring(0, 50) }, "clipboard");
+
     try {
       // Save original clipboard content first
       const originalClipboard = clipboard.readText();
-      this.safeLog(
-        "💾 Saved original clipboard content:",
-        originalClipboard.substring(0, 50) + "..."
-      );
+      debugLogger.debug("Original clipboard saved", { contentPreview: originalClipboard.substring(0, 50) }, "clipboard");
 
       // Copy text to clipboard first - this always works
       clipboard.writeText(text);
-      this.safeLog("📋 Text copied to clipboard:", text.substring(0, 50) + "...");
+      debugLogger.debug("Text written to clipboard", { textPreview: text.substring(0, 50) }, "clipboard");
 
       if (platform === "darwin") {
         method = "applescript";
         // Check accessibility permissions first
-        this.safeLog("🔍 Checking accessibility permissions for paste operation...");
+        debugLogger.debug("Checking accessibility permissions", {}, "clipboard");
         const hasPermissions = await this.checkAccessibilityPermissions();
 
         if (!hasPermissions) {
-          this.safeLog("⚠️ No accessibility permissions - text copied to clipboard only");
+          debugLogger.warn("No accessibility permissions", {}, "clipboard");
           const errorMsg =
             "Accessibility permissions required for automatic pasting. Text has been copied to clipboard - please paste manually with Cmd+V.";
           throw new Error(errorMsg);
         }
 
-        this.safeLog("✅ Permissions granted, attempting to paste...");
+        debugLogger.info("Permissions granted, calling pasteMacOS", {}, "clipboard");
         await this.pasteMacOS(originalClipboard);
       } else if (platform === "win32") {
         const nircmdPath = this.getNircmdPath();
@@ -204,11 +203,15 @@ class ClipboardManager {
   }
 
   async pasteMacOS(originalClipboard) {
+    debugLogger.debug("pasteMacOS started", { pasteDelay: PASTE_DELAY_MS }, "clipboard");
     return new Promise((resolve, reject) => {
       setTimeout(() => {
+        debugLogger.debug("Spawning osascript for Cmd+V (key code 9)", {}, "clipboard");
+        // Use key code 9 (physical V key) instead of keystroke "v"
+        // This works regardless of keyboard layout (Russian, etc.)
         const pasteProcess = spawn("osascript", [
           "-e",
-          'tell application "System Events" to keystroke "v" using command down',
+          'tell application "System Events" to key code 9 using command down',
         ]);
 
         let errorOutput = "";
@@ -227,15 +230,18 @@ class ClipboardManager {
           // Clean up the process reference
           pasteProcess.removeAllListeners();
 
+          debugLogger.debug("osascript process closed", { code, errorOutput }, "clipboard");
+
           if (code === 0) {
-            this.safeLog("✅ Text pasted successfully via Cmd+V simulation");
+            debugLogger.info("Paste successful via Cmd+V simulation", {}, "clipboard");
             setTimeout(() => {
               clipboard.writeText(originalClipboard);
-              this.safeLog("🔄 Original clipboard content restored");
+              debugLogger.debug("Original clipboard restored", {}, "clipboard");
             }, 100);
             resolve();
           } else {
             const errorMsg = `Paste failed (code ${code}). Text is copied to clipboard - please paste manually with Cmd+V.`;
+            debugLogger.error("Paste failed", { code, errorOutput }, "clipboard");
             reject(new Error(errorMsg));
           }
         });
@@ -244,6 +250,7 @@ class ClipboardManager {
           if (hasTimedOut) return;
           clearTimeout(timeoutId);
           pasteProcess.removeAllListeners();
+          debugLogger.error("osascript spawn error", { error: error.message }, "clipboard");
           const errorMsg = `Paste command failed: ${error.message}. Text is copied to clipboard - please paste manually with Cmd+V.`;
           reject(new Error(errorMsg));
         });
