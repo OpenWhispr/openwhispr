@@ -157,8 +157,18 @@ export function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
 
   const modifiers: string[] = [];
 
-  if (e.ctrlKey || e.metaKey) {
-    modifiers.push("CommandOrControl");
+  // Distinguish between Control and Command (Meta) keys
+  // On macOS: Control = physical Ctrl key, Meta = Command key
+  // On Windows/Linux: Control = Ctrl key, Meta = Windows/Super key
+  const isMac = /Mac|Darwin/.test(navigator.platform);
+
+  if (e.metaKey) {
+    // Command key on macOS, Windows key on Windows/Linux
+    modifiers.push(isMac ? "Command" : "Super");
+  }
+  if (e.ctrlKey) {
+    // Control key - use explicit "Control" to avoid CommandOrControl mapping
+    modifiers.push("Control");
   }
   if (e.altKey) {
     modifiers.push("Alt");
