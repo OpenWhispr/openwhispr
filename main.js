@@ -54,9 +54,19 @@ function configureChannelUserDataPath() {
 
 configureChannelUserDataPath();
 
-// Enable native Wayland global shortcuts: https://github.com/electron/electron/pull/45171
+// Fix transparent window flickering on Linux: --enable-transparent-visuals requires
+// the compositor to set up an ARGB visual before any windows are created.
+// --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("enable-transparent-visuals");
+  app.commandLine.appendSwitch("disable-gpu-compositing");
+}
+
+// Enable native Wayland support: Ozone platform for native rendering,
+// and GlobalShortcutsPortal for global shortcuts via xdg-desktop-portal
 if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") {
-  app.commandLine.appendSwitch("enable-features", "GlobalShortcutsPortal");
+  app.commandLine.appendSwitch("ozone-platform-hint", "auto");
+  app.commandLine.appendSwitch("enable-features", "UseOzonePlatform,WaylandWindowDecorations,GlobalShortcutsPortal");
 }
 
 // Group all windows under single taskbar entry on Windows
@@ -800,6 +810,12 @@ if (gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    // On Linux, --enable-transparent-visuals requires a short delay before creating
+    // windows to allow the compositor to set up the ARGB visual correctly.
+    // Without this delay, transparent windows flicker on both X11 and Wayland.
+    const delay = process.platform === "linux" ? 300 : 0;
+    return new Promise((resolve) => setTimeout(resolve, delay));
+  }).then(() => {
     startApp().catch((error) => {
       console.error("Failed to start app:", error);
       dialog.showErrorBox(
