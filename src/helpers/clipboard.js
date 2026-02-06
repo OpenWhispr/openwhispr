@@ -613,6 +613,48 @@ class ClipboardManager {
         "yakuake",
       ];
 
+      // On GNOME Wayland, xdotool can't see native Wayland windows and returns
+      // OpenWhispr's own window instead. Use AT-SPI2 accessibility API first,
+      // which works for both native Wayland and XWayland windows.
+      if (isGnome && isWayland) {
+        try {
+          const atspiScript = `import gi
+gi.require_version('Atspi','2.0')
+from gi.repository import Atspi
+d=Atspi.get_desktop(0)
+skip={'gnome-shell',''}
+for i in range(d.get_child_count()):
+ a=d.get_child_at_index(i)
+ if not a:continue
+ n=a.get_name()
+ if n.lower() in skip:continue
+ for j in range(a.get_child_count()):
+  w=a.get_child_at_index(j)
+  if w and w.get_state_set().contains(Atspi.StateType.ACTIVE):
+   print(n.lower());raise SystemExit(0)`;
+          const result = spawnSync("python3", ["-c", atspiScript], {
+            timeout: 1000,
+            stdio: ["pipe", "pipe", "pipe"],
+          });
+          if (result.status === 0) {
+            const appName = result.stdout.toString().trim();
+            if (appName) {
+              const isTerminalWindow = terminalClasses.some((term) => appName.includes(term));
+              this.safeLog(
+                isTerminalWindow
+                  ? `🖥️ Terminal detected via AT-SPI2: ${appName}`
+                  : `🪟 Non-terminal detected via AT-SPI2: ${appName}`
+              );
+              return isTerminalWindow;
+            }
+          }
+        } catch {
+          // AT-SPI2 detection failed, continue to other methods
+        }
+      }
+
+      // xdotool window class detection (reliable on X11 and for XWayland apps
+      // on non-GNOME Wayland; skipped on GNOME Wayland where AT-SPI2 is used above)
       if (xdotoolWindowClass) {
         const isTerminalWindow = terminalClasses.some((term) => xdotoolWindowClass.includes(term));
         if (isTerminalWindow) {
@@ -666,6 +708,11 @@ class ClipboardManager {
       ? ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
       : ["key", "29:1", "47:1", "47:0", "29:0"];
 
+    // On GNOME Wayland, prefer ydotool over xdotool because xdotool can only
+    // interact with XWayland windows and may target the wrong window (e.g. OpenWhispr
+    // itself) while reporting success, preventing fallback to ydotool.
+    // ydotool uses the regular ydotoolArgs which respects terminal detection:
+    // Ctrl+Shift+V for detected terminals, Ctrl+V for everything else.
     const candidates = [
       ...(canUseWtype
         ? [
@@ -677,8 +724,15 @@ class ClipboardManager {
               : { cmd: "wtype", args: ["-M", "ctrl", "-k", "v", "-m", "ctrl"] },
           ]
         : []),
-      ...(canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : []),
-      ...(canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : []),
+      ...(isGnome && isWayland
+        ? [
+            ...(canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : []),
+            ...(canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : []),
+          ]
+        : [
+            ...(canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : []),
+            ...(canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : []),
+          ]),
     ];
 
     const available = candidates.filter((c) => this.commandExists(c.cmd));
