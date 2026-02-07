@@ -75,6 +75,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
    # ANTHROPIC_API_KEY=your_anthropic_key
    # GEMINI_API_KEY=your_gemini_key
    # GROQ_API_KEY=your_groq_key
+   # MISTRAL_API_KEY=your_mistral_key
    ```
    
    **Method B - In-app configuration**:
@@ -486,6 +487,9 @@ GEMINI_API_KEY=your_gemini_api_key_here
 
 # Optional: Groq API Configuration (ultra-fast inference)
 GROQ_API_KEY=your_groq_api_key_here
+
+# Optional: Mistral API Configuration (Voxtral transcription)
+MISTRAL_API_KEY=your_mistral_api_key_here
 
 # Optional: Debug mode
 DEBUG=false

@@ -77,6 +77,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
+    mistralApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
     dictationKey,
@@ -85,6 +86,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setDictationKey,
     setOpenaiApiKey,
     setGroqApiKey,
+    setMistralApiKey,
     updateTranscriptionSettings,
     preferredLanguage,
   } = useSettings();
@@ -454,6 +456,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               setOpenaiApiKey={setOpenaiApiKey}
               groqApiKey={groqApiKey}
               setGroqApiKey={setGroqApiKey}
+              mistralApiKey={mistralApiKey}
+              setMistralApiKey={setMistralApiKey}
               customTranscriptionApiKey={customTranscriptionApiKey}
               setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
               cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}

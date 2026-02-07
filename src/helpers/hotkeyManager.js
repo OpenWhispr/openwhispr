@@ -47,12 +47,13 @@ class HotkeyManager {
       };
     }
 
-    if (process.platform === "linux") {
+    if (process.platform === "linux" || process.platform === "win32") {
       // Linux DE's often reserve Super/Meta combinations
+      // Windows reserves Win (Super/Meta) key combinations for OS shortcuts
       if (hotkey.includes("Super") || hotkey.includes("Meta")) {
         return {
           reason: "os_reserved",
-          message: `"${hotkey}" may be reserved by your desktop environment.`,
+          message: `"${hotkey}" may be reserved by your ${process.platform === "win32" ? "operating system" : "desktop environment"}.`,
           suggestions: this.getSuggestions(hotkey),
         };
       }
@@ -72,7 +73,7 @@ class HotkeyManager {
     if (process.platform === "darwin" && isCompound) {
       suggestions = ["Control+Alt", "Alt+Command", "Command+Shift+Space"];
     } else if (process.platform === "win32" && isCompound) {
-      suggestions = ["Control+Super", "Control+Alt", "Control+Shift+K"];
+      suggestions = ["Control+Alt", "Control+Shift+K", "Control+Shift+Space"];
     } else if (process.platform === "linux" && isCompound) {
       suggestions = ["Control+Super", "Control+Shift+K", "Super+Shift+R"];
     }
@@ -93,16 +94,21 @@ class HotkeyManager {
     // Note: We need to check isRegistered because on first run, currentHotkey is set to the
     // default value but it's not actually registered yet.
     const checkAccelerator = hotkey.startsWith("Fn+") ? hotkey.slice(3) : hotkey;
-    if (
-      hotkey === this.currentHotkey &&
-      hotkey !== "GLOBE" &&
-      !isRightSideModifier(hotkey) &&
-      globalShortcut.isRegistered(checkAccelerator)
-    ) {
-      debugLogger.log(
-        `[HotkeyManager] Hotkey "${hotkey}" is already the current hotkey and registered, no change needed`
-      );
-      return { success: true, hotkey };
+    try {
+      if (
+        hotkey === this.currentHotkey &&
+        hotkey !== "GLOBE" &&
+        !isRightSideModifier(hotkey) &&
+        globalShortcut.isRegistered(checkAccelerator)
+      ) {
+        debugLogger.log(
+          `[HotkeyManager] Hotkey "${hotkey}" is already the current hotkey and registered, no change needed`
+        );
+        return { success: true, hotkey };
+      }
+    } catch {
+      // Invalid accelerator string (e.g. "Control+Super" on Windows) — fall through to re-register
+      debugLogger.log(`[HotkeyManager] isRegistered check failed for "${checkAccelerator}", will attempt fresh registration`);
     }
 
     // Unregister the previous hotkey (skip GLOBE and right-side modifiers - they use native listeners)
@@ -115,7 +121,11 @@ class HotkeyManager {
         ? this.currentHotkey.slice(3)
         : this.currentHotkey;
       debugLogger.log(`[HotkeyManager] Unregistering previous hotkey: "${prevAccelerator}"`);
-      globalShortcut.unregister(prevAccelerator);
+      try {
+        globalShortcut.unregister(prevAccelerator);
+      } catch {
+        debugLogger.log(`[HotkeyManager] Could not unregister "${prevAccelerator}" (invalid accelerator)`);
+      }
     }
 
     try {

@@ -12,6 +12,7 @@ const REASONING_CACHE_TTL = 30000; // 30 seconds
 const PLACEHOLDER_KEYS = {
   openai: "your_openai_api_key_here",
   groq: "your_groq_api_key_here",
+  mistral: "your_mistral_api_key_here",
 };
 
 const isValidApiKey = (key, provider = "openai") => {
@@ -569,6 +570,15 @@ class AudioManager {
       // For custom, we allow null/empty - the endpoint may not require auth
       if (!apiKey) {
         apiKey = null;
+      }
+    } else if (provider === "mistral") {
+      // Get Mistral API key
+      apiKey = await window.electronAPI.getMistralKey?.();
+      if (!isValidApiKey(apiKey, "mistral")) {
+        apiKey = localStorage.getItem("mistralApiKey");
+      }
+      if (!isValidApiKey(apiKey, "mistral")) {
+        throw new Error("Mistral API key not found. Please set your API key in the Control Panel.");
       }
     } else if (provider === "groq") {
       // Try to get Groq API key
@@ -1192,7 +1202,50 @@ class AudioManager {
       const endpoint = this.getTranscriptionEndpoint();
       const isCustomEndpoint =
         provider === "custom" ||
-        (!endpoint.includes("api.openai.com") && !endpoint.includes("api.groq.com"));
+        (!endpoint.includes("api.openai.com") && !endpoint.includes("api.groq.com") && !endpoint.includes("api.mistral.ai"));
+
+      const apiCallStart = performance.now();
+
+      // Use IPC proxy for Mistral to avoid CORS (their API doesn't support browser requests)
+      if (provider === "mistral" && window.electronAPI?.proxyMistralTranscription) {
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const proxyData = { audioBuffer, model, language };
+
+        // Pass custom dictionary as context_bias for Mistral (equivalent to OpenAI's prompt field)
+        // Mistral requires each token to match ^[^,\s]+$ — no spaces allowed within tokens.
+        // Split multi-word entries into separate words so the model gets natural hints
+        // (e.g. "Sahne Muh-Muhs" → "Sahne,Muh-Muhs" instead of "Sahne_Muh-Muhs").
+        // Mistral supports up to 100 context_bias tokens — silently cap to avoid API errors.
+        if (dictionaryPrompt) {
+          const tokens = dictionaryPrompt
+            .split(",")
+            .flatMap(entry => entry.trim().split(/\s+/))
+            .filter(Boolean)
+            .slice(0, 100);
+          if (tokens.length > 0) {
+            proxyData.contextBias = tokens.join(",");
+          }
+        }
+
+        const result = await window.electronAPI.proxyMistralTranscription(proxyData);
+        const proxyText = result?.text ?? result?.data?.text ?? result?.transcription?.text;
+
+        if (proxyText && proxyText.trim().length > 0) {
+          timings.transcriptionProcessingDurationMs = Math.round(
+            performance.now() - apiCallStart
+          );
+          const reasoningStart = performance.now();
+          const text = await this.processTranscription(proxyText, "mistral");
+          timings.reasoningProcessingDurationMs = Math.round(
+            performance.now() - reasoningStart
+          );
+
+          const source = (await this.isReasoningAvailable()) ? "mistral-reasoned" : "mistral";
+          return { success: true, text, source, timings };
+        }
+
+        throw new Error("No text transcribed - Mistral response was empty");
+      }
 
       logger.debug(
         "Making transcription API request",
@@ -1211,7 +1264,11 @@ class AudioManager {
       // Build headers - only include Authorization if we have an API key
       const headers = {};
       if (apiKey) {
-        headers.Authorization = `Bearer ${apiKey}`;
+        if (provider === "mistral" && !window.electronAPI?.proxyMistralTranscription) {
+          headers["x-api-key"] = apiKey;
+        } else {
+          headers.Authorization = `Bearer ${apiKey}`;
+        }
       }
 
       logger.debug(
@@ -1230,7 +1287,6 @@ class AudioManager {
         "transcription"
       );
 
-      const apiCallStart = performance.now();
       const response = await fetch(endpoint, {
         method: "POST",
         headers,
@@ -1419,6 +1475,7 @@ class AudioManager {
       if (trimmedModel) {
         const isGroqModel = trimmedModel.startsWith("whisper-large-v3");
         const isOpenAIModel = trimmedModel.startsWith("gpt-4o") || trimmedModel === "whisper-1";
+        const isMistralModel = trimmedModel.startsWith("voxtral-");
 
         if (provider === "groq" && isGroqModel) {
           return trimmedModel;
@@ -1426,11 +1483,16 @@ class AudioManager {
         if (provider === "openai" && isOpenAIModel) {
           return trimmedModel;
         }
+        if (provider === "mistral" && isMistralModel) {
+          return trimmedModel;
+        }
         // Model doesn't match provider - fall through to default
       }
 
       // Return provider-appropriate default
-      return provider === "groq" ? "whisper-large-v3-turbo" : "gpt-4o-mini-transcribe";
+      if (provider === "groq") return "whisper-large-v3-turbo";
+      if (provider === "mistral") return "voxtral-mini-latest";
+      return "gpt-4o-mini-transcribe";
     } catch (error) {
       return "gpt-4o-mini-transcribe";
     }
@@ -1480,6 +1542,8 @@ class AudioManager {
         base = currentBaseUrl.trim() || API_ENDPOINTS.TRANSCRIPTION_BASE;
       } else if (currentProvider === "groq") {
         base = API_ENDPOINTS.GROQ_BASE;
+      } else if (currentProvider === "mistral") {
+        base = API_ENDPOINTS.MISTRAL_BASE;
       } else {
         // OpenAI or other standard providers
         base = API_ENDPOINTS.TRANSCRIPTION_BASE;

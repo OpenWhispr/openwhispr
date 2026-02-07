@@ -7,6 +7,7 @@ const PERSISTED_KEYS = [
   "ANTHROPIC_API_KEY",
   "GEMINI_API_KEY",
   "GROQ_API_KEY",
+  "MISTRAL_API_KEY",
   "CUSTOM_TRANSCRIPTION_API_KEY",
   "CUSTOM_REASONING_API_KEY",
   "LOCAL_TRANSCRIPTION_PROVIDER",
@@ -81,6 +82,14 @@ class EnvironmentManager {
 
   saveGroqKey(key) {
     return this._saveKey("GROQ_API_KEY", key);
+  }
+
+  getMistralKey() {
+    return this._getKey("MISTRAL_API_KEY");
+  }
+
+  saveMistralKey(key) {
+    return this._saveKey("MISTRAL_API_KEY", key);
   }
 
   getCustomTranscriptionKey() {

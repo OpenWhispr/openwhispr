@@ -93,7 +93,7 @@ function LocalModelCard({
                 isSelected
                   ? "bg-primary shadow-[0_0_6px_oklch(0.62_0.22_260/0.6)] animate-[pulse-glow_2s_ease-in-out_infinite]"
                   : "bg-success shadow-[0_0_4px_rgba(34,197,94,0.5)]"
-              }`}
+                }`}
             />
           ) : isDownloading ? (
             <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.5)] animate-[spinner-rotate_1s_linear_infinite]" />
@@ -189,6 +189,8 @@ interface TranscriptionModelPickerProps {
   setOpenaiApiKey: (key: string) => void;
   groqApiKey: string;
   setGroqApiKey: (key: string) => void;
+  mistralApiKey: string;
+  setMistralApiKey: (key: string) => void;
   customTranscriptionApiKey?: string;
   setCustomTranscriptionApiKey?: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
@@ -200,6 +202,7 @@ interface TranscriptionModelPickerProps {
 const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq", recommended: true },
+  { id: "mistral", name: "Mistral" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -262,6 +265,8 @@ export default function TranscriptionModelPicker({
   setOpenaiApiKey,
   groqApiKey,
   setGroqApiKey,
+  mistralApiKey = "",
+  setMistralApiKey,
   customTranscriptionApiKey = "",
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl = "",
@@ -628,10 +633,10 @@ export default function TranscriptionModelPicker({
     const modelsToRender =
       localModels.length === 0
         ? Object.entries(WHISPER_MODEL_INFO).map(([modelId, info]) => ({
-            model: modelId,
-            downloaded: false,
-            size_mb: info.sizeMb,
-          }))
+          model: modelId,
+          downloaded: false,
+          size_mb: info.sizeMb,
+        }))
         : localModels;
 
     return (
@@ -700,10 +705,10 @@ export default function TranscriptionModelPicker({
     const modelsToRender =
       parakeetModels.length === 0
         ? Object.entries(PARAKEET_MODEL_INFO).map(([modelId, info]) => ({
-            model: modelId,
-            downloaded: false,
-            size_mb: info.sizeMb,
-          }))
+          model: modelId,
+          downloaded: false,
+          size_mb: info.sizeMb,
+        }))
         : parakeetModels;
 
     return (
@@ -779,7 +784,7 @@ export default function TranscriptionModelPicker({
                 {/* API Key */}
                 <ApiKeyInput
                   apiKey={customTranscriptionApiKey}
-                  setApiKey={setCustomTranscriptionApiKey || (() => {})}
+                  setApiKey={setCustomTranscriptionApiKey || (() => { })}
                   label="API Key (Optional)"
                   helpText=""
                 />
@@ -806,7 +811,9 @@ export default function TranscriptionModelPicker({
                       onClick={createExternalLinkHandler(
                         selectedCloudProvider === "groq"
                           ? "https://console.groq.com/keys"
-                          : "https://platform.openai.com/api-keys"
+                          : selectedCloudProvider === "mistral"
+                            ? "https://console.mistral.ai/api-keys"
+                            : "https://platform.openai.com/api-keys"
                       )}
                       className="text-[11px] text-white/70 hover:text-white transition-colors cursor-pointer"
                     >
@@ -814,8 +821,20 @@ export default function TranscriptionModelPicker({
                     </button>
                   </div>
                   <ApiKeyInput
-                    apiKey={selectedCloudProvider === "groq" ? groqApiKey : openaiApiKey}
-                    setApiKey={selectedCloudProvider === "groq" ? setGroqApiKey : setOpenaiApiKey}
+                    apiKey={
+                      selectedCloudProvider === "groq"
+                        ? groqApiKey
+                        : selectedCloudProvider === "mistral"
+                          ? mistralApiKey
+                          : openaiApiKey
+                    }
+                    setApiKey={
+                      selectedCloudProvider === "groq"
+                        ? setGroqApiKey
+                        : selectedCloudProvider === "mistral"
+                          ? setMistralApiKey
+                          : setOpenaiApiKey
+                    }
                     label=""
                     helpText=""
                   />

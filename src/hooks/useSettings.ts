@@ -46,6 +46,7 @@ export interface ApiKeySettings {
   anthropicApiKey: string;
   geminiApiKey: string;
   groqApiKey: string;
+  mistralApiKey: string;
   customTranscriptionApiKey: string;
   customReasoningApiKey: string;
 }
@@ -273,6 +274,11 @@ export function useSettings() {
     deserialize: String,
   });
 
+  const [mistralApiKey, setMistralApiKeyLocal] = useLocalStorage("mistralApiKey", "", {
+    serialize: String,
+    deserialize: String,
+  });
+
   // Theme setting
   const [theme, setTheme] = useLocalStorage<"light" | "dark" | "auto">("theme", "auto", {
     serialize: String,
@@ -337,6 +343,10 @@ export function useSettings() {
       if (!groqApiKey) {
         const envKey = await window.electronAPI.getGroqKey?.();
         if (envKey) setGroqApiKeyLocal(envKey);
+      }
+      if (!mistralApiKey) {
+        const envKey = await window.electronAPI.getMistralKey?.();
+        if (envKey) setMistralApiKeyLocal(envKey);
       }
       if (!customTranscriptionApiKey) {
         const envKey = await window.electronAPI.getCustomTranscriptionKey?.();
@@ -409,6 +419,15 @@ export function useSettings() {
       debouncedPersistToEnv();
     },
     [setGroqApiKeyLocal, debouncedPersistToEnv]
+  );
+
+  const setMistralApiKey = useCallback(
+    (key: string) => {
+      setMistralApiKeyLocal(key);
+      window.electronAPI?.saveMistralKey?.(key);
+      debouncedPersistToEnv();
+    },
+    [setMistralApiKeyLocal, debouncedPersistToEnv]
   );
 
   const setCustomTranscriptionApiKey = useCallback(
@@ -596,8 +615,9 @@ export function useSettings() {
       if (keys.anthropicApiKey !== undefined) setAnthropicApiKey(keys.anthropicApiKey);
       if (keys.geminiApiKey !== undefined) setGeminiApiKey(keys.geminiApiKey);
       if (keys.groqApiKey !== undefined) setGroqApiKey(keys.groqApiKey);
+      if (keys.mistralApiKey !== undefined) setMistralApiKey(keys.mistralApiKey);
     },
-    [setOpenaiApiKey, setAnthropicApiKey, setGeminiApiKey, setGroqApiKey]
+    [setOpenaiApiKey, setAnthropicApiKey, setGeminiApiKey, setGroqApiKey, setMistralApiKey]
   );
 
   return {
@@ -625,6 +645,7 @@ export function useSettings() {
     anthropicApiKey,
     geminiApiKey,
     groqApiKey,
+    mistralApiKey,
     dictationKey,
     theme,
     setUseLocalWhisper,
@@ -649,6 +670,7 @@ export function useSettings() {
     setAnthropicApiKey,
     setGeminiApiKey,
     setGroqApiKey,
+    setMistralApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
     customReasoningApiKey,

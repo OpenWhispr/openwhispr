@@ -123,6 +123,18 @@
           "description": "216x real-time speed"
         }
       ]
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral",
+      "baseUrl": "https://api.mistral.ai/v1",
+      "models": [
+        {
+          "id": "voxtral-mini-latest",
+          "name": "Voxtral Mini",
+          "description": "Fast multilingual transcription"
+        }
+      ]
     }
   ],
   "cloudProviders": [

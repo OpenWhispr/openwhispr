@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Upgrade Prompt Dialog**: When usage limit is reached, offers three paths — upgrade to Pro, bring your own key, or switch to local
 - **Cancel Processing Button**: Cancel ongoing transcription processing mid-flight
 - **Dynamic Window Resizing**: Window automatically resizes based on command menu and toast visibility
+- **Mistral Voxtral Transcription**: Added Mistral as a cloud transcription provider
 - **Dark Mode Icon Inversion**: Monochrome provider icons now automatically invert in dark mode for better visibility
 
 ### Changed
