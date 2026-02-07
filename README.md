@@ -69,7 +69,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
    
    **Method A - Environment file**:
    ```bash
-   cp env.example .env
+   cp .env.example .env
    # Edit .env and add your API keys:
    # OPENAI_API_KEY=your_openai_key
    # ANTHROPIC_API_KEY=your_anthropic_key
@@ -81,14 +81,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
    - Run the app and configure API keys through the Control Panel
    - Keys are automatically saved and persist across app restarts
 
-4. **Run the application**:
+4. **Build the application**:
+   ```bash
+   npm run build
+   ```
+
+5. **Run the application**:
    ```bash
    npm run dev  # Development mode with hot reload
    # OR
    npm start    # Production mode
    ```
 
-5. **Optional: Local Whisper from source** (only needed if you want local processing):
+6. **Optional: Local Whisper from source** (only needed if you want local processing):
    ```bash
    npm run download:whisper-cpp
    ```
