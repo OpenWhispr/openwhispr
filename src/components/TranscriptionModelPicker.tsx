@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Download, Trash2, Cloud, Lock, X } from "lucide-react";
+import { Download, Trash2, Cloud, Lock, X, Zap, Check } from "lucide-react";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
@@ -25,6 +25,8 @@ import {
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { createExternalLinkHandler } from "../utils/externalLinks";
+import { getCachedPlatform } from "../utils/platform";
+import type { CudaWhisperStatus } from "../types/electron";
 import logger from "../utils/logger";
 
 interface LocalModel {
@@ -283,6 +285,10 @@ export default function TranscriptionModelPicker({
   const [internalLocalProvider, setInternalLocalProvider] = useState(selectedLocalProvider);
   const hasLoadedRef = useRef(false);
   const hasLoadedParakeetRef = useRef(false);
+  const [cudaStatus, setCudaStatus] = useState<CudaWhisperStatus | null>(null);
+  const [cudaDownloading, setCudaDownloading] = useState(false);
+  const [cudaProgress, setCudaProgress] = useState({ downloadedBytes: 0, totalBytes: 0, percentage: 0 });
+  const [cudaDismissed, setCudaDismissed] = useState(false);
 
   useEffect(() => {
     if (selectedLocalProvider !== internalLocalProvider) {
@@ -436,6 +442,44 @@ export default function TranscriptionModelPicker({
     window.addEventListener("openwhispr-models-cleared", handleModelsCleared);
     return () => window.removeEventListener("openwhispr-models-cleared", handleModelsCleared);
   }, [loadLocalModels, loadParakeetModels]);
+
+  useEffect(() => {
+    if (!useLocalWhisper || internalLocalProvider !== "whisper") return;
+    if (getCachedPlatform() === "darwin") return;
+    window.electronAPI?.getCudaWhisperStatus?.()?.then(setCudaStatus).catch(() => {});
+  }, [useLocalWhisper, internalLocalProvider]);
+
+  useEffect(() => {
+    if (!cudaDownloading) return;
+    const cleanup = window.electronAPI?.onCudaDownloadProgress?.((data) => {
+      setCudaProgress(data);
+    });
+    return cleanup;
+  }, [cudaDownloading]);
+
+  const handleCudaDownload = async () => {
+    setCudaDownloading(true);
+    try {
+      const result = await window.electronAPI?.downloadCudaWhisperBinary?.();
+      if (result?.success) {
+        const status = await window.electronAPI?.getCudaWhisperStatus?.();
+        setCudaStatus(status || null);
+      }
+    } finally {
+      setCudaDownloading(false);
+    }
+  };
+
+  const handleCudaDelete = async () => {
+    await window.electronAPI?.deleteCudaWhisperBinary?.();
+    const status = await window.electronAPI?.getCudaWhisperStatus?.();
+    setCudaStatus(status || null);
+  };
+
+  const handleCudaCancel = async () => {
+    await window.electronAPI?.cancelCudaWhisperDownload?.();
+    setCudaDownloading(false);
+  };
 
   const {
     downloadingModel,
@@ -874,6 +918,79 @@ export default function TranscriptionModelPicker({
           </div>
 
           {progressDisplay}
+
+          {internalLocalProvider === "whisper" &&
+            !cudaDismissed &&
+            getCachedPlatform() !== "darwin" &&
+            cudaStatus?.gpuInfo.hasNvidiaGpu && (
+              <div className="mx-2 mt-2 rounded-md border border-border bg-surface-1 p-2.5">
+                {cudaDownloading ? (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-foreground">
+                        Downloading CUDA binary... {Math.round(cudaProgress.percentage)}%
+                      </span>
+                      <button
+                        onClick={handleCudaCancel}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div className="w-full rounded-full overflow-hidden bg-white/5 dark:bg-white/3" style={{ height: 4 }}>
+                      <div
+                        className="bg-primary shadow-[0_0_8px_oklch(0.62_0.22_260/0.4)]"
+                        style={{
+                          height: "100%",
+                          width: `${Math.min(cudaProgress.percentage, 100)}%`,
+                          borderRadius: 9999,
+                          transition: "width 300ms ease-out",
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : cudaStatus.downloaded ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Check size={13} className="text-success" />
+                      <span className="text-xs font-medium text-foreground">GPU acceleration active</span>
+                    </div>
+                    <Button
+                      onClick={handleCudaDelete}
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <Zap size={13} className="text-amber-500" />
+                      <span className="text-xs font-medium text-foreground">
+                        NVIDIA GPU detected{cudaStatus.gpuInfo.gpuName ? ` (${cudaStatus.gpuInfo.gpuName})` : ""}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground pl-5">
+                      GPU-accelerated Whisper available (~250 MB download)
+                    </p>
+                    <div className="flex items-center gap-2 pl-5">
+                      <Button onClick={handleCudaDownload} size="sm" variant="default" className="h-6 px-2.5 text-xs">
+                        <Download size={11} className="mr-1" />
+                        Download
+                      </Button>
+                      <button
+                        onClick={() => setCudaDismissed(true)}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Not now
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
           <div className="p-2">
             {internalLocalProvider === "whisper" && renderLocalModels()}

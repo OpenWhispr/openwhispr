@@ -1,8 +1,10 @@
 const { spawn } = require("child_process");
+const EventEmitter = require("events");
 const fs = require("fs");
 const net = require("net");
 const path = require("path");
 const http = require("http");
+const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
 const { getSafeTempDir } = require("./safeTempDir");
@@ -14,8 +16,9 @@ const STARTUP_TIMEOUT_MS = 30000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 
-class WhisperServerManager {
+class WhisperServerManager extends EventEmitter {
   constructor() {
+    super();
     this.process = null;
     this.port = null;
     this.ready = false;
@@ -25,6 +28,7 @@ class WhisperServerManager {
     this.cachedServerBinaryPath = null;
     this.cachedFFmpegPath = null;
     this.canConvert = false;
+    this.useCuda = false;
   }
 
   getFFmpegPath() {
@@ -117,7 +121,14 @@ class WhisperServerManager {
     return null;
   }
 
-  getServerBinaryPath() {
+  getServerBinaryPath(options = {}) {
+    if (options.preferCuda) {
+      const ext = process.platform === "win32" ? ".exe" : "";
+      const cudaBinary = `whisper-server-${process.platform}-${process.arch}-cuda${ext}`;
+      const cudaPath = path.join(app.getPath("userData"), "bin", cudaBinary);
+      if (fs.existsSync(cudaPath)) return cudaPath;
+    }
+
     if (this.cachedServerBinaryPath) return this.cachedServerBinaryPath;
 
     const platform = process.platform;
@@ -199,12 +210,14 @@ class WhisperServerManager {
   }
 
   async _doStart(modelPath, options = {}) {
-    const serverBinary = this.getServerBinaryPath();
+    const usingCuda = options.useCuda || false;
+    const serverBinary = this.getServerBinaryPath(usingCuda ? { preferCuda: true } : {});
     if (!serverBinary) throw new Error("whisper-server binary not found");
     if (!fs.existsSync(modelPath)) throw new Error(`Model file not found: ${modelPath}`);
 
     this.port = await this.findAvailablePort();
     this.modelPath = modelPath;
+    this.useCuda = usingCuda;
 
     // Check for FFmpeg first - only use --convert flag if FFmpeg is available
     const ffmpegPath = this.getFFmpegPath();
@@ -242,7 +255,10 @@ class WhisperServerManager {
       modelPath,
       args,
       cwd: serverBinaryDir,
+      cuda: usingCuda,
     });
+
+    const startTime = Date.now();
 
     this.process = spawn(serverBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -253,6 +269,7 @@ class WhisperServerManager {
 
     let stderrBuffer = "";
     let exitCode = null;
+    let earlyExit = false;
 
     this.process.stdout.on("data", (data) => {
       debugLogger.debug("whisper-server stdout", { data: data.toString().trim() });
@@ -270,18 +287,33 @@ class WhisperServerManager {
 
     this.process.on("close", (code) => {
       exitCode = code;
+      if (Date.now() - startTime < 10000) earlyExit = true;
       debugLogger.debug("whisper-server process exited", { code });
       this.ready = false;
       this.process = null;
       this.stopHealthCheck();
     });
 
-    await this.waitForReady(() => ({ stderr: stderrBuffer, exitCode }));
+    try {
+      await this.waitForReady(() => ({ stderr: stderrBuffer, exitCode }));
+    } catch (err) {
+      if (usingCuda && earlyExit) {
+        debugLogger.warn("CUDA whisper-server failed, falling back to CPU", {
+          exitCode,
+          stderr: stderrBuffer.slice(0, 200),
+        });
+        this.emit("cuda-fallback");
+        return this._doStart(modelPath, { ...options, useCuda: false });
+      }
+      throw err;
+    }
+
     this.startHealthCheck();
 
     debugLogger.info("whisper-server started successfully", {
       port: this.port,
       model: path.basename(modelPath),
+      cuda: this.useCuda,
     });
   }
 

@@ -21,6 +21,7 @@ const PERSISTED_KEYS = [
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
   "UI_LANGUAGE",
+  "WHISPER_CUDA_ENABLED",
 ];
 
 class EnvironmentManager {

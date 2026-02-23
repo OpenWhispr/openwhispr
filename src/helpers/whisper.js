@@ -69,7 +69,7 @@ class WhisperManager {
       await cleanupStaleDownloads(this.getModelsDir());
 
       // Pre-warm whisper-server if local mode enabled (eliminates 2-5s cold-start delay)
-      const { localTranscriptionProvider, whisperModel } = settings;
+      const { localTranscriptionProvider, whisperModel, useCuda } = settings;
 
       if (
         localTranscriptionProvider === "whisper" &&
@@ -82,11 +82,12 @@ class WhisperManager {
           debugLogger.info("Pre-warming whisper-server", {
             model: whisperModel,
             modelPath,
+            cuda: !!useCuda,
           });
 
           try {
             const serverStartTime = Date.now();
-            await this.serverManager.start(modelPath);
+            await this.serverManager.start(modelPath, { useCuda: !!useCuda });
             this.currentServerModel = whisperModel;
 
             debugLogger.info("whisper-server pre-warmed successfully", {
@@ -188,7 +189,7 @@ class WhisperManager {
     debugLogger.info(`[Dependencies] Models: ${modelsStatus}`);
   }
 
-  async startServer(modelName) {
+  async startServer(modelName, options = {}) {
     if (!this.serverManager.isAvailable()) {
       return { success: false, reason: "whisper-server binary not found" };
     }
@@ -199,7 +200,7 @@ class WhisperManager {
     }
 
     try {
-      await this.serverManager.start(modelPath);
+      await this.serverManager.start(modelPath, options);
       this.currentServerModel = modelName;
       debugLogger.info("whisper-server started", {
         model: modelName,
@@ -270,7 +271,7 @@ class WhisperManager {
     // Start server if not running or if model changed
     if (!this.serverManager.ready || this.currentServerModel !== model) {
       debugLogger.debug("Starting/restarting whisper-server for model", { model });
-      await this.serverManager.start(modelPath);
+      await this.serverManager.start(modelPath, { useCuda: this.serverManager.useCuda });
       this.currentServerModel = model;
     }
 
