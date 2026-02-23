@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
+  onCancelDictation: registerListener("cancel-dictation", (callback) => () => callback()),
+  onEnterDictation: registerListener("enter-dictation", (callback) => () => callback()),
 
   // Database functions
   saveTranscription: (text) => ipcRenderer.invoke("db-save-transcription", text),
@@ -64,6 +66,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   readClipboard: () => ipcRenderer.invoke("read-clipboard"),
   writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
   checkPasteTools: () => ipcRenderer.invoke("check-paste-tools"),
+  pressEnterKey: () => ipcRenderer.invoke("press-enter-key"),
 
   // Local Whisper functions (whisper.cpp)
   transcribeLocalWhisper: (audioBlob, options) =>
@@ -311,6 +314,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "floating-icon-auto-hide-changed",
     (callback) => (_event, enabled) => callback(enabled)
   ),
+
+  // Wake word activation
+  wakeWordToggle: (enabled) => ipcRenderer.invoke("wake-word:toggle", enabled),
+  wakeWordSetPhrase: (phrase) => ipcRenderer.invoke("wake-word:set-phrase", phrase),
+  wakeWordSetFinishPhrase: (phrase) => ipcRenderer.invoke("wake-word:set-finish-phrase", phrase),
+  wakeWordSetCancelPhrase: (phrase) => ipcRenderer.invoke("wake-word:set-cancel-phrase", phrase),
+  wakeWordSetEnterPhrase: (phrase) => ipcRenderer.invoke("wake-word:set-enter-phrase", phrase),
+  wakeWordStatus: () => ipcRenderer.invoke("wake-word:status"),
+  wakeWordCheckChunk: (audioBuffer) => ipcRenderer.invoke("wake-word:check-chunk", audioBuffer),
+  wakeWordRecordingState: (isRecording) => ipcRenderer.send("wake-word:recording-state", isRecording),
+  onWakeWordHeard: registerListener("wake-word:heard", (callback) => (_event, data) => callback(data)),
 
   // Auto-start management
   getAutoStartEnabled: () => ipcRenderer.invoke("get-auto-start-enabled"),

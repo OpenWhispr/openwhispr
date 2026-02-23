@@ -14,6 +14,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
+  const enterAfterPasteRef = useRef(false);
   const { onToggle } = options;
 
   const performStartRecording = useCallback(async () => {
@@ -100,12 +101,30 @@ export const useAudioRecording = (toast, options = {}) => {
       },
       onTranscriptionComplete: async (result) => {
         if (result.success) {
-          setTranscript(result.text);
+          // Strip finish phrase from the end of the transcription if configured
+          let text = result.text;
+          try {
+            const wakeStatus = await window.electronAPI?.wakeWordStatus?.();
+            if (wakeStatus?.enabled) {
+              // Strip any configured action phrases from the end of the transcription
+              const phrasesToStrip = [
+                wakeStatus.finishPhrase,
+                wakeStatus.cancelPhrase,
+                wakeStatus.enterPhrase,
+              ].filter(Boolean);
+              for (const fp of phrasesToStrip) {
+                const pattern = new RegExp(`\\s*\\b${fp.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[.,!?]*\\s*$`, "i");
+                text = text.replace(pattern, "").trim();
+              }
+            }
+          } catch {}
+
+          setTranscript(text);
 
           const isStreaming = result.source?.includes("streaming");
           const pasteStart = performance.now();
           await audioManagerRef.current.safePaste(
-            result.text,
+            text,
             isStreaming ? { fromStreaming: true } : {}
           );
           logger.info(
@@ -113,12 +132,23 @@ export const useAudioRecording = (toast, options = {}) => {
             {
               pasteMs: Math.round(performance.now() - pasteStart),
               source: result.source,
-              textLength: result.text.length,
+              textLength: text.length,
             },
             "streaming"
           );
 
-          audioManagerRef.current.saveTranscription(result.text);
+          // If enter-dictation was used, simulate Enter key after paste
+          if (enterAfterPasteRef.current) {
+            enterAfterPasteRef.current = false;
+            try {
+              await new Promise((resolve) => setTimeout(resolve, 50));
+              await window.electronAPI.pressEnterKey();
+            } catch (err) {
+              logger.warn("Failed to press Enter key after paste", { error: err.message });
+            }
+          }
+
+          audioManagerRef.current.saveTranscription(text);
 
           if (result.source === "openai" && localStorage.getItem("useLocalWhisper") === "true") {
             toast({
@@ -181,6 +211,22 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
+    const disposeCancelDictation = window.electronAPI.onCancelDictation?.(() => {
+      if (audioManagerRef.current) {
+        const state = audioManagerRef.current.getState();
+        if (state.isRecording || state.isStreaming || state.isStreamingStartInProgress) {
+          audioManagerRef.current.cancelRecording();
+          onToggle?.();
+        }
+      }
+    });
+
+    const disposeEnterDictation = window.electronAPI.onEnterDictation?.(() => {
+      enterAfterPasteRef.current = true;
+      handleStop();
+      onToggle?.();
+    });
+
     const handleNoAudioDetected = () => {
       toast({
         title: t("hooks.audioRecording.noAudio.title"),
@@ -196,6 +242,8 @@ export const useAudioRecording = (toast, options = {}) => {
       disposeToggle?.();
       disposeStart?.();
       disposeStop?.();
+      disposeCancelDictation?.();
+      disposeEnterDictation?.();
       disposeNoAudio?.();
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();

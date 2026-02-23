@@ -17,6 +17,7 @@ const MAIN_WINDOW_CONFIG = {
     nodeIntegration: false,
     contextIsolation: true,
     sandbox: true,
+    backgroundThrottling: false, // Keep timers/MediaRecorder running when window is hidden (wake word capture)
   },
   frame: false,
   alwaysOnTop: true,

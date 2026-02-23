@@ -160,6 +160,7 @@ const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
 const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
+const WakeWordManager = require("./src/helpers/wakeWordManager");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 
 // Manager instances - initialized after app.whenReady()
@@ -177,6 +178,7 @@ let globeKeyManager = null;
 let windowsKeyManager = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
+let wakeWordManager = null;
 
 function parseAuthBridgePort() {
   const raw = (process.env.OPENWHISPR_AUTH_BRIDGE_PORT || "").trim();
@@ -237,6 +239,8 @@ function initializeCoreManagers() {
   updateManager = new UpdateManager();
   windowsKeyManager = new WindowsKeyManager();
 
+  wakeWordManager = new WakeWordManager(windowManager);
+
   // IPC handlers must be registered before window content loads
   new IPCHandlers({
     environmentManager,
@@ -247,6 +251,7 @@ function initializeCoreManagers() {
     windowManager,
     updateManager,
     windowsKeyManager,
+    wakeWordManager,
     getTrayManager: () => trayManager,
   });
 }
@@ -433,6 +438,12 @@ async function startApp() {
   initializeCoreManagers();
   startAuthBridgeServer();
 
+  // Explicitly grant all permission requests — ensures getUserMedia works
+  // in sandboxed renderers (wake word capture + dictation).
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(true);
+  });
+
   // Electron's file:// sends no Origin header, which Neon Auth rejects.
   session.defaultSession.webRequest.onBeforeSendHeaders(
     { urls: ["https://*.neon.tech/*"] },
@@ -500,6 +511,18 @@ async function startApp() {
     const modelManager = require("./src/helpers/modelManagerBridge").default;
     modelManager.prewarmServer(process.env.LOCAL_REASONING_MODEL).catch((err) => {
       debugLogger.debug("llama-server pre-warm error (non-fatal)", { error: err.message });
+    });
+  }
+
+  // Notify wake word manager of recording state changes
+  ipcMain.on("wake-word:recording-state", (_event, isRecording) => {
+    wakeWordManager.setRecordingState(isRecording);
+  });
+
+  // Auto-start wake word if previously enabled
+  if (process.env.WAKE_WORD_ENABLED === "true") {
+    wakeWordManager.toggle(true).catch((err) => {
+      debugLogger.debug("Wake word startup error (non-fatal)", { error: err.message });
     });
   }
 
@@ -872,6 +895,9 @@ if (gotSingleInstanceLock) {
     }
     if (updateManager) {
       updateManager.cleanup();
+    }
+    if (wakeWordManager) {
+      wakeWordManager.stop();
     }
     // Stop whisper server if running
     if (whisperManager) {

@@ -8,6 +8,7 @@ import { useHotkey } from "./hooks/useHotkey";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useAuth } from "./hooks/useAuth";
+import { useWakeWordCapture } from "./hooks/useWakeWordCapture";
 
 // Sound Wave Icon Component (for idle/hover states)
 const SoundWaveIcon = ({ size = 16 }) => {
@@ -176,6 +177,15 @@ export default function App() {
     });
     return () => unsubscribe?.();
   }, []);
+
+  // Notify main process of recording state for wake word
+  useEffect(() => {
+    window.electronAPI?.wakeWordRecordingState?.(isRecording);
+  }, [isRecording]);
+
+  // Wake word: capture mic audio and send chunks to main process for detection.
+  // Runs continuously when enabled — during dictation it detects stop words.
+  useWakeWordCapture();
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {

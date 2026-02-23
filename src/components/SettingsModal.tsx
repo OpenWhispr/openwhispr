@@ -11,6 +11,7 @@ import {
   BookOpen,
   ShieldCheck,
   Lock,
+  AudioLines,
 } from "lucide-react";
 import SidebarModal, { SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
@@ -75,6 +76,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         icon: Sparkles,
         description: t("settingsModal.sections.prompts.description"),
         group: t("settingsModal.groups.intelligence"),
+      },
+      {
+        id: "wakeWord",
+        label: "Wake Word",
+        icon: AudioLines,
+        description: "Voice-activated dictation",
+        group: t("settingsModal.groups.speech"),
       },
       {
         id: "privacy",

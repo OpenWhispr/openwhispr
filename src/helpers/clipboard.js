@@ -1481,6 +1481,64 @@ Would you like to open System Settings now?`;
       recommendedInstall,
     };
   }
+  async pressEnterKey() {
+    const platform = process.platform;
+    debugLogger.debug("[Clipboard] pressEnterKey called", { platform });
+
+    return new Promise((resolve, reject) => {
+      let proc;
+
+      if (platform === "darwin") {
+        proc = spawn("osascript", [
+          "-e",
+          'tell application "System Events" to keystroke return',
+        ]);
+      } else if (platform === "win32") {
+        proc = spawn("powershell.exe", [
+          "-NoProfile",
+          "-NonInteractive",
+          "-WindowStyle",
+          "Hidden",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "[void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms');[System.Windows.Forms.SendKeys]::SendWait('{ENTER}')",
+        ]);
+      } else {
+        // Linux
+        const { isWayland, isWlroots } = getLinuxSessionInfo();
+        if (isWayland && isWlroots && this.commandExists("wtype")) {
+          proc = spawn("wtype", ["-k", "Return"]);
+        } else if (this.commandExists("xdotool")) {
+          proc = spawn("xdotool", ["key", "Return"]);
+        } else if (this.commandExists("ydotool")) {
+          proc = spawn("ydotool", ["key", "28:1", "28:0"]);
+        } else {
+          return reject(new Error("No key simulation tool available on Linux"));
+        }
+      }
+
+      const timeoutId = setTimeout(() => {
+        killProcess(proc, "SIGKILL");
+        reject(new Error("pressEnterKey timed out"));
+      }, 3000);
+
+      proc.on("close", (code) => {
+        clearTimeout(timeoutId);
+        if (code === 0) {
+          debugLogger.debug("[Clipboard] pressEnterKey success");
+          resolve({ success: true });
+        } else {
+          reject(new Error(`pressEnterKey failed with code ${code}`));
+        }
+      });
+
+      proc.on("error", (err) => {
+        clearTimeout(timeoutId);
+        reject(err);
+      });
+    });
+  }
 }
 
 module.exports = ClipboardManager;

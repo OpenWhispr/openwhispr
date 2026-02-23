@@ -69,6 +69,7 @@ export type SettingsSectionType =
   | "aiModels"
   | "agentConfig"
   | "prompts"
+  | "wakeWord"
   | "permissions"
   | "privacy"
   | "developer";
@@ -114,6 +115,302 @@ function SettingsPanelRow({
   className?: string;
 }) {
   return <div className={`px-4 py-3 ${className}`}>{children}</div>;
+}
+
+const WAKE_WORD_LOG_MAX = 20;
+
+interface WakeWordHeardEntry {
+  text: string;
+  matched: boolean;
+  time: string;
+  mode?: "wake" | "finish";
+}
+
+function WakeWordSection() {
+  const [enabled, setEnabled] = useState(false);
+  const [phrase, setPhrase] = useState("whisper");
+  const [finishPhrase, setFinishPhrase] = useState("");
+  const [cancelPhrase, setCancelPhrase] = useState("");
+  const [enterPhrase, setEnterPhrase] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<{
+    enabled: boolean;
+    phrase: string;
+    finishPhrase: string;
+    cancelPhrase: string;
+    enterPhrase: string;
+    listening: boolean;
+    paused: boolean;
+    dictationActive: boolean;
+    serverRunning: boolean;
+  } | null>(null);
+  const [heardLog, setHeardLog] = useState<WakeWordHeardEntry[]>([]);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  // Load status on mount
+  useEffect(() => {
+    (window as any).electronAPI
+      ?.wakeWordStatus()
+      .then((s: any) => {
+        if (s) {
+          setEnabled(s.enabled);
+          setPhrase(s.phrase || "whisper");
+          setFinishPhrase(s.finishPhrase || "");
+          setCancelPhrase(s.cancelPhrase || "");
+          setEnterPhrase(s.enterPhrase || "");
+          setStatus(s);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Subscribe to live transcription results
+  useEffect(() => {
+    const unsubscribe = (window as any).electronAPI?.onWakeWordHeard?.(
+      (data: { text: string; matched: boolean; phrase: string; mode?: "wake" | "finish" }) => {
+        const entry: WakeWordHeardEntry = {
+          text: data.text,
+          matched: data.matched,
+          time: new Date().toLocaleTimeString(),
+          mode: data.mode,
+        };
+        setHeardLog((prev) => {
+          const next = [...prev, entry];
+          return next.length > WAKE_WORD_LOG_MAX ? next.slice(-WAKE_WORD_LOG_MAX) : next;
+        });
+      }
+    );
+    return () => unsubscribe?.();
+  }, []);
+
+  // Auto-scroll log to bottom
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [heardLog]);
+
+  const [error, setError] = useState<string | null>(null);
+
+  const handleToggle = async (newEnabled: boolean) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await (window as any).electronAPI?.wakeWordToggle(newEnabled);
+      if (result?.success) {
+        setEnabled(result.enabled);
+        setStatus(await (window as any).electronAPI?.wakeWordStatus());
+        if (!newEnabled) setHeardLog([]);
+      } else if (result?.error) {
+        setError(result.error);
+      }
+    } catch (err: any) {
+      setError(err?.message || "Failed to toggle wake word");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePhraseChange = async (newPhrase: string) => {
+    setPhrase(newPhrase);
+    try {
+      await (window as any).electronAPI?.wakeWordSetPhrase(newPhrase);
+    } catch {}
+  };
+
+  const handleFinishPhraseChange = async (newPhrase: string) => {
+    setFinishPhrase(newPhrase);
+    try {
+      await (window as any).electronAPI?.wakeWordSetFinishPhrase(newPhrase);
+    } catch {}
+  };
+
+  const handleCancelPhraseChange = async (newPhrase: string) => {
+    setCancelPhrase(newPhrase);
+    try {
+      await (window as any).electronAPI?.wakeWordSetCancelPhrase(newPhrase);
+    } catch {}
+  };
+
+  const handleEnterPhraseChange = async (newPhrase: string) => {
+    setEnterPhrase(newPhrase);
+    try {
+      await (window as any).electronAPI?.wakeWordSetEnterPhrase(newPhrase);
+    } catch {}
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="mb-3">
+        <h3 className="text-[13px] font-semibold text-foreground tracking-tight">Wake Word</h3>
+        <p className="text-[11px] text-muted-foreground/80 mt-0.5 leading-relaxed">
+          Start and stop dictation by saying a magic word instead of pressing a hotkey.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm divide-y divide-border/30 dark:divide-border-subtle/50">
+        <div className="px-4 py-3.5">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <p className="text-[13px] font-medium text-foreground">Enable Wake Word</p>
+              <p className="text-[11px] text-muted-foreground">
+                {loading
+                  ? "Starting wake word listener..."
+                  : enabled
+                    ? status?.listening
+                      ? "Listening for wake word"
+                      : "Enabled (server starting...)"
+                    : "Voice activation is off"}
+              </p>
+            </div>
+            <button
+              onClick={() => handleToggle(!enabled)}
+              disabled={loading}
+              className={cn(
+                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                enabled ? "bg-primary" : "bg-input"
+              )}
+            >
+              <span
+                className={cn(
+                  "pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform duration-200 ease-in-out",
+                  enabled ? "translate-x-4" : "translate-x-0"
+                )}
+              />
+            </button>
+          </div>
+        </div>
+
+        <div className="px-4 py-3.5">
+          <div className="space-y-2">
+            <label className="text-[13px] font-medium text-foreground">Wake Phrase</label>
+            <Input
+              value={phrase}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                handlePhraseChange(e.target.value)
+              }
+              placeholder="whisper"
+              className="h-8 text-[13px]"
+              disabled={loading}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Say this word to start dictation.
+            </p>
+          </div>
+        </div>
+
+        <div className="px-4 py-3.5">
+          <div className="space-y-2">
+            <label className="text-[13px] font-medium text-foreground">Finish Phrase</label>
+            <Input
+              value={finishPhrase}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                handleFinishPhraseChange(e.target.value)
+              }
+              placeholder="over"
+              className="h-8 text-[13px]"
+              disabled={loading}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Say this word to stop dictation. It will be stripped from the transcription.
+              Leave empty to use the wake phrase for both start and stop.
+            </p>
+          </div>
+        </div>
+
+        <div className="px-4 py-3.5">
+          <div className="space-y-2">
+            <label className="text-[13px] font-medium text-foreground">Cancel Phrase</label>
+            <Input
+              value={cancelPhrase}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                handleCancelPhraseChange(e.target.value)
+              }
+              placeholder="cancel"
+              className="h-8 text-[13px]"
+              disabled={loading}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Say this word to cancel dictation. The audio will be discarded without pasting.
+            </p>
+          </div>
+        </div>
+
+        <div className="px-4 py-3.5">
+          <div className="space-y-2">
+            <label className="text-[13px] font-medium text-foreground">Enter Phrase</label>
+            <Input
+              value={enterPhrase}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                handleEnterPhraseChange(e.target.value)
+              }
+              placeholder="send"
+              className="h-8 text-[13px]"
+              disabled={loading}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Say this word to stop dictation and press Enter after pasting (e.g. to send a message).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Error display */}
+      {error && (
+        <div className="rounded-lg border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 px-4 py-3">
+          <p className="text-[12px] text-red-700 dark:text-red-400">{error}</p>
+        </div>
+      )}
+
+      {/* Live listener output */}
+      {enabled && (
+        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm">
+          <div className="px-4 py-2.5 border-b border-border/30 dark:border-border-subtle/50">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+              </span>
+              <p className="text-[11px] font-medium text-muted-foreground">Listener Output</p>
+            </div>
+          </div>
+          <div className="px-4 py-2 max-h-48 overflow-y-auto font-mono text-[11px] space-y-1">
+            {heardLog.length === 0 ? (
+              <p className="text-muted-foreground/60 py-2 text-center">
+                Waiting for audio...
+              </p>
+            ) : (
+              heardLog.map((entry, i) => (
+                <div
+                  key={i}
+                  className={cn(
+                    "flex items-start gap-2 py-0.5",
+                    entry.matched && "text-green-600 dark:text-green-400 font-semibold"
+                  )}
+                >
+                  <span className="text-muted-foreground/50 shrink-0">{entry.time}</span>
+                  <span className="flex-1 break-words">
+                    {entry.matched
+                      ? `[${entry.mode === "cancel" ? "CANCEL" : entry.mode === "enter" ? "ENTER" : entry.mode === "finish" ? "FINISH" : "WAKE"}] ${entry.text}`
+                      : entry.text}
+                  </span>
+                </div>
+              ))
+            )}
+            <div ref={logEndRef} />
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm">
+        <div className="px-4 py-3">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Uses the base Whisper model (~142 MB) to continuously listen for your wake phrase.
+            Runs in the background with minimal resource usage. The listener automatically pauses
+            during active dictation and resumes when done.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SectionHeader({ title, description }: { title: string; description?: string }) {
@@ -2023,6 +2320,9 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
             <PromptStudio />
           </div>
         );
+
+      case "wakeWord":
+        return <WakeWordSection />;
 
       case "privacy":
         return (
