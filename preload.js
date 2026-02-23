@@ -123,6 +123,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   createProductionEnvFile: (key) => ipcRenderer.invoke("create-production-env-file", key),
 
   // Clipboard functions
+  checkAccessibilityPermission: () => ipcRenderer.invoke("check-accessibility-permission"),
   readClipboard: () => ipcRenderer.invoke("read-clipboard"),
   writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
   checkPasteTools: () => ipcRenderer.invoke("check-paste-tools"),

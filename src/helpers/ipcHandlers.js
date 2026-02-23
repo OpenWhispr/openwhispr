@@ -441,14 +441,26 @@ class IPCHandlers {
     });
 
     ipcMain.handle("paste-text", async (event, text, options) => {
-      // If the floating dictation panel currently has focus, blur it first so the
+      // If the floating dictation panel currently has focus, dismiss it so the
       // paste keystroke lands in the user's target app instead of the overlay.
       const mainWindow = this.windowManager?.mainWindow;
       if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
-        mainWindow.blur();
-        await new Promise((resolve) => setTimeout(resolve, 80));
+        if (process.platform === "darwin") {
+          // hide() forces macOS to activate the previous app; showInactive()
+          // restores the overlay without stealing focus.
+          mainWindow.hide();
+          await new Promise((resolve) => setTimeout(resolve, 120));
+          mainWindow.showInactive();
+        } else {
+          mainWindow.blur();
+          await new Promise((resolve) => setTimeout(resolve, 80));
+        }
       }
       return this.clipboardManager.pasteText(text, { ...options, webContents: event.sender });
+    });
+
+    ipcMain.handle("check-accessibility-permission", async () => {
+      return this.clipboardManager.checkAccessibilityPermissions();
     });
 
     ipcMain.handle("read-clipboard", async (event) => {

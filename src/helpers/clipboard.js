@@ -1,4 +1,4 @@
-const { clipboard } = require("electron");
+const { clipboard, systemPreferences } = require("electron");
 const { spawn, spawnSync } = require("child_process");
 const { killProcess } = require("../utils/process");
 const path = require("path");
@@ -7,10 +7,9 @@ const debugLogger = require("./debugLogger");
 
 const CACHE_TTL_MS = 30000;
 
-// macOS accessibility: once granted, permissions persist across app sessions,
-// so use a long TTL. Denied results re-check quickly so granting takes effect fast.
-const ACCESSIBILITY_GRANTED_TTL_MS = 24 * 60 * 60 * 1000;
-const ACCESSIBILITY_DENIED_TTL_MS = 5000;
+// isTrustedAccessibilityClient() is a cheap synchronous syscall, so the cache
+// only exists to debounce the dialog shown on denial.
+const ACCESSIBILITY_CHECK_TTL_MS = 5000;
 
 const getLinuxDesktopEnv = () =>
   [process.env.XDG_CURRENT_DESKTOP, process.env.XDG_SESSION_DESKTOP, process.env.DESKTOP_SESSION]
@@ -327,7 +326,14 @@ class ClipboardManager {
         }
 
         this.safeLog("✅ Permissions granted, attempting to paste...");
-        await this.pasteMacOS(originalClipboard, options);
+        try {
+          await this.pasteMacOS(originalClipboard, options);
+        } catch (firstError) {
+          this.safeLog("⚠️ First paste attempt failed, retrying...", firstError?.message);
+          clipboard.writeText(text);
+          await new Promise((r) => setTimeout(r, 200));
+          await this.pasteMacOS(originalClipboard, options);
+        }
       } else if (platform === "win32") {
         const winFastPaste = this.resolveWindowsFastPasteBinary();
         if (winFastPaste) {
@@ -1244,44 +1250,17 @@ class ClipboardManager {
       return this.accessibilityCache.value;
     }
 
-    return new Promise((resolve) => {
-      const testProcess = spawn("osascript", [
-        "-e",
-        'tell application "System Events" to get name of first process',
-      ]);
+    const allowed = systemPreferences.isTrustedAccessibilityClient(false);
+    this.accessibilityCache = {
+      value: allowed,
+      expiresAt: Date.now() + ACCESSIBILITY_CHECK_TTL_MS,
+    };
 
-      let testOutput = "";
-      let testError = "";
+    if (!allowed) {
+      this.showAccessibilityDialog("not allowed assistive access");
+    }
 
-      testProcess.stdout.on("data", (data) => {
-        testOutput += data.toString();
-      });
-
-      testProcess.stderr.on("data", (data) => {
-        testError += data.toString();
-      });
-
-      testProcess.on("close", (code) => {
-        const allowed = code === 0;
-        this.accessibilityCache = {
-          value: allowed,
-          expiresAt:
-            Date.now() + (allowed ? ACCESSIBILITY_GRANTED_TTL_MS : ACCESSIBILITY_DENIED_TTL_MS),
-        };
-        if (!allowed) {
-          this.showAccessibilityDialog(testError);
-        }
-        resolve(allowed);
-      });
-
-      testProcess.on("error", (error) => {
-        this.accessibilityCache = {
-          value: false,
-          expiresAt: Date.now() + ACCESSIBILITY_DENIED_TTL_MS,
-        };
-        resolve(false);
-      });
-    });
+    return allowed;
   }
 
   showAccessibilityDialog(testError) {
