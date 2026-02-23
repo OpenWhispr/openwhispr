@@ -792,6 +792,7 @@ class ClipboardManager {
       "tabby",
       "sakura",
       "warp",
+      "termius",
     ];
 
     // Pre-detect the target window BEFORE our window takes focus or blurs,
