@@ -970,9 +970,12 @@
       "howItWorksDescription": "「ねぇ {{agentName}}」と呼びかけて指示を出すと、AI がクリーンアップモードから指示モードに切り替わります。呼びかけなければ、通常のディクテーションのクリーンアップが行われます。",
       "howItWorksTitle": "仕組み",
       "instructionMode": "指示",
+      "passAgentNameToWhisper": "エージェント名を Whisper に渡す",
+      "passAgentNameToWhisperDesc": "Whisper に送信する辞書にエージェント名を追加し、名前の認識精度を向上させます。",
       "placeholder": "例: ジャービス、ノヴァ、アトラス...",
       "save": "保存",
-      "title": "音声エージェント"
+      "title": "音声エージェント",
+      "whisperIntegration": "Whisper 連携"
     },
     "aiModels": {
       "customSetup": "カスタム設定",

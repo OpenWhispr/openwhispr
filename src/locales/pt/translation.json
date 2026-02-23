@@ -942,9 +942,12 @@
       "howItWorksDescription": "Quando você diz \"Ei {{agentName}}\" seguido de uma instrução, a IA muda do modo de limpeza para o modo de instrução. Sem a frase de ativação, ela simplesmente limpa seu ditado.",
       "howItWorksTitle": "Como funciona",
       "instructionMode": "Instrução",
+      "passAgentNameToWhisper": "Passar nome do agente para Whisper",
+      "passAgentNameToWhisperDesc": "Adicione o nome do seu agente ao dicionário enviado ao Whisper para ajudá-lo a reconhecer melhor o nome.",
       "placeholder": "ex.: Jarvis, Nova, Atlas...",
       "save": "Salvar",
-      "title": "Agente de voz"
+      "title": "Agente de voz",
+      "whisperIntegration": "Integração Whisper"
     },
     "aiModels": {
       "customSetup": "Configuração personalizada",

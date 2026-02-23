@@ -32,6 +32,7 @@ export interface TranscriptionSettings {
   cloudTranscriptionMode: string;
   customDictionary: string[];
   assemblyAiStreaming: boolean;
+  passAgentNameToWhisper: boolean;
 }
 
 export interface ReasoningSettings {
@@ -276,6 +277,15 @@ function useSettingsInternal() {
     {
       serialize: String,
       deserialize: (value) => value !== "false", // Default to true unless explicitly disabled
+    }
+  );
+
+  const [passAgentNameToWhisper, setPassAgentNameToWhisper] = useLocalStorage(
+    "passAgentNameToWhisper",
+    false,
+    {
+      serialize: String,
+      deserialize: (value) => value === "true",
     }
   );
 
@@ -704,6 +714,8 @@ function useSettingsInternal() {
       if (settings.cloudTranscriptionBaseUrl !== undefined)
         setCloudTranscriptionBaseUrl(settings.cloudTranscriptionBaseUrl);
       if (settings.customDictionary !== undefined) setCustomDictionary(settings.customDictionary);
+      if (settings.passAgentNameToWhisper !== undefined)
+        setPassAgentNameToWhisper(settings.passAgentNameToWhisper);
     },
     [
       setUseLocalWhisper,
@@ -719,6 +731,7 @@ function useSettingsInternal() {
       setCloudTranscriptionModel,
       setCloudTranscriptionBaseUrl,
       setCustomDictionary,
+      setPassAgentNameToWhisper,
     ]
   );
 
@@ -772,6 +785,7 @@ function useSettingsInternal() {
     cloudReasoningMode,
     customDictionary,
     assemblyAiStreaming,
+    passAgentNameToWhisper,
     setAssemblyAiStreaming,
     useReasoningModel,
     reasoningModel,
@@ -799,6 +813,7 @@ function useSettingsInternal() {
     setCloudTranscriptionMode,
     setCloudReasoningMode,
     setCustomDictionary,
+    setPassAgentNameToWhisper,
     setUseReasoningModel,
     setReasoningModel,
     setReasoningProvider,

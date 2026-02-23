@@ -970,9 +970,12 @@
       "howItWorksDescription": "Cuando dices \"Hey {{agentName}}\" seguido de una instrucción, la IA cambia del modo corrección al modo instrucción. Sin la frase de activación, simplemente corrige tu dictado.",
       "howItWorksTitle": "Cómo funciona",
       "instructionMode": "Instrucción",
+      "passAgentNameToWhisper": "Pasar nombre del agente a Whisper",
+      "passAgentNameToWhisperDesc": "Añade el nombre de tu agente al diccionario enviado a Whisper para ayudarle a reconocer mejor el nombre.",
       "placeholder": "p. ej. Jarvis, Nova, Atlas...",
       "save": "Guardar",
-      "title": "Agente de voz"
+      "title": "Agente de voz",
+      "whisperIntegration": "Integración con Whisper"
     },
     "aiModels": {
       "customSetup": "Configuración personalizada",

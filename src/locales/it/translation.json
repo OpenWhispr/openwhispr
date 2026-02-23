@@ -970,9 +970,12 @@
       "howItWorksDescription": "Quando dici \"Ehi {{agentName}}\" seguito da un'istruzione, l'IA passa dalla modalità correzione alla modalità istruzione. Senza la frase di attivazione, si limita a correggere la tua dettatura.",
       "howItWorksTitle": "Come funziona",
       "instructionMode": "Istruzione",
+      "passAgentNameToWhisper": "Passa il nome dell'agente a Whisper",
+      "passAgentNameToWhisperDesc": "Aggiungi il nome del tuo agente al dizionario inviato a Whisper per aiutarlo a riconoscere meglio il nome.",
       "placeholder": "es. Jarvis, Nova, Atlas...",
       "save": "Salva",
-      "title": "Agente vocale"
+      "title": "Agente vocale",
+      "whisperIntegration": "Integrazione Whisper"
     },
     "aiModels": {
       "customSetup": "Configurazione personalizzata",

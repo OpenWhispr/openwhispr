@@ -970,9 +970,12 @@
       "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, wechselt die KI vom Bereinigungsmodus in den Anweisungsmodus. Ohne die Triggerphrase wird Ihr Diktat einfach bereinigt.",
       "howItWorksTitle": "So funktioniert es",
       "instructionMode": "Anweisung",
+      "passAgentNameToWhisper": "Agentenname an Whisper übergeben",
+      "passAgentNameToWhisperDesc": "Fügen Sie Ihren Agentennamen zum Wörterbuch hinzu, das an Whisper gesendet wird, damit der Name besser erkannt wird.",
       "placeholder": "z. B. Jarvis, Nova, Atlas...",
       "save": "Speichern",
-      "title": "Sprachagent"
+      "title": "Sprachagent",
+      "whisperIntegration": "Whisper-Integration"
     },
     "aiModels": {
       "customSetup": "Benutzerdefinierte Einrichtung",

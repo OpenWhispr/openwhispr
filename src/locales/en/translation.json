@@ -981,9 +981,12 @@
       "howItWorksDescription": "When you say \"Hey {{agentName}}\" followed by an instruction, the AI switches from cleanup mode to instruction mode. Without the trigger phrase, it simply cleans up your dictation.",
       "howItWorksTitle": "How it works",
       "instructionMode": "Instruction",
+      "passAgentNameToWhisper": "Pass agent name to Whisper",
+      "passAgentNameToWhisperDesc": "Add your agent name to the dictionary sent to Whisper to help it recognize the name better.",
       "placeholder": "e.g. Jarvis, Nova, Atlas...",
       "save": "Save",
-      "title": "Voice Agent"
+      "title": "Voice Agent",
+      "whisperIntegration": "Whisper Integration"
     },
     "aiModels": {
       "customSetup": "Custom Setup",

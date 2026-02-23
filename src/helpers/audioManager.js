@@ -826,7 +826,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Add custom dictionary as initial prompt to help Whisper recognize specific words
       const dictionaryPrompt = this.getCustomDictionaryPrompt();
       if (dictionaryPrompt) {
+        logger.debug("Appending custom dictionary to local Whisper prompt", { dictionaryPrompt }, "transcription");
         options.initialPrompt = dictionaryPrompt;
+      } else {
+        logger.debug("No custom dictionary to append for local Whisper", {}, "transcription");
       }
 
       logger.debug(
@@ -1468,7 +1471,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (language) opts.language = language;
 
     const dictionaryPrompt = this.getCustomDictionaryPrompt();
-    if (dictionaryPrompt) opts.prompt = dictionaryPrompt;
+    if (dictionaryPrompt) {
+      logger.debug("Appending custom dictionary to OpenWhispr Cloud prompt", { dictionaryPrompt }, "transcription");
+      opts.prompt = dictionaryPrompt;
+    } else {
+      logger.debug("No custom dictionary to append for OpenWhispr Cloud", {}, "transcription");
+    }
 
     // Use withSessionRefresh to handle AUTH_EXPIRED automatically
     const transcriptionStart = performance.now();
@@ -1666,7 +1674,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Add custom dictionary as prompt hint for cloud transcription
       const dictionaryPrompt = this.getCustomDictionaryPrompt();
       if (dictionaryPrompt) {
+        logger.debug("Appending custom dictionary to Cloud API prompt", { dictionaryPrompt }, "transcription");
         formData.append("prompt", dictionaryPrompt);
+      } else {
+        logger.debug("No custom dictionary to append for Cloud API", {}, "transcription");
       }
 
       const shouldStream = this.shouldStreamTranscription(model, provider);

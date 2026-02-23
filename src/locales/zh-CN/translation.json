@@ -970,9 +970,12 @@
       "howItWorksDescription": "当你说\u201cHey {{agentName}}\u201d并跟上指令时，AI 会从整理模式切换到指令模式。没有触发短语时，它只会整理你的听写内容。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
+      "passAgentNameToWhisper": "将助手名称传递给 Whisper",
+      "passAgentNameToWhisperDesc": "将你的助手名称添加到发送给 Whisper 的词典中，以帮助它更好地识别名称。",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
       "save": "保存",
-      "title": "语音助手"
+      "title": "语音助手",
+      "whisperIntegration": "Whisper 集成"
     },
     "aiModels": {
       "customSetup": "自定义设置",

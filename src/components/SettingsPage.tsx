@@ -1136,6 +1136,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setCloudBackupEnabled,
     telemetryEnabled,
     setTelemetryEnabled,
+    passAgentNameToWhisper,
+    setPassAgentNameToWhisper,
   } = useSettings();
 
   const { t, i18n } = useTranslation();
@@ -2406,6 +2408,35 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                     <p className="text-[11px] text-muted-foreground/60">
                       {t("settingsPage.agentConfig.helper")}
                     </p>
+                  </div>
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Pass Agent Name to Whisper */}
+            <div>
+              <p className="text-[13px] font-medium text-foreground mb-3">
+                {t("settingsPage.agentConfig.whisperIntegration")}
+              </p>
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[13px] font-medium text-foreground">
+                        {t("settingsPage.agentConfig.passAgentNameToWhisper")}
+                      </p>
+                      <p className="text-[12px] text-muted-foreground mt-0.5">
+                        {t("settingsPage.agentConfig.passAgentNameToWhisperDesc")}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={passAgentNameToWhisper}
+                      onCheckedChange={(checked) => {
+                        setPassAgentNameToWhisper(checked);
+                        // trigger sync when this toggle is flipped
+                        setTimeout(() => setAgentName(agentName), 0);
+                      }}
+                    />
                   </div>
                 </SettingsPanelRow>
               </SettingsPanel>

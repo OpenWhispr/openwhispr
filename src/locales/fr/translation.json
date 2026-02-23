@@ -970,9 +970,12 @@
       "howItWorksDescription": "Lorsque vous dites « Hey {{agentName}} » suivi d'une instruction, l'IA passe du mode correction au mode instruction. Sans la phrase déclencheur, il corrige simplement votre dictée.",
       "howItWorksTitle": "Comment ça marche",
       "instructionMode": "Instruction",
+      "passAgentNameToWhisper": "Passer le nom de l'agent à Whisper",
+      "passAgentNameToWhisperDesc": "Ajoutez le nom de votre agent au dictionnaire envoyé à Whisper pour l'aider à mieux reconnaître le nom.",
       "placeholder": "ex. Jarvis, Nova, Atlas...",
       "save": "Enregistrer",
-      "title": "Agent vocal"
+      "title": "Agent vocal",
+      "whisperIntegration": "Intégration Whisper"
     },
     "aiModels": {
       "customSetup": "Configuration personnalisée",

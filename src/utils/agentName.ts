@@ -25,10 +25,19 @@ function syncAgentNameToDictionary(newName: string, oldName?: string): void {
     dictionary = dictionary.filter((w) => w !== oldName);
   }
 
-  // Add new name at the front if not already present
+  const passAgentNameToWhisper = localStorage.getItem("passAgentNameToWhisper") === "true";
   const trimmed = newName.trim();
-  if (trimmed && !dictionary.includes(trimmed)) {
-    dictionary = [trimmed, ...dictionary];
+
+  if (passAgentNameToWhisper) {
+    // Add new name at the front if not already present
+    if (trimmed && !dictionary.includes(trimmed)) {
+      dictionary = [trimmed, ...dictionary];
+    }
+  } else {
+    // Ensure the name is removed if the setting is disabled
+    if (trimmed) {
+      dictionary = dictionary.filter((w) => w !== trimmed);
+    }
   }
 
   localStorage.setItem(DICTIONARY_KEY, JSON.stringify(dictionary));
