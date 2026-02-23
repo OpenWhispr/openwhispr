@@ -205,6 +205,18 @@ export interface PasteToolsResult {
   recommendedInstall?: string;
 }
 
+export type GpuBackend = "vulkan" | "cpu" | "metal" | null;
+
+export interface LlamaServerStatus {
+  available: boolean;
+  running: boolean;
+  port: number | null;
+  modelPath: string | null;
+  modelName: string | null;
+  backend: GpuBackend;
+  gpuAccelerated: boolean;
+}
+
 export interface ReferralItem {
   id: string;
   email: string;
@@ -455,6 +467,14 @@ declare global {
       llamaCppCheck: () => Promise<{ isInstalled: boolean; version?: string }>;
       llamaCppInstall: () => Promise<{ success: boolean; error?: string }>;
       llamaCppUninstall: () => Promise<{ success: boolean; error?: string }>;
+
+      // llama-server
+      llamaServerStart: (
+        modelId: string
+      ) => Promise<{ success: boolean; port?: number; error?: string }>;
+      llamaServerStop: () => Promise<{ success: boolean; error?: string }>;
+      llamaServerStatus: () => Promise<LlamaServerStatus>;
+      llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
 
       // Window control operations
       windowMinimize: () => Promise<void>;

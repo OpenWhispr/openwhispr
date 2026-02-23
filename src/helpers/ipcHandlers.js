@@ -1270,9 +1270,11 @@ class IPCHandlers {
         await modelManager.serverManager.start(modelPath, {
           contextSize: modelInfo.model.contextLength || 4096,
           threads: 4,
+          gpuLayers: 99,
         });
         modelManager.currentServerModelId = modelId;
 
+        this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
         return { success: true, port: modelManager.serverManager.port };
       } catch (error) {
         return { success: false, error: error.message };
@@ -1295,6 +1297,17 @@ class IPCHandlers {
         return modelManager.getServerStatus();
       } catch (error) {
         return { available: false, running: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("llama-gpu-reset", async () => {
+      try {
+        const modelManager = require("./modelManagerBridge").default;
+        modelManager.serverManager.resetGpuDetection();
+        await modelManager.stopServer();
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
       }
     });
 

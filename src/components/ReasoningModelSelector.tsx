@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import type { LlamaServerStatus } from "../types/electron";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Cloud, Lock } from "lucide-react";
@@ -66,6 +67,47 @@ interface ReasoningModelSelectorProps {
   setGroqApiKey: (key: string) => void;
   customReasoningApiKey?: string;
   setCustomReasoningApiKey?: (key: string) => void;
+}
+
+function GpuStatusBadge() {
+  const [status, setStatus] = useState<LlamaServerStatus | null>(null);
+
+  useEffect(() => {
+    const poll = () =>
+      window.electronAPI
+        ?.llamaServerStatus?.()
+        .then(setStatus)
+        .catch(() => {});
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!status?.running) return null;
+
+  const isGpu = status.gpuAccelerated && status.backend;
+  const backendLabel = status.backend === "metal" ? "Metal" : "Vulkan";
+
+  return (
+    <div className="flex items-center gap-1.5 mt-2 px-1">
+      <span
+        className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ backgroundColor: isGpu ? "#22c55e" : "#f59e0b" }}
+      />
+      <span className="text-xs text-muted-foreground">
+        {isGpu ? `GPU Accelerated (${backendLabel})` : "CPU Only"}
+      </span>
+      {!isGpu && (
+        <button
+          type="button"
+          onClick={() => window.electronAPI.llamaGpuReset?.()}
+          className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors ml-1"
+        >
+          Re-detect GPU
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function ReasoningModelSelector({
@@ -746,16 +788,19 @@ export default function ReasoningModelSelector({
           </div>
         </div>
       ) : (
-        <LocalModelPicker
-          providers={localProviders}
-          selectedModel={reasoningModel}
-          selectedProvider={selectedLocalProvider}
-          onModelSelect={setReasoningModel}
-          onProviderSelect={handleLocalProviderChange}
-          modelType="llm"
-          colorScheme="purple"
-          onDownloadComplete={loadDownloadedModels}
-        />
+        <>
+          <LocalModelPicker
+            providers={localProviders}
+            selectedModel={reasoningModel}
+            selectedProvider={selectedLocalProvider}
+            onModelSelect={setReasoningModel}
+            onProviderSelect={handleLocalProviderChange}
+            modelType="llm"
+            colorScheme="purple"
+            onDownloadComplete={loadDownloadedModels}
+          />
+          <GpuStatusBadge />
+        </>
       )}
     </div>
   );

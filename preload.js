@@ -272,6 +272,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   llamaServerStart: (modelId) => ipcRenderer.invoke("llama-server-start", modelId),
   llamaServerStop: () => ipcRenderer.invoke("llama-server-stop"),
   llamaServerStatus: () => ipcRenderer.invoke("llama-server-status"),
+  llamaGpuReset: () => ipcRenderer.invoke("llama-gpu-reset"),
 
   getLogLevel: () => ipcRenderer.invoke("get-log-level"),
   log: (entry) => ipcRenderer.invoke("app-log", entry),
