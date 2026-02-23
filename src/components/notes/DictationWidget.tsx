@@ -46,9 +46,16 @@ export default function DictationWidget({
             "border border-primary/20 dark:border-primary/25",
             "shadow-elevated"
           )}
-          style={{ animation: "float-up 0.2s ease-out" }}
+          style={{
+            animation: "grow-to-bar 0.45s cubic-bezier(0.22, 1, 0.36, 1) both",
+          }}
         >
-          <div className="flex items-end gap-0.75 h-5">
+          <div
+            className="flex items-end gap-0.75 h-5"
+            style={{
+              animation: "fade-in-content 0.3s ease-out 0.2s both",
+            }}
+          >
             {Array.from({ length: BAR_COUNT }, (_, i) => (
               <div
                 key={i}
@@ -56,13 +63,18 @@ export default function DictationWidget({
                 style={{
                   height: "100%",
                   animation: `waveform-bar ${0.6 + i * 0.08}s ease-in-out infinite`,
-                  animationDelay: `${i * 0.06}s`,
+                  animationDelay: `${0.35 + i * 0.05}s`,
                 }}
               />
             ))}
           </div>
 
-          <span className="text-xs font-medium tabular-nums text-primary/60 dark:text-primary/70 min-w-9">
+          <span
+            className="text-xs font-medium tabular-nums text-primary/60 dark:text-primary/70 min-w-9"
+            style={{
+              animation: "fade-in-content 0.3s ease-out 0.25s both",
+            }}
+          >
             {minutes}:{seconds}
           </span>
 
@@ -74,6 +86,9 @@ export default function DictationWidget({
               "text-primary",
               "transition-colors duration-150"
             )}
+            style={{
+              animation: "fade-in-content 0.3s ease-out 0.3s both",
+            }}
             aria-label={t("notes.editor.stop")}
           >
             <Square size={12} fill="currentColor" />
@@ -99,21 +114,20 @@ export default function DictationWidget({
           <button
             onClick={onStart}
             className={cn(
-              "flex items-center gap-2.5 h-11 px-6 rounded-xl",
+              "flex items-center justify-center w-11 h-11 rounded-full",
               "bg-primary/8 dark:bg-primary/12",
               "backdrop-blur-xl",
               "border border-primary/15 dark:border-primary/20",
               "shadow-sm hover:shadow-md",
-              "text-primary/70 hover:text-primary",
-              "transition-[background-color,color,transform] duration-200",
-              "hover:bg-primary/12 dark:hover:bg-primary/18",
-              "active:scale-[0.98]"
+              "text-primary/60 hover:text-primary",
+              "transition-all duration-200",
+              "hover:bg-primary/14 dark:hover:bg-primary/20",
+              "hover:scale-105",
+              "active:scale-[0.97]"
             )}
+            aria-label={t("notes.editor.transcribe")}
           >
-            <Mic size={15} />
-            <span className="text-xs font-semibold tracking-tight">
-              {t("notes.editor.transcribe")}
-            </span>
+            <Mic size={16} />
           </button>
           {actionPicker}
         </div>
