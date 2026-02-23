@@ -395,7 +395,11 @@ declare global {
       cancelCudaWhisperDownload: () => Promise<{ success: boolean }>;
       deleteCudaWhisperBinary: () => Promise<{ success: boolean }>;
       onCudaDownloadProgress: (
-        callback: (data: { downloadedBytes: number; totalBytes: number; percentage: number }) => void
+        callback: (data: {
+          downloadedBytes: number;
+          totalBytes: number;
+          percentage: number;
+        }) => void
       ) => () => void;
       onCudaFallbackNotification: (callback: () => void) => () => void;
 

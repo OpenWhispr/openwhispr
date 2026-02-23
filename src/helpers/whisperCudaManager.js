@@ -13,8 +13,7 @@ const {
 } = require("./downloadUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 
-const GITHUB_RELEASE_URL =
-  "https://api.github.com/repos/OpenWhispr/whisper.cpp/releases/latest";
+const GITHUB_RELEASE_URL = "https://api.github.com/repos/OpenWhispr/whisper.cpp/releases/latest";
 
 const PLATFORM_BINARY_NAMES = {
   linux: "whisper-server-linux-x64-cuda",
@@ -71,9 +70,7 @@ class WhisperCudaManager {
     const asset = release.assets?.find((a) => a.name === assetName);
 
     if (!asset) {
-      throw new Error(
-        `No CUDA asset found for ${process.platform} (expected ${assetName})`
-      );
+      throw new Error(`No CUDA asset found for ${process.platform} (expected ${assetName})`);
     }
 
     return {
@@ -124,8 +121,7 @@ class WhisperCudaManager {
               type: "progress",
               downloaded_bytes: downloaded,
               total_bytes: total,
-              percentage:
-                total > 0 ? Math.round((downloaded / total) * 100) : 0,
+              percentage: total > 0 ? Math.round((downloaded / total) * 100) : 0,
             });
           }
         },
@@ -151,9 +147,7 @@ class WhisperCudaManager {
       }
 
       if (!this.getCudaBinaryPath()) {
-        throw new Error(
-          `Extraction completed but binary "${binaryName}" not found in archive`
-        );
+        throw new Error(`Extraction completed but binary "${binaryName}" not found in archive`);
       }
 
       debugLogger.info("CUDA binary download complete", {
@@ -172,9 +166,7 @@ class WhisperCudaManager {
     } finally {
       this._downloadSignal = null;
       await fsPromises.unlink(zipPath).catch(() => {});
-      await fsPromises
-        .rm(extractDir, { recursive: true, force: true })
-        .catch(() => {});
+      await fsPromises.rm(extractDir, { recursive: true, force: true }).catch(() => {});
     }
   }
 

@@ -22,7 +22,10 @@ function detectNvidiaGpu() {
           return;
         }
 
-        const parts = stdout.trim().split(",").map((s) => s.trim());
+        const parts = stdout
+          .trim()
+          .split(",")
+          .map((s) => s.trim());
         if (parts.length < 3) {
           cachedGpuInfo = { hasNvidiaGpu: false };
           resolve(cachedGpuInfo);
