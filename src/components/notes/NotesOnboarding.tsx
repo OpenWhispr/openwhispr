@@ -1,26 +1,19 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkles, Plus, ChevronRight, Zap, Loader2, Check } from "lucide-react";
 import { Button } from "../ui/button";
-import ApiKeyInput from "../ui/ApiKeyInput";
 import { cn } from "../lib/utils";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import { useActions, initializeActions } from "../../stores/actionStore";
-import { getProviderIcon, isMonochromeProvider } from "../../utils/providerIcons";
+import { useDialogs } from "../../hooks/useDialogs";
+import { AlertDialog } from "../ui/dialog";
+import ReasoningModelSelector from "../ReasoningModelSelector";
 
 interface NotesOnboardingProps {
   onComplete: () => void;
   onOpenSettings?: (section: string) => void;
 }
-
-const LLM_PROVIDERS = [
-  { id: "openai", name: "OpenAI", placeholder: "sk-..." },
-  { id: "anthropic", name: "Anthropic", placeholder: "sk-ant-..." },
-  { id: "gemini", name: "Google Gemini", placeholder: "AI..." },
-] as const;
-
-type LLMProviderId = (typeof LLM_PROVIDERS)[number]["id"];
 
 const inputClass = cn(
   "w-full h-8 px-3 rounded-md text-xs",
@@ -29,12 +22,11 @@ const inputClass = cn(
   "focus:border-primary/30 transition-colors duration-150"
 );
 
-export default function NotesOnboarding({ onComplete, onOpenSettings }: NotesOnboardingProps) {
+export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const { t } = useTranslation();
-  const { isProUser, isLLMConfigured, complete } = useNotesOnboarding();
+  const { isProUser, isProLoading, isLLMConfigured, complete } = useNotesOnboarding();
   const actions = useActions();
   const [llmExpanded, setLlmExpanded] = useState(!isLLMConfigured && !isProUser);
-  const [selectedProvider, setSelectedProvider] = useState<LLMProviderId>("openai");
   const [createExpanded, setCreateExpanded] = useState(false);
   const [actionName, setActionName] = useState("");
   const [actionDescription, setActionDescription] = useState("");
@@ -42,53 +34,30 @@ export default function NotesOnboarding({ onComplete, onOpenSettings }: NotesOnb
   const [isSaving, setIsSaving] = useState(false);
   const [justCreated, setJustCreated] = useState(false);
 
-  const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
-  const anthropicApiKey = useSettingsStore((s) => s.anthropicApiKey);
-  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
-  const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
-  const setAnthropicApiKey = useSettingsStore((s) => s.setAnthropicApiKey);
-  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
-  const setReasoningProvider = useSettingsStore((s) => s.setReasoningProvider);
+  const useReasoningModel = useSettingsStore((s) => s.useReasoningModel);
   const setUseReasoningModel = useSettingsStore((s) => s.setUseReasoningModel);
-  const updateReasoningSettings = useSettingsStore((s) => s.updateReasoningSettings);
+  const reasoningModel = useSettingsStore((s) => s.reasoningModel);
+  const setReasoningModel = useSettingsStore((s) => s.setReasoningModel);
+  const reasoningProvider = useSettingsStore((s) => s.reasoningProvider);
+  const setReasoningProvider = useSettingsStore((s) => s.setReasoningProvider);
+  const cloudReasoningBaseUrl = useSettingsStore((s) => s.cloudReasoningBaseUrl);
+  const setCloudReasoningBaseUrl = useSettingsStore((s) => s.setCloudReasoningBaseUrl);
+  const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
+  const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
+  const anthropicApiKey = useSettingsStore((s) => s.anthropicApiKey);
+  const setAnthropicApiKey = useSettingsStore((s) => s.setAnthropicApiKey);
+  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
+  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
+  const groqApiKey = useSettingsStore((s) => s.groqApiKey);
+  const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
+  const customReasoningApiKey = useSettingsStore((s) => s.customReasoningApiKey);
+  const setCustomReasoningApiKey = useSettingsStore((s) => s.setCustomReasoningApiKey);
+
+  const { alertDialog, showAlertDialog, hideAlertDialog } = useDialogs();
 
   useEffect(() => {
     initializeActions();
   }, []);
-
-  const activeKey =
-    selectedProvider === "openai"
-      ? openaiApiKey
-      : selectedProvider === "anthropic"
-        ? anthropicApiKey
-        : geminiApiKey;
-
-  const setActiveKey = useCallback(
-    (key: string) => {
-      if (selectedProvider === "openai") setOpenaiApiKey(key);
-      else if (selectedProvider === "anthropic") setAnthropicApiKey(key);
-      else setGeminiApiKey(key);
-
-      if (key) {
-        setReasoningProvider(selectedProvider);
-        setUseReasoningModel(true);
-        updateReasoningSettings({
-          useReasoningModel: true,
-          reasoningProvider: selectedProvider,
-          cloudReasoningMode: "byok",
-        });
-      }
-    },
-    [
-      selectedProvider,
-      setOpenaiApiKey,
-      setAnthropicApiKey,
-      setGeminiApiKey,
-      setReasoningProvider,
-      setUseReasoningModel,
-      updateReasoningSettings,
-    ]
-  );
 
   const handleCreateAction = async () => {
     if (!actionName.trim() || !actionPrompt.trim()) return;
@@ -114,14 +83,13 @@ export default function NotesOnboarding({ onComplete, onOpenSettings }: NotesOnb
     onComplete();
   };
 
-  const providerMeta = LLM_PROVIDERS.find((p) => p.id === selectedProvider)!;
   const builtInAction = actions.find((a) => a.is_builtin === 1);
   const customActions = actions.filter((a) => a.is_builtin !== 1);
 
   return (
-    <div className="flex flex-col items-center justify-center h-full overflow-y-auto px-6">
+    <div className="flex flex-col items-center h-full overflow-y-auto px-6 py-6">
       <div
-        className="w-full max-w-[420px] space-y-5"
+        className="w-full max-w-[420px] space-y-5 my-auto"
         style={{ animation: "float-up 0.4s ease-out" }}
       >
         <div className="flex flex-col items-center text-center">
@@ -132,14 +100,12 @@ export default function NotesOnboarding({ onComplete, onOpenSettings }: NotesOnb
             {t("notes.onboarding.actions.title")}
           </h2>
           <p className="text-xs text-foreground/35 leading-relaxed max-w-[320px]">
-            {isProUser
-              ? t("notes.onboarding.actions.proNote")
-              : t("notes.onboarding.actions.description")}
+            {t("notes.onboarding.actions.description")}
           </p>
         </div>
 
-        {/* LLM Configuration — non-Pro only */}
-        {!isProUser && (
+        {/* LLM Configuration — non-Pro only, deferred until pro status is known */}
+        {!isProLoading && !isProUser && (
           <div
             className={cn(
               "rounded-lg border transition-colors duration-200",
@@ -183,40 +149,26 @@ export default function NotesOnboarding({ onComplete, onOpenSettings }: NotesOnb
                   {t("notes.onboarding.llm.description")}
                 </p>
 
-                <div className="flex items-center rounded-md border border-foreground/6 dark:border-white/6 bg-surface-1/30 dark:bg-white/[0.02] p-0.5">
-                  {LLM_PROVIDERS.map((provider) => {
-                    const icon = getProviderIcon(provider.id);
-                    const invert = isMonochromeProvider(provider.id);
-                    return (
-                      <button
-                        key={provider.id}
-                        onClick={() => setSelectedProvider(provider.id)}
-                        className={cn(
-                          "flex-1 flex items-center justify-center gap-1.5 h-7 rounded text-xs font-medium transition-colors duration-150",
-                          selectedProvider === provider.id
-                            ? "bg-foreground/[0.06] dark:bg-white/8 text-foreground/70"
-                            : "text-foreground/30 hover:text-foreground/50"
-                        )}
-                      >
-                        {icon && (
-                          <img
-                            src={icon}
-                            alt=""
-                            className={cn("w-3.5 h-3.5", invert && "dark:invert")}
-                          />
-                        )}
-                        {provider.name}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <ApiKeyInput
-                  apiKey={activeKey}
-                  setApiKey={setActiveKey}
-                  placeholder={providerMeta.placeholder}
-                  label=""
-                  ariaLabel={`${providerMeta.name} API key`}
+                <ReasoningModelSelector
+                  useReasoningModel={useReasoningModel}
+                  setUseReasoningModel={setUseReasoningModel}
+                  reasoningModel={reasoningModel}
+                  setReasoningModel={setReasoningModel}
+                  localReasoningProvider={reasoningProvider}
+                  setLocalReasoningProvider={setReasoningProvider}
+                  cloudReasoningBaseUrl={cloudReasoningBaseUrl}
+                  setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
+                  openaiApiKey={openaiApiKey}
+                  setOpenaiApiKey={setOpenaiApiKey}
+                  anthropicApiKey={anthropicApiKey}
+                  setAnthropicApiKey={setAnthropicApiKey}
+                  geminiApiKey={geminiApiKey}
+                  setGeminiApiKey={setGeminiApiKey}
+                  groqApiKey={groqApiKey}
+                  setGroqApiKey={setGroqApiKey}
+                  customReasoningApiKey={customReasoningApiKey}
+                  setCustomReasoningApiKey={setCustomReasoningApiKey}
+                  showAlertDialog={showAlertDialog}
                 />
               </div>
             )}
@@ -366,30 +318,19 @@ export default function NotesOnboarding({ onComplete, onOpenSettings }: NotesOnb
           )}
         </div>
 
-        {/* Pro upsell — non-Pro only */}
-        {!isProUser && (
-          <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg bg-primary/[0.04] dark:bg-primary/[0.06] border border-primary/10 dark:border-primary/15">
-            <p className="text-xs text-primary/50 leading-relaxed flex-1">
-              {t("notes.onboarding.proUpsell.message")}
-            </p>
-            {onOpenSettings && (
-              <button
-                type="button"
-                onClick={() => onOpenSettings("plansBilling")}
-                className="text-xs font-medium text-primary/60 hover:text-primary/80 transition-colors whitespace-nowrap"
-              >
-                {t("notes.onboarding.proUpsell.learnMore")}
-              </button>
-            )}
-          </div>
-        )}
-
         <div className="flex justify-center pt-1 pb-4">
           <Button variant="default" size="sm" onClick={handleComplete} className="h-8 text-xs px-8">
             {t("notes.onboarding.getStarted")}
           </Button>
         </div>
       </div>
+
+      <AlertDialog
+        open={alertDialog.open}
+        onOpenChange={(open) => !open && hideAlertDialog()}
+        title={alertDialog.title}
+        description={alertDialog.description}
+      />
     </div>
   );
 }

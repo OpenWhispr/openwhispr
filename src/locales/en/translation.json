@@ -1300,7 +1300,10 @@
     "dictionary": "Dictionary",
     "referral": "Get a free month",
     "settings": "Settings",
-    "support": "Support"
+    "support": "Support",
+    "limitReached": "Weekly limit reached",
+    "limitReachedDescription": "Upgrade to Pro for unlimited transcriptions.",
+    "upgradeToPro": "Upgrade to Pro"
   },
   "referral": {
     "title": "Refer and earn rewards",

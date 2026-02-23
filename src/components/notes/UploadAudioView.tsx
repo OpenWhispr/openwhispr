@@ -114,7 +114,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const isOpenWhisprCloud =
     isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
-  const showSetup = !isProUser && !setupDismissed && state === "idle";
+  const usageLoaded = usage?.hasLoaded ?? false;
+  const showSetup = usageLoaded && !isProUser && !setupDismissed && state === "idle";
   const showModelPicker = !isSignedIn || cloudTranscriptionMode === "byok" || useLocalWhisper;
   const shouldCenter = !showSetup && !advancedOpen;
 

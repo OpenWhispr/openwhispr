@@ -9,6 +9,7 @@ import { useUsage } from "./useUsage";
 interface UseNotesOnboardingReturn {
   isComplete: boolean;
   isProUser: boolean;
+  isProLoading: boolean;
   isLLMConfigured: boolean;
   complete: () => void;
 }
@@ -16,6 +17,7 @@ interface UseNotesOnboardingReturn {
 export function useNotesOnboarding(): UseNotesOnboardingReturn {
   const usage = useUsage();
   const isProUser = !!(usage?.isSubscribed || usage?.isTrial);
+  const isProLoading = usage !== null && !usage.hasLoaded;
   const useReasoningModel = useSettingsStore((s) => s.useReasoningModel);
   const effectiveModel = useSettingsStore(selectEffectiveReasoningModel);
   const isCloudReasoning = useSettingsStore(selectIsCloudReasoningMode);
@@ -32,5 +34,5 @@ export function useNotesOnboarding(): UseNotesOnboardingReturn {
     setIsComplete(true);
   }, []);
 
-  return { isComplete, isProUser, isLLMConfigured, complete };
+  return { isComplete, isProUser, isProLoading, isLLMConfigured, complete };
 }

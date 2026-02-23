@@ -23,12 +23,15 @@ interface ControlPanelSidebarProps {
   onOpenSettings: () => void;
   onOpenReferrals?: () => void;
   onUpgrade?: () => void;
+  onUpgradeCheckout?: () => void;
+  isOverLimit?: boolean;
   userName?: string | null;
   userEmail?: string | null;
   userImage?: string | null;
   isSignedIn?: boolean;
   authLoaded?: boolean;
   isProUser?: boolean;
+  usageLoaded?: boolean;
   updateAction?: React.ReactNode;
 }
 
@@ -38,12 +41,15 @@ export default function ControlPanelSidebar({
   onOpenSettings,
   onOpenReferrals,
   onUpgrade,
+  onUpgradeCheckout,
+  isOverLimit,
   userName,
   userEmail,
   userImage,
   isSignedIn,
   authLoaded,
   isProUser,
+  usageLoaded,
   updateAction,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
@@ -51,7 +57,8 @@ export default function ControlPanelSidebar({
     () => localStorage.getItem("upgradeProDismissed") === "true"
   );
 
-  const showUpgradeBanner = !isProUser && !upgradeDismissed;
+  const showLimitBanner = authLoaded && isSignedIn && !isProUser && isOverLimit;
+  const showUpgradeBanner = !showLimitBanner && authLoaded && (!isSignedIn || usageLoaded !== false) && !isProUser && !upgradeDismissed;
 
   const navItems: {
     id: ControlPanelView;
@@ -116,6 +123,26 @@ export default function ControlPanelSidebar({
       </nav>
 
       <div className="flex-1" />
+
+      {showLimitBanner && (
+        <div className="px-2 pb-2">
+          <div className="rounded-lg border border-destructive/25 bg-destructive/5 dark:bg-destructive/10 p-3">
+            <div className="flex flex-col items-center text-center">
+              <img src={logoIcon} alt="" className="w-7 h-7 rounded-md mb-2" />
+              <p className="text-xs font-medium text-foreground mb-0.5">{t("sidebar.limitReached")}</p>
+              <p className="text-[11px] leading-snug text-muted-foreground mb-2.5">
+                {t("sidebar.limitReachedDescription")}
+              </p>
+              <button
+                onClick={onUpgradeCheckout}
+                className="w-full h-7 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+              >
+                {t("sidebar.upgradeToPro")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showUpgradeBanner && (
         <div className="px-2 pb-2">

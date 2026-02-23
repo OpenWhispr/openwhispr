@@ -68,6 +68,7 @@ export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewP
   const {
     isComplete: isOnboardingComplete,
     isProUser,
+    isProLoading,
     complete: completeOnboarding,
   } = useNotesOnboarding();
 
@@ -628,7 +629,7 @@ export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewP
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {!isProUser && (
+        {!isProLoading && !isProUser && (
           <RealtimeTranscriptionBanner
             onUpgrade={onOpenSettings ? () => onOpenSettings("plansBilling") : undefined}
           />

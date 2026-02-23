@@ -710,7 +710,6 @@ export default function ReasoningModelSelector({
                           <ApiKeyInput
                             apiKey={anthropicApiKey}
                             setApiKey={setAnthropicApiKey}
-                            placeholder="sk-ant-..."
                             label=""
                             helpText=""
                           />
@@ -736,7 +735,6 @@ export default function ReasoningModelSelector({
                           <ApiKeyInput
                             apiKey={geminiApiKey}
                             setApiKey={setGeminiApiKey}
-                            placeholder="AIza..."
                             label=""
                             helpText=""
                           />
@@ -760,7 +758,6 @@ export default function ReasoningModelSelector({
                           <ApiKeyInput
                             apiKey={groqApiKey}
                             setApiKey={setGroqApiKey}
-                            placeholder="gsk_..."
                             label=""
                             helpText=""
                           />

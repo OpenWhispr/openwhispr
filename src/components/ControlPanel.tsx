@@ -330,12 +330,15 @@ export default function ControlPanel() {
             setSettingsSection("plansBilling");
             setShowSettings(true);
           }}
+          onUpgradeCheckout={() => usage?.openCheckout()}
+          isOverLimit={usage?.isOverLimit ?? false}
           userName={user?.name}
           userEmail={user?.email}
           userImage={user?.image}
           isSignedIn={isSignedIn}
           authLoaded={authLoaded}
           isProUser={usage?.isSubscribed || usage?.isTrial}
+          usageLoaded={usage?.hasLoaded ?? false}
           updateAction={
             !updateStatus.isDevelopment &&
             (updateStatus.updateAvailable ||
