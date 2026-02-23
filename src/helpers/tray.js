@@ -267,16 +267,9 @@ class TrayManager {
       return;
     }
 
-    if (process.platform === "darwin") {
-      this.tray.on("click", () => {
-        this.tray?.popUpContextMenu();
-      });
-    } else {
+    if (process.platform !== "darwin") {
       this.tray.on("click", () => {
         void this.showControlPanelFromTray();
-      });
-      this.tray.on("right-click", () => {
-        this.tray?.popUpContextMenu();
       });
     }
 
