@@ -424,6 +424,8 @@ declare global {
       notifyHotkeyChanged?: (hotkey: string) => void;
       notifyFloatingIconAutoHideChanged?: (enabled: boolean) => void;
       onFloatingIconAutoHideChanged?: (callback: (enabled: boolean) => void) => () => void;
+      notifyFloatingIconShrinkOnIdleChanged?: (enabled: boolean) => void;
+      onFloatingIconShrinkOnIdleChanged?: (callback: (enabled: boolean) => void) => () => void;
 
       // Auto-start at login
       getAutoStartEnabled?: () => Promise<boolean>;

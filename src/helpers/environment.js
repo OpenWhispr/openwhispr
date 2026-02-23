@@ -20,6 +20,7 @@ const PERSISTED_KEYS = [
   "DICTATION_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
+  "FLOATING_ICON_SHRINK_ON_IDLE",
   "UI_LANGUAGE",
 ];
 
@@ -146,6 +147,16 @@ class EnvironmentManager {
 
   saveFloatingIconAutoHide(enabled) {
     const result = this._saveKey("FLOATING_ICON_AUTO_HIDE", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getFloatingIconShrinkOnIdle() {
+    return this._getKey("FLOATING_ICON_SHRINK_ON_IDLE") === "true";
+  }
+
+  saveFloatingIconShrinkOnIdle(enabled) {
+    const result = this._saveKey("FLOATING_ICON_SHRINK_ON_IDLE", String(enabled));
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

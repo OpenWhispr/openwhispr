@@ -675,6 +675,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setAudioCuesEnabled,
     floatingIconAutoHide,
     setFloatingIconAutoHide,
+    floatingIconShrinkOnIdle,
+    setFloatingIconShrinkOnIdle,
     cloudBackupEnabled,
     setCloudBackupEnabled,
     telemetryEnabled,
@@ -1576,6 +1578,14 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                     description={t("settingsPage.general.floatingIcon.autoHideDescription")}
                   >
                     <Toggle checked={floatingIconAutoHide} onChange={setFloatingIconAutoHide} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.floatingIcon.shrinkOnIdle")}
+                    description={t("settingsPage.general.floatingIcon.shrinkOnIdleDescription")}
+                  >
+                    <Toggle checked={floatingIconShrinkOnIdle} onChange={setFloatingIconShrinkOnIdle} />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>

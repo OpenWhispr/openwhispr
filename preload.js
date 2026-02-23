@@ -312,6 +312,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, enabled) => callback(enabled)
   ),
 
+  // Floating icon shrink on idle
+  notifyFloatingIconShrinkOnIdleChanged: (enabled) =>
+    ipcRenderer.send("floating-icon-shrink-on-idle-changed", enabled),
+  onFloatingIconShrinkOnIdleChanged: registerListener(
+    "floating-icon-shrink-on-idle-changed",
+    (callback) => (_event, enabled) => callback(enabled)
+  ),
+
   // Auto-start management
   getAutoStartEnabled: () => ipcRenderer.invoke("get-auto-start-enabled"),
   setAutoStartEnabled: (enabled) => ipcRenderer.invoke("set-auto-start-enabled", enabled),

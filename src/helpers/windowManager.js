@@ -26,6 +26,7 @@ class WindowManager {
     this.winPushState = null;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
+    this._floatingIconShrinkOnIdle = false;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -390,6 +391,10 @@ class WindowManager {
 
   setFloatingIconAutoHide(enabled) {
     this._floatingIconAutoHide = Boolean(enabled);
+  }
+
+  setFloatingIconShrinkOnIdle(enabled) {
+    this._floatingIconShrinkOnIdle = Boolean(enabled);
   }
 
   setHotkeyListeningMode(enabled) {

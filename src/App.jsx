@@ -89,6 +89,11 @@ export default function App() {
   );
   const prevAutoHideRef = useRef(floatingIconAutoHide);
 
+  // Floating icon shrink on idle setting (read from localStorage, synced via IPC)
+  const [floatingIconShrinkOnIdle, setFloatingIconShrinkOnIdle] = useState(
+    () => localStorage.getItem("floatingIconShrinkOnIdle") === "true"
+  );
+
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
     window.electronAPI?.setMainWindowInteractivity?.(shouldCapture);
   }, []);
@@ -177,6 +182,14 @@ export default function App() {
     return () => unsubscribe?.();
   }, []);
 
+  // Listen for shrink-on-idle setting changes relayed from the main process
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onFloatingIconShrinkOnIdleChanged?.((enabled) => {
+      setFloatingIconShrinkOnIdle(enabled);
+    });
+    return () => unsubscribe?.();
+  }, []);
+
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {
     let hideTimeout;
@@ -246,28 +259,33 @@ export default function App() {
   const getMicButtonProps = () => {
     const baseClasses =
       "rounded-full w-10 h-10 flex items-center justify-center relative overflow-hidden border-2 border-white/70 cursor-pointer";
+    const isActive = micState === "hover" || micState === "recording" || micState === "processing";
+    const scale = floatingIconShrinkOnIdle && !isActive ? "scale(0.5)" : "scale(1)";
 
     switch (micState) {
       case "idle":
       case "hover":
         return {
           className: `${baseClasses} bg-black/50 cursor-pointer`,
+          style: { transform: scale },
           tooltip: t("app.mic.hotkeyToSpeak", { hotkey }),
         };
       case "recording":
         return {
           className: `${baseClasses} bg-primary cursor-pointer`,
+          style: { transform: scale },
           tooltip: t("app.mic.recording"),
         };
       case "processing":
         return {
           className: `${baseClasses} bg-accent cursor-not-allowed`,
+          style: { transform: scale },
           tooltip: t("app.mic.processing"),
         };
       default:
         return {
           className: `${baseClasses} bg-black/50 cursor-pointer`,
-          style: { transform: "scale(0.8)" },
+          style: { transform: scale },
           tooltip: t("app.mic.clickToSpeak"),
         };
     }
@@ -361,7 +379,7 @@ export default function App() {
                       ? "grabbing !important"
                       : "pointer !important",
                 transition:
-                  "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s ease-out",
+                  "transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.25s ease-out",
               }}
             >
               {/* Background effects */}
