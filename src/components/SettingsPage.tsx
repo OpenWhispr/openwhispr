@@ -1147,6 +1147,9 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                           {t("settingsPage.account.pricing.free.period")}
                         </span>
                       </div>
+                      <p className="text-[9px] font-medium text-primary/80 mt-1.5">
+                        {t("settingsPage.account.pricing.free.trialNote")}
+                      </p>
                       <ul className="space-y-0.5 mt-2 flex-1">
                         {(
                           t("settingsPage.account.pricing.free.features", {
@@ -1259,35 +1262,17 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                             {t("settingsPage.account.pricing.currentPlan")}
                           </span>
                         </div>
-                      ) : !isSignedIn ? (
-                        <Button
-                          onClick={startOnboarding}
-                          size="sm"
-                          className="mt-2 w-full h-6 text-[10px]"
-                        >
-                          {t("settingsPage.account.pricing.pro.trialCta")}
-                        </Button>
                       ) : (
                         <Button
-                          onClick={async () => {
-                            const result = await usage?.openCheckout(billingPeriod);
-                            if (result && !result.success) {
-                              toast({
-                                title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-                                description: t(
-                                  "settingsPage.account.checkout.couldNotOpenDescription"
-                                ),
-                                variant: "destructive",
-                              });
-                            }
-                          }}
+                          onClick={() =>
+                            window.electronAPI?.openExternal?.(
+                              `https://openwhispr.com/get-started?plan=${billingPeriod}`
+                            )
+                          }
                           size="sm"
                           className="mt-2 w-full h-6 text-[10px]"
-                          disabled={usage?.checkoutLoading}
                         >
-                          {usage?.checkoutLoading
-                            ? t("settingsPage.account.checkout.opening")
-                            : t("settingsPage.account.pricing.pro.cta")}
+                          {t("settingsPage.account.pricing.pro.cta")}
                         </Button>
                       )}
                     </div>
@@ -1549,29 +1534,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                       </SettingsPanel>
                     )}
                   </>
-                ) : (
-                  <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/3 dark:bg-primary/6 p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
-                        <UserCircle className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-2.5">
-                        <div>
-                          <p className="text-xs font-medium text-foreground">
-                            {t("settingsPage.account.signedOutPlans.title")}
-                          </p>
-                          <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
-                            {t("settingsPage.account.signedOutPlans.description")}
-                          </p>
-                        </div>
-                        <Button onClick={startOnboarding} size="sm" className="w-full">
-                          <UserCircle className="mr-1.5 h-3.5 w-3.5" />
-                          {t("settingsPage.account.signedOutPlans.button")}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                ) : null}
               </>
             ) : (
               <>

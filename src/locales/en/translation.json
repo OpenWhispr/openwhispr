@@ -938,6 +938,7 @@
           "name": "Free",
           "price": "$0",
           "period": "forever",
+          "trialNote": "Includes 7 days free of OpenWhispr Pro",
           "features": [
             "2,000 words/week",
             "Local AI models",
@@ -962,8 +963,7 @@
             "Zero data retention",
             "Priority support"
           ],
-          "cta": "Upgrade to Pro",
-          "trialCta": "Start 7-Day Free Trial",
+          "cta": "Get Started",
           "switchToAnnual": "Switch to Annual"
         },
         "enterprise": {
