@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Check, X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { Check, X, KeyRound } from "lucide-react";
 import { Input } from "./input";
 
 interface ApiKeyInputProps {
@@ -14,8 +14,8 @@ interface ApiKeyInputProps {
 }
 
 function maskKey(key: string): string {
-  if (key.length <= 4) return "••••";
-  return key.slice(0, 4) + "••••••••";
+  if (key.length <= 8) return "••••••••";
+  return key.slice(0, 3) + "..." + key.slice(-4);
 }
 
 export default function ApiKeyInput({
@@ -32,18 +32,8 @@ export default function ApiKeyInput({
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const draftRef = useRef(draft);
-  const setApiKeyRef = useRef(setApiKey);
   const hasKey = apiKey.length > 0;
   const variantClasses = variant === "purple" ? "border-primary focus:border-primary" : "";
-
-  draftRef.current = draft;
-  setApiKeyRef.current = setApiKey;
-
-  const enterEdit = useCallback(() => {
-    setDraft(apiKey);
-    setIsEditing(true);
-  }, [apiKey]);
 
   useEffect(() => {
     if (isEditing) {
@@ -54,16 +44,24 @@ export default function ApiKeyInput({
     }
   }, [isEditing]);
 
-  const save = useCallback(() => {
-    const value = draftRef.current.trim();
-    setApiKeyRef.current(value);
-    setIsEditing(false);
-  }, []);
+  const enterEdit = () => {
+    setDraft(apiKey);
+    setIsEditing(true);
+  };
 
-  const cancel = useCallback(() => {
+  const save = () => {
+    try {
+      setApiKey(draft.trim());
+    } catch {
+      // Store setter may throw (e.g. cache invalidation in renderer)
+    }
+    setIsEditing(false);
+  };
+
+  const cancel = () => {
     setDraft("");
     setIsEditing(false);
-  }, []);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -76,10 +74,15 @@ export default function ApiKeyInput({
     }
   };
 
-  const handleBlur = (e: React.FocusEvent) => {
-    if (containerRef.current?.contains(e.relatedTarget as Node)) return;
-    cancel();
-  };
+  useEffect(() => {
+    if (!isEditing) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current?.contains(e.target as Node)) return;
+      cancel();
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isEditing]);
 
   return (
     <div className={className}>
@@ -95,7 +98,6 @@ export default function ApiKeyInput({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
-              onBlur={handleBlur}
               aria-label={ariaLabel || label || "API Key"}
               className={`h-8 text-sm font-mono pr-16 ${variantClasses}`}
               autoComplete="off"
@@ -104,24 +106,16 @@ export default function ApiKeyInput({
             <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
               <button
                 type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  save();
-                }}
+                onClick={save}
                 className="h-6 w-6 flex items-center justify-center rounded text-success hover:bg-success/10 active:scale-95 transition-all"
-                tabIndex={-1}
                 aria-label="Save API key"
               >
                 <Check className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  cancel();
-                }}
+                onClick={cancel}
                 className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 active:scale-95 transition-all"
-                tabIndex={-1}
                 aria-label="Cancel editing"
               >
                 <X className="w-3.5 h-3.5" />
@@ -141,7 +135,7 @@ export default function ApiKeyInput({
           >
             {hasKey ? (
               <span className="flex items-center gap-1.5 text-foreground/70 font-mono text-xs tracking-wide">
-                <Check className="w-3 h-3 text-success shrink-0" />
+                <KeyRound className="w-3 h-3 text-muted-foreground/50 shrink-0" />
                 {maskKey(apiKey)}
               </span>
             ) : (
