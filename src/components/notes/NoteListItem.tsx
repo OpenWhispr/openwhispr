@@ -50,7 +50,10 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
-function relativeTime(dateStr: string): string {
+function relativeTime(
+  dateStr: string,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
   const source = dateStr.endsWith("Z") ? dateStr : `${dateStr}Z`;
   const date = new Date(source);
   if (Number.isNaN(date.getTime())) return dateStr;
@@ -60,10 +63,10 @@ function relativeTime(dateStr: string): string {
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
 
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  if (hours < 24) return `${hours}h`;
-  if (days < 7) return `${days}d`;
+  if (minutes < 1) return t("notes.list.timeNow");
+  if (minutes < 60) return t("notes.list.minutesAgo", { count: minutes });
+  if (hours < 24) return t("notes.list.hoursAgo", { count: hours });
+  if (days < 7) return t("notes.list.daysAgo", { count: days });
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
@@ -120,7 +123,7 @@ export default function NoteListItem({
           </p>
           <div className="flex items-center gap-0.5 shrink-0">
             <span className="text-xs text-muted-foreground dark:text-muted-foreground/30 tabular-nums group-hover:opacity-0 transition-opacity">
-              {relativeTime(note.updated_at)}
+              {relativeTime(note.updated_at, t)}
             </span>
             <DropdownMenu
               onOpenChange={(open) => {

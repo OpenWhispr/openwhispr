@@ -89,7 +89,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
           localStorage.removeItem("customPrompts");
         }
       } catch (e) {
-        console.error("Failed to migrate legacy custom prompts:", e);
+        logger.error("Failed to migrate legacy custom prompts", { error: e }, "prompts");
       }
     }
 
@@ -98,7 +98,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
       try {
         setEditedPrompt(JSON.parse(customPrompt));
       } catch (error) {
-        console.error("Failed to load custom prompt:", error);
+        logger.error("Failed to load custom prompt", { error }, "prompts");
       }
     }
   }, []);

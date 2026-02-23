@@ -5,22 +5,20 @@ import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
-import { useActions, initializeActions } from "../../stores/actionStore";
+import {
+  useActions,
+  initializeActions,
+  getActionName,
+  getActionDescription,
+} from "../../stores/actionStore";
+import { notesInputClass } from "./shared";
 import { useDialogs } from "../../hooks/useDialogs";
 import { AlertDialog } from "../ui/dialog";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 
 interface NotesOnboardingProps {
   onComplete: () => void;
-  onOpenSettings?: (section: string) => void;
 }
-
-const inputClass = cn(
-  "w-full h-8 px-3 rounded-md text-xs",
-  "bg-foreground/3 dark:bg-white/4 border border-border/30 dark:border-white/6",
-  "text-foreground/80 placeholder:text-foreground/20 outline-none",
-  "focus:border-primary/30 transition-colors duration-150"
-);
 
 export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const { t } = useTranslation();
@@ -185,14 +183,10 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-foreground/70 truncate">
-                  {builtInAction.translation_key
-                    ? t(`${builtInAction.translation_key}.name`)
-                    : builtInAction.name}
+                  {getActionName(builtInAction, t)}
                 </p>
                 <p className="text-xs text-foreground/25 truncate">
-                  {builtInAction.translation_key
-                    ? t(`${builtInAction.translation_key}.description`)
-                    : builtInAction.description}
+                  {getActionDescription(builtInAction, t)}
                 </p>
               </div>
               <span className="text-xs text-foreground/15 font-medium shrink-0">
@@ -269,7 +263,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 placeholder={t("notes.actions.namePlaceholder")}
                 aria-label={t("notes.actions.namePlaceholder")}
                 disabled={isSaving}
-                className={cn(inputClass, "disabled:opacity-40")}
+                className={cn(notesInputClass, "disabled:opacity-40")}
               />
               <input
                 type="text"
@@ -278,7 +272,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 placeholder={t("notes.actions.descriptionPlaceholder")}
                 aria-label={t("notes.actions.descriptionPlaceholder")}
                 disabled={isSaving}
-                className={cn(inputClass, "disabled:opacity-40")}
+                className={cn(notesInputClass, "disabled:opacity-40")}
               />
               <textarea
                 value={actionPrompt}
@@ -326,6 +320,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
         onOpenChange={(open) => !open && hideAlertDialog()}
         title={alertDialog.title}
         description={alertDialog.description}
+        onOk={hideAlertDialog}
       />
     </div>
   );

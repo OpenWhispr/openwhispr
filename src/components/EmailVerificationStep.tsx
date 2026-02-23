@@ -41,7 +41,7 @@ export default function EmailVerificationStep({ email, onVerified }: EmailVerifi
           }
         } else if (res.status === 401 || res.status === 400) {
           if (pollRef.current) clearInterval(pollRef.current);
-          setError("Session expired. Please restart the sign-up process.");
+          setError(t("auth.sessionExpired"));
         }
       } catch {
         // Network error — silently retry on next poll

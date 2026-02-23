@@ -182,7 +182,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   ]);
 
   const getActiveModelLabel = (): string => {
-    if (isOpenWhisprCloud) return "OpenWhispr Cloud";
+    if (isOpenWhisprCloud) return t("notes.upload.openwhisprCloud");
     if (useLocalWhisper) {
       if (localTranscriptionProvider === "nvidia")
         return `Parakeet · ${parakeetModel || "default"}`;
@@ -190,7 +190,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
     const name =
       cloudTranscriptionProvider === "custom"
-        ? "Custom"
+        ? t("notes.upload.custom")
         : cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1);
     return `${name} · ${cloudTranscriptionModel}`;
   };

@@ -8,6 +8,7 @@ import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
+import logger from "../utils/logger";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { modelRegistry } from "../models/ModelRegistry";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
@@ -395,7 +396,7 @@ export default function ReasoningModelSelector({
         return downloaded;
       }
     } catch (error) {
-      console.error("Failed to load downloaded models:", error);
+      logger.error("Failed to load downloaded models", { error }, "models");
     }
     return new Set<string>();
   }, []);
@@ -517,7 +518,7 @@ export default function ReasoningModelSelector({
               providers={cloudProviders}
               selectedId={selectedCloudProvider}
               onSelect={handleCloudProviderChange}
-              colorScheme="indigo"
+              colorScheme="purple"
             />
 
             <div className="p-3">

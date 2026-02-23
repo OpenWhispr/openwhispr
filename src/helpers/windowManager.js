@@ -1,4 +1,5 @@
 const { app, screen, BrowserWindow, shell, dialog } = require("electron");
+const debugLogger = require("./debugLogger");
 const HotkeyManager = require("./hotkeyManager");
 const DragManager = require("./dragManager");
 const MenuManager = require("./menuManager");
@@ -209,7 +210,7 @@ class WindowManager {
 
     const safetyTimeoutId = setTimeout(() => {
       if (this.macCompoundPushState?.active) {
-        console.warn("[WindowManager] Compound PTT safety timeout triggered - stopping recording");
+        debugLogger.warn("Compound PTT safety timeout", undefined, "ptt");
         this.forceStopMacCompoundPush("timeout");
       }
     }, MAX_PUSH_DURATION_MS);

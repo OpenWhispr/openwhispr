@@ -4,20 +4,19 @@ import { Sparkles, Pencil, Trash2, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
-import { useActions, initializeActions } from "../../stores/actionStore";
+import {
+  useActions,
+  initializeActions,
+  getActionName,
+  getActionDescription,
+} from "../../stores/actionStore";
+import { notesInputClass } from "./shared";
 import type { ActionItem } from "../../types/electron";
 
 interface ActionManagerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-const inputClass = cn(
-  "w-full h-8 px-3 rounded-md text-xs",
-  "bg-foreground/3 dark:bg-white/4 border border-border/30 dark:border-white/6",
-  "text-foreground/80 placeholder:text-foreground/20 outline-none",
-  "focus:border-primary/30 transition-colors duration-150"
-);
 
 export default function ActionManagerDialog({ open, onOpenChange }: ActionManagerDialogProps) {
   const { t } = useTranslation();
@@ -74,11 +73,6 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
     }
   };
 
-  const actionName = (action: ActionItem) =>
-    action.translation_key ? t(`${action.translation_key}.name`) : action.name;
-  const actionDescription = (action: ActionItem) =>
-    action.translation_key ? t(`${action.translation_key}.description`) : action.description;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg gap-2.5">
@@ -99,7 +93,7 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
             onChange={(e) => setName(e.target.value)}
             placeholder={t("notes.actions.namePlaceholder")}
             disabled={isSaving}
-            className={cn(inputClass, "disabled:opacity-40")}
+            className={cn(notesInputClass, "disabled:opacity-40")}
           />
           <input
             type="text"
@@ -107,7 +101,7 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t("notes.actions.descriptionPlaceholder")}
             disabled={isSaving}
-            className={cn(inputClass, "disabled:opacity-40")}
+            className={cn(notesInputClass, "disabled:opacity-40")}
           />
           <textarea
             value={prompt}
@@ -172,7 +166,9 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
                   <Sparkles size={12} className="text-accent/40 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium truncate">{actionName(action)}</span>
+                      <span className="text-xs font-medium truncate">
+                        {getActionName(action, t)}
+                      </span>
                       {action.is_builtin === 1 && (
                         <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-foreground/5 dark:bg-white/6 text-muted-foreground/50 shrink-0">
                           {t("notes.actions.builtIn")}
@@ -181,7 +177,7 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
                     </div>
                     {action.description && (
                       <p className="text-xs text-muted-foreground/40 truncate">
-                        {actionDescription(action)}
+                        {getActionDescription(action, t)}
                       </p>
                     )}
                   </div>

@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { FolderOpen, Copy, Check } from "lucide-react";
 import { useToast } from "./ui/Toast";
 import { Toggle } from "./ui/toggle";
+import logger from "../utils/logger";
 
 export default function DeveloperSection() {
   const { t } = useTranslation();
@@ -25,7 +26,7 @@ export default function DeveloperSection() {
       setDebugEnabled(state.enabled);
       setLogPath(state.logPath);
     } catch (error) {
-      console.error("Failed to load debug state:", error);
+      logger.error("Failed to load debug state", { error }, "developer");
       toast({
         title: t("developerSection.toasts.loadFailed.title"),
         description: t("developerSection.toasts.loadFailed.description"),

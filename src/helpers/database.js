@@ -1,7 +1,7 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 const fs = require("fs");
-const os = require("os");
+const debugLogger = require("./debugLogger");
 const { app } = require("electron");
 
 class DatabaseManager {
@@ -144,7 +144,7 @@ class DatabaseManager {
 
       return true;
     } catch (error) {
-      console.error("Database initialization failed:", error.message);
+      debugLogger.error("Database initialization failed", { error: error.message }, "database");
       throw error;
     }
   }
@@ -162,7 +162,7 @@ class DatabaseManager {
 
       return { id: result.lastInsertRowid, success: true, transcription };
     } catch (error) {
-      console.error("Error saving transcription:", error.message);
+      debugLogger.error("Error saving transcription", { error: error.message }, "database");
       throw error;
     }
   }
@@ -176,7 +176,7 @@ class DatabaseManager {
       const transcriptions = stmt.all(limit);
       return transcriptions;
     } catch (error) {
-      console.error("Error getting transcriptions:", error.message);
+      debugLogger.error("Error getting transcriptions", { error: error.message }, "database");
       throw error;
     }
   }
@@ -190,7 +190,7 @@ class DatabaseManager {
       const result = stmt.run();
       return { cleared: result.changes, success: true };
     } catch (error) {
-      console.error("Error clearing transcriptions:", error.message);
+      debugLogger.error("Error clearing transcriptions", { error: error.message }, "database");
       throw error;
     }
   }
@@ -202,10 +202,9 @@ class DatabaseManager {
       }
       const stmt = this.db.prepare("DELETE FROM transcriptions WHERE id = ?");
       const result = stmt.run(id);
-      console.log(`Deleted transcription ${id}, affected rows: ${result.changes}`);
       return { success: result.changes > 0, id };
     } catch (error) {
-      console.error("❌ Error deleting transcription:", error);
+      debugLogger.error("Error deleting transcription", { error: error.message }, "database");
       throw error;
     }
   }
@@ -219,7 +218,7 @@ class DatabaseManager {
       const rows = stmt.all();
       return rows.map((row) => row.word);
     } catch (error) {
-      console.error("Error getting dictionary:", error.message);
+      debugLogger.error("Error getting dictionary", { error: error.message }, "database");
       throw error;
     }
   }
@@ -242,7 +241,7 @@ class DatabaseManager {
       transaction(words);
       return { success: true };
     } catch (error) {
-      console.error("Error setting dictionary:", error.message);
+      debugLogger.error("Error setting dictionary", { error: error.message }, "database");
       throw error;
     }
   }
@@ -275,7 +274,7 @@ class DatabaseManager {
 
       return { success: true, note };
     } catch (error) {
-      console.error("Error saving note:", error.message);
+      debugLogger.error("Error saving note", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -288,7 +287,7 @@ class DatabaseManager {
       const stmt = this.db.prepare("SELECT * FROM notes WHERE id = ?");
       return stmt.get(id) || null;
     } catch (error) {
-      console.error("Error getting note:", error.message);
+      debugLogger.error("Error getting note", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -313,7 +312,7 @@ class DatabaseManager {
       params.push(limit);
       return stmt.all(...params);
     } catch (error) {
-      console.error("Error getting notes:", error.message);
+      debugLogger.error("Error getting notes", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -346,7 +345,7 @@ class DatabaseManager {
       const note = fetchStmt.get(id);
       return { success: true, note };
     } catch (error) {
-      console.error("Error updating note:", error.message);
+      debugLogger.error("Error updating note", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -356,7 +355,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db.prepare("SELECT * FROM folders ORDER BY sort_order ASC, created_at ASC").all();
     } catch (error) {
-      console.error("Error getting folders:", error.message);
+      debugLogger.error("Error getting folders", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -378,7 +377,7 @@ class DatabaseManager {
         .get(result.lastInsertRowid);
       return { success: true, folder };
     } catch (error) {
-      console.error("Error creating folder:", error.message);
+      debugLogger.error("Error creating folder", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -398,7 +397,7 @@ class DatabaseManager {
       this.db.prepare("DELETE FROM folders WHERE id = ?").run(id);
       return { success: true, id };
     } catch (error) {
-      console.error("Error deleting folder:", error.message);
+      debugLogger.error("Error deleting folder", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -419,7 +418,7 @@ class DatabaseManager {
       const updated = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
       return { success: true, folder: updated };
     } catch (error) {
-      console.error("Error renaming folder:", error.message);
+      debugLogger.error("Error renaming folder", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -431,7 +430,7 @@ class DatabaseManager {
         .prepare("SELECT folder_id, COUNT(*) as count FROM notes GROUP BY folder_id")
         .all();
     } catch (error) {
-      console.error("Error getting folder note counts:", error.message);
+      debugLogger.error("Error getting folder note counts", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -441,7 +440,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db.prepare("SELECT * FROM actions ORDER BY sort_order ASC, created_at ASC").all();
     } catch (error) {
-      console.error("Error getting actions:", error.message);
+      debugLogger.error("Error getting actions", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -451,7 +450,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db.prepare("SELECT * FROM actions WHERE id = ?").get(id) || null;
     } catch (error) {
-      console.error("Error getting action:", error.message);
+      debugLogger.error("Error getting action", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -475,7 +474,7 @@ class DatabaseManager {
         .get(result.lastInsertRowid);
       return { success: true, action };
     } catch (error) {
-      console.error("Error creating action:", error.message);
+      debugLogger.error("Error creating action", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -499,7 +498,7 @@ class DatabaseManager {
       const action = this.db.prepare("SELECT * FROM actions WHERE id = ?").get(id);
       return { success: true, action };
     } catch (error) {
-      console.error("Error updating action:", error.message);
+      debugLogger.error("Error updating action", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -513,7 +512,7 @@ class DatabaseManager {
       this.db.prepare("DELETE FROM actions WHERE id = ?").run(id);
       return { success: true, id };
     } catch (error) {
-      console.error("Error deleting action:", error.message);
+      debugLogger.error("Error deleting action", { error: error.message }, "notes");
       throw error;
     }
   }
@@ -527,13 +526,12 @@ class DatabaseManager {
       const result = stmt.run(id);
       return { success: result.changes > 0, id };
     } catch (error) {
-      console.error("Error deleting note:", error.message);
+      debugLogger.error("Error deleting note", { error: error.message }, "notes");
       throw error;
     }
   }
 
   cleanup() {
-    console.log("Starting database cleanup...");
     try {
       const dbPath = path.join(
         app.getPath("userData"),
@@ -541,10 +539,9 @@ class DatabaseManager {
       );
       if (fs.existsSync(dbPath)) {
         fs.unlinkSync(dbPath);
-        console.log("✅ Database file deleted:", dbPath);
       }
     } catch (error) {
-      console.error("❌ Error deleting database file:", error);
+      debugLogger.error("Error deleting database file", { error: error.message }, "database");
     }
   }
 }

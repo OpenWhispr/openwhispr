@@ -1,36 +1,4 @@
 {
-  "app": {
-    "name": "OpenWhispr",
-    "loading": "正在加载 OpenWhispr...",
-    "oauth": {
-      "redirectTitle": "正在跳转到 OpenWhispr",
-      "closeTab": "你可以关闭此标签页"
-    },
-    "buttons": {
-      "cancelRecording": "取消录音",
-      "cancelProcessing": "取消处理"
-    },
-    "mic": {
-      "hotkeyToSpeak": "[{{hotkey}}] 开始说话",
-      "recording": "录音中...",
-      "processing": "处理中...",
-      "clickToSpeak": "点击开始说话"
-    },
-    "toasts": {
-      "hotkeyChanged": {
-        "title": "快捷键已更改"
-      },
-      "hotkeyUnavailable": {
-        "title": "快捷键不可用",
-        "description": "无法注册快捷键，请在设置中选择其他快捷键。"
-      }
-    },
-    "commandMenu": {
-      "startListening": "开始听写",
-      "stopListening": "停止听写",
-      "hideForNow": "暂时隐藏"
-    }
-  },
   "settings": {
     "language": {
       "sectionTitle": "语言",
@@ -172,10 +140,10 @@
     "availableModels": "可用模型",
     "fast": "快速",
     "hold": "按住",
-    "less": "收起",
-    "more": "展开",
     "private": "隐私",
-    "tap": "点按"
+    "tap": "点按",
+    "close": "关闭",
+    "dismiss": "忽略"
   },
   "onboarding": {
     "steps": {
@@ -249,29 +217,24 @@
       "updatePayment": "更新支付方式"
     },
     "history": {
-      "title": "转录记录",
       "couldNotLoadTitle": "无法加载历史记录",
       "couldNotLoadDescription": "加载转录记录时出错，请尝试关闭并重新打开应用。",
       "copiedTitle": "已复制！",
       "copiedDescription": "文本已复制到剪贴板",
       "couldNotCopyTitle": "无法复制",
       "couldNotCopyDescription": "复制到剪贴板时出错，请重试。",
-      "clearTitle": "清除历史记录",
-      "clearDescription": "这将删除你的所有转录记录，此操作无法撤销。",
-      "clearedTitle": "历史记录已清除",
-      "clearedDescription": "已删除 {{count}} 条转录记录",
-      "clearedDescription_other": "已删除 {{count}} 条转录记录",
-      "couldNotClearTitle": "无法清除历史记录",
-      "couldNotClearDescription": "出了点问题，请重试。",
       "deleteTitle": "删除转录记录",
       "deleteDescription": "此转录记录将被永久删除。",
       "couldNotDeleteTitle": "无法删除",
       "couldNotDeleteDescription": "此转录记录可能已被删除。",
       "couldNotDeleteDescriptionGeneric": "出了点问题，请重试。",
-      "clear": "清除",
       "empty": "暂无转录记录",
       "press": "按下",
-      "toStart": "开始"
+      "toStart": "开始",
+      "dateGroups": {
+        "today": "今天",
+        "yesterday": "昨天"
+      }
     },
     "cloudMigration": {
       "title": "欢迎使用 OpenWhispr Pro",
@@ -292,8 +255,6 @@
       "localDescription": "在你的设备上运行，完全隐私，离线可用。",
       "cloudDescription": "通过 API 使用高级模型，快速且强大，需要联网。"
     },
-    "enableTitle": "启用 AI 文本增强",
-    "enableDescription": "使用 AI 自动提升转录质量",
     "custom": {
       "endpointWithProtocol": "请输入包含协议的完整 URL（例如 https://server/v1）。",
       "httpsRequired": "需要 HTTPS（仅本地网络允许 HTTP）。",
@@ -536,7 +497,8 @@
       "continueWithGoogle": "使用 Google 继续"
     },
     "welcomeSubtitle": "随时随地用语音输入",
-    "welcomeTitle": "欢迎使用 OpenWhispr"
+    "welcomeTitle": "欢迎使用 OpenWhispr",
+    "sessionExpired": "会话已过期，请重新登录。"
   },
   "cleanupPrompt": "文本整理",
   "developerSection": {
@@ -944,6 +906,54 @@
         "description": "无限转录、优先处理等更多功能。",
         "title": "免费试用 Pro 版 7 天"
       },
+      "pricing": {
+        "title": "套餐",
+        "monthly": "按月",
+        "annual": "按年",
+        "annualBadge": "省 17%",
+        "free": {
+          "name": "免费版",
+          "price": "$0",
+          "period": "永久",
+          "trialNote": "含 7 天免费 Pro 试用",
+          "features": [
+            "每周 2,000 字",
+            "本地 AI 模型",
+            "自带 API Key",
+            "词典和片段",
+            "支持 100+ 种语言",
+            "零数据留存"
+          ]
+        },
+        "pro": {
+          "name": "Pro",
+          "monthlyPrice": "$8",
+          "monthlyPeriod": "/月",
+          "annualPrice": "$80",
+          "annualPeriod": "/年",
+          "features": [
+            "包含免费版所有功能",
+            "无限使用",
+            "实时转录",
+            "最新音频和 AI 模型",
+            "iOS/Android（即将推出）",
+            "零数据留存",
+            "优先支持"
+          ],
+          "cta": "开始使用",
+          "switchToAnnual": "切换为年付"
+        },
+        "enterprise": {
+          "name": "企业版",
+          "price": "自定义",
+          "features": ["云端同步", "团队功能（即将推出）", "SSO 与合规"],
+          "cta": "联系我们"
+        },
+        "currentPlan": "当前套餐"
+      },
+      "signedOutPlans": {
+        "button": "免费创建账户"
+      },
       "user": "用户",
       "wordsRemaining": "剩余 {{remaining}} 个词"
     },
@@ -1013,26 +1023,6 @@
       },
       "resetAppData": "重置应用数据",
       "resetAppDataDescription": "永久删除所有设置、转录记录和缓存数据"
-    },
-    "dictionary": {
-      "add": "添加",
-      "addWordOrPhrase": "添加词汇或短语",
-      "agentNameAutoManaged": "助手名称（自动管理）",
-      "clearAll": "全部清除",
-      "clearDictionaryDescription": "这将删除自定义词典中的所有词汇，此操作无法撤销。",
-      "clearDictionaryTitle": "清除词典？",
-      "description": "添加词汇、姓名或专业术语以提高转录准确率",
-      "howItWorksDescription": "你添加的词汇会被包含在 AI 提示词中，以便模型在转录整理时能够识别并保留这些词汇。",
-      "howItWorksTitle": "工作原理",
-      "noWords": "尚未添加任何词汇",
-      "placeholder": "例如 OpenWhispr、Kubernetes、张医生...",
-      "pressEnterToAdd": "按回车键添加",
-      "removeWord": "删除词汇",
-      "tipDescription": "添加专有名词、专业术语或任何可能被错误转录的词汇。",
-      "tipLabel": "提示",
-      "title": "自定义词典",
-      "wordsAppearHere": "你添加的词汇将显示在这里",
-      "yourWords": "你的词汇"
     },
     "general": {
       "appearance": {
@@ -1239,6 +1229,7 @@
     }
   },
   "referral": {
+    "modalTitle": "推荐计划",
     "title": "推荐赚取奖励",
     "subtitle": "送一个月，得一个月。",
     "tabs": {
@@ -1312,7 +1303,6 @@
   "notes": {
     "folders": {
       "title": "文件夹",
-      "meetings": "会议",
       "soon": "即将推出",
       "folderName": "文件夹名称",
       "couldNotCreate": "无法创建文件夹",
@@ -1324,20 +1314,17 @@
       "newNote": "新建笔记",
       "untitled": "无标题",
       "untitledNote": "无标题笔记",
-      "createToGetStarted": "创建一条笔记以开始使用",
-      "selectNote": "选择一条笔记"
+      "timeNow": "刚刚",
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前"
     },
     "editor": {
       "untitled": "无标题",
       "noteTitle": "笔记标题",
       "stop": "停止",
       "transcribe": "转录",
-      "recording": "录音中",
       "processing": "处理中...",
-      "edit": "编辑",
-      "preview": "预览",
-      "enhance": "增强",
-      "reEnhance": "重新增强",
       "export": "导出",
       "asMarkdown": "导出为 Markdown",
       "asPlainText": "导出为纯文本",
@@ -1347,17 +1334,6 @@
       "wordsCount": "{{count}} 个词",
       "startWriting": "开始书写...",
       "staleIndicator": "内容在增强后已更改"
-    },
-    "enhance": {
-      "title": "AI 增强",
-      "defaultPrompt": "修正语法、改善结构，并将笔记格式化以提高可读性，同时保留所有原始含义。",
-      "placeholder": "你希望 AI 对你的笔记做什么？",
-      "tryAgain": "重试",
-      "apply": "应用",
-      "cancel": "取消",
-      "enhancing": "增强中...",
-      "enhance": "增强",
-      "noProviders": "在设置中配置 API 密钥以使用 AI 模型"
     },
     "upload": {
       "title": "上传音频",
@@ -1387,7 +1363,9 @@
       "selectFolder": "选择文件夹",
       "transcriptionFailed": "转录失败",
       "errorOccurred": "发生错误",
-      "enhancementFailed": "增强失败"
+      "noProviderTitle": "尚未设置转录服务商",
+      "noProviderDescription": "添加 API Key 或下载本地模型以开始转录。",
+      "noProviderAction": "打开转录设置"
     },
     "meeting": {
       "title": "会议笔记",
@@ -1439,37 +1417,29 @@
       "addExisting": "添加已有笔记",
       "addCount": "添加 {{count}} 条笔记",
       "noResults": "没有匹配的笔记",
-      "noNotesAvailable": "没有其他可用笔记"
+      "noNotesAvailable": "没有其他可用笔记",
+      "today": "今天",
+      "yesterday": "昨天"
     },
     "onboarding": {
       "llm": {
-        "title": "Configure an AI model",
-        "description": "Actions use AI to transform your notes. Set up a language model to get started.",
-        "skipForNow": "Skip for now",
-        "configured": "AI model configured",
-        "apiKeyPlaceholder": "Paste your API key",
-        "getKey": "Get API key",
-        "localModel": "Local model",
-        "cloudProvider": "Cloud provider"
+        "title": "配置 AI 模型",
+        "description": "操作使用 AI 来处理你的笔记。设置一个语言模型以开始使用。",
+        "configured": "AI 模型已配置"
       },
       "actions": {
-        "title": "AI-Powered Actions",
-        "description": "Actions transform your notes — clean up transcriptions, summarize meetings, and more. Use built-in actions or create your own.",
-        "builtInLabel": "Built-in",
-        "createTitle": "Create your own action",
-        "createDescription": "Define a custom action with your own AI prompt. You can always edit or add more later in settings.",
-        "created": "Created!",
-        "proNote": "Your Pro plan includes AI-powered actions. Here's how they work."
+        "title": "AI 驱动的操作",
+        "description": "操作可以处理你的笔记——整理转录、总结会议等。使用内置操作或创建你自己的。",
+        "builtInLabel": "内置",
+        "createTitle": "创建你的操作",
+        "createDescription": "使用你自己的 AI 提示词定义自定义操作。你可以随时在设置中编辑或添加更多。",
+        "created": "已创建！"
       },
-      "proUpsell": {
-        "message": "Skip the setup — Pro includes the latest AI models, zero configuration.",
-        "learnMore": "Learn more"
-      },
-      "getStarted": "Get Started"
+      "getStarted": "开始使用"
     },
     "realtimeBanner": {
-      "message": "Real-time transcription available on Pro",
-      "upgrade": "Upgrade"
+      "message": "Pro 版可使用实时转录",
+      "upgrade": "升级"
     }
   },
   "dictionary": {
@@ -1477,6 +1447,9 @@
     "removeWord": "移除 {{word}}",
     "clearAll": "全部清除",
     "howItWorks": "工作原理",
+    "howItWorksDetail": "你添加的词汇会被包含在 AI 提示词中，以便模型在转录整理时能够识别并保留这些词汇。",
+    "autoManaged": "助手名称（自动管理）",
+    "inputHint": "按回车键添加",
     "title": "自定义词典",
     "description": "教 AI 学习你的词汇 — 名字、行话和它可能遗漏的术语",
     "clearTitle": "清空词典？",
@@ -1490,7 +1463,15 @@
     "dictionary": "词典",
     "referral": "获取免费一个月",
     "settings": "设置",
-    "support": "支持"
+    "support": "支持",
+    "limitReached": "已达每周上限",
+    "limitReachedDescription": "升级到 Pro 即可无限转录。",
+    "upgradeToPro": "升级到 Pro",
+    "upgradeTitle": "升级到 Pro",
+    "upgradeDescription": "无限转录、实时转录等更多功能。",
+    "learnMore": "了解更多",
+    "defaultUser": "用户",
+    "notSignedIn": "未登录"
   },
   "usage": {
     "approachingLimit": "即将达到周限额",
@@ -1510,5 +1491,20 @@
     "upgradeToPro": "升级到 Pro",
     "useYourOwnKey": "使用自己的 API Key",
     "upgradeUnlimited": "升级到 Pro — 无限转录"
+  },
+  "support": {
+    "joinDiscord": "加入 Discord",
+    "contactSupport": "联系支持",
+    "submitBug": "提交 Bug"
+  },
+  "apiKeyInput": {
+    "placeholder": "输入你的 API Key",
+    "label": "API Key",
+    "save": "保存",
+    "cancelEdit": "取消编辑",
+    "edit": "编辑",
+    "add": "添加",
+    "editButton": "编辑密钥",
+    "addButton": "添加密钥"
   }
 }

@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useToast } from "./ui/Toast";
 import { cn } from "./lib/utils";
 import { SpectrogramCard } from "./referral-cards/SpectrogramCard";
+import logger from "../utils/logger";
 
 const REFERRAL_WORD_GOAL = 2000;
 const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -205,19 +206,19 @@ export function ReferralDashboard() {
       const data = await window.electronAPI?.getReferralStats?.();
       setStats(data ?? null);
     } catch (err) {
-      console.error("Failed to fetch referral stats:", err);
+      logger.error("Failed to fetch referral stats", { error: err }, "referral");
       setError(t("referral.errors.unableToLoadStats"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const fetchInvites = useCallback(async () => {
     try {
       const result = await window.electronAPI?.getReferralInvites?.();
       setInvites(result?.invites ?? []);
     } catch (err) {
-      console.error("Failed to fetch referral invites:", err);
+      logger.error("Failed to fetch referral invites", { error: err }, "referral");
     }
   }, []);
 
@@ -239,7 +240,7 @@ export function ReferralDashboard() {
       });
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error("Failed to copy link:", err);
+      logger.error("Failed to copy link", { error: err }, "referral");
       toast({
         title: t("referral.toasts.copyFailedTitle"),
         description: t("referral.toasts.copyFailedDescription"),
@@ -276,7 +277,7 @@ export function ReferralDashboard() {
         throw new Error("Failed to send invite");
       }
     } catch (err) {
-      console.error("Failed to send invite:", err);
+      logger.error("Failed to send invite", { error: err }, "referral");
       toast({
         title: t("referral.toasts.sendFailedTitle"),
         description: t("referral.toasts.sendFailedDescription"),

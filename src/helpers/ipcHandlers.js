@@ -411,7 +411,7 @@ class IPCHandlers {
         fs.writeFileSync(result.filePath, exportContent, "utf-8");
         return { success: true };
       } catch (error) {
-        console.error("Error exporting note:", error.message);
+        debugLogger.error("Error exporting note", { error: error.message }, "notes");
         return { success: false, error: error.message };
       }
     });
@@ -745,12 +745,8 @@ class IPCHandlers {
 
     // Utility handlers
     ipcMain.handle("cleanup-app", async (event) => {
-      try {
-        AppUtils.cleanup(this.windowManager.mainWindow);
-        return { success: true, message: "Cleanup completed successfully" };
-      } catch (error) {
-        throw error;
-      }
+      AppUtils.cleanup(this.windowManager.mainWindow);
+      return { success: true, message: "Cleanup completed successfully" };
     });
 
     ipcMain.handle("update-hotkey", async (event, hotkey) => {

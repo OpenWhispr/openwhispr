@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "./button";
 import { HelpCircle, Mail, Bug } from "lucide-react";
 import {
@@ -8,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "./dropdown-menu";
 import { cn } from "../lib/utils";
+import logger from "../../utils/logger";
 
 function DiscordIcon({ className }: { className?: string }) {
   return (
@@ -26,14 +28,15 @@ const openExternal = async (url: string) => {
   try {
     const result = await window.electronAPI?.openExternal(url);
     if (!result?.success) {
-      console.error("Failed to open URL:", result?.error);
+      logger.error("Failed to open URL", { error: result?.error }, "support");
     }
   } catch (error) {
-    console.error("Error opening URL:", error);
+    logger.error("Error opening URL", { error }, "support");
   }
 };
 
 export default function SupportDropdown({ className, trigger }: SupportDropdownProps) {
+  const { t } = useTranslation();
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -53,7 +56,7 @@ export default function SupportDropdown({ className, trigger }: SupportDropdownP
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => openExternal("https://discord.gg/yZWC9WTtX7")}>
           <DiscordIcon className="mr-2 h-4 w-4" />
-          Join Discord
+          {t("support.joinDiscord")}
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={async () => {
@@ -64,13 +67,13 @@ export default function SupportDropdown({ className, trigger }: SupportDropdownP
           }}
         >
           <Mail className="mr-2 h-4 w-4" />
-          Contact Support
+          {t("support.contactSupport")}
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => openExternal("https://github.com/OpenWhispr/openwhispr/issues")}
         >
           <Bug className="mr-2 h-4 w-4" />
-          Submit Bug
+          {t("support.submitBug")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

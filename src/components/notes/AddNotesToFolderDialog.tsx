@@ -4,6 +4,7 @@ import { Search, FileText, Check } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
+import { formatDateGroup } from "../../utils/dateFormatting";
 import type { NoteItem } from "../../types/electron";
 
 interface AddNotesToFolderDialogProps {
@@ -11,26 +12,6 @@ interface AddNotesToFolderDialogProps {
   onOpenChange: (open: boolean) => void;
   targetFolderId: number;
   onNotesAdded: () => void;
-}
-
-function formatDateGroup(dateStr: string, t: (key: string) => string): string {
-  const source = dateStr.endsWith("Z") ? dateStr : `${dateStr}Z`;
-  const date = new Date(source);
-  if (Number.isNaN(date.getTime())) return dateStr;
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const noteDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.floor((today.getTime() - noteDate.getTime()) / 86400000);
-
-  if (diffDays === 0) return t("notes.addToFolder.today");
-  if (diffDays === 1) return t("notes.addToFolder.yesterday");
-
-  return date.toLocaleDateString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
 }
 
 function groupNotesByDate(notes: NoteItem[], t: (key: string) => string): [string, NoteItem[]][] {

@@ -191,7 +191,7 @@ function TranscriptionSection({
   setCloudTranscriptionBaseUrl,
   toast,
 }: TranscriptionSectionProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const isCustomMode = cloudTranscriptionMode === "byok" || useLocalWhisper;
   const isCloudMode = isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
 
@@ -428,7 +428,7 @@ function AiModelsSection({
   showAlertDialog,
   toast,
 }: AiModelsSectionProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const isCustomMode = cloudReasoningMode === "byok";
   const isCloudMode = isSignedIn && cloudReasoningMode === "openwhispr";
 

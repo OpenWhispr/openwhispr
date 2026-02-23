@@ -69,7 +69,7 @@ export async function initializeNotes(
 ): Promise<NoteItem[]> {
   currentLimit = limit;
   ensureIpcListeners();
-  const items = await window.electronAPI.getNotes(noteType, limit, folderId);
+  const items = (await window.electronAPI?.getNotes(noteType, limit, folderId)) ?? [];
   useNoteStore.setState({ notes: items });
   return items;
 }

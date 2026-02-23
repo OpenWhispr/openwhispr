@@ -111,10 +111,7 @@ export default function DictionaryView() {
             {showInfo && (
               <div className="mt-2.5 rounded-md bg-foreground/[0.02] dark:bg-white/[0.02] border border-foreground/5 dark:border-white/4 px-3 py-2.5">
                 <p className="text-xs text-foreground/25 leading-[1.6]">
-                  Words are fed as context hints to the speech model, helping it recognize uncommon
-                  terms. For difficult words, try adding context like{" "}
-                  <span className="text-foreground/35">"The word is Synty"</span> alongside the word
-                  itself.
+                  {t("dictionary.howItWorksDetail")}
                 </p>
               </div>
             )}
@@ -183,7 +180,7 @@ export default function DictionaryView() {
                           ? "pl-2.5 pr-2.5 bg-primary/10 dark:bg-primary/15 text-primary border-primary/20 dark:border-primary/30"
                           : "pl-2.5 pr-1 bg-foreground/[0.02] dark:bg-white/[0.03] text-foreground/60 dark:text-foreground/50 border-foreground/8 dark:border-white/6 hover:border-foreground/15 dark:hover:border-white/12 hover:bg-foreground/[0.04] dark:hover:bg-white/[0.06] hover:text-foreground/80 dark:hover:text-foreground/70"
                       }`}
-                    title={isAgentName ? "Auto-managed — synced from agent name" : undefined}
+                    title={isAgentName ? t("dictionary.autoManaged") : undefined}
                   >
                     {word}
                     {!isAgentName && (
@@ -207,8 +204,7 @@ export default function DictionaryView() {
           <div className="px-5 pb-3 flex items-start gap-1.5">
             <Info size={9} className="text-foreground/10 mt-px shrink-0" />
             <p className="text-xs text-foreground/12 leading-relaxed">
-              Separate multiple words with commas. Add context phrases like "The word is Synty" for
-              better recognition.
+              {t("dictionary.inputHint")}
             </p>
           </div>
         </>

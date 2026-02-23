@@ -23,8 +23,9 @@ import {
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
-import { API_ENDPOINTS } from "../config/constants";
+import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { createExternalLinkHandler } from "../utils/externalLinks";
+import logger from "../utils/logger";
 
 interface LocalModel {
   model: string;
@@ -336,7 +337,7 @@ export default function TranscriptionModelPicker({
         validateAndSelectModel(result.models);
       }
     } catch (error) {
-      console.error("[TranscriptionModelPicker] Failed to load models:", error);
+      logger.error("Failed to load models", { error }, "models");
       setLocalModels([]);
     } finally {
       isLoadingRef.current = false;
@@ -353,7 +354,7 @@ export default function TranscriptionModelPicker({
         setParakeetModels(result.models);
       }
     } catch (error) {
-      console.error("[TranscriptionModelPicker] Failed to load Parakeet models:", error);
+      logger.error("Failed to load Parakeet models", { error }, "models");
       setParakeetModels([]);
     } finally {
       isLoadingParakeetRef.current = false;
@@ -526,7 +527,6 @@ export default function TranscriptionModelPicker({
     const trimmed = (cloudTranscriptionBaseUrl || "").trim();
     if (!trimmed) return;
 
-    const { normalizeBaseUrl } = require("../config/constants");
     const normalized = normalizeBaseUrl(trimmed);
 
     if (normalized && normalized !== cloudTranscriptionBaseUrl) {
@@ -772,7 +772,7 @@ export default function TranscriptionModelPicker({
               providers={cloudProviderTabs}
               selectedId={selectedCloudProvider}
               onSelect={handleCloudProviderChange}
-              colorScheme={colorScheme === "purple" ? "purple" : "indigo"}
+              colorScheme="purple"
               scrollable
             />
           </div>
@@ -855,7 +855,7 @@ export default function TranscriptionModelPicker({
                     models={cloudModelOptions}
                     selectedModel={selectedCloudModel}
                     onModelSelect={onCloudModelSelect}
-                    colorScheme={colorScheme === "purple" ? "purple" : "indigo"}
+                    colorScheme="purple"
                   />
                 </div>
               </div>
@@ -869,7 +869,7 @@ export default function TranscriptionModelPicker({
               providers={LOCAL_PROVIDER_TABS}
               selectedId={internalLocalProvider}
               onSelect={handleLocalProviderChange}
-              colorScheme={colorScheme === "purple" ? "purple" : "indigo"}
+              colorScheme="purple"
             />
           </div>
 

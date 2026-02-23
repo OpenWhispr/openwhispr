@@ -1,36 +1,4 @@
 {
-  "app": {
-    "name": "OpenWhispr",
-    "loading": "Loading OpenWhispr...",
-    "oauth": {
-      "redirectTitle": "Redirecting to OpenWhispr",
-      "closeTab": "You can close this tab"
-    },
-    "buttons": {
-      "cancelRecording": "Cancel recording",
-      "cancelProcessing": "Cancel processing"
-    },
-    "mic": {
-      "hotkeyToSpeak": "[{{hotkey}}] to speak",
-      "recording": "Recording...",
-      "processing": "Processing...",
-      "clickToSpeak": "Click to speak"
-    },
-    "toasts": {
-      "hotkeyChanged": {
-        "title": "Hotkey Changed"
-      },
-      "hotkeyUnavailable": {
-        "title": "Hotkey Unavailable",
-        "description": "Could not register hotkey. Please set a different hotkey in Settings."
-      }
-    },
-    "commandMenu": {
-      "startListening": "Start listening",
-      "stopListening": "Stop listening",
-      "hideForNow": "Hide this for now"
-    }
-  },
   "settings": {
     "language": {
       "sectionTitle": "Language",
@@ -172,10 +140,10 @@
     "availableModels": "Available Models",
     "fast": "Fast",
     "hold": "Hold",
-    "less": "Less",
-    "more": "More",
     "private": "Private",
-    "tap": "Tap"
+    "tap": "Tap",
+    "close": "Close",
+    "dismiss": "Dismiss"
   },
   "onboarding": {
     "steps": {
@@ -249,33 +217,23 @@
       "updatePayment": "Update Payment"
     },
     "history": {
-      "title": "Transcriptions",
       "couldNotLoadTitle": "Couldn't load your history",
       "couldNotLoadDescription": "Something went wrong loading your transcriptions. Try closing and reopening the app.",
       "copiedTitle": "Copied!",
       "copiedDescription": "Text copied to your clipboard",
       "couldNotCopyTitle": "Couldn't copy",
       "couldNotCopyDescription": "Something went wrong copying to your clipboard. Try again.",
-      "clearTitle": "Clear History",
-      "clearDescription": "This will remove all your transcriptions. You can't undo this.",
-      "clearedTitle": "History cleared",
-      "clearedDescription": "{{count}} transcription removed",
-      "clearedDescription_other": "{{count}} transcriptions removed",
-      "couldNotClearTitle": "Couldn't clear history",
-      "couldNotClearDescription": "Something went wrong. Please try again.",
       "deleteTitle": "Delete Transcription",
       "deleteDescription": "This transcription will be permanently removed.",
       "couldNotDeleteTitle": "Couldn't delete",
       "couldNotDeleteDescription": "This transcription may have already been removed.",
       "couldNotDeleteDescriptionGeneric": "Something went wrong. Please try again.",
-      "clear": "Clear",
       "empty": "No transcriptions yet",
       "press": "Press",
       "toStart": "to start",
       "dateGroups": {
         "today": "Today",
-        "yesterday": "Yesterday",
-        "older": "Older"
+        "yesterday": "Yesterday"
       }
     },
     "cloudMigration": {
@@ -297,8 +255,6 @@
       "localDescription": "Runs on your device. Complete privacy, works offline.",
       "cloudDescription": "Advanced models via API. Fast and capable, requires internet."
     },
-    "enableTitle": "Enable AI Text Enhancement",
-    "enableDescription": "Use AI to automatically improve transcription quality",
     "custom": {
       "endpointWithProtocol": "Enter a full base URL including protocol (for example, https://server/v1).",
       "httpsRequired": "HTTPS required (HTTP allowed for local network only).",
@@ -541,7 +497,8 @@
       "continueWithGoogle": "Continue with Google"
     },
     "welcomeSubtitle": "Dictate anywhere using your voice",
-    "welcomeTitle": "Welcome to OpenWhispr"
+    "welcomeTitle": "Welcome to OpenWhispr",
+    "sessionExpired": "Session expired. Please restart the sign-up process."
   },
   "cleanupPrompt": "Cleanup",
   "developerSection": {
@@ -995,8 +952,6 @@
         "title": "Try Pro free for 7 days"
       },
       "signedOutPlans": {
-        "title": "Create a free account",
-        "description": "Get 2,000 words/week free, or try Pro with a 7-day trial.",
         "button": "Create Free Account"
       },
       "user": "User",
@@ -1068,26 +1023,6 @@
       },
       "resetAppData": "Reset app data",
       "resetAppDataDescription": "Permanently delete all settings, transcriptions, and cached data"
-    },
-    "dictionary": {
-      "add": "Add",
-      "addWordOrPhrase": "Add a word or phrase",
-      "agentNameAutoManaged": "Agent name (auto-managed)",
-      "clearAll": "Clear all",
-      "clearDictionaryDescription": "This will remove all words from your custom dictionary. This action cannot be undone.",
-      "clearDictionaryTitle": "Clear dictionary?",
-      "description": "Add words, names, or technical terms to improve transcription accuracy",
-      "howItWorksDescription": "Words you add are included in the AI prompt so the model knows to look for and preserve these terms during transcription cleanup.",
-      "howItWorksTitle": "How it works",
-      "noWords": "No words added yet",
-      "placeholder": "e.g. OpenWhispr, Kubernetes, Dr. Martinez...",
-      "pressEnterToAdd": "Press Enter to add",
-      "removeWord": "Remove word",
-      "tipDescription": "Add proper nouns, technical terms, or any word that might be transcribed incorrectly.",
-      "tipLabel": "Tip",
-      "title": "Custom Dictionary",
-      "wordsAppearHere": "Words you add will appear here",
-      "yourWords": "Your words"
     },
     "general": {
       "appearance": {
@@ -1303,10 +1238,16 @@
     "support": "Support",
     "limitReached": "Weekly limit reached",
     "limitReachedDescription": "Upgrade to Pro for unlimited transcriptions.",
-    "upgradeToPro": "Upgrade to Pro"
+    "upgradeToPro": "Upgrade to Pro",
+    "upgradeTitle": "Upgrade to Pro",
+    "upgradeDescription": "Unlimited transcriptions and premium features.",
+    "learnMore": "Learn more",
+    "defaultUser": "User",
+    "notSignedIn": "Not signed in"
   },
   "referral": {
     "title": "Refer and earn rewards",
+    "modalTitle": "Refer and earn rewards",
     "subtitle": "Give a month. Get a month.",
     "tabs": {
       "refer": "Refer",
@@ -1398,7 +1339,6 @@
   "notes": {
     "folders": {
       "title": "Folders",
-      "meetings": "Meetings",
       "soon": "Soon",
       "folderName": "Folder name",
       "couldNotCreate": "Couldn't create folder",
@@ -1410,20 +1350,17 @@
       "newNote": "New note",
       "untitled": "Untitled",
       "untitledNote": "Untitled Note",
-      "createToGetStarted": "Create a note to get started",
-      "selectNote": "Select a note"
+      "timeNow": "now",
+      "minutesAgo": "{{count}}m",
+      "hoursAgo": "{{count}}h",
+      "daysAgo": "{{count}}d"
     },
     "editor": {
       "untitled": "Untitled",
       "noteTitle": "Note title",
       "stop": "Stop",
       "transcribe": "Transcribe",
-      "recording": "Recording",
       "processing": "Processing...",
-      "edit": "Edit",
-      "preview": "Preview",
-      "enhance": "Enhance",
-      "reEnhance": "Re-enhance",
       "export": "Export",
       "asMarkdown": "As Markdown",
       "asPlainText": "As Plain Text",
@@ -1433,17 +1370,6 @@
       "wordsCount": "{{count}} words",
       "startWriting": "Start writing...",
       "staleIndicator": "Content has changed since enhancement"
-    },
-    "enhance": {
-      "title": "Enhance with AI",
-      "defaultPrompt": "Clean up grammar, improve structure, and format these notes for readability while preserving all original meaning.",
-      "placeholder": "What should the AI do with your notes?",
-      "tryAgain": "Try Again",
-      "apply": "Apply",
-      "cancel": "Cancel",
-      "enhancing": "Enhancing...",
-      "enhance": "Enhance",
-      "noProviders": "Configure API keys in Settings to use AI models"
     },
     "upload": {
       "title": "Upload Audio",
@@ -1473,7 +1399,6 @@
       "selectFolder": "Select folder",
       "transcriptionFailed": "Transcription failed",
       "errorOccurred": "An error occurred",
-      "enhancementFailed": "Enhancement failed",
       "noProviderTitle": "No transcription provider set up",
       "noProviderDescription": "Add an API key or download a local model to start transcribing.",
       "noProviderAction": "Open Transcription Settings"
@@ -1536,12 +1461,7 @@
       "llm": {
         "title": "Configure an AI model",
         "description": "Actions use AI to transform your notes. Set up a language model to get started.",
-        "skipForNow": "Skip for now",
-        "configured": "AI model configured",
-        "apiKeyPlaceholder": "Paste your API key",
-        "getKey": "Get API key",
-        "localModel": "Local model",
-        "cloudProvider": "Cloud provider"
+        "configured": "AI model configured"
       },
       "actions": {
         "title": "AI-Powered Actions",
@@ -1549,12 +1469,7 @@
         "builtInLabel": "Built-in",
         "createTitle": "Create your own action",
         "createDescription": "Define a custom action with your own AI prompt. You can always edit or add more later in settings.",
-        "created": "Created!",
-        "proNote": "Your Pro plan includes AI-powered actions. Here's how they work."
-      },
-      "proUpsell": {
-        "message": "Skip the setup — Pro includes the latest AI models, zero configuration.",
-        "learnMore": "Learn more"
+        "created": "Created!"
       },
       "getStarted": "Get Started"
     },
@@ -1572,6 +1487,24 @@
     "addPlaceholder": "Add a word or phrase...",
     "removeWord": "Remove {{word}}",
     "clearAll": "Clear all",
-    "howItWorks": "How it works"
+    "howItWorks": "How it works",
+    "howItWorksDetail": "Words are fed as context hints to the speech model, helping it recognize uncommon terms. For difficult words, try adding context like \"The word is Synty\" alongside the word itself.",
+    "autoManaged": "Auto-managed — synced from agent name",
+    "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition."
+  },
+  "support": {
+    "joinDiscord": "Join Discord",
+    "contactSupport": "Contact Support",
+    "submitBug": "Submit Bug"
+  },
+  "apiKeyInput": {
+    "placeholder": "Paste your API key",
+    "label": "API Key",
+    "save": "Save API key",
+    "cancelEdit": "Cancel editing",
+    "edit": "Edit API key",
+    "add": "Add API key",
+    "editButton": "edit",
+    "addButton": "add"
   }
 }

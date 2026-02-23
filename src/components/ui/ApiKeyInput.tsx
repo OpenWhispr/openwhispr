@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, X, KeyRound } from "lucide-react";
 import { Input } from "./input";
 
@@ -22,12 +23,15 @@ export default function ApiKeyInput({
   apiKey,
   setApiKey,
   className = "",
-  placeholder = "Paste your API key",
-  label = "API Key",
+  placeholder,
+  label,
   ariaLabel,
   helpText,
   variant = "default",
 }: ApiKeyInputProps) {
+  const { t } = useTranslation();
+  const resolvedPlaceholder = placeholder ?? t("apiKeyInput.placeholder");
+  const resolvedLabel = label ?? t("apiKeyInput.label");
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -86,7 +90,9 @@ export default function ApiKeyInput({
 
   return (
     <div className={className}>
-      {label && <label className="block text-xs font-medium text-foreground mb-1">{label}</label>}
+      {resolvedLabel && (
+        <label className="block text-xs font-medium text-foreground mb-1">{resolvedLabel}</label>
+      )}
 
       <div ref={containerRef} className="relative">
         {isEditing ? (
@@ -94,11 +100,11 @@ export default function ApiKeyInput({
             <Input
               ref={inputRef}
               type="text"
-              placeholder={placeholder}
+              placeholder={resolvedPlaceholder}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={handleKeyDown}
-              aria-label={ariaLabel || label || "API Key"}
+              aria-label={ariaLabel || resolvedLabel || t("apiKeyInput.label")}
               className={`h-8 text-sm font-mono pr-16 ${variantClasses}`}
               autoComplete="off"
               spellCheck={false}
@@ -108,7 +114,7 @@ export default function ApiKeyInput({
                 type="button"
                 onClick={save}
                 className="h-6 w-6 flex items-center justify-center rounded text-success hover:bg-success/10 active:scale-95 transition-all"
-                aria-label="Save API key"
+                aria-label={t("apiKeyInput.save")}
               >
                 <Check className="w-3.5 h-3.5" />
               </button>
@@ -116,7 +122,7 @@ export default function ApiKeyInput({
                 type="button"
                 onClick={cancel}
                 className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 active:scale-95 transition-all"
-                aria-label="Cancel editing"
+                aria-label={t("apiKeyInput.cancelEdit")}
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -131,7 +137,7 @@ export default function ApiKeyInput({
                 ? "border-border/70 bg-input hover:border-border-hover dark:bg-surface-1 dark:border-border-subtle/50 dark:hover:border-border-hover"
                 : "border-dashed border-border/40 bg-transparent hover:border-border/70 hover:bg-muted/30"
             }`}
-            aria-label={hasKey ? "Edit API key" : "Add API key"}
+            aria-label={hasKey ? t("apiKeyInput.edit") : t("apiKeyInput.add")}
           >
             {hasKey ? (
               <span className="flex items-center gap-1.5 text-foreground/70 font-mono text-xs tracking-wide">
@@ -139,10 +145,10 @@ export default function ApiKeyInput({
                 {maskKey(apiKey)}
               </span>
             ) : (
-              <span className="text-muted-foreground/40 text-xs">{placeholder}</span>
+              <span className="text-muted-foreground/40 text-xs">{resolvedPlaceholder}</span>
             )}
             <span className="ml-auto text-muted-foreground/30 text-xs group-hover:text-muted-foreground/60 transition-colors">
-              {hasKey ? "edit" : "add"}
+              {hasKey ? t("apiKeyInput.editButton") : t("apiKeyInput.addButton")}
             </span>
           </button>
         )}

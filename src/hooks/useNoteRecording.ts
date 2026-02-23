@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import AudioManager from "../helpers/audioManager";
 import logger from "../utils/logger";
+import { getRecordingErrorTitle } from "../utils/recordingErrors";
 
 interface UseNoteRecordingOptions {
   onTranscriptionComplete: (text: string) => void;
@@ -61,15 +62,7 @@ export function useNoteRecording({
         }
       },
       onError: (error: { title: string; description: string; code?: string }) => {
-        const title =
-          error.code === "AUTH_EXPIRED"
-            ? t("hooks.audioRecording.errorTitles.sessionExpired")
-            : error.code === "OFFLINE"
-              ? t("hooks.audioRecording.errorTitles.offline")
-              : error.code === "LIMIT_REACHED"
-                ? t("hooks.audioRecording.errorTitles.dailyLimitReached")
-                : error.title;
-
+        const title = getRecordingErrorTitle(error, t);
         callbacksRef.current.onError?.({ title, description: error.description });
       },
       onPartialTranscript: (text: string) => {

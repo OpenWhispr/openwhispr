@@ -27,7 +27,7 @@ export interface UseFolderManagementReturn {
   setRenamingFolderId: (id: number | null) => void;
   setRenameValue: (v: string) => void;
   setShowAddNotesDialog: (v: boolean) => void;
-  loadFolders: () => Promise<void>;
+  loadFolders: () => Promise<FolderItem[]>;
   handleCreateFolder: () => Promise<void>;
   handleConfirmRename: () => Promise<void>;
   handleDeleteFolder: (id: number) => Promise<void>;
@@ -50,18 +50,25 @@ export function useFolderManagement(): UseFolderManagementReturn {
   const newFolderInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const prevFolderIdRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
 
   const loadFolders = useCallback(async () => {
-    const [items, counts] = await Promise.all([
-      window.electronAPI.getFolders(),
-      window.electronAPI.getFolderNoteCounts(),
-    ]);
-    setFolders(items);
-    const countMap: Record<number, number> = {};
-    counts.forEach((c) => {
-      countMap[c.folder_id] = c.count;
-    });
-    setFolderCounts(countMap);
+    try {
+      const [items, counts] = await Promise.all([
+        window.electronAPI.getFolders(),
+        window.electronAPI.getFolderNoteCounts(),
+      ]);
+      if (!isMountedRef.current) return items;
+      setFolders(items);
+      const countMap: Record<number, number> = {};
+      counts.forEach((c) => {
+        countMap[c.folder_id] = c.count;
+      });
+      setFolderCounts(countMap);
+      return items;
+    } catch {
+      return [];
+    }
   }, []);
 
   // Load folders on mount, determine initial active folder
@@ -69,16 +76,8 @@ export function useFolderManagement(): UseFolderManagementReturn {
     const load = async () => {
       try {
         setIsLoading(true);
-        const [items, counts] = await Promise.all([
-          window.electronAPI.getFolders(),
-          window.electronAPI.getFolderNoteCounts(),
-        ]);
-        setFolders(items);
-        const countMap: Record<number, number> = {};
-        counts.forEach((c) => {
-          countMap[c.folder_id] = c.count;
-        });
-        setFolderCounts(countMap);
+        const items = await loadFolders();
+        if (!isMountedRef.current) return;
 
         // Respect pre-set activeFolderId (e.g., navigating from "Open Note")
         const presetFolderId = getActiveFolderIdValue();
@@ -93,6 +92,7 @@ export function useFolderManagement(): UseFolderManagementReturn {
         }
         if (initialFolderId) {
           const notes = await initializeNotes(null, 50, initialFolderId);
+          if (!isMountedRef.current) return;
           const presetNoteId = getActiveNoteIdValue();
           if (!presetNoteId && notes.length > 0) {
             setActiveNoteId(notes[0].id);
@@ -100,10 +100,13 @@ export function useFolderManagement(): UseFolderManagementReturn {
         }
         prevFolderIdRef.current = initialFolderId;
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) setIsLoading(false);
       }
     };
     load();
+    return () => {
+      isMountedRef.current = false;
+    };
   }, []);
 
   // Re-initialize notes when active folder changes

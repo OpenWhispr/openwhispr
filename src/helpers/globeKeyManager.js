@@ -131,7 +131,7 @@ class GlobeKeyManager extends EventEmitter {
         this.process = null;
       }
     }
-    console.error("GlobeKeyManager error:", error);
+    debugLogger.error("GlobeKeyManager error", { error: error.message }, "hotkey");
     this.emit("error", error);
   }
 

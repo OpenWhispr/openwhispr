@@ -318,7 +318,7 @@ export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewP
     : null;
 
   if (!isOnboardingComplete) {
-    return <NotesOnboarding onComplete={completeOnboarding} onOpenSettings={onOpenSettings} />;
+    return <NotesOnboarding onComplete={completeOnboarding} />;
   }
 
   return (

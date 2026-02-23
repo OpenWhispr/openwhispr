@@ -44,7 +44,7 @@ export default function RealtimeTranscriptionBanner({
       <button
         onClick={handleDismiss}
         className="p-0.5 rounded text-primary/25 hover:text-primary/50 transition-colors shrink-0"
-        aria-label="Dismiss"
+        aria-label={t("common.dismiss")}
       >
         <X size={11} />
       </button>

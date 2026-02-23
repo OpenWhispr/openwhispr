@@ -36,6 +36,7 @@ import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { getPlatform } from "../utils/platform";
+import logger from "../utils/logger";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
 
@@ -150,7 +151,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           setActivationMode("tap");
         }
       } catch (error) {
-        console.error("Failed to check hotkey mode:", error);
+        logger.error("Failed to check hotkey mode", { error }, "onboarding");
       }
     };
     checkHotkeyMode();
@@ -171,7 +172,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             : await window.electronAPI?.checkModelStatus(modelToCheck);
         setIsModelDownloaded(result?.downloaded ?? false);
       } catch (error) {
-        console.error("Failed to check model status:", error);
+        logger.error("Failed to check model status", { error }, "onboarding");
         setIsModelDownloaded(false);
       }
     };
@@ -216,7 +217,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           }
         }
       } catch (error) {
-        console.error("Failed to auto-register default hotkey:", error);
+        logger.error("Failed to auto-register default hotkey", { error }, "onboarding");
       } finally {
         autoRegisterInFlightRef.current = false;
       }
@@ -241,7 +242,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       }
       return true;
     } catch (error) {
-      console.error("Failed to register onboarding hotkey", error);
+      logger.error("Failed to register onboarding hotkey", { error }, "onboarding");
       showAlertDialog({
         title: t("onboarding.hotkey.couldNotRegisterTitle"),
         description: t("onboarding.hotkey.couldNotRegisterDescription"),
@@ -266,7 +267,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     try {
       await window.electronAPI?.saveAllKeysToEnv?.();
     } catch (error) {
-      console.error("Failed to persist API keys:", error);
+      logger.error("Failed to persist API keys", { error }, "onboarding");
     }
 
     return true;

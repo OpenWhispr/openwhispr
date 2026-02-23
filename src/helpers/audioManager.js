@@ -894,7 +894,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           stack: error.stack,
           fallbackToCleanup: true,
         });
-        console.error(`Reasoning failed (${source}):`, error.message);
+        logger.error("Reasoning failed", { source, error: error.message }, "notes");
       }
     }
 

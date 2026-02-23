@@ -26,7 +26,7 @@ export function ProviderTabs({
   selectedId,
   onSelect,
   renderIcon,
-  colorScheme = "indigo",
+  colorScheme = "purple",
   scrollable = false,
 }: ProviderTabsProps) {
   const { t } = useTranslation();

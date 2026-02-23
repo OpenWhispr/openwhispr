@@ -74,7 +74,7 @@ export function addTranscription(item: TranscriptionItem) {
 }
 
 export function removeTranscription(id: number) {
-  if (!id) return;
+  if (id == null) return;
   const { transcriptions } = useTranscriptionStore.getState();
   const next = transcriptions.filter((item) => item.id !== id);
   if (next.length === transcriptions.length) return;

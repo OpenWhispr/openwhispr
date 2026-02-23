@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
@@ -36,6 +37,7 @@ export default function SidebarModal<T extends string>({
   sidebarWidth = "w-52",
   version,
 }: SidebarModalProps<T>) {
+  const { t } = useTranslation();
   // Group items by their group property
   const groupedItems = React.useMemo(() => {
     const groups: { label: string | null; items: SidebarItem<T>[] }[] = [];
@@ -84,7 +86,7 @@ export default function SidebarModal<T extends string>({
           <div className="relative h-full max-h-[85vh] overflow-hidden">
             <DialogPrimitive.Close className="absolute right-4 top-4 z-10 rounded-md p-1.5 opacity-40 ring-offset-background transition-[opacity,background-color] hover:opacity-100 bg-transparent hover:bg-muted dark:hover:bg-surface-raised focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1">
               <X className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="sr-only">Close</span>
+              <span className="sr-only">{t("common.close")}</span>
             </DialogPrimitive.Close>
 
             <div className="flex h-[85vh]">

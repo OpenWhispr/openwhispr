@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import reasoningService from "../services/ReasoningService";
 import type { ActionItem } from "../types/electron";
 import { getEffectiveReasoningModel } from "../stores/settingsStore";
@@ -19,6 +19,12 @@ export function useActionProcessing({ onSuccess, onError }: UseActionProcessingO
   const cancelledRef = useRef(false);
   const successTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const processingRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+    };
+  }, []);
 
   const runAction = useCallback(
     async (

@@ -166,15 +166,17 @@ export default function ControlPanelSidebar({
             </button>
             <div className="flex flex-col items-center text-center pt-1">
               <img src={logoIcon} alt="" className="w-7 h-7 rounded-md mb-2" />
-              <p className="text-xs font-medium text-foreground mb-0.5">Upgrade to Pro</p>
+              <p className="text-xs font-medium text-foreground mb-0.5">
+                {t("sidebar.upgradeTitle")}
+              </p>
               <p className="text-[11px] leading-snug text-muted-foreground mb-2.5">
-                Unlimited transcriptions and premium features.
+                {t("sidebar.upgradeDescription")}
               </p>
               <button
                 onClick={onUpgrade}
                 className="w-full h-7 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
               >
-                Learn more
+                {t("sidebar.learnMore")}
               </button>
             </div>
           </div>
@@ -247,7 +249,7 @@ export default function ControlPanelSidebar({
             {isSignedIn && (userName || userEmail) ? (
               <>
                 <p className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight">
-                  {userName || "User"}
+                  {userName || t("sidebar.defaultUser")}
                 </p>
                 {userEmail && (
                   <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
@@ -256,7 +258,9 @@ export default function ControlPanelSidebar({
                 )}
               </>
             ) : authLoaded && !isSignedIn ? (
-              <p className="text-xs text-foreground/45 dark:text-foreground/55">Not signed in</p>
+              <p className="text-xs text-foreground/45 dark:text-foreground/55">
+                {t("sidebar.notSignedIn")}
+              </p>
             ) : null}
           </div>
         </div>

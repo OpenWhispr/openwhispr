@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { TFunction } from "i18next";
 import type { ActionItem } from "../types/electron";
 
 interface ActionState {
@@ -45,7 +46,7 @@ function ensureIpcListeners() {
 
 export async function initializeActions(): Promise<ActionItem[]> {
   ensureIpcListeners();
-  const items = await window.electronAPI.getActions();
+  const items = (await window.electronAPI?.getActions()) ?? [];
   useActionStore.setState({ actions: items });
   return items;
 }
@@ -72,4 +73,22 @@ function removeActionFromStore(id: number): void {
 
 export function useActions(): ActionItem[] {
   return useActionStore((state) => state.actions);
+}
+
+export function getActionName(
+  action: { name: string; translation_key?: string },
+  t: TFunction
+): string {
+  return action.translation_key
+    ? t(`${action.translation_key}.name`, { defaultValue: action.name })
+    : action.name;
+}
+
+export function getActionDescription(
+  action: { description: string; translation_key?: string },
+  t: TFunction
+): string {
+  return action.translation_key
+    ? t(`${action.translation_key}.description`, { defaultValue: action.description })
+    : action.description;
 }

@@ -5,6 +5,7 @@ import { Loader2, Sparkles, Cloud, X } from "lucide-react";
 import TranscriptionItem from "./ui/TranscriptionItem";
 import type { TranscriptionItem as TranscriptionItemType } from "../types/electron";
 import { formatHotkeyLabel } from "../utils/hotkeys";
+import { formatDateGroup } from "../utils/dateFormatting";
 
 interface HistoryViewProps {
   history: TranscriptionItemType[];
@@ -20,26 +21,6 @@ interface HistoryViewProps {
   onOpenSettings: (section?: string) => void;
 }
 
-function getDateLabel(
-  timestamp: string,
-  todayStart: Date,
-  yesterdayStart: Date,
-  t: (key: string) => string,
-  locale: string
-): string {
-  const ts = timestamp.endsWith("Z") ? timestamp : `${timestamp}Z`;
-  const date = new Date(ts);
-  if (Number.isNaN(date.getTime())) return timestamp;
-
-  if (date >= todayStart) {
-    return t("controlPanel.history.dateGroups.today");
-  }
-  if (date >= yesterdayStart) {
-    return t("controlPanel.history.dateGroups.yesterday");
-  }
-  return date.toLocaleDateString(locale, { month: "long", day: "numeric", year: "numeric" });
-}
-
 export default function HistoryView({
   history,
   isLoading,
@@ -53,21 +34,16 @@ export default function HistoryView({
   deleteTranscription,
   onOpenSettings,
 }: HistoryViewProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
 
   const groupedHistory = useMemo(() => {
     if (history.length === 0) return [];
-
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterdayStart = new Date(todayStart);
-    yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
     const groups: { label: string; items: TranscriptionItemType[] }[] = [];
     let currentLabel: string | null = null;
 
     for (const item of history) {
-      const label = getDateLabel(item.timestamp, todayStart, yesterdayStart, t, i18n.language);
+      const label = formatDateGroup(item.timestamp, t);
 
       if (label !== currentLabel) {
         groups.push({ label, items: [item] });
@@ -78,7 +54,7 @@ export default function HistoryView({
     }
 
     return groups;
-  }, [history, t, i18n.language]);
+  }, [history, t]);
 
   return (
     <div className="px-4 pt-4 pb-6">
@@ -90,7 +66,7 @@ export default function HistoryView({
                 setShowCloudMigrationBanner(false);
                 localStorage.setItem("cloudMigrationShown", "true");
               }}
-              aria-label="Close"
+              aria-label={t("common.close")}
               className="absolute top-2 right-2 p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
               <X size={14} />
@@ -130,7 +106,7 @@ export default function HistoryView({
                 localStorage.setItem("aiCTADismissed", "true");
                 setAiCTADismissed(true);
               }}
-              aria-label="Close"
+              aria-label={t("common.close")}
               className="absolute top-2 right-2 p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
             >
               <X size={14} />

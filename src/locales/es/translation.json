@@ -1,36 +1,4 @@
 {
-  "app": {
-    "name": "OpenWhispr",
-    "loading": "Cargando OpenWhispr...",
-    "oauth": {
-      "redirectTitle": "Redirigiendo a OpenWhispr",
-      "closeTab": "Puedes cerrar esta pestaña"
-    },
-    "buttons": {
-      "cancelRecording": "Cancelar grabación",
-      "cancelProcessing": "Cancelar procesamiento"
-    },
-    "mic": {
-      "hotkeyToSpeak": "[{{hotkey}}] para hablar",
-      "recording": "Grabando...",
-      "processing": "Procesando...",
-      "clickToSpeak": "Haz clic para hablar"
-    },
-    "toasts": {
-      "hotkeyChanged": {
-        "title": "Atajo cambiado"
-      },
-      "hotkeyUnavailable": {
-        "title": "Atajo no disponible",
-        "description": "No se pudo registrar el atajo. Configura uno diferente en Ajustes."
-      }
-    },
-    "commandMenu": {
-      "startListening": "Iniciar escucha",
-      "stopListening": "Detener escucha",
-      "hideForNow": "Ocultar por ahora"
-    }
-  },
   "settings": {
     "language": {
       "sectionTitle": "Idioma",
@@ -172,10 +140,10 @@
     "availableModels": "Modelos disponibles",
     "fast": "Rápido",
     "hold": "Mantener",
-    "less": "Menos",
-    "more": "Más",
     "private": "Privado",
-    "tap": "Pulsar"
+    "tap": "Pulsar",
+    "close": "Cerrar",
+    "dismiss": "Descartar"
   },
   "onboarding": {
     "steps": {
@@ -249,29 +217,24 @@
       "updatePayment": "Actualizar pago"
     },
     "history": {
-      "title": "Transcripciones",
       "couldNotLoadTitle": "No se pudo cargar tu historial",
       "couldNotLoadDescription": "Ocurrió un problema al cargar tus transcripciones. Cierra y abre la app de nuevo.",
       "copiedTitle": "¡Copiado!",
       "copiedDescription": "Texto copiado al portapapeles",
       "couldNotCopyTitle": "No se pudo copiar",
       "couldNotCopyDescription": "Ocurrió un problema al copiar al portapapeles. Inténtalo de nuevo.",
-      "clearTitle": "Borrar historial",
-      "clearDescription": "Esto eliminará todas tus transcripciones. No se puede deshacer.",
-      "clearedTitle": "Historial borrado",
-      "clearedDescription": "{{count}} transcripción eliminada",
-      "clearedDescription_other": "{{count}} transcripciones eliminadas",
-      "couldNotClearTitle": "No se pudo borrar el historial",
-      "couldNotClearDescription": "Algo salió mal. Inténtalo de nuevo.",
       "deleteTitle": "Eliminar transcripción",
       "deleteDescription": "Esta transcripción se eliminará permanentemente.",
       "couldNotDeleteTitle": "No se pudo eliminar",
       "couldNotDeleteDescription": "Puede que esta transcripción ya se haya eliminado.",
       "couldNotDeleteDescriptionGeneric": "Algo salió mal. Inténtalo de nuevo.",
-      "clear": "Borrar",
       "empty": "Aún no hay transcripciones",
       "press": "Pulsa",
-      "toStart": "para empezar"
+      "toStart": "para empezar",
+      "dateGroups": {
+        "today": "Hoy",
+        "yesterday": "Ayer"
+      }
     },
     "cloudMigration": {
       "title": "Bienvenido a OpenWhispr Pro",
@@ -292,8 +255,6 @@
       "localDescription": "Se ejecuta en tu dispositivo. Privacidad total y funciona sin internet.",
       "cloudDescription": "Modelos avanzados por API. Rápido y potente, requiere internet."
     },
-    "enableTitle": "Activar mejora de texto con IA",
-    "enableDescription": "Usa IA para mejorar automáticamente la calidad de transcripción",
     "custom": {
       "endpointWithProtocol": "Introduce una URL base completa con protocolo (por ejemplo, https://server/v1).",
       "httpsRequired": "Se requiere HTTPS (HTTP solo para red local).",
@@ -536,7 +497,8 @@
       "continueWithGoogle": "Continuar con Google"
     },
     "welcomeSubtitle": "Dicta en cualquier lugar usando tu voz",
-    "welcomeTitle": "Bienvenido a OpenWhispr"
+    "welcomeTitle": "Bienvenido a OpenWhispr",
+    "sessionExpired": "Sesión expirada"
   },
   "cleanupPrompt": "Corrección",
   "developerSection": {
@@ -924,6 +886,55 @@
         "trial": "Prueba"
       },
       "planTitle": "Plan",
+      "pricing": {
+        "title": "Planes",
+        "monthly": "Mensual",
+        "annual": "Anual",
+        "annualBadge": "Ahorra 17%",
+        "free": {
+          "name": "Gratis",
+          "price": "$0",
+          "period": "para siempre",
+          "trialNote": "Incluye 7 días gratis de OpenWhispr Pro",
+          "features": [
+            "2.000 palabras/semana",
+            "Modelos de IA locales",
+            "Usa tus propias claves",
+            "Diccionario y fragmentos",
+            "Soporte para 100+ idiomas",
+            "Sin retención de datos"
+          ]
+        },
+        "pro": {
+          "name": "Pro",
+          "monthlyPrice": "$8",
+          "monthlyPeriod": "/mes",
+          "annualPrice": "$80",
+          "annualPeriod": "/año",
+          "features": [
+            "Todo lo de Gratis",
+            "Uso ilimitado",
+            "Transcripción en tiempo real",
+            "Últimos modelos de audio e IA",
+            "iOS/Android (próximamente)",
+            "Sin retención de datos",
+            "Soporte prioritario"
+          ],
+          "cta": "Comenzar",
+          "switchToAnnual": "Cambiar a Anual"
+        },
+        "enterprise": {
+          "name": "Enterprise",
+          "price": "Personalizado",
+          "features": [
+            "Sincronización en la nube",
+            "Funciones de equipo (próximamente)",
+            "SSO y cumplimiento"
+          ],
+          "cta": "Contáctanos"
+        },
+        "currentPlan": "Plan actual"
+      },
       "rollingWeeklyLimit": "Límite semanal móvil",
       "signOut": {
         "failedDescription": "Algo salió mal al cerrar sesión. Inténtalo de nuevo.",
@@ -932,6 +943,9 @@
         "signingOut": "Cerrando sesión..."
       },
       "signedIn": "Sesión iniciada",
+      "signedOutPlans": {
+        "button": "Crear cuenta gratuita"
+      },
       "title": "Cuenta",
       "toasts": {
         "approachingLimit": {
@@ -1013,26 +1027,6 @@
       },
       "resetAppData": "Restablecer datos de la app",
       "resetAppDataDescription": "Elimina permanentemente todos los ajustes, transcripciones y datos en caché"
-    },
-    "dictionary": {
-      "add": "Agregar",
-      "addWordOrPhrase": "Agrega una palabra o frase",
-      "agentNameAutoManaged": "Nombre del agente (gestionado automáticamente)",
-      "clearAll": "Borrar todo",
-      "clearDictionaryDescription": "Esto eliminará todas las palabras de tu diccionario personalizado. Esta acción no se puede deshacer.",
-      "clearDictionaryTitle": "¿Borrar diccionario?",
-      "description": "Agrega palabras, nombres o términos técnicos para mejorar la precisión de transcripción",
-      "howItWorksDescription": "Las palabras que agregas se incluyen en el prompt de IA para que el modelo las reconozca y preserve durante la corrección de transcripción.",
-      "howItWorksTitle": "Cómo funciona",
-      "noWords": "Aún no se han agregado palabras",
-      "placeholder": "p. ej. OpenWhispr, Kubernetes, Dr. Martínez...",
-      "pressEnterToAdd": "Pulsa Enter para agregar",
-      "removeWord": "Eliminar palabra",
-      "tipDescription": "Agrega nombres propios, términos técnicos o cualquier palabra que pueda transcribirse incorrectamente.",
-      "tipLabel": "Consejo",
-      "title": "Diccionario personalizado",
-      "wordsAppearHere": "Las palabras que agregues aparecerán aquí",
-      "yourWords": "Tus palabras"
     },
     "general": {
       "appearance": {
@@ -1241,6 +1235,7 @@
   "referral": {
     "title": "Recomienda y gana recompensas",
     "subtitle": "Regala un mes. Recibe un mes.",
+    "modalTitle": "Invitar amigos",
     "tabs": {
       "refer": "Recomendar",
       "pastInvites": "Invitaciones anteriores"
@@ -1312,7 +1307,6 @@
   "notes": {
     "folders": {
       "title": "Carpetas",
-      "meetings": "Reuniones",
       "soon": "Próximamente",
       "folderName": "Nombre de la carpeta",
       "couldNotCreate": "No se pudo crear la carpeta",
@@ -1324,20 +1318,17 @@
       "newNote": "Nueva nota",
       "untitled": "Sin título",
       "untitledNote": "Nota sin título",
-      "createToGetStarted": "Crea una nota para comenzar",
-      "selectNote": "Selecciona una nota"
+      "timeNow": "Ahora",
+      "minutesAgo": "hace {{count}}m",
+      "hoursAgo": "hace {{count}}h",
+      "daysAgo": "hace {{count}}d"
     },
     "editor": {
       "untitled": "Sin título",
       "noteTitle": "Título de la nota",
       "stop": "Detener",
       "transcribe": "Transcribir",
-      "recording": "Grabando",
       "processing": "Procesando...",
-      "edit": "Editar",
-      "preview": "Vista previa",
-      "enhance": "Mejorar",
-      "reEnhance": "Volver a mejorar",
       "export": "Exportar",
       "asMarkdown": "Como Markdown",
       "asPlainText": "Como texto plano",
@@ -1347,17 +1338,6 @@
       "wordsCount": "{{count}} palabras",
       "startWriting": "Comienza a escribir...",
       "staleIndicator": "El contenido ha cambiado desde la mejora"
-    },
-    "enhance": {
-      "title": "Mejorar con IA",
-      "defaultPrompt": "Corrige la gramática, mejora la estructura y formatea estas notas para facilitar la lectura, preservando todo el significado original.",
-      "placeholder": "¿Qué debería hacer la IA con tus notas?",
-      "tryAgain": "Intentar de nuevo",
-      "apply": "Aplicar",
-      "cancel": "Cancelar",
-      "enhancing": "Mejorando...",
-      "enhance": "Mejorar",
-      "noProviders": "Configura las claves API en Ajustes para usar modelos de IA"
     },
     "upload": {
       "title": "Subir audio",
@@ -1387,7 +1367,9 @@
       "selectFolder": "Seleccionar carpeta",
       "transcriptionFailed": "Error en la transcripción",
       "errorOccurred": "Se produjo un error",
-      "enhancementFailed": "Error en la mejora"
+      "noProviderTitle": "No se ha configurado un proveedor de transcripción",
+      "noProviderDescription": "Agrega una clave API o descarga un modelo local para comenzar a transcribir.",
+      "noProviderAction": "Abrir configuración de transcripción"
     },
     "meeting": {
       "title": "Notas de reunión",
@@ -1439,37 +1421,29 @@
       "addExisting": "Añadir existentes",
       "addCount": "Añadir {{count}} notas",
       "noResults": "No hay notas coincidentes",
-      "noNotesAvailable": "No hay otras notas disponibles"
+      "noNotesAvailable": "No hay otras notas disponibles",
+      "today": "Hoy",
+      "yesterday": "Ayer"
     },
     "onboarding": {
       "llm": {
-        "title": "Configure an AI model",
-        "description": "Actions use AI to transform your notes. Set up a language model to get started.",
-        "skipForNow": "Skip for now",
-        "configured": "AI model configured",
-        "apiKeyPlaceholder": "Paste your API key",
-        "getKey": "Get API key",
-        "localModel": "Local model",
-        "cloudProvider": "Cloud provider"
+        "title": "Configurar un modelo de IA",
+        "description": "Las acciones usan IA para transformar tus notas. Configura un modelo de lenguaje para comenzar.",
+        "configured": "Modelo de IA configurado"
       },
       "actions": {
-        "title": "AI-Powered Actions",
-        "description": "Actions transform your notes — clean up transcriptions, summarize meetings, and more. Use built-in actions or create your own.",
-        "builtInLabel": "Built-in",
-        "createTitle": "Create your own action",
-        "createDescription": "Define a custom action with your own AI prompt. You can always edit or add more later in settings.",
-        "created": "Created!",
-        "proNote": "Your Pro plan includes AI-powered actions. Here's how they work."
+        "title": "Acciones impulsadas por IA",
+        "description": "Las acciones transforman tus notas: corrigen transcripciones, resumen reuniones y más. Usa acciones integradas o crea las tuyas.",
+        "builtInLabel": "Integrada",
+        "createTitle": "Crea tu propia acción",
+        "createDescription": "Define una acción personalizada con tu propio prompt de IA. Puedes editar o agregar más después en los ajustes.",
+        "created": "¡Creada!"
       },
-      "proUpsell": {
-        "message": "Skip the setup — Pro includes the latest AI models, zero configuration.",
-        "learnMore": "Learn more"
-      },
-      "getStarted": "Get Started"
+      "getStarted": "Comenzar"
     },
     "realtimeBanner": {
-      "message": "Real-time transcription available on Pro",
-      "upgrade": "Upgrade"
+      "message": "Transcripción en tiempo real disponible con Pro",
+      "upgrade": "Mejorar"
     }
   },
   "dictionary": {
@@ -1477,6 +1451,9 @@
     "removeWord": "Eliminar {{word}}",
     "clearAll": "Borrar todo",
     "howItWorks": "Cómo funciona",
+    "howItWorksDetail": "Las palabras que agregas se incluyen en el prompt de IA para que el modelo las reconozca y preserve durante la corrección de transcripción.",
+    "autoManaged": "Nombre del agente (gestionado automáticamente)",
+    "inputHint": "Pulsa Enter para agregar",
     "title": "Diccionario personalizado",
     "description": "Enseña a la IA tu vocabulario: nombres, jerga y términos que podría pasar por alto",
     "clearTitle": "¿Borrar el diccionario?",
@@ -1490,7 +1467,15 @@
     "dictionary": "Diccionario",
     "referral": "Obtener un mes gratis",
     "settings": "Configuración",
-    "support": "Soporte"
+    "support": "Soporte",
+    "limitReached": "Límite semanal alcanzado",
+    "limitReachedDescription": "Mejora a Pro para transcripciones ilimitadas.",
+    "upgradeToPro": "Mejorar a Pro",
+    "upgradeTitle": "Mejorar a Pro",
+    "upgradeDescription": "Transcripciones ilimitadas y más.",
+    "learnMore": "Más información",
+    "defaultUser": "Usuario",
+    "notSignedIn": "Sin sesión iniciada"
   },
   "usage": {
     "approachingLimit": "Cerca del límite semanal",
@@ -1510,5 +1495,20 @@
     "upgradeToPro": "Actualizar a Pro",
     "useYourOwnKey": "Usar tu propia clave API",
     "upgradeUnlimited": "Actualizar a Pro — transcripciones ilimitadas"
+  },
+  "support": {
+    "joinDiscord": "Unirse a Discord",
+    "contactSupport": "Contactar soporte",
+    "submitBug": "Reportar un error"
+  },
+  "apiKeyInput": {
+    "placeholder": "Introduce tu clave API",
+    "label": "Clave API",
+    "save": "Guardar",
+    "cancelEdit": "Cancelar edición",
+    "edit": "Editar",
+    "add": "Agregar",
+    "editButton": "Editar",
+    "addButton": "Agregar"
   }
 }

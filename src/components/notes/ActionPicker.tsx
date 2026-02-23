@@ -9,7 +9,12 @@ import {
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
-import { useActions, initializeActions } from "../../stores/actionStore";
+import {
+  useActions,
+  initializeActions,
+  getActionName,
+  getActionDescription,
+} from "../../stores/actionStore";
 import type { ActionItem } from "../../types/electron";
 
 interface ActionPickerProps {
@@ -43,17 +48,12 @@ export default function ActionPicker({
 
   if (!activeAction) return null;
 
-  const actionName = (action: ActionItem) =>
-    action.translation_key ? t(`${action.translation_key}.name`) : action.name;
-  const actionDescription = (action: ActionItem) =>
-    action.translation_key ? t(`${action.translation_key}.description`) : action.description;
-
   return (
     <div className="flex items-center">
       <button
         onClick={() => handleRun(activeAction)}
         disabled={disabled}
-        aria-label={t("notes.actions.runAction", { name: actionName(activeAction) })}
+        aria-label={t("notes.actions.runAction", { name: getActionName(activeAction, t) })}
         className={cn(
           "flex items-center gap-2 h-11 pl-5 pr-3 rounded-l-xl",
           "bg-accent/8 dark:bg-accent/12",
@@ -68,7 +68,9 @@ export default function ActionPicker({
         )}
       >
         <Sparkles size={14} />
-        <span className="text-xs font-semibold tracking-tight">{actionName(activeAction)}</span>
+        <span className="text-xs font-semibold tracking-tight">
+          {getActionName(activeAction, t)}
+        </span>
       </button>
 
       <DropdownMenu>
@@ -103,10 +105,10 @@ export default function ActionPicker({
             >
               <Sparkles size={12} className="text-accent/50 shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{actionName(action)}</div>
+                <div className="font-medium truncate">{getActionName(action, t)}</div>
                 {action.description && (
                   <div className="text-xs text-muted-foreground/50 truncate">
-                    {actionDescription(action)}
+                    {getActionDescription(action, t)}
                   </div>
                 )}
               </div>

@@ -211,7 +211,7 @@ class HotkeyManager {
         return { success: true, hotkey };
       } else {
         const failureInfo = this.getFailureReason(accelerator);
-        console.error(`[HotkeyManager] Failed to register hotkey: ${hotkey}`, failureInfo);
+        debugLogger.error("Failed to register hotkey", { error: hotkey, ...failureInfo }, "hotkey");
         debugLogger.log(`[HotkeyManager] Registration failed:`, failureInfo);
 
         this._restorePreviousHotkey(previousHotkey, callback);
@@ -231,7 +231,7 @@ class HotkeyManager {
         };
       }
     } catch (error) {
-      console.error("[HotkeyManager] Error setting up shortcuts:", error);
+      debugLogger.error("Error setting up shortcuts", { error: error.message }, "hotkey");
       debugLogger.log(`[HotkeyManager] Exception during registration:`, error.message);
       this._restorePreviousHotkey(previousHotkey, callback);
       return { success: false, error: error.message };
@@ -410,8 +410,7 @@ class HotkeyManager {
       debugLogger.log("[HotkeyManager] All hotkey fallbacks failed");
       this.notifyHotkeyFailure(defaultHotkey, result);
     } catch (err) {
-      console.error("Failed to initialize hotkey:", err);
-      debugLogger.error("[HotkeyManager] Failed to initialize hotkey:", err.message);
+      debugLogger.error("Failed to initialize hotkey", { error: err.message }, "hotkey");
     }
   }
 
