@@ -103,8 +103,6 @@ class TrayManager {
   }
 
   async createTray() {
-    if (process.platform !== "darwin" && process.platform !== "win32") return;
-
     try {
       const trayIcon = await this.loadTrayIcon();
       if (!trayIcon || trayIcon.isEmpty()) {
@@ -269,15 +267,15 @@ class TrayManager {
       return;
     }
 
-    if (process.platform === "win32") {
+    if (process.platform === "darwin") {
       this.tray.on("click", () => {
-        void this.showControlPanelFromTray();
-      });
-      this.tray.on("right-click", () => {
         this.tray?.popUpContextMenu();
       });
     } else {
       this.tray.on("click", () => {
+        void this.showControlPanelFromTray();
+      });
+      this.tray.on("right-click", () => {
         this.tray?.popUpContextMenu();
       });
     }
