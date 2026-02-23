@@ -1624,7 +1624,7 @@ class IPCHandlers {
       }
     });
 
-    const fetchStripeUrl = async (event, endpoint, errorPrefix) => {
+    const fetchStripeUrl = async (event, endpoint, errorPrefix, body) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -1632,10 +1632,14 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}${endpoint}`, {
-          method: "POST",
-          headers: { Cookie: cookieHeader },
-        });
+        const headers = { Cookie: cookieHeader };
+        const fetchOpts = { method: "POST", headers };
+        if (body) {
+          headers["Content-Type"] = "application/json";
+          fetchOpts.body = JSON.stringify(body);
+        }
+
+        const response = await fetch(`${apiUrl}${endpoint}`, fetchOpts);
 
         if (!response.ok) {
           if (response.status === 401) {
@@ -1653,8 +1657,13 @@ class IPCHandlers {
       }
     };
 
-    ipcMain.handle("cloud-checkout", (event) =>
-      fetchStripeUrl(event, "/api/stripe/checkout", "Cloud checkout error")
+    ipcMain.handle("cloud-checkout", (event, plan) =>
+      fetchStripeUrl(
+        event,
+        "/api/stripe/checkout",
+        "Cloud checkout error",
+        plan ? { plan } : undefined
+      )
     );
 
     ipcMain.handle("cloud-billing-portal", (event) =>

@@ -924,6 +924,12 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
   const [isOpeningBilling, setIsOpeningBilling] = useState(false);
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annual">("monthly");
 
+  useEffect(() => {
+    if (usage?.billingInterval) {
+      setBillingPeriod(usage.billingInterval);
+    }
+  }, [usage?.billingInterval]);
+
   const startOnboarding = useCallback(() => {
     localStorage.setItem("pendingCloudMigration", "true");
     localStorage.setItem("onboardingCurrentStep", "0");
@@ -1042,11 +1048,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                           {t("settingsPage.account.trialCta.description")}
                         </p>
                       </div>
-                      <Button
-                        onClick={startOnboarding}
-                        size="sm"
-                        className="w-full"
-                      >
+                      <Button onClick={startOnboarding} size="sm" className="w-full">
                         <UserCircle className="mr-1.5 h-3.5 w-3.5" />
                         {t("settingsPage.account.trialCta.button")}
                       </Button>
@@ -1201,6 +1203,11 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                             ? t("settingsPage.account.pricing.pro.monthlyPeriod")
                             : t("settingsPage.account.pricing.pro.annualPeriod")}
                         </span>
+                        {billingPeriod === "annual" && (
+                          <span className="text-[9px] font-semibold text-primary ml-1">
+                            {t("settingsPage.account.pricing.annualBadge")}
+                          </span>
+                        )}
                       </div>
                       <ul className="space-y-0.5 mt-2 flex-1">
                         {(
@@ -1217,7 +1224,36 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                           </li>
                         ))}
                       </ul>
-                      {usage?.isSubscribed || usage?.isTrial ? (
+                      {usage?.isSubscribed && !usage?.isTrial ? (
+                        billingPeriod === "annual" ? (
+                          <Button
+                            onClick={async () => {
+                              const result = await usage.openBillingPortal();
+                              if (!result.success) {
+                                toast({
+                                  title: t("settingsPage.account.billing.couldNotOpenTitle"),
+                                  description: t(
+                                    "settingsPage.account.billing.couldNotOpenDescription"
+                                  ),
+                                  variant: "destructive",
+                                });
+                              }
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="mt-2 w-full h-6 text-[10px]"
+                            disabled={usage?.checkoutLoading}
+                          >
+                            {t("settingsPage.account.pricing.pro.switchToAnnual")}
+                          </Button>
+                        ) : (
+                          <div className="mt-2 text-center">
+                            <span className="text-[9px] font-medium text-primary">
+                              {t("settingsPage.account.pricing.currentPlan")}
+                            </span>
+                          </div>
+                        )
+                      ) : usage?.isTrial ? (
                         <div className="mt-2 text-center">
                           <span className="text-[9px] font-medium text-primary">
                             {t("settingsPage.account.pricing.currentPlan")}
@@ -1234,7 +1270,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                       ) : (
                         <Button
                           onClick={async () => {
-                            const result = await usage?.openCheckout();
+                            const result = await usage?.openCheckout(billingPeriod);
                             if (result && !result.success) {
                               toast({
                                 title: t("settingsPage.account.checkout.couldNotOpenTitle"),
@@ -1302,212 +1338,216 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                 {isSignedIn ? (
                   <>
                     <SectionHeader title={t("settingsPage.account.planTitle")} />
-                {!usage || !usage.hasLoaded ? (
-                  <SettingsPanel>
-                    <SettingsPanelRow>
-                      <div className="flex items-center justify-between">
-                        <Skeleton className="h-4 w-24" />
-                        <Skeleton className="h-5 w-16 rounded-full" />
-                      </div>
-                    </SettingsPanelRow>
-                    <SettingsPanelRow>
-                      <div className="space-y-2">
-                        <Skeleton className="h-3 w-48" />
-                        <Skeleton className="h-8 w-full rounded" />
-                      </div>
-                    </SettingsPanelRow>
-                  </SettingsPanel>
-                ) : (
-                  <SettingsPanel>
-                    {usage.isPastDue && (
-                      <SettingsPanelRow>
-                        <Alert
-                          variant="warning"
-                          className="dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 dark:[&>svg]:text-amber-400"
-                        >
-                          <AlertTriangle className="h-4 w-4" />
-                          <AlertTitle>{t("settingsPage.account.pastDue.title")}</AlertTitle>
-                          <AlertDescription>
-                            {t("settingsPage.account.pastDue.description")}
-                          </AlertDescription>
-                        </Alert>
-                      </SettingsPanelRow>
-                    )}
-
-                    <SettingsPanelRow>
-                      <SettingsRow
-                        label={
-                          usage.isTrial
-                            ? t("settingsPage.account.planLabels.trial")
-                            : usage.isPastDue
-                              ? t("settingsPage.account.planLabels.free")
-                              : usage.isSubscribed
-                                ? t("settingsPage.account.planLabels.pro")
-                                : t("settingsPage.account.planLabels.free")
-                        }
-                        description={
-                          usage.isTrial
-                            ? t("settingsPage.account.planDescriptions.trial", {
-                                days: usage.trialDaysLeft,
-                              })
-                            : usage.isPastDue
-                              ? t("settingsPage.account.planDescriptions.pastDue", {
-                                  used: usage.wordsUsed.toLocaleString(i18n.language),
-                                  limit: usage.limit.toLocaleString(i18n.language),
-                                })
-                              : usage.isSubscribed
-                                ? usage.currentPeriodEnd
-                                  ? t("settingsPage.account.planDescriptions.nextBilling", {
-                                      date: new Date(usage.currentPeriodEnd).toLocaleDateString(
-                                        i18n.language,
-                                        { month: "short", day: "numeric", year: "numeric" }
-                                      ),
-                                    })
-                                  : t("settingsPage.account.planDescriptions.unlimited")
-                                : t("settingsPage.account.planDescriptions.freeUsage", {
-                                    used: usage.wordsUsed.toLocaleString(i18n.language),
-                                    limit: usage.limit.toLocaleString(i18n.language),
-                                  })
-                        }
-                      >
-                        {usage.isTrial ? (
-                          <Badge variant="info">{t("settingsPage.account.badges.trial")}</Badge>
-                        ) : usage.isPastDue ? (
-                          <Badge variant="destructive">
-                            {t("settingsPage.account.badges.pastDue")}
-                          </Badge>
-                        ) : usage.isSubscribed ? (
-                          <Badge variant="success">{t("settingsPage.account.badges.pro")}</Badge>
-                        ) : usage.isOverLimit ? (
-                          <Badge variant="warning">
-                            {t("settingsPage.account.badges.limitReached")}
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">{t("settingsPage.account.badges.free")}</Badge>
-                        )}
-                      </SettingsRow>
-                    </SettingsPanelRow>
-
-                    {!usage.isSubscribed && !usage.isTrial && (
-                      <SettingsPanelRow>
-                        <div className="space-y-1.5">
-                          <Progress
-                            value={
-                              usage.limit > 0
-                                ? Math.min(100, (usage.wordsUsed / usage.limit) * 100)
-                                : 0
-                            }
-                            className={cn(
-                              "h-1.5",
-                              usage.isOverLimit
-                                ? "[&>div]:bg-destructive"
-                                : usage.isApproachingLimit
-                                  ? "[&>div]:bg-warning"
-                                  : "[&>div]:bg-primary"
-                            )}
-                          />
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span className="tabular-nums">
-                              {usage.wordsUsed.toLocaleString(i18n.language)} /{" "}
-                              {usage.limit.toLocaleString(i18n.language)}
-                            </span>
-                            {usage.isApproachingLimit && (
-                              <span className="text-warning">
-                                {t("settingsPage.account.wordsRemaining", {
-                                  remaining: usage.wordsRemaining.toLocaleString(i18n.language),
-                                })}
-                              </span>
-                            )}
-                            {!usage.isApproachingLimit && !usage.isOverLimit && (
-                              <span>{t("settingsPage.account.rollingWeeklyLimit")}</span>
-                            )}
+                    {!usage || !usage.hasLoaded ? (
+                      <SettingsPanel>
+                        <SettingsPanelRow>
+                          <div className="flex items-center justify-between">
+                            <Skeleton className="h-4 w-24" />
+                            <Skeleton className="h-5 w-16 rounded-full" />
                           </div>
-                        </div>
-                      </SettingsPanelRow>
-                    )}
+                        </SettingsPanelRow>
+                        <SettingsPanelRow>
+                          <div className="space-y-2">
+                            <Skeleton className="h-3 w-48" />
+                            <Skeleton className="h-8 w-full rounded" />
+                          </div>
+                        </SettingsPanelRow>
+                      </SettingsPanel>
+                    ) : (
+                      <SettingsPanel>
+                        {usage.isPastDue && (
+                          <SettingsPanelRow>
+                            <Alert
+                              variant="warning"
+                              className="dark:bg-amber-950/50 dark:border-amber-800 dark:text-amber-200 dark:[&>svg]:text-amber-400"
+                            >
+                              <AlertTriangle className="h-4 w-4" />
+                              <AlertTitle>{t("settingsPage.account.pastDue.title")}</AlertTitle>
+                              <AlertDescription>
+                                {t("settingsPage.account.pastDue.description")}
+                              </AlertDescription>
+                            </Alert>
+                          </SettingsPanelRow>
+                        )}
 
-                    <SettingsPanelRow>
-                      {usage.isPastDue ? (
-                        <Button
-                          onClick={async () => {
-                            setIsOpeningBilling(true);
-                            try {
-                              const result = await usage.openBillingPortal();
-                              if (!result.success) {
-                                toast({
-                                  title: t("settingsPage.account.billing.couldNotOpenTitle"),
-                                  description: t(
-                                    "settingsPage.account.billing.couldNotOpenDescription"
-                                  ),
-                                  variant: "destructive",
-                                });
-                              }
-                            } finally {
-                              setIsOpeningBilling(false);
+                        <SettingsPanelRow>
+                          <SettingsRow
+                            label={
+                              usage.isTrial
+                                ? t("settingsPage.account.planLabels.trial")
+                                : usage.isPastDue
+                                  ? t("settingsPage.account.planLabels.free")
+                                  : usage.isSubscribed
+                                    ? t("settingsPage.account.planLabels.pro")
+                                    : t("settingsPage.account.planLabels.free")
                             }
-                          }}
-                          disabled={isOpeningBilling}
-                          size="sm"
-                          className="w-full"
-                        >
-                          {isOpeningBilling ? (
-                            <>
-                              <Loader2 size={14} className="animate-spin" />
-                              {t("settingsPage.account.billing.opening")}
-                            </>
+                            description={
+                              usage.isTrial
+                                ? t("settingsPage.account.planDescriptions.trial", {
+                                    days: usage.trialDaysLeft,
+                                  })
+                                : usage.isPastDue
+                                  ? t("settingsPage.account.planDescriptions.pastDue", {
+                                      used: usage.wordsUsed.toLocaleString(i18n.language),
+                                      limit: usage.limit.toLocaleString(i18n.language),
+                                    })
+                                  : usage.isSubscribed
+                                    ? usage.currentPeriodEnd
+                                      ? t("settingsPage.account.planDescriptions.nextBilling", {
+                                          date: new Date(usage.currentPeriodEnd).toLocaleDateString(
+                                            i18n.language,
+                                            { month: "short", day: "numeric", year: "numeric" }
+                                          ),
+                                        })
+                                      : t("settingsPage.account.planDescriptions.unlimited")
+                                    : t("settingsPage.account.planDescriptions.freeUsage", {
+                                        used: usage.wordsUsed.toLocaleString(i18n.language),
+                                        limit: usage.limit.toLocaleString(i18n.language),
+                                      })
+                            }
+                          >
+                            {usage.isTrial ? (
+                              <Badge variant="info">{t("settingsPage.account.badges.trial")}</Badge>
+                            ) : usage.isPastDue ? (
+                              <Badge variant="destructive">
+                                {t("settingsPage.account.badges.pastDue")}
+                              </Badge>
+                            ) : usage.isSubscribed ? (
+                              <Badge variant="success">
+                                {t("settingsPage.account.badges.pro")}
+                              </Badge>
+                            ) : usage.isOverLimit ? (
+                              <Badge variant="warning">
+                                {t("settingsPage.account.badges.limitReached")}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline">
+                                {t("settingsPage.account.badges.free")}
+                              </Badge>
+                            )}
+                          </SettingsRow>
+                        </SettingsPanelRow>
+
+                        {!usage.isSubscribed && !usage.isTrial && (
+                          <SettingsPanelRow>
+                            <div className="space-y-1.5">
+                              <Progress
+                                value={
+                                  usage.limit > 0
+                                    ? Math.min(100, (usage.wordsUsed / usage.limit) * 100)
+                                    : 0
+                                }
+                                className={cn(
+                                  "h-1.5",
+                                  usage.isOverLimit
+                                    ? "[&>div]:bg-destructive"
+                                    : usage.isApproachingLimit
+                                      ? "[&>div]:bg-warning"
+                                      : "[&>div]:bg-primary"
+                                )}
+                              />
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <span className="tabular-nums">
+                                  {usage.wordsUsed.toLocaleString(i18n.language)} /{" "}
+                                  {usage.limit.toLocaleString(i18n.language)}
+                                </span>
+                                {usage.isApproachingLimit && (
+                                  <span className="text-warning">
+                                    {t("settingsPage.account.wordsRemaining", {
+                                      remaining: usage.wordsRemaining.toLocaleString(i18n.language),
+                                    })}
+                                  </span>
+                                )}
+                                {!usage.isApproachingLimit && !usage.isOverLimit && (
+                                  <span>{t("settingsPage.account.rollingWeeklyLimit")}</span>
+                                )}
+                              </div>
+                            </div>
+                          </SettingsPanelRow>
+                        )}
+
+                        <SettingsPanelRow>
+                          {usage.isPastDue ? (
+                            <Button
+                              onClick={async () => {
+                                setIsOpeningBilling(true);
+                                try {
+                                  const result = await usage.openBillingPortal();
+                                  if (!result.success) {
+                                    toast({
+                                      title: t("settingsPage.account.billing.couldNotOpenTitle"),
+                                      description: t(
+                                        "settingsPage.account.billing.couldNotOpenDescription"
+                                      ),
+                                      variant: "destructive",
+                                    });
+                                  }
+                                } finally {
+                                  setIsOpeningBilling(false);
+                                }
+                              }}
+                              disabled={isOpeningBilling}
+                              size="sm"
+                              className="w-full"
+                            >
+                              {isOpeningBilling ? (
+                                <>
+                                  <Loader2 size={14} className="animate-spin" />
+                                  {t("settingsPage.account.billing.opening")}
+                                </>
+                              ) : (
+                                t("settingsPage.account.billing.updatePaymentMethod")
+                              )}
+                            </Button>
+                          ) : usage.isSubscribed && !usage.isTrial ? (
+                            <Button
+                              onClick={async () => {
+                                const result = await usage.openBillingPortal();
+                                if (!result.success) {
+                                  toast({
+                                    title: t("settingsPage.account.billing.couldNotOpenTitle"),
+                                    description: t(
+                                      "settingsPage.account.billing.couldNotOpenDescription"
+                                    ),
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                              disabled={usage.checkoutLoading}
+                            >
+                              {usage.checkoutLoading
+                                ? t("settingsPage.account.billing.opening")
+                                : t("settingsPage.account.billing.manageBilling")}
+                            </Button>
                           ) : (
-                            t("settingsPage.account.billing.updatePaymentMethod")
+                            <Button
+                              onClick={async () => {
+                                const result = await usage.openCheckout(billingPeriod);
+                                if (!result.success) {
+                                  toast({
+                                    title: t("settingsPage.account.checkout.couldNotOpenTitle"),
+                                    description: t(
+                                      "settingsPage.account.checkout.couldNotOpenDescription"
+                                    ),
+                                    variant: "destructive",
+                                  });
+                                }
+                              }}
+                              size="sm"
+                              className="w-full"
+                              disabled={usage.checkoutLoading}
+                            >
+                              {usage.checkoutLoading
+                                ? t("settingsPage.account.checkout.opening")
+                                : t("settingsPage.account.checkout.upgradeToPro")}
+                            </Button>
                           )}
-                        </Button>
-                      ) : usage.isSubscribed && !usage.isTrial ? (
-                        <Button
-                          onClick={async () => {
-                            const result = await usage.openBillingPortal();
-                            if (!result.success) {
-                              toast({
-                                title: t("settingsPage.account.billing.couldNotOpenTitle"),
-                                description: t(
-                                  "settingsPage.account.billing.couldNotOpenDescription"
-                                ),
-                                variant: "destructive",
-                              });
-                            }
-                          }}
-                          variant="outline"
-                          size="sm"
-                          className="w-full"
-                          disabled={usage.checkoutLoading}
-                        >
-                          {usage.checkoutLoading
-                            ? t("settingsPage.account.billing.opening")
-                            : t("settingsPage.account.billing.manageBilling")}
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={async () => {
-                            const result = await usage.openCheckout();
-                            if (!result.success) {
-                              toast({
-                                title: t("settingsPage.account.checkout.couldNotOpenTitle"),
-                                description: t(
-                                  "settingsPage.account.checkout.couldNotOpenDescription"
-                                ),
-                                variant: "destructive",
-                              });
-                            }
-                          }}
-                          size="sm"
-                          className="w-full"
-                          disabled={usage.checkoutLoading}
-                        >
-                          {usage.checkoutLoading
-                            ? t("settingsPage.account.checkout.opening")
-                            : t("settingsPage.account.checkout.upgradeToPro")}
-                        </Button>
-                      )}
-                    </SettingsPanelRow>
-                  </SettingsPanel>
-                )}
+                        </SettingsPanelRow>
+                      </SettingsPanel>
+                    )}
                   </>
                 ) : (
                   <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/3 dark:bg-primary/6 p-4">
@@ -1524,11 +1564,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                             {t("settingsPage.account.signedOutPlans.description")}
                           </p>
                         </div>
-                        <Button
-                          onClick={startOnboarding}
-                          size="sm"
-                          className="w-full"
-                        >
+                        <Button onClick={startOnboarding} size="sm" className="w-full">
                           <UserCircle className="mr-1.5 h-3.5 w-3.5" />
                           {t("settingsPage.account.signedOutPlans.button")}
                         </Button>

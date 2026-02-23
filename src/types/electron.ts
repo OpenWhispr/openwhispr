@@ -605,11 +605,12 @@ declare global {
         isTrial?: boolean;
         trialDaysLeft?: number | null;
         currentPeriodEnd?: string | null;
+        billingInterval?: "monthly" | "annual" | null;
         resetAt?: string;
         error?: string;
         code?: string;
       }>;
-      cloudCheckout?: () => Promise<{
+      cloudCheckout?: (plan?: "monthly" | "annual") => Promise<{
         success: boolean;
         url?: string;
         error?: string;

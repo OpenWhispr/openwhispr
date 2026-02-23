@@ -956,12 +956,15 @@
           "features": [
             "Everything in Free",
             "Unlimited usage",
+            "Real-time transcription",
+            "Latest audio & AI models",
             "iOS/Android (coming soon)",
             "Zero data retention",
             "Priority support"
           ],
           "cta": "Upgrade to Pro",
-          "trialCta": "Start 7-Day Free Trial"
+          "trialCta": "Start 7-Day Free Trial",
+          "switchToAnnual": "Switch to Annual"
         },
         "enterprise": {
           "name": "Enterprise",
@@ -1525,6 +1528,36 @@
           "description": "Fix grammar, structure, and formatting"
         }
       }
+    },
+    "onboarding": {
+      "llm": {
+        "title": "Configure an AI model",
+        "description": "Actions use AI to transform your notes. Set up a language model to get started.",
+        "skipForNow": "Skip for now",
+        "configured": "AI model configured",
+        "apiKeyPlaceholder": "Paste your API key",
+        "getKey": "Get API key",
+        "localModel": "Local model",
+        "cloudProvider": "Cloud provider"
+      },
+      "actions": {
+        "title": "AI-Powered Actions",
+        "description": "Actions transform your notes — clean up transcriptions, summarize meetings, and more. Use built-in actions or create your own.",
+        "builtInLabel": "Built-in",
+        "createTitle": "Create your own action",
+        "createDescription": "Define a custom action with your own AI prompt. You can always edit or add more later in settings.",
+        "created": "Created!",
+        "proNote": "Your Pro plan includes AI-powered actions. Here's how they work."
+      },
+      "proUpsell": {
+        "message": "Skip the setup — Pro includes the latest AI models, zero configuration.",
+        "learnMore": "Learn more"
+      },
+      "getStarted": "Get Started"
+    },
+    "realtimeBanner": {
+      "message": "Real-time transcription available on Pro",
+      "upgrade": "Upgrade"
     }
   },
   "dictionary": {

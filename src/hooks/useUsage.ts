@@ -13,6 +13,7 @@ interface UsageData {
   isTrial: boolean;
   trialDaysLeft: number | null;
   currentPeriodEnd: string | null;
+  billingInterval: "monthly" | "annual" | null;
   resetAt: string;
 }
 
@@ -27,6 +28,7 @@ interface UseUsageResult {
   isTrial: boolean;
   trialDaysLeft: number | null;
   currentPeriodEnd: string | null;
+  billingInterval: "monthly" | "annual" | null;
   isOverLimit: boolean;
   isApproachingLimit: boolean;
   resetAt: string | null;
@@ -35,7 +37,7 @@ interface UseUsageResult {
   error: string | null;
   checkoutLoading: boolean;
   refetch: () => Promise<void>;
-  openCheckout: () => Promise<{ success: boolean; error?: string }>;
+  openCheckout: (plan?: "monthly" | "annual") => Promise<{ success: boolean; error?: string }>;
   openBillingPortal: () => Promise<{ success: boolean; error?: string }>;
 }
 
@@ -71,6 +73,7 @@ export function useUsage(): UseUsageResult | null {
             isTrial: result.isTrial ?? false,
             trialDaysLeft: result.trialDaysLeft ?? null,
             currentPeriodEnd: result.currentPeriodEnd ?? null,
+            billingInterval: result.billingInterval ?? null,
             resetAt: result.resetAt ?? "rolling",
           });
           lastFetchRef.current = Date.now();
@@ -88,6 +91,8 @@ export function useUsage(): UseUsageResult | null {
     }
   }, []);
 
+  const pendingRefetchRef = useRef(false);
+
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
 
@@ -98,28 +103,42 @@ export function useUsage(): UseUsageResult | null {
       setIsLoading(false);
       setHasLoaded(true);
     }
+
+    const handleFocus = () => {
+      if (pendingRefetchRef.current) {
+        pendingRefetchRef.current = false;
+        lastFetchRef.current = 0;
+        fetchUsage();
+      }
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, [isLoaded, isSignedIn, fetchUsage]);
 
-  const openCheckout = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
-    if (checkoutInFlightRef.current)
-      return { success: false, error: "Checkout already in progress" };
-    if (!window.electronAPI?.cloudCheckout || !window.electronAPI?.openExternal) {
-      return { success: false, error: "App not ready" };
-    }
-    checkoutInFlightRef.current = true;
-    setCheckoutLoading(true);
-    try {
-      const result = await window.electronAPI.cloudCheckout();
-      if (result.success && result.url) {
-        await window.electronAPI.openExternal(result.url);
-        return { success: true };
+  const openCheckout = useCallback(
+    async (plan?: "monthly" | "annual"): Promise<{ success: boolean; error?: string }> => {
+      if (checkoutInFlightRef.current)
+        return { success: false, error: "Checkout already in progress" };
+      if (!window.electronAPI?.cloudCheckout || !window.electronAPI?.openExternal) {
+        return { success: false, error: "App not ready" };
       }
-      return { success: false, error: result.error || "Failed to start checkout" };
-    } finally {
-      checkoutInFlightRef.current = false;
-      setCheckoutLoading(false);
-    }
-  }, []);
+      checkoutInFlightRef.current = true;
+      setCheckoutLoading(true);
+      try {
+        const result = await window.electronAPI.cloudCheckout(plan);
+        if (result.success && result.url) {
+          pendingRefetchRef.current = true;
+          await window.electronAPI.openExternal(result.url);
+          return { success: true };
+        }
+        return { success: false, error: result.error || "Failed to start checkout" };
+      } finally {
+        checkoutInFlightRef.current = false;
+        setCheckoutLoading(false);
+      }
+    },
+    []
+  );
 
   const openBillingPortal = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
     if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
@@ -131,6 +150,7 @@ export function useUsage(): UseUsageResult | null {
     try {
       const result = await window.electronAPI.cloudBillingPortal();
       if (result.success && result.url) {
+        pendingRefetchRef.current = true;
         await window.electronAPI.openExternal(result.url);
         return { success: true };
       }
@@ -162,6 +182,7 @@ export function useUsage(): UseUsageResult | null {
     isTrial: data?.isTrial ?? false,
     trialDaysLeft: data?.trialDaysLeft ?? null,
     currentPeriodEnd: data?.currentPeriodEnd ?? null,
+    billingInterval: data?.billingInterval ?? null,
     isOverLimit,
     isApproachingLimit,
     resetAt: data?.resetAt ?? null,

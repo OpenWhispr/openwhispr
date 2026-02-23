@@ -292,7 +292,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
   cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
-  cloudCheckout: () => ipcRenderer.invoke("cloud-checkout"),
+  cloudCheckout: (plan) => ipcRenderer.invoke("cloud-checkout", plan),
   cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),
 
   // Cloud audio file transcription
