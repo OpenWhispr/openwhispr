@@ -139,9 +139,7 @@ export default function ApiKeyInput({
                 {maskKey(apiKey)}
               </span>
             ) : (
-              <span className="text-muted-foreground/40 text-xs">
-                {placeholder}
-              </span>
+              <span className="text-muted-foreground/40 text-xs">{placeholder}</span>
             )}
             <span className="ml-auto text-muted-foreground/30 text-xs group-hover:text-muted-foreground/60 transition-colors">
               {hasKey ? "edit" : "add"}

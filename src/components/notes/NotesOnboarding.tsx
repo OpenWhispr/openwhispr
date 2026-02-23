@@ -34,8 +34,6 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [justCreated, setJustCreated] = useState(false);
 
-  const useReasoningModel = useSettingsStore((s) => s.useReasoningModel);
-  const setUseReasoningModel = useSettingsStore((s) => s.setUseReasoningModel);
   const reasoningModel = useSettingsStore((s) => s.reasoningModel);
   const setReasoningModel = useSettingsStore((s) => s.setReasoningModel);
   const reasoningProvider = useSettingsStore((s) => s.reasoningProvider);
@@ -150,8 +148,6 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 </p>
 
                 <ReasoningModelSelector
-                  useReasoningModel={useReasoningModel}
-                  setUseReasoningModel={setUseReasoningModel}
                   reasoningModel={reasoningModel}
                   setReasoningModel={setReasoningModel}
                   localReasoningProvider={reasoningProvider}

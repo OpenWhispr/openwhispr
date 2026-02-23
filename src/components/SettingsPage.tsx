@@ -578,8 +578,6 @@ function AiModelsSection({
           {/* Custom Setup model picker — shown when Custom Setup is active or not signed in */}
           {(isCustomMode || !isSignedIn) && (
             <ReasoningModelSelector
-              useReasoningModel={useReasoningModel}
-              setUseReasoningModel={setUseReasoningModel}
               reasoningModel={reasoningModel}
               setReasoningModel={setReasoningModel}
               localReasoningProvider={reasoningProvider}
