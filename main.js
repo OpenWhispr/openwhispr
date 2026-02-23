@@ -58,6 +58,7 @@ configureChannelUserDataPath();
 // the compositor to set up an ARGB visual before any windows are created.
 // --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
 if (process.platform === "linux") {
+  app.commandLine.appendSwitch("gtk-version", "3");
   app.commandLine.appendSwitch("enable-transparent-visuals");
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }

@@ -110,7 +110,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Detects when user addresses their named agent
   - Routes to appropriate AI provider (OpenAI/Anthropic/Gemini)
   - Removes agent name from final output
-  - Supports GPT-5, Claude Opus 4.1, and Gemini 2.5 models
+  - Supports GPT-5, Claude 4.6 (Opus/Sonnet/Haiku), and Gemini 3.1 Pro / 3 Flash models
 
 ### whisper.cpp Integration
 
@@ -237,14 +237,13 @@ Environment variables persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - GPT-5 Nano (`gpt-5-nano`) - Ultra-fast, low latency
     - GPT-4.1 Series (`gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`) - Strong baseline with 1M context
   - **Anthropic** (Via IPC bridge to avoid CORS):
-    - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Balanced performance
+    - Claude Sonnet 4.6 (`claude-sonnet-4-6`) - Balanced performance
     - Claude Haiku 4.5 (`claude-haiku-4-5`) - Fast with near-frontier intelligence
-    - Claude Opus 4.5 (`claude-opus-4-5`) - Most capable Claude model
+    - Claude Opus 4.6 (`claude-opus-4-6`) - Most capable Claude model
   - **Google Gemini** (Direct API integration):
-    - Gemini 2.5 Pro (`gemini-2.5-pro`) - Most capable Gemini model
-    - Gemini 2.5 Flash (`gemini-2.5-flash`) - High-performance with thinking
+    - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
+    - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
     - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost
-    - Gemini 2.0 Flash (`gemini-2.0-flash`) - Fast, long-context option
   - **Local**: GGUF models via llama.cpp (Qwen, Llama, Mistral, GPT-OSS)
 
 ### 8. Model Registry Architecture
@@ -283,11 +282,11 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 **Anthropic Integration**:
 - Routes through IPC handler to avoid CORS issues in renderer process
 - Uses main process for API calls with proper error handling
-- Model IDs use alias format (e.g., `claude-sonnet-4-5` not date-suffixed versions)
+- Model IDs use alias format (e.g., `claude-sonnet-4-6` not date-suffixed versions)
 
 **Gemini Integration**:
 - Direct API calls from renderer process
-- Increased token limits for Gemini 2.5 Pro (2000 minimum)
+- Increased token limits for Gemini 3.1 Pro (2000 minimum)
 - Proper handling of thinking process in responses
 - Error handling for MAX_TOKENS finish reason
 

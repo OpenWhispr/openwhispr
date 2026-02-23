@@ -110,6 +110,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
+      - name: Download windows-fast-paste.exe
+        run: node scripts/download-windows-fast-paste.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Download windows-key-listener.exe
+        run: node scripts/download-windows-key-listener.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
       - name: Cache Electron
         uses: actions/cache@v4
         with:
