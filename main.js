@@ -634,19 +634,32 @@ async function startApp() {
 
     globeKeyManager.on("right-modifier-up", async (modifier) => {
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
-      if (currentHotkey !== modifier) return;
-      if (!isLiveWindow(windowManager.mainWindow)) return;
 
-      const activationMode = windowManager.getActivationMode();
-      if (activationMode === "push") {
-        rightModDownTime = 0;
-        rightModLastStopTime = Date.now();
-        if (rightModIsRecording) {
-          rightModIsRecording = false;
-          windowManager.sendStopDictation();
-        } else {
-          windowManager.hideDictationPanel();
+      if (currentHotkey === modifier) {
+        if (!isLiveWindow(windowManager.mainWindow)) return;
+
+        const activationMode = windowManager.getActivationMode();
+        if (activationMode === "push") {
+          rightModDownTime = 0;
+          rightModLastStopTime = Date.now();
+          if (rightModIsRecording) {
+            rightModIsRecording = false;
+            windowManager.sendStopDictation();
+          } else {
+            windowManager.hideDictationPanel();
+          }
         }
+      }
+
+      const rightModToBase = {
+        RightCommand: "command",
+        RightOption: "option",
+        RightControl: "control",
+        RightShift: "shift",
+      };
+      const baseMod = rightModToBase[modifier];
+      if (baseMod && windowManager?.handleMacPushModifierUp) {
+        windowManager.handleMacPushModifierUp(baseMod);
       }
     });
 

@@ -36,6 +36,16 @@ function isModifierOnlyHotkey(hotkey) {
   return hotkey.split("+").every((part) => MODIFIER_NAMES.has(part.toLowerCase()));
 }
 
+function normalizeToAccelerator(hotkey) {
+  let accelerator = hotkey.startsWith("Fn+") ? hotkey.slice(3) : hotkey;
+  accelerator = accelerator
+    .replace(/\bRight(Command|Cmd)\b/g, "Command")
+    .replace(/\bRight(Control|Ctrl)\b/g, "Control")
+    .replace(/\bRight(Alt|Option)\b/g, "Alt")
+    .replace(/\bRightShift\b/g, "Shift");
+  return accelerator;
+}
+
 // Suggested alternative hotkeys when registration fails
 const SUGGESTED_HOTKEYS = {
   single: ["F8", "F9", "F10", "Pause", "ScrollLock"],
@@ -115,7 +125,7 @@ class HotkeyManager {
     // If we're already using this hotkey AND it's actually registered, return success
     // Note: We need to check isRegistered because on first run, currentHotkey is set to the
     // default value but it's not actually registered yet.
-    const checkAccelerator = hotkey.startsWith("Fn+") ? hotkey.slice(3) : hotkey;
+    const checkAccelerator = normalizeToAccelerator(hotkey);
     if (
       hotkey === this.currentHotkey &&
       hotkey !== "GLOBE" &&
@@ -138,9 +148,7 @@ class HotkeyManager {
       !isRightSideModifier(this.currentHotkey) &&
       !isModifierOnlyHotkey(this.currentHotkey)
     ) {
-      const prevAccelerator = this.currentHotkey.startsWith("Fn+")
-        ? this.currentHotkey.slice(3)
-        : this.currentHotkey;
+      const prevAccelerator = normalizeToAccelerator(this.currentHotkey);
       try {
         debugLogger.log(`[HotkeyManager] Unregistering previous hotkey: "${prevAccelerator}"`);
         globalShortcut.unregister(prevAccelerator);
@@ -183,9 +191,7 @@ class HotkeyManager {
         return { success: true, hotkey };
       }
 
-      // Fn+ prefix is a UI-level distinction (user holds Fn to get real F-keys on macOS).
-      // At the OS/Electron level, the accelerator is just the key without Fn.
-      const accelerator = hotkey.startsWith("Fn+") ? hotkey.slice(3) : hotkey;
+      const accelerator = normalizeToAccelerator(hotkey);
 
       const alreadyRegistered = globalShortcut.isRegistered(accelerator);
       debugLogger.log(
@@ -241,7 +247,7 @@ class HotkeyManager {
     ) {
       return;
     }
-    const prevAccel = previousHotkey.startsWith("Fn+") ? previousHotkey.slice(3) : previousHotkey;
+    const prevAccel = normalizeToAccelerator(previousHotkey);
     try {
       const restored = globalShortcut.register(prevAccel, callback);
       if (restored) {

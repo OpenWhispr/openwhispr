@@ -287,6 +287,8 @@ class WindowManager {
       switch (part) {
         case "Command":
         case "Cmd":
+        case "RightCommand":
+        case "RightCmd":
         case "CommandOrControl":
         case "Super":
         case "Meta":
@@ -294,13 +296,18 @@ class WindowManager {
           break;
         case "Control":
         case "Ctrl":
+        case "RightControl":
+        case "RightCtrl":
           required.add("control");
           break;
         case "Alt":
         case "Option":
+        case "RightAlt":
+        case "RightOption":
           required.add("option");
           break;
         case "Shift":
+        case "RightShift":
           required.add("shift");
           break;
         case "Fn":

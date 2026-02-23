@@ -52,21 +52,18 @@ func eventTapCallback(proxy: CGEventTapProxy, type: CGEventType, event: CGEvent,
     let currentModifiers = flags.intersection(modifierMask)
 
     if currentModifiers != lastModifierFlags {
-        // Only emit MODIFIER_UP when Globe/Fn is held (compound push-to-talk)
-        if fnIsDown {
-            let released = lastModifierFlags.subtracting(currentModifiers)
-            let releases: [(CGEventFlags, String)] = [
-                (.maskControl, "control"),
-                (.maskCommand, "command"),
-                (.maskAlternate, "option"),
-                (.maskShift, "shift"),
-            ]
+        let released = lastModifierFlags.subtracting(currentModifiers)
+        let releases: [(CGEventFlags, String)] = [
+            (.maskControl, "control"),
+            (.maskCommand, "command"),
+            (.maskAlternate, "option"),
+            (.maskShift, "shift"),
+        ]
 
-            for (flag, name) in releases {
-                if released.contains(flag) {
-                    FileHandle.standardOutput.write("MODIFIER_UP:\(name)\n".data(using: .utf8)!)
-                    fflush(stdout)
-                }
+        for (flag, name) in releases {
+            if released.contains(flag) {
+                FileHandle.standardOutput.write("MODIFIER_UP:\(name)\n".data(using: .utf8)!)
+                fflush(stdout)
             }
         }
 
