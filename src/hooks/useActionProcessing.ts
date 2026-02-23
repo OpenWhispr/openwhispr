@@ -30,7 +30,7 @@ export function useActionProcessing({ onSuccess, onError }: UseActionProcessingO
 
       const modelId = getEffectiveReasoningModel() || options.modelId;
 
-      if (!modelId) {
+      if (!modelId && !options.isCloudMode) {
         onError("No AI model selected. Configure one in Settings.");
         return;
       }

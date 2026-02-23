@@ -411,14 +411,19 @@ export default function ControlPanel() {
                 copyToClipboard={copyToClipboard}
                 deleteTranscription={deleteTranscription}
                 onOpenSettings={(section) => {
-                  setSettingsSection(section );
+                  setSettingsSection(section);
                   setShowSettings(true);
                 }}
               />
             )}
             {activeView === "personal-notes" && (
               <Suspense fallback={null}>
-                <PersonalNotesView />
+                <PersonalNotesView
+                  onOpenSettings={(section) => {
+                    setSettingsSection(section);
+                    setShowSettings(true);
+                  }}
+                />
               </Suspense>
             )}
             {activeView === "dictionary" && (
@@ -435,7 +440,7 @@ export default function ControlPanel() {
                     setActiveView("personal-notes");
                   }}
                   onOpenSettings={(section) => {
-                    setSettingsSection(section );
+                    setSettingsSection(section);
                     setShowSettings(true);
                   }}
                 />

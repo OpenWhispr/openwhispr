@@ -53,7 +53,9 @@ export async function initializeActions(): Promise<ActionItem[]> {
 function addActionToStore(action: ActionItem): void {
   const { actions } = useActionStore.getState();
   const withoutDuplicate = actions.filter((a) => a.id !== action.id);
-  useActionStore.setState({ actions: [...withoutDuplicate, action].sort((a, b) => a.sort_order - b.sort_order) });
+  useActionStore.setState({
+    actions: [...withoutDuplicate, action].sort((a, b) => a.sort_order - b.sort_order),
+  });
 }
 
 function updateActionInStore(action: ActionItem): void {

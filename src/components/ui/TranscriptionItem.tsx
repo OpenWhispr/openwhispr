@@ -11,11 +11,7 @@ interface TranscriptionItemProps {
   onDelete: (id: number) => void;
 }
 
-export default function TranscriptionItem({
-  item,
-  onCopy,
-  onDelete,
-}: TranscriptionItemProps) {
+export default function TranscriptionItem({ item, onCopy, onDelete }: TranscriptionItemProps) {
   const { i18n } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
 

@@ -8,6 +8,7 @@ interface ApiKeyInputProps {
   className?: string;
   placeholder?: string;
   label?: string;
+  ariaLabel?: string;
   helpText?: React.ReactNode;
   variant?: "default" | "purple";
 }
@@ -18,6 +19,7 @@ export default function ApiKeyInput({
   className = "",
   placeholder = "sk-...",
   label = "API Key",
+  ariaLabel,
   helpText = "Get your API key from platform.openai.com",
   variant = "default",
 }: ApiKeyInputProps) {
@@ -33,6 +35,7 @@ export default function ApiKeyInput({
           placeholder={placeholder}
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
+          aria-label={ariaLabel || label || "API Key"}
           className={`h-8 text-sm ${hasKey ? "pr-14" : ""} ${variantClasses}`}
         />
         {hasKey && (

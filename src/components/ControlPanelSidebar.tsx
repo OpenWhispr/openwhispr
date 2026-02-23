@@ -95,7 +95,9 @@ export default function ControlPanelSidebar({
                 size={15}
                 className={cn(
                   "shrink-0 transition-colors duration-150",
-                  isActive ? "text-primary" : "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/55 dark:group-hover:text-foreground/70"
+                  isActive
+                    ? "text-primary"
+                    : "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/55 dark:group-hover:text-foreground/70"
                 )}
               />
               <span
@@ -130,9 +132,7 @@ export default function ControlPanelSidebar({
             </button>
             <div className="flex flex-col items-center text-center pt-1">
               <img src={logoIcon} alt="" className="w-7 h-7 rounded-md mb-2" />
-              <p className="text-xs font-medium text-foreground mb-0.5">
-                Upgrade to Pro
-              </p>
+              <p className="text-xs font-medium text-foreground mb-0.5">Upgrade to Pro</p>
               <p className="text-[11px] leading-snug text-muted-foreground mb-2.5">
                 Unlimited transcriptions and premium features.
               </p>
@@ -216,7 +216,9 @@ export default function ControlPanelSidebar({
                   {userName || "User"}
                 </p>
                 {userEmail && (
-                  <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">{userEmail}</p>
+                  <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
+                    {userEmail}
+                  </p>
                 )}
               </>
             ) : authLoaded && !isSignedIn ? (

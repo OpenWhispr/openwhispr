@@ -14,6 +14,8 @@ interface UseNoteRecordingReturn {
   isProcessing: boolean;
   isStreaming: boolean;
   partialTranscript: string;
+  streamingCommit: string | null;
+  consumeStreamingCommit: () => void;
   startRecording: () => Promise<void>;
   stopRecording: () => Promise<void>;
   cancelRecording: () => void;
@@ -29,6 +31,7 @@ export function useNoteRecording({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [partialTranscript, setPartialTranscript] = useState("");
+  const [streamingCommits, setStreamingCommits] = useState<string[]>([]);
   const audioManagerRef = useRef<InstanceType<typeof AudioManager> | null>(null);
 
   const callbacksRef = useRef({ onTranscriptionComplete, onPartialTranscript, onError });
@@ -54,6 +57,7 @@ export function useNoteRecording({
         setIsStreaming(isStreaming ?? false);
         if (!isStreaming) {
           setPartialTranscript("");
+          setStreamingCommits([]);
         }
       },
       onError: (error: { title: string; description: string; code?: string }) => {
@@ -71,6 +75,9 @@ export function useNoteRecording({
       onPartialTranscript: (text: string) => {
         setPartialTranscript(text);
         callbacksRef.current.onPartialTranscript?.(text);
+      },
+      onStreamingCommit: (text: string) => {
+        setStreamingCommits((pending) => [...pending, text]);
       },
       onTranscriptionComplete: (result: {
         success: boolean;
@@ -137,11 +144,20 @@ export function useNoteRecording({
     }
   }, []);
 
+  const consumeStreamingCommit = useCallback(
+    () => setStreamingCommits((pending) => pending.slice(1)),
+    []
+  );
+
+  const streamingCommit = streamingCommits[0] ?? null;
+
   return {
     isRecording,
     isProcessing,
     isStreaming,
     partialTranscript,
+    streamingCommit,
+    consumeStreamingCommit,
     startRecording,
     stopRecording,
     cancelRecording,

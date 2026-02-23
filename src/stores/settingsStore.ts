@@ -576,7 +576,8 @@ export async function initializeSettings(): Promise<void> {
 
     const { key, newValue } = event;
     const state = useSettingsStore.getState();
-    if (!(key in state) || typeof (state as Record<string, unknown>)[key] === "function") return;
+    if (!(key in state) || typeof (state as unknown as Record<string, unknown>)[key] === "function")
+      return;
 
     let value: unknown;
     if (BOOLEAN_SETTINGS.has(key)) {

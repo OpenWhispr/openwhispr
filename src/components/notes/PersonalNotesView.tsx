@@ -33,11 +33,18 @@ import {
   setActiveNoteId,
   setActiveFolderId,
 } from "../../stores/noteStore";
+import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
+import NotesOnboarding from "./NotesOnboarding";
+import RealtimeTranscriptionBanner from "./RealtimeTranscriptionBanner";
 
 const FOLDER_INPUT_CLASS =
   "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
 
-export default function PersonalNotesView() {
+interface PersonalNotesViewProps {
+  onOpenSettings?: (section: string) => void;
+}
+
+export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewProps) {
   const { t } = useTranslation();
   const notes = useNotes();
   const activeNoteId = useActiveNoteId();
@@ -58,6 +65,11 @@ export default function PersonalNotesView() {
   const { toast } = useToast();
   const isCloudMode = useSettingsStore(selectIsCloudReasoningMode);
   const effectiveModelId = useSettingsStore(selectEffectiveReasoningModel);
+  const {
+    isComplete: isOnboardingComplete,
+    isProUser,
+    complete: completeOnboarding,
+  } = useNotesOnboarding();
 
   const {
     folders,
@@ -87,18 +99,25 @@ export default function PersonalNotesView() {
     [folders, activeFolderId]
   );
 
-  const { isRecording, isProcessing, partialTranscript, startRecording, stopRecording } =
-    useNoteRecording({
-      onTranscriptionComplete: useCallback((text: string) => {
-        setFinalTranscript(text);
-      }, []),
-      onError: useCallback(
-        (error: { title: string; description: string }) => {
-          toast({ title: error.title, description: error.description, variant: "destructive" });
-        },
-        [toast]
-      ),
-    });
+  const {
+    isRecording,
+    isProcessing,
+    partialTranscript,
+    streamingCommit,
+    consumeStreamingCommit,
+    startRecording,
+    stopRecording,
+  } = useNoteRecording({
+    onTranscriptionComplete: useCallback((text: string) => {
+      setFinalTranscript(text);
+    }, []),
+    onError: useCallback(
+      (error: { title: string; description: string }) => {
+        toast({ title: error.title, description: error.description, variant: "destructive" });
+      },
+      [toast]
+    ),
+  });
 
   useEffect(() => {
     if (activeNote && activeNote.id !== activeNoteRef.current) {
@@ -297,6 +316,10 @@ export default function PersonalNotesView() {
     ? { ...activeNote, title: localTitle, content: localContent }
     : null;
 
+  if (!isOnboardingComplete) {
+    return <NotesOnboarding onComplete={completeOnboarding} onOpenSettings={onOpenSettings} />;
+  }
+
   return (
     <div className="flex h-full">
       <div className="w-52 shrink-0 border-r border-border/15 dark:border-white/4 flex flex-col">
@@ -403,7 +426,9 @@ export default function PersonalNotesView() {
                       <span
                         className={cn(
                           "text-xs tabular-nums shrink-0 transition-colors group-hover:opacity-0",
-                          isActive ? "text-foreground/50 dark:text-foreground/30" : "text-foreground/35 dark:text-foreground/15"
+                          isActive
+                            ? "text-foreground/50 dark:text-foreground/30"
+                            : "text-foreground/35 dark:text-foreground/15"
                         )}
                       >
                         {count > 0 ? count : ""}
@@ -559,7 +584,9 @@ export default function PersonalNotesView() {
                       fillOpacity={0.04}
                     />
                   </svg>
-                  <p className="text-xs text-foreground/50 dark:text-foreground/25 mb-3">{t("notes.empty.emptyFolder")}</p>
+                  <p className="text-xs text-foreground/50 dark:text-foreground/25 mb-3">
+                    {t("notes.empty.emptyFolder")}
+                  </p>
                   <div className="flex flex-col gap-1.5 w-full max-w-36">
                     <button
                       onClick={handleNewNote}
@@ -601,6 +628,11 @@ export default function PersonalNotesView() {
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
+        {!isProUser && (
+          <RealtimeTranscriptionBanner
+            onUpgrade={onOpenSettings ? () => onOpenSettings("plansBilling") : undefined}
+          />
+        )}
         {isMeetingsFolder ? (
           <div className="flex flex-col items-center justify-center h-full -mt-6">
             <svg
@@ -715,6 +747,8 @@ export default function PersonalNotesView() {
               partialTranscript={partialTranscript}
               finalTranscript={finalTranscript}
               onFinalTranscriptConsumed={() => setFinalTranscript(null)}
+              streamingCommit={streamingCommit}
+              onStreamingCommitConsumed={consumeStreamingCommit}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
               onExportNote={handleExportNote}

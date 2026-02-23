@@ -116,11 +116,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return words.length > 0 ? words.join(", ") : null;
   }
 
-  setCallbacks({ onStateChange, onError, onTranscriptionComplete, onPartialTranscript }) {
+  setCallbacks({
+    onStateChange,
+    onError,
+    onTranscriptionComplete,
+    onPartialTranscript,
+    onStreamingCommit,
+  }) {
     this.onStateChange = onStateChange;
     this.onError = onError;
     this.onTranscriptionComplete = onTranscriptionComplete;
     this.onPartialTranscript = onPartialTranscript;
+    this.onStreamingCommit = onStreamingCommit;
   }
 
   setSkipReasoning(skip) {
@@ -128,7 +135,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async getAudioConstraints() {
-    const { preferBuiltInMic: preferBuiltIn, selectedMicDeviceId: selectedDeviceId } = getSettings();
+    const { preferBuiltInMic: preferBuiltIn, selectedMicDeviceId: selectedDeviceId } =
+      getSettings();
 
     // Disable browser audio processing — dictation doesn't need it and it adds ~48ms latency
     const noProcessing = {
@@ -1883,9 +1891,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
 
       const finalCleanup = window.electronAPI.onDeepgramFinalTranscript((text) => {
+        // text = accumulated final text from deepgramStreaming.
+        // Extract just the new segment (delta from previous accumulated final).
+        const prevLen = this.streamingFinalText.length;
         this.streamingFinalText = text;
         this.streamingPartialText = "";
-        this.onPartialTranscript?.(text);
+        const newSegment = text.slice(prevLen);
+        if (newSegment) {
+          this.onStreamingCommit?.(newSegment);
+        }
       });
 
       const errorCleanup = window.electronAPI.onDeepgramError((error) => {
@@ -2315,6 +2329,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.onError = null;
     this.onTranscriptionComplete = null;
     this.onPartialTranscript = null;
+    this.onStreamingCommit = null;
     if (this._onApiKeyChanged) {
       window.removeEventListener("api-key-changed", this._onApiKeyChanged);
     }

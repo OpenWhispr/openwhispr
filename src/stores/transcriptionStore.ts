@@ -68,7 +68,9 @@ export function addTranscription(item: TranscriptionItem) {
   if (!item) return;
   const { transcriptions } = useTranscriptionStore.getState();
   const withoutDuplicate = transcriptions.filter((existing) => existing.id !== item.id);
-  useTranscriptionStore.setState({ transcriptions: [item, ...withoutDuplicate].slice(0, currentLimit) });
+  useTranscriptionStore.setState({
+    transcriptions: [item, ...withoutDuplicate].slice(0, currentLimit),
+  });
 }
 
 export function removeTranscription(id: number) {

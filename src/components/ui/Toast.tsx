@@ -148,7 +148,7 @@ const ToastViewport: React.FC<{
   return (
     <div
       className={cn(
-        "fixed z-50 flex flex-col gap-1.5 pointer-events-none",
+        "fixed z-[100] flex flex-col gap-1.5 pointer-events-none",
         isDictationPanel ? "bottom-20 right-6" : "bottom-5 right-5"
       )}
     >

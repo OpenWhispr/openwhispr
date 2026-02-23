@@ -269,7 +269,9 @@ export default function HistoryView({
           <div>
             {groupedHistory.map((group, index) => (
               <div key={group.label}>
-                <div className={`sticky top-0 z-10 bg-background px-1 pb-2 before:content-[''] before:absolute before:left-0 before:right-0 before:bottom-full before:h-5 before:bg-background ${index === 0 ? "pt-1" : "pt-5"}`}>
+                <div
+                  className={`sticky top-0 z-10 bg-background px-1 pb-2 ${index === 0 ? "pt-1" : "pt-5"}`}
+                >
                   <span className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground uppercase tracking-wide">
                     {group.label}
                   </span>

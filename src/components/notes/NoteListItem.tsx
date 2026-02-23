@@ -144,7 +144,10 @@ export default function NoteListItem({
               <DropdownMenuContent align="end" sideOffset={4} className="min-w-40">
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="text-xs gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer focus:bg-foreground/5 data-[state=open]:bg-foreground/5">
-                    <FolderOpen size={12} className="text-muted-foreground/80 dark:text-muted-foreground/60" />
+                    <FolderOpen
+                      size={12}
+                      className="text-muted-foreground/80 dark:text-muted-foreground/60"
+                    />
                     {t("notes.context.moveToFolder")}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent
@@ -247,7 +250,9 @@ export default function NoteListItem({
           </div>
         </div>
         {preview && (
-          <p className="text-xs text-muted-foreground/80 dark:text-muted-foreground/40 line-clamp-1 mt-0.5">{preview}</p>
+          <p className="text-xs text-muted-foreground/80 dark:text-muted-foreground/40 line-clamp-1 mt-0.5">
+            {preview}
+          </p>
         )}
       </div>
     </button>
