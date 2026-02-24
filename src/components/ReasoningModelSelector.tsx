@@ -32,30 +32,6 @@ type CloudModelOption = {
   invertInDark?: boolean;
 };
 
-const OWNED_BY_ICON_RULES: Array<{ match: RegExp; provider: string }> = [
-  { match: /(openai|system|default|gpt|davinci)/, provider: "openai" },
-  { match: /(azure)/, provider: "openai" },
-  { match: /(anthropic|claude)/, provider: "anthropic" },
-  { match: /(google|gemini)/, provider: "gemini" },
-  { match: /(meta|llama)/, provider: "llama" },
-  { match: /(mistral)/, provider: "mistral" },
-  { match: /(qwen|ali|tongyi)/, provider: "qwen" },
-  { match: /(openrouter|oss)/, provider: "openai-oss" },
-];
-
-const resolveOwnedByIcon = (ownedBy?: string): { icon?: string; invertInDark: boolean } => {
-  if (!ownedBy) return { icon: undefined, invertInDark: false };
-  const normalized = ownedBy.toLowerCase();
-  const rule = OWNED_BY_ICON_RULES.find(({ match }) => match.test(normalized));
-  if (rule) {
-    return {
-      icon: getProviderIcon(rule.provider),
-      invertInDark: isMonochromeProvider(rule.provider),
-    };
-  }
-  return { icon: undefined, invertInDark: false };
-};
-
 interface ReasoningModelSelectorProps {
   reasoningModel: string;
   setReasoningModel: (model: string) => void;
@@ -448,16 +424,13 @@ export default function ReasoningModelSelector({
             const value = (item?.id || item?.name) as string | undefined;
             if (!value) return null;
             const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
-            const { icon, invertInDark } = resolveOwnedByIcon(ownedBy);
             return {
               value,
               label: (item?.id || item?.name || value) as string,
               description:
                 (item?.description as string) ||
                 (ownedBy ? t("reasoning.custom.ownerLabel", { owner: ownedBy }) : undefined),
-              icon,
               ownedBy,
-              invertInDark,
             } as CloudModelOption;
           })
           .filter(Boolean) as CloudModelOption[];

@@ -256,10 +256,13 @@ export function getModelProvider(modelId: string): string {
     return "openwhispr";
   }
 
+  if (getSettings().reasoningProvider === "custom") {
+    return "custom";
+  }
+
   const model = getAllReasoningModels().find((m) => m.value === modelId);
 
   if (!model) {
-    if (getSettings().reasoningProvider === "custom") return "custom";
     if (modelId.includes("claude")) return "anthropic";
     if (modelId.includes("gemini") && !modelId.includes("gemma")) return "gemini";
     if ((modelId.includes("gpt-4") || modelId.includes("gpt-5")) && !modelId.includes("gpt-oss"))
