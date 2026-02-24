@@ -5,7 +5,11 @@ import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/neonAuth";
 import { getBaseLanguageCode, validateLanguageForModel } from "../utils/languageSupport";
-import { getSettings, getEffectiveReasoningModel, isCloudReasoningMode } from "../stores/settingsStore";
+import {
+  getSettings,
+  getEffectiveReasoningModel,
+  isCloudReasoningMode,
+} from "../stores/settingsStore";
 
 const SHORT_CLIP_DURATION_SECONDS = 2.5;
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -802,6 +806,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       };
       this.cachedReasoningPreference = useReasoning;
       return false;
+    }
+
+    if (isCloudReasoningMode()) {
+      this.reasoningAvailabilityCache = {
+        value: true,
+        expiresAt: now + REASONING_CACHE_TTL,
+      };
+      this.cachedReasoningPreference = useReasoning;
+      return true;
     }
 
     try {

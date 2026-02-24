@@ -216,7 +216,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const generateTitle = async (text: string): Promise<string> => {
     if (!useReasoningModel) return "";
-    const model = isCloudReasoning ? "" : (effectiveReasoningModel || getAllReasoningModels()[0]?.value);
+    const model = isCloudReasoning
+      ? ""
+      : effectiveReasoningModel || getAllReasoningModels()[0]?.value;
     if (!model && !isCloudReasoning) return "";
     try {
       const title = await reasoningService.processText(text.slice(0, 2000), model, null, {
