@@ -126,7 +126,7 @@ export default function HistoryView({
                   variant="default"
                   size="sm"
                   className="h-7 text-xs"
-                  onClick={() => onOpenSettings("aiModels")}
+                  onClick={() => onOpenSettings("intelligence")}
                 >
                   {t("controlPanel.aiCta.enable")}
                 </Button>
