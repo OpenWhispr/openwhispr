@@ -63,6 +63,10 @@ if (process.platform === "linux") {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
+if (process.platform === "win32") {
+  app.commandLine.appendSwitch("disable-gpu-compositing");
+}
+
 // Enable native Wayland support: Ozone platform for native rendering,
 // and GlobalShortcutsPortal for global shortcuts via xdg-desktop-portal
 if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") {
@@ -803,6 +807,9 @@ if (gotSingleInstanceLock) {
       }
       windowManager.controlPanelWindow.show();
       windowManager.controlPanelWindow.focus();
+      if (windowManager.controlPanelWindow.webContents.isCrashed()) {
+        windowManager.loadControlPanel();
+      }
     } else {
       windowManager.createControlPanelWindow();
     }

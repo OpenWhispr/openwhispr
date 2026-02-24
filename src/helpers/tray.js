@@ -79,6 +79,9 @@ class TrayManager {
           this.controlPanelWindow.show();
         }
         this.controlPanelWindow.focus();
+        if (this.controlPanelWindow.webContents.isCrashed()) {
+          this.controlPanelWindow.webContents.reload();
+        }
         return;
       }
 

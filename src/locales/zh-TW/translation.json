@@ -234,7 +234,13 @@
       "description": "說話時自動修正文法、標點和格式。",
       "enable": "啟用 AI 增強"
     },
-    "loading": "載入中..."
+    "loading": "載入中...",
+    "gpu": {
+      "bannerTitle": "GPU 加速可用",
+      "bannerDescription": "啟用 GPU 加速以獲得更快的效能。",
+      "enableButton": "啟用 GPU",
+      "dismissButton": "暫時不要"
+    }
   },
   "reasoning": {
     "mode": {
@@ -1436,6 +1442,9 @@
     "realtimeBanner": {
       "message": "Pro 方案可使用即時轉錄",
       "upgrade": "升級"
+    },
+    "enhance": {
+      "title": "增強錯誤"
     }
   },
   "dictionary": {
@@ -1502,5 +1511,47 @@
     "add": "新增",
     "editButton": "編輯金鑰",
     "addButton": "新增金鑰"
+  },
+  "gpu": {
+    "transcriptionBanner": "使用 GPU 加速轉錄",
+    "reasoningBanner": "使用 GPU 加速 AI 處理",
+    "enableButton": "啟用 GPU",
+    "active": "GPU 加速已啟用",
+    "activating": "正在啟動 GPU...",
+    "activationFailed": "無法啟動 GPU",
+    "retry": "重試",
+    "remove": "移除",
+    "dismiss": "暫時不要",
+    "cancel": "取消"
+  },
+  "app": {
+    "toasts": {
+      "hotkeyChanged": {
+        "title": "快捷鍵已變更"
+      },
+      "hotkeyUnavailable": {
+        "title": "快捷鍵無法使用",
+        "description": "無法註冊所選快捷鍵。請在設定中選擇其他快捷鍵。"
+      }
+    },
+    "mic": {
+      "hotkeyToSpeak": "按 {{hotkey}} 開始說話",
+      "recording": "錄音中...",
+      "processing": "處理中...",
+      "clickToSpeak": "點擊開始說話"
+    },
+    "buttons": {
+      "cancelRecording": "取消錄音",
+      "cancelProcessing": "取消處理"
+    },
+    "commandMenu": {
+      "stopListening": "停止錄音",
+      "startListening": "開始錄音",
+      "hideForNow": "暫時隱藏"
+    },
+    "oauth": {
+      "redirectTitle": "正在跳轉到應用程式...",
+      "closeTab": "您可以關閉此分頁。"
+    }
   }
 }

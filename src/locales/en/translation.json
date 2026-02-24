@@ -234,7 +234,13 @@
       "description": "Automatically fix grammar, punctuation, and formatting as you speak.",
       "enable": "Enable AI Enhancement"
     },
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "gpu": {
+      "bannerTitle": "GPU acceleration available",
+      "bannerDescription": "Enable GPU acceleration for faster performance.",
+      "enableButton": "Enable GPU",
+      "dismissButton": "Not now"
+    }
   },
   "reasoning": {
     "mode": {
@@ -1472,6 +1478,9 @@
     "realtimeBanner": {
       "message": "Real-time transcription available on Pro",
       "upgrade": "Upgrade"
+    },
+    "enhance": {
+      "title": "Enhancement error"
     }
   },
   "dictionary": {
@@ -1502,5 +1511,47 @@
     "add": "Add API key",
     "editButton": "edit",
     "addButton": "add"
+  },
+  "gpu": {
+    "transcriptionBanner": "Speed up transcription with GPU acceleration",
+    "reasoningBanner": "Speed up AI processing with GPU acceleration",
+    "enableButton": "Enable GPU",
+    "active": "GPU acceleration active",
+    "activating": "Activating GPU...",
+    "activationFailed": "GPU could not be activated",
+    "retry": "Retry",
+    "remove": "Remove",
+    "dismiss": "Not now",
+    "cancel": "Cancel"
+  },
+  "app": {
+    "toasts": {
+      "hotkeyChanged": {
+        "title": "Hotkey changed"
+      },
+      "hotkeyUnavailable": {
+        "title": "Hotkey unavailable",
+        "description": "The selected hotkey could not be registered. Please choose a different one in settings."
+      }
+    },
+    "mic": {
+      "hotkeyToSpeak": "Press {{hotkey}} to speak",
+      "recording": "Recording...",
+      "processing": "Processing...",
+      "clickToSpeak": "Click to speak"
+    },
+    "buttons": {
+      "cancelRecording": "Cancel recording",
+      "cancelProcessing": "Cancel processing"
+    },
+    "commandMenu": {
+      "stopListening": "Stop listening",
+      "startListening": "Start listening",
+      "hideForNow": "Hide for now"
+    },
+    "oauth": {
+      "redirectTitle": "Redirecting to app...",
+      "closeTab": "You can close this tab."
+    }
   }
 }

@@ -37,6 +37,7 @@ const MAIN_WINDOW_CONFIG = {
 const CONTROL_PANEL_CONFIG = {
   width: 1200,
   height: 800,
+  backgroundColor: "#1c1c2e",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
     nodeIntegration: false,
@@ -50,6 +51,7 @@ const CONTROL_PANEL_CONFIG = {
     // directly from the browser. These would be blocked by CORS otherwise.
     webSecurity: false,
     spellcheck: false,
+    backgroundThrottling: false,
   },
   title: "Control Panel",
   resizable: true,

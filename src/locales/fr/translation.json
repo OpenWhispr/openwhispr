@@ -234,7 +234,13 @@
       "description": "Corrige automatiquement grammaire, ponctuation et mise en forme pendant que vous parlez.",
       "enable": "Activer l'amélioration IA"
     },
-    "loading": "Chargement..."
+    "loading": "Chargement...",
+    "gpu": {
+      "bannerTitle": "Accélération GPU disponible",
+      "bannerDescription": "Activez l'accélération GPU pour de meilleures performances.",
+      "enableButton": "Activer le GPU",
+      "dismissButton": "Pas maintenant"
+    }
   },
   "reasoning": {
     "mode": {
@@ -1476,6 +1482,9 @@
     "realtimeBanner": {
       "message": "Transcription en temps réel disponible avec Pro",
       "upgrade": "Passer à Pro"
+    },
+    "enhance": {
+      "title": "Erreur d'amélioration"
     }
   },
   "dictionary": {
@@ -1506,5 +1515,47 @@
     "add": "Ajouter une clé API",
     "editButton": "modifier",
     "addButton": "ajouter"
+  },
+  "gpu": {
+    "transcriptionBanner": "Accélérez la transcription avec le GPU",
+    "reasoningBanner": "Accélérez le traitement IA avec le GPU",
+    "enableButton": "Activer le GPU",
+    "active": "Accélération GPU active",
+    "activating": "Activation du GPU...",
+    "activationFailed": "Impossible d'activer le GPU",
+    "retry": "Réessayer",
+    "remove": "Supprimer",
+    "dismiss": "Pas maintenant",
+    "cancel": "Annuler"
+  },
+  "app": {
+    "toasts": {
+      "hotkeyChanged": {
+        "title": "Raccourci modifié"
+      },
+      "hotkeyUnavailable": {
+        "title": "Raccourci indisponible",
+        "description": "Le raccourci sélectionné n’a pas pu être enregistré. Veuillez en choisir un autre dans les paramètres."
+      }
+    },
+    "mic": {
+      "hotkeyToSpeak": "Appuyez sur {{hotkey}} pour parler",
+      "recording": "Enregistrement...",
+      "processing": "Traitement...",
+      "clickToSpeak": "Cliquez pour parler"
+    },
+    "buttons": {
+      "cancelRecording": "Annuler l’enregistrement",
+      "cancelProcessing": "Annuler le traitement"
+    },
+    "commandMenu": {
+      "stopListening": "Arrêter l’écoute",
+      "startListening": "Commencer l’écoute",
+      "hideForNow": "Masquer pour l’instant"
+    },
+    "oauth": {
+      "redirectTitle": "Redirection vers l'app...",
+      "closeTab": "Vous pouvez fermer cet onglet."
+    }
   }
 }
