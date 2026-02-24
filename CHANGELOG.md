@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-02-23
+
+### Added
+
+- **GPU-Accelerated Local Inference**: Vulkan (Windows/Linux) and Metal (macOS) support for llama-server with automatic CPU fallback and GPU status badge in the reasoning model selector
+- **CUDA GPU Acceleration for Whisper**: NVIDIA GPU acceleration for local Whisper transcription with automatic GPU detection, upgrade banner for existing users, and shared download progress UI
+- **On-Demand Vulkan Download**: Vulkan llama-server binary downloads on-demand when the user opts in, saving 40-46MB from the app installer
+
+### Changed
+
+- **Vulkan Llama-Server Architecture**: Switched from bundling the Vulkan binary to on-demand download into userData, mirroring the Whisper CUDA download pattern
+
+### Fixed
+
+- **macOS Paste Failure**: Replaced osascript-based accessibility check with Electron's native `isTrustedAccessibilityClient()` and fixed focus transfer using hide()+showInactive() instead of blur() on NSPanel (#313)
+- **Windows Sherpa-onnx Extraction**: Fixed tar extraction failing on Windows due to GNU tar interpreting drive letter colons as remote host separators — now uses relative paths (#284)
+- **Cloud Reasoning for Non-BYOK Users**: Cloud-only users without local API keys now properly get reasoning applied instead of receiving raw unprocessed transcription text
+- **BYOK Model Leaking to Cloud Reasoning**: Stopped forwarding client-side BYOK model name to the cloud reasoning endpoint when using OpenWhispr Cloud
+- **Vulkan GPU Detection**: Fixed Linux Vulkan asset naming regex and replaced vulkaninfo CLI with Electron's `app.getGPUInfo()`; clear stale backend state on server stop
+- **API Key Cache Invalidation**: Replaced renderer-incompatible `require()` with dynamic `import()` so cache clear, `api-key-changed` event dispatch, and `.env` persistence all execute correctly after saving API keys
+
 ## [1.5.0] - 2026-02-23
 
 ### Added

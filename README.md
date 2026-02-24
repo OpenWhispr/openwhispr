@@ -46,6 +46,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 📝 **Notes System**: Create, edit, and organize transcription notes with folders, audio upload, and real-time dictation
 - 🤖 **AI Actions**: Apply AI-powered actions to notes with customizable processing templates
 - 🔗 **Referral Program**: Invite friends and earn free Pro months with shareable referral cards
+- ⚡ **GPU Acceleration**: Vulkan (Windows/Linux), Metal (macOS), and CUDA (NVIDIA) for faster local inference and transcription
 
 ## Prerequisites
 
@@ -730,7 +731,7 @@ A: OpenWhispr supports 58 languages including English, Spanish, French, German, 
 
 ## Project Status
 
-OpenWhispr is actively maintained and ready for production use. Current version: 1.5.0
+OpenWhispr is actively maintained and ready for production use. Current version: 1.5.1
 
 - ✅ Core functionality complete
 - ✅ Cross-platform support (macOS, Windows, Linux)
@@ -745,6 +746,7 @@ OpenWhispr is actively maintained and ready for production use. Current version:
 - ✅ GNOME Wayland native global shortcuts
 - ✅ Notes system with folders, audio upload, and AI actions
 - ✅ Referral program with shareable invite cards
+- ✅ GPU-accelerated local inference (Vulkan/Metal/CUDA)
 
 ## Acknowledgments
 
