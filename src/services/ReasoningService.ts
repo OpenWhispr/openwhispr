@@ -1034,10 +1034,8 @@ class ReasoningService extends BaseReasoningService {
       const language = this.getPreferredLanguage();
       const locale = this.getUiLanguage();
 
-      // Use withSessionRefresh to handle AUTH_EXPIRED automatically
       const result = await withSessionRefresh(async () => {
         const res = await (window as any).electronAPI.cloudReason(text, {
-          model,
           agentName,
           customDictionary,
           customPrompt: this.getCustomPrompt(),
@@ -1086,6 +1084,11 @@ class ReasoningService extends BaseReasoningService {
 
   async isAvailable(): Promise<boolean> {
     try {
+      if (isCloudReasoningMode()) {
+        logger.logReasoning("API_KEY_CHECK", { cloudReasoningMode: true });
+        return true;
+      }
+
       const openaiKey = await window.electronAPI?.getOpenAIKey?.();
       const anthropicKey = await window.electronAPI?.getAnthropicKey?.();
       const geminiKey = await window.electronAPI?.getGeminiKey?.();

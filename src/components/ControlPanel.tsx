@@ -45,6 +45,9 @@ export default function ControlPanel() {
   );
   const [showReferrals, setShowReferrals] = useState(false);
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
+  const [vulkanBanner, setVulkanBanner] = useState<{ show: boolean; deviceName?: string }>({
+    show: false,
+  });
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
   const [cudaStatus, setCudaStatus] = useState<CudaWhisperStatus | null>(null);
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
@@ -152,6 +155,22 @@ export default function ControlPanel() {
     localStorage.removeItem("pendingCloudMigration");
     setShowCloudMigrationBanner(true);
   }, [authLoaded, isSignedIn, setUseLocalWhisper, setCloudTranscriptionMode]);
+
+  useEffect(() => {
+    if (platform === "darwin" || !useReasoningModel) return;
+    if (localStorage.getItem("llamaVulkanBannerDismissed") === "true") return;
+
+    Promise.all([
+      window.electronAPI?.detectVulkanGpu?.(),
+      window.electronAPI?.getLlamaVulkanStatus?.(),
+    ])
+      .then(([gpu, vulkan]) => {
+        if (gpu?.available && !vulkan?.downloaded) {
+          setVulkanBanner({ show: true, deviceName: gpu.deviceName });
+        }
+      })
+      .catch(() => {});
+  }, [useReasoningModel]);
 
   const fetchCudaStatus = useCallback(() => {
     if (platform === "darwin" || gpuBannerDismissed) return;
@@ -426,6 +445,41 @@ export default function ControlPanel() {
                       >
                         {t("controlPanel.billing.updatePayment")}
                       </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {vulkanBanner.show && activeView === "home" && (
+              <div className="mx-4 mt-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                <div className="flex items-start gap-2">
+                  <Zap className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-foreground">
+                      {vulkanBanner.deviceName || "GPU"} detected — speed up local AI with Vulkan
+                      acceleration
+                    </p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSettingsSection("reasoning");
+                          setShowSettings(true);
+                        }}
+                        className="text-xs font-medium text-purple-400 hover:text-purple-300 transition-colors"
+                      >
+                        Enable GPU
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.setItem("llamaVulkanBannerDismissed", "true");
+                          setVulkanBanner({ show: false });
+                        }}
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        Not now
+                      </button>
                     </div>
                   </div>
                 </div>

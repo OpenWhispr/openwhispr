@@ -16,37 +16,39 @@ const LLAMA_CPP_REPO = "ggerganov/llama.cpp";
 // Version can be pinned via environment variable for reproducible builds
 const VERSION_OVERRIDE = process.env.LLAMA_CPP_VERSION || null;
 
-// Asset name patterns to match in the release (version-independent)
 const BINARIES = {
   "darwin-arm64": {
+    platformArch: "darwin-arm64",
     assetPattern: /^llama-.*-bin-macos-arm64\.tar\.gz$/,
     binaryPath: "build/bin/llama-server",
     outputName: "llama-server-darwin-arm64",
     libPattern: "*.dylib",
   },
   "darwin-x64": {
+    platformArch: "darwin-x64",
     assetPattern: /^llama-.*-bin-macos-x64\.tar\.gz$/,
     binaryPath: "build/bin/llama-server",
     outputName: "llama-server-darwin-x64",
     libPattern: "*.dylib",
   },
-  "win32-x64": {
+  "win32-x64-cpu": {
+    platformArch: "win32-x64",
     assetPattern: /^llama-.*-bin-win-cpu-x64\.zip$/,
     binaryPath: "build/bin/llama-server.exe",
-    outputName: "llama-server-win32-x64.exe",
+    outputName: "llama-server-win32-x64-cpu.exe",
     libPattern: "*.dll",
   },
-  "linux-x64": {
+  "linux-x64-cpu": {
+    platformArch: "linux-x64",
     assetPattern: /^llama-.*-bin-ubuntu-x64\.tar\.gz$/,
     binaryPath: "build/bin/llama-server",
-    outputName: "llama-server-linux-x64",
+    outputName: "llama-server-linux-x64-cpu",
     libPattern: "*.so*",
   },
 };
 
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
-// Cache the release info to avoid multiple API calls
 let cachedRelease = null;
 
 async function getRelease() {
@@ -84,45 +86,43 @@ function findLibrariesInDir(dir, pattern, maxDepth = 5, currentDepth = 0) {
 }
 
 function matchesPattern(filename, pattern) {
-  // Handle patterns like "*.dylib", "*.dll", "*.so*"
   if (pattern === "*.dylib") {
     return filename.endsWith(".dylib");
   } else if (pattern === "*.dll") {
     return filename.endsWith(".dll");
   } else if (pattern === "*.so*") {
-    // Match .so files with optional version suffix (e.g., libfoo.so, libfoo.so.1, libfoo.so.1.2.3)
     return /\.so(\.\d+)*$/.test(filename) || filename.endsWith(".so");
   }
   return false;
 }
 
-async function downloadBinary(platformArch, config, release, isForce = false) {
+async function downloadBinary(key, config, release, isForce = false) {
   if (!config) {
-    console.log(`  ${platformArch}: Not supported`);
+    console.log(`  ${key}: Not supported`);
     return false;
   }
 
   const outputPath = path.join(BIN_DIR, config.outputName);
 
   if (fs.existsSync(outputPath) && !isForce) {
-    console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
+    console.log(`  ${key}: Already exists (use --force to re-download)`);
     return true;
   }
 
   const asset = findAsset(release, config.assetPattern);
   if (!asset) {
-    console.error(`  ${platformArch}: No matching asset found for pattern ${config.assetPattern}`);
+    console.error(`  ${key}: No matching asset found for pattern ${config.assetPattern}`);
     return false;
   }
 
-  console.log(`  ${platformArch}: Downloading from ${asset.url}`);
+  console.log(`  ${key}: Downloading from ${asset.url}`);
 
   const zipPath = path.join(BIN_DIR, asset.name);
 
   try {
     await downloadFile(asset.url, zipPath);
 
-    const extractDir = path.join(BIN_DIR, `temp-llama-${platformArch}`);
+    const extractDir = path.join(BIN_DIR, `temp-llama-${key}`);
     fs.mkdirSync(extractDir, { recursive: true });
     await extractArchive(zipPath, extractDir);
 
@@ -136,10 +136,8 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
     if (binaryPath && fs.existsSync(binaryPath)) {
       fs.copyFileSync(binaryPath, outputPath);
       setExecutable(outputPath);
-      console.log(`  ${platformArch}: Extracted to ${config.outputName}`);
+      console.log(`  ${key}: Extracted to ${config.outputName}`);
 
-      // Copy shared libraries (dylib/dll/so files)
-      // Always overwrite — libraries are architecture-specific (e.g. arm64 vs x64 dylibs)
       if (config.libPattern) {
         const libraries = findLibrariesInDir(extractDir, config.libPattern);
 
@@ -149,11 +147,11 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
 
           fs.copyFileSync(libPath, destPath);
           setExecutable(destPath);
-          console.log(`  ${platformArch}: Copied library ${libName}`);
+          console.log(`  ${key}: Copied library ${libName}`);
         }
       }
     } else {
-      console.error(`  ${platformArch}: Binary '${binaryName}' not found in archive`);
+      console.error(`  ${key}: Binary '${binaryName}' not found in archive`);
       return false;
     }
 
@@ -161,10 +159,14 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
     if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
     return true;
   } catch (error) {
-    console.error(`  ${platformArch}: Failed - ${error.message}`);
+    console.error(`  ${key}: Failed - ${error.message}`);
     if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
     return false;
   }
+}
+
+function getEntriesForPlatformArch(platformArch) {
+  return Object.entries(BINARIES).filter(([, config]) => config.platformArch === platformArch);
 }
 
 async function main() {
@@ -189,18 +191,25 @@ async function main() {
   const args = parseArgs();
 
   if (args.isCurrent) {
-    if (!BINARIES[args.platformArch]) {
+    const entries = getEntriesForPlatformArch(args.platformArch);
+
+    if (entries.length === 0) {
       console.error(`Unsupported platform/arch: ${args.platformArch}`);
       process.exitCode = 1;
       return;
     }
 
     console.log(`Downloading for target platform (${args.platformArch}):`);
-    const ok = await downloadBinary(args.platformArch, BINARIES[args.platformArch], release, args.isForce);
-    if (!ok) {
-      console.error(`Failed to download binaries for ${args.platformArch}`);
-      process.exitCode = 1;
-      return;
+
+    for (const [key, config] of entries) {
+      const ok = await downloadBinary(key, config, release, args.isForce);
+      if (!ok && config.optional) {
+        console.warn(`  ${key}: Skipping optional variant`);
+      } else if (!ok) {
+        console.error(`Failed to download binaries for ${key}`);
+        process.exitCode = 1;
+        return;
+      }
     }
 
     if (args.shouldCleanup) {
@@ -208,8 +217,11 @@ async function main() {
     }
   } else {
     console.log("Downloading binaries for all platforms:");
-    for (const platformArch of Object.keys(BINARIES)) {
-      await downloadBinary(platformArch, BINARIES[platformArch], release, args.isForce);
+    for (const [key, config] of Object.entries(BINARIES)) {
+      const ok = await downloadBinary(key, config, release, args.isForce);
+      if (!ok && config.optional) {
+        console.warn(`  ${key}: Skipping optional variant`);
+      }
     }
   }
 

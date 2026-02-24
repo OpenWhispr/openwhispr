@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import type {
+  LlamaServerStatus,
+  LlamaVulkanStatus,
+  VulkanGpuResult,
+  LlamaVulkanDownloadProgress,
+} from "../types/electron";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Cloud, Lock } from "lucide-react";
@@ -14,6 +20,7 @@ import { modelRegistry } from "../models/ModelRegistry";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { createExternalLinkHandler } from "../utils/externalLinks";
+import { getCachedPlatform } from "../utils/platform";
 
 type CloudModelOption = {
   value: string;
@@ -66,6 +73,173 @@ interface ReasoningModelSelectorProps {
   setGroqApiKey: (key: string) => void;
   customReasoningApiKey?: string;
   setCustomReasoningApiKey?: (key: string) => void;
+}
+
+function GpuStatusBadge() {
+  const [serverStatus, setServerStatus] = useState<LlamaServerStatus | null>(null);
+  const [vulkanStatus, setVulkanStatus] = useState<LlamaVulkanStatus | null>(null);
+  const [gpuResult, setGpuResult] = useState<VulkanGpuResult | null>(null);
+  const [progress, setProgress] = useState<LlamaVulkanDownloadProgress | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const platform = getCachedPlatform();
+
+  useEffect(() => {
+    const poll = () => {
+      window.electronAPI
+        ?.llamaServerStatus?.()
+        .then(setServerStatus)
+        .catch(() => {});
+      if (platform !== "darwin") {
+        window.electronAPI
+          ?.getLlamaVulkanStatus?.()
+          .then(setVulkanStatus)
+          .catch(() => {});
+      }
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
+  }, [platform]);
+
+  useEffect(() => {
+    if (platform !== "darwin") {
+      window.electronAPI
+        ?.detectVulkanGpu?.()
+        .then(setGpuResult)
+        .catch(() => {});
+    }
+  }, [platform]);
+
+  useEffect(() => {
+    const cleanup = window.electronAPI?.onLlamaVulkanDownloadProgress?.((data) => {
+      setProgress(data);
+    });
+    return () => cleanup?.();
+  }, []);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    setError(null);
+    try {
+      const result = await window.electronAPI?.downloadLlamaVulkanBinary?.();
+      if (result?.success) {
+        setVulkanStatus((prev) => (prev ? { ...prev, downloaded: true } : prev));
+        window.electronAPI?.llamaGpuReset?.();
+      } else if (result && !result.cancelled) {
+        setError(result.error || "Download failed");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setDownloading(false);
+      setProgress(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    await window.electronAPI?.deleteLlamaVulkanBinary?.();
+    setVulkanStatus((prev) => (prev ? { ...prev, downloaded: false } : prev));
+  };
+
+  if (platform === "darwin") {
+    if (!serverStatus?.running) return null;
+    return (
+      <div className="flex items-center gap-1.5 mt-2 px-1">
+        <span
+          className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+          style={{ backgroundColor: "#22c55e" }}
+        />
+        <span className="text-xs text-muted-foreground">GPU Accelerated (Metal)</span>
+      </div>
+    );
+  }
+
+  if (downloading && progress) {
+    return (
+      <div className="flex items-center gap-2 mt-2 px-1">
+        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+          <div
+            className="h-full bg-purple-500 transition-all"
+            style={{ width: `${progress.percentage}%` }}
+          />
+        </div>
+        <span className="text-xs text-muted-foreground tabular-nums">{progress.percentage}%</span>
+        <button
+          type="button"
+          onClick={() => window.electronAPI?.cancelLlamaVulkanDownload?.()}
+          className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center gap-1.5 mt-2 px-1">
+        <span className="text-xs text-destructive">{error}</span>
+        <button
+          type="button"
+          onClick={() => setError(null)}
+          className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors ml-1"
+        >
+          Dismiss
+        </button>
+      </div>
+    );
+  }
+
+  if (vulkanStatus?.downloaded) {
+    const isGpu = serverStatus?.gpuAccelerated && serverStatus?.backend === "vulkan";
+    return (
+      <div className="flex items-center gap-1.5 mt-2 px-1">
+        <span
+          className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
+          style={{ backgroundColor: isGpu ? "#22c55e" : "#f59e0b" }}
+        />
+        <span className="text-xs text-muted-foreground">
+          {isGpu ? "GPU Accelerated (Vulkan)" : "CPU Only"}
+        </span>
+        {!isGpu && serverStatus?.running && (
+          <button
+            type="button"
+            onClick={() => window.electronAPI?.llamaGpuReset?.()}
+            className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors ml-1"
+          >
+            Re-detect GPU
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={handleDelete}
+          className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors ml-auto"
+        >
+          Remove
+        </button>
+      </div>
+    );
+  }
+
+  if (gpuResult?.available) {
+    return (
+      <div className="flex items-center gap-1.5 mt-2 px-1">
+        <span className="text-xs text-muted-foreground">
+          {gpuResult.deviceName || "GPU"} detected
+        </span>
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors ml-1"
+        >
+          Download Vulkan (~40MB)
+        </button>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export default function ReasoningModelSelector({
@@ -746,16 +920,19 @@ export default function ReasoningModelSelector({
           </div>
         </div>
       ) : (
-        <LocalModelPicker
-          providers={localProviders}
-          selectedModel={reasoningModel}
-          selectedProvider={selectedLocalProvider}
-          onModelSelect={setReasoningModel}
-          onProviderSelect={handleLocalProviderChange}
-          modelType="llm"
-          colorScheme="purple"
-          onDownloadComplete={loadDownloadedModels}
-        />
+        <>
+          <LocalModelPicker
+            providers={localProviders}
+            selectedModel={reasoningModel}
+            selectedProvider={selectedLocalProvider}
+            onModelSelect={setReasoningModel}
+            onProviderSelect={handleLocalProviderChange}
+            modelType="llm"
+            colorScheme="purple"
+            onDownloadComplete={loadDownloadedModels}
+          />
+          <GpuStatusBadge />
+        </>
       )}
     </div>
   );

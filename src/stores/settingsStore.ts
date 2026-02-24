@@ -16,12 +16,6 @@ import type {
 } from "../hooks/useSettings";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
-function getReasoningService() {
-  if (!_ReasoningService) {
-    _ReasoningService = require("../services/ReasoningService").default;
-  }
-  return _ReasoningService!;
-}
 
 const isBrowser = typeof window !== "undefined";
 
@@ -171,7 +165,16 @@ function invalidateApiKeyCaches(
   provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom"
 ) {
   if (provider) {
-    getReasoningService().clearApiKeyCache(provider);
+    if (_ReasoningService) {
+      _ReasoningService.clearApiKeyCache(provider);
+    } else {
+      import("../services/ReasoningService")
+        .then((mod) => {
+          _ReasoningService = mod.default;
+          _ReasoningService.clearApiKeyCache(provider);
+        })
+        .catch(() => {});
+    }
   }
   if (isBrowser) window.dispatchEvent(new Event("api-key-changed"));
   debouncedPersistToEnv();
@@ -441,7 +444,11 @@ export function getSettings() {
 }
 
 export function getEffectiveReasoningModel() {
-  return useSettingsStore.getState().reasoningModel;
+  const state = useSettingsStore.getState();
+  if (selectIsCloudReasoningMode(state)) {
+    return "";
+  }
+  return state.reasoningModel;
 }
 
 export function isCloudReasoningMode() {
