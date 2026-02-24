@@ -3,12 +3,14 @@ import { useTranslation } from "react-i18next";
 import {
   Sliders,
   Mic,
-  Brain,
   UserCircle,
   Wrench,
   Keyboard,
   CreditCard,
   Shield,
+  Braces,
+  User,
+  Sparkles,
 } from "lucide-react";
 import SidebarModal, { SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
@@ -17,14 +19,35 @@ export type { SettingsSectionType };
 
 // Maps old section IDs to new ones for backward-compatible deep-linking
 const SECTION_ALIASES: Record<string, SettingsSectionType> = {
-  aiModels: "intelligence",
-  agentConfig: "intelligence",
-  prompts: "intelligence",
+  aiModels: "aiModels",
+  agentConfig: "agentConfig",
+  prompts: "prompts",
+  intelligence: "aiModels",
+  reasoning: "aiModels",
+  speechAi: "transcription",
   softwareUpdates: "system",
   privacy: "privacyData",
   permissions: "privacyData",
   developer: "system",
 };
+
+const DEFAULT_SECTION: SettingsSectionType = "transcription";
+
+function isSettingsSection(value: string): value is SettingsSectionType {
+  return [
+    "account",
+    "plansBilling",
+    "general",
+    "hotkeys",
+    "transcription",
+    "aiModels",
+    "agentConfig",
+    "prompts",
+    "intelligence",
+    "privacyData",
+    "system",
+  ].includes(value);
+}
 
 interface SettingsModalProps {
   open: boolean;
@@ -69,14 +92,34 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         label: t("settingsModal.sections.transcription.label"),
         icon: Mic,
         description: t("settingsModal.sections.transcription.description"),
-        group: t("settingsModal.groups.speechAi"),
+        group: t("settingsModal.groups.speech", { defaultValue: "Speech" }),
       },
       {
-        id: "intelligence",
-        label: t("settingsModal.sections.intelligence.label"),
-        icon: Brain,
-        description: t("settingsModal.sections.intelligence.description"),
-        group: t("settingsModal.groups.speechAi"),
+        id: "aiModels",
+        label: t("settingsModal.sections.aiModels.label", { defaultValue: "AI Models" }),
+        icon: Braces,
+        description: t("settingsModal.sections.aiModels.description", {
+          defaultValue: "Model selection and AI text cleanup",
+        }),
+        group: t("settingsModal.groups.intelligence", { defaultValue: "Intelligence" }),
+      },
+      {
+        id: "agentConfig",
+        label: t("settingsModal.sections.agentConfig.label", { defaultValue: "Agent" }),
+        icon: User,
+        description: t("settingsModal.sections.agentConfig.description", {
+          defaultValue: "Agent name and instruction mode behavior",
+        }),
+        group: t("settingsModal.groups.intelligence", { defaultValue: "Intelligence" }),
+      },
+      {
+        id: "prompts",
+        label: t("settingsModal.sections.prompts.label", { defaultValue: "Prompts" }),
+        icon: Sparkles,
+        description: t("settingsModal.sections.prompts.description", {
+          defaultValue: "Customize system prompts and test output",
+        }),
+        group: t("settingsModal.groups.intelligence", { defaultValue: "Intelligence" }),
       },
       {
         id: "privacyData",
@@ -96,14 +139,21 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
     [t]
   );
 
-  const [activeSection, setActiveSection] = React.useState<SettingsSectionType>("account");
+  const [activeSection, setActiveSection] = React.useState<SettingsSectionType>(DEFAULT_SECTION);
 
   // Navigate to initial section when modal opens, resolving legacy aliases
   useEffect(() => {
-    if (open && initialSection) {
-      const resolved = (SECTION_ALIASES[initialSection] ?? initialSection) as SettingsSectionType;
-      setActiveSection(resolved);
+    if (!open) {
+      return;
     }
+
+    if (!initialSection) {
+      setActiveSection(DEFAULT_SECTION);
+      return;
+    }
+
+    const resolved = SECTION_ALIASES[initialSection] ?? initialSection;
+    setActiveSection(isSettingsSection(resolved) ? resolved : DEFAULT_SECTION);
   }, [open, initialSection]);
 
   return (

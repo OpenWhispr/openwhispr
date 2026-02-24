@@ -69,6 +69,9 @@ export type SettingsSectionType =
   | "general"
   | "hotkeys"
   | "transcription"
+  | "aiModels"
+  | "agentConfig"
+  | "prompts"
   | "intelligence"
   | "privacyData"
   | "system";
@@ -945,6 +948,159 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     }
   }, [showAlertDialog, t]);
 
+  const renderAiModelsContent = () => (
+    <AiModelsSection
+      isSignedIn={isSignedIn ?? false}
+      cloudReasoningMode={cloudReasoningMode}
+      setCloudReasoningMode={setCloudReasoningMode}
+      useReasoningModel={useReasoningModel}
+      setUseReasoningModel={(value) => {
+        updateReasoningSettings({ useReasoningModel: value });
+      }}
+      reasoningModel={reasoningModel}
+      setReasoningModel={setReasoningModel}
+      reasoningProvider={reasoningProvider}
+      setReasoningProvider={setReasoningProvider}
+      cloudReasoningBaseUrl={cloudReasoningBaseUrl}
+      setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
+      openaiApiKey={openaiApiKey}
+      setOpenaiApiKey={setOpenaiApiKey}
+      anthropicApiKey={anthropicApiKey}
+      setAnthropicApiKey={setAnthropicApiKey}
+      geminiApiKey={geminiApiKey}
+      setGeminiApiKey={setGeminiApiKey}
+      groqApiKey={groqApiKey}
+      setGroqApiKey={setGroqApiKey}
+      customReasoningApiKey={customReasoningApiKey}
+      setCustomReasoningApiKey={setCustomReasoningApiKey}
+      showAlertDialog={showAlertDialog}
+      toast={toast}
+    />
+  );
+
+  const renderAgentConfigContent = () => (
+    <>
+      <SectionHeader
+        title={t("settingsPage.agentConfig.title")}
+        description={t("settingsPage.agentConfig.description")}
+      />
+
+      <div className="space-y-5">
+        <div>
+          <p className="text-xs font-medium text-foreground mb-3">
+            {t("settingsPage.agentConfig.agentName")}
+          </p>
+          <SettingsPanel>
+            <SettingsPanelRow>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder={t("settingsPage.agentConfig.placeholder")}
+                    value={agentNameInput}
+                    onChange={(e) => setAgentNameInput(e.target.value)}
+                    className="flex-1 text-center text-base font-mono"
+                  />
+                  <Button
+                    onClick={() => {
+                      const trimmed = agentNameInput.trim();
+                      const oldName = agentName;
+                      setAgentName(trimmed);
+                      setAgentNameInput(trimmed);
+                      let dict = customDictionary.filter((w) => w !== oldName);
+                      if (trimmed && !dict.includes(trimmed)) dict = [trimmed, ...dict];
+                      setCustomDictionary(dict);
+                      showAlertDialog({
+                        title: t("settingsPage.agentConfig.dialogs.updatedTitle"),
+                        description: t("settingsPage.agentConfig.dialogs.updatedDescription", {
+                          name: trimmed,
+                        }),
+                      });
+                    }}
+                    disabled={!agentNameInput.trim()}
+                    size="sm"
+                  >
+                    {t("settingsPage.agentConfig.save")}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground/60">
+                  {t("settingsPage.agentConfig.helper")}
+                </p>
+              </div>
+            </SettingsPanelRow>
+          </SettingsPanel>
+        </div>
+
+        <div>
+          <SectionHeader title={t("settingsPage.agentConfig.howItWorksTitle")} />
+          <SettingsPanel>
+            <SettingsPanelRow>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {t("settingsPage.agentConfig.howItWorksDescription", { agentName })}
+              </p>
+            </SettingsPanelRow>
+          </SettingsPanel>
+        </div>
+
+        <div>
+          <SectionHeader title={t("settingsPage.agentConfig.examplesTitle")} />
+          <SettingsPanel>
+            <SettingsPanelRow>
+              <div className="space-y-2.5">
+                {[
+                  {
+                    input: t("settingsPage.agentConfig.examples.formalEmail", {
+                      agentName,
+                    }),
+                    mode: t("settingsPage.agentConfig.instructionMode"),
+                  },
+                  {
+                    input: t("settingsPage.agentConfig.examples.professional", {
+                      agentName,
+                    }),
+                    mode: t("settingsPage.agentConfig.instructionMode"),
+                  },
+                  {
+                    input: t("settingsPage.agentConfig.examples.bulletPoints", {
+                      agentName,
+                    }),
+                    mode: t("settingsPage.agentConfig.instructionMode"),
+                  },
+                  {
+                    input: t("settingsPage.agentConfig.cleanupExample"),
+                    mode: t("settingsPage.agentConfig.cleanupMode"),
+                  },
+                ].map((example, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <span
+                      className={`shrink-0 mt-0.5 text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded ${
+                        example.mode === t("settingsPage.agentConfig.instructionMode")
+                          ? "bg-primary/10 text-primary dark:bg-primary/15"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {example.mode}
+                    </span>
+                    <p className="text-xs text-muted-foreground leading-relaxed">"{example.input}"</p>
+                  </div>
+                ))}
+              </div>
+            </SettingsPanelRow>
+          </SettingsPanel>
+        </div>
+      </div>
+    </>
+  );
+
+  const renderPromptsContent = () => (
+    <>
+      <SectionHeader
+        title={t("settingsPage.prompts.title")}
+        description={t("settingsPage.prompts.description")}
+      />
+      <PromptStudio />
+    </>
+  );
+
   const renderSectionContent = () => {
     switch (activeSection) {
       case "account":
@@ -1794,162 +1950,24 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
           />
         );
 
+      case "aiModels":
+        return renderAiModelsContent();
+
+      case "agentConfig":
+        return <div>{renderAgentConfigContent()}</div>;
+
+      case "prompts":
+        return <div>{renderPromptsContent()}</div>;
+
       case "intelligence":
         return (
           <div className="space-y-6">
-            {/* Text Cleanup (AI Models) */}
-            <AiModelsSection
-              isSignedIn={isSignedIn ?? false}
-              cloudReasoningMode={cloudReasoningMode}
-              setCloudReasoningMode={setCloudReasoningMode}
-              useReasoningModel={useReasoningModel}
-              setUseReasoningModel={(value) => {
-                updateReasoningSettings({ useReasoningModel: value });
-              }}
-              reasoningModel={reasoningModel}
-              setReasoningModel={setReasoningModel}
-              reasoningProvider={reasoningProvider}
-              setReasoningProvider={setReasoningProvider}
-              cloudReasoningBaseUrl={cloudReasoningBaseUrl}
-              setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
-              openaiApiKey={openaiApiKey}
-              setOpenaiApiKey={setOpenaiApiKey}
-              anthropicApiKey={anthropicApiKey}
-              setAnthropicApiKey={setAnthropicApiKey}
-              geminiApiKey={geminiApiKey}
-              setGeminiApiKey={setGeminiApiKey}
-              groqApiKey={groqApiKey}
-              setGroqApiKey={setGroqApiKey}
-              customReasoningApiKey={customReasoningApiKey}
-              setCustomReasoningApiKey={setCustomReasoningApiKey}
-              showAlertDialog={showAlertDialog}
-              toast={toast}
-            />
-
-            {/* Agent Config */}
+            {renderAiModelsContent()}
             <div className="border-t border-border/40 pt-6">
-              <SectionHeader
-                title={t("settingsPage.agentConfig.title")}
-                description={t("settingsPage.agentConfig.description")}
-              />
-
-              <div className="space-y-5">
-                <div>
-                  <p className="text-xs font-medium text-foreground mb-3">
-                    {t("settingsPage.agentConfig.agentName")}
-                  </p>
-                  <SettingsPanel>
-                    <SettingsPanelRow>
-                      <div className="space-y-3">
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder={t("settingsPage.agentConfig.placeholder")}
-                            value={agentNameInput}
-                            onChange={(e) => setAgentNameInput(e.target.value)}
-                            className="flex-1 text-center text-base font-mono"
-                          />
-                          <Button
-                            onClick={() => {
-                              const trimmed = agentNameInput.trim();
-                              const oldName = agentName;
-                              setAgentName(trimmed);
-                              setAgentNameInput(trimmed);
-                              let dict = customDictionary.filter((w) => w !== oldName);
-                              if (trimmed && !dict.includes(trimmed)) dict = [trimmed, ...dict];
-                              setCustomDictionary(dict);
-                              showAlertDialog({
-                                title: t("settingsPage.agentConfig.dialogs.updatedTitle"),
-                                description: t(
-                                  "settingsPage.agentConfig.dialogs.updatedDescription",
-                                  {
-                                    name: trimmed,
-                                  }
-                                ),
-                              });
-                            }}
-                            disabled={!agentNameInput.trim()}
-                            size="sm"
-                          >
-                            {t("settingsPage.agentConfig.save")}
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground/60">
-                          {t("settingsPage.agentConfig.helper")}
-                        </p>
-                      </div>
-                    </SettingsPanelRow>
-                  </SettingsPanel>
-                </div>
-
-                <div>
-                  <SectionHeader title={t("settingsPage.agentConfig.howItWorksTitle")} />
-                  <SettingsPanel>
-                    <SettingsPanelRow>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        {t("settingsPage.agentConfig.howItWorksDescription", { agentName })}
-                      </p>
-                    </SettingsPanelRow>
-                  </SettingsPanel>
-                </div>
-
-                <div>
-                  <SectionHeader title={t("settingsPage.agentConfig.examplesTitle")} />
-                  <SettingsPanel>
-                    <SettingsPanelRow>
-                      <div className="space-y-2.5">
-                        {[
-                          {
-                            input: t("settingsPage.agentConfig.examples.formalEmail", {
-                              agentName,
-                            }),
-                            mode: t("settingsPage.agentConfig.instructionMode"),
-                          },
-                          {
-                            input: t("settingsPage.agentConfig.examples.professional", {
-                              agentName,
-                            }),
-                            mode: t("settingsPage.agentConfig.instructionMode"),
-                          },
-                          {
-                            input: t("settingsPage.agentConfig.examples.bulletPoints", {
-                              agentName,
-                            }),
-                            mode: t("settingsPage.agentConfig.instructionMode"),
-                          },
-                          {
-                            input: t("settingsPage.agentConfig.cleanupExample"),
-                            mode: t("settingsPage.agentConfig.cleanupMode"),
-                          },
-                        ].map((example, i) => (
-                          <div key={i} className="flex items-start gap-3">
-                            <span
-                              className={`shrink-0 mt-0.5 text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded ${
-                                example.mode === t("settingsPage.agentConfig.instructionMode")
-                                  ? "bg-primary/10 text-primary dark:bg-primary/15"
-                                  : "bg-muted text-muted-foreground"
-                              }`}
-                            >
-                              {example.mode}
-                            </span>
-                            <p className="text-xs text-muted-foreground leading-relaxed">
-                              "{example.input}"
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </SettingsPanelRow>
-                  </SettingsPanel>
-                </div>
-              </div>
+              {renderAgentConfigContent()}
             </div>
-
-            {/* System Prompt */}
             <div className="border-t border-border/40 pt-6">
-              <SectionHeader
-                title={t("settingsPage.prompts.title")}
-                description={t("settingsPage.prompts.description")}
-              />
-              <PromptStudio />
+              {renderPromptsContent()}
             </div>
           </div>
         );

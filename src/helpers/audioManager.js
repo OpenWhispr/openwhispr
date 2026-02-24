@@ -10,6 +10,13 @@ import {
   getEffectiveReasoningModel,
   isCloudReasoningMode,
 } from "../stores/settingsStore";
+import {
+  getPromptMode,
+  PROMPT_MODES,
+  getCustomUnifiedPrompt,
+  getCustomLegacyPrompts,
+  getSystemPrompt,
+} from "../config/prompts";
 
 const SHORT_CLIP_DURATION_SECONDS = 2.5;
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -1124,10 +1131,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       if (cloudReasoningMode === "openwhispr") {
         const reasonResult = await withSessionRefresh(async () => {
+          const promptOptions = this.getCloudReasoningPromptOptions(
+            processedText,
+            agentName,
+            settings
+          );
           const res = await window.electronAPI.cloudReason(processedText, {
             agentName,
             customDictionary: settings.customDictionary,
-            customPrompt: this.getCustomPrompt(),
+            ...promptOptions,
             language: settings.preferredLanguage || "auto",
             locale: settings.uiLanguage || "en",
             sttProvider: result.sttProvider,
@@ -1181,15 +1193,26 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return getSettings().customDictionary;
   }
 
-  getCustomPrompt() {
-    try {
-      const raw = localStorage.getItem("customUnifiedPrompt");
-      if (!raw) return undefined;
-      const parsed = JSON.parse(raw);
-      return typeof parsed === "string" ? parsed : undefined;
-    } catch {
-      return undefined;
-    }
+  getCloudReasoningPromptOptions(text, agentName, settings) {
+    const promptMode = getPromptMode();
+    const customPrompt =
+      promptMode === PROMPT_MODES.UNIFIED ? getCustomUnifiedPrompt() || undefined : undefined;
+    const customPrompts =
+      promptMode === PROMPT_MODES.AGENT_NORMAL ? getCustomLegacyPrompts() || undefined : undefined;
+    const systemPrompt = getSystemPrompt(
+      agentName || null,
+      settings.customDictionary,
+      settings.preferredLanguage || "auto",
+      text,
+      settings.uiLanguage || "en"
+    );
+
+    return {
+      promptMode,
+      customPrompt,
+      customPrompts,
+      systemPrompt,
+    };
   }
 
   getKeyterms() {
@@ -2180,10 +2203,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       try {
         if (cloudReasoningMode === "openwhispr") {
           const reasonResult = await withSessionRefresh(async () => {
+            const promptOptions = this.getCloudReasoningPromptOptions(
+              finalText,
+              agentName,
+              stSettings
+            );
             const res = await window.electronAPI.cloudReason(finalText, {
               agentName,
               customDictionary: stSettings.customDictionary,
-              customPrompt: this.getCustomPrompt(),
+              ...promptOptions,
               language: stSettings.preferredLanguage || "auto",
               locale: stSettings.uiLanguage || "en",
               sttProvider: "deepgram",

@@ -7,6 +7,12 @@ import logger from "../utils/logger";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/neonAuth";
 import { getSettings, isCloudReasoningMode } from "../stores/settingsStore";
+import {
+  getPromptMode,
+  PROMPT_MODES,
+  getCustomUnifiedPrompt,
+  getCustomLegacyPrompts,
+} from "../config/prompts";
 
 class ReasoningService extends BaseReasoningService {
   private apiKeyCache: SecureCache<string>;
@@ -1036,13 +1042,23 @@ class ReasoningService extends BaseReasoningService {
       const customDictionary = this.getCustomDictionary();
       const language = this.getPreferredLanguage();
       const locale = this.getUiLanguage();
+      const promptMode = getPromptMode();
+      const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
+      const customPrompt =
+        promptMode === PROMPT_MODES.UNIFIED ? getCustomUnifiedPrompt() || undefined : undefined;
+      const customPrompts =
+        promptMode === PROMPT_MODES.AGENT_NORMAL
+          ? getCustomLegacyPrompts() || undefined
+          : undefined;
 
       const result = await withSessionRefresh(async () => {
         const res = await (window as any).electronAPI.cloudReason(text, {
           agentName,
           customDictionary,
-          customPrompt: this.getCustomPrompt(),
-          systemPrompt: config.systemPrompt,
+          customPrompt,
+          customPrompts,
+          promptMode,
+          systemPrompt,
           language,
           locale,
         });
@@ -1071,17 +1087,6 @@ class ReasoningService extends BaseReasoningService {
       throw error;
     } finally {
       this.isProcessing = false;
-    }
-  }
-
-  private getCustomPrompt(): string | undefined {
-    try {
-      const raw = localStorage.getItem("customUnifiedPrompt");
-      if (!raw) return undefined;
-      const parsed = JSON.parse(raw);
-      return typeof parsed === "string" ? parsed : undefined;
-    } catch {
-      return undefined;
     }
   }
 

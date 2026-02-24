@@ -689,6 +689,12 @@ declare global {
           agentName?: string;
           customDictionary?: string[];
           customPrompt?: string;
+          customPrompts?: {
+            agent: string;
+            regular: string;
+          };
+          promptMode?: "unified" | "agent_normal";
+          systemPrompt?: string;
           language?: string;
           locale?: string;
         }
