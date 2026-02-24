@@ -461,7 +461,7 @@ export default function ControlPanel() {
                             className="h-7 text-xs"
                             onClick={() => {
                               setSettingsSection(
-                                gpuAccelAvailable.cuda ? "transcription" : "reasoning"
+                                gpuAccelAvailable.cuda ? "transcription" : "intelligence"
                               );
                               setShowSettings(true);
                             }}
