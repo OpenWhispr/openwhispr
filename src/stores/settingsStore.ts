@@ -180,7 +180,7 @@ function invalidateApiKeyCaches(
   debouncedPersistToEnv();
 }
 
-export const useSettingsStore = create<SettingsState>()((set) => ({
+export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(isBrowser ? localStorage.getItem("uiLanguage") : null),
   useLocalWhisper: readBoolean("useLocalWhisper", false),
   whisperModel: readString("whisperModel", "base"),
@@ -361,6 +361,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
 
   setFloatingIconAutoHide: (enabled: boolean) => {
+    if (get().floatingIconAutoHide === enabled) return;
     if (isBrowser) localStorage.setItem("floatingIconAutoHide", String(enabled));
     set({ floatingIconAutoHide: enabled });
     if (isBrowser) {
