@@ -388,6 +388,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       this.onTranscriptionComplete?.(result);
 
+      if (result?.source === "openwhispr") {
+        window.dispatchEvent(new Event("usage-changed"));
+      }
+
       const roundTripDurationMs = Math.round(performance.now() - pipelineStart);
 
       const timingData = {
@@ -2210,6 +2214,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     // If streaming produced no text, fall back to batch transcription
+    // (batch fallback records usage server-side via /api/transcribe)
+    let usedBatchFallback = false;
     if (!finalText && durationSeconds > 2 && fallbackBlob?.size > 0) {
       logger.info(
         "Streaming produced no text, falling back to batch transcription",
@@ -2222,6 +2228,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         });
         if (batchResult?.text) {
           finalText = batchResult.text;
+          usedBatchFallback = true;
           logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
         }
       } catch (fallbackErr) {
@@ -2236,6 +2243,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         text: finalText,
         source: "deepgram-streaming",
       });
+
+      // Report streaming word usage (skip if batch fallback already recorded it)
+      if (!usedBatchFallback) {
+        window.electronAPI.cloudStreamingUsage?.(finalText, durationSeconds ?? 0).catch((err) => {
+          logger.error("Failed to report streaming usage", { error: err.message }, "streaming");
+        });
+      }
+      window.dispatchEvent(new Event("usage-changed"));
 
       logger.info(
         "Streaming total processing",
