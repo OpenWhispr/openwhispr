@@ -40,28 +40,12 @@ const BINARIES = {
     outputName: "llama-server-win32-x64-cpu.exe",
     libPattern: "*.dll",
   },
-  "win32-x64-vulkan": {
-    platformArch: "win32-x64",
-    assetPattern: /^llama-.*-bin-win-vulkan-x64\.zip$/,
-    binaryPath: "build/bin/llama-server.exe",
-    outputName: "llama-server-win32-x64-vulkan.exe",
-    libPattern: "*.dll",
-    optional: true,
-  },
   "linux-x64-cpu": {
     platformArch: "linux-x64",
     assetPattern: /^llama-.*-bin-ubuntu-x64\.tar\.gz$/,
     binaryPath: "build/bin/llama-server",
     outputName: "llama-server-linux-x64-cpu",
     libPattern: "*.so*",
-  },
-  "linux-x64-vulkan": {
-    platformArch: "linux-x64",
-    assetPattern: /^llama-.*-bin-linux-vulkan-x64\.tar\.gz$/,
-    binaryPath: "build/bin/llama-server",
-    outputName: "llama-server-linux-x64-vulkan",
-    libPattern: "*.so*",
-    optional: true,
   },
 };
 

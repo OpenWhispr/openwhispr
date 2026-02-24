@@ -1311,6 +1311,90 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("detect-vulkan-gpu", async () => {
+      try {
+        const { detectVulkanGpu } = require("../utils/vulkanDetection");
+        return await detectVulkanGpu();
+      } catch (error) {
+        return { available: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("get-llama-vulkan-status", async () => {
+      try {
+        if (!this._llamaVulkanManager) {
+          const LlamaVulkanManager = require("./llamaVulkanManager");
+          this._llamaVulkanManager = new LlamaVulkanManager();
+        }
+        return this._llamaVulkanManager.getStatus();
+      } catch (error) {
+        return { supported: false, downloaded: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("download-llama-vulkan-binary", async (event) => {
+      try {
+        if (!this._llamaVulkanManager) {
+          const LlamaVulkanManager = require("./llamaVulkanManager");
+          this._llamaVulkanManager = new LlamaVulkanManager();
+        }
+
+        const result = await this._llamaVulkanManager.download((downloaded, total) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send("llama-vulkan-download-progress", {
+              downloaded,
+              total,
+              percentage: total > 0 ? Math.round((downloaded / total) * 100) : 0,
+            });
+          }
+        });
+
+        if (result.success) {
+          process.env.LLAMA_VULKAN_ENABLED = "true";
+          delete process.env.LLAMA_GPU_BACKEND;
+          const modelManager = require("./modelManagerBridge").default;
+          modelManager.serverManager.cachedServerBinaryPaths = null;
+          this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+        }
+
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("cancel-llama-vulkan-download", async () => {
+      if (this._llamaVulkanManager) {
+        return { success: this._llamaVulkanManager.cancelDownload() };
+      }
+      return { success: false };
+    });
+
+    ipcMain.handle("delete-llama-vulkan-binary", async () => {
+      try {
+        if (!this._llamaVulkanManager) {
+          const LlamaVulkanManager = require("./llamaVulkanManager");
+          this._llamaVulkanManager = new LlamaVulkanManager();
+        }
+
+        const modelManager = require("./modelManagerBridge").default;
+        if (modelManager.serverManager.activeBackend === "vulkan") {
+          await modelManager.stopServer();
+        }
+
+        const result = await this._llamaVulkanManager.deleteBinary();
+
+        delete process.env.LLAMA_VULKAN_ENABLED;
+        delete process.env.LLAMA_GPU_BACKEND;
+        modelManager.serverManager.cachedServerBinaryPaths = null;
+        this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("get-log-level", async () => {
       return debugLogger.getLevel();
     });

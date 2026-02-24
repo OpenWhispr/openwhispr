@@ -274,6 +274,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   llamaServerStatus: () => ipcRenderer.invoke("llama-server-status"),
   llamaGpuReset: () => ipcRenderer.invoke("llama-gpu-reset"),
 
+  // Vulkan GPU acceleration
+  detectVulkanGpu: () => ipcRenderer.invoke("detect-vulkan-gpu"),
+  getLlamaVulkanStatus: () => ipcRenderer.invoke("get-llama-vulkan-status"),
+  downloadLlamaVulkanBinary: () => ipcRenderer.invoke("download-llama-vulkan-binary"),
+  cancelLlamaVulkanDownload: () => ipcRenderer.invoke("cancel-llama-vulkan-download"),
+  deleteLlamaVulkanBinary: () => ipcRenderer.invoke("delete-llama-vulkan-binary"),
+  onLlamaVulkanDownloadProgress: registerListener(
+    "llama-vulkan-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
+
   getLogLevel: () => ipcRenderer.invoke("get-log-level"),
   log: (entry) => ipcRenderer.invoke("app-log", entry),
 

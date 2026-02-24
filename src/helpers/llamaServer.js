@@ -6,6 +6,7 @@ const http = require("http");
 const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
 const { getSafeTempDir } = require("./safeTempDir");
+const { app } = require("electron");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8220;
@@ -64,7 +65,14 @@ class LlamaServerManager {
         resolveBinary(`llama-server-${platformArch}`) || resolveBinary(`llama-server${ext}`);
       paths = defaultBin ? { default: defaultBin } : {};
     } else {
-      const vulkanBin = resolveBinary(`llama-server-${platformArch}-vulkan${ext}`);
+      const userBinDir = path.join(app.getPath("userData"), "bin");
+      const vulkanName = `llama-server-vulkan${ext}`;
+      let vulkanBin = null;
+      try {
+        const vulkanPath = path.join(userBinDir, vulkanName);
+        if (fs.existsSync(vulkanPath)) vulkanBin = vulkanPath;
+      } catch {}
+
       const cpuBin =
         resolveBinary(`llama-server-${platformArch}-cpu${ext}`) ||
         resolveBinary(`llama-server-${platformArch}${ext}`) ||
@@ -208,6 +216,8 @@ class LlamaServerManager {
       env.DYLD_LIBRARY_PATH = binDir + (env.DYLD_LIBRARY_PATH ? `:${env.DYLD_LIBRARY_PATH}` : "");
     } else if (process.platform === "linux") {
       env.LD_LIBRARY_PATH = binDir + (env.LD_LIBRARY_PATH ? `:${env.LD_LIBRARY_PATH}` : "");
+    } else if (process.platform === "win32") {
+      env.PATH = binDir + (env.PATH ? `;${env.PATH}` : "");
     }
 
     return env;

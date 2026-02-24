@@ -217,6 +217,26 @@ export interface LlamaServerStatus {
   gpuAccelerated: boolean;
 }
 
+export interface VulkanGpuResult {
+  available: boolean;
+  deviceName?: string;
+  reason?: string;
+  error?: string;
+}
+
+export interface LlamaVulkanStatus {
+  supported: boolean;
+  downloaded: boolean;
+  downloading?: boolean;
+  error?: string;
+}
+
+export interface LlamaVulkanDownloadProgress {
+  downloaded: number;
+  total: number;
+  percentage: number;
+}
+
 export interface ReferralItem {
   id: string;
   email: string;
@@ -475,6 +495,22 @@ declare global {
       llamaServerStop: () => Promise<{ success: boolean; error?: string }>;
       llamaServerStatus: () => Promise<LlamaServerStatus>;
       llamaGpuReset: () => Promise<{ success: boolean; error?: string }>;
+      detectVulkanGpu?: () => Promise<VulkanGpuResult>;
+      getLlamaVulkanStatus?: () => Promise<LlamaVulkanStatus>;
+      downloadLlamaVulkanBinary?: () => Promise<{
+        success: boolean;
+        cancelled?: boolean;
+        error?: string;
+      }>;
+      cancelLlamaVulkanDownload?: () => Promise<{ success: boolean }>;
+      deleteLlamaVulkanBinary?: () => Promise<{
+        success: boolean;
+        deletedCount?: number;
+        error?: string;
+      }>;
+      onLlamaVulkanDownloadProgress?: (
+        callback: (data: LlamaVulkanDownloadProgress) => void
+      ) => () => void;
 
       // Window control operations
       windowMinimize: () => Promise<void>;
