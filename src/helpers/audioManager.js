@@ -2255,13 +2255,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         source: "deepgram-streaming",
       });
 
-      // Report streaming word usage (skip if batch fallback already recorded it)
       if (!usedBatchFallback) {
-        window.electronAPI.cloudStreamingUsage?.(finalText, durationSeconds ?? 0).catch((err) => {
-          logger.error("Failed to report streaming usage", { error: err.message }, "streaming");
-        });
+        (async () => {
+          try {
+            await withSessionRefresh(async () => {
+              const res = await window.electronAPI.cloudStreamingUsage(
+                finalText,
+                durationSeconds ?? 0
+              );
+              if (!res.success) {
+                const err = new Error(res.error || "Streaming usage recording failed");
+                err.code = res.code;
+                throw err;
+              }
+            });
+          } catch (err) {
+            logger.error("Failed to report streaming usage", { error: err.message }, "streaming");
+          }
+          window.dispatchEvent(new Event("usage-changed"));
+        })();
+      } else {
+        window.dispatchEvent(new Event("usage-changed"));
       }
-      window.dispatchEvent(new Event("usage-changed"));
 
       logger.info(
         "Streaming total processing",
