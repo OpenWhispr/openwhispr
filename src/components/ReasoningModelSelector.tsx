@@ -7,6 +7,7 @@ import type {
   LlamaVulkanDownloadProgress,
 } from "../types/electron";
 import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
 import { Cloud, Lock } from "lucide-react";
 import ApiKeyInput from "./ui/ApiKeyInput";
@@ -156,15 +157,21 @@ function GpuStatusBadge() {
   }
 
   if (downloading && progress) {
+    const roundedPercent = Math.round(progress.percentage);
     return (
       <div className="flex items-center gap-2 mt-2 px-1">
-        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+        <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
           <div
-            className="h-full bg-purple-500 transition-all"
-            style={{ width: `${progress.percentage}%` }}
+            className="h-full bg-primary transition-all"
+            style={{ width: `${Math.min(progress.percentage, 100)}%` }}
           />
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums">{progress.percentage}%</span>
+        <Badge
+          variant="default"
+          className="h-6 min-w-[3.25rem] shrink-0 justify-center px-2 text-[11px] font-semibold tracking-normal tabular-nums"
+        >
+          {roundedPercent}%
+        </Badge>
         <button
           type="button"
           onClick={() => window.electronAPI?.cancelLlamaVulkanDownload?.()}

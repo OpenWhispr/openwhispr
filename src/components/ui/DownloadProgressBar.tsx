@@ -1,5 +1,6 @@
 import { Loader2 } from "lucide-react";
 import { formatETA, type DownloadProgress } from "../../hooks/useModelDownload";
+import { Badge } from "./badge";
 interface DownloadProgressBarProps {
   modelName: string;
   progress: DownloadProgress;
@@ -26,18 +27,18 @@ export function DownloadProgressBar({
   return (
     <div className="px-2.5 py-2 border-b border-white/5 dark:border-border-subtle">
       <div className="flex items-center gap-2 mb-2">
-        <div className="relative flex items-center justify-center w-6 h-6">
-          <div
-            className={`absolute inset-0 rounded-md bg-primary/15 ${isInstalling || indeterminate ? "animate-pulse" : ""}`}
-          />
+        <Badge
+          variant="default"
+          className={`h-6 min-w-[3.25rem] justify-center px-2 text-[11px] font-semibold tracking-normal tabular-nums ${
+            isInstalling || indeterminate ? "animate-pulse" : ""
+          }`}
+        >
           {isInstalling ? (
-            <Loader2 className="relative w-3.5 h-3.5 text-primary animate-spin" />
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
-            <span className="relative text-xs font-bold text-primary tabular-nums">
-              {indeterminate ? "···" : `${pct}%`}
-            </span>
+            <span>{indeterminate ? "···" : `${pct}%`}</span>
           )}
-        </div>
+        </Badge>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-foreground truncate">
             {isInstalling ? `Installing ${modelName}` : `Downloading ${modelName}`}
