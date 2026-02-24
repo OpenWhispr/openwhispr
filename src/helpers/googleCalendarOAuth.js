@@ -5,8 +5,7 @@ const { shell } = require("electron");
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-const GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
-const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+const CALENDAR_SCOPE = "openid email https://www.googleapis.com/auth/calendar.readonly";
 const OAUTH_TIMEOUT_MS = 120000;
 
 class GoogleCalendarOAuth {
@@ -66,13 +65,29 @@ class GoogleCalendarOAuth {
             return;
           }
 
-          const userInfo = await this._httpsGet(GOOGLE_USERINFO_URL, {
-            Authorization: `Bearer ${tokenData.access_token}`,
-          });
+          let email = null;
+          if (tokenData.id_token) {
+            try {
+              const payload = JSON.parse(
+                Buffer.from(tokenData.id_token.split(".")[1], "base64url").toString()
+              );
+              email = payload.email;
+            } catch {}
+          }
+
+          if (!email) {
+            res.writeHead(200, { "Content-Type": "text/html" });
+            res.end(
+              "<html><body><h3>Authentication failed — could not retrieve email. You can close this tab.</h3></body></html>"
+            );
+            cleanup();
+            reject(new Error("Could not extract email from Google OAuth response"));
+            return;
+          }
 
           const expiresAt = Date.now() + tokenData.expires_in * 1000;
           this.databaseManager.saveGoogleTokens({
-            google_email: userInfo.email,
+            google_email: email,
             access_token: tokenData.access_token,
             refresh_token: tokenData.refresh_token,
             expires_at: expiresAt,
@@ -84,7 +99,7 @@ class GoogleCalendarOAuth {
             "<html><body><h3>Authentication successful! You can close this tab.</h3></body></html>"
           );
           cleanup();
-          resolve({ success: true, email: userInfo.email });
+          resolve({ success: true, email });
         } catch (err) {
           res.writeHead(500, { "Content-Type": "text/html" });
           res.end("<html><body><h3>An error occurred. You can close this tab.</h3></body></html>");
@@ -209,34 +224,6 @@ class GoogleCalendarOAuth {
       );
       req.on("error", reject);
       req.write(body);
-      req.end();
-    });
-  }
-
-  _httpsGet(urlString, headers = {}) {
-    const url = new URL(urlString);
-    return new Promise((resolve, reject) => {
-      const req = https.request(
-        {
-          hostname: url.hostname,
-          port: 443,
-          path: url.pathname + url.search,
-          method: "GET",
-          headers,
-        },
-        (res) => {
-          let data = "";
-          res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => {
-            try {
-              resolve(JSON.parse(data));
-            } catch (e) {
-              reject(new Error(`Invalid JSON response: ${data.slice(0, 200)}`));
-            }
-          });
-        }
-      );
-      req.on("error", reject);
       req.end();
     });
   }
