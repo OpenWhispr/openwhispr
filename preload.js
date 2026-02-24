@@ -26,9 +26,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
-  onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
-  onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
-  onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
+  onToggleDictation: registerListener(
+    "toggle-dictation",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onStartDictation: registerListener(
+    "start-dictation",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onStopDictation: registerListener(
+    "stop-dictation",
+    (callback) => (_event, data) => callback(data)
+  ),
 
   // Database functions
   saveTranscription: (text) => ipcRenderer.invoke("db-save-transcription", text),
@@ -375,6 +384,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Notify main process of activation mode changes (for Windows Push-to-Talk)
   notifyActivationModeChanged: (mode) => ipcRenderer.send("activation-mode-changed", mode),
   notifyHotkeyChanged: (hotkey) => ipcRenderer.send("hotkey-changed", hotkey),
+
+  // Multi-hotkey bindings
+  updateHotkeyBindings: (bindings) => ipcRenderer.invoke("update-hotkey-bindings", bindings),
+  getHotkeyBindings: () => ipcRenderer.invoke("get-hotkey-bindings"),
+  notifyHotkeyBindingsChanged: (bindings) =>
+    ipcRenderer.send("hotkey-bindings-changed", bindings),
 
   // Floating icon auto-hide
   notifyFloatingIconAutoHideChanged: (enabled) =>

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef } from "react";
 import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import type { LocalTranscriptionProvider } from "../types/electron";
+import type { HotkeyBinding } from "../types/hotkeyBindings";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -32,6 +33,7 @@ export interface ReasoningSettings {
 export interface HotkeySettings {
   dictationKey: string;
   activationMode: "tap" | "push";
+  hotkeyBindings: HotkeyBinding[];
 }
 
 export interface MicrophoneSettings {
@@ -175,6 +177,8 @@ function useSettingsInternal() {
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
+    hotkeyBindings: store.hotkeyBindings,
+    setHotkeyBindings: store.setHotkeyBindings,
     audioCuesEnabled: store.audioCuesEnabled,
     setAudioCuesEnabled: store.setAudioCuesEnabled,
     floatingIconAutoHide: store.floatingIconAutoHide,

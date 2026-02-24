@@ -131,7 +131,9 @@
     "private": "Приватный",
     "tap": "Нажатие",
     "close": "Закрыть",
-    "dismiss": "Скрыть"
+    "dismiss": "Скрыть",
+    "dictation": "Диктовка",
+    "agent": "Агент"
   },
   "onboarding": {
     "steps": {
@@ -651,6 +653,12 @@
     "recording": "Запись",
     "tryShortcut": "Попробуйте Ctrl+Shift+K",
     "tryShortcutMac": "Попробуйте ⌘⇧K"
+  },
+  "hotkeyBindings": {
+    "sectionDescription": "Настройте горячие клавиши для голосовой диктовки и команд агента",
+    "emptyState": "Горячие клавиши не настроены. Добавьте горячую клавишу, чтобы начать диктовать.",
+    "addHotkey": "Добавить горячую клавишу",
+    "removeBinding": "Удалить горячую клавишу"
   },
   "languageSelector": {
     "noLanguagesFound": "Языки не найдены",

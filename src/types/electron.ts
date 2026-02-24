@@ -221,9 +221,15 @@ declare global {
       pasteText: (text: string, options?: { fromStreaming?: boolean }) => Promise<void>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
-      onToggleDictation: (callback: () => void) => () => void;
-      onStartDictation?: (callback: () => void) => () => void;
-      onStopDictation?: (callback: () => void) => () => void;
+      onToggleDictation: (
+        callback: (data?: { language?: string; bindingId?: string; dictationMode?: string }) => void
+      ) => () => void;
+      onStartDictation?: (
+        callback: (data?: { language?: string; bindingId?: string; dictationMode?: string }) => void
+      ) => () => void;
+      onStopDictation?: (
+        callback: (data?: { language?: string; bindingId?: string; dictationMode?: string }) => void
+      ) => () => void;
 
       // Database operations
       saveTranscription: (text: string) => Promise<{ id: number; success: boolean }>;
@@ -571,6 +577,39 @@ declare global {
       openSoundInputSettings?: () => Promise<{ success: boolean; error?: string }>;
       openAccessibilitySettings?: () => Promise<{ success: boolean; error?: string }>;
       openWhisperModelsFolder?: () => Promise<{ success: boolean; error?: string }>;
+
+      // Multi-hotkey bindings
+      updateHotkeyBindings?: (
+        bindings: Array<{
+          id: string;
+          hotkey: string;
+          language: string;
+          activationMode: "tap" | "push";
+          dictationMode: "transcription" | "agent";
+        }>
+      ) => Promise<{
+        success: boolean;
+        results?: Array<{ success: boolean; hotkey: string }>;
+        error?: string;
+      }>;
+      getHotkeyBindings?: () => Promise<
+        Array<{
+          id: string;
+          hotkey: string;
+          language: string;
+          activationMode: "tap" | "push";
+          dictationMode: "transcription" | "agent";
+        }>
+      >;
+      notifyHotkeyBindingsChanged?: (
+        bindings: Array<{
+          id: string;
+          hotkey: string;
+          language: string;
+          activationMode: "tap" | "push";
+          dictationMode: "transcription" | "agent";
+        }>
+      ) => void;
 
       // Windows Push-to-Talk notifications
       notifyActivationModeChanged?: (mode: "tap" | "push") => void;

@@ -46,6 +46,15 @@ function normalizeToAccelerator(hotkey) {
   return accelerator;
 }
 
+// Returns true if the hotkey is handled by native listeners rather than globalShortcut
+function usesNativeListener(hotkey) {
+  if (!hotkey) return true;
+  if (hotkey === "GLOBE") return true;
+  if (isRightSideModifier(hotkey)) return true;
+  if (isModifierOnlyHotkey(hotkey) && process.platform === "win32") return true;
+  return false;
+}
+
 // Suggested alternative hotkeys when registration fails
 const SUGGESTED_HOTKEYS = {
   single: ["F8", "F9", "F10", "Pause", "ScrollLock"],
@@ -60,6 +69,8 @@ class HotkeyManager {
     this.gnomeManager = null;
     this.useGnome = false;
     this.hotkeyCallback = null;
+
+    this.bindings = new Map();
   }
 
   setListeningMode(enabled) {
@@ -69,6 +80,98 @@ class HotkeyManager {
 
   isInListeningMode() {
     return this.isListeningMode;
+  }
+
+  registerBinding(binding, callback) {
+    if (!binding || !binding.hotkey || !callback) {
+      throw new Error("binding with hotkey and callback are required");
+    }
+
+    const hotkeyStr = binding.hotkey;
+    debugLogger.log(
+      `[HotkeyManager] Registering binding "${binding.id}" for hotkey "${hotkeyStr}"`
+    );
+
+    // Unregister any existing binding for this hotkey
+    if (this.bindings.has(hotkeyStr)) {
+      this._unregisterGlobalShortcut(hotkeyStr);
+    }
+
+    this.bindings.set(hotkeyStr, { binding, callback });
+
+    // Register the globalShortcut if it's not native-listener-only
+    if (!usesNativeListener(hotkeyStr)) {
+      const accelerator = normalizeToAccelerator(hotkeyStr);
+      if (process.platform === "linux") {
+        try {
+          globalShortcut.unregister(accelerator);
+        } catch {}
+      }
+      const success = globalShortcut.register(accelerator, callback);
+      if (!success) {
+        debugLogger.warn(`[HotkeyManager] Failed to register globalShortcut for "${hotkeyStr}"`);
+        return { success: false, hotkey: hotkeyStr };
+      }
+    }
+
+    debugLogger.log(`[HotkeyManager] Binding "${binding.id}" registered for "${hotkeyStr}"`);
+    return { success: true, hotkey: hotkeyStr };
+  }
+
+  unregisterBinding(hotkeyStr) {
+    if (!this.bindings.has(hotkeyStr)) return;
+
+    debugLogger.log(`[HotkeyManager] Unregistering binding for hotkey "${hotkeyStr}"`);
+    this._unregisterGlobalShortcut(hotkeyStr);
+    this.bindings.delete(hotkeyStr);
+  }
+
+  _unregisterGlobalShortcut(hotkeyStr) {
+    if (usesNativeListener(hotkeyStr)) return;
+    const accelerator = normalizeToAccelerator(hotkeyStr);
+    try {
+      globalShortcut.unregister(accelerator);
+    } catch (err) {
+      debugLogger.warn(`[HotkeyManager] Error unregistering "${accelerator}": ${err.message}`);
+    }
+  }
+
+  updateAllBindings(newBindings, callbackFactory) {
+    if (!callbackFactory) {
+      throw new Error("callbackFactory is required");
+    }
+
+    debugLogger.log(`[HotkeyManager] Updating all bindings: ${newBindings.length} binding(s)`);
+
+    // Unregister all existing bindings
+    for (const hotkeyStr of this.bindings.keys()) {
+      this._unregisterGlobalShortcut(hotkeyStr);
+    }
+    this.bindings.clear();
+
+    // Register each new binding
+    const results = [];
+    for (const binding of newBindings) {
+      const callback = callbackFactory(binding);
+      const result = this.registerBinding(binding, callback);
+      results.push(result);
+    }
+
+    // Update currentHotkey to first binding's hotkey for backwards compatibility
+    if (newBindings.length > 0) {
+      this.currentHotkey = newBindings[0].hotkey;
+    }
+
+    return results;
+  }
+
+  getBindingForHotkey(hotkeyStr) {
+    const entry = this.bindings.get(hotkeyStr);
+    return entry ? entry.binding : null;
+  }
+
+  getAllRegisteredHotkeys() {
+    return Array.from(this.bindings.keys());
   }
 
   getFailureReason(hotkey) {
@@ -530,6 +633,12 @@ class HotkeyManager {
   }
 
   unregisterAll() {
+    // Unregister all multi-bindings
+    for (const hotkeyStr of this.bindings.keys()) {
+      this._unregisterGlobalShortcut(hotkeyStr);
+    }
+    this.bindings.clear();
+
     if (this.gnomeManager) {
       this.gnomeManager.unregisterKeybinding().catch((err) => {
         debugLogger.warn("[HotkeyManager] Error unregistering GNOME keybinding:", err.message);
@@ -553,3 +662,4 @@ class HotkeyManager {
 module.exports = HotkeyManager;
 module.exports.isModifierOnlyHotkey = isModifierOnlyHotkey;
 module.exports.isRightSideModifier = isRightSideModifier;
+module.exports.usesNativeListener = usesNativeListener;

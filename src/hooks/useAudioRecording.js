@@ -140,18 +140,28 @@ export const useAudioRecording = (toast, options = {}) => {
 
     audioManagerRef.current.warmupStreamingConnection();
 
-    const handleToggle = async () => {
+    const applyHotkeyOverrides = (data) => {
+      if (!data || !audioManagerRef.current) return;
+      if (data.language) {
+        audioManagerRef.current.setLanguageOverride(data.language);
+      }
+      audioManagerRef.current.setDictationMode(data.dictationMode || "transcription");
+    };
+
+    const handleToggle = async (data) => {
       if (!audioManagerRef.current) return;
       const currentState = audioManagerRef.current.getState();
 
       if (!currentState.isRecording && !currentState.isProcessing) {
+        applyHotkeyOverrides(data);
         await performStartRecording();
       } else if (currentState.isRecording) {
         await performStopRecording();
       }
     };
 
-    const handleStart = async () => {
+    const handleStart = async (data) => {
+      applyHotkeyOverrides(data);
       await performStartRecording();
     };
 
@@ -159,13 +169,13 @@ export const useAudioRecording = (toast, options = {}) => {
       await performStopRecording();
     };
 
-    const disposeToggle = window.electronAPI.onToggleDictation(() => {
-      handleToggle();
+    const disposeToggle = window.electronAPI.onToggleDictation((data) => {
+      handleToggle(data);
       onToggle?.();
     });
 
-    const disposeStart = window.electronAPI.onStartDictation?.(() => {
-      handleStart();
+    const disposeStart = window.electronAPI.onStartDictation?.((data) => {
+      handleStart(data);
       onToggle?.();
     });
 

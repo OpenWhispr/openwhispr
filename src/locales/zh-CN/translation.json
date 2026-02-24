@@ -131,7 +131,9 @@
     "private": "隐私",
     "tap": "点按",
     "close": "关闭",
-    "dismiss": "忽略"
+    "dismiss": "忽略",
+    "dictation": "听写",
+    "agent": "智能体"
   },
   "onboarding": {
     "steps": {
@@ -651,6 +653,12 @@
     "recording": "录制中",
     "tryShortcut": "试试 Ctrl+Shift+K",
     "tryShortcutMac": "试试 ⌘⇧K"
+  },
+  "hotkeyBindings": {
+    "sectionDescription": "配置语音听写和智能体命令的快捷键",
+    "emptyState": "未配置快捷键。添加快捷键以开始听写。",
+    "addHotkey": "添加快捷键",
+    "removeBinding": "删除快捷键"
   },
   "languageSelector": {
     "noLanguagesFound": "未找到匹配的语言",

@@ -131,7 +131,9 @@
     "private": "Privato",
     "tap": "Tocca",
     "close": "Chiudi",
-    "dismiss": "Ignora"
+    "dismiss": "Ignora",
+    "dictation": "Dettatura",
+    "agent": "Agente"
   },
   "onboarding": {
     "steps": {
@@ -651,6 +653,12 @@
     "recording": "Registrazione",
     "tryShortcut": "Prova Ctrl+Shift+K",
     "tryShortcutMac": "Prova ⌘⇧K"
+  },
+  "hotkeyBindings": {
+    "sectionDescription": "Configura le scorciatoie da tastiera per la dettatura vocale e i comandi dell'agente",
+    "emptyState": "Nessuna scorciatoia configurata. Aggiungi una scorciatoia per iniziare a dettare.",
+    "addHotkey": "Aggiungi scorciatoia",
+    "removeBinding": "Rimuovi scorciatoia"
   },
   "languageSelector": {
     "noLanguagesFound": "Nessuna lingua trovata",

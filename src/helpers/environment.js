@@ -19,6 +19,7 @@ const PERSISTED_KEYS = [
   "LOCAL_REASONING_MODEL",
   "DICTATION_KEY",
   "ACTIVATION_MODE",
+  "HOTKEY_BINDINGS",
   "FLOATING_ICON_AUTO_HIDE",
   "UI_LANGUAGE",
 ];
@@ -136,6 +137,38 @@ class EnvironmentManager {
   saveActivationMode(mode) {
     const validMode = mode === "push" ? "push" : "tap";
     const result = this._saveKey("ACTIVATION_MODE", validMode);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getHotkeyBindings() {
+    const raw = this._getKey("HOTKEY_BINDINGS");
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch {}
+    }
+
+    // Migration: if DICTATION_KEY exists but HOTKEY_BINDINGS doesn't, synthesize one binding
+    const dictationKey = this._getKey("DICTATION_KEY");
+    if (dictationKey) {
+      const activationMode = this.getActivationMode();
+      return [
+        {
+          id: "default",
+          hotkey: dictationKey,
+          language: "auto",
+          activationMode,
+          dictationMode: "transcription",
+        },
+      ];
+    }
+
+    return [];
+  }
+
+  saveHotkeyBindings(bindings) {
+    const result = this._saveKey("HOTKEY_BINDINGS", JSON.stringify(bindings));
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

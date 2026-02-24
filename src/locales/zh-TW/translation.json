@@ -131,7 +131,9 @@
     "private": "私密",
     "tap": "點按",
     "close": "關閉",
-    "dismiss": "忽略"
+    "dismiss": "忽略",
+    "dictation": "聽寫",
+    "agent": "智慧助手"
   },
   "onboarding": {
     "steps": {
@@ -651,6 +653,12 @@
     "recording": "記錄中",
     "tryShortcut": "試試 Ctrl+Shift+K",
     "tryShortcutMac": "試試 ⌘⇧K"
+  },
+  "hotkeyBindings": {
+    "sectionDescription": "設定語音聽寫和智慧助手指令的快捷鍵",
+    "emptyState": "尚未設定快捷鍵。新增快捷鍵以開始聽寫。",
+    "addHotkey": "新增快捷鍵",
+    "removeBinding": "移除快捷鍵"
   },
   "languageSelector": {
     "noLanguagesFound": "找不到語言",

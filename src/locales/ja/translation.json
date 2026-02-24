@@ -131,7 +131,9 @@
     "private": "プライベート",
     "tap": "タップ",
     "close": "閉じる",
-    "dismiss": "閉じる"
+    "dismiss": "閉じる",
+    "dictation": "ディクテーション",
+    "agent": "エージェント"
   },
   "onboarding": {
     "steps": {
@@ -651,6 +653,12 @@
     "recording": "記録中",
     "tryShortcut": "Ctrl+Shift+K をお試しください",
     "tryShortcutMac": "⌘⇧K をお試しください"
+  },
+  "hotkeyBindings": {
+    "sectionDescription": "音声ディクテーションとエージェントコマンドのホットキーを設定します",
+    "emptyState": "ホットキーが設定されていません。ディクテーションを開始するにはホットキーを追加してください。",
+    "addHotkey": "ホットキーを追加",
+    "removeBinding": "ホットキーを削除"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",

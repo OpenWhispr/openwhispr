@@ -527,10 +527,25 @@ async function startApp() {
     globeKeyManager.on("globe-down", async () => {
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
       const mainWindowLive = isLiveWindow(windowManager.mainWindow);
+
+      // Look up binding for GLOBE (multi-binding) or fall back to legacy check
+      const globeBinding = hotkeyManager.getBindingForHotkey("GLOBE");
+      const activationMode = globeBinding
+        ? globeBinding.activationMode
+        : windowManager.getActivationMode();
+      const payload = globeBinding
+        ? {
+            language: globeBinding.language,
+            bindingId: globeBinding.id,
+            dictationMode: globeBinding.dictationMode,
+          }
+        : undefined;
+
       debugLogger?.debug("[Globe] globe-down received", {
         currentHotkey,
         mainWindowLive,
-        activationMode: mainWindowLive ? windowManager.getActivationMode() : "n/a",
+        activationMode,
+        hasBinding: !!globeBinding,
       });
 
       // Forward to control panel for hotkey capture
@@ -538,10 +553,10 @@ async function startApp() {
         windowManager.controlPanelWindow.webContents.send("globe-key-pressed");
       }
 
-      // Handle dictation if Globe is the current hotkey
-      if (currentHotkey === "GLOBE") {
+      // Handle dictation if Globe is the current hotkey or has a binding
+      const isGlobeActive = globeBinding || currentHotkey === "GLOBE";
+      if (isGlobeActive) {
         if (mainWindowLive) {
-          const activationMode = windowManager.getActivationMode();
           if (activationMode === "push") {
             const now = Date.now();
             if (now - globeLastStopTime < POST_STOP_COOLDOWN_MS) {
@@ -556,12 +571,12 @@ async function startApp() {
               if (globeKeyDownTime === pressTime && !globeKeyIsRecording) {
                 globeKeyIsRecording = true;
                 debugLogger?.debug("[Globe] Starting dictation (push hold)");
-                windowManager.sendStartDictation();
+                windowManager.sendStartDictation(payload);
               }
             }, MIN_HOLD_DURATION_MS);
           } else {
             windowManager.showDictationPanel();
-            windowManager.mainWindow.webContents.send("toggle-dictation");
+            windowManager.mainWindow.webContents.send("toggle-dictation", payload);
           }
         } else {
           debugLogger?.debug("[Globe] Ignored — mainWindow not live");
@@ -579,16 +594,31 @@ async function startApp() {
         windowManager.controlPanelWindow.webContents.send("globe-key-released");
       }
 
-      // Handle push-to-talk release if Globe is the current hotkey
-      if (hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey() === "GLOBE") {
-        const activationMode = windowManager.getActivationMode();
+      // Handle push-to-talk release if Globe is the current hotkey or has a binding
+      const globeBinding = hotkeyManager.getBindingForHotkey("GLOBE");
+      const isGlobeActive =
+        globeBinding ||
+        (hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey() === "GLOBE");
+
+      if (isGlobeActive) {
+        const activationMode = globeBinding
+          ? globeBinding.activationMode
+          : windowManager.getActivationMode();
+        const payload = globeBinding
+          ? {
+              language: globeBinding.language,
+              bindingId: globeBinding.id,
+              dictationMode: globeBinding.dictationMode,
+            }
+          : undefined;
+
         if (activationMode === "push") {
           globeKeyDownTime = 0;
           globeLastStopTime = Date.now();
           if (globeKeyIsRecording) {
             globeKeyIsRecording = false;
             debugLogger?.debug("[Globe] Stopping dictation (push release)");
-            windowManager.sendStopDictation();
+            windowManager.sendStopDictation(payload);
           }
         }
       }
@@ -609,11 +639,24 @@ async function startApp() {
     let rightModLastStopTime = 0;
 
     globeKeyManager.on("right-modifier-down", async (modifier) => {
+      // Check multi-binding first, fall back to legacy single-hotkey
+      const binding = hotkeyManager.getBindingForHotkey(modifier);
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
-      if (currentHotkey !== modifier) return;
+
+      if (!binding && currentHotkey !== modifier) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
 
-      const activationMode = windowManager.getActivationMode();
+      const activationMode = binding
+        ? binding.activationMode
+        : windowManager.getActivationMode();
+      const payload = binding
+        ? {
+            language: binding.language,
+            bindingId: binding.id,
+            dictationMode: binding.dictationMode,
+          }
+        : undefined;
+
       if (activationMode === "push") {
         const now = Date.now();
         if (now - rightModLastStopTime < POST_STOP_COOLDOWN_MS) return;
@@ -624,28 +667,40 @@ async function startApp() {
         setTimeout(() => {
           if (rightModDownTime === pressTime && !rightModIsRecording) {
             rightModIsRecording = true;
-            windowManager.sendStartDictation();
+            windowManager.sendStartDictation(payload);
           }
         }, MIN_HOLD_DURATION_MS);
       } else {
         windowManager.showDictationPanel();
-        windowManager.mainWindow.webContents.send("toggle-dictation");
+        windowManager.mainWindow.webContents.send("toggle-dictation", payload);
       }
     });
 
     globeKeyManager.on("right-modifier-up", async (modifier) => {
+      const binding = hotkeyManager.getBindingForHotkey(modifier);
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
+      const isActive = binding || currentHotkey === modifier;
 
-      if (currentHotkey === modifier) {
+      if (isActive) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
 
-        const activationMode = windowManager.getActivationMode();
+        const activationMode = binding
+          ? binding.activationMode
+          : windowManager.getActivationMode();
+        const payload = binding
+          ? {
+              language: binding.language,
+              bindingId: binding.id,
+              dictationMode: binding.dictationMode,
+            }
+          : undefined;
+
         if (activationMode === "push") {
           rightModDownTime = 0;
           rightModLastStopTime = Date.now();
           if (rightModIsRecording) {
             rightModIsRecording = false;
-            windowManager.sendStopDictation();
+            windowManager.sendStopDictation(payload);
           } else {
             windowManager.hideDictationPanel();
           }
@@ -694,15 +749,28 @@ async function startApp() {
       return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey);
     };
 
-    windowsKeyManager.on("key-down", (_key) => {
+    windowsKeyManager.on("key-down", (key) => {
       if (!isLiveWindow(windowManager.mainWindow)) return;
 
-      const activationMode = windowManager.getActivationMode();
+      // Look up binding for the pressed key to get language/dictationMode
+      const currentHotkey = hotkeyManager.getCurrentHotkey();
+      const binding = hotkeyManager.getBindingForHotkey(currentHotkey);
+      const activationMode = binding
+        ? binding.activationMode
+        : windowManager.getActivationMode();
+      const payload = binding
+        ? {
+            language: binding.language,
+            bindingId: binding.id,
+            dictationMode: binding.dictationMode,
+          }
+        : undefined;
+
       if (activationMode === "push") {
-        windowManager.startWindowsPushToTalk();
+        windowManager.startWindowsPushToTalk(payload);
       } else if (activationMode === "tap") {
         windowManager.showDictationPanel();
-        windowManager.mainWindow.webContents.send("toggle-dictation");
+        windowManager.mainWindow.webContents.send("toggle-dictation", payload);
       }
     });
 

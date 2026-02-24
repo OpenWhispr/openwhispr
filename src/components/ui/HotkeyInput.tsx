@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
 import { formatHotkeyLabel } from "../../utils/hotkeys";
+import { getValidationMessage } from "../../utils/hotkeyValidator";
 import { getPlatform } from "../../utils/platform";
 
 const CODE_TO_KEY: Record<string, string> = {
@@ -147,6 +148,7 @@ export interface HotkeyInputProps {
   disabled?: boolean;
   autoFocus?: boolean;
   validate?: (hotkey: string) => string | null | undefined;
+  otherHotkeys?: string[];
 }
 
 export function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
@@ -188,8 +190,18 @@ export function HotkeyInput({
   autoFocus = false,
   variant = "default",
   validate,
+  otherHotkeys,
 }: HotkeyInputProps & HotkeyInputVariant) {
   const { t } = useTranslation();
+
+  const resolvedValidate = useMemo(() => {
+    if (validate) return validate;
+    if (otherHotkeys && otherHotkeys.length > 0) {
+      return (hotkey: string) => getValidationMessage(hotkey, getPlatform(), otherHotkeys);
+    }
+    return undefined;
+  }, [validate, otherHotkeys]);
+
   const [isCapturing, setIsCapturing] = useState(false);
   const [activeModifiers, setActiveModifiers] = useState<Set<string>>(new Set());
   const [validationWarning, setValidationWarning] = useState<string | null>(null);
@@ -268,8 +280,8 @@ export function HotkeyInput({
         warningTimeoutRef.current = null;
       }
 
-      if (validate) {
-        const errorMsg = validate(hotkey);
+      if (resolvedValidate) {
+        const errorMsg = resolvedValidate(hotkey);
         if (errorMsg) {
           setValidationWarning(errorMsg);
           warningTimeoutRef.current = setTimeout(() => setValidationWarning(null), 4000);
@@ -290,7 +302,7 @@ export function HotkeyInput({
       clearFnHeld();
       containerRef.current?.blur();
     },
-    [validate, onChange, clearFnHeld]
+    [resolvedValidate, onChange, clearFnHeld]
   );
 
   const handleKeyDown = useCallback(

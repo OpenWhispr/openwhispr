@@ -131,7 +131,9 @@
     "private": "Private",
     "tap": "Tap",
     "close": "Close",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "dictation": "Dictation",
+    "agent": "Agent"
   },
   "onboarding": {
     "steps": {
@@ -651,6 +653,12 @@
     "recording": "Recording",
     "tryShortcut": "Try Ctrl+Shift+K",
     "tryShortcutMac": "Try ⌘⇧K"
+  },
+  "hotkeyBindings": {
+    "sectionDescription": "Configure hotkey bindings for voice dictation and agent commands",
+    "emptyState": "No hotkeys configured. Add a hotkey to start dictating.",
+    "addHotkey": "Add hotkey",
+    "removeBinding": "Remove hotkey binding"
   },
   "languageSelector": {
     "noLanguagesFound": "No languages found",

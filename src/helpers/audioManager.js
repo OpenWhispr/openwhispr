@@ -65,6 +65,8 @@ class AudioManager {
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
     this.skipReasoning = false;
+    this.languageOverride = null;
+    this.dictationMode = "transcription";
   }
 
   getWorkletBlobUrl() {
@@ -132,6 +134,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   setSkipReasoning(skip) {
     this.skipReasoning = skip;
+  }
+
+  setLanguageOverride(language) {
+    this.languageOverride = language || null;
+  }
+
+  setDictationMode(mode) {
+    this.dictationMode = mode || "transcription";
+  }
+
+  getEffectiveLanguage() {
+    if (this.languageOverride) {
+      const lang = this.languageOverride;
+      this.languageOverride = null;
+      return lang;
+    }
+    return getSettings().preferredLanguage;
   }
 
   async getAudioConstraints() {
@@ -440,7 +459,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Send original audio to main process - FFmpeg in main process handles conversion
       // (renderer-side AudioContext conversion was unreliable with WebM/Opus format)
       const arrayBuffer = await audioBlob.arrayBuffer();
-      const language = getBaseLanguageCode(getSettings().preferredLanguage);
+      const language = getBaseLanguageCode(this.getEffectiveLanguage());
       const options = { model };
       if (language) {
         options.language = language;
@@ -518,7 +537,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       const arrayBuffer = await audioBlob.arrayBuffer();
-      const language = validateLanguageForModel(getSettings().preferredLanguage, model);
+      const language = validateLanguageForModel(this.getEffectiveLanguage(), model);
       const options = { model };
       if (language) {
         options.language = language;
@@ -739,17 +758,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return new Blob([arrayBuffer], { type: "audio/wav" });
   }
 
-  async processWithReasoningModel(text, model, agentName) {
+  async processWithReasoningModel(text, model, agentName, config = {}) {
     logger.logReasoning("CALLING_REASONING_SERVICE", {
       model,
       agentName,
       textLength: text.length,
+      dictationMode: config.dictationMode,
     });
 
     const startTime = Date.now();
 
     try {
-      const result = await ReasoningService.processText(text, model, agentName);
+      const result = await ReasoningService.processText(text, model, agentName, config);
 
       const processingTime = Date.now() - startTime;
 
@@ -878,7 +898,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const result = await this.processWithReasoningModel(
           normalizedText,
           reasoningModel,
-          agentName
+          agentName,
+          { dictationMode: this.dictationMode }
         );
 
         logger.logReasoning("REASONING_SUCCESS", {
@@ -1069,7 +1090,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const timings = {};
     const settings = getSettings();
-    const language = getBaseLanguageCode(settings.preferredLanguage);
+    const language = getBaseLanguageCode(this.getEffectiveLanguage());
 
     const arrayBuffer = await audioBlob.arrayBuffer();
     const opts = {};
@@ -1106,6 +1127,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             customPrompt: this.getCustomPrompt(),
             language: settings.preferredLanguage || "auto",
             locale: settings.uiLanguage || "en",
+            dictationMode: this.dictationMode,
           });
           if (!res.success) {
             const err = new Error(res.error || "Cloud reasoning failed");
@@ -1124,7 +1146,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const result = await this.processWithReasoningModel(
             processedText,
             effectiveModel,
-            agentName
+            agentName,
+            { dictationMode: this.dictationMode }
           );
           if (result) {
             processedText = result;
@@ -1167,7 +1190,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async processWithOpenAIAPI(audioBlob, metadata = {}) {
     const timings = {};
     const apiSettings = getSettings();
-    const language = getBaseLanguageCode(apiSettings.preferredLanguage);
+    const language = getBaseLanguageCode(this.getEffectiveLanguage());
     const allowLocalFallback = apiSettings.allowLocalFallback;
     const fallbackModel = apiSettings.fallbackWhisperModel || "base";
 
@@ -1935,7 +1958,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // 4. Connect WebSocket — audio is already flowing from the pipeline above,
       //    so Deepgram receives data immediately (no idle timeout).
       const result = await withSessionRefresh(async () => {
-        const preferredLang = getSettings().preferredLanguage;
+        const preferredLang = this.getEffectiveLanguage();
         const res = await window.electronAPI.deepgramStreamingStart({
           sampleRate: 16000,
           language: preferredLang && preferredLang !== "auto" ? preferredLang : undefined,
@@ -2147,6 +2170,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               customPrompt: this.getCustomPrompt(),
               language: stSettings.preferredLanguage || "auto",
               locale: stSettings.uiLanguage || "en",
+              dictationMode: this.dictationMode,
             });
             if (!res.success) {
               const err = new Error(res.error || "Cloud reasoning failed");
@@ -2174,7 +2198,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             const result = await this.processWithReasoningModel(
               finalText,
               effectiveModel,
-              agentName
+              agentName,
+              { dictationMode: this.dictationMode }
             );
             if (result) {
               finalText = result;

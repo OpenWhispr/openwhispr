@@ -43,13 +43,8 @@ import { useUpdater } from "../hooks/useUpdater";
 
 import PromptStudio from "./ui/PromptStudio";
 import ReasoningModelSelector from "./ReasoningModelSelector";
-import { HotkeyInput } from "./ui/HotkeyInput";
-import HotkeyGuidanceAccordion from "./ui/HotkeyGuidanceAccordion";
-import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
-import { getValidationMessage } from "../utils/hotkeyValidator";
-import { getPlatform, getCachedPlatform } from "../utils/platform";
-import { getDefaultHotkey, formatHotkeyLabel } from "../utils/hotkeys";
-import { ActivationModeSelector } from "./ui/ActivationModeSelector";
+import { getCachedPlatform } from "../utils/platform";
+import { HotkeyBindingsList } from "./ui/HotkeyBindingsList";
 import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
 import LanguageSelector from "./ui/LanguageSelector";
@@ -631,8 +626,6 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     geminiApiKey,
     groqApiKey,
     mistralApiKey,
-    dictationKey,
-    activationMode,
     setActivationMode,
     preferBuiltInMic,
     selectedMicDeviceId,
@@ -659,7 +652,6 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setCustomTranscriptionApiKey,
     customReasoningApiKey,
     setCustomReasoningApiKey,
-    setDictationKey,
     updateTranscriptionSettings,
     updateReasoningSettings,
     cloudTranscriptionMode,
@@ -728,20 +720,6 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
   }, [usage?.isApproachingLimit, usage?.wordsUsed, usage?.limit, toast, t, i18n.language]);
 
   const installTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const { registerHotkey, isRegistering: isHotkeyRegistering } = useHotkeyRegistration({
-    onSuccess: (registeredHotkey) => {
-      setDictationKey(registeredHotkey);
-    },
-    showSuccessToast: false,
-    showErrorToast: true,
-    showAlert: showAlertDialog,
-  });
-
-  const validateHotkeyForInput = useCallback(
-    (hotkey: string) => getValidationMessage(hotkey, getPlatform()),
-    []
-  );
 
   const [isUsingGnomeHotkeys, setIsUsingGnomeHotkeys] = useState(false);
 
@@ -1719,44 +1697,12 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
       case "hotkeys":
         return (
           <div className="space-y-6">
-            {/* Dictation Hotkey */}
             <div>
               <SectionHeader
                 title={t("settingsPage.general.hotkey.title")}
-                description={t("settingsPage.general.hotkey.description")}
+                description={t("hotkeyBindings.sectionDescription")}
               />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <HotkeyInput
-                    value={dictationKey}
-                    onChange={async (newHotkey) => {
-                      await registerHotkey(newHotkey);
-                    }}
-                    disabled={isHotkeyRegistering}
-                    validate={validateHotkeyForInput}
-                  />
-                  {dictationKey && dictationKey !== getDefaultHotkey() && (
-                    <button
-                      onClick={() => registerHotkey(getDefaultHotkey())}
-                      disabled={isHotkeyRegistering}
-                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
-                    >
-                      {t("settingsPage.general.hotkey.resetToDefault", {
-                        hotkey: formatHotkeyLabel(getDefaultHotkey()),
-                      })}
-                    </button>
-                  )}
-                </SettingsPanelRow>
-
-                {!isUsingGnomeHotkeys && (
-                  <SettingsPanelRow>
-                    <p className="text-xs font-medium text-muted-foreground/80 mb-2">
-                      {t("settingsPage.general.hotkey.activationMode")}
-                    </p>
-                    <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
-                  </SettingsPanelRow>
-                )}
-              </SettingsPanel>
+              <HotkeyBindingsList isUsingGnomeHotkeys={isUsingGnomeHotkeys} />
             </div>
           </div>
         );

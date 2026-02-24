@@ -131,7 +131,9 @@
     "private": "Privat",
     "tap": "Tippen",
     "close": "Schließen",
-    "dismiss": "Verwerfen"
+    "dismiss": "Verwerfen",
+    "dictation": "Diktat",
+    "agent": "Agent"
   },
   "onboarding": {
     "steps": {
@@ -651,6 +653,12 @@
     "recording": "Aufnahme",
     "tryShortcut": "Versuchen Sie Ctrl+Shift+K",
     "tryShortcutMac": "Versuchen Sie ⌘⇧K"
+  },
+  "hotkeyBindings": {
+    "sectionDescription": "Konfigurieren Sie Tastenkombinationen fuer Sprachdiktat und Agentenbefehle",
+    "emptyState": "Keine Tastenkombinationen konfiguriert. Fuegen Sie eine hinzu, um mit dem Diktieren zu beginnen.",
+    "addHotkey": "Tastenkombination hinzufuegen",
+    "removeBinding": "Tastenkombination entfernen"
   },
   "languageSelector": {
     "noLanguagesFound": "Keine Sprachen gefunden",

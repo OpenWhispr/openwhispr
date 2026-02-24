@@ -259,7 +259,8 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig,
     providerName: string
   ): Promise<string> {
-    const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
+    const systemPrompt =
+      config.systemPrompt || this.getSystemPromptForMode(agentName, config.dictationMode, text);
     const userPrompt = text;
 
     const messages = [
@@ -497,7 +498,8 @@ class ReasoningService extends BaseReasoningService {
     this.isProcessing = true;
 
     try {
-      const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
+      const systemPrompt =
+        config.systemPrompt || this.getSystemPromptForMode(agentName, config.dictationMode, text);
       const userPrompt = text;
 
       const messages = [
@@ -713,7 +715,8 @@ class ReasoningService extends BaseReasoningService {
         textLength: text.length,
       });
 
-      const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
+      const systemPrompt =
+        config.systemPrompt || this.getSystemPromptForMode(agentName, config.dictationMode, text);
       const result = await window.electronAPI.processAnthropicReasoning(text, model, agentName, {
         ...config,
         systemPrompt,
@@ -764,7 +767,8 @@ class ReasoningService extends BaseReasoningService {
         textLength: text.length,
       });
 
-      const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
+      const systemPrompt =
+        config.systemPrompt || this.getSystemPromptForMode(agentName, config.dictationMode, text);
       const result = await window.electronAPI.processLocalReasoning(text, model, agentName, {
         ...config,
         systemPrompt,
@@ -821,7 +825,8 @@ class ReasoningService extends BaseReasoningService {
     this.isProcessing = true;
 
     try {
-      const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
+      const systemPrompt =
+        config.systemPrompt || this.getSystemPromptForMode(agentName, config.dictationMode, text);
       const userPrompt = text;
 
       const requestBody = {
@@ -1044,6 +1049,7 @@ class ReasoningService extends BaseReasoningService {
           systemPrompt: config.systemPrompt,
           language,
           locale,
+          dictationMode: config.dictationMode,
         });
 
         if (!res.success) {

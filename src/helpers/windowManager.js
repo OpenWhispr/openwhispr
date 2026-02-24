@@ -153,6 +153,60 @@ class WindowManager {
     await this.loadWindowContent(this.mainWindow, false);
   }
 
+  // Build a binding payload for IPC events
+  _buildBindingPayload(binding) {
+    if (!binding) return {};
+    return {
+      language: binding.language,
+      bindingId: binding.id,
+      dictationMode: binding.dictationMode,
+    };
+  }
+
+  createHotkeyCallbackFactory() {
+    return (binding) => {
+      let lastToggleTime = 0;
+      const DEBOUNCE_MS = 150;
+      const payload = this._buildBindingPayload(binding);
+
+      return async () => {
+        if (this.hotkeyManager.isInListeningMode()) {
+          return;
+        }
+
+        const activationMode = binding.activationMode || this.getActivationMode();
+        const hotkeyStr = binding.hotkey;
+
+        if (
+          process.platform === "darwin" &&
+          activationMode === "push" &&
+          hotkeyStr &&
+          hotkeyStr !== "GLOBE" &&
+          hotkeyStr.includes("+")
+        ) {
+          this.startMacCompoundPushToTalk(hotkeyStr, payload);
+          return;
+        }
+
+        // Windows push mode: always defer to native listener (globalShortcut can't detect key-up)
+        if (process.platform === "win32" && activationMode === "push") {
+          return;
+        }
+
+        const now = Date.now();
+        if (now - lastToggleTime < DEBOUNCE_MS) {
+          return;
+        }
+        lastToggleTime = now;
+
+        this.showDictationPanel();
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.webContents.send("toggle-dictation", payload);
+        }
+      };
+    };
+  }
+
   createHotkeyCallback() {
     let lastToggleTime = 0;
     const DEBOUNCE_MS = 150;
@@ -188,11 +242,13 @@ class WindowManager {
       lastToggleTime = now;
 
       this.showDictationPanel();
-      this.mainWindow.webContents.send("toggle-dictation");
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send("toggle-dictation");
+      }
     };
   }
 
-  startMacCompoundPushToTalk(hotkey) {
+  startMacCompoundPushToTalk(hotkey, payload) {
     if (this.macCompoundPushState?.active) {
       return;
     }
@@ -221,6 +277,7 @@ class WindowManager {
       isRecording: false,
       requiredModifiers,
       safetyTimeoutId,
+      payload,
     };
 
     setTimeout(() => {
@@ -230,7 +287,7 @@ class WindowManager {
 
       if (!this.macCompoundPushState.isRecording) {
         this.macCompoundPushState.isRecording = true;
-        this.sendStartDictation();
+        this.sendStartDictation(payload);
       }
     }, MIN_HOLD_DURATION_MS);
   }
@@ -249,10 +306,11 @@ class WindowManager {
     }
 
     const wasRecording = this.macCompoundPushState.isRecording;
+    const payload = this.macCompoundPushState.payload;
     this.macCompoundPushState = null;
 
     if (wasRecording) {
-      this.sendStopDictation();
+      this.sendStopDictation(payload);
     } else {
       this.hideDictationPanel();
     }
@@ -268,10 +326,11 @@ class WindowManager {
     }
 
     const wasRecording = this.macCompoundPushState.isRecording;
+    const payload = this.macCompoundPushState.payload;
     this.macCompoundPushState = null;
 
     if (wasRecording) {
-      this.sendStopDictation();
+      this.sendStopDictation(payload);
     }
     this.hideDictationPanel();
 
@@ -322,7 +381,7 @@ class WindowManager {
     return required;
   }
 
-  startWindowsPushToTalk() {
+  startWindowsPushToTalk(payload) {
     if (this.winPushState?.active) {
       return;
     }
@@ -336,6 +395,7 @@ class WindowManager {
       active: true,
       downTime,
       isRecording: false,
+      payload,
     };
 
     setTimeout(() => {
@@ -345,7 +405,7 @@ class WindowManager {
 
       if (!this.winPushState.isRecording) {
         this.winPushState.isRecording = true;
-        this.sendStartDictation();
+        this.sendStartDictation(payload);
       }
     }, MIN_HOLD_DURATION_MS);
   }
@@ -356,10 +416,11 @@ class WindowManager {
     }
 
     const wasRecording = this.winPushState.isRecording;
+    const payload = this.winPushState.payload;
     this.winPushState = null;
 
     if (wasRecording) {
-      this.sendStopDictation();
+      this.sendStopDictation(payload);
     } else {
       this.hideDictationPanel();
     }
@@ -369,22 +430,22 @@ class WindowManager {
     this.winPushState = null;
   }
 
-  sendStartDictation() {
+  sendStartDictation(payload) {
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.showDictationPanel();
-      this.mainWindow.webContents.send("start-dictation");
+      this.mainWindow.webContents.send("start-dictation", payload);
     }
   }
 
-  sendStopDictation() {
+  sendStopDictation(payload) {
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send("stop-dictation");
+      this.mainWindow.webContents.send("stop-dictation", payload);
     }
   }
 
@@ -406,6 +467,16 @@ class WindowManager {
 
   async initializeHotkey() {
     await this.hotkeyManager.initializeHotkey(this.mainWindow, this.createHotkeyCallback());
+  }
+
+  initializeHotkeys(bindings) {
+    const factory = this.createHotkeyCallbackFactory();
+    return this.hotkeyManager.updateAllBindings(bindings, factory);
+  }
+
+  updateAllBindings(bindings) {
+    const factory = this.createHotkeyCallbackFactory();
+    return this.hotkeyManager.updateAllBindings(bindings, factory);
   }
 
   async updateHotkey(hotkey) {

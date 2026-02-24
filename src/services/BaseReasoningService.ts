@@ -1,11 +1,13 @@
-import { getSystemPrompt } from "../config/prompts";
+import { getSystemPrompt, getSystemPromptForMode } from "../config/prompts";
 import { getSettings } from "../stores/settingsStore";
+import type { DictationMode } from "../types/hotkeyBindings";
 
 export interface ReasoningConfig {
   maxTokens?: number;
   temperature?: number;
   contextSize?: number;
   systemPrompt?: string;
+  dictationMode?: DictationMode;
 }
 
 export abstract class BaseReasoningService {
@@ -27,6 +29,23 @@ export abstract class BaseReasoningService {
     const language = this.getPreferredLanguage();
     const uiLanguage = this.getUiLanguage();
     return getSystemPrompt(agentName, this.getCustomDictionary(), language, transcript, uiLanguage);
+  }
+
+  protected getSystemPromptForMode(
+    agentName: string | null,
+    dictationMode: DictationMode | undefined,
+    transcript?: string
+  ): string {
+    const language = this.getPreferredLanguage();
+    const uiLanguage = this.getUiLanguage();
+    return getSystemPromptForMode(
+      agentName,
+      dictationMode,
+      this.getCustomDictionary(),
+      language,
+      transcript,
+      uiLanguage
+    );
   }
 
   protected calculateMaxTokens(

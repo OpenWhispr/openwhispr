@@ -131,7 +131,9 @@
     "private": "Privado",
     "tap": "Pulsar",
     "close": "Cerrar",
-    "dismiss": "Descartar"
+    "dismiss": "Descartar",
+    "dictation": "Dictado",
+    "agent": "Agente"
   },
   "onboarding": {
     "steps": {
@@ -651,6 +653,12 @@
     "recording": "Grabando",
     "tryShortcut": "Prueba Ctrl+Shift+K",
     "tryShortcutMac": "Prueba ⌘⇧K"
+  },
+  "hotkeyBindings": {
+    "sectionDescription": "Configura atajos de teclado para dictado por voz y comandos de agente",
+    "emptyState": "No hay atajos configurados. Agrega un atajo para empezar a dictar.",
+    "addHotkey": "Agregar atajo",
+    "removeBinding": "Eliminar atajo"
   },
   "languageSelector": {
     "noLanguagesFound": "No se encontraron idiomas",

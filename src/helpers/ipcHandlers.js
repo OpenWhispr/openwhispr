@@ -753,6 +753,30 @@ class IPCHandlers {
       return await this.windowManager.updateHotkey(hotkey);
     });
 
+    ipcMain.handle("update-hotkey-bindings", async (_event, bindings) => {
+      try {
+        const results = this.windowManager.updateAllBindings(bindings);
+        this.environmentManager.saveHotkeyBindings(bindings);
+        return { success: true, results };
+      } catch (error) {
+        debugLogger.error("[IPC] Failed to update hotkey bindings:", error.message);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("get-hotkey-bindings", async () => {
+      return this.environmentManager.getHotkeyBindings();
+    });
+
+    ipcMain.on("hotkey-bindings-changed", (_event, bindings) => {
+      try {
+        this.windowManager.updateAllBindings(bindings);
+        this.environmentManager.saveHotkeyBindings(bindings);
+      } catch (error) {
+        debugLogger.error("[IPC] Failed to sync hotkey bindings:", error.message);
+      }
+    });
+
     ipcMain.handle("set-hotkey-listening-mode", async (event, enabled, newHotkey = null) => {
       this.windowManager.setHotkeyListeningMode(enabled);
       const hotkeyManager = this.windowManager.hotkeyManager;
@@ -760,22 +784,41 @@ class IPCHandlers {
       // When exiting capture mode with a new hotkey, use that to avoid reading stale state
       const effectiveHotkey = !enabled && newHotkey ? newHotkey : hotkeyManager.getCurrentHotkey();
 
-      const { isModifierOnlyHotkey, isRightSideModifier } = require("./hotkeyManager");
-      const usesNativeListener = (hotkey) =>
+      const {
+        isModifierOnlyHotkey,
+        isRightSideModifier,
+        usesNativeListener: hotkeyUsesNativeListener,
+      } = require("./hotkeyManager");
+
+      const usesNativeListenerLegacy = (hotkey) =>
         !hotkey ||
         hotkey === "GLOBE" ||
         isModifierOnlyHotkey(hotkey) ||
         isRightSideModifier(hotkey);
 
+      const hasMultiBindings = hotkeyManager.bindings.size > 0;
+
       if (enabled) {
-        // Entering capture mode - unregister globalShortcut so it doesn't consume key events
-        const currentHotkey = hotkeyManager.getCurrentHotkey();
-        if (currentHotkey && !usesNativeListener(currentHotkey)) {
-          debugLogger.log(
-            `[IPC] Unregistering globalShortcut "${currentHotkey}" for hotkey capture mode`
-          );
-          const { globalShortcut } = require("electron");
-          globalShortcut.unregister(currentHotkey);
+        if (hasMultiBindings) {
+          for (const hotkeyStr of hotkeyManager.getAllRegisteredHotkeys()) {
+            if (!hotkeyUsesNativeListener(hotkeyStr)) {
+              const { globalShortcut } = require("electron");
+              const accelerator = hotkeyStr.startsWith("Fn+") ? hotkeyStr.slice(3) : hotkeyStr;
+              debugLogger.log(`[IPC] Unregistering binding "${hotkeyStr}" for hotkey capture mode`);
+              try {
+                globalShortcut.unregister(accelerator);
+              } catch {}
+            }
+          }
+        } else {
+          const currentHotkey = hotkeyManager.getCurrentHotkey();
+          if (currentHotkey && !usesNativeListenerLegacy(currentHotkey)) {
+            debugLogger.log(
+              `[IPC] Unregistering globalShortcut "${currentHotkey}" for hotkey capture mode`
+            );
+            const { globalShortcut } = require("electron");
+            globalShortcut.unregister(currentHotkey);
+          }
         }
 
         // On Windows, stop the Windows key listener
@@ -792,22 +835,44 @@ class IPCHandlers {
           });
         }
       } else {
-        // Exiting capture mode - re-register globalShortcut if not already registered
-        if (effectiveHotkey && !usesNativeListener(effectiveHotkey)) {
-          const { globalShortcut } = require("electron");
-          const accelerator = effectiveHotkey.startsWith("Fn+")
-            ? effectiveHotkey.slice(3)
-            : effectiveHotkey;
-          if (!globalShortcut.isRegistered(accelerator)) {
-            debugLogger.log(
-              `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
-            );
-            const callback = this.windowManager.createHotkeyCallback();
-            const registered = globalShortcut.register(accelerator, callback);
-            if (!registered) {
-              debugLogger.warn(
-                `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
+        if (hasMultiBindings) {
+          const factory = this.windowManager.createHotkeyCallbackFactory();
+          for (const [hotkeyStr, entry] of hotkeyManager.bindings.entries()) {
+            if (!hotkeyUsesNativeListener(hotkeyStr)) {
+              const { globalShortcut } = require("electron");
+              const accelerator = hotkeyStr.startsWith("Fn+") ? hotkeyStr.slice(3) : hotkeyStr;
+              if (!globalShortcut.isRegistered(accelerator)) {
+                debugLogger.log(`[IPC] Re-registering binding "${hotkeyStr}" after capture mode`);
+                const callback = factory(entry.binding);
+                const registered = globalShortcut.register(accelerator, callback);
+                if (registered) {
+                  entry.callback = callback;
+                } else {
+                  debugLogger.warn(
+                    `[IPC] Failed to re-register binding "${hotkeyStr}" after capture mode`
+                  );
+                }
+              }
+            }
+          }
+        } else {
+          // Legacy single-hotkey path
+          if (effectiveHotkey && !usesNativeListenerLegacy(effectiveHotkey)) {
+            const { globalShortcut } = require("electron");
+            const accelerator = effectiveHotkey.startsWith("Fn+")
+              ? effectiveHotkey.slice(3)
+              : effectiveHotkey;
+            if (!globalShortcut.isRegistered(accelerator)) {
+              debugLogger.log(
+                `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
               );
+              const callback = this.windowManager.createHotkeyCallback();
+              const registered = globalShortcut.register(accelerator, callback);
+              if (!registered) {
+                debugLogger.warn(
+                  `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
+                );
+              }
             }
           }
         }

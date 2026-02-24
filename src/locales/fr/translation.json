@@ -131,7 +131,9 @@
     "private": "Privé",
     "tap": "Appui",
     "close": "Fermer",
-    "dismiss": "Ignorer"
+    "dismiss": "Ignorer",
+    "dictation": "Dictee",
+    "agent": "Agent"
   },
   "onboarding": {
     "steps": {
@@ -651,6 +653,12 @@
     "recording": "Enregistrement",
     "tryShortcut": "Essayez Ctrl+Shift+K",
     "tryShortcutMac": "Essayez ⌘⇧K"
+  },
+  "hotkeyBindings": {
+    "sectionDescription": "Configurez les raccourcis clavier pour la dictee vocale et les commandes d'agent",
+    "emptyState": "Aucun raccourci configure. Ajoutez un raccourci pour commencer a dicter.",
+    "addHotkey": "Ajouter un raccourci",
+    "removeBinding": "Supprimer le raccourci"
   },
   "languageSelector": {
     "noLanguagesFound": "Aucune langue trouvée",

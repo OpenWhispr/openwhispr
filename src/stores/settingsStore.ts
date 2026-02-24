@@ -5,6 +5,7 @@ import { hasStoredByokKey } from "../utils/byokDetection";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import logger from "../utils/logger";
 import type { LocalTranscriptionProvider } from "../types/electron";
+import type { HotkeyBinding } from "../types/hotkeyBindings";
 import type {
   TranscriptionSettings,
   ReasoningSettings,
@@ -50,6 +51,18 @@ function readStringArray(key: string, fallback: string[]): string[] {
   }
 }
 
+function readJsonArray<T>(key: string, fallback: T[]): T[] {
+  if (!isBrowser) return fallback;
+  const stored = localStorage.getItem(key);
+  if (stored === null) return fallback;
+  try {
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 const BOOLEAN_SETTINGS = new Set([
   "useLocalWhisper",
   "allowOpenAIFallback",
@@ -65,6 +78,8 @@ const BOOLEAN_SETTINGS = new Set([
 ]);
 
 const ARRAY_SETTINGS = new Set(["customDictionary"]);
+
+const JSON_SETTINGS = new Set(["hotkeyBindings"]);
 
 const LANGUAGE_MIGRATIONS: Record<string, string> = { zh: "zh-CN" };
 
@@ -120,8 +135,11 @@ export interface SettingsState
   setCustomTranscriptionApiKey: (key: string) => void;
   setCustomReasoningApiKey: (key: string) => void;
 
+  hotkeyBindings: HotkeyBinding[];
+
   setDictationKey: (key: string) => void;
   setActivationMode: (mode: "tap" | "push") => void;
+  setHotkeyBindings: (bindings: HotkeyBinding[]) => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
   setSelectedMicDeviceId: (value: string) => void;
@@ -220,6 +238,8 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     | "tap"
     | "push",
+
+  hotkeyBindings: readJsonArray<HotkeyBinding>("hotkeyBindings", []),
 
   preferBuiltInMic: readBoolean("preferBuiltInMic", true),
   selectedMicDeviceId: readString("selectedMicDeviceId", ""),
@@ -343,6 +363,12 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
     if (isBrowser) {
       window.electronAPI?.notifyActivationModeChanged?.(mode);
     }
+  },
+
+  setHotkeyBindings: (bindings: HotkeyBinding[]) => {
+    if (isBrowser) localStorage.setItem("hotkeyBindings", JSON.stringify(bindings));
+    set({ hotkeyBindings: bindings });
+    window.electronAPI?.notifyHotkeyBindingsChanged?.(bindings);
   },
 
   setPreferBuiltInMic: createBooleanSetter("preferBuiltInMic"),
@@ -572,6 +598,20 @@ export async function initializeSettings(): Promise<void> {
     }
 
     ensureAgentNameInDictionary();
+
+    // Migrate legacy single-hotkey settings to hotkeyBindings array
+    if (localStorage.getItem("dictationKey") && !localStorage.getItem("hotkeyBindings")) {
+      const legacyBinding: HotkeyBinding = {
+        id: crypto.randomUUID(),
+        hotkey: localStorage.getItem("dictationKey") || "",
+        language: localStorage.getItem("preferredLanguage") || "auto",
+        activationMode: (localStorage.getItem("activationMode") as "tap" | "push") || "tap",
+        dictationMode: "transcription",
+      };
+      const bindings = [legacyBinding];
+      localStorage.setItem("hotkeyBindings", JSON.stringify(bindings));
+      useSettingsStore.setState({ hotkeyBindings: bindings });
+    }
   }
 
   // Sync Zustand store when another window writes to localStorage
@@ -592,6 +632,12 @@ export async function initializeSettings(): Promise<void> {
         value = Array.isArray(parsed) ? parsed : [];
       } catch {
         value = [];
+      }
+    } else if (JSON_SETTINGS.has(key)) {
+      try {
+        value = JSON.parse(newValue);
+      } catch {
+        return;
       }
     } else {
       value = newValue;
