@@ -32,7 +32,7 @@ import { useSettings } from "../../hooks/useSettings";
 import { withSessionRefresh } from "../../lib/neonAuth";
 import reasoningService from "../../services/ReasoningService";
 import { getAllReasoningModels } from "../../models/ModelRegistry";
-import { useSettingsStore } from "../../stores/settingsStore";
+import { useSettingsStore, selectIsCloudReasoningMode } from "../../stores/settingsStore";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
 
@@ -110,7 +110,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     updateTranscriptionSettings,
   } = useSettings();
 
-  const effectiveReasoningModel = useSettingsStore((s) => s.reasoningModel);
+  const isCloudReasoning = useSettingsStore(selectIsCloudReasoningMode);
+  const effectiveReasoningModel = useSettingsStore((s) =>
+    selectIsCloudReasoningMode(s) ? "" : s.reasoningModel
+  );
   const useReasoningModel = useSettingsStore((s) => s.useReasoningModel);
 
   const isOpenWhisprCloud =
@@ -213,8 +216,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const generateTitle = async (text: string): Promise<string> => {
     if (!useReasoningModel) return "";
-    const model = effectiveReasoningModel || getAllReasoningModels()[0]?.value;
-    if (!model) return "";
+    const model = isCloudReasoning ? "" : (effectiveReasoningModel || getAllReasoningModels()[0]?.value);
+    if (!model && !isCloudReasoning) return "";
     try {
       const title = await reasoningService.processText(text.slice(0, 2000), model, null, {
         systemPrompt: TITLE_SYSTEM_PROMPT,

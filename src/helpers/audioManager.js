@@ -5,7 +5,7 @@ import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/neonAuth";
 import { getBaseLanguageCode, validateLanguageForModel } from "../utils/languageSupport";
-import { getSettings, getEffectiveReasoningModel } from "../stores/settingsStore";
+import { getSettings, getEffectiveReasoningModel, isCloudReasoningMode } from "../stores/settingsStore";
 
 const SHORT_CLIP_DURATION_SECONDS = 2.5;
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -846,12 +846,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
 
     const reasoningModel = getEffectiveReasoningModel();
+    const isCloud = isCloudReasoningMode();
     const reasoningProvider = getSettings().reasoningProvider || "auto";
     const agentName =
       typeof window !== "undefined" && window.localStorage
         ? localStorage.getItem("agentName") || null
         : null;
-    if (!reasoningModel) {
+    if (!reasoningModel && !isCloud) {
       logger.logReasoning("REASONING_SKIPPED", {
         reason: "No reasoning model selected",
       });

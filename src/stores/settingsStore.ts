@@ -441,7 +441,11 @@ export function getSettings() {
 }
 
 export function getEffectiveReasoningModel() {
-  return useSettingsStore.getState().reasoningModel;
+  const state = useSettingsStore.getState();
+  if (selectIsCloudReasoningMode(state)) {
+    return "";
+  }
+  return state.reasoningModel;
 }
 
 export function isCloudReasoningMode() {
