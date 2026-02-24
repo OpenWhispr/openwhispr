@@ -7,7 +7,6 @@ import type {
   LlamaVulkanDownloadProgress,
 } from "../types/electron";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
 import { Input } from "./ui/input";
 import { Cloud, Lock } from "lucide-react";
 import ApiKeyInput from "./ui/ApiKeyInput";
@@ -166,12 +165,7 @@ function GpuStatusBadge() {
             style={{ width: `${Math.min(progress.percentage, 100)}%` }}
           />
         </div>
-        <Badge
-          variant="default"
-          className="h-6 min-w-[3.25rem] shrink-0 justify-center px-2 text-[11px] font-semibold tracking-normal tabular-nums"
-        >
-          {roundedPercent}%
-        </Badge>
+        <span className="text-xs text-muted-foreground tabular-nums shrink-0">{roundedPercent}%</span>
         <button
           type="button"
           onClick={() => window.electronAPI?.cancelLlamaVulkanDownload?.()}
