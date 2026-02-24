@@ -95,6 +95,7 @@ class IPCHandlers {
     this.windowsKeyManager = managers.windowsKeyManager;
     this.getTrayManager = managers.getTrayManager;
     this.whisperCudaManager = managers.whisperCudaManager;
+    this.googleCalendarManager = managers.googleCalendarManager;
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
@@ -2565,6 +2566,86 @@ class IPCHandlers {
         return { isConnected: false, sessionId: null };
       }
       return this.deepgramStreaming.getStatus();
+    });
+
+    // Google Calendar
+    ipcMain.handle("gcal-start-oauth", async () => {
+      try {
+        return await this.googleCalendarManager.startOAuth();
+      } catch (error) {
+        debugLogger.error("Google Calendar OAuth failed", { error: error.message }, "calendar");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("gcal-disconnect", async () => {
+      try {
+        this.googleCalendarManager.disconnect();
+        return { success: true };
+      } catch (error) {
+        debugLogger.error(
+          "Google Calendar disconnect failed",
+          { error: error.message },
+          "calendar"
+        );
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("gcal-get-connection-status", async () => {
+      try {
+        return this.googleCalendarManager.getConnectionStatus();
+      } catch (error) {
+        return { connected: false, email: null };
+      }
+    });
+
+    ipcMain.handle("gcal-get-calendars", async () => {
+      try {
+        return { success: true, calendars: this.googleCalendarManager.getCalendars() };
+      } catch (error) {
+        return { success: false, calendars: [] };
+      }
+    });
+
+    ipcMain.handle("gcal-set-calendar-selection", async (_event, calendarId, isSelected) => {
+      try {
+        await this.googleCalendarManager.setCalendarSelection(calendarId, isSelected);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("gcal-sync-events", async () => {
+      try {
+        await this.googleCalendarManager.syncEvents();
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("gcal-get-upcoming-events", async (_event, windowMinutes) => {
+      try {
+        return {
+          success: true,
+          events: await this.googleCalendarManager.getUpcomingEvents(windowMinutes),
+        };
+      } catch (error) {
+        return { success: false, events: [] };
+      }
+    });
+
+    ipcMain.handle("get-desktop-sources", async (_event, types) => {
+      try {
+        const { desktopCapturer } = require("electron");
+        const sources = await desktopCapturer.getSources({ types: types || ["screen"] });
+        return sources.map((s) => ({ id: s.id, name: s.name }));
+      } catch (error) {
+        debugLogger.error("Failed to get desktop sources", { error: error.message }, "calendar");
+        return [];
+      }
     });
   }
 

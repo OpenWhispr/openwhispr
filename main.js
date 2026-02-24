@@ -161,6 +161,7 @@ const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
 const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
+const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 
 // Manager instances - initialized after app.whenReady()
@@ -177,6 +178,7 @@ let updateManager = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
 let whisperCudaManager = null;
+let googleCalendarManager = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 
@@ -239,6 +241,7 @@ function initializeCoreManagers() {
     whisperCudaManager = new WhisperCudaManager();
   }
   parakeetManager = new ParakeetManager();
+  googleCalendarManager = new GoogleCalendarManager(databaseManager, windowManager);
   updateManager = new UpdateManager();
   windowsKeyManager = new WindowsKeyManager();
 
@@ -253,6 +256,7 @@ function initializeCoreManagers() {
     updateManager,
     windowsKeyManager,
     whisperCudaManager,
+    googleCalendarManager,
     getTrayManager: () => trayManager,
   });
 }
@@ -289,6 +293,8 @@ function initializeDeferredManagers() {
       });
     });
   }
+
+  googleCalendarManager.start();
 }
 
 app.on("open-url", (event, url) => {
@@ -484,6 +490,13 @@ async function startApp() {
 
   // Phase 2: Initialize remaining managers after windows are visible
   initializeDeferredManagers();
+
+  const { powerMonitor } = require("electron");
+  powerMonitor.on("resume", () => {
+    if (googleCalendarManager) {
+      googleCalendarManager.onWakeFromSleep();
+    }
+  });
 
   // Non-blocking server pre-warming
   const whisperSettings = {
@@ -908,6 +921,9 @@ if (gotSingleInstanceLock) {
     }
     if (windowsKeyManager) {
       windowsKeyManager.stop();
+    }
+    if (googleCalendarManager) {
+      googleCalendarManager.stop();
     }
     if (updateManager) {
       updateManager.cleanup();

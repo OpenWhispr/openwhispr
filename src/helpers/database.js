@@ -141,6 +141,59 @@ class DatabaseManager {
         )
         .run("notes.actions.builtin.cleanupNotes", "Clean Up Notes");
 
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS google_calendar_tokens (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          google_email TEXT NOT NULL,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT NOT NULL,
+          expires_at INTEGER NOT NULL,
+          scope TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS google_calendars (
+          id TEXT PRIMARY KEY,
+          summary TEXT NOT NULL,
+          description TEXT,
+          background_color TEXT,
+          is_selected INTEGER NOT NULL DEFAULT 1,
+          sync_token TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS calendar_events (
+          id TEXT PRIMARY KEY,
+          calendar_id TEXT NOT NULL,
+          summary TEXT,
+          start_time TEXT NOT NULL,
+          end_time TEXT NOT NULL,
+          is_all_day INTEGER NOT NULL DEFAULT 0,
+          status TEXT NOT NULL DEFAULT 'confirmed',
+          hangout_link TEXT,
+          conference_data TEXT,
+          organizer_email TEXT,
+          attendees_count INTEGER DEFAULT 0,
+          synced_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN transcript TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN calendar_event_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
       return true;
     } catch (error) {
       debugLogger.error("Database initialization failed", { error: error.message }, "database");
@@ -258,10 +311,11 @@ class DatabaseManager {
         throw new Error("Database not initialized");
       }
       if (!folderId) {
-        const personal = this.db
-          .prepare("SELECT id FROM folders WHERE name = 'Personal' AND is_default = 1")
-          .get();
-        folderId = personal?.id || null;
+        const defaultFolderName = noteType === "meeting" ? "Meetings" : "Personal";
+        const defaultFolder = this.db
+          .prepare("SELECT id FROM folders WHERE name = ? AND is_default = 1")
+          .get(defaultFolderName);
+        folderId = defaultFolder?.id || null;
       }
       const stmt = this.db.prepare(
         "INSERT INTO notes (title, content, note_type, source_file, audio_duration_seconds, folder_id) VALUES (?, ?, ?, ?, ?, ?)"
@@ -326,6 +380,8 @@ class DatabaseManager {
         "enhancement_prompt",
         "enhanced_at_content_hash",
         "folder_id",
+        "transcript",
+        "calendar_event_id",
       ];
       const fields = [];
       const values = [];
@@ -526,6 +582,211 @@ class DatabaseManager {
       return { success: result.changes > 0, id };
     } catch (error) {
       debugLogger.error("Error deleting note", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  saveGoogleTokens(tokens) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db.prepare("DELETE FROM google_calendar_tokens").run();
+      const stmt = this.db.prepare(
+        "INSERT INTO google_calendar_tokens (google_email, access_token, refresh_token, expires_at, scope) VALUES (?, ?, ?, ?, ?)"
+      );
+      stmt.run(
+        tokens.google_email,
+        tokens.access_token,
+        tokens.refresh_token,
+        tokens.expires_at,
+        tokens.scope
+      );
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error saving Google tokens", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  getGoogleTokens() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db.prepare("SELECT * FROM google_calendar_tokens LIMIT 1").get() || null;
+    } catch (error) {
+      debugLogger.error("Error getting Google tokens", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  deleteGoogleTokens() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db.prepare("DELETE FROM google_calendar_tokens").run();
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error deleting Google tokens", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  saveGoogleCalendars(calendars) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const stmt = this.db.prepare(
+        "INSERT INTO google_calendars (id, summary, description, background_color) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET summary = excluded.summary, description = excluded.description, background_color = excluded.background_color"
+      );
+      for (const cal of calendars) {
+        stmt.run(cal.id, cal.summary, cal.description || null, cal.background_color || null);
+      }
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error saving Google calendars", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  getGoogleCalendars() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db.prepare("SELECT * FROM google_calendars").all();
+    } catch (error) {
+      debugLogger.error("Error getting Google calendars", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  updateCalendarSelection(calendarId, isSelected) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare("UPDATE google_calendars SET is_selected = ? WHERE id = ?")
+        .run(isSelected ? 1 : 0, calendarId);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error updating calendar selection", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  getSelectedCalendars() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db.prepare("SELECT * FROM google_calendars WHERE is_selected = 1").all();
+    } catch (error) {
+      debugLogger.error("Error getting selected calendars", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  upsertCalendarEvents(events) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const transaction = this.db.transaction((eventList) => {
+        const stmt = this.db.prepare(
+          "INSERT OR REPLACE INTO calendar_events (id, calendar_id, summary, start_time, end_time, is_all_day, status, hangout_link, conference_data, organizer_email, attendees_count, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)"
+        );
+        for (const e of eventList) {
+          stmt.run(
+            e.id,
+            e.calendar_id,
+            e.summary || null,
+            e.start_time,
+            e.end_time,
+            e.is_all_day ? 1 : 0,
+            e.status || "confirmed",
+            e.hangout_link || null,
+            e.conference_data || null,
+            e.organizer_email || null,
+            e.attendees_count || 0
+          );
+        }
+      });
+      transaction(events);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error upserting calendar events", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  getActiveEvents() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM calendar_events WHERE datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now') AND is_all_day = 0 AND status = 'confirmed' ORDER BY start_time ASC"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error("Error getting active events", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  getUpcomingEvents(windowMinutes = 1440) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM calendar_events WHERE datetime(start_time) > datetime('now') AND datetime(start_time) <= datetime('now', '+' || ? || ' minutes') AND is_all_day = 0 AND status = 'confirmed' ORDER BY start_time ASC"
+        )
+        .all(windowMinutes);
+    } catch (error) {
+      debugLogger.error("Error getting upcoming events", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  clearCalendarData() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const transaction = this.db.transaction(() => {
+        this.db.prepare("DELETE FROM calendar_events").run();
+        this.db.prepare("DELETE FROM google_calendars").run();
+        this.db.prepare("DELETE FROM google_calendar_tokens").run();
+      });
+      transaction();
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error clearing calendar data", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  updateCalendarSyncToken(calendarId, syncToken) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare("UPDATE google_calendars SET sync_token = ? WHERE id = ?")
+        .run(syncToken, calendarId);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error updating sync token", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  removeCalendarEvents(eventIds) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const placeholders = eventIds.map(() => "?").join(", ");
+      this.db.prepare(`DELETE FROM calendar_events WHERE id IN (${placeholders})`).run(...eventIds);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error removing calendar events", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  getMeetingsFolder() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return (
+        this.db
+          .prepare("SELECT id FROM folders WHERE name = 'Meetings' AND is_default = 1")
+          .get() || null
+      );
+    } catch (error) {
+      debugLogger.error("Error getting meetings folder", { error: error.message }, "gcal");
       throw error;
     }
   }

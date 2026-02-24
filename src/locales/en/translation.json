@@ -488,6 +488,29 @@
     "welcomeTitle": "Welcome to OpenWhispr",
     "sessionExpired": "Session expired. Please restart the sign-up process."
   },
+  "calendar": {
+    "title": "Google Calendar",
+    "status": "Status",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "notConnectedDescription": "Connect to detect and record meetings",
+    "connectCta": {
+      "title": "Calendar Integration",
+      "description": "Auto-detect meetings and record with speaker diarization"
+    },
+    "connect": "Connect Google Calendar",
+    "connecting": "Connecting...",
+    "disconnect": "Disconnect",
+    "disconnecting": "Disconnecting...",
+    "sync": "Sync",
+    "syncing": "Syncing...",
+    "calendarsTitle": "Calendars",
+    "upcomingTitle": "Upcoming",
+    "noUpcoming": "No upcoming events",
+    "meetingStarting": "Meeting starting now",
+    "today": "Today",
+    "tomorrow": "Tomorrow"
+  },
   "cleanupPrompt": "Cleanup",
   "developerSection": {
     "currentLogFile": "Current log file",
@@ -809,6 +832,10 @@
       "hotkeys": {
         "description": "Dictation hotkey & activation",
         "label": "Hotkeys"
+      },
+      "calendar": {
+        "label": "Calendar",
+        "description": "Google Calendar integration"
       },
       "transcription": {
         "description": "Speech-to-text engine",

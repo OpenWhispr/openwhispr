@@ -7,6 +7,7 @@ import {
   UserCircle,
   Wrench,
   Keyboard,
+  Calendar,
   CreditCard,
   Shield,
 } from "lucide-react";
@@ -62,6 +63,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         label: t("settingsModal.sections.hotkeys.label"),
         icon: Keyboard,
         description: t("settingsModal.sections.hotkeys.description"),
+        group: t("settingsModal.groups.app"),
+      },
+      {
+        id: "calendar",
+        label: t("settingsModal.sections.calendar.label"),
+        icon: Calendar,
+        description: t("settingsModal.sections.calendar.description"),
         group: t("settingsModal.groups.app"),
       },
       {

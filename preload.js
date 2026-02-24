@@ -436,4 +436,40 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Auto-start management
   getAutoStartEnabled: () => ipcRenderer.invoke("get-auto-start-enabled"),
   setAutoStartEnabled: (enabled) => ipcRenderer.invoke("set-auto-start-enabled", enabled),
+
+  // Google Calendar
+  gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),
+  gcalDisconnect: () => ipcRenderer.invoke("gcal-disconnect"),
+  gcalGetConnectionStatus: () => ipcRenderer.invoke("gcal-get-connection-status"),
+  gcalGetCalendars: () => ipcRenderer.invoke("gcal-get-calendars"),
+  gcalSetCalendarSelection: (calendarId, isSelected) =>
+    ipcRenderer.invoke("gcal-set-calendar-selection", calendarId, isSelected),
+  gcalSyncEvents: () => ipcRenderer.invoke("gcal-sync-events"),
+  gcalGetUpcomingEvents: (windowMinutes) =>
+    ipcRenderer.invoke("gcal-get-upcoming-events", windowMinutes),
+
+  // Desktop audio capture
+  getDesktopSources: (types) => ipcRenderer.invoke("get-desktop-sources", types),
+
+  // Google Calendar event listeners
+  onGcalMeetingStarting: registerListener(
+    "gcal-meeting-starting",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onGcalMeetingEnded: registerListener(
+    "gcal-meeting-ended",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onGcalStartRecording: registerListener(
+    "gcal-start-recording",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onGcalConnectionChanged: registerListener(
+    "gcal-connection-changed",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onGcalEventsSynced: registerListener(
+    "gcal-events-synced",
+    (callback) => (_event, data) => callback(data)
+  ),
 });

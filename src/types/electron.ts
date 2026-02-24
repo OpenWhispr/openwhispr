@@ -18,6 +18,8 @@ export interface NoteItem {
   source_file: string | null;
   audio_duration_seconds: number | null;
   folder_id: number | null;
+  transcript: string | null;
+  calendar_event_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -304,6 +306,8 @@ declare global {
           enhancement_prompt?: string | null;
           enhanced_at_content_hash?: string | null;
           folder_id?: number | null;
+          transcript?: string | null;
+          calendar_event_id?: string | null;
         }
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
@@ -672,7 +676,7 @@ declare global {
       // OpenWhispr Cloud API
       cloudTranscribe?: (
         audioBuffer: ArrayBuffer,
-        opts: { language?: string; prompt?: string }
+        opts: { language?: string; prompt?: string; useCase?: string; diarization?: boolean }
       ) => Promise<{
         success: boolean;
         text?: string;
@@ -859,6 +863,30 @@ declare global {
       onDeepgramSessionEnd?: (
         callback: (data: { audioDuration?: number; text?: string }) => void
       ) => () => void;
+
+      // Google Calendar
+      gcalStartOAuth?: () => Promise<{ success: boolean; email?: string; error?: string }>;
+      gcalDisconnect?: () => Promise<{ success: boolean; error?: string }>;
+      gcalGetConnectionStatus?: () => Promise<{ connected: boolean; email: string | null }>;
+      gcalGetCalendars?: () => Promise<{ success: boolean; calendars: any[] }>;
+      gcalSetCalendarSelection?: (
+        calendarId: string,
+        isSelected: boolean
+      ) => Promise<{ success: boolean; error?: string }>;
+      gcalSyncEvents?: () => Promise<{ success: boolean; error?: string }>;
+      gcalGetUpcomingEvents?: (
+        windowMinutes?: number
+      ) => Promise<{ success: boolean; events: any[] }>;
+
+      // Desktop audio capture
+      getDesktopSources?: (types: string[]) => Promise<Array<{ id: string; name: string }>>;
+
+      // Google Calendar event listeners
+      onGcalMeetingStarting?: (callback: (data: any) => void) => () => void;
+      onGcalMeetingEnded?: (callback: (data: any) => void) => () => void;
+      onGcalStartRecording?: (callback: (data: any) => void) => () => void;
+      onGcalConnectionChanged?: (callback: (data: any) => void) => () => void;
+      onGcalEventsSynced?: (callback: (data: any) => void) => () => void;
     };
 
     api?: {

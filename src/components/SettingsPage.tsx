@@ -51,6 +51,7 @@ import { getPlatform, getCachedPlatform } from "../utils/platform";
 import { getDefaultHotkey, formatHotkeyLabel } from "../utils/hotkeys";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import { Toggle } from "./ui/toggle";
+import CalendarSettings from "./CalendarSettings";
 import DeveloperSection from "./DeveloperSection";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
@@ -68,6 +69,7 @@ export type SettingsSectionType =
   | "plansBilling"
   | "general"
   | "hotkeys"
+  | "calendar"
   | "transcription"
   | "intelligence"
   | "privacyData"
@@ -1760,6 +1762,9 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
             </div>
           </div>
         );
+
+      case "calendar":
+        return <CalendarSettings />;
 
       case "transcription":
         return (

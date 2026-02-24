@@ -55,6 +55,7 @@ const BOOLEAN_SETTINGS = new Set([
   "telemetryEnabled",
   "audioCuesEnabled",
   "floatingIconAutoHide",
+  "gcalConnected",
   "isSignedIn",
 ]);
 
@@ -84,6 +85,8 @@ export interface SettingsState
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   floatingIconAutoHide: boolean;
+  gcalConnected: boolean;
+  gcalEmail: string;
 
   setUseLocalWhisper: (value: boolean) => void;
   setWhisperModel: (value: string) => void;
@@ -125,6 +128,8 @@ export interface SettingsState
   setTelemetryEnabled: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
+  setGcalConnected: (value: boolean) => void;
+  setGcalEmail: (value: string) => void;
   setIsSignedIn: (value: boolean) => void;
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
@@ -236,6 +241,8 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   telemetryEnabled: readBoolean("telemetryEnabled", false),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
+  gcalConnected: readBoolean("gcalConnected", false),
+  gcalEmail: readString("gcalEmail", ""),
   isSignedIn: readBoolean("isSignedIn", false),
 
   setUseLocalWhisper: createBooleanSetter("useLocalWhisper"),
@@ -367,6 +374,9 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
       window.electronAPI?.notifyFloatingIconAutoHideChanged?.(enabled);
     }
   },
+
+  setGcalConnected: createBooleanSetter("gcalConnected"),
+  setGcalEmail: createStringSetter("gcalEmail"),
 
   setIsSignedIn: (value: boolean) => {
     if (isBrowser) localStorage.setItem("isSignedIn", String(value));
