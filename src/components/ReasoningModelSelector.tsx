@@ -165,7 +165,10 @@ function GpuStatusBadge() {
             style={{ width: `${Math.min(progress.percentage, 100)}%` }}
           />
         </div>
-        <span className="text-xs text-muted-foreground tabular-nums shrink-0">{roundedPercent}%</span>
+        <div className="relative flex items-center justify-center h-5 min-w-5 px-1 shrink-0">
+          <div className="absolute inset-0 rounded-md bg-primary/15" />
+          <span className="relative text-xs font-bold text-primary tabular-nums">{roundedPercent}%</span>
+        </div>
         <button
           type="button"
           onClick={() => window.electronAPI?.cancelLlamaVulkanDownload?.()}
