@@ -10,11 +10,26 @@ if (!isMac) {
   process.exit(0);
 }
 
+// Support cross-compilation via --arch flag or TARGET_ARCH env var
+const archIndex = process.argv.indexOf("--arch");
+const targetArch =
+  (archIndex !== -1 && process.argv[archIndex + 1]) || process.env.TARGET_ARCH || process.arch;
+
+const ARCH_TO_TARGET = {
+  arm64: "arm64-apple-macosx11.0",
+  x64: "x86_64-apple-macosx10.15",
+};
+const swiftTarget = ARCH_TO_TARGET[targetArch];
+if (!swiftTarget) {
+  console.error(`[fast-paste] Unsupported architecture: ${targetArch}`);
+  process.exit(1);
+}
+
 const projectRoot = path.resolve(__dirname, "..");
 const swiftSource = path.join(projectRoot, "resources", "macos-fast-paste.swift");
 const outputDir = path.join(projectRoot, "resources", "bin");
 const outputBinary = path.join(outputDir, "macos-fast-paste");
-const hashFile = path.join(outputDir, ".macos-fast-paste.hash");
+const hashFile = path.join(outputDir, `.macos-fast-paste.${targetArch}.hash`);
 const moduleCacheDir = path.join(outputDir, ".swift-module-cache");
 
 function log(message) {
@@ -86,6 +101,8 @@ function attemptCompile(command, args) {
 const compileArgs = [
   swiftSource,
   "-O",
+  "-target",
+  swiftTarget,
   "-module-cache-path",
   moduleCacheDir,
   "-o",
@@ -117,4 +134,4 @@ try {
   log(`Warning: Could not save source hash: ${err.message}`);
 }
 
-log("Successfully built macOS fast-paste binary.");
+log(`Successfully built macOS fast-paste binary (${targetArch}).`);

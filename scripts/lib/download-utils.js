@@ -45,7 +45,9 @@ function fetchJson(url, redirectCount = 0) {
             reject(new Error("Redirect without location header"));
             return;
           }
-          fetchJson(redirectUrl, redirectCount + 1).then(resolve).catch(reject);
+          fetchJson(redirectUrl, redirectCount + 1)
+            .then(resolve)
+            .catch(reject);
           return;
         }
 
@@ -211,7 +213,8 @@ function downloadFile(url, dest, retryCount = 0) {
 
     request(url);
   }).catch(async (error) => {
-    const isTransient = error.message.includes("timed out") ||
+    const isTransient =
+      error.message.includes("timed out") ||
       error.code === "ECONNRESET" ||
       error.code === "ETIMEDOUT";
 
@@ -293,7 +296,8 @@ function parseArgs() {
     isCurrent: args.includes("--current"),
     isAll: args.includes("--all"),
     isForce: args.includes("--force"),
-    shouldCleanup: args.includes("--clean") ||
+    shouldCleanup:
+      args.includes("--clean") ||
       process.env.CI === "true" ||
       process.env.GITHUB_ACTIONS === "true",
   };

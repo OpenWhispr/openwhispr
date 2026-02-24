@@ -157,7 +157,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: resources/bin
-          key: macos-${{ matrix.arch }}-bin-${{ hashFiles('scripts/download-*.js', 'scripts/build-globe-listener.js', 'resources/macos-globe-listener.swift') }}
+          key: macos-${{ matrix.arch }}-bin-${{ hashFiles('scripts/download-*.js', 'scripts/build-globe-listener.js', 'resources/macos-globe-listener.swift', 'scripts/build-macos-fast-paste.js', 'resources/macos-fast-paste.swift') }}
 
       - name: Download whisper.cpp binaries
         run: node scripts/download-whisper-cpp.js --current --platform darwin --arch ${{ matrix.arch }}
