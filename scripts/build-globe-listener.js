@@ -32,6 +32,12 @@ const outputBinary = path.join(outputDir, "macos-globe-listener");
 const hashFile = path.join(outputDir, `.macos-globe-listener.${targetArch}.hash`);
 const moduleCacheDir = path.join(outputDir, ".swift-module-cache");
 
+// Mach-O CPU type constants for architecture verification
+const ARCH_CPU_TYPE = {
+  arm64: 0x0100000c, // CPU_TYPE_ARM64
+  x64: 0x01000007, // CPU_TYPE_X86_64
+};
+
 function log(message) {
   console.log(`[globe-listener] ${message}`);
 }
@@ -39,6 +45,26 @@ function log(message) {
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
     fs.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
+function verifyBinaryArch(binaryPath, expectedArch) {
+  try {
+    const fd = fs.openSync(binaryPath, "r");
+    const header = Buffer.alloc(8);
+    fs.readSync(fd, header, 0, 8, 0);
+    fs.closeSync(fd);
+
+    const magic = header.readUInt32LE(0);
+    if (magic !== 0xfeedfacf) {
+      // Not a 64-bit Mach-O
+      return false;
+    }
+    const cpuType = header.readInt32LE(4);
+    const expectedCpu = ARCH_CPU_TYPE[expectedArch];
+    return cpuType === expectedCpu;
+  } catch {
+    return false;
   }
 }
 
@@ -52,14 +78,20 @@ ensureDir(moduleCacheDir);
 
 let needsBuild = true;
 if (fs.existsSync(outputBinary)) {
-  try {
-    const binaryStat = fs.statSync(outputBinary);
-    const sourceStat = fs.statSync(swiftSource);
-    if (binaryStat.mtimeMs >= sourceStat.mtimeMs) {
-      needsBuild = false;
-    }
-  } catch {
+  // Verify existing binary matches the target architecture
+  if (!verifyBinaryArch(outputBinary, targetArch)) {
+    log(`Existing binary is wrong architecture (expected ${targetArch}), rebuild needed`);
     needsBuild = true;
+  } else {
+    try {
+      const binaryStat = fs.statSync(outputBinary);
+      const sourceStat = fs.statSync(swiftSource);
+      if (binaryStat.mtimeMs >= sourceStat.mtimeMs) {
+        needsBuild = false;
+      }
+    } catch {
+      needsBuild = true;
+    }
   }
 }
 
@@ -76,8 +108,9 @@ if (!needsBuild && fs.existsSync(outputBinary)) {
         needsBuild = true;
       }
     } else {
-      // No hash file exists, save current hash for next time
-      fs.writeFileSync(hashFile, currentHash);
+      // No hash file for this architecture — force rebuild to ensure correct arch
+      log(`No hash file for ${targetArch}, rebuild needed`);
+      needsBuild = true;
     }
   } catch (err) {
     log(`Hash check failed: ${err.message}, forcing rebuild`);
@@ -126,6 +159,15 @@ try {
   fs.chmodSync(outputBinary, 0o755);
 } catch (error) {
   console.warn(`[globe-listener] Unable to set executable permissions: ${error.message}`);
+}
+
+// Verify the compiled binary matches the target architecture
+if (!verifyBinaryArch(outputBinary, targetArch)) {
+  console.error(
+    `[globe-listener] FATAL: Compiled binary architecture does not match target (${targetArch}). ` +
+      `This can happen when cross-compiling without setting TARGET_ARCH env var.`
+  );
+  process.exit(1);
 }
 
 // Save source hash after successful build
