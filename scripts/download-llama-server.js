@@ -16,8 +16,6 @@ const LLAMA_CPP_REPO = "ggerganov/llama.cpp";
 // Version can be pinned via environment variable for reproducible builds
 const VERSION_OVERRIDE = process.env.LLAMA_CPP_VERSION || null;
 
-// Asset name patterns to match in the release (version-independent)
-// platformArch groups variants that belong to the same OS/arch combination
 const BINARIES = {
   "darwin-arm64": {
     platformArch: "darwin-arm64",
@@ -51,7 +49,6 @@ const BINARIES = {
 
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
 
-// Cache the release info to avoid multiple API calls
 let cachedRelease = null;
 
 async function getRelease() {

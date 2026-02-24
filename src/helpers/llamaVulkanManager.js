@@ -21,7 +21,7 @@ const VULKAN_ASSETS = {
     libPattern: /\.dll$/i,
   },
   "linux-x64": {
-    assetPattern: /^llama-.*-bin-linux-vulkan-x64\.tar\.gz$/,
+    assetPattern: /^llama-.*-bin-ubuntu-vulkan-x64\.tar\.gz$/,
     binaryName: "llama-server",
     outputName: "llama-server-vulkan",
     libPattern: /\.so(\.\d+)*$/,

@@ -1,32 +1,57 @@
-const { execFile } = require("child_process");
+const { app } = require("electron");
 
 let cachedResult = null;
 
-function detectVulkanGpu() {
-  if (cachedResult) return Promise.resolve(cachedResult);
+const VULKAN_VENDOR_IDS = new Set([
+  0x10de, // NVIDIA
+  0x1002, // AMD
+  0x8086, // Intel
+]);
+
+const VENDOR_NAMES = {
+  0x10de: "NVIDIA",
+  0x1002: "AMD",
+  0x8086: "Intel",
+};
+
+function parseDeviceName(gpuInfo, activeGpu) {
+  const renderer = gpuInfo.auxAttributes?.glRenderer;
+  if (renderer) {
+    const match = renderer.match(/ANGLE\s*\([^,]*,\s*([^,)]+)/);
+    if (match) return match[1].trim();
+  }
+  if (activeGpu?.vendorId) {
+    return VENDOR_NAMES[activeGpu.vendorId] || `GPU (vendor ${activeGpu.vendorId})`;
+  }
+  return null;
+}
+
+async function detectVulkanGpu() {
+  if (cachedResult) return cachedResult;
 
   if (process.platform === "darwin") {
     cachedResult = { available: false };
-    return Promise.resolve(cachedResult);
+    return cachedResult;
   }
 
-  return new Promise((resolve) => {
-    execFile("vulkaninfo", ["--summary"], { timeout: 5000 }, (error, stdout) => {
-      if (error || !stdout) {
-        cachedResult = { available: false };
-        resolve(cachedResult);
-        return;
-      }
+  try {
+    const gpuInfo = await app.getGPUInfo("complete");
+    const activeGpu = gpuInfo.gpuDevice?.find((d) => d.active) || gpuInfo.gpuDevice?.[0];
 
-      const nameMatch = stdout.match(/deviceName\s*=\s*(.+)/);
-      if (nameMatch) {
-        cachedResult = { available: true, deviceName: nameMatch[1].trim() };
-      } else {
-        cachedResult = { available: false };
-      }
-      resolve(cachedResult);
-    });
-  });
+    if (!activeGpu || !VULKAN_VENDOR_IDS.has(activeGpu.vendorId)) {
+      cachedResult = { available: false };
+      return cachedResult;
+    }
+
+    cachedResult = {
+      available: true,
+      deviceName: parseDeviceName(gpuInfo, activeGpu),
+    };
+    return cachedResult;
+  } catch {
+    cachedResult = { available: false };
+    return cachedResult;
+  }
 }
 
 function clearCache() {

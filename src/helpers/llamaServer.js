@@ -528,6 +528,7 @@ class LlamaServerManager {
     this.ready = false;
     this.port = null;
     this.modelPath = null;
+    this.activeBackend = null;
   }
 
   getStatus() {
