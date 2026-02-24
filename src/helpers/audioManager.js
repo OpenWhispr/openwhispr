@@ -1090,6 +1090,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const language = getBaseLanguageCode(settings.preferredLanguage);
 
     const arrayBuffer = await audioBlob.arrayBuffer();
+    const audioSizeBytes = audioBlob.size;
+    const audioFormat = audioBlob.type;
     const opts = {};
     if (language) opts.language = language;
 
@@ -1124,6 +1126,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             customPrompt: this.getCustomPrompt(),
             language: settings.preferredLanguage || "auto",
             locale: settings.uiLanguage || "en",
+            sttProvider: result.sttProvider,
+            sttModel: result.sttModel,
+            sttProcessingMs: result.sttProcessingMs,
+            audioDurationMs: result.audioDurationMs,
+            audioSizeBytes,
+            audioFormat,
           });
           if (!res.success) {
             const err = new Error(res.error || "Cloud reasoning failed");
@@ -2165,6 +2173,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               customPrompt: this.getCustomPrompt(),
               language: stSettings.preferredLanguage || "auto",
               locale: stSettings.uiLanguage || "en",
+              sttProvider: "deepgram",
+              sttModel: "nova-3",
+              audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
             });
             if (!res.success) {
               const err = new Error(res.error || "Cloud reasoning failed");

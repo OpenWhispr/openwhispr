@@ -1654,6 +1654,7 @@ class IPCHandlers {
           prompt: opts.prompt,
           clientType: "desktop",
           appVersion: app.getVersion(),
+          clientVersion: app.getVersion(),
           sessionId: this.sessionId,
         });
 
@@ -1695,6 +1696,10 @@ class IPCHandlers {
           wordsRemaining: data.data.wordsRemaining,
           plan: data.data.plan,
           limitReached: data.data.limitReached || false,
+          sttProvider: data.data.sttProvider,
+          sttModel: data.data.sttModel,
+          sttProcessingMs: data.data.sttProcessingMs,
+          audioDurationMs: data.data.audioDurationMs,
         };
       } catch (error) {
         debugLogger.error("Cloud transcription error", { error: error.message }, "cloud-api");
@@ -1738,6 +1743,13 @@ class IPCHandlers {
             sessionId: this.sessionId,
             clientType: "desktop",
             appVersion: app.getVersion(),
+            clientVersion: app.getVersion(),
+            sttProvider: opts.sttProvider,
+            sttModel: opts.sttModel,
+            sttProcessingMs: opts.sttProcessingMs,
+            audioDurationMs: opts.audioDurationMs,
+            audioSizeBytes: opts.audioSizeBytes,
+            audioFormat: opts.audioFormat,
           }),
         });
 
@@ -1784,6 +1796,9 @@ class IPCHandlers {
             text,
             audioDurationSeconds,
             sessionId: this.sessionId,
+            clientType: "desktop",
+            appVersion: app.getVersion(),
+            clientVersion: app.getVersion(),
           }),
         });
 
@@ -1893,6 +1908,7 @@ class IPCHandlers {
           source: "file_upload",
           clientType: "desktop",
           appVersion: app.getVersion(),
+          clientVersion: app.getVersion(),
           sessionId: this.sessionId,
         });
 
