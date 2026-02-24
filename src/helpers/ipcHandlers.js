@@ -94,10 +94,17 @@ class IPCHandlers {
     this.updateManager = managers.updateManager;
     this.windowsKeyManager = managers.windowsKeyManager;
     this.getTrayManager = managers.getTrayManager;
+    this.whisperCudaManager = managers.whisperCudaManager;
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
     this.setupHandlers();
+
+    if (this.whisperManager?.serverManager) {
+      this.whisperManager.serverManager.on("cuda-fallback", () => {
+        this.broadcastToWindows("cuda-fallback-notification", {});
+      });
+    }
   }
 
   _syncStartupEnv(setVars, clearVars = []) {
@@ -607,7 +614,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("whisper-server-start", async (event, modelName) => {
-      return this.whisperManager.startServer(modelName);
+      const useCuda =
+        process.env.WHISPER_CUDA_ENABLED === "true" && this.whisperCudaManager?.isDownloaded();
+      return this.whisperManager.startServer(modelName, { useCuda });
     });
 
     ipcMain.handle("whisper-server-stop", async () => {
@@ -616,6 +625,59 @@ class IPCHandlers {
 
     ipcMain.handle("whisper-server-status", async () => {
       return this.whisperManager.getServerStatus();
+    });
+
+    ipcMain.handle("detect-gpu", async () => {
+      const { detectNvidiaGpu } = require("../utils/gpuDetection");
+      return detectNvidiaGpu();
+    });
+
+    ipcMain.handle("get-cuda-whisper-status", async () => {
+      const { detectNvidiaGpu } = require("../utils/gpuDetection");
+      const gpuInfo = await detectNvidiaGpu();
+      if (!this.whisperCudaManager) {
+        return { downloaded: false, path: null, gpuInfo };
+      }
+      return {
+        downloaded: this.whisperCudaManager.isDownloaded(),
+        path: this.whisperCudaManager.getCudaBinaryPath(),
+        gpuInfo,
+      };
+    });
+
+    ipcMain.handle("download-cuda-whisper-binary", async (event) => {
+      if (!this.whisperCudaManager) {
+        return { success: false, error: "CUDA not supported on this platform" };
+      }
+      try {
+        await this.whisperCudaManager.download((progress) => {
+          if (progress.type === "progress" && !event.sender.isDestroyed()) {
+            event.sender.send("cuda-download-progress", {
+              downloadedBytes: progress.downloaded_bytes,
+              totalBytes: progress.total_bytes,
+              percentage: progress.percentage,
+            });
+          }
+        });
+        this._syncStartupEnv({ WHISPER_CUDA_ENABLED: "true" });
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("cancel-cuda-whisper-download", async () => {
+      if (!this.whisperCudaManager) return { success: false };
+      return this.whisperCudaManager.cancelDownload();
+    });
+
+    ipcMain.handle("delete-cuda-whisper-binary", async () => {
+      if (!this.whisperCudaManager) return { success: false };
+      const result = await this.whisperCudaManager.delete();
+      if (result.success) {
+        this._syncStartupEnv({}, ["WHISPER_CUDA_ENABLED"]);
+      }
+      return result;
     });
 
     ipcMain.handle("check-ffmpeg-availability", async (event) => {

@@ -160,6 +160,7 @@ const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
 const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
+const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 
 // Manager instances - initialized after app.whenReady()
@@ -175,6 +176,7 @@ let trayManager = null;
 let updateManager = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
+let whisperCudaManager = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 
@@ -233,6 +235,9 @@ function initializeCoreManagers() {
   databaseManager = new DatabaseManager();
   clipboardManager = new ClipboardManager();
   whisperManager = new WhisperManager();
+  if (process.platform !== "darwin") {
+    whisperCudaManager = new WhisperCudaManager();
+  }
   parakeetManager = new ParakeetManager();
   updateManager = new UpdateManager();
   windowsKeyManager = new WindowsKeyManager();
@@ -247,6 +252,7 @@ function initializeCoreManagers() {
     windowManager,
     updateManager,
     windowsKeyManager,
+    whisperCudaManager,
     getTrayManager: () => trayManager,
   });
 }
@@ -326,7 +332,6 @@ function navigateControlPanelWithVerifier(verifier) {
   windowManager.controlPanelWindow.show();
   windowManager.controlPanelWindow.focus();
 }
-
 
 function handleOAuthDeepLink(deepLinkUrl) {
   try {
@@ -484,6 +489,7 @@ async function startApp() {
   const whisperSettings = {
     localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
     whisperModel: process.env.LOCAL_WHISPER_MODEL,
+    useCuda: process.env.WHISPER_CUDA_ENABLED === "true" && whisperCudaManager?.isDownloaded(),
   };
   whisperManager.initializeAtStartup(whisperSettings).catch((err) => {
     debugLogger.debug("Whisper startup init error (non-fatal)", { error: err.message });

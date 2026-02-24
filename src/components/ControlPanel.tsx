@@ -21,6 +21,7 @@ import WindowControls from "./WindowControls";
 import { getCachedPlatform } from "../utils/platform";
 import { setActiveNoteId, setActiveFolderId } from "../stores/noteStore";
 import HistoryView from "./HistoryView";
+import type { CudaWhisperStatus } from "../types/electron";
 
 const platform = getCachedPlatform();
 
@@ -48,10 +49,20 @@ export default function ControlPanel() {
     show: false,
   });
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const [cudaStatus, setCudaStatus] = useState<CudaWhisperStatus | null>(null);
+  const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
+    () => localStorage.getItem("gpuBannerDismissed") === "true"
+  );
   const cloudMigrationProcessed = useRef(false);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
-  const { useReasoningModel, setUseLocalWhisper, setCloudTranscriptionMode } = useSettings();
+  const {
+    useLocalWhisper,
+    localTranscriptionProvider,
+    useReasoningModel,
+    setUseLocalWhisper,
+    setCloudTranscriptionMode,
+  } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
   const usage = useUsage();
 
@@ -160,6 +171,25 @@ export default function ControlPanel() {
       })
       .catch(() => {});
   }, [useReasoningModel]);
+
+  const fetchCudaStatus = useCallback(() => {
+    if (platform === "darwin" || gpuBannerDismissed) return;
+    if (!useLocalWhisper || localTranscriptionProvider !== "whisper") return;
+    window.electronAPI
+      ?.getCudaWhisperStatus?.()
+      ?.then(setCudaStatus)
+      .catch(() => {});
+  }, [useLocalWhisper, localTranscriptionProvider, gpuBannerDismissed]);
+
+  useEffect(() => {
+    if (!showSettings) fetchCudaStatus();
+  }, [showSettings, fetchCudaStatus]);
+
+  const showGpuBanner =
+    activeView === "home" &&
+    !gpuBannerDismissed &&
+    cudaStatus?.gpuInfo.hasNvidiaGpu === true &&
+    cudaStatus.downloaded === false;
 
   const loadTranscriptions = async () => {
     try {
@@ -450,6 +480,49 @@ export default function ControlPanel() {
                       >
                         Not now
                       </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {showGpuBanner && (
+              <div className="max-w-3xl mx-auto w-full mb-3">
+                <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
+                      <Zap size={16} className="text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground mb-0.5">
+                        GPU acceleration available
+                      </p>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        {cudaStatus?.gpuInfo.gpuName
+                          ? `Your ${cudaStatus.gpuInfo.gpuName} can speed up local transcription.`
+                          : "Your NVIDIA GPU can speed up local transcription."}
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            setSettingsSection("transcription");
+                            setShowSettings(true);
+                          }}
+                        >
+                          Enable GPU
+                        </Button>
+                        <button
+                          onClick={() => {
+                            setGpuBannerDismissed(true);
+                            localStorage.setItem("gpuBannerDismissed", "true");
+                          }}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          Not now
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

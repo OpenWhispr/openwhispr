@@ -41,9 +41,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Note functions
   saveNote: (title, content, noteType, sourceFile, audioDuration, folderId) =>
-    ipcRenderer.invoke("db-save-note", title, content, noteType, sourceFile, audioDuration, folderId),
+    ipcRenderer.invoke(
+      "db-save-note",
+      title,
+      content,
+      noteType,
+      sourceFile,
+      audioDuration,
+      folderId
+    ),
   getNote: (id) => ipcRenderer.invoke("db-get-note", id),
-  getNotes: (noteType, limit, folderId) => ipcRenderer.invoke("db-get-notes", noteType, limit, folderId),
+  getNotes: (noteType, limit, folderId) =>
+    ipcRenderer.invoke("db-get-notes", noteType, limit, folderId),
   updateNote: (id, updates) => ipcRenderer.invoke("db-update-note", id, updates),
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
@@ -146,6 +155,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   whisperServerStart: (modelName) => ipcRenderer.invoke("whisper-server-start", modelName),
   whisperServerStop: () => ipcRenderer.invoke("whisper-server-stop"),
   whisperServerStatus: () => ipcRenderer.invoke("whisper-server-status"),
+
+  // CUDA GPU acceleration
+  detectGpu: () => ipcRenderer.invoke("detect-gpu"),
+  getCudaWhisperStatus: () => ipcRenderer.invoke("get-cuda-whisper-status"),
+  downloadCudaWhisperBinary: () => ipcRenderer.invoke("download-cuda-whisper-binary"),
+  cancelCudaWhisperDownload: () => ipcRenderer.invoke("cancel-cuda-whisper-download"),
+  deleteCudaWhisperBinary: () => ipcRenderer.invoke("delete-cuda-whisper-binary"),
+  onCudaDownloadProgress: registerListener(
+    "cuda-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onCudaFallbackNotification: registerListener(
+    "cuda-fallback-notification",
+    (callback) => () => callback()
+  ),
 
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
@@ -309,7 +333,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),
 
   // Cloud audio file transcription
-  transcribeAudioFileCloud: (filePath) => ipcRenderer.invoke("transcribe-audio-file-cloud", filePath),
+  transcribeAudioFileCloud: (filePath) =>
+    ipcRenderer.invoke("transcribe-audio-file-cloud", filePath),
   transcribeAudioFileByok: (options) => ipcRenderer.invoke("transcribe-audio-file-byok", options),
 
   // Referral stats
@@ -350,10 +375,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deepgramStreamingFinalize: () => ipcRenderer.send("deepgram-streaming-finalize"),
   deepgramStreamingStop: () => ipcRenderer.invoke("deepgram-streaming-stop"),
   deepgramStreamingStatus: () => ipcRenderer.invoke("deepgram-streaming-status"),
-  onDeepgramPartialTranscript: registerListener("deepgram-partial-transcript", (callback) => (_event, text) => callback(text)),
-  onDeepgramFinalTranscript: registerListener("deepgram-final-transcript", (callback) => (_event, text) => callback(text)),
-  onDeepgramError: registerListener("deepgram-error", (callback) => (_event, error) => callback(error)),
-  onDeepgramSessionEnd: registerListener("deepgram-session-end", (callback) => (_event, data) => callback(data)),
+  onDeepgramPartialTranscript: registerListener(
+    "deepgram-partial-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onDeepgramFinalTranscript: registerListener(
+    "deepgram-final-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onDeepgramError: registerListener(
+    "deepgram-error",
+    (callback) => (_event, error) => callback(error)
+  ),
+  onDeepgramSessionEnd: registerListener(
+    "deepgram-session-end",
+    (callback) => (_event, data) => callback(data)
+  ),
 
   // Usage limit events (for showing UpgradePrompt in ControlPanel)
   notifyLimitReached: (data) => ipcRenderer.send("limit-reached", data),

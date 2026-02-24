@@ -43,6 +43,19 @@ export interface ActionItem {
   updated_at: string;
 }
 
+export interface GpuInfo {
+  hasNvidiaGpu: boolean;
+  gpuName?: string;
+  driverVersion?: string;
+  vramMb?: number;
+}
+
+export interface CudaWhisperStatus {
+  downloaded: boolean;
+  path: string | null;
+  gpuInfo: GpuInfo;
+}
+
 export interface WhisperCheckResult {
   installed: boolean;
   working: boolean;
@@ -407,6 +420,21 @@ declare global {
         message?: string;
         error?: string;
       }>;
+
+      // CUDA GPU acceleration
+      detectGpu: () => Promise<GpuInfo>;
+      getCudaWhisperStatus: () => Promise<CudaWhisperStatus>;
+      downloadCudaWhisperBinary: () => Promise<{ success: boolean; error?: string }>;
+      cancelCudaWhisperDownload: () => Promise<{ success: boolean }>;
+      deleteCudaWhisperBinary: () => Promise<{ success: boolean }>;
+      onCudaDownloadProgress: (
+        callback: (data: {
+          downloadedBytes: number;
+          totalBytes: number;
+          percentage: number;
+        }) => void
+      ) => () => void;
+      onCudaFallbackNotification: (callback: () => void) => () => void;
 
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
