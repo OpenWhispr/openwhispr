@@ -316,3 +316,5 @@ Thumbs.db
 .macos-context-capture.hash
 .macos-context-capture.*.hash
 .linux-fast-paste.hash
+.windows-context-capture.hash
+.windows-context-capture.*.hash

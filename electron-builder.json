@@ -99,6 +99,7 @@
         "sherpa-onnx-*",
         "windows-key-listener*",
         "windows-fast-paste*",
+        "windows-context-capture*",
         "*.dylib",
         "*.dll",
         "*.so*"

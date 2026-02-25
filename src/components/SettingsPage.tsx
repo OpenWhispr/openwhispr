@@ -1641,25 +1641,23 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
               </SettingsPanel>
             </div>
 
-            {/* Context Awareness (macOS only) */}
-            {window.electronAPI?.getPlatform() === "darwin" && (
-              <div>
-                <SectionHeader title={t("settingsPage.general.contextAwareness.title")} />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <SettingsRow
-                      label={t("settingsPage.general.contextAwareness.label")}
-                      description={t("settingsPage.general.contextAwareness.description")}
-                    >
-                      <Toggle
-                        checked={contextAwarenessEnabled}
-                        onChange={setContextAwarenessEnabled}
-                      />
-                    </SettingsRow>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </div>
-            )}
+            {/* Context Awareness */}
+            <div>
+              <SectionHeader title={t("settingsPage.general.contextAwareness.title")} />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.contextAwareness.label")}
+                    description={t("settingsPage.general.contextAwareness.description")}
+                  >
+                    <Toggle
+                      checked={contextAwarenessEnabled}
+                      onChange={setContextAwarenessEnabled}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
 
             {/* Language */}
             <div>
