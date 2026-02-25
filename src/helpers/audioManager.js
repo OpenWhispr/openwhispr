@@ -1094,7 +1094,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const audioFormat = audioBlob.type;
     const opts = {};
     if (language) opts.language = language;
-    if (settings.useReasoningModel && !this.skipReasoning) opts.sendLogs = "false";
+    const reasoningMode = settings.cloudReasoningMode || "openwhispr";
+    if (settings.useReasoningModel && !this.skipReasoning && reasoningMode === "openwhispr") {
+      opts.sendLogs = "false";
+    }
 
     const dictionaryPrompt = this.getCustomDictionaryPrompt();
     if (dictionaryPrompt) opts.prompt = dictionaryPrompt;
@@ -1130,6 +1133,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             sttProvider: result.sttProvider,
             sttModel: result.sttModel,
             sttProcessingMs: result.sttProcessingMs,
+            sttWordCount: result.sttWordCount,
+            sttLanguage: result.sttLanguage,
             audioDurationMs: result.audioDurationMs,
             audioSizeBytes,
             audioFormat,
@@ -2160,6 +2165,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
 
     const stSettings = getSettings();
+    const streamingSttModel = stopResult?.model || "nova-3";
+    const streamingSttProcessingMs = Math.round(tTerminate - t0);
+    const streamingAudioBytesSent = stopResult?.audioBytesSent || 0;
+    const streamingSttLanguage = getBaseLanguageCode(stSettings.preferredLanguage) || undefined;
+    const streamingSttWordCount = finalText ? finalText.split(/\s+/).filter(Boolean).length : 0;
+
     let usedCloudReasoning = false;
     if (stSettings.useReasoningModel && finalText && !this.skipReasoning) {
       const reasoningStart = performance.now();
@@ -2176,8 +2187,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               language: stSettings.preferredLanguage || "auto",
               locale: stSettings.uiLanguage || "en",
               sttProvider: "deepgram",
-              sttModel: "nova-3",
+              sttModel: streamingSttModel,
+              sttProcessingMs: streamingSttProcessingMs,
+              sttWordCount: streamingSttWordCount,
+              sttLanguage: streamingSttLanguage,
               audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
+              audioSizeBytes: streamingAudioBytesSent || undefined,
+              audioFormat: "linear16",
             });
             if (!res.success) {
               const err = new Error(res.error || "Cloud reasoning failed");
@@ -2252,6 +2268,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (finalText) {
       const tBeforePaste = performance.now();
+      const clientTotalMs = Math.round(tBeforePaste - t0);
       this.onTranscriptionComplete?.({
         success: true,
         text: finalText,
@@ -2265,7 +2282,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               const res = await window.electronAPI.cloudStreamingUsage(
                 finalText,
                 durationSeconds ?? 0,
-                { sendLogs: !usedCloudReasoning }
+                {
+                  sendLogs: !usedCloudReasoning,
+                  sttProvider: "deepgram",
+                  sttModel: streamingSttModel,
+                  sttProcessingMs: streamingSttProcessingMs,
+                  sttLanguage: streamingSttLanguage,
+                  audioSizeBytes: streamingAudioBytesSent || undefined,
+                  audioFormat: "linear16",
+                  clientTotalMs,
+                }
               );
               if (!res.success) {
                 const err = new Error(res.error || "Streaming usage recording failed");

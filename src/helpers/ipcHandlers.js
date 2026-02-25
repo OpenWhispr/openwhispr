@@ -1700,6 +1700,8 @@ class IPCHandlers {
           sttProvider: data.data.sttProvider,
           sttModel: data.data.sttModel,
           sttProcessingMs: data.data.sttProcessingMs,
+          sttWordCount: data.data.sttWordCount,
+          sttLanguage: data.data.sttLanguage,
           audioDurationMs: data.data.audioDurationMs,
         };
       } catch (error) {
@@ -1748,9 +1750,12 @@ class IPCHandlers {
             sttProvider: opts.sttProvider,
             sttModel: opts.sttModel,
             sttProcessingMs: opts.sttProcessingMs,
+            sttWordCount: opts.sttWordCount,
+            sttLanguage: opts.sttLanguage,
             audioDurationMs: opts.audioDurationMs,
             audioSizeBytes: opts.audioSizeBytes,
             audioFormat: opts.audioFormat,
+            clientTotalMs: opts.clientTotalMs,
           }),
         });
 
@@ -1802,6 +1807,13 @@ class IPCHandlers {
               clientType: "desktop",
               appVersion: app.getVersion(),
               clientVersion: app.getVersion(),
+              sttProvider: opts.sttProvider,
+              sttModel: opts.sttModel,
+              sttProcessingMs: opts.sttProcessingMs,
+              sttLanguage: opts.sttLanguage,
+              audioSizeBytes: opts.audioSizeBytes,
+              audioFormat: opts.audioFormat,
+              clientTotalMs: opts.clientTotalMs,
               sendLogs: opts.sendLogs,
             }),
           });
@@ -2631,12 +2643,14 @@ class IPCHandlers {
 
     ipcMain.handle("deepgram-streaming-stop", async () => {
       try {
+        const model = this.deepgramStreaming?.currentModel || "nova-3";
+        const audioBytesSent = this.deepgramStreaming?.audioBytesSent || 0;
         let result = { text: "" };
         if (this.deepgramStreaming) {
           result = await this.deepgramStreaming.disconnect(true);
         }
 
-        return { success: true, text: result?.text || "" };
+        return { success: true, text: result?.text || "", model, audioBytesSent };
       } catch (error) {
         debugLogger.error("Deepgram streaming stop error", { error: error.message });
         return { success: false, error: error.message };
