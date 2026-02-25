@@ -1,8 +1,10 @@
-const { execSync } = require("child_process");
+const { execSync, execFileSync } = require("child_process");
+const path = require("path");
+const fs = require("fs");
 const EventEmitter = require("events");
 const debugLogger = require("./debugLogger");
 
-const CHECK_INTERVAL_MS = 10 * 1000;
+const CHECK_INTERVAL_MS = 5 * 1000;
 const SUSTAINED_THRESHOLD_CHECKS = 3;
 const COOLDOWN_MS = 30 * 60 * 1000;
 const EXEC_OPTS = { timeout: 5000, encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] };
@@ -15,11 +17,18 @@ class AudioActivityDetector extends EventEmitter {
     this.audioActiveStart = null;
     this.hasPrompted = false;
     this.lastDismissedAt = null;
+    this._micCheckBinary = null;
   }
 
   start() {
     if (this.checkInterval) return;
-    debugLogger.info("Starting audio activity detector", {}, "meeting");
+    if (process.platform === "darwin") this._resolveMicCheckBinary();
+    debugLogger.info(
+      "Audio activity detector started",
+      { intervalMs: CHECK_INTERVAL_MS, threshold: SUSTAINED_THRESHOLD_CHECKS },
+      "meeting"
+    );
+    this._check();
     this.checkInterval = setInterval(() => this._check(), CHECK_INTERVAL_MS);
   }
 
@@ -29,12 +38,17 @@ class AudioActivityDetector extends EventEmitter {
       this.checkInterval = null;
     }
     this._reset();
-    debugLogger.info("Stopped audio activity detector", {}, "meeting");
+    debugLogger.info("Audio activity detector stopped", {}, "meeting");
   }
 
   dismiss() {
     this.lastDismissedAt = Date.now();
     this._reset();
+    debugLogger.info(
+      "Audio detection dismissed, cooldown started",
+      { cooldownMs: COOLDOWN_MS },
+      "meeting"
+    );
   }
 
   _reset() {
@@ -47,27 +61,36 @@ class AudioActivityDetector extends EventEmitter {
     if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
     if (this.hasPrompted) return;
 
-    if (this._isMicActive()) {
+    const active = this._isMicActive();
+    debugLogger.debug(
+      "Mic check",
+      { active, consecutiveChecks: this.consecutiveChecks },
+      "meeting"
+    );
+
+    if (active) {
       this.consecutiveChecks++;
       if (!this.audioActiveStart) this.audioActiveStart = Date.now();
 
       if (this.consecutiveChecks >= SUSTAINED_THRESHOLD_CHECKS) {
         this.hasPrompted = true;
         const now = Date.now();
+        const durationMs = now - this.audioActiveStart;
         debugLogger.info(
           "Sustained audio activity detected",
-          {
-            consecutiveChecks: this.consecutiveChecks,
-            durationMs: now - this.audioActiveStart,
-          },
+          { consecutiveChecks: this.consecutiveChecks, durationMs },
           "meeting"
         );
-        this.emit("sustained-audio-detected", {
-          durationMs: now - this.audioActiveStart,
-          detectedAt: now,
-        });
+        this.emit("sustained-audio-detected", { durationMs, detectedAt: now });
       }
     } else {
+      if (this.consecutiveChecks > 0) {
+        debugLogger.debug(
+          "Mic activity reset",
+          { previousChecks: this.consecutiveChecks },
+          "meeting"
+        );
+      }
       this.consecutiveChecks = 0;
       this.audioActiveStart = null;
     }
@@ -86,7 +109,51 @@ class AudioActivityDetector extends EventEmitter {
     }
   }
 
+  _resolveMicCheckBinary() {
+    const binaryName = "macos-mic-check";
+    const candidates = [
+      path.join(__dirname, "..", "..", "resources", "bin", binaryName),
+      path.join(__dirname, "..", "..", "resources", binaryName),
+    ];
+
+    if (process.resourcesPath) {
+      candidates.push(
+        path.join(process.resourcesPath, binaryName),
+        path.join(process.resourcesPath, "bin", binaryName),
+        path.join(process.resourcesPath, "resources", "bin", binaryName),
+        path.join(process.resourcesPath, "app.asar.unpacked", "resources", "bin", binaryName)
+      );
+    }
+
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(candidate)) {
+          fs.accessSync(candidate, fs.constants.X_OK);
+          this._micCheckBinary = candidate;
+          debugLogger.info("Resolved mic-check binary", { path: candidate }, "meeting");
+          return;
+        }
+      } catch {
+        // continue
+      }
+    }
+    debugLogger.warn("macos-mic-check binary not found, falling back to ioreg", {}, "meeting");
+  }
+
   _checkDarwin() {
+    if (this._micCheckBinary) {
+      try {
+        const out = execFileSync(this._micCheckBinary, [], { timeout: 3000, encoding: "utf8" });
+        return out.trim() === "true";
+      } catch (err) {
+        debugLogger.debug(
+          "mic-check binary failed, falling back",
+          { error: err.message },
+          "meeting"
+        );
+      }
+    }
+
     try {
       const out = execSync("ioreg -l -w 0 | grep '\"IOAudioEngineState\" = 1'", EXEC_OPTS);
       return out.trim().length > 0;

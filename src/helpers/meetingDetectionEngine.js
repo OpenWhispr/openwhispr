@@ -28,19 +28,28 @@ class MeetingDetectionEngine {
   }
 
   _handleDetection(source, key, data) {
-    if (source === "process" && !this.preferences.processDetection) return;
-    if (source === "audio" && !this.preferences.audioDetection) return;
-
     const detectionId = `${source}:${key}`;
 
-    if (this.activeDetections.has(detectionId)) return;
+    if (source === "process" && !this.preferences.processDetection) {
+      debugLogger.debug("Process detection disabled, ignoring", { detectionId }, "meeting");
+      return;
+    }
+    if (source === "audio" && !this.preferences.audioDetection) {
+      debugLogger.debug("Audio detection disabled, ignoring", { detectionId }, "meeting");
+      return;
+    }
+
+    if (this.activeDetections.has(detectionId)) {
+      debugLogger.debug("Detection already active, skipping", { detectionId }, "meeting");
+      return;
+    }
 
     const calendarState = this.googleCalendarManager?.getActiveMeetingState?.();
     if (calendarState) {
       if (calendarState.activeMeeting !== null || calendarState.activeEvents?.length > 0) {
-        debugLogger.debug(
+        debugLogger.info(
           "Suppressing detection — active calendar meeting exists",
-          { detectionId },
+          { detectionId, activeMeeting: calendarState.activeMeeting?.summary },
           "meeting"
         );
         return;
@@ -56,6 +65,11 @@ class MeetingDetectionEngine {
       });
     }
 
+    debugLogger.info(
+      "Meeting detection triggered",
+      { detectionId, source, imminentEvent: imminentEvent?.summary ?? null },
+      "meeting"
+    );
     this.activeDetections.set(detectionId, { source, key, data, dismissed: false });
     this._showPrompt(detectionId, source, key, data, imminentEvent);
   }
@@ -74,9 +88,13 @@ class MeetingDetectionEngine {
       body = "It sounds like you're in a meeting. Want to take notes?";
     }
 
+    debugLogger.info("Showing notification", { detectionId, title }, "meeting");
+
     const notif = new Notification({ title, body });
 
     notif.on("click", () => {
+      debugLogger.info("Notification clicked — starting recording", { detectionId }, "meeting");
+
       let event;
       if (imminentEvent) {
         event = imminentEvent;
@@ -104,6 +122,7 @@ class MeetingDetectionEngine {
     });
 
     notif.on("close", () => {
+      debugLogger.debug("Notification closed", { detectionId }, "meeting");
       this._dismiss(source, key);
       const detection = this.activeDetections.get(detectionId);
       if (detection) detection.dismissed = true;
@@ -120,6 +139,7 @@ class MeetingDetectionEngine {
   }
 
   handleUserResponse(detectionId, action) {
+    debugLogger.info("User response to detection", { detectionId, action }, "meeting");
     if (action === "dismiss") {
       const detection = this.activeDetections.get(detectionId);
       if (detection) {
@@ -138,6 +158,7 @@ class MeetingDetectionEngine {
   }
 
   setPreferences(prefs) {
+    debugLogger.info("Updating detection preferences", prefs, "meeting");
     Object.assign(this.preferences, prefs);
 
     if (this.preferences.processDetection) {
@@ -158,11 +179,13 @@ class MeetingDetectionEngine {
   }
 
   start() {
+    debugLogger.info("Meeting detection engine started", this.preferences, "meeting");
     if (this.preferences.processDetection) this.meetingProcessDetector.start();
     if (this.preferences.audioDetection) this.audioActivityDetector.start();
   }
 
   stop() {
+    debugLogger.info("Meeting detection engine stopped", {}, "meeting");
     this.meetingProcessDetector.stop();
     this.audioActivityDetector.stop();
     this.activeDetections.clear();

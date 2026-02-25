@@ -97,7 +97,16 @@ class MeetingProcessDetector extends EventEmitter {
 
   start() {
     if (this.pollInterval) return;
-    debugLogger.info("Starting meeting process detector", {}, "meeting");
+    const apps = MEETING_APPS[process.platform] || [];
+    debugLogger.info(
+      "Process detector started",
+      {
+        platform: process.platform,
+        appsMonitored: apps.map((a) => a.appName),
+        intervalMs: POLL_INTERVAL_MS,
+      },
+      "meeting"
+    );
     this._poll();
     this.pollInterval = setInterval(() => this._poll(), POLL_INTERVAL_MS);
   }
@@ -113,6 +122,7 @@ class MeetingProcessDetector extends EventEmitter {
 
   dismiss(processKey) {
     this.dismissedProcesses.add(processKey);
+    debugLogger.info("Process detection dismissed", { processKey }, "meeting");
   }
 
   getDetectedProcesses() {
