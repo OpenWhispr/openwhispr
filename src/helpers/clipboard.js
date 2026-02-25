@@ -821,8 +821,9 @@ class ClipboardManager {
 
     const targetWindowId = preDetectTargetWindow();
     const xdotoolWindowClass = preDetectWindowClass(targetWindowId);
+    const useShiftInsertFallback = isWayland && isGnome && !xdotoolWindowClass;
 
-    if (linuxFastPaste) {
+    if (linuxFastPaste && !useShiftInsertFallback) {
       const earlyIsTerminal = xdotoolWindowClass
         ? terminalClasses.some((t) => xdotoolWindowClass.includes(t))
         : false;
@@ -972,7 +973,6 @@ class ClipboardManager {
     };
 
     const inTerminal = isTerminal();
-    const useShiftInsertFallback = isWayland && isGnome && !xdotoolWindowClass;
     const pasteKeys = useShiftInsertFallback
       ? "Shift+Insert"
       : inTerminal
