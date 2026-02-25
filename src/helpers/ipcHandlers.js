@@ -1652,6 +1652,7 @@ class IPCHandlers {
         const { body, boundary } = buildMultipartBody(audioData, "audio.webm", "audio/webm", {
           language: opts.language,
           prompt: opts.prompt,
+          sendLogs: opts.sendLogs,
           clientType: "desktop",
           appVersion: app.getVersion(),
           clientVersion: app.getVersion(),
@@ -1778,7 +1779,7 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("cloud-streaming-usage", async (event, text, audioDurationSeconds) => {
+    ipcMain.handle("cloud-streaming-usage", async (event, text, audioDurationSeconds, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -1799,6 +1800,7 @@ class IPCHandlers {
             clientType: "desktop",
             appVersion: app.getVersion(),
             clientVersion: app.getVersion(),
+            sendLogs: opts.sendLogs,
           }),
         });
 

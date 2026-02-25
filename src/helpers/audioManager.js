@@ -1094,6 +1094,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const audioFormat = audioBlob.type;
     const opts = {};
     if (language) opts.language = language;
+    if (settings.useReasoningModel && !this.skipReasoning) opts.sendLogs = "false";
 
     const dictionaryPrompt = this.getCustomDictionaryPrompt();
     if (dictionaryPrompt) opts.prompt = dictionaryPrompt;
@@ -2159,6 +2160,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
 
     const stSettings = getSettings();
+    let usedCloudReasoning = false;
     if (stSettings.useReasoningModel && finalText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || "";
@@ -2188,6 +2190,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (reasonResult.success && reasonResult.text) {
             finalText = reasonResult.text;
           }
+          usedCloudReasoning = true;
 
           logger.info(
             "Streaming reasoning complete",
@@ -2261,7 +2264,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             await withSessionRefresh(async () => {
               const res = await window.electronAPI.cloudStreamingUsage(
                 finalText,
-                durationSeconds ?? 0
+                durationSeconds ?? 0,
+                { sendLogs: !usedCloudReasoning }
               );
               if (!res.success) {
                 const err = new Error(res.error || "Streaming usage recording failed");

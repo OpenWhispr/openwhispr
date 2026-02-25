@@ -702,7 +702,8 @@ declare global {
       }>;
       cloudStreamingUsage?: (
         text: string,
-        audioDurationSeconds: number
+        audioDurationSeconds: number,
+        opts?: { sendLogs?: boolean }
       ) => Promise<{
         success: boolean;
         wordsUsed?: number;
