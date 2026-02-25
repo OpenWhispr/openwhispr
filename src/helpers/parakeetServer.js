@@ -14,7 +14,7 @@ const ParakeetWsServer = require("./parakeetWsServer");
 
 const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 4; // float32
-const MAX_SEGMENT_SECONDS = 30;
+const MAX_SEGMENT_SECONDS = 15;
 const MAX_SEGMENT_BYTES = MAX_SEGMENT_SECONDS * SAMPLE_RATE * BYTES_PER_SAMPLE;
 const SILENCE_RMS_THRESHOLD = 0.001;
 
@@ -78,9 +78,6 @@ class ParakeetServerManager {
 
     await convertToWav(tempInputPath, tempWavPath, { sampleRate: 16000, channels: 1 });
 
-    const outputStats = fs.statSync(tempWavPath);
-    debugLogger.debug("FFmpeg conversion complete", { outputSize: outputStats.size });
-
     const wavBuffer = fs.readFileSync(tempWavPath);
     return { wavBuffer, filesToCleanup: [tempInputPath, tempWavPath] };
   }
@@ -117,6 +114,13 @@ class ParakeetServerManager {
 
       if (samples.length <= MAX_SEGMENT_BYTES) {
         const result = await this.wsServer.transcribe(samples, SAMPLE_RATE);
+        if (!result.text?.trim()) {
+          debugLogger.warn("Parakeet returned empty text for non-silent audio", {
+            durationSeconds,
+            rms,
+            samplesBytes: samples.length,
+          });
+        }
         return { ...result, language };
       }
 
@@ -133,7 +137,14 @@ class ParakeetServerManager {
         const segment = samples.subarray(offset, end);
         const result = await this.wsServer.transcribe(segment, SAMPLE_RATE);
         totalElapsed += result.elapsed || 0;
-        if (result.text) texts.push(result.text);
+        if (result.text) {
+          texts.push(result.text);
+        } else {
+          debugLogger.warn("Parakeet segment returned empty text", {
+            segmentIndex: offset / MAX_SEGMENT_BYTES,
+            segmentDuration: segment.length / BYTES_PER_SAMPLE / SAMPLE_RATE,
+          });
+        }
       }
 
       return { text: texts.join(" "), elapsed: totalElapsed, language };

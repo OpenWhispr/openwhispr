@@ -1779,45 +1779,48 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("cloud-streaming-usage", async (event, text, audioDurationSeconds, opts = {}) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+    ipcMain.handle(
+      "cloud-streaming-usage",
+      async (event, text, audioDurationSeconds, opts = {}) => {
+        try {
+          const apiUrl = getApiUrl();
+          if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+          const cookieHeader = await getSessionCookies(event);
+          if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/streaming-usage`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Cookie: cookieHeader,
-          },
-          body: JSON.stringify({
-            text,
-            audioDurationSeconds,
-            sessionId: this.sessionId,
-            clientType: "desktop",
-            appVersion: app.getVersion(),
-            clientVersion: app.getVersion(),
-            sendLogs: opts.sendLogs,
-          }),
-        });
+          const response = await fetch(`${apiUrl}/api/streaming-usage`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Cookie: cookieHeader,
+            },
+            body: JSON.stringify({
+              text,
+              audioDurationSeconds,
+              sessionId: this.sessionId,
+              clientType: "desktop",
+              appVersion: app.getVersion(),
+              clientVersion: app.getVersion(),
+              sendLogs: opts.sendLogs,
+            }),
+          });
 
-        if (response.status === 401) {
-          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          if (response.status === 401) {
+            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          }
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+          return { success: true, ...data };
+        } catch (error) {
+          debugLogger.error("Cloud streaming usage error", { error: error.message }, "cloud-api");
+          return { success: false, error: error.message };
         }
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const data = await response.json();
-        return { success: true, ...data };
-      } catch (error) {
-        debugLogger.error("Cloud streaming usage error", { error: error.message }, "cloud-api");
-        return { success: false, error: error.message };
       }
-    });
+    );
 
     ipcMain.handle("cloud-usage", async (event) => {
       try {

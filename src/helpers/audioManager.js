@@ -912,7 +912,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           stack: error.stack,
           fallbackToCleanup: true,
         });
-        logger.error("Reasoning failed", { source, error: error.message }, "notes");
+        logger.warn("Reasoning failed", { source, error: error.message }, "notes");
       }
     }
 
