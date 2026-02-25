@@ -234,7 +234,13 @@
       "description": "Corrige automáticamente gramática, puntuación y formato mientras hablas.",
       "enable": "Activar mejora con IA"
     },
-    "loading": "Cargando..."
+    "loading": "Cargando...",
+    "gpu": {
+      "bannerTitle": "Aceleración GPU disponible",
+      "bannerDescription": "Activa la aceleración GPU para un rendimiento más rápido.",
+      "enableButton": "Activar GPU",
+      "dismissButton": "Ahora no"
+    }
   },
   "reasoning": {
     "mode": {
@@ -1440,6 +1446,9 @@
     "realtimeBanner": {
       "message": "Transcripción en tiempo real disponible con Pro",
       "upgrade": "Mejorar"
+    },
+    "enhance": {
+      "title": "Error de mejora"
     }
   },
   "dictionary": {
@@ -1506,5 +1515,47 @@
     "add": "Agregar",
     "editButton": "Editar",
     "addButton": "Agregar"
+  },
+  "gpu": {
+    "transcriptionBanner": "Acelera la transcripción con GPU",
+    "reasoningBanner": "Acelera el procesamiento de IA con GPU",
+    "enableButton": "Activar GPU",
+    "active": "Aceleración GPU activa",
+    "activating": "Activando GPU...",
+    "activationFailed": "No se pudo activar la GPU",
+    "retry": "Reintentar",
+    "remove": "Eliminar",
+    "dismiss": "Ahora no",
+    "cancel": "Cancelar"
+  },
+  "app": {
+    "toasts": {
+      "hotkeyChanged": {
+        "title": "Atajo cambiado"
+      },
+      "hotkeyUnavailable": {
+        "title": "Atajo no disponible",
+        "description": "No se pudo registrar el atajo seleccionado. Elige otro en la configuración."
+      }
+    },
+    "mic": {
+      "hotkeyToSpeak": "Pulsa {{hotkey}} para hablar",
+      "recording": "Grabando...",
+      "processing": "Procesando...",
+      "clickToSpeak": "Haz clic para hablar"
+    },
+    "buttons": {
+      "cancelRecording": "Cancelar grabación",
+      "cancelProcessing": "Cancelar procesamiento"
+    },
+    "commandMenu": {
+      "stopListening": "Dejar de escuchar",
+      "startListening": "Empezar a escuchar",
+      "hideForNow": "Ocultar por ahora"
+    },
+    "oauth": {
+      "redirectTitle": "Redirigiendo a la app...",
+      "closeTab": "Puedes cerrar esta pestaña."
+    }
   }
 }

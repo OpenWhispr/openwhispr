@@ -704,6 +704,18 @@ declare global {
         error?: string;
         code?: string;
       }>;
+      cloudStreamingUsage?: (
+        text: string,
+        audioDurationSeconds: number,
+        opts?: { sendLogs?: boolean }
+      ) => Promise<{
+        success: boolean;
+        wordsUsed?: number;
+        wordsRemaining?: number;
+        limitReached?: boolean;
+        error?: string;
+        code?: string;
+      }>;
       cloudUsage?: () => Promise<{
         success: boolean;
         wordsUsed?: number;

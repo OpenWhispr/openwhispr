@@ -328,6 +328,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // OpenWhispr Cloud API
   cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
   cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
+  cloudStreamingUsage: (text, audioDurationSeconds, opts) =>
+    ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
   cloudCheckout: (plan) => ipcRenderer.invoke("cloud-checkout", plan),
   cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),

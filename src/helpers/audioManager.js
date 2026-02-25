@@ -388,6 +388,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       this.onTranscriptionComplete?.(result);
 
+      if (result?.source === "openwhispr") {
+        window.dispatchEvent(new Event("usage-changed"));
+      }
+
       const roundTripDurationMs = Math.round(performance.now() - pipelineStart);
 
       const timingData = {
@@ -908,7 +912,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           stack: error.stack,
           fallbackToCleanup: true,
         });
-        logger.error("Reasoning failed", { source, error: error.message }, "notes");
+        logger.warn("Reasoning failed", { source, error: error.message }, "notes");
       }
     }
 
@@ -1086,8 +1090,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const language = getBaseLanguageCode(settings.preferredLanguage);
 
     const arrayBuffer = await audioBlob.arrayBuffer();
+    const audioSizeBytes = audioBlob.size;
+    const audioFormat = audioBlob.type;
     const opts = {};
     if (language) opts.language = language;
+    if (settings.useReasoningModel && !this.skipReasoning) opts.sendLogs = "false";
 
     const dictionaryPrompt = this.getCustomDictionaryPrompt();
     if (dictionaryPrompt) opts.prompt = dictionaryPrompt;
@@ -1120,6 +1127,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             customPrompt: this.getCustomPrompt(),
             language: settings.preferredLanguage || "auto",
             locale: settings.uiLanguage || "en",
+            sttProvider: result.sttProvider,
+            sttModel: result.sttModel,
+            sttProcessingMs: result.sttProcessingMs,
+            audioDurationMs: result.audioDurationMs,
+            audioSizeBytes,
+            audioFormat,
           });
           if (!res.success) {
             const err = new Error(res.error || "Cloud reasoning failed");
@@ -2147,6 +2160,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
 
     const stSettings = getSettings();
+    let usedCloudReasoning = false;
     if (stSettings.useReasoningModel && finalText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || "";
@@ -2161,6 +2175,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               customPrompt: this.getCustomPrompt(),
               language: stSettings.preferredLanguage || "auto",
               locale: stSettings.uiLanguage || "en",
+              sttProvider: "deepgram",
+              sttModel: "nova-3",
+              audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
             });
             if (!res.success) {
               const err = new Error(res.error || "Cloud reasoning failed");
@@ -2173,6 +2190,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (reasonResult.success && reasonResult.text) {
             finalText = reasonResult.text;
           }
+          usedCloudReasoning = true;
 
           logger.info(
             "Streaming reasoning complete",
@@ -2210,6 +2228,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     // If streaming produced no text, fall back to batch transcription
+    // (batch fallback records usage server-side via /api/transcribe)
+    let usedBatchFallback = false;
     if (!finalText && durationSeconds > 2 && fallbackBlob?.size > 0) {
       logger.info(
         "Streaming produced no text, falling back to batch transcription",
@@ -2222,6 +2242,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         });
         if (batchResult?.text) {
           finalText = batchResult.text;
+          usedBatchFallback = true;
           logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
         }
       } catch (fallbackErr) {
@@ -2236,6 +2257,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         text: finalText,
         source: "deepgram-streaming",
       });
+
+      if (!usedBatchFallback) {
+        (async () => {
+          try {
+            await withSessionRefresh(async () => {
+              const res = await window.electronAPI.cloudStreamingUsage(
+                finalText,
+                durationSeconds ?? 0,
+                { sendLogs: !usedCloudReasoning }
+              );
+              if (!res.success) {
+                const err = new Error(res.error || "Streaming usage recording failed");
+                err.code = res.code;
+                throw err;
+              }
+            });
+          } catch (err) {
+            logger.error("Failed to report streaming usage", { error: err.message }, "streaming");
+          }
+          window.dispatchEvent(new Event("usage-changed"));
+        })();
+      } else {
+        window.dispatchEvent(new Event("usage-changed"));
+      }
 
       logger.info(
         "Streaming total processing",

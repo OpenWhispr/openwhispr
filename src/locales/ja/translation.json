@@ -234,7 +234,13 @@
       "description": "話しながら文法、句読点、書式を自動的に修正します。",
       "enable": "AI 補正を有効にする"
     },
-    "loading": "読み込み中..."
+    "loading": "読み込み中...",
+    "gpu": {
+      "bannerTitle": "GPU アクセラレーションが利用可能",
+      "bannerDescription": "GPU アクセラレーションを有効にしてパフォーマンスを向上させましょう。",
+      "enableButton": "GPU を有効化",
+      "dismissButton": "後で"
+    }
   },
   "reasoning": {
     "mode": {
@@ -1364,6 +1370,9 @@
     "realtimeBanner": {
       "message": "Pro でリアルタイム文字起こしが利用可能",
       "upgrade": "アップグレード"
+    },
+    "enhance": {
+      "title": "強化エラー"
     }
   },
   "dictionary": {
@@ -1502,5 +1511,47 @@
     "add": "追加",
     "editButton": "編集",
     "addButton": "追加"
+  },
+  "gpu": {
+    "transcriptionBanner": "GPU で文字起こしを高速化",
+    "reasoningBanner": "GPU で AI 処理を高速化",
+    "enableButton": "GPU を有効化",
+    "active": "GPU アクセラレーション有効",
+    "activating": "GPU を有効化中...",
+    "activationFailed": "GPU を有効化できませんでした",
+    "retry": "再試行",
+    "remove": "削除",
+    "dismiss": "後で",
+    "cancel": "キャンセル"
+  },
+  "app": {
+    "toasts": {
+      "hotkeyChanged": {
+        "title": "ホットキーが変更されました"
+      },
+      "hotkeyUnavailable": {
+        "title": "ホットキーが使用できません",
+        "description": "選択したホットキーを登録できませんでした。設定から別のホットキーを選択してください。"
+      }
+    },
+    "mic": {
+      "hotkeyToSpeak": "{{hotkey}} を押して話す",
+      "recording": "録音中...",
+      "processing": "処理中...",
+      "clickToSpeak": "クリックして話す"
+    },
+    "buttons": {
+      "cancelRecording": "録音をキャンセル",
+      "cancelProcessing": "処理をキャンセル"
+    },
+    "commandMenu": {
+      "stopListening": "録音を停止",
+      "startListening": "録音を開始",
+      "hideForNow": "一時的に非表示"
+    },
+    "oauth": {
+      "redirectTitle": "アプリにリダイレクト中...",
+      "closeTab": "このタブを閉じてください。"
+    }
   }
 }

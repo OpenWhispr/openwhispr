@@ -950,9 +950,7 @@ export default function TranscriptionModelPicker({
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <Check size={13} className="text-success" />
-                      <span className="text-xs font-medium text-foreground">
-                        GPU acceleration active
-                      </span>
+                      <span className="text-xs font-medium text-foreground">{t("gpu.active")}</span>
                     </div>
                     <Button
                       onClick={handleCudaDelete}
@@ -960,37 +958,32 @@ export default function TranscriptionModelPicker({
                       variant="ghost"
                       className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
                     >
-                      Remove
+                      {t("gpu.remove")}
                     </Button>
                   </div>
                 ) : (
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5">
-                      <Zap size={13} className="text-amber-500" />
-                      <span className="text-xs font-medium text-foreground">
-                        NVIDIA GPU detected
-                        {cudaStatus.gpuInfo.gpuName ? ` (${cudaStatus.gpuInfo.gpuName})` : ""}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground pl-5">
-                      GPU-accelerated Whisper available (~250 MB download)
-                    </p>
-                    <div className="flex items-center gap-2 pl-5">
-                      <Button
-                        onClick={handleCudaDownload}
-                        size="sm"
-                        variant="default"
-                        className="h-6 px-2.5 text-xs"
-                      >
-                        <Download size={11} className="mr-1" />
-                        Download
-                      </Button>
-                      <button
-                        onClick={() => setCudaDismissed(true)}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        Not now
-                      </button>
+                  <div className="flex items-start gap-2.5">
+                    <Zap size={13} className="text-primary shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground">
+                        {t("gpu.transcriptionBanner")}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <Button
+                          onClick={handleCudaDownload}
+                          size="sm"
+                          variant="default"
+                          className="h-6 px-2.5 text-xs"
+                        >
+                          {t("gpu.enableButton")}
+                        </Button>
+                        <button
+                          onClick={() => setCudaDismissed(true)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {t("gpu.dismiss")}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

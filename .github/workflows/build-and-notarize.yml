@@ -168,6 +168,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install ffmpeg-static for target architecture
+        if: matrix.arch == 'x64'
+        run: npm_config_arch=x64 node node_modules/ffmpeg-static/install.js
+
       - name: Cache native binaries
         uses: actions/cache@v4
         with:

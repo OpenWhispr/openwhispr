@@ -111,8 +111,16 @@ export function useUsage(): UseUsageResult | null {
         fetchUsage();
       }
     };
+    const handleUsageChanged = () => {
+      lastFetchRef.current = 0;
+      fetchUsage();
+    };
     window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
+    window.addEventListener("usage-changed", handleUsageChanged);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("usage-changed", handleUsageChanged);
+    };
   }, [isLoaded, isSignedIn, fetchUsage]);
 
   const openCheckout = useCallback(

@@ -166,7 +166,12 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ provider, callbackURL, disableRedirect: true }),
+        body: JSON.stringify({
+          provider,
+          callbackURL,
+          newUserCallbackURL: callbackURL,
+          disableRedirect: true,
+        }),
       });
 
       const text = await response.text();

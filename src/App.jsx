@@ -88,7 +88,6 @@ export default function App() {
 
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
-  const setFloatingIconAutoHide = useSettingsStore((s) => s.setFloatingIconAutoHide);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
 
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
@@ -171,10 +170,11 @@ export default function App() {
     }
   }, [isSignedIn, warmupStreaming]);
 
-  // Listen for auto-hide setting changes relayed from the main process
+  // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onFloatingIconAutoHideChanged?.((enabled) => {
-      setFloatingIconAutoHide(enabled);
+      localStorage.setItem("floatingIconAutoHide", String(enabled));
+      useSettingsStore.setState({ floatingIconAutoHide: enabled });
     });
     return () => unsubscribe?.();
   }, []);

@@ -234,7 +234,13 @@
       "description": "Korrigiert automatisch Grammatik, Zeichensetzung und Formatierung, während Sie sprechen.",
       "enable": "KI-Verbesserung aktivieren"
     },
-    "loading": "Laden..."
+    "loading": "Laden...",
+    "gpu": {
+      "bannerTitle": "GPU-Beschleunigung verfügbar",
+      "bannerDescription": "Aktiviere die GPU-Beschleunigung für schnellere Leistung.",
+      "enableButton": "GPU aktivieren",
+      "dismissButton": "Nicht jetzt"
+    }
   },
   "reasoning": {
     "mode": {
@@ -1436,6 +1442,9 @@
     "realtimeBanner": {
       "message": "Echtzeit-Transkription mit Pro verfügbar",
       "upgrade": "Upgraden"
+    },
+    "enhance": {
+      "title": "Verbesserungsfehler"
     }
   },
   "dictionary": {
@@ -1502,5 +1511,47 @@
     "add": "Hinzufügen",
     "editButton": "Bearbeiten",
     "addButton": "Hinzufügen"
+  },
+  "gpu": {
+    "transcriptionBanner": "Transkription mit GPU beschleunigen",
+    "reasoningBanner": "KI-Verarbeitung mit GPU beschleunigen",
+    "enableButton": "GPU aktivieren",
+    "active": "GPU-Beschleunigung aktiv",
+    "activating": "GPU wird aktiviert...",
+    "activationFailed": "GPU konnte nicht aktiviert werden",
+    "retry": "Erneut versuchen",
+    "remove": "Entfernen",
+    "dismiss": "Nicht jetzt",
+    "cancel": "Abbrechen"
+  },
+  "app": {
+    "toasts": {
+      "hotkeyChanged": {
+        "title": "Tastenkombination geändert"
+      },
+      "hotkeyUnavailable": {
+        "title": "Tastenkombination nicht verfügbar",
+        "description": "Die ausgewählte Tastenkombination konnte nicht registriert werden. Bitte wähle eine andere in den Einstellungen."
+      }
+    },
+    "mic": {
+      "hotkeyToSpeak": "{{hotkey}} drücken zum Sprechen",
+      "recording": "Aufnahme...",
+      "processing": "Verarbeitung...",
+      "clickToSpeak": "Klicken zum Sprechen"
+    },
+    "buttons": {
+      "cancelRecording": "Aufnahme abbrechen",
+      "cancelProcessing": "Verarbeitung abbrechen"
+    },
+    "commandMenu": {
+      "stopListening": "Aufnahme beenden",
+      "startListening": "Aufnahme starten",
+      "hideForNow": "Vorerst ausblenden"
+    },
+    "oauth": {
+      "redirectTitle": "Weiterleitung zur App...",
+      "closeTab": "Du kannst diesen Tab schließen."
+    }
   }
 }

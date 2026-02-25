@@ -8,7 +8,7 @@ import type {
 } from "../types/electron";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Cloud, Lock } from "lucide-react";
+import { Cloud, Lock, Zap } from "lucide-react";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
@@ -32,30 +32,6 @@ type CloudModelOption = {
   invertInDark?: boolean;
 };
 
-const OWNED_BY_ICON_RULES: Array<{ match: RegExp; provider: string }> = [
-  { match: /(openai|system|default|gpt|davinci)/, provider: "openai" },
-  { match: /(azure)/, provider: "openai" },
-  { match: /(anthropic|claude)/, provider: "anthropic" },
-  { match: /(google|gemini)/, provider: "gemini" },
-  { match: /(meta|llama)/, provider: "llama" },
-  { match: /(mistral)/, provider: "mistral" },
-  { match: /(qwen|ali|tongyi)/, provider: "qwen" },
-  { match: /(openrouter|oss)/, provider: "openai-oss" },
-];
-
-const resolveOwnedByIcon = (ownedBy?: string): { icon?: string; invertInDark: boolean } => {
-  if (!ownedBy) return { icon: undefined, invertInDark: false };
-  const normalized = ownedBy.toLowerCase();
-  const rule = OWNED_BY_ICON_RULES.find(({ match }) => match.test(normalized));
-  if (rule) {
-    return {
-      icon: getProviderIcon(rule.provider),
-      invertInDark: isMonochromeProvider(rule.provider),
-    };
-  }
-  return { icon: undefined, invertInDark: false };
-};
-
 interface ReasoningModelSelectorProps {
   reasoningModel: string;
   setReasoningModel: (model: string) => void;
@@ -76,12 +52,18 @@ interface ReasoningModelSelectorProps {
 }
 
 function GpuStatusBadge() {
+  const { t } = useTranslation();
   const [serverStatus, setServerStatus] = useState<LlamaServerStatus | null>(null);
   const [vulkanStatus, setVulkanStatus] = useState<LlamaVulkanStatus | null>(null);
   const [gpuResult, setGpuResult] = useState<VulkanGpuResult | null>(null);
   const [progress, setProgress] = useState<LlamaVulkanDownloadProgress | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activating, setActivating] = useState(false);
+  const [activationFailed, setActivationFailed] = useState(false);
+  const [dismissed, setDismissed] = useState(
+    () => localStorage.getItem("llamaVulkanBannerDismissed") === "true"
+  );
   const platform = getCachedPlatform();
 
   useEffect(() => {
@@ -118,6 +100,20 @@ function GpuStatusBadge() {
     return () => cleanup?.();
   }, []);
 
+  useEffect(() => {
+    if (!activating) return;
+    if (serverStatus?.gpuAccelerated) {
+      setActivating(false);
+      setActivationFailed(false);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      setActivating(false);
+      setActivationFailed(true);
+    }, 15000);
+    return () => clearTimeout(timeout);
+  }, [activating, serverStatus?.gpuAccelerated]);
+
   const handleDownload = async () => {
     setDownloading(true);
     setError(null);
@@ -125,12 +121,14 @@ function GpuStatusBadge() {
       const result = await window.electronAPI?.downloadLlamaVulkanBinary?.();
       if (result?.success) {
         setVulkanStatus((prev) => (prev ? { ...prev, downloaded: true } : prev));
-        window.electronAPI?.llamaGpuReset?.();
+        await window.electronAPI?.llamaGpuReset?.();
+        setActivating(true);
+        setActivationFailed(false);
       } else if (result && !result.cancelled) {
-        setError(result.error || "Download failed");
+        setError(result.error || t("gpu.activationFailed"));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Download failed");
+      setError(err instanceof Error ? err.message : t("gpu.activationFailed"));
     } finally {
       setDownloading(false);
       setProgress(null);
@@ -142,25 +140,30 @@ function GpuStatusBadge() {
     setVulkanStatus((prev) => (prev ? { ...prev, downloaded: false } : prev));
   };
 
+  const handleRetry = async () => {
+    setActivationFailed(false);
+    setActivating(true);
+    await window.electronAPI?.llamaGpuReset?.();
+  };
+
+  // State 1: macOS
   if (platform === "darwin") {
     if (!serverStatus?.running) return null;
     return (
       <div className="flex items-center gap-1.5 mt-2 px-1">
-        <span
-          className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-          style={{ backgroundColor: "#22c55e" }}
-        />
-        <span className="text-xs text-muted-foreground">GPU Accelerated (Metal)</span>
+        <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-success" />
+        <span className="text-xs text-muted-foreground">{t("gpu.active")}</span>
       </div>
     );
   }
 
+  // State 3: Downloading
   if (downloading && progress) {
     return (
       <div className="flex items-center gap-2 mt-2 px-1">
         <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
           <div
-            className="h-full bg-purple-500 transition-all"
+            className="h-full bg-primary transition-all"
             style={{ width: `${progress.percentage}%` }}
           />
         </div>
@@ -168,14 +171,15 @@ function GpuStatusBadge() {
         <button
           type="button"
           onClick={() => window.electronAPI?.cancelLlamaVulkanDownload?.()}
-          className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors"
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
-          Cancel
+          {t("gpu.cancel")}
         </button>
       </div>
     );
   }
 
+  // State 3b: Error
   if (error) {
     return (
       <div className="flex items-center gap-1.5 mt-2 px-1">
@@ -183,58 +187,101 @@ function GpuStatusBadge() {
         <button
           type="button"
           onClick={() => setError(null)}
-          className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors ml-1"
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
         >
-          Dismiss
+          {t("gpu.dismiss")}
         </button>
       </div>
     );
   }
 
+  // State 5: Activating
+  if (activating) {
+    return (
+      <div className="flex items-center gap-1.5 mt-2 px-1">
+        <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
+        <span className="text-xs text-muted-foreground">{t("gpu.activating")}</span>
+      </div>
+    );
+  }
+
+  // State 4: Downloaded + GPU active
   if (vulkanStatus?.downloaded) {
     const isGpu = serverStatus?.gpuAccelerated && serverStatus?.backend === "vulkan";
+
+    // State 6: Activation failed
+    if (!isGpu && activationFailed) {
+      return (
+        <div className="flex items-center gap-1.5 mt-2 px-1">
+          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-warning" />
+          <span className="text-xs text-muted-foreground">{t("gpu.activationFailed")}</span>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+          >
+            {t("gpu.retry")}
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+          >
+            {t("gpu.remove")}
+          </button>
+        </div>
+      );
+    }
+
+    // State 4: GPU active or just downloaded
     return (
       <div className="flex items-center gap-1.5 mt-2 px-1">
         <span
-          className="inline-block w-1.5 h-1.5 rounded-full shrink-0"
-          style={{ backgroundColor: isGpu ? "#22c55e" : "#f59e0b" }}
+          className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${isGpu ? "bg-success" : "bg-warning"}`}
         />
         <span className="text-xs text-muted-foreground">
-          {isGpu ? "GPU Accelerated (Vulkan)" : "CPU Only"}
+          {isGpu ? t("gpu.active") : t("gpu.activating")}
         </span>
-        {!isGpu && serverStatus?.running && (
-          <button
-            type="button"
-            onClick={() => window.electronAPI?.llamaGpuReset?.()}
-            className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors ml-1"
-          >
-            Re-detect GPU
-          </button>
-        )}
         <button
           type="button"
           onClick={handleDelete}
-          className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors ml-auto"
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
         >
-          Remove
+          {t("gpu.remove")}
         </button>
       </div>
     );
   }
 
-  if (gpuResult?.available) {
+  // State 7: GPU available, not downloaded — show banner
+  if (gpuResult?.available && !dismissed) {
     return (
-      <div className="flex items-center gap-1.5 mt-2 px-1">
-        <span className="text-xs text-muted-foreground">
-          {gpuResult.deviceName || "GPU"} detected
-        </span>
-        <button
-          type="button"
-          onClick={handleDownload}
-          className="text-xs text-muted-foreground underline decoration-muted-foreground/30 hover:decoration-muted-foreground/60 hover:text-foreground transition-colors ml-1"
-        >
-          Download Vulkan (~40MB)
-        </button>
+      <div className="mt-2 rounded-md border border-primary/20 bg-primary/5 p-2.5">
+        <div className="flex items-start gap-2.5">
+          <Zap size={13} className="text-primary shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-foreground">{t("gpu.reasoningBanner")}</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <Button
+                onClick={handleDownload}
+                size="sm"
+                variant="default"
+                className="h-6 px-2.5 text-xs"
+              >
+                {t("gpu.enableButton")}
+              </Button>
+              <button
+                onClick={() => {
+                  localStorage.setItem("llamaVulkanBannerDismissed", "true");
+                  setDismissed(true);
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {t("gpu.dismiss")}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -377,16 +424,13 @@ export default function ReasoningModelSelector({
             const value = (item?.id || item?.name) as string | undefined;
             if (!value) return null;
             const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
-            const { icon, invertInDark } = resolveOwnedByIcon(ownedBy);
             return {
               value,
               label: (item?.id || item?.name || value) as string,
               description:
                 (item?.description as string) ||
                 (ownedBy ? t("reasoning.custom.ownerLabel", { owner: ownedBy }) : undefined),
-              icon,
               ownedBy,
-              invertInDark,
             } as CloudModelOption;
           })
           .filter(Boolean) as CloudModelOption[];

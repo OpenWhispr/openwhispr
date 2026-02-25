@@ -21,7 +21,6 @@ import WindowControls from "./WindowControls";
 import { getCachedPlatform } from "../utils/platform";
 import { setActiveNoteId, setActiveFolderId } from "../stores/noteStore";
 import HistoryView from "./HistoryView";
-import type { CudaWhisperStatus } from "../types/electron";
 
 const platform = getCachedPlatform();
 
@@ -45,13 +44,13 @@ export default function ControlPanel() {
   );
   const [showReferrals, setShowReferrals] = useState(false);
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
-  const [vulkanBanner, setVulkanBanner] = useState<{ show: boolean; deviceName?: string }>({
-    show: false,
-  });
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
-  const [cudaStatus, setCudaStatus] = useState<CudaWhisperStatus | null>(null);
+  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{ cuda: boolean; vulkan: boolean }>({
+    cuda: false,
+    vulkan: false,
+  });
   const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
-    () => localStorage.getItem("gpuBannerDismissed") === "true"
+    () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
   const cloudMigrationProcessed = useRef(false);
   const { hotkey } = useHotkey();
@@ -157,39 +156,28 @@ export default function ControlPanel() {
   }, [authLoaded, isSignedIn, setUseLocalWhisper, setCloudTranscriptionMode]);
 
   useEffect(() => {
-    if (platform === "darwin" || !useReasoningModel) return;
-    if (localStorage.getItem("llamaVulkanBannerDismissed") === "true") return;
-
-    Promise.all([
-      window.electronAPI?.detectVulkanGpu?.(),
-      window.electronAPI?.getLlamaVulkanStatus?.(),
-    ])
-      .then(([gpu, vulkan]) => {
-        if (gpu?.available && !vulkan?.downloaded) {
-          setVulkanBanner({ show: true, deviceName: gpu.deviceName });
-        }
-      })
-      .catch(() => {});
-  }, [useReasoningModel]);
-
-  const fetchCudaStatus = useCallback(() => {
     if (platform === "darwin" || gpuBannerDismissed) return;
-    if (!useLocalWhisper || localTranscriptionProvider !== "whisper") return;
-    window.electronAPI
-      ?.getCudaWhisperStatus?.()
-      ?.then(setCudaStatus)
-      .catch(() => {});
-  }, [useLocalWhisper, localTranscriptionProvider, gpuBannerDismissed]);
-
-  useEffect(() => {
-    if (!showSettings) fetchCudaStatus();
-  }, [showSettings, fetchCudaStatus]);
-
-  const showGpuBanner =
-    activeView === "home" &&
-    !gpuBannerDismissed &&
-    cudaStatus?.gpuInfo.hasNvidiaGpu === true &&
-    cudaStatus.downloaded === false;
+    const detect = async () => {
+      const results = { cuda: false, vulkan: false };
+      if (useLocalWhisper && localTranscriptionProvider === "whisper") {
+        try {
+          const status = await window.electronAPI?.getCudaWhisperStatus?.();
+          if (status?.gpuInfo.hasNvidiaGpu && !status.downloaded) results.cuda = true;
+        } catch {}
+      }
+      if (useReasoningModel) {
+        try {
+          const [gpu, vulkan] = await Promise.all([
+            window.electronAPI?.detectVulkanGpu?.(),
+            window.electronAPI?.getLlamaVulkanStatus?.(),
+          ]);
+          if (gpu?.available && !vulkan?.downloaded) results.vulkan = true;
+        } catch {}
+      }
+      setGpuAccelAvailable(results);
+    };
+    detect();
+  }, [useLocalWhisper, localTranscriptionProvider, useReasoningModel, gpuBannerDismissed]);
 
   const loadTranscriptions = async () => {
     try {
@@ -450,84 +438,51 @@ export default function ControlPanel() {
                 </div>
               </div>
             )}
-            {vulkanBanner.show && activeView === "home" && (
-              <div className="mx-4 mt-3 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                <div className="flex items-start gap-2">
-                  <Zap className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-foreground">
-                      {vulkanBanner.deviceName || "GPU"} detected — speed up local AI with Vulkan
-                      acceleration
-                    </p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSettingsSection("reasoning");
-                          setShowSettings(true);
-                        }}
-                        className="text-xs font-medium text-purple-400 hover:text-purple-300 transition-colors"
-                      >
-                        Enable GPU
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          localStorage.setItem("llamaVulkanBannerDismissed", "true");
-                          setVulkanBanner({ show: false });
-                        }}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        Not now
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-            {showGpuBanner && (
-              <div className="max-w-3xl mx-auto w-full mb-3">
-                <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
-                  <div className="flex items-start gap-3">
-                    <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
-                      <Zap size={16} className="text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-foreground mb-0.5">
-                        GPU acceleration available
-                      </p>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        {cudaStatus?.gpuInfo.gpuName
-                          ? `Your ${cudaStatus.gpuInfo.gpuName} can speed up local transcription.`
-                          : "Your NVIDIA GPU can speed up local transcription."}
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => {
-                            setSettingsSection("transcription");
-                            setShowSettings(true);
-                          }}
-                        >
-                          Enable GPU
-                        </Button>
-                        <button
-                          onClick={() => {
-                            setGpuBannerDismissed(true);
-                            localStorage.setItem("gpuBannerDismissed", "true");
-                          }}
-                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          Not now
-                        </button>
+            {(gpuAccelAvailable.cuda || gpuAccelAvailable.vulkan) &&
+              activeView === "home" &&
+              !gpuBannerDismissed && (
+                <div className="max-w-3xl mx-auto w-full mb-3">
+                  <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
+                        <Zap size={16} className="text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground mb-0.5">
+                          {t("controlPanel.gpu.bannerTitle")}
+                        </p>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {t("controlPanel.gpu.bannerDescription")}
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => {
+                              setSettingsSection(
+                                gpuAccelAvailable.cuda ? "transcription" : "intelligence"
+                              );
+                              setShowSettings(true);
+                            }}
+                          >
+                            {t("controlPanel.gpu.enableButton")}
+                          </Button>
+                          <button
+                            onClick={() => {
+                              setGpuBannerDismissed(true);
+                              localStorage.setItem("gpuBannerDismissedUnified", "true");
+                            }}
+                            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {t("controlPanel.gpu.dismissButton")}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
             {activeView === "home" && (
               <HistoryView
                 history={history}

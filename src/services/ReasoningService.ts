@@ -441,6 +441,9 @@ class ReasoningService extends BaseReasoningService {
         case "openwhispr":
           result = await this.processWithOpenWhispr(text, model, agentName, config);
           break;
+        case "custom":
+          result = await this.processWithOpenAI(text, trimmedModel, agentName, config);
+          break;
         default:
           throw new Error(`Unsupported reasoning provider: ${provider}`);
       }

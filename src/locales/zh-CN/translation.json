@@ -234,7 +234,13 @@
       "description": "在你说话的同时，自动修正语法、标点和格式。",
       "enable": "启用 AI 增强"
     },
-    "loading": "加载中..."
+    "loading": "加载中...",
+    "gpu": {
+      "bannerTitle": "GPU 加速可用",
+      "bannerDescription": "启用 GPU 加速以获得更快的性能。",
+      "enableButton": "启用 GPU",
+      "dismissButton": "暂不启用"
+    }
   },
   "reasoning": {
     "mode": {
@@ -1436,6 +1442,9 @@
     "realtimeBanner": {
       "message": "Pro 版可使用实时转录",
       "upgrade": "升级"
+    },
+    "enhance": {
+      "title": "增强错误"
     }
   },
   "dictionary": {
@@ -1502,5 +1511,47 @@
     "add": "添加",
     "editButton": "编辑密钥",
     "addButton": "添加密钥"
+  },
+  "gpu": {
+    "transcriptionBanner": "使用 GPU 加速转录",
+    "reasoningBanner": "使用 GPU 加速 AI 处理",
+    "enableButton": "启用 GPU",
+    "active": "GPU 加速已启用",
+    "activating": "正在激活 GPU...",
+    "activationFailed": "无法激活 GPU",
+    "retry": "重试",
+    "remove": "移除",
+    "dismiss": "暂不启用",
+    "cancel": "取消"
+  },
+  "app": {
+    "toasts": {
+      "hotkeyChanged": {
+        "title": "快捷键已更改"
+      },
+      "hotkeyUnavailable": {
+        "title": "快捷键不可用",
+        "description": "无法注册所选快捷键。请在设置中选择其他快捷键。"
+      }
+    },
+    "mic": {
+      "hotkeyToSpeak": "按 {{hotkey}} 开始说话",
+      "recording": "录音中...",
+      "processing": "处理中...",
+      "clickToSpeak": "点击开始说话"
+    },
+    "buttons": {
+      "cancelRecording": "取消录音",
+      "cancelProcessing": "取消处理"
+    },
+    "commandMenu": {
+      "stopListening": "停止录音",
+      "startListening": "开始录音",
+      "hideForNow": "暂时隐藏"
+    },
+    "oauth": {
+      "redirectTitle": "正在跳转到应用...",
+      "closeTab": "您可以关闭此标签页。"
+    }
   }
 }

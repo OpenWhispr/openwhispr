@@ -276,9 +276,10 @@ function findBinaryInDir(dir, binaryName, maxDepth = 5, currentDepth = 0) {
 
 function parseArgs() {
   const args = process.argv;
-  let targetPlatform = process.platform;
-  let targetArch = process.arch;
+  let targetPlatform = process.env.TARGET_PLATFORM || process.platform;
+  let targetArch = process.env.TARGET_ARCH || process.arch;
 
+  // CLI args override env vars
   const platformIndex = args.indexOf("--platform");
   if (platformIndex !== -1 && args[platformIndex + 1]) {
     targetPlatform = args[platformIndex + 1];

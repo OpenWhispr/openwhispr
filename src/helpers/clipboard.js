@@ -255,6 +255,47 @@ class ClipboardManager {
     return accessible;
   }
 
+  _detectKdeWindowClass() {
+    if (this.commandExists("kdotool")) {
+      try {
+        const idResult = spawnSync("kdotool", ["getactivewindow"], { timeout: 1000 });
+        if (idResult.status === 0) {
+          const winId = idResult.stdout.toString().trim();
+          const classResult = spawnSync("kdotool", ["getwindowclassname", winId], {
+            timeout: 1000,
+          });
+          if (classResult.status === 0) {
+            const cls = classResult.stdout.toString().toLowerCase().trim();
+            if (cls) return cls;
+          }
+        }
+      } catch {}
+    }
+
+    const qdbus = ["qdbus6", "qdbus"].find((cmd) => this.commandExists(cmd));
+    if (qdbus) {
+      try {
+        const result = spawnSync(qdbus, ["org.kde.KWin", "/KWin", "supportInformation"], {
+          timeout: 2000,
+          maxBuffer: 512 * 1024,
+        });
+        if (result.status === 0) {
+          const lines = result.stdout.toString().split("\n");
+          let lastClass = null;
+          for (const line of lines) {
+            const classMatch = line.match(/^\s*resourceClass:\s+(.+)$/);
+            if (classMatch) lastClass = classMatch[1].trim();
+            if (/^\s*active:\s+(1|true)\s*$/i.test(line) && lastClass) {
+              return lastClass.toLowerCase();
+            }
+          }
+        }
+      } catch {}
+    }
+
+    return null;
+  }
+
   safeLog(...args) {
     if (process.env.NODE_ENV === "development") {
       try {
@@ -827,18 +868,25 @@ class ClipboardManager {
     };
 
     const targetWindowId = preDetectTargetWindow();
-    const xdotoolWindowClass = preDetectWindowClass(targetWindowId);
+    let detectedWindowClass = preDetectWindowClass(targetWindowId);
+
+    if (!detectedWindowClass && isKde) {
+      detectedWindowClass = this._detectKdeWindowClass();
+      if (detectedWindowClass) {
+        debugLogger.debug("KDE window class detected", { detectedWindowClass }, "clipboard");
+      }
+    }
 
     if (linuxFastPaste) {
-      const earlyIsTerminal = xdotoolWindowClass
-        ? terminalClasses.some((t) => xdotoolWindowClass.includes(t))
+      const earlyIsTerminal = detectedWindowClass
+        ? terminalClasses.some((t) => detectedWindowClass.includes(t))
         : false;
 
       const spawnFastPaste = (args, label) =>
         new Promise((resolve, reject) => {
           debugLogger.debug(
             `Attempting native linux-fast-paste (${label})`,
-            { linuxFastPaste, args, targetWindowId, xdotoolWindowClass, earlyIsTerminal },
+            { linuxFastPaste, args, targetWindowId, detectedWindowClass, earlyIsTerminal },
             "clipboard"
           );
           const proc = spawn(linuxFastPaste, args);
@@ -950,32 +998,12 @@ class ClipboardManager {
 
     // Terminals use Ctrl+Shift+V instead of Ctrl+V
     const isTerminal = () => {
-      if (xdotoolWindowClass) {
-        const isTerminalWindow = terminalClasses.some((term) => xdotoolWindowClass.includes(term));
-        if (isTerminalWindow) {
-          this.safeLog(`🖥️ Terminal detected via xdotool: ${xdotoolWindowClass}`);
-        }
-        return isTerminalWindow;
+      if (!detectedWindowClass) return false;
+      const isTerminalWindow = terminalClasses.some((term) => detectedWindowClass.includes(term));
+      if (isTerminalWindow) {
+        this.safeLog(`🖥️ Terminal detected: ${detectedWindowClass}`);
       }
-
-      try {
-        if (this.commandExists("kdotool")) {
-          const windowIdResult = spawnSync("kdotool", ["getactivewindow"]);
-          if (windowIdResult.status === 0) {
-            const windowId = windowIdResult.stdout.toString().trim();
-            const classResult = spawnSync("kdotool", ["getwindowclassname", windowId]);
-            if (classResult.status === 0) {
-              const className = classResult.stdout.toString().toLowerCase().trim();
-              const isTerminalWindow = terminalClasses.some((term) => className.includes(term));
-              if (isTerminalWindow) {
-                this.safeLog(`🖥️ Terminal detected via kdotool: ${className}`);
-              }
-              return isTerminalWindow;
-            }
-          }
-        }
-      } catch {}
-      return false;
+      return isTerminalWindow;
     };
 
     const inTerminal = isTerminal();
@@ -992,7 +1020,7 @@ class ClipboardManager {
 
     if (targetWindowId) {
       this.safeLog(
-        `🎯 Targeting window ID ${targetWindowId} for paste (class: ${xdotoolWindowClass})`
+        `🎯 Targeting window ID ${targetWindowId} for paste (class: ${detectedWindowClass})`
       );
     }
 
@@ -1036,7 +1064,7 @@ class ClipboardManager {
         candidateTools: candidates.map((c) => c.cmd),
         availableTools: available.map((c) => c.cmd),
         targetWindowId,
-        xdotoolWindowClass,
+        detectedWindowClass,
         inTerminal,
         pasteKeys,
       },

@@ -206,7 +206,13 @@
       "description": "Corrija automaticamente gramática, pontuação e formatação enquanto você fala.",
       "enable": "Ativar melhoria com IA"
     },
-    "loading": "Carregando..."
+    "loading": "Carregando...",
+    "gpu": {
+      "bannerTitle": "Aceleração GPU disponível",
+      "bannerDescription": "Ative a aceleração GPU para um desempenho mais rápido.",
+      "enableButton": "Ativar GPU",
+      "dismissButton": "Agora não"
+    }
   },
   "reasoning": {
     "mode": {
@@ -1440,6 +1446,9 @@
     "realtimeBanner": {
       "message": "Transcrição em tempo real disponível no Pro",
       "upgrade": "Fazer upgrade"
+    },
+    "enhance": {
+      "title": "Erro de aprimoramento"
     }
   },
   "dictionary": {
@@ -1506,5 +1515,47 @@
     "add": "Adicionar",
     "editButton": "Editar",
     "addButton": "Adicionar"
+  },
+  "gpu": {
+    "transcriptionBanner": "Acelere a transcrição com GPU",
+    "reasoningBanner": "Acelere o processamento de IA com GPU",
+    "enableButton": "Ativar GPU",
+    "active": "Aceleração GPU ativa",
+    "activating": "Ativando GPU...",
+    "activationFailed": "Não foi possível ativar a GPU",
+    "retry": "Tentar novamente",
+    "remove": "Remover",
+    "dismiss": "Agora não",
+    "cancel": "Cancelar"
+  },
+  "app": {
+    "toasts": {
+      "hotkeyChanged": {
+        "title": "Atalho alterado"
+      },
+      "hotkeyUnavailable": {
+        "title": "Atalho indisponível",
+        "description": "Não foi possível registrar o atalho selecionado. Escolha outro nas configurações."
+      }
+    },
+    "mic": {
+      "hotkeyToSpeak": "Pressione {{hotkey}} para falar",
+      "recording": "Gravando...",
+      "processing": "Processando...",
+      "clickToSpeak": "Clique para falar"
+    },
+    "buttons": {
+      "cancelRecording": "Cancelar gravação",
+      "cancelProcessing": "Cancelar processamento"
+    },
+    "commandMenu": {
+      "stopListening": "Parar de ouvir",
+      "startListening": "Começar a ouvir",
+      "hideForNow": "Ocultar por agora"
+    },
+    "oauth": {
+      "redirectTitle": "Redirecionando para o app...",
+      "closeTab": "Você pode fechar esta aba."
+    }
   }
 }

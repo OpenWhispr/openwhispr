@@ -234,7 +234,13 @@
       "description": "Автоматически исправляйте грамматику, пунктуацию и форматирование прямо во время диктовки.",
       "enable": "Включить ИИ-улучшение"
     },
-    "loading": "Загрузка..."
+    "loading": "Загрузка...",
+    "gpu": {
+      "bannerTitle": "Доступно ускорение GPU",
+      "bannerDescription": "Включите ускорение GPU для повышения производительности.",
+      "enableButton": "Включить GPU",
+      "dismissButton": "Не сейчас"
+    }
   },
   "reasoning": {
     "mode": {
@@ -1440,6 +1446,9 @@
     "realtimeBanner": {
       "message": "Транскрипция в реальном времени доступна в Pro",
       "upgrade": "Перейти"
+    },
+    "enhance": {
+      "title": "Ошибка улучшения"
     }
   },
   "dictionary": {
@@ -1506,5 +1515,47 @@
     "add": "Добавить",
     "editButton": "Изменить ключ",
     "addButton": "Добавить ключ"
+  },
+  "gpu": {
+    "transcriptionBanner": "Ускорьте транскрипцию с помощью GPU",
+    "reasoningBanner": "Ускорьте обработку ИИ с помощью GPU",
+    "enableButton": "Включить GPU",
+    "active": "Ускорение GPU активно",
+    "activating": "Активация GPU...",
+    "activationFailed": "Не удалось активировать GPU",
+    "retry": "Повторить",
+    "remove": "Удалить",
+    "dismiss": "Не сейчас",
+    "cancel": "Отмена"
+  },
+  "app": {
+    "toasts": {
+      "hotkeyChanged": {
+        "title": "Горячая клавиша изменена"
+      },
+      "hotkeyUnavailable": {
+        "title": "Горячая клавиша недоступна",
+        "description": "Не удалось зарегистрировать выбранную комбинацию. Выберите другую в настройках."
+      }
+    },
+    "mic": {
+      "hotkeyToSpeak": "Нажмите {{hotkey}} для записи",
+      "recording": "Запись...",
+      "processing": "Обработка...",
+      "clickToSpeak": "Нажмите для записи"
+    },
+    "buttons": {
+      "cancelRecording": "Отменить запись",
+      "cancelProcessing": "Отменить обработку"
+    },
+    "commandMenu": {
+      "stopListening": "Остановить запись",
+      "startListening": "Начать запись",
+      "hideForNow": "Скрыть"
+    },
+    "oauth": {
+      "redirectTitle": "Перенаправление в приложение...",
+      "closeTab": "Можете закрыть эту вкладку."
+    }
   }
 }

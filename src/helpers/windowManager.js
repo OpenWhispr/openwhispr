@@ -42,11 +42,6 @@ class WindowManager {
       ...position,
     });
 
-    // Main window (dictation overlay) should never appear in dock/taskbar
-    // On macOS, users access the app via the menu bar tray icon
-    // On Windows/Linux, the control panel stays in the taskbar when minimized
-    this.mainWindow.setSkipTaskbar(true);
-
     this.setMainWindowInteractivity(false);
     this.registerMainWindowEvents();
 
@@ -535,6 +530,24 @@ class WindowManager {
         }
       }
     );
+
+    this.controlPanelWindow.webContents.on("render-process-gone", (_event, details) => {
+      if (details.reason === "crashed" || details.reason === "killed" || details.reason === "oom") {
+        debugLogger.error(
+          "Control panel renderer process gone",
+          { reason: details.reason, exitCode: details.exitCode },
+          "window"
+        );
+        setTimeout(() => this.loadControlPanel(), 1000);
+      }
+    });
+
+    this.controlPanelWindow.on("show", () => {
+      if (this.controlPanelWindow.webContents.isCrashed()) {
+        debugLogger.error("Control panel crashed, reloading on show", undefined, "window");
+        this.loadControlPanel();
+      }
+    });
 
     await this.loadControlPanel();
   }

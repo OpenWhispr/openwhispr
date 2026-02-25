@@ -1189,16 +1189,36 @@ class IPCHandlers {
         if (prefs.localTranscriptionProvider === "nvidia") {
           setVars.PARAKEET_MODEL = prefs.model;
           clearVars.push("LOCAL_WHISPER_MODEL");
+          this.whisperManager.stopServer().catch((err) => {
+            debugLogger.error("Failed to stop whisper-server on provider switch", {
+              error: err.message,
+            });
+          });
         } else {
           setVars.LOCAL_WHISPER_MODEL = prefs.model;
           clearVars.push("PARAKEET_MODEL");
+          this.parakeetManager.stopServer().catch((err) => {
+            debugLogger.error("Failed to stop parakeet-server on provider switch", {
+              error: err.message,
+            });
+          });
         }
       } else if (prefs.useLocalWhisper) {
         // Local mode enabled but no model selected - clear pre-warming vars
         clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
       } else {
-        // Cloud mode - clear all local transcription vars
+        // Cloud mode - stop local servers to free RAM
         clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
+        this.whisperManager.stopServer().catch((err) => {
+          debugLogger.error("Failed to stop whisper-server on cloud switch", {
+            error: err.message,
+          });
+        });
+        this.parakeetManager.stopServer().catch((err) => {
+          debugLogger.error("Failed to stop parakeet-server on cloud switch", {
+            error: err.message,
+          });
+        });
       }
 
       if (prefs.reasoningProvider === "local" && prefs.reasoningModel) {
@@ -1206,6 +1226,12 @@ class IPCHandlers {
         setVars.LOCAL_REASONING_MODEL = prefs.reasoningModel;
       } else if (prefs.reasoningProvider && prefs.reasoningProvider !== "local") {
         clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
+        const modelManager = require("./modelManagerBridge").default;
+        modelManager.stopServer().catch((err) => {
+          debugLogger.error("Failed to stop llama-server on provider switch", {
+            error: err.message,
+          });
+        });
       }
 
       this._syncStartupEnv(setVars, clearVars);
@@ -1627,8 +1653,10 @@ class IPCHandlers {
         const { body, boundary } = buildMultipartBody(audioData, "audio.webm", "audio/webm", {
           language: opts.language,
           prompt: opts.prompt,
+          sendLogs: opts.sendLogs,
           clientType: "desktop",
           appVersion: app.getVersion(),
+          clientVersion: app.getVersion(),
           sessionId: this.sessionId,
         });
 
@@ -1670,6 +1698,10 @@ class IPCHandlers {
           wordsRemaining: data.data.wordsRemaining,
           plan: data.data.plan,
           limitReached: data.data.limitReached || false,
+          sttProvider: data.data.sttProvider,
+          sttModel: data.data.sttModel,
+          sttProcessingMs: data.data.sttProcessingMs,
+          audioDurationMs: data.data.audioDurationMs,
         };
       } catch (error) {
         debugLogger.error("Cloud transcription error", { error: error.message }, "cloud-api");
@@ -1713,6 +1745,13 @@ class IPCHandlers {
             sessionId: this.sessionId,
             clientType: "desktop",
             appVersion: app.getVersion(),
+            clientVersion: app.getVersion(),
+            sttProvider: opts.sttProvider,
+            sttModel: opts.sttModel,
+            sttProcessingMs: opts.sttProcessingMs,
+            audioDurationMs: opts.audioDurationMs,
+            audioSizeBytes: opts.audioSizeBytes,
+            audioFormat: opts.audioFormat,
           }),
         });
 
@@ -1740,6 +1779,49 @@ class IPCHandlers {
         return { success: false, error: error.message };
       }
     });
+
+    ipcMain.handle(
+      "cloud-streaming-usage",
+      async (event, text, audioDurationSeconds, opts = {}) => {
+        try {
+          const apiUrl = getApiUrl();
+          if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+          const cookieHeader = await getSessionCookies(event);
+          if (!cookieHeader) throw new Error("No session cookies available");
+
+          const response = await fetch(`${apiUrl}/api/streaming-usage`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Cookie: cookieHeader,
+            },
+            body: JSON.stringify({
+              text,
+              audioDurationSeconds,
+              sessionId: this.sessionId,
+              clientType: "desktop",
+              appVersion: app.getVersion(),
+              clientVersion: app.getVersion(),
+              sendLogs: opts.sendLogs,
+            }),
+          });
+
+          if (response.status === 401) {
+            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          }
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+          return { success: true, ...data };
+        } catch (error) {
+          debugLogger.error("Cloud streaming usage error", { error: error.message }, "cloud-api");
+          return { success: false, error: error.message };
+        }
+      }
+    );
 
     ipcMain.handle("cloud-usage", async (event) => {
       try {
@@ -1832,6 +1914,7 @@ class IPCHandlers {
           source: "file_upload",
           clientType: "desktop",
           appVersion: app.getVersion(),
+          clientVersion: app.getVersion(),
           sessionId: this.sessionId,
         });
 
