@@ -1,4 +1,4 @@
-const { clipboard } = require("electron");
+const { clipboard, systemPreferences } = require("electron");
 const { spawn, spawnSync } = require("child_process");
 const { killProcess } = require("../utils/process");
 const path = require("path");
@@ -7,10 +7,9 @@ const debugLogger = require("./debugLogger");
 
 const CACHE_TTL_MS = 30000;
 
-// macOS accessibility: once granted, permissions persist across app sessions,
-// so use a long TTL. Denied results re-check quickly so granting takes effect fast.
-const ACCESSIBILITY_GRANTED_TTL_MS = 24 * 60 * 60 * 1000;
-const ACCESSIBILITY_DENIED_TTL_MS = 5000;
+// isTrustedAccessibilityClient() is a cheap synchronous syscall, so the cache
+// only exists to debounce the dialog shown on denial.
+const ACCESSIBILITY_CHECK_TTL_MS = 5000;
 
 const getLinuxDesktopEnv = () =>
   [process.env.XDG_CURRENT_DESKTOP, process.env.XDG_SESSION_DESKTOP, process.env.DESKTOP_SESSION]
@@ -256,6 +255,47 @@ class ClipboardManager {
     return accessible;
   }
 
+  _detectKdeWindowClass() {
+    if (this.commandExists("kdotool")) {
+      try {
+        const idResult = spawnSync("kdotool", ["getactivewindow"], { timeout: 1000 });
+        if (idResult.status === 0) {
+          const winId = idResult.stdout.toString().trim();
+          const classResult = spawnSync("kdotool", ["getwindowclassname", winId], {
+            timeout: 1000,
+          });
+          if (classResult.status === 0) {
+            const cls = classResult.stdout.toString().toLowerCase().trim();
+            if (cls) return cls;
+          }
+        }
+      } catch {}
+    }
+
+    const qdbus = ["qdbus6", "qdbus"].find((cmd) => this.commandExists(cmd));
+    if (qdbus) {
+      try {
+        const result = spawnSync(qdbus, ["org.kde.KWin", "/KWin", "supportInformation"], {
+          timeout: 2000,
+          maxBuffer: 512 * 1024,
+        });
+        if (result.status === 0) {
+          const lines = result.stdout.toString().split("\n");
+          let lastClass = null;
+          for (const line of lines) {
+            const classMatch = line.match(/^\s*resourceClass:\s+(.+)$/);
+            if (classMatch) lastClass = classMatch[1].trim();
+            if (/^\s*active:\s+(1|true)\s*$/i.test(line) && lastClass) {
+              return lastClass.toLowerCase();
+            }
+          }
+        }
+      } catch {}
+    }
+
+    return null;
+  }
+
   safeLog(...args) {
     if (process.env.NODE_ENV === "development") {
       try {
@@ -327,7 +367,14 @@ class ClipboardManager {
         }
 
         this.safeLog("✅ Permissions granted, attempting to paste...");
-        await this.pasteMacOS(originalClipboard, options);
+        try {
+          await this.pasteMacOS(originalClipboard, options);
+        } catch (firstError) {
+          this.safeLog("⚠️ First paste attempt failed, retrying...", firstError?.message);
+          clipboard.writeText(text);
+          await new Promise((r) => setTimeout(r, 200));
+          await this.pasteMacOS(originalClipboard, options);
+        }
       } else if (platform === "win32") {
         const winFastPaste = this.resolveWindowsFastPasteBinary();
         if (winFastPaste) {
@@ -792,6 +839,7 @@ class ClipboardManager {
       "tabby",
       "sakura",
       "warp",
+      "termius",
     ];
 
     // Pre-detect the target window BEFORE our window takes focus or blurs,
@@ -820,19 +868,27 @@ class ClipboardManager {
     };
 
     const targetWindowId = preDetectTargetWindow();
-    const xdotoolWindowClass = preDetectWindowClass(targetWindowId);
-    const useShiftInsertFallback = isWayland && isGnome && !xdotoolWindowClass;
+    let detectedWindowClass = preDetectWindowClass(targetWindowId);
+
+    if (!detectedWindowClass && isKde) {
+      detectedWindowClass = this._detectKdeWindowClass();
+      if (detectedWindowClass) {
+        debugLogger.debug("KDE window class detected", { detectedWindowClass }, "clipboard");
+      }
+    }
+
+    const useShiftInsertFallback = isWayland && isGnome && !detectedWindowClass;
 
     if (linuxFastPaste && !useShiftInsertFallback) {
-      const earlyIsTerminal = xdotoolWindowClass
-        ? terminalClasses.some((t) => xdotoolWindowClass.includes(t))
+      const earlyIsTerminal = detectedWindowClass
+        ? terminalClasses.some((t) => detectedWindowClass.includes(t))
         : false;
 
       const spawnFastPaste = (args, label) =>
         new Promise((resolve, reject) => {
           debugLogger.debug(
             `Attempting native linux-fast-paste (${label})`,
-            { linuxFastPaste, args, targetWindowId, xdotoolWindowClass, earlyIsTerminal },
+            { linuxFastPaste, args, targetWindowId, detectedWindowClass, earlyIsTerminal },
             "clipboard"
           );
           const proc = spawn(linuxFastPaste, args);
@@ -944,32 +1000,12 @@ class ClipboardManager {
 
     // Terminals use Ctrl+Shift+V instead of Ctrl+V
     const isTerminal = () => {
-      if (xdotoolWindowClass) {
-        const isTerminalWindow = terminalClasses.some((term) => xdotoolWindowClass.includes(term));
-        if (isTerminalWindow) {
-          this.safeLog(`🖥️ Terminal detected via xdotool: ${xdotoolWindowClass}`);
-        }
-        return isTerminalWindow;
+      if (!detectedWindowClass) return false;
+      const isTerminalWindow = terminalClasses.some((term) => detectedWindowClass.includes(term));
+      if (isTerminalWindow) {
+        this.safeLog(`🖥️ Terminal detected: ${detectedWindowClass}`);
       }
-
-      try {
-        if (this.commandExists("kdotool")) {
-          const windowIdResult = spawnSync("kdotool", ["getactivewindow"]);
-          if (windowIdResult.status === 0) {
-            const windowId = windowIdResult.stdout.toString().trim();
-            const classResult = spawnSync("kdotool", ["getwindowclassname", windowId]);
-            if (classResult.status === 0) {
-              const className = classResult.stdout.toString().toLowerCase().trim();
-              const isTerminalWindow = terminalClasses.some((term) => className.includes(term));
-              if (isTerminalWindow) {
-                this.safeLog(`🖥️ Terminal detected via kdotool: ${className}`);
-              }
-              return isTerminalWindow;
-            }
-          }
-        }
-      } catch {}
-      return false;
+      return isTerminalWindow;
     };
 
     const inTerminal = isTerminal();
@@ -990,7 +1026,7 @@ class ClipboardManager {
 
     if (targetWindowId) {
       this.safeLog(
-        `🎯 Targeting window ID ${targetWindowId} for paste (class: ${xdotoolWindowClass})`
+        `🎯 Targeting window ID ${targetWindowId} for paste (class: ${detectedWindowClass})`
       );
     }
 
@@ -1020,7 +1056,7 @@ class ClipboardManager {
     if (!isWayland) {
       // X11: xdotool is native and needs no daemon; ydotool as fallback
       candidates = [...xdotoolEntry, ...ydotoolEntry];
-    } else if (isGnome && !xdotoolWindowClass) {
+    } else if (isGnome && !detectedWindowClass) {
       // GNOME Wayland: when X11 window class cannot be detected, prefer ydotool first
       // to avoid xdotool targeting issues on some Wayland-focused apps.
       candidates = [...ydotoolEntry, ...xdotoolEntry, ...wtypeEntry];
@@ -1028,8 +1064,8 @@ class ClipboardManager {
       // wlroots (Sway, Hyprland, etc.): wtype is native; then xdotool for XWayland; ydotool last
       candidates = [...wtypeEntry, ...xdotoolEntry, ...ydotoolEntry];
     } else {
-      // GNOME, KDE, or unknown Wayland: xdotool for XWayland apps first; ydotool fallback; wtype last resort
-      candidates = [...xdotoolEntry, ...ydotoolEntry, ...wtypeEntry];
+      // GNOME, KDE, or unknown Wayland: ydotool (uinput) works for all windows; xdotool for XWayland only
+      candidates = [...ydotoolEntry, ...xdotoolEntry, ...wtypeEntry];
     }
 
     const available = candidates.filter((c) => this.commandExists(c.cmd));
@@ -1040,7 +1076,7 @@ class ClipboardManager {
         candidateTools: candidates.map((c) => c.cmd),
         availableTools: available.map((c) => c.cmd),
         targetWindowId,
-        xdotoolWindowClass,
+        detectedWindowClass,
         inTerminal,
         pasteKeys,
       },
@@ -1254,44 +1290,17 @@ class ClipboardManager {
       return this.accessibilityCache.value;
     }
 
-    return new Promise((resolve) => {
-      const testProcess = spawn("osascript", [
-        "-e",
-        'tell application "System Events" to get name of first process',
-      ]);
+    const allowed = systemPreferences.isTrustedAccessibilityClient(false);
+    this.accessibilityCache = {
+      value: allowed,
+      expiresAt: Date.now() + ACCESSIBILITY_CHECK_TTL_MS,
+    };
 
-      let testOutput = "";
-      let testError = "";
+    if (!allowed) {
+      this.showAccessibilityDialog("not allowed assistive access");
+    }
 
-      testProcess.stdout.on("data", (data) => {
-        testOutput += data.toString();
-      });
-
-      testProcess.stderr.on("data", (data) => {
-        testError += data.toString();
-      });
-
-      testProcess.on("close", (code) => {
-        const allowed = code === 0;
-        this.accessibilityCache = {
-          value: allowed,
-          expiresAt:
-            Date.now() + (allowed ? ACCESSIBILITY_GRANTED_TTL_MS : ACCESSIBILITY_DENIED_TTL_MS),
-        };
-        if (!allowed) {
-          this.showAccessibilityDialog(testError);
-        }
-        resolve(allowed);
-      });
-
-      testProcess.on("error", (error) => {
-        this.accessibilityCache = {
-          value: false,
-          expiresAt: Date.now() + ACCESSIBILITY_DENIED_TTL_MS,
-        };
-        resolve(false);
-      });
-    });
+    return allowed;
   }
 
   showAccessibilityDialog(testError) {

@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-02-24
+
+### Added
+
+- **Unified GPU Banners**: Replaced dual CUDA/Vulkan banners on the home screen with a single GPU acceleration banner; added GPU banners to Transcription Settings and AI Text Enhancement Settings
+- **GpuStatusBadge Redesign**: Auto-retry flow (download → activating → GPU active) with 15s timeout, replacing confusing "CPU Only" and "Re-detect GPU" states; swapped hardcoded hex colors for `bg-success`/`bg-warning` design tokens
+- **Streaming Usage Tracking**: Wired up the previously-uncalled `/api/streaming-usage` endpoint so Deepgram streaming transcriptions report word counts to the server
+- **Cloud API Telemetry**: Forward STT metadata (`sttProvider`, `sttModel`, processing time, audio duration/size/format) and `clientVersion`/`clientType`/`appVersion` to all cloud API requests
+- **Internationalization**: Added 15 missing i18n keys (`app.mic.*`, `app.commandMenu.*`, `app.toasts.*`, `app.oauth.*`, `notes.enhance.title`) across all 10 locale files
+
+### Fixed
+
+- **Windows Blank Screen**: Fixed blank screen on return from sleep/minimize by adding `render-process-gone` handler, `isCrashed()` health checks on show/tray/second-instance paths, `backgroundColor` and `backgroundThrottling` to window config, and `disable-gpu-compositing` for win32
+- **IPC Echo Loop**: Broke infinite IPC bounce in floating icon auto-hide toggle by guarding the setter with an early return when the value hasn't changed
+- **GPU Banner Navigation**: GPU banner "Enable GPU" button now navigates to the correct `"intelligence"` settings section instead of invalid `"reasoning"` ID
+- **AI CTA Deep Link**: Replaced legacy `"aiModels"` alias with canonical `"intelligence"` section ID in the AI enhancement CTA button
+- **Custom Endpoint Routing** (#311): Moved `reasoningProvider === "custom"` check to the top of `getModelProvider()` so custom endpoint models are never misrouted through built-in providers; custom models now show a neutral Globe icon
+- **KDE Wayland Terminal Detection**: Detect Konsole via `kdotool` (fast path) or KWin `supportInformation` via `qdbus` (zero-install fallback) so terminals receive `Ctrl+Shift+V` instead of `Ctrl+V`
+- **RAM Leak on Provider Switch**: Whisper, Parakeet, and llama-server processes now stop when switching to cloud providers, freeing loaded models from RAM
+- **Streaming Usage Session Refresh**: Wrapped `cloudStreamingUsage` in `withSessionRefresh` so expired sessions auto-refresh instead of silently dropping word counts
+- **Duplicate Transcription Logs**: Skip telemetry logging in streaming-usage and transcribe endpoints when reasoning is enabled (the `/api/reason` endpoint already creates the combined row)
+- **Usage Cache Invalidation**: `useUsage` hook now listens for `usage-changed` events to invalidate its cache and refetch immediately after transcription
+- **macOS Binary Architecture**: Added Mach-O header verification to globe-listener and fast-paste build scripts; force rebuild when architecture-specific hash file is missing; runtime architecture check before spawning binary
+- **Globe Key Listener Resilience**: Auto-restart globe key listener on unexpected exit code 0 (sleep/wake invalidation); reset restart counter after sustained uptime; only treat "Failed to create event tap" as fatal
+- **Parakeet Long Recordings**: Lowered max segment duration from 30s to 15s for more reliable chunked transcription; downgraded reasoning failure log from error to warn
+
+## [1.5.2] - 2026-02-24
+
+### Fixed
+
+- **Reasoning Output**: Resolved empty output for Qwen3/GPT-OSS models by raising local inference minimum tokens from 100 to 512; fixed custom endpoint models misrouting by checking `reasoningProvider` setting before name heuristics
+- **Google OAuth**: Added `newUserCallbackURL` to desktop Google OAuth flow for proper new user registration
+- **Linux KDE Taskbar**: Prevented dictation panel from appearing in KDE taskbar
+- **Intel Mac CI Builds**: Fixed binary architecture mismatch by installing x64 ffmpeg-static binary and preventing prebuild hooks from deleting x64 binaries on arm64 CI runners (#196)
+
+## [1.5.1] - 2026-02-23
+
+### Added
+
+- **GPU-Accelerated Local Inference**: Vulkan (Windows/Linux) and Metal (macOS) support for llama-server with automatic CPU fallback and GPU status badge in the reasoning model selector
+- **CUDA GPU Acceleration for Whisper**: NVIDIA GPU acceleration for local Whisper transcription with automatic GPU detection, upgrade banner for existing users, and shared download progress UI
+- **On-Demand Vulkan Download**: Vulkan llama-server binary downloads on-demand when the user opts in, saving 40-46MB from the app installer
+
+### Changed
+
+- **Vulkan Llama-Server Architecture**: Switched from bundling the Vulkan binary to on-demand download into userData, mirroring the Whisper CUDA download pattern
+
+### Fixed
+
+- **macOS Paste Failure**: Replaced osascript-based accessibility check with Electron's native `isTrustedAccessibilityClient()` and fixed focus transfer using hide()+showInactive() instead of blur() on NSPanel (#313)
+- **Windows Sherpa-onnx Extraction**: Fixed tar extraction failing on Windows due to GNU tar interpreting drive letter colons as remote host separators — now uses relative paths (#284)
+- **macOS Auto-Update Architecture**: Detect Rosetta translation via `sysctl.proc_translated` so Apple Silicon users stuck on an x64 build from older releases self-heal to the native arm64 build on next update
+
+## [1.5.0] - 2026-02-23
+
+### Added
+
+- **Notes System**: Full-featured note-taking built into the control panel
+  - Create, edit, and organize notes with a rich Markdown editor
+  - Organize notes into custom folders with a default Personal folder
+  - Upload audio files for transcription directly into notes
+  - Real-time dictation widget for transcribing directly into a note
+  - Drag-and-drop to reorder notes and move between folders
+  - Guided onboarding flow for first-time notes users
+- **AI Actions on Notes**: Apply AI-powered actions to note content
+  - Action picker with customizable processing prompts
+  - Action manager dialog for creating and editing action templates
+  - Processing overlay with live progress feedback
+- **Sidebar Navigation**: Redesigned control panel with persistent sidebar
+  - New `ControlPanelSidebar` replaces the old tab-based layout
+  - Dedicated views for History, Notes, Dictionary, and Settings
+  - Collapsible sidebar for more content space
+- **Referral Program**: Invite friends to earn free Pro months
+  - Referral dashboard with invite tracking and status badges
+  - Email invitation flow
+  - Animated spectrogram share card with unique referral code
+- **New AI Models**: Added Claude 4.6 (Opus), Gemini 3 Flash, and Gemini 3.1 Pro to the model registry
+- **Settings Store**: Migrated settings state management to Zustand store for better performance and shared access across components
+- **Note Store & Action Store**: New Zustand stores for notes and AI action state
+
+### Changed
+
+- **Control Panel Architecture**: Extracted History, Dictionary, and Settings into standalone views, reducing ControlPanel complexity
+- **Settings Refactor**: Extracted bulk of `useSettings` hook logic into `settingsStore.ts` for cleaner separation of concerns
+- **UI Polish**: Updated numerous components with improved dark mode support, consistent spacing, and refined typography
+- **Locale Updates**: Extended all 10 language files with notes, referral, and sidebar translation keys
+
+### Fixed
+
+- **macOS Auto-Update Architecture**: Detect Rosetta translation via `sysctl.proc_translated` so Apple Silicon users stuck on an x64 build from older releases self-heal to the native arm64 build on next update
+- **Linux GTK Crash**: Force GTK3 on Linux startup to avoid GTK symbol crash on systems with GTK4 installed (#291)
+- **CI Pipeline**: Added Windows paste binary and key listener download steps to the build workflow (#298)
+- **Buy Me a Coffee**: Updated funding link username
+
 ## [1.4.11] - 2026-02-13
 
 ### Added
@@ -48,7 +142,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.4.8] - 2026-02-12
 
 ### Added
-
+- **Referral Program**: Invite friends to earn free Pro months with referral dashboard, email invitations, invite tracking with status badges, and animated spectrogram share card with unique referral code
+- **Notes System**: Added sidebar navigation with notes system and dictionary view for organizing transcriptions
+- **Folder Organization**: Notes can be organized into custom folders with a default Personal folder, folder management UI, and folder-aware note filtering. Upload flow now includes folder selection
 - **Internationalization v1**: Full desktop localization across auth, settings, hooks, and UI with centralized renderer locale resources (#258)
 - **Chinese Language Split**: Split Chinese into Simplified (zh-CN) and Traditional (zh-TW) with tailored AI instructions and one-time migration for existing users (#267)
 - **Russian Interface Language**: Added Russian to interface language options
@@ -76,6 +172,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Archive Extraction Retry**: Reuse existing archive on extraction retry with improved error handling
 - **Email Verification Polling**: Pass email param in verification polling and stop on 401 responses
 - **Auth Build Bundling**: Added @neondatabase/auth packages to rollup externals for correct production bundling (#256)
+- **Neon Auth Build Config**: Fixed Vite build configuration for Neon Auth packages (#266)
 
 ### Changed
 

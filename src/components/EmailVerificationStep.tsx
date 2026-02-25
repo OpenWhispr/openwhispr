@@ -41,7 +41,7 @@ export default function EmailVerificationStep({ email, onVerified }: EmailVerifi
           }
         } else if (res.status === 401 || res.status === 400) {
           if (pollRef.current) clearInterval(pollRef.current);
-          setError("Session expired. Please restart the sign-up process.");
+          setError(t("auth.sessionExpired"));
         }
       } catch {
         // Network error — silently retry on next poll
@@ -120,12 +120,12 @@ export default function EmailVerificationStep({ email, onVerified }: EmailVerifi
 
       <div className="flex items-center justify-center gap-1.5 py-1">
         <Loader2 className="w-3 h-3 animate-spin text-muted-foreground/50" />
-        <p className="text-[10px] text-muted-foreground/50">{t("emailVerification.waiting")}</p>
+        <p className="text-xs text-muted-foreground/50">{t("emailVerification.waiting")}</p>
       </div>
 
       {error && (
         <div className="px-2.5 py-1.5 rounded bg-destructive/5 border border-destructive/20 flex items-center gap-1.5">
-          <p className="text-[10px] text-destructive leading-snug">{error}</p>
+          <p className="text-xs text-destructive leading-snug">{error}</p>
         </div>
       )}
 

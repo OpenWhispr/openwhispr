@@ -14,6 +14,7 @@ import {
   UserCircle,
 } from "lucide-react";
 import TitleBar from "./TitleBar";
+import WindowControls from "./WindowControls";
 import PermissionCard from "./ui/PermissionCard";
 import SupportDropdown from "./ui/SupportDropdown";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
@@ -32,10 +33,10 @@ import { setAgentName as saveAgentName } from "../utils/agentName";
 import { formatHotkeyLabel, getDefaultHotkey } from "../utils/hotkeys";
 import { useAuth } from "../hooks/useAuth";
 import { HotkeyInput } from "./ui/HotkeyInput";
-import HotkeyGuidanceAccordion from "./ui/HotkeyGuidanceAccordion";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { getPlatform } from "../utils/platform";
+import logger from "../utils/logger";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
 
@@ -150,7 +151,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           setActivationMode("tap");
         }
       } catch (error) {
-        console.error("Failed to check hotkey mode:", error);
+        logger.error("Failed to check hotkey mode", { error }, "onboarding");
       }
     };
     checkHotkeyMode();
@@ -171,7 +172,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             : await window.electronAPI?.checkModelStatus(modelToCheck);
         setIsModelDownloaded(result?.downloaded ?? false);
       } catch (error) {
-        console.error("Failed to check model status:", error);
+        logger.error("Failed to check model status", { error }, "onboarding");
         setIsModelDownloaded(false);
       }
     };
@@ -216,7 +217,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           }
         }
       } catch (error) {
-        console.error("Failed to auto-register default hotkey:", error);
+        logger.error("Failed to auto-register default hotkey", { error }, "onboarding");
       } finally {
         autoRegisterInFlightRef.current = false;
       }
@@ -241,7 +242,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       }
       return true;
     } catch (error) {
-      console.error("Failed to register onboarding hotkey", error);
+      logger.error("Failed to register onboarding hotkey", { error }, "onboarding");
       showAlertDialog({
         title: t("onboarding.hotkey.couldNotRegisterTitle"),
         description: t("onboarding.hotkey.couldNotRegisterDescription"),
@@ -266,7 +267,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     try {
       await window.electronAPI?.saveAllKeysToEnv?.();
     } catch (error) {
-      console.error("Failed to persist API keys:", error);
+      logger.error("Failed to persist API keys", { error }, "onboarding");
     }
 
     return true;
@@ -608,7 +609,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 {t("onboarding.activation.mode")}
               </span>
-              <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+              <p className="text-xs text-muted-foreground/70 mt-0.5">
                 {activationMode === "tap"
                   ? t("onboarding.activation.tapDescription")
                   : t("onboarding.activation.holdDescription")}
@@ -629,7 +630,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
             {t("onboarding.activation.test")}
           </span>
-          <span className="text-[10px] text-muted-foreground/60">
+          <span className="text-xs text-muted-foreground/60">
             {activationMode === "tap" || isUsingGnomeHotkeys
               ? t("onboarding.activation.hotkeyToStartStop", { hotkey: readableHotkey })
               : t("onboarding.activation.holdHotkey", { hotkey: readableHotkey })}
@@ -673,6 +674,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             return openaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "groq") {
             return groqApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "mistral") {
+            return mistralApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "custom") {
             // Custom can work without API key for local endpoints
             return true;
@@ -714,12 +717,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     };
   }, []);
 
+  const onboardingPlatform =
+    typeof window !== "undefined" && window.electronAPI?.getPlatform
+      ? window.electronAPI.getPlatform()
+      : "darwin";
+
   return (
     <div
       className="h-screen flex flex-col bg-background"
-      style={{
-        paddingTop: "env(safe-area-inset-top, 0px)",
-      }}
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
     >
       <ConfirmDialog
         open={confirmDialog.open}
@@ -739,14 +745,27 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         onOk={() => {}}
       />
 
-      {/* Title Bar */}
-      <div className="shrink-0 z-10">
-        <TitleBar
-          showTitle={true}
-          className="bg-background backdrop-blur-xl border-b border-border shadow-sm"
-          actions={isSignedIn ? <SupportDropdown /> : undefined}
-        ></TitleBar>
-      </div>
+      {/* Title Bar / drag region */}
+      {currentStep === 0 ? (
+        <div
+          className="flex items-center justify-end w-full h-10 shrink-0"
+          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+        >
+          {onboardingPlatform !== "darwin" && (
+            <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+              <WindowControls />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="shrink-0 z-10">
+          <TitleBar
+            showTitle={true}
+            className="bg-background backdrop-blur-xl border-b border-border shadow-sm"
+            actions={isSignedIn ? <SupportDropdown /> : undefined}
+          ></TitleBar>
+        </div>
+      )}
 
       {/* Progress Bar - hidden on welcome/auth step */}
       {showProgress && (

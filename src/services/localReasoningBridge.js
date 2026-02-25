@@ -48,17 +48,21 @@ class LocalReasoningService {
       });
 
       const result = await modelManager.runInference(modelId, text, inferenceConfig);
+      const cleanResult = result
+        .replace(/<think>[\s\S]*?<\/think>/g, "")
+        .replace(/<think>[\s\S]*$/, "")
+        .trim();
 
       const processingTime = Date.now() - startTime;
 
       debugLogger.logReasoning("LOCAL_BRIDGE_SUCCESS", {
         modelId,
         processingTimeMs: processingTime,
-        resultLength: result.length,
-        resultPreview: result.substring(0, 100) + (result.length > 100 ? "..." : ""),
+        resultLength: cleanResult.length,
+        resultPreview: cleanResult.substring(0, 100) + (cleanResult.length > 100 ? "..." : ""),
       });
 
-      return result;
+      return cleanResult;
     } catch (error) {
       const processingTime = Date.now() - startTime;
 
@@ -75,7 +79,7 @@ class LocalReasoningService {
     }
   }
 
-  calculateMaxTokens(textLength, minTokens = 100, maxTokens = 2048, multiplier = 2) {
+  calculateMaxTokens(textLength, minTokens = 512, maxTokens = 2048, multiplier = 2) {
     return Math.max(minTokens, Math.min(textLength * multiplier, maxTokens));
   }
 }

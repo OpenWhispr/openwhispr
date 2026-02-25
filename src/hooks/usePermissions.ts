@@ -246,6 +246,17 @@ export const usePermissions = (
     checkPasteToolsAvailability();
   }, [checkPasteToolsAvailability]);
 
+  // On macOS, re-validate accessibility permission on mount to override stale
+  // localStorage values (e.g. after app update changes the code signature).
+  useEffect(() => {
+    if (getPlatform() !== "darwin") return;
+    window.electronAPI?.checkAccessibilityPermission?.().then((granted) => {
+      if (!granted) {
+        setAccessibilityPermissionGranted(false);
+      }
+    });
+  }, [setAccessibilityPermissionGranted]);
+
   const testAccessibilityPermission = useCallback(async () => {
     const platform = getPlatform();
 

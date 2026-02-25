@@ -58,7 +58,12 @@ configureChannelUserDataPath();
 // the compositor to set up an ARGB visual before any windows are created.
 // --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
 if (process.platform === "linux") {
+  app.commandLine.appendSwitch("gtk-version", "3");
   app.commandLine.appendSwitch("enable-transparent-visuals");
+  app.commandLine.appendSwitch("disable-gpu-compositing");
+}
+
+if (process.platform === "win32") {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
@@ -159,6 +164,7 @@ const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
 const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
+const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 
 // Manager instances - initialized after app.whenReady()
@@ -174,6 +180,7 @@ let trayManager = null;
 let updateManager = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
+let whisperCudaManager = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 
@@ -232,6 +239,9 @@ function initializeCoreManagers() {
   databaseManager = new DatabaseManager();
   clipboardManager = new ClipboardManager();
   whisperManager = new WhisperManager();
+  if (process.platform !== "darwin") {
+    whisperCudaManager = new WhisperCudaManager();
+  }
   parakeetManager = new ParakeetManager();
   updateManager = new UpdateManager();
   windowsKeyManager = new WindowsKeyManager();
@@ -246,6 +256,7 @@ function initializeCoreManagers() {
     windowManager,
     updateManager,
     windowsKeyManager,
+    whisperCudaManager,
     getTrayManager: () => trayManager,
   });
 }
@@ -482,6 +493,7 @@ async function startApp() {
   const whisperSettings = {
     localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
     whisperModel: process.env.LOCAL_WHISPER_MODEL,
+    useCuda: process.env.WHISPER_CUDA_ENABLED === "true" && whisperCudaManager?.isDownloaded(),
   };
   whisperManager.initializeAtStartup(whisperSettings).catch((err) => {
     debugLogger.debug("Whisper startup init error (non-fatal)", { error: err.message });
@@ -523,18 +535,29 @@ async function startApp() {
     const POST_STOP_COOLDOWN_MS = 300;
 
     globeKeyManager.on("globe-down", async () => {
+      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
+      const mainWindowLive = isLiveWindow(windowManager.mainWindow);
+      debugLogger?.debug("[Globe] globe-down received", {
+        currentHotkey,
+        mainWindowLive,
+        activationMode: mainWindowLive ? windowManager.getActivationMode() : "n/a",
+      });
+
       // Forward to control panel for hotkey capture
       if (isLiveWindow(windowManager.controlPanelWindow)) {
         windowManager.controlPanelWindow.webContents.send("globe-key-pressed");
       }
 
       // Handle dictation if Globe is the current hotkey
-      if (hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey() === "GLOBE") {
-        if (isLiveWindow(windowManager.mainWindow)) {
+      if (currentHotkey === "GLOBE") {
+        if (mainWindowLive) {
           const activationMode = windowManager.getActivationMode();
           if (activationMode === "push") {
             const now = Date.now();
-            if (now - globeLastStopTime < POST_STOP_COOLDOWN_MS) return;
+            if (now - globeLastStopTime < POST_STOP_COOLDOWN_MS) {
+              debugLogger?.debug("[Globe] Ignored — cooldown active");
+              return;
+            }
             windowManager.showDictationPanel();
             const pressTime = now;
             globeKeyDownTime = pressTime;
@@ -542,6 +565,7 @@ async function startApp() {
             setTimeout(async () => {
               if (globeKeyDownTime === pressTime && !globeKeyIsRecording) {
                 globeKeyIsRecording = true;
+                debugLogger?.debug("[Globe] Starting dictation (push hold)");
                 windowManager.sendStartDictation();
               }
             }, MIN_HOLD_DURATION_MS);
@@ -549,11 +573,17 @@ async function startApp() {
             windowManager.showDictationPanel();
             windowManager.mainWindow.webContents.send("toggle-dictation");
           }
+        } else {
+          debugLogger?.debug("[Globe] Ignored — mainWindow not live");
         }
+      } else {
+        debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE", { currentHotkey });
       }
     });
 
     globeKeyManager.on("globe-up", async () => {
+      debugLogger?.debug("[Globe] globe-up received", { wasRecording: globeKeyIsRecording });
+
       // Forward to control panel for hotkey capture (Fn key released)
       if (isLiveWindow(windowManager.controlPanelWindow)) {
         windowManager.controlPanelWindow.webContents.send("globe-key-released");
@@ -567,6 +597,7 @@ async function startApp() {
           globeLastStopTime = Date.now();
           if (globeKeyIsRecording) {
             globeKeyIsRecording = false;
+            debugLogger?.debug("[Globe] Stopping dictation (push release)");
             windowManager.sendStopDictation();
           }
         }
@@ -614,19 +645,32 @@ async function startApp() {
 
     globeKeyManager.on("right-modifier-up", async (modifier) => {
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
-      if (currentHotkey !== modifier) return;
-      if (!isLiveWindow(windowManager.mainWindow)) return;
 
-      const activationMode = windowManager.getActivationMode();
-      if (activationMode === "push") {
-        rightModDownTime = 0;
-        rightModLastStopTime = Date.now();
-        if (rightModIsRecording) {
-          rightModIsRecording = false;
-          windowManager.sendStopDictation();
-        } else {
-          windowManager.hideDictationPanel();
+      if (currentHotkey === modifier) {
+        if (!isLiveWindow(windowManager.mainWindow)) return;
+
+        const activationMode = windowManager.getActivationMode();
+        if (activationMode === "push") {
+          rightModDownTime = 0;
+          rightModLastStopTime = Date.now();
+          if (rightModIsRecording) {
+            rightModIsRecording = false;
+            windowManager.sendStopDictation();
+          } else {
+            windowManager.hideDictationPanel();
+          }
         }
+      }
+
+      const rightModToBase = {
+        RightCommand: "command",
+        RightOption: "option",
+        RightControl: "control",
+        RightShift: "shift",
+      };
+      const baseMod = rightModToBase[modifier];
+      if (baseMod && windowManager?.handleMacPushModifierUp) {
+        windowManager.handleMacPushModifierUp(baseMod);
       }
     });
 
@@ -763,6 +807,9 @@ if (gotSingleInstanceLock) {
       }
       windowManager.controlPanelWindow.show();
       windowManager.controlPanelWindow.focus();
+      if (windowManager.controlPanelWindow.webContents.isCrashed()) {
+        windowManager.loadControlPanel();
+      }
     } else {
       windowManager.createControlPanelWindow();
     }

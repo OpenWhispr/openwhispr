@@ -2,6 +2,7 @@ import { Dialog, DialogContent } from "./ui/dialog";
 import { ChevronRight } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useUsage } from "../hooks/useUsage";
+import { useSettingsStore } from "../stores/settingsStore";
 
 interface UpgradePromptProps {
   open: boolean;
@@ -71,7 +72,7 @@ export default function UpgradePrompt({
             title={t("upgradePrompt.useApiKey")}
             description={t("upgradePrompt.useApiKeyDescription")}
             onClick={() => {
-              localStorage.setItem("cloudTranscriptionMode", "byok");
+              useSettingsStore.getState().setCloudTranscriptionMode("byok");
               onOpenChange(false);
             }}
           />
@@ -79,7 +80,7 @@ export default function UpgradePrompt({
             title={t("upgradePrompt.switchToLocal")}
             description={t("upgradePrompt.switchToLocalDescription")}
             onClick={() => {
-              localStorage.setItem("useLocalWhisper", "true");
+              useSettingsStore.getState().setUseLocalWhisper(true);
               onOpenChange(false);
             }}
           />

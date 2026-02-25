@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
@@ -20,6 +20,7 @@ import ReasoningService from "../../services/ReasoningService";
 import { getModelProvider } from "../../models/ModelRegistry";
 import logger from "../../utils/logger";
 import { UNIFIED_SYSTEM_PROMPT } from "../../config/prompts";
+import { useSettingsStore, selectIsCloudReasoningMode } from "../../stores/settingsStore";
 
 interface PromptStudioProps {
   className?: string;
@@ -69,6 +70,11 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
   const { alertDialog, showAlertDialog, hideAlertDialog } = useDialogs();
   const { agentName } = useAgentName();
 
+  const effectiveModel = useSettingsStore((s) => s.reasoningModel);
+  const isCloudMode = useSettingsStore(selectIsCloudReasoningMode);
+  const useReasoningModel = useSettingsStore((s) => s.useReasoningModel);
+  const reasoningModel = useSettingsStore((s) => s.reasoningModel);
+
   useEffect(() => {
     const legacyPrompts = localStorage.getItem("customPrompts");
     if (legacyPrompts && !localStorage.getItem("customUnifiedPrompt")) {
@@ -79,7 +85,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
           localStorage.removeItem("customPrompts");
         }
       } catch (e) {
-        console.error("Failed to migrate legacy custom prompts:", e);
+        logger.error("Failed to migrate legacy custom prompts", { error: e }, "prompts");
       }
     }
 
@@ -88,7 +94,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
       try {
         setEditedPrompt(JSON.parse(customPrompt));
       } catch (error) {
-        console.error("Failed to load custom prompt:", error);
+        logger.error("Failed to load custom prompt", { error }, "prompts");
       }
     }
   }, []);
@@ -123,12 +129,6 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
     setTestResult("");
 
     try {
-      const useReasoningModel = localStorage.getItem("useReasoningModel") === "true";
-      const cloudReasoningMode = localStorage.getItem("cloudReasoningMode") || "openwhispr";
-      const isSignedIn = localStorage.getItem("isSignedIn") === "true";
-      const isCloudMode = isSignedIn && cloudReasoningMode === "openwhispr";
-
-      const reasoningModel = localStorage.getItem("reasoningModel") || "";
       const reasoningProvider = isCloudMode
         ? "openwhispr"
         : reasoningModel
@@ -153,24 +153,25 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
         return;
       }
 
-      // In BYOK mode, a model must be selected
       if (!isCloudMode && !reasoningModel) {
         setTestResult(t("promptStudio.test.noModelSelected"));
         return;
       }
 
-      // In BYOK mode with custom provider, validate base URL
       if (!isCloudMode) {
         const providerConfig = PROVIDER_CONFIG[reasoningProvider] || {
           label: reasoningProvider.charAt(0).toUpperCase() + reasoningProvider.slice(1),
         };
 
         if (providerConfig.baseStorageKey) {
-          const baseUrl = (localStorage.getItem(providerConfig.baseStorageKey) || "").trim();
+          const baseUrl = (useSettingsStore.getState().cloudReasoningBaseUrl || "").trim();
           if (!baseUrl) {
             setTestResult(
               t("promptStudio.test.baseUrlMissing", {
-                provider: providerConfig.label,
+                provider:
+                  reasoningProvider === "custom"
+                    ? t("promptStudio.test.customEndpoint")
+                    : providerConfig.label,
               })
             );
             return;
@@ -178,8 +179,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
         }
       }
 
-      // Cloud mode doesn't require a specific model — pass a placeholder if none is set
-      const modelToUse = isCloudMode ? reasoningModel || "auto" : reasoningModel;
+      const modelToUse = isCloudMode ? effectiveModel || "auto" : reasoningModel;
 
       const currentCustomPrompt = localStorage.getItem("customUnifiedPrompt");
       localStorage.setItem("customUnifiedPrompt", JSON.stringify(editedPrompt));
@@ -232,7 +232,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-[12px] font-medium transition-all duration-150 border-b-2 ${
+                className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-xs font-medium transition-colors duration-150 border-b-2 ${
                   isActive
                     ? "border-primary text-foreground bg-primary/5 dark:bg-primary/3"
                     : "border-transparent text-muted-foreground hover:text-foreground hover:bg-black/2 dark:hover:bg-white/2"
@@ -261,10 +261,10 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                   },
                 ].map((item) => (
                   <div key={item.mode} className="flex items-start gap-3">
-                    <span className="shrink-0 mt-0.5 text-[10px] font-medium uppercase tracking-wider px-1.5 py-px rounded bg-muted text-muted-foreground">
+                    <span className="shrink-0 mt-0.5 text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded bg-muted text-muted-foreground">
                       {item.mode}
                     </span>
-                    <p className="text-[12px] text-muted-foreground leading-relaxed">{item.desc}</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
                   </div>
                 ))}
               </div>
@@ -273,13 +273,13 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
             <div className="px-5 py-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+                  <p className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
                     {isCustomPrompt
                       ? t("promptStudio.view.customPrompt")
                       : t("promptStudio.view.defaultPrompt")}
                   </p>
                   {isCustomPrompt && (
-                    <span className="text-[9px] font-semibold uppercase tracking-wider px-1.5 py-px rounded-full bg-primary/10 text-primary">
+                    <span className="text-xs font-semibold uppercase tracking-wider px-1.5 py-px rounded-full bg-primary/10 text-primary">
                       {t("promptStudio.view.modified")}
                     </span>
                   )}
@@ -288,7 +288,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                   onClick={() => copyText(getCurrentPrompt())}
                   variant="ghost"
                   size="sm"
-                  className="h-7 px-2 text-[11px]"
+                  className="h-7 px-2 text-xs"
                 >
                   {copiedPrompt ? (
                     <>
@@ -303,7 +303,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                 </Button>
               </div>
               <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/30 rounded-lg p-4 max-h-80 overflow-y-auto">
-                <pre className="text-[11px] font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed">
+                <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed">
                   {getCurrentPrompt().replace(/\{\{agentName\}\}/g, agentName)}
                 </pre>
               </div>
@@ -315,12 +315,12 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
         {activeTab === "edit" && (
           <div className="divide-y divide-border/40 dark:divide-border-subtle">
             <div className="px-5 py-4">
-              <p className="text-[12px] text-muted-foreground leading-relaxed">
+              <p className="text-xs text-muted-foreground leading-relaxed">
                 <span className="font-medium text-warning">
                   {t("promptStudio.edit.cautionLabel")}
                 </span>{" "}
                 {t("promptStudio.edit.cautionTextPrefix")}{" "}
-                <code className="text-[11px] bg-muted/50 px-1 py-0.5 rounded font-mono">
+                <code className="text-xs bg-muted/50 px-1 py-0.5 rounded font-mono">
                   {"{{agentName}}"}
                 </code>{" "}
                 {t("promptStudio.edit.cautionTextSuffix")}
@@ -332,10 +332,10 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                 value={editedPrompt}
                 onChange={(e) => setEditedPrompt(e.target.value)}
                 rows={16}
-                className="font-mono text-[11px] leading-relaxed"
+                className="font-mono text-xs leading-relaxed"
                 placeholder={t("promptStudio.edit.placeholder")}
               />
-              <p className="text-[11px] text-muted-foreground/50 mt-2">
+              <p className="text-xs text-muted-foreground/50 mt-2">
                 {t("promptStudio.edit.agentNameLabel")}{" "}
                 <span className="font-medium text-foreground">{agentName}</span>
               </p>
@@ -359,12 +359,6 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
         {/* ── Test Tab ── */}
         {activeTab === "test" &&
           (() => {
-            const useReasoningModel = localStorage.getItem("useReasoningModel") === "true";
-            const cloudReasoningMode = localStorage.getItem("cloudReasoningMode") || "openwhispr";
-            const isSignedIn = localStorage.getItem("isSignedIn") === "true";
-            const isCloudMode = isSignedIn && cloudReasoningMode === "openwhispr";
-
-            const reasoningModel = localStorage.getItem("reasoningModel") || "";
             const reasoningProvider = isCloudMode
               ? "openwhispr"
               : reasoningModel
@@ -377,7 +371,10 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
             const displayModel = isCloudMode
               ? t("promptStudio.test.openwhisprCloud")
               : reasoningModel || t("promptStudio.test.none");
-            const displayProvider = providerConfig.label;
+            const displayProvider =
+              reasoningProvider === "custom"
+                ? t("promptStudio.test.customEndpoint")
+                : providerConfig.label;
 
             return (
               <div className="divide-y divide-border/40 dark:divide-border-subtle">
@@ -386,7 +383,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                     <div className="rounded-lg border border-warning/20 bg-warning/5 dark:bg-warning/10 px-4 py-3">
                       <div className="flex items-start gap-2.5">
                         <AlertTriangle className="w-3.5 h-3.5 text-warning mt-0.5 shrink-0" />
-                        <p className="text-[12px] text-muted-foreground leading-relaxed">
+                        <p className="text-xs text-muted-foreground leading-relaxed">
                           {t("promptStudio.test.disabledInSettingsPrefix")}{" "}
                           <span className="font-medium text-foreground">
                             {t("promptStudio.test.aiModels")}
@@ -401,31 +398,31 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                 <div className="px-5 py-4">
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
-                      <p className="text-[11px] text-muted-foreground/60 uppercase tracking-wider">
+                      <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">
                         {t("promptStudio.test.modelLabel")}
                       </p>
-                      <p className="text-[12px] font-medium text-foreground font-mono">
+                      <p className="text-xs font-medium text-foreground font-mono">
                         {displayModel}
                       </p>
                     </div>
                     <div className="h-3 w-px bg-border/40" />
                     <div className="flex items-center gap-2">
-                      <p className="text-[11px] text-muted-foreground/60 uppercase tracking-wider">
+                      <p className="text-xs text-muted-foreground/60 uppercase tracking-wider">
                         {t("promptStudio.test.providerLabel")}
                       </p>
-                      <p className="text-[12px] font-medium text-foreground">{displayProvider}</p>
+                      <p className="text-xs font-medium text-foreground">{displayProvider}</p>
                     </div>
                   </div>
                 </div>
 
                 <div className="px-5 py-4">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[12px] font-medium text-foreground">
+                    <p className="text-xs font-medium text-foreground">
                       {t("promptStudio.test.inputLabel")}
                     </p>
                     {testText && (
                       <span
-                        className={`text-[10px] font-medium uppercase tracking-wider px-1.5 py-px rounded ${
+                        className={`text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded ${
                           isAgentAddressed
                             ? "bg-primary/10 text-primary dark:bg-primary/15"
                             : "bg-muted text-muted-foreground"
@@ -441,10 +438,10 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                     value={testText}
                     onChange={(e) => setTestText(e.target.value)}
                     rows={3}
-                    className="text-[12px]"
+                    className="text-xs"
                     placeholder={t("promptStudio.test.inputPlaceholder")}
                   />
-                  <p className="text-[10px] text-muted-foreground/40 mt-1.5">
+                  <p className="text-xs text-muted-foreground/40 mt-1.5">
                     {t("promptStudio.test.addressHint", { agentName })}
                   </p>
                 </div>
@@ -464,7 +461,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                 {testResult && (
                   <div className="px-5 py-4">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-[12px] font-medium text-foreground">
+                      <p className="text-xs font-medium text-foreground">
                         {t("promptStudio.test.outputLabel")}
                       </p>
                       <Button
@@ -477,7 +474,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                       </Button>
                     </div>
                     <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/30 rounded-lg p-4 max-h-48 overflow-y-auto">
-                      <pre className="text-[12px] text-foreground whitespace-pre-wrap leading-relaxed">
+                      <pre className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">
                         {testResult}
                       </pre>
                     </div>

@@ -22,8 +22,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 🎯 **Agent Naming**: Personalize your AI assistant with a custom name for natural interactions
 - 🧠 **Multi-Provider AI**:
   - **OpenAI**: GPT-5, GPT-4.1, o-series reasoning models
-  - **Anthropic**: Claude Opus 4.5, Claude Sonnet 4.5
-  - **Google**: Gemini 2.5 Pro/Flash/Flash-Lite
+  - **Anthropic**: Claude Opus 4.6, Claude Sonnet 4.5
+  - **Google**: Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5 Pro/Flash
   - **Groq**: Ultra-fast inference with Llama and Mixtral models
   - **Local**: Qwen, LLaMA, Mistral models via llama.cpp
 - 🔒 **Privacy-First**: Local processing keeps your voice data completely private
@@ -43,6 +43,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 🎙️ **Push-to-Talk (Windows)**: Native low-level keyboard hook for true push-to-talk with compound hotkey support
 - 📖 **Custom Dictionary**: Add words, names, and technical terms to improve transcription accuracy
 - 🐧 **GNOME Wayland Support**: Native global shortcuts via D-Bus for GNOME Wayland users
+- 📝 **Notes System**: Create, edit, and organize transcription notes with folders, audio upload, and real-time dictation
+- 🤖 **AI Actions**: Apply AI-powered actions to notes with customizable processing templates
+- 🔗 **Referral Program**: Invite friends and earn free Pro months with shareable referral cards
 
 ## Prerequisites
 
@@ -398,8 +401,8 @@ Once you've named your agent during setup, you can interact with it using multip
 **🤖 AI Provider Options**:
 
 - **OpenAI**: GPT-5, GPT-4.1, o-series reasoning models
-- **Anthropic**: Claude Opus 4.5, Sonnet 4.5, Haiku 4.5
-- **Google**: Gemini 2.5 Pro/Flash/Flash-Lite
+- **Anthropic**: Claude Opus 4.6, Sonnet 4.5, Haiku 4.5
+- **Google**: Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5 Pro/Flash
 - **Groq**: Ultra-fast Llama and Mixtral inference
 - **Local**: Qwen, LLaMA, Mistral via llama.cpp
 
@@ -727,7 +730,7 @@ A: OpenWhispr supports 58 languages including English, Spanish, French, German, 
 
 ## Project Status
 
-OpenWhispr is actively maintained and ready for production use. Current version: 1.4.10
+OpenWhispr is actively maintained and ready for production use. Current version: 1.5.3
 
 - ✅ Core functionality complete
 - ✅ Cross-platform support (macOS, Windows, Linux)
@@ -740,6 +743,8 @@ OpenWhispr is actively maintained and ready for production use. Current version:
 - ✅ Custom dictionary for improved transcription accuracy
 - ✅ NVIDIA Parakeet support via sherpa-onnx
 - ✅ GNOME Wayland native global shortcuts
+- ✅ Notes system with folders, audio upload, and AI actions
+- ✅ Referral program with shareable invite cards
 
 ## Acknowledgments
 

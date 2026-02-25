@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import AudioManager from "../helpers/audioManager";
 import logger from "../utils/logger";
 import { playStartCue, playStopCue } from "../utils/dictationCues";
+import { getSettings } from "../stores/settingsStore";
+import { getRecordingErrorTitle } from "../utils/recordingErrors";
 
 export const useAudioRecording = (toast, options = {}) => {
   const { t } = useTranslation();
@@ -78,16 +80,7 @@ export const useAudioRecording = (toast, options = {}) => {
         }
       },
       onError: (error) => {
-        // Provide specific titles for cloud error codes
-        const title =
-          error.code === "AUTH_EXPIRED"
-            ? t("hooks.audioRecording.errorTitles.sessionExpired")
-            : error.code === "OFFLINE"
-              ? t("hooks.audioRecording.errorTitles.offline")
-              : error.code === "LIMIT_REACHED"
-                ? t("hooks.audioRecording.errorTitles.dailyLimitReached")
-                : error.title;
-
+        const title = getRecordingErrorTitle(error, t);
         toast({
           title,
           description: error.description,
@@ -120,7 +113,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
           audioManagerRef.current.saveTranscription(result.text);
 
-          if (result.source === "openai" && localStorage.getItem("useLocalWhisper") === "true") {
+          if (result.source === "openai" && getSettings().useLocalWhisper) {
             toast({
               title: t("hooks.audioRecording.fallback.title"),
               description: t("hooks.audioRecording.fallback.description"),

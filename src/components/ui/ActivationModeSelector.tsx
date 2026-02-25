@@ -23,7 +23,7 @@ export function ActivationModeSelector({
   return (
     <div
       className={`
-        relative flex rounded-md border transition-all duration-200
+        relative flex rounded-md border transition-colors duration-200
         bg-surface-1 border-border-subtle
         ${isCompact ? "p-0.5" : "p-0.5"}
         ${disabled ? "opacity-50 cursor-not-allowed" : ""}

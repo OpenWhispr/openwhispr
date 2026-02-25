@@ -8,6 +8,7 @@ import { useHotkey } from "./hooks/useHotkey";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useAuth } from "./hooks/useAuth";
+import { useSettingsStore } from "./stores/settingsStore";
 
 // Sound Wave Icon Component (for idle/hover states)
 const SoundWaveIcon = ({ size = 16 }) => {
@@ -33,7 +34,7 @@ const VoiceWaveIndicator = ({ isListening }) => {
       {[...Array(4)].map((_, i) => (
         <div
           key={i}
-          className={`w-0.5 bg-white rounded-full transition-all duration-150 ${
+          className={`w-0.5 bg-white rounded-full transition-[height] duration-150 ${
             isListening ? "animate-pulse h-4" : "h-2"
           }`}
           style={{
@@ -83,10 +84,8 @@ export default function App() {
   const [dragStartPos, setDragStartPos] = useState(null);
   const [hasDragged, setHasDragged] = useState(false);
 
-  // Floating icon auto-hide setting (read from localStorage, synced via IPC)
-  const [floatingIconAutoHide, setFloatingIconAutoHide] = useState(
-    () => localStorage.getItem("floatingIconAutoHide") === "true"
-  );
+  // Floating icon auto-hide setting (read from store, synced via IPC)
+  const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
 
   const setWindowInteractivity = React.useCallback((shouldCapture) => {
@@ -169,10 +168,11 @@ export default function App() {
     }
   }, [isSignedIn, warmupStreaming]);
 
-  // Listen for auto-hide setting changes relayed from the main process
+  // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onFloatingIconAutoHideChanged?.((enabled) => {
-      setFloatingIconAutoHide(enabled);
+      localStorage.setItem("floatingIconAutoHide", String(enabled));
+      useSettingsStore.setState({ floatingIconAutoHide: enabled });
     });
     return () => unsubscribe?.();
   }, []);
@@ -301,7 +301,7 @@ export default function App() {
                 e.stopPropagation();
                 isRecording ? cancelRecording() : cancelProcessing();
               }}
-              className="group/cancel w-5 h-5 rounded-full bg-surface-2/90 hover:bg-destructive border border-border hover:border-destructive/70 flex items-center justify-center transition-all duration-150 shadow-sm backdrop-blur-sm"
+              className="group/cancel w-5 h-5 rounded-full bg-surface-2/90 hover:bg-destructive border border-border hover:border-destructive/70 flex items-center justify-center transition-colors duration-150 shadow-sm backdrop-blur-sm"
             >
               <X
                 size={10}

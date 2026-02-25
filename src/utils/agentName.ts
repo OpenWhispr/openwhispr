@@ -1,7 +1,7 @@
 import { useState } from "react";
+import { getSettings, useSettingsStore } from "../stores/settingsStore";
 
 const AGENT_NAME_KEY = "agentName";
-const DICTIONARY_KEY = "customDictionary";
 const DEFAULT_AGENT_NAME = "OpenWhispr";
 
 export const getAgentName = (): string => {
@@ -9,16 +9,7 @@ export const getAgentName = (): string => {
 };
 
 function syncAgentNameToDictionary(newName: string, oldName?: string): void {
-  let dictionary: string[] = [];
-  try {
-    const raw = localStorage.getItem(DICTIONARY_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) dictionary = parsed;
-    }
-  } catch {
-    // ignore
-  }
+  let dictionary = [...getSettings().customDictionary];
 
   // Remove old agent name if it changed
   if (oldName && oldName !== newName) {
@@ -31,10 +22,7 @@ function syncAgentNameToDictionary(newName: string, oldName?: string): void {
     dictionary = [trimmed, ...dictionary];
   }
 
-  localStorage.setItem(DICTIONARY_KEY, JSON.stringify(dictionary));
-
-  // Best-effort sync to SQLite
-  window.electronAPI?.setDictionary?.(dictionary).catch(() => {});
+  useSettingsStore.getState().setCustomDictionary(dictionary);
 }
 
 export const setAgentName = (name: string): void => {

@@ -6,6 +6,10 @@
  *   - Ctrl+V for normal applications
  *   - Ctrl+Shift+V for terminal emulators
  *
+ * Terminal detection uses two strategies:
+ *   1. Window class name (fast, works for native terminals)
+ *   2. Executable name (fallback, catches Electron-based terminals like Termius)
+ *
  * Compile with: cl /O2 windows-fast-paste.c /Fe:windows-fast-paste.exe user32.lib
  * Or with MinGW: gcc -O2 windows-fast-paste.c -o windows-fast-paste.exe -luser32
  */
@@ -29,9 +33,51 @@ static const char* TERMINAL_CLASSES[] = {
     NULL
 };
 
+/* Electron-based terminals share Chrome_WidgetWin_1 as window class,
+   so we detect them by executable name instead */
+static const char* TERMINAL_EXES[] = {
+    "termius.exe",
+    "tabby.exe",
+    "wave.exe",
+    "rio.exe",
+    NULL
+};
+
 static BOOL IsTerminalClass(const char* className) {
     for (int i = 0; TERMINAL_CLASSES[i] != NULL; i++) {
         if (_stricmp(className, TERMINAL_CLASSES[i]) == 0) {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static BOOL GetExeName(HWND hwnd, char* exeName, DWORD exeNameSize) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    if (pid == 0) return FALSE;
+
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!hProcess) return FALSE;
+
+    char exePath[MAX_PATH];
+    DWORD pathLen = MAX_PATH;
+    BOOL ok = QueryFullProcessImageNameA(hProcess, 0, exePath, &pathLen);
+    CloseHandle(hProcess);
+
+    if (!ok || pathLen == 0) return FALSE;
+
+    const char* baseName = strrchr(exePath, '\\');
+    baseName = baseName ? baseName + 1 : exePath;
+
+    strncpy(exeName, baseName, exeNameSize - 1);
+    exeName[exeNameSize - 1] = '\0';
+    return TRUE;
+}
+
+static BOOL IsTerminalExe(const char* exeName) {
+    for (int i = 0; TERMINAL_EXES[i] != NULL; i++) {
+        if (_stricmp(exeName, TERMINAL_EXES[i]) == 0) {
             return TRUE;
         }
     }
@@ -113,8 +159,18 @@ int main(int argc, char* argv[]) {
 
     BOOL isTerminal = IsTerminalClass(className);
 
+    char exeName[MAX_PATH] = {0};
+    BOOL gotExeName = GetExeName(hwnd, exeName, sizeof(exeName));
+
+    if (!isTerminal && gotExeName) {
+        isTerminal = IsTerminalExe(exeName);
+    }
+
     if (detectOnly) {
         printf("WINDOW_CLASS %s\n", className);
+        if (gotExeName) {
+            printf("EXE_NAME %s\n", exeName);
+        }
         printf("IS_TERMINAL %s\n", isTerminal ? "true" : "false");
         fflush(stdout);
         return 0;

@@ -26,7 +26,7 @@ export function ProviderTabs({
   selectedId,
   onSelect,
   renderIcon,
-  colorScheme = "indigo",
+  colorScheme = "purple",
   scrollable = false,
 }: ProviderTabsProps) {
   const { t } = useTranslation();
@@ -77,7 +77,7 @@ export function ProviderTabs({
     >
       {/* Sliding indicator - frosted glass treatment */}
       <div
-        className="absolute top-0.5 left-0 rounded-md bg-card border border-border dark:border-border-subtle shadow-sm dark:shadow-(--shadow-card) transition-all duration-200 ease-out pointer-events-none"
+        className="absolute top-0.5 left-0 rounded-md bg-card border border-border dark:border-border-subtle shadow-sm dark:shadow-(--shadow-card) transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
         style={indicatorStyle}
       />
 
@@ -96,9 +96,7 @@ export function ProviderTabs({
             {renderIcon ? renderIcon(provider.id) : <ProviderIcon provider={provider.id} />}
             <span>{provider.name}</span>
             {provider.recommended && (
-              <span className="text-[9px] text-primary/70 font-medium">
-                {t("common.recommended")}
-              </span>
+              <span className="text-xs text-primary/70 font-medium">{t("common.recommended")}</span>
             )}
           </button>
         );

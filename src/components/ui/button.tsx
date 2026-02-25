@@ -8,7 +8,7 @@ const buttonVariants = cva(
   [
     "inline-flex items-center justify-center gap-2 whitespace-nowrap",
     "rounded text-sm font-medium cursor-pointer select-none",
-    "transition-all duration-200 ease-out",
+    "transition-[background-color,border-color,color,transform] duration-200 ease-out",
     "outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
     "disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed",
     "[&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 shrink-0",
@@ -24,7 +24,7 @@ const buttonVariants = cva(
           "shadow-sm",
           "hover:bg-primary/95 hover:shadow",
           "active:bg-primary/85 active:scale-[0.985]",
-          "transition-all duration-200 ease-out",
+          "transition-[background-color,border-color,color,transform] duration-200 ease-out",
         ].join(" "),
 
         // Success — uses design tokens
@@ -56,7 +56,7 @@ const buttonVariants = cva(
           "hover:bg-muted hover:border-border-hover",
           "active:scale-[0.985]",
           "dark:bg-surface-raised/90 dark:border-border-hover dark:hover:bg-surface-raised",
-          "transition-all duration-200 ease-out",
+          "transition-[background-color,border-color,color,transform] duration-200 ease-out",
         ].join(" "),
 
         // Secondary — uses design tokens
@@ -95,7 +95,7 @@ const buttonVariants = cva(
           "hover:bg-surface-2/90 hover:border-border-hover hover:shadow",
           "active:scale-[0.985] active:shadow-sm",
           "dark:bg-surface-raised/80 dark:border-border-hover dark:hover:bg-surface-raised/95",
-          "transition-all duration-200 ease-out",
+          "transition-[background-color,border-color,color,transform] duration-200 ease-out",
         ].join(" "),
       },
       size: {

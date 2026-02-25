@@ -22,20 +22,22 @@ const MAIN_WINDOW_CONFIG = {
   alwaysOnTop: true,
   resizable: false,
   transparent: true,
-  show: false, // Start hidden, show after setup
-  skipTaskbar: false, // Keep visible in Dock/taskbar so app stays discoverable
+  show: false,
+  skipTaskbar: true,
   focusable: true,
   visibleOnAllWorkspaces: process.platform !== "win32",
   fullScreenable: false,
-  hasShadow: false, // Remove shadow for cleaner look
-  acceptsFirstMouse: true, // Accept clicks even when not focused
-  type: process.platform === "darwin" ? "panel" : "normal", // Panel on macOS preserves floating behavior
+  hasShadow: false,
+  acceptsFirstMouse: true,
+  type:
+    process.platform === "darwin" ? "panel" : process.platform === "linux" ? "toolbar" : "normal",
 };
 
 // Control panel window configuration
 const CONTROL_PANEL_CONFIG = {
   width: 1200,
   height: 800,
+  backgroundColor: "#1c1c2e",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
     nodeIntegration: false,
@@ -49,6 +51,7 @@ const CONTROL_PANEL_CONFIG = {
     // directly from the browser. These would be blocked by CORS otherwise.
     webSecurity: false,
     spellcheck: false,
+    backgroundThrottling: false,
   },
   title: "Control Panel",
   resizable: true,

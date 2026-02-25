@@ -1,18 +1,26 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import type {
+  LlamaServerStatus,
+  LlamaVulkanStatus,
+  VulkanGpuResult,
+  LlamaVulkanDownloadProgress,
+} from "../types/electron";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Cloud, Lock } from "lucide-react";
+import { Cloud, Lock, Zap } from "lucide-react";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
+import logger from "../utils/logger";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { modelRegistry } from "../models/ModelRegistry";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { createExternalLinkHandler } from "../utils/externalLinks";
+import { getCachedPlatform } from "../utils/platform";
 
 type CloudModelOption = {
   value: string;
@@ -24,33 +32,7 @@ type CloudModelOption = {
   invertInDark?: boolean;
 };
 
-const OWNED_BY_ICON_RULES: Array<{ match: RegExp; provider: string }> = [
-  { match: /(openai|system|default|gpt|davinci)/, provider: "openai" },
-  { match: /(azure)/, provider: "openai" },
-  { match: /(anthropic|claude)/, provider: "anthropic" },
-  { match: /(google|gemini)/, provider: "gemini" },
-  { match: /(meta|llama)/, provider: "llama" },
-  { match: /(mistral)/, provider: "mistral" },
-  { match: /(qwen|ali|tongyi)/, provider: "qwen" },
-  { match: /(openrouter|oss)/, provider: "openai-oss" },
-];
-
-const resolveOwnedByIcon = (ownedBy?: string): { icon?: string; invertInDark: boolean } => {
-  if (!ownedBy) return { icon: undefined, invertInDark: false };
-  const normalized = ownedBy.toLowerCase();
-  const rule = OWNED_BY_ICON_RULES.find(({ match }) => match.test(normalized));
-  if (rule) {
-    return {
-      icon: getProviderIcon(rule.provider),
-      invertInDark: isMonochromeProvider(rule.provider),
-    };
-  }
-  return { icon: undefined, invertInDark: false };
-};
-
 interface ReasoningModelSelectorProps {
-  useReasoningModel: boolean;
-  setUseReasoningModel: (value: boolean) => void;
   reasoningModel: string;
   setReasoningModel: (model: string) => void;
   localReasoningProvider: string;
@@ -67,12 +49,247 @@ interface ReasoningModelSelectorProps {
   setGroqApiKey: (key: string) => void;
   customReasoningApiKey?: string;
   setCustomReasoningApiKey?: (key: string) => void;
-  showAlertDialog: (dialog: { title: string; description: string }) => void;
+}
+
+function GpuStatusBadge() {
+  const { t } = useTranslation();
+  const [serverStatus, setServerStatus] = useState<LlamaServerStatus | null>(null);
+  const [vulkanStatus, setVulkanStatus] = useState<LlamaVulkanStatus | null>(null);
+  const [gpuResult, setGpuResult] = useState<VulkanGpuResult | null>(null);
+  const [progress, setProgress] = useState<LlamaVulkanDownloadProgress | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [activating, setActivating] = useState(false);
+  const [activationFailed, setActivationFailed] = useState(false);
+  const [dismissed, setDismissed] = useState(
+    () => localStorage.getItem("llamaVulkanBannerDismissed") === "true"
+  );
+  const platform = getCachedPlatform();
+
+  useEffect(() => {
+    const poll = () => {
+      window.electronAPI
+        ?.llamaServerStatus?.()
+        .then(setServerStatus)
+        .catch(() => {});
+      if (platform !== "darwin") {
+        window.electronAPI
+          ?.getLlamaVulkanStatus?.()
+          .then(setVulkanStatus)
+          .catch(() => {});
+      }
+    };
+    poll();
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
+  }, [platform]);
+
+  useEffect(() => {
+    if (platform !== "darwin") {
+      window.electronAPI
+        ?.detectVulkanGpu?.()
+        .then(setGpuResult)
+        .catch(() => {});
+    }
+  }, [platform]);
+
+  useEffect(() => {
+    const cleanup = window.electronAPI?.onLlamaVulkanDownloadProgress?.((data) => {
+      setProgress(data);
+    });
+    return () => cleanup?.();
+  }, []);
+
+  useEffect(() => {
+    if (!activating) return;
+    if (serverStatus?.gpuAccelerated) {
+      setActivating(false);
+      setActivationFailed(false);
+      return;
+    }
+    const timeout = setTimeout(() => {
+      setActivating(false);
+      setActivationFailed(true);
+    }, 15000);
+    return () => clearTimeout(timeout);
+  }, [activating, serverStatus?.gpuAccelerated]);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    setError(null);
+    try {
+      const result = await window.electronAPI?.downloadLlamaVulkanBinary?.();
+      if (result?.success) {
+        setVulkanStatus((prev) => (prev ? { ...prev, downloaded: true } : prev));
+        await window.electronAPI?.llamaGpuReset?.();
+        setActivating(true);
+        setActivationFailed(false);
+      } else if (result && !result.cancelled) {
+        setError(result.error || t("gpu.activationFailed"));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("gpu.activationFailed"));
+    } finally {
+      setDownloading(false);
+      setProgress(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    await window.electronAPI?.deleteLlamaVulkanBinary?.();
+    setVulkanStatus((prev) => (prev ? { ...prev, downloaded: false } : prev));
+  };
+
+  const handleRetry = async () => {
+    setActivationFailed(false);
+    setActivating(true);
+    await window.electronAPI?.llamaGpuReset?.();
+  };
+
+  // State 1: macOS
+  if (platform === "darwin") {
+    if (!serverStatus?.running) return null;
+    return (
+      <div className="flex items-center gap-1.5 mt-2 px-1">
+        <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-success" />
+        <span className="text-xs text-muted-foreground">{t("gpu.active")}</span>
+      </div>
+    );
+  }
+
+  // State 3: Downloading
+  if (downloading && progress) {
+    return (
+      <div className="flex items-center gap-2 mt-2 px-1">
+        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+          <div
+            className="h-full bg-primary transition-all"
+            style={{ width: `${progress.percentage}%` }}
+          />
+        </div>
+        <span className="text-xs text-muted-foreground tabular-nums">{progress.percentage}%</span>
+        <button
+          type="button"
+          onClick={() => window.electronAPI?.cancelLlamaVulkanDownload?.()}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {t("gpu.cancel")}
+        </button>
+      </div>
+    );
+  }
+
+  // State 3b: Error
+  if (error) {
+    return (
+      <div className="flex items-center gap-1.5 mt-2 px-1">
+        <span className="text-xs text-destructive">{error}</span>
+        <button
+          type="button"
+          onClick={() => setError(null)}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+        >
+          {t("gpu.dismiss")}
+        </button>
+      </div>
+    );
+  }
+
+  // State 5: Activating
+  if (activating) {
+    return (
+      <div className="flex items-center gap-1.5 mt-2 px-1">
+        <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-primary animate-pulse" />
+        <span className="text-xs text-muted-foreground">{t("gpu.activating")}</span>
+      </div>
+    );
+  }
+
+  // State 4: Downloaded + GPU active
+  if (vulkanStatus?.downloaded) {
+    const isGpu = serverStatus?.gpuAccelerated && serverStatus?.backend === "vulkan";
+
+    // State 6: Activation failed
+    if (!isGpu && activationFailed) {
+      return (
+        <div className="flex items-center gap-1.5 mt-2 px-1">
+          <span className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-warning" />
+          <span className="text-xs text-muted-foreground">{t("gpu.activationFailed")}</span>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+          >
+            {t("gpu.retry")}
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+          >
+            {t("gpu.remove")}
+          </button>
+        </div>
+      );
+    }
+
+    // State 4: GPU active or just downloaded
+    return (
+      <div className="flex items-center gap-1.5 mt-2 px-1">
+        <span
+          className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${isGpu ? "bg-success" : "bg-warning"}`}
+        />
+        <span className="text-xs text-muted-foreground">
+          {isGpu ? t("gpu.active") : t("gpu.activating")}
+        </span>
+        <button
+          type="button"
+          onClick={handleDelete}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-auto"
+        >
+          {t("gpu.remove")}
+        </button>
+      </div>
+    );
+  }
+
+  // State 7: GPU available, not downloaded — show banner
+  if (gpuResult?.available && !dismissed) {
+    return (
+      <div className="mt-2 rounded-md border border-primary/20 bg-primary/5 p-2.5">
+        <div className="flex items-start gap-2.5">
+          <Zap size={13} className="text-primary shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-foreground">{t("gpu.reasoningBanner")}</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <Button
+                onClick={handleDownload}
+                size="sm"
+                variant="default"
+                className="h-6 px-2.5 text-xs"
+              >
+                {t("gpu.enableButton")}
+              </Button>
+              <button
+                onClick={() => {
+                  localStorage.setItem("llamaVulkanBannerDismissed", "true");
+                  setDismissed(true);
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {t("gpu.dismiss")}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export default function ReasoningModelSelector({
-  useReasoningModel,
-  setUseReasoningModel,
   reasoningModel,
   setReasoningModel,
   localReasoningProvider,
@@ -103,6 +320,7 @@ export default function ReasoningModelSelector({
   const isMountedRef = useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
     };
@@ -206,16 +424,13 @@ export default function ReasoningModelSelector({
             const value = (item?.id || item?.name) as string | undefined;
             if (!value) return null;
             const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
-            const { icon, invertInDark } = resolveOwnedByIcon(ownedBy);
             return {
               value,
               label: (item?.id || item?.name || value) as string,
               description:
                 (item?.description as string) ||
                 (ownedBy ? t("reasoning.custom.ownerLabel", { owner: ownedBy }) : undefined),
-              icon,
               ownedBy,
-              invertInDark,
             } as CloudModelOption;
           })
           .filter(Boolean) as CloudModelOption[];
@@ -399,7 +614,7 @@ export default function ReasoningModelSelector({
         return downloaded;
       }
     } catch (error) {
-      console.error("Failed to load downloaded models:", error);
+      logger.error("Failed to load downloaded models", { error }, "models");
     }
     return new Set<string>();
   }, []);
@@ -499,302 +714,268 @@ export default function ReasoningModelSelector({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between p-3 bg-card border border-border rounded-lg">
-        <div>
-          <label className="text-sm font-medium text-foreground">
-            {t("reasoning.enableTitle")}
-          </label>
-          <p className="text-xs text-muted-foreground">{t("reasoning.enableDescription")}</p>
-        </div>
-        <button
-          onClick={() => setUseReasoningModel(!useReasoningModel)}
-          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 ${
-            useReasoningModel ? "bg-primary" : "bg-muted-foreground/25"
-          }`}
-        >
-          <span
-            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform duration-200 ${
-              useReasoningModel ? "translate-x-4.5" : "translate-x-0.75"
-            }`}
-          />
-        </button>
+      <div className="space-y-2">
+        <ProviderTabs
+          providers={MODE_TABS}
+          selectedId={selectedMode}
+          onSelect={(id) => handleModeChange(id as "cloud" | "local")}
+          renderIcon={renderModeIcon}
+          colorScheme="purple"
+        />
+        <p className="text-xs text-muted-foreground text-center">
+          {selectedMode === "local"
+            ? t("reasoning.mode.localDescription")
+            : t("reasoning.mode.cloudDescription")}
+        </p>
       </div>
 
-      {useReasoningModel && (
-        <>
-          <div className="space-y-2">
+      {selectedMode === "cloud" ? (
+        <div className="space-y-2">
+          <div className="border border-border rounded-lg overflow-hidden">
             <ProviderTabs
-              providers={MODE_TABS}
-              selectedId={selectedMode}
-              onSelect={(id) => handleModeChange(id as "cloud" | "local")}
-              renderIcon={renderModeIcon}
+              providers={cloudProviders}
+              selectedId={selectedCloudProvider}
+              onSelect={handleCloudProviderChange}
               colorScheme="purple"
             />
-            <p className="text-xs text-muted-foreground text-center">
-              {selectedMode === "local"
-                ? t("reasoning.mode.localDescription")
-                : t("reasoning.mode.cloudDescription")}
-            </p>
-          </div>
 
-          {selectedMode === "cloud" ? (
-            <div className="space-y-2">
-              <div className="border border-border rounded-lg overflow-hidden">
-                <ProviderTabs
-                  providers={cloudProviders}
-                  selectedId={selectedCloudProvider}
-                  onSelect={handleCloudProviderChange}
-                  colorScheme="indigo"
-                />
+            <div className="p-3">
+              {selectedCloudProvider === "custom" ? (
+                <>
+                  <div className="space-y-2">
+                    <h4 className="font-medium text-foreground">
+                      {t("reasoning.custom.endpointTitle")}
+                    </h4>
+                    <Input
+                      value={customBaseInput}
+                      onChange={(event) => setCustomBaseInput(event.target.value)}
+                      onBlur={handleBaseUrlBlur}
+                      placeholder="https://api.openai.com/v1"
+                      className="text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      {t("reasoning.custom.endpointExamples")}{" "}
+                      <code className="text-primary">http://localhost:11434/v1</code>{" "}
+                      {t("reasoning.custom.ollama")},{" "}
+                      <code className="text-primary">http://localhost:8080/v1</code>{" "}
+                      {t("reasoning.custom.localAi")}.
+                    </p>
+                  </div>
 
-                <div className="p-3">
-                  {selectedCloudProvider === "custom" ? (
-                    <>
-                      {/* 1. Endpoint URL - TOP */}
-                      <div className="space-y-2">
-                        <h4 className="font-medium text-foreground">
-                          {t("reasoning.custom.endpointTitle")}
-                        </h4>
-                        <Input
-                          value={customBaseInput}
-                          onChange={(event) => setCustomBaseInput(event.target.value)}
-                          onBlur={handleBaseUrlBlur}
-                          placeholder="https://api.openai.com/v1"
-                          className="text-sm"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          {t("reasoning.custom.endpointExamples")}{" "}
-                          <code className="text-primary">http://localhost:11434/v1</code>{" "}
-                          {t("reasoning.custom.ollama")},{" "}
-                          <code className="text-primary">http://localhost:8080/v1</code>{" "}
-                          {t("reasoning.custom.localAi")}.
-                        </p>
+                  <div className="space-y-2 pt-3">
+                    <h4 className="font-medium text-foreground">
+                      {t("reasoning.custom.apiKeyOptional")}
+                    </h4>
+                    <ApiKeyInput
+                      apiKey={customReasoningApiKey}
+                      setApiKey={setCustomReasoningApiKey || (() => {})}
+                      label=""
+                      helpText={t("reasoning.custom.apiKeyHelp")}
+                    />
+                  </div>
+
+                  <div className="space-y-2 pt-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-foreground">
+                        {t("reasoning.availableModels")}
+                      </h4>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={handleResetCustomBase}
+                          className="text-xs"
+                        >
+                          {t("common.reset")}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={handleRefreshCustomModels}
+                          disabled={
+                            customModelsLoading || (!trimmedCustomBase && !hasSavedCustomBase)
+                          }
+                          className="text-xs"
+                        >
+                          {customModelsLoading
+                            ? t("common.loading")
+                            : isCustomBaseDirty
+                              ? t("reasoning.custom.applyAndRefresh")
+                              : t("common.refresh")}
+                        </Button>
                       </div>
-
-                      {/* 2. API Key - SECOND */}
-                      <div className="space-y-2 pt-3">
-                        <h4 className="font-medium text-foreground">
-                          {t("reasoning.custom.apiKeyOptional")}
-                        </h4>
-                        <ApiKeyInput
-                          apiKey={customReasoningApiKey}
-                          setApiKey={setCustomReasoningApiKey || (() => {})}
-                          label=""
-                          helpText={t("reasoning.custom.apiKeyHelp")}
-                        />
-                      </div>
-
-                      {/* 3. Model Selection - THIRD */}
-                      <div className="space-y-2 pt-3">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-medium text-foreground">
-                            {t("reasoning.availableModels")}
-                          </h4>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={handleResetCustomBase}
-                              className="text-xs"
-                            >
-                              {t("common.reset")}
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={handleRefreshCustomModels}
-                              disabled={
-                                customModelsLoading || (!trimmedCustomBase && !hasSavedCustomBase)
-                              }
-                              className="text-xs"
-                            >
-                              {customModelsLoading
-                                ? t("common.loading")
-                                : isCustomBaseDirty
-                                  ? t("reasoning.custom.applyAndRefresh")
-                                  : t("common.refresh")}
-                            </Button>
-                          </div>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {t("reasoning.custom.queryPrefix")}{" "}
-                          <code>
-                            {hasCustomBase
-                              ? `${effectiveReasoningBase}/models`
-                              : `${defaultOpenAIBase}/models`}
-                          </code>{" "}
-                          {t("reasoning.custom.querySuffix")}
-                        </p>
-                        {isCustomBaseDirty && (
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t("reasoning.custom.queryPrefix")}{" "}
+                      <code>
+                        {hasCustomBase
+                          ? `${effectiveReasoningBase}/models`
+                          : `${defaultOpenAIBase}/models`}
+                      </code>{" "}
+                      {t("reasoning.custom.querySuffix")}
+                    </p>
+                    {isCustomBaseDirty && (
+                      <p className="text-xs text-primary">
+                        {t("reasoning.custom.modelsReloadHint")}
+                      </p>
+                    )}
+                    {!hasCustomBase && (
+                      <p className="text-xs text-warning">{t("reasoning.custom.enterEndpoint")}</p>
+                    )}
+                    {hasCustomBase && (
+                      <>
+                        {customModelsLoading && (
                           <p className="text-xs text-primary">
-                            {t("reasoning.custom.modelsReloadHint")}
+                            {t("reasoning.custom.fetchingModels")}
                           </p>
                         )}
-                        {!hasCustomBase && (
-                          <p className="text-xs text-warning">
-                            {t("reasoning.custom.enterEndpoint")}
-                          </p>
+                        {customModelsError && (
+                          <p className="text-xs text-destructive">{customModelsError}</p>
                         )}
-                        {hasCustomBase && (
-                          <>
-                            {customModelsLoading && (
-                              <p className="text-xs text-primary">
-                                {t("reasoning.custom.fetchingModels")}
-                              </p>
-                            )}
-                            {customModelsError && (
-                              <p className="text-xs text-destructive">{customModelsError}</p>
-                            )}
-                            {!customModelsLoading &&
-                              !customModelsError &&
-                              customModelOptions.length === 0 && (
-                                <p className="text-xs text-warning">
-                                  {t("reasoning.custom.noModels")}
-                                </p>
-                              )}
-                          </>
-                        )}
-                        <ModelCardList
-                          models={selectedCloudModels}
-                          selectedModel={reasoningModel}
-                          onModelSelect={setReasoningModel}
-                        />
+                        {!customModelsLoading &&
+                          !customModelsError &&
+                          customModelOptions.length === 0 && (
+                            <p className="text-xs text-warning">{t("reasoning.custom.noModels")}</p>
+                          )}
+                      </>
+                    )}
+                    <ModelCardList
+                      models={selectedCloudModels}
+                      selectedModel={reasoningModel}
+                      onModelSelect={setReasoningModel}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {selectedCloudProvider === "openai" && (
+                    <div className="space-y-2">
+                      <div className="flex items-baseline justify-between">
+                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
+                        <a
+                          href="https://platform.openai.com/api-keys"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={createExternalLinkHandler(
+                            "https://platform.openai.com/api-keys"
+                          )}
+                          className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
+                        >
+                          {t("reasoning.getApiKey")}
+                        </a>
                       </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* 1. API Key - TOP */}
-                      {selectedCloudProvider === "openai" && (
-                        <div className="space-y-2">
-                          <div className="flex items-baseline justify-between">
-                            <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                            <a
-                              href="https://platform.openai.com/api-keys"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={createExternalLinkHandler(
-                                "https://platform.openai.com/api-keys"
-                              )}
-                              className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
-                            >
-                              {t("reasoning.getApiKey")}
-                            </a>
-                          </div>
-                          <ApiKeyInput
-                            apiKey={openaiApiKey}
-                            setApiKey={setOpenaiApiKey}
-                            label=""
-                            helpText=""
-                          />
-                        </div>
-                      )}
-
-                      {selectedCloudProvider === "anthropic" && (
-                        <div className="space-y-2">
-                          <div className="flex items-baseline justify-between">
-                            <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                            <a
-                              href="https://console.anthropic.com/settings/keys"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={createExternalLinkHandler(
-                                "https://console.anthropic.com/settings/keys"
-                              )}
-                              className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
-                            >
-                              {t("reasoning.getApiKey")}
-                            </a>
-                          </div>
-                          <ApiKeyInput
-                            apiKey={anthropicApiKey}
-                            setApiKey={setAnthropicApiKey}
-                            placeholder="sk-ant-..."
-                            label=""
-                            helpText=""
-                          />
-                        </div>
-                      )}
-
-                      {selectedCloudProvider === "gemini" && (
-                        <div className="space-y-2">
-                          <div className="flex items-baseline justify-between">
-                            <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                            <a
-                              href="https://aistudio.google.com/app/api-keys"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={createExternalLinkHandler(
-                                "https://aistudio.google.com/app/api-keys"
-                              )}
-                              className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
-                            >
-                              {t("reasoning.getApiKey")}
-                            </a>
-                          </div>
-                          <ApiKeyInput
-                            apiKey={geminiApiKey}
-                            setApiKey={setGeminiApiKey}
-                            placeholder="AIza..."
-                            label=""
-                            helpText=""
-                          />
-                        </div>
-                      )}
-
-                      {selectedCloudProvider === "groq" && (
-                        <div className="space-y-2">
-                          <div className="flex items-baseline justify-between">
-                            <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                            <a
-                              href="https://console.groq.com/keys"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={createExternalLinkHandler("https://console.groq.com/keys")}
-                              className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
-                            >
-                              {t("reasoning.getApiKey")}
-                            </a>
-                          </div>
-                          <ApiKeyInput
-                            apiKey={groqApiKey}
-                            setApiKey={setGroqApiKey}
-                            placeholder="gsk_..."
-                            label=""
-                            helpText=""
-                          />
-                        </div>
-                      )}
-
-                      {/* 2. Model Selection - BOTTOM */}
-                      <div className="pt-3 space-y-2">
-                        <h4 className="text-sm font-medium text-foreground">
-                          {t("reasoning.selectModel")}
-                        </h4>
-                        <ModelCardList
-                          models={selectedCloudModels}
-                          selectedModel={reasoningModel}
-                          onModelSelect={setReasoningModel}
-                        />
-                      </div>
-                    </>
+                      <ApiKeyInput
+                        apiKey={openaiApiKey}
+                        setApiKey={setOpenaiApiKey}
+                        label=""
+                        helpText=""
+                      />
+                    </div>
                   )}
-                </div>
-              </div>
+
+                  {selectedCloudProvider === "anthropic" && (
+                    <div className="space-y-2">
+                      <div className="flex items-baseline justify-between">
+                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
+                        <a
+                          href="https://console.anthropic.com/settings/keys"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={createExternalLinkHandler(
+                            "https://console.anthropic.com/settings/keys"
+                          )}
+                          className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
+                        >
+                          {t("reasoning.getApiKey")}
+                        </a>
+                      </div>
+                      <ApiKeyInput
+                        apiKey={anthropicApiKey}
+                        setApiKey={setAnthropicApiKey}
+                        label=""
+                        helpText=""
+                      />
+                    </div>
+                  )}
+
+                  {selectedCloudProvider === "gemini" && (
+                    <div className="space-y-2">
+                      <div className="flex items-baseline justify-between">
+                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
+                        <a
+                          href="https://aistudio.google.com/app/api-keys"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={createExternalLinkHandler(
+                            "https://aistudio.google.com/app/api-keys"
+                          )}
+                          className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
+                        >
+                          {t("reasoning.getApiKey")}
+                        </a>
+                      </div>
+                      <ApiKeyInput
+                        apiKey={geminiApiKey}
+                        setApiKey={setGeminiApiKey}
+                        label=""
+                        helpText=""
+                      />
+                    </div>
+                  )}
+
+                  {selectedCloudProvider === "groq" && (
+                    <div className="space-y-2">
+                      <div className="flex items-baseline justify-between">
+                        <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
+                        <a
+                          href="https://console.groq.com/keys"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={createExternalLinkHandler("https://console.groq.com/keys")}
+                          className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
+                        >
+                          {t("reasoning.getApiKey")}
+                        </a>
+                      </div>
+                      <ApiKeyInput
+                        apiKey={groqApiKey}
+                        setApiKey={setGroqApiKey}
+                        label=""
+                        helpText=""
+                      />
+                    </div>
+                  )}
+
+                  <div className="pt-3 space-y-2">
+                    <h4 className="text-sm font-medium text-foreground">
+                      {t("reasoning.selectModel")}
+                    </h4>
+                    <ModelCardList
+                      models={selectedCloudModels}
+                      selectedModel={reasoningModel}
+                      onModelSelect={setReasoningModel}
+                    />
+                  </div>
+                </>
+              )}
             </div>
-          ) : (
-            <LocalModelPicker
-              providers={localProviders}
-              selectedModel={reasoningModel}
-              selectedProvider={selectedLocalProvider}
-              onModelSelect={setReasoningModel}
-              onProviderSelect={handleLocalProviderChange}
-              modelType="llm"
-              colorScheme="purple"
-              onDownloadComplete={loadDownloadedModels}
-            />
-          )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <LocalModelPicker
+            providers={localProviders}
+            selectedModel={reasoningModel}
+            selectedProvider={selectedLocalProvider}
+            onModelSelect={setReasoningModel}
+            onProviderSelect={handleLocalProviderChange}
+            modelType="llm"
+            colorScheme="purple"
+            onDownloadComplete={loadDownloadedModels}
+          />
+          <GpuStatusBadge />
         </>
       )}
     </div>

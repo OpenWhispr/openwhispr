@@ -1,102 +1,49 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
-import { Copy, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Copy, Trash2 } from "lucide-react";
 import type { TranscriptionItem as TranscriptionItemType } from "../../types/electron";
 import { cn } from "../lib/utils";
 
 interface TranscriptionItemProps {
   item: TranscriptionItemType;
-  index: number;
-  total: number;
   onCopy: (text: string) => void;
   onDelete: (id: number) => void;
 }
 
-const TEXT_PREVIEW_LENGTH = 120;
-
-export default function TranscriptionItem({
-  item,
-  index,
-  total,
-  onCopy,
-  onDelete,
-}: TranscriptionItemProps) {
-  const { i18n, t } = useTranslation();
-  const [isExpanded, setIsExpanded] = useState(false);
+export default function TranscriptionItem({ item, onCopy, onDelete }: TranscriptionItemProps) {
+  const { i18n } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
 
   const timestampSource = item.timestamp.endsWith("Z") ? item.timestamp : `${item.timestamp}Z`;
   const timestampDate = new Date(timestampSource);
-  const formattedTimestamp = Number.isNaN(timestampDate.getTime())
-    ? item.timestamp
-    : timestampDate.toLocaleString(i18n.language, {
-        month: "short",
-        day: "numeric",
+  const formattedTime = Number.isNaN(timestampDate.getTime())
+    ? ""
+    : timestampDate.toLocaleTimeString(i18n.language, {
         hour: "2-digit",
         minute: "2-digit",
       });
 
-  const isLongText = item.text.length > TEXT_PREVIEW_LENGTH;
-  const displayText =
-    isExpanded || !isLongText ? item.text : `${item.text.slice(0, TEXT_PREVIEW_LENGTH)}…`;
-
   return (
     <div
-      className="group relative px-3 py-2.5 transition-colors duration-150 hover:bg-muted/30 dark:hover:bg-white/2"
+      className="group rounded-md border border-border/40 dark:border-border-subtle/60 bg-card/50 dark:bg-surface-2/60 px-3 py-2.5 transition-colors duration-150 hover:bg-muted/30 dark:hover:bg-surface-2/80"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       <div className="flex items-start gap-3">
-        {/* Number badge - compact pill */}
-        <div className="flex-shrink-0 mt-0.5">
-          <span className="inline-flex items-center justify-center min-w-[28px] h-5 px-1.5 rounded-sm bg-primary/10 dark:bg-primary/15 text-primary text-[10px] font-semibold tabular-nums">
-            {total - index}
+        {formattedTime && (
+          <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums pt-0.5">
+            {formattedTime}
           </span>
-        </div>
+        )}
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {/* Text */}
-          <p
-            className={cn(
-              "text-foreground text-[13px] leading-[1.5] break-words",
-              !isExpanded && isLongText && "line-clamp-2"
-            )}
-          >
-            {displayText}
-          </p>
+        <p className="flex-1 min-w-0 text-foreground text-sm leading-[1.5] break-words">
+          {item.text}
+        </p>
 
-          {/* Metadata row */}
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-[11px] text-muted-foreground tabular-nums">
-              {formattedTimestamp}
-            </span>
-            {isLongText && (
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="inline-flex items-center gap-0.5 text-[11px] text-primary/80 hover:text-primary transition-colors"
-              >
-                {isExpanded ? (
-                  <>
-                    <span>{t("common.less")}</span>
-                    <ChevronUp size={12} />
-                  </>
-                ) : (
-                  <>
-                    <span>{t("common.more")}</span>
-                    <ChevronDown size={12} />
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Actions - fade in on hover */}
         <div
           className={cn(
-            "flex items-center gap-0.5 flex-shrink-0 transition-opacity duration-150",
+            "flex items-center gap-0.5 shrink-0 transition-opacity duration-150",
             isHovered ? "opacity-100" : "opacity-0"
           )}
         >

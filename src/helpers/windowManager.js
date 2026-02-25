@@ -1,4 +1,5 @@
 const { app, screen, BrowserWindow, shell, dialog } = require("electron");
+const debugLogger = require("./debugLogger");
 const HotkeyManager = require("./hotkeyManager");
 const DragManager = require("./dragManager");
 const MenuManager = require("./menuManager");
@@ -40,11 +41,6 @@ class WindowManager {
       ...MAIN_WINDOW_CONFIG,
       ...position,
     });
-
-    // Main window (dictation overlay) should never appear in dock/taskbar
-    // On macOS, users access the app via the menu bar tray icon
-    // On Windows/Linux, the control panel stays in the taskbar when minimized
-    this.mainWindow.setSkipTaskbar(true);
 
     this.setMainWindowInteractivity(false);
     this.registerMainWindowEvents();
@@ -209,7 +205,7 @@ class WindowManager {
 
     const safetyTimeoutId = setTimeout(() => {
       if (this.macCompoundPushState?.active) {
-        console.warn("[WindowManager] Compound PTT safety timeout triggered - stopping recording");
+        debugLogger.warn("Compound PTT safety timeout", undefined, "ptt");
         this.forceStopMacCompoundPush("timeout");
       }
     }, MAX_PUSH_DURATION_MS);
@@ -287,6 +283,8 @@ class WindowManager {
       switch (part) {
         case "Command":
         case "Cmd":
+        case "RightCommand":
+        case "RightCmd":
         case "CommandOrControl":
         case "Super":
         case "Meta":
@@ -294,13 +292,18 @@ class WindowManager {
           break;
         case "Control":
         case "Ctrl":
+        case "RightControl":
+        case "RightCtrl":
           required.add("control");
           break;
         case "Alt":
         case "Option":
+        case "RightAlt":
+        case "RightOption":
           required.add("option");
           break;
         case "Shift":
+        case "RightShift":
           required.add("shift");
           break;
         case "Fn":
@@ -495,11 +498,7 @@ class WindowManager {
     this.controlPanelWindow.on("close", (event) => {
       if (!this.isQuitting) {
         event.preventDefault();
-        if (process.platform === "darwin") {
-          this.hideControlPanelToTray();
-        } else {
-          this.controlPanelWindow.minimize();
-        }
+        this.hideControlPanelToTray();
       }
     });
 
@@ -531,6 +530,24 @@ class WindowManager {
         }
       }
     );
+
+    this.controlPanelWindow.webContents.on("render-process-gone", (_event, details) => {
+      if (details.reason === "crashed" || details.reason === "killed" || details.reason === "oom") {
+        debugLogger.error(
+          "Control panel renderer process gone",
+          { reason: details.reason, exitCode: details.exitCode },
+          "window"
+        );
+        setTimeout(() => this.loadControlPanel(), 1000);
+      }
+    });
+
+    this.controlPanelWindow.on("show", () => {
+      if (this.controlPanelWindow.webContents.isCrashed()) {
+        debugLogger.error("Control panel crashed, reloading on show", undefined, "window");
+        this.loadControlPanel();
+      }
+    });
 
     await this.loadControlPanel();
   }

@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
 /**
  * Helper to register an IPC listener and return a cleanup function.
@@ -39,6 +39,77 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getDictionary: () => ipcRenderer.invoke("db-get-dictionary"),
   setDictionary: (words) => ipcRenderer.invoke("db-set-dictionary", words),
 
+  // Note functions
+  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId) =>
+    ipcRenderer.invoke(
+      "db-save-note",
+      title,
+      content,
+      noteType,
+      sourceFile,
+      audioDuration,
+      folderId
+    ),
+  getNote: (id) => ipcRenderer.invoke("db-get-note", id),
+  getNotes: (noteType, limit, folderId) =>
+    ipcRenderer.invoke("db-get-notes", noteType, limit, folderId),
+  updateNote: (id, updates) => ipcRenderer.invoke("db-update-note", id, updates),
+  deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
+  exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
+
+  // Folder functions
+  getFolders: () => ipcRenderer.invoke("db-get-folders"),
+  createFolder: (name) => ipcRenderer.invoke("db-create-folder", name),
+  deleteFolder: (id) => ipcRenderer.invoke("db-delete-folder", id),
+  renameFolder: (id, name) => ipcRenderer.invoke("db-rename-folder", id, name),
+  getFolderNoteCounts: () => ipcRenderer.invoke("db-get-folder-note-counts"),
+
+  // Action functions
+  getActions: () => ipcRenderer.invoke("db-get-actions"),
+  getAction: (id) => ipcRenderer.invoke("db-get-action", id),
+  createAction: (name, description, prompt, icon) =>
+    ipcRenderer.invoke("db-create-action", name, description, prompt, icon),
+  updateAction: (id, updates) => ipcRenderer.invoke("db-update-action", id, updates),
+  deleteAction: (id) => ipcRenderer.invoke("db-delete-action", id),
+
+  // Audio file operations
+  selectAudioFile: () => ipcRenderer.invoke("select-audio-file"),
+  transcribeAudioFile: (filePath, options) =>
+    ipcRenderer.invoke("transcribe-audio-file", filePath, options),
+  getPathForFile: (file) => webUtils.getPathForFile(file),
+
+  onNoteAdded: (callback) => {
+    const listener = (_event, note) => callback?.(note);
+    ipcRenderer.on("note-added", listener);
+    return () => ipcRenderer.removeListener("note-added", listener);
+  },
+  onNoteUpdated: (callback) => {
+    const listener = (_event, note) => callback?.(note);
+    ipcRenderer.on("note-updated", listener);
+    return () => ipcRenderer.removeListener("note-updated", listener);
+  },
+  onNoteDeleted: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("note-deleted", listener);
+    return () => ipcRenderer.removeListener("note-deleted", listener);
+  },
+
+  onActionCreated: (callback) => {
+    const listener = (_event, action) => callback?.(action);
+    ipcRenderer.on("action-created", listener);
+    return () => ipcRenderer.removeListener("action-created", listener);
+  },
+  onActionUpdated: (callback) => {
+    const listener = (_event, action) => callback?.(action);
+    ipcRenderer.on("action-updated", listener);
+    return () => ipcRenderer.removeListener("action-updated", listener);
+  },
+  onActionDeleted: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("action-deleted", listener);
+    return () => ipcRenderer.removeListener("action-deleted", listener);
+  },
+
   onTranscriptionAdded: (callback) => {
     const listener = (_event, transcription) => callback?.(transcription);
     ipcRenderer.on("transcription-added", listener);
@@ -61,6 +132,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   createProductionEnvFile: (key) => ipcRenderer.invoke("create-production-env-file", key),
 
   // Clipboard functions
+  checkAccessibilityPermission: () => ipcRenderer.invoke("check-accessibility-permission"),
   readClipboard: () => ipcRenderer.invoke("read-clipboard"),
   writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
   checkPasteTools: () => ipcRenderer.invoke("check-paste-tools"),
@@ -83,6 +155,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   whisperServerStart: (modelName) => ipcRenderer.invoke("whisper-server-start", modelName),
   whisperServerStop: () => ipcRenderer.invoke("whisper-server-stop"),
   whisperServerStatus: () => ipcRenderer.invoke("whisper-server-status"),
+
+  // CUDA GPU acceleration
+  detectGpu: () => ipcRenderer.invoke("detect-gpu"),
+  getCudaWhisperStatus: () => ipcRenderer.invoke("get-cuda-whisper-status"),
+  downloadCudaWhisperBinary: () => ipcRenderer.invoke("download-cuda-whisper-binary"),
+  cancelCudaWhisperDownload: () => ipcRenderer.invoke("cancel-cuda-whisper-download"),
+  deleteCudaWhisperBinary: () => ipcRenderer.invoke("delete-cuda-whisper-binary"),
+  onCudaDownloadProgress: registerListener(
+    "cuda-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onCudaFallbackNotification: registerListener(
+    "cuda-fallback-notification",
+    (callback) => () => callback()
+  ),
 
   // Local Parakeet (NVIDIA) functions
   transcribeLocalParakeet: (audioBlob, options) =>
@@ -209,6 +296,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   llamaServerStart: (modelId) => ipcRenderer.invoke("llama-server-start", modelId),
   llamaServerStop: () => ipcRenderer.invoke("llama-server-stop"),
   llamaServerStatus: () => ipcRenderer.invoke("llama-server-status"),
+  llamaGpuReset: () => ipcRenderer.invoke("llama-gpu-reset"),
+
+  // Vulkan GPU acceleration
+  detectVulkanGpu: () => ipcRenderer.invoke("detect-vulkan-gpu"),
+  getLlamaVulkanStatus: () => ipcRenderer.invoke("get-llama-vulkan-status"),
+  downloadLlamaVulkanBinary: () => ipcRenderer.invoke("download-llama-vulkan-binary"),
+  cancelLlamaVulkanDownload: () => ipcRenderer.invoke("cancel-llama-vulkan-download"),
+  deleteLlamaVulkanBinary: () => ipcRenderer.invoke("delete-llama-vulkan-binary"),
+  onLlamaVulkanDownloadProgress: registerListener(
+    "llama-vulkan-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
 
   getLogLevel: () => ipcRenderer.invoke("get-log-level"),
   log: (entry) => ipcRenderer.invoke("app-log", entry),
@@ -229,9 +328,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // OpenWhispr Cloud API
   cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
   cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
+  cloudStreamingUsage: (text, audioDurationSeconds, opts) =>
+    ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
-  cloudCheckout: () => ipcRenderer.invoke("cloud-checkout"),
+  cloudCheckout: (plan) => ipcRenderer.invoke("cloud-checkout", plan),
   cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),
+
+  // Cloud audio file transcription
+  transcribeAudioFileCloud: (filePath) =>
+    ipcRenderer.invoke("transcribe-audio-file-cloud", filePath),
+  transcribeAudioFileByok: (options) => ipcRenderer.invoke("transcribe-audio-file-byok", options),
+
+  // Referral stats
+  getReferralStats: () => ipcRenderer.invoke("get-referral-stats"),
+  sendReferralInvite: (email) => ipcRenderer.invoke("send-referral-invite", email),
+  getReferralInvites: () => ipcRenderer.invoke("get-referral-invites"),
 
   // Assembly AI Streaming
   assemblyAiStreamingWarmup: (options) =>
@@ -266,10 +377,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deepgramStreamingFinalize: () => ipcRenderer.send("deepgram-streaming-finalize"),
   deepgramStreamingStop: () => ipcRenderer.invoke("deepgram-streaming-stop"),
   deepgramStreamingStatus: () => ipcRenderer.invoke("deepgram-streaming-status"),
-  onDeepgramPartialTranscript: registerListener("deepgram-partial-transcript", (callback) => (_event, text) => callback(text)),
-  onDeepgramFinalTranscript: registerListener("deepgram-final-transcript", (callback) => (_event, text) => callback(text)),
-  onDeepgramError: registerListener("deepgram-error", (callback) => (_event, error) => callback(error)),
-  onDeepgramSessionEnd: registerListener("deepgram-session-end", (callback) => (_event, data) => callback(data)),
+  onDeepgramPartialTranscript: registerListener(
+    "deepgram-partial-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onDeepgramFinalTranscript: registerListener(
+    "deepgram-final-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onDeepgramError: registerListener(
+    "deepgram-error",
+    (callback) => (_event, error) => callback(error)
+  ),
+  onDeepgramSessionEnd: registerListener(
+    "deepgram-session-end",
+    (callback) => (_event, data) => callback(data)
+  ),
 
   // Usage limit events (for showing UpgradePrompt in ControlPanel)
   notifyLimitReached: (data) => ipcRenderer.send("limit-reached", data),

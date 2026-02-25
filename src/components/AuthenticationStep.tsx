@@ -335,7 +335,7 @@ export default function AuthenticationStep({
         </div>
 
         <div className="bg-warning/5 p-2.5 rounded border border-warning/20">
-          <p className="text-[10px] text-warning text-center leading-snug">
+          <p className="text-xs text-warning text-center leading-snug">
             {t("auth.cloudNotConfigured")}
           </p>
         </div>
@@ -401,7 +401,7 @@ export default function AuthenticationStep({
         <button
           type="button"
           onClick={handleBack}
-          className="text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5"
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5"
         >
           <ChevronLeft className="w-3 h-3" />
           {t("auth.common.back")}
@@ -445,7 +445,7 @@ export default function AuthenticationStep({
           />
 
           {authMode === "sign-up" && (
-            <p className="text-[9px] text-muted-foreground/70 leading-tight">
+            <p className="text-xs text-muted-foreground/70 leading-tight">
               {t("auth.passwordForm.passwordMinLength")}
             </p>
           )}
@@ -454,7 +454,7 @@ export default function AuthenticationStep({
             <button
               type="button"
               onClick={handleForgotPassword}
-              className="text-[10px] text-primary hover:text-primary/80 transition-colors text-left"
+              className="text-xs text-primary hover:text-primary/80 transition-colors text-left"
               disabled={isSubmitting}
             >
               {t("auth.passwordForm.forgotPassword")}
@@ -464,7 +464,7 @@ export default function AuthenticationStep({
           {error && (
             <div className="px-2.5 py-1.5 rounded bg-destructive/5 border border-destructive/20 flex items-center gap-1.5">
               <AlertCircle className="w-3 h-3 text-destructive shrink-0" />
-              <p className="text-[10px] text-destructive leading-snug">{error}</p>
+              <p className="text-xs text-destructive leading-snug">{error}</p>
             </div>
           )}
 
@@ -492,7 +492,7 @@ export default function AuthenticationStep({
           <button
             type="button"
             onClick={toggleAuthMode}
-            className="text-[10px] text-muted-foreground/70 hover:text-foreground transition-colors"
+            className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
             disabled={isSubmitting}
           >
             {authMode === "sign-in" ? (
@@ -557,7 +557,7 @@ export default function AuthenticationStep({
 
       <div className="flex items-center gap-2">
         <div className="flex-1 h-px bg-border/50" />
-        <span className="text-[9px] font-medium text-muted-foreground/40 uppercase tracking-widest px-1">
+        <span className="text-xs font-medium text-muted-foreground/40 uppercase tracking-widest px-1">
           {t("auth.common.or")}
         </span>
         <div className="flex-1 h-px bg-border/50" />
@@ -614,7 +614,7 @@ export default function AuthenticationStep({
         </button>
       </div>
 
-      <p className="text-[10px] text-muted-foreground/80 leading-tight text-center">
+      <p className="text-xs text-muted-foreground/80 leading-tight text-center">
         {t("auth.legal.prefix")}{" "}
         <a
           href="https://openwhispr.com/terms"
