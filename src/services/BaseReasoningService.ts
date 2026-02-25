@@ -1,11 +1,13 @@
 import { getSystemPrompt } from "../config/prompts";
 import { getSettings } from "../stores/settingsStore";
+import type { AppContext } from "../types/electron";
 
 export interface ReasoningConfig {
   maxTokens?: number;
   temperature?: number;
   contextSize?: number;
   systemPrompt?: string;
+  appContext?: AppContext | null;
 }
 
 export abstract class BaseReasoningService {
@@ -23,10 +25,21 @@ export abstract class BaseReasoningService {
     return getSettings().uiLanguage || "en";
   }
 
-  protected getSystemPrompt(agentName: string | null, transcript?: string): string {
+  protected getSystemPrompt(
+    agentName: string | null,
+    transcript?: string,
+    appContext?: AppContext | null
+  ): string {
     const language = this.getPreferredLanguage();
     const uiLanguage = this.getUiLanguage();
-    return getSystemPrompt(agentName, this.getCustomDictionary(), language, transcript, uiLanguage);
+    return getSystemPrompt(
+      agentName,
+      this.getCustomDictionary(),
+      language,
+      transcript,
+      uiLanguage,
+      appContext
+    );
   }
 
   protected calculateMaxTokens(

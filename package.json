@@ -6,11 +6,12 @@
   "private": true,
   "scripts": {
     "compile:globe": "node scripts/build-globe-listener.js",
+    "compile:context-capture": "node scripts/build-context-capture.js",
     "compile:fast-paste": "node scripts/build-macos-fast-paste.js",
     "compile:winkeys": "node scripts/build-windows-key-listener.js",
     "compile:winpaste": "node scripts/build-windows-fast-paste.js",
     "compile:linux-paste": "node scripts/build-linux-fast-paste.js",
-    "compile:native": "npm run compile:globe && npm run compile:fast-paste && npm run compile:winkeys && npm run compile:winpaste && npm run compile:linux-paste",
+    "compile:native": "npm run compile:globe && npm run compile:context-capture && npm run compile:fast-paste && npm run compile:winkeys && npm run compile:winpaste && npm run compile:linux-paste",
     "prestart": "npm run compile:native",
     "start": "electron .",
     "predev": "npm run compile:native",

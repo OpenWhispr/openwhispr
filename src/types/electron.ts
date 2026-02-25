@@ -1,3 +1,10 @@
+export interface AppContext {
+  bundleId: string | null;
+  appName: string | null;
+  windowTitle: string | null;
+  fileName: string | null;
+}
+
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
 export interface TranscriptionItem {
@@ -266,8 +273,8 @@ declare global {
       pasteText: (text: string, options?: { fromStreaming?: boolean }) => Promise<void>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
-      onToggleDictation: (callback: () => void) => () => void;
-      onStartDictation?: (callback: () => void) => () => void;
+      onToggleDictation: (callback: (appContext?: AppContext | null) => void) => () => void;
+      onStartDictation?: (callback: (appContext?: AppContext | null) => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
 
       // Database operations

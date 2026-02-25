@@ -14,6 +14,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const [transcript, setTranscript] = useState("");
   const [partialTranscript, setPartialTranscript] = useState("");
   const audioManagerRef = useRef(null);
+  const appContextRef = useRef(null);
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
   const { onToggle } = options;
@@ -159,12 +160,20 @@ export const useAudioRecording = (toast, options = {}) => {
       await performStopRecording();
     };
 
-    const disposeToggle = window.electronAPI.onToggleDictation(() => {
+    const disposeToggle = window.electronAPI.onToggleDictation((appContext) => {
+      appContextRef.current = appContext ?? null;
+      if (audioManagerRef.current) {
+        audioManagerRef.current.appContext = appContextRef.current;
+      }
       handleToggle();
       onToggle?.();
     });
 
-    const disposeStart = window.electronAPI.onStartDictation?.(() => {
+    const disposeStart = window.electronAPI.onStartDictation?.((appContext) => {
+      appContextRef.current = appContext ?? null;
+      if (audioManagerRef.current) {
+        audioManagerRef.current.appContext = appContextRef.current;
+      }
       handleStart();
       onToggle?.();
     });

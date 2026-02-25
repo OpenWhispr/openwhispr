@@ -26,8 +26,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   pasteText: (text, options) => ipcRenderer.invoke("paste-text", text, options),
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
-  onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
-  onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
+  onToggleDictation: registerListener(
+    "toggle-dictation",
+    (callback) => (_event, appContext) => callback(appContext)
+  ),
+  onStartDictation: registerListener(
+    "start-dictation",
+    (callback) => (_event, appContext) => callback(appContext)
+  ),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
 
   // Database functions

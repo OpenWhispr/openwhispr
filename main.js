@@ -165,6 +165,7 @@ const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
 const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
+const ContextCaptureManager = require("./src/helpers/contextCaptureManager");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 
 // Manager instances - initialized after app.whenReady()
@@ -181,6 +182,7 @@ let updateManager = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
 let whisperCudaManager = null;
+let contextCaptureManager = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 
@@ -266,6 +268,8 @@ function initializeDeferredManagers() {
   clipboardManager.preWarmAccessibility();
   trayManager = new TrayManager();
   globeKeyManager = new GlobeKeyManager();
+  contextCaptureManager = new ContextCaptureManager();
+  windowManager.setContextCaptureManager(contextCaptureManager);
 
   if (process.platform === "darwin") {
     globeKeyManager.on("error", (error) => {
@@ -570,8 +574,9 @@ async function startApp() {
               }
             }, MIN_HOLD_DURATION_MS);
           } else {
+            const appCtx = contextCaptureManager?.captureContext() ?? null;
             windowManager.showDictationPanel();
-            windowManager.mainWindow.webContents.send("toggle-dictation");
+            windowManager.mainWindow.webContents.send("toggle-dictation", appCtx);
           }
         } else {
           debugLogger?.debug("[Globe] Ignored — mainWindow not live");
@@ -638,8 +643,9 @@ async function startApp() {
           }
         }, MIN_HOLD_DURATION_MS);
       } else {
+        const appCtx = contextCaptureManager?.captureContext() ?? null;
         windowManager.showDictationPanel();
-        windowManager.mainWindow.webContents.send("toggle-dictation");
+        windowManager.mainWindow.webContents.send("toggle-dictation", appCtx);
       }
     });
 
@@ -711,8 +717,9 @@ async function startApp() {
       if (activationMode === "push") {
         windowManager.startWindowsPushToTalk();
       } else if (activationMode === "tap") {
+        const appCtx = contextCaptureManager?.captureContext() ?? null;
         windowManager.showDictationPanel();
-        windowManager.mainWindow.webContents.send("toggle-dictation");
+        windowManager.mainWindow.webContents.send("toggle-dictation", appCtx);
       }
     });
 

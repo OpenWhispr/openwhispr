@@ -55,6 +55,7 @@ const BOOLEAN_SETTINGS = new Set([
   "telemetryEnabled",
   "audioCuesEnabled",
   "floatingIconAutoHide",
+  "contextAwarenessEnabled",
   "isSignedIn",
 ]);
 
@@ -84,6 +85,7 @@ export interface SettingsState
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   floatingIconAutoHide: boolean;
+  contextAwarenessEnabled: boolean;
 
   setUseLocalWhisper: (value: boolean) => void;
   setWhisperModel: (value: string) => void;
@@ -125,6 +127,7 @@ export interface SettingsState
   setTelemetryEnabled: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
+  setContextAwarenessEnabled: (value: boolean) => void;
   setIsSignedIn: (value: boolean) => void;
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
@@ -236,6 +239,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   telemetryEnabled: readBoolean("telemetryEnabled", false),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
+  contextAwarenessEnabled: readBoolean("contextAwarenessEnabled", true),
   isSignedIn: readBoolean("isSignedIn", false),
 
   setUseLocalWhisper: createBooleanSetter("useLocalWhisper"),
@@ -359,6 +363,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCloudBackupEnabled: createBooleanSetter("cloudBackupEnabled"),
   setTelemetryEnabled: createBooleanSetter("telemetryEnabled"),
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
+  setContextAwarenessEnabled: createBooleanSetter("contextAwarenessEnabled"),
 
   setFloatingIconAutoHide: (enabled: boolean) => {
     if (get().floatingIconAutoHide === enabled) return;

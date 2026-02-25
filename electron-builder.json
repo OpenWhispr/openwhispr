@@ -86,6 +86,7 @@
   "extraResources": [
     "src/assets/**/*",
     "resources/bin/macos-globe-listener",
+    "resources/bin/macos-context-capture",
     "resources/bin/macos-fast-paste",
     "resources/bin/linux-fast-paste",
     {

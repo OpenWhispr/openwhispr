@@ -1034,6 +1034,11 @@
         "themeDescription": "Choose light, dark, or match your system",
         "title": "Appearance"
       },
+      "contextAwareness": {
+        "title": "Context Awareness",
+        "label": "Share active app context",
+        "description": "Send the active app name and file to AI for more relevant responses"
+      },
       "floatingIcon": {
         "autoHide": "Auto-hide when idle",
         "autoHideDescription": "Keep the icon hidden until you start dictating",

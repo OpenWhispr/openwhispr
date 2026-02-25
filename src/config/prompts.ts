@@ -2,6 +2,7 @@ import promptData from "./promptData.json";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { en as enPrompts, type PromptBundle } from "../locales/prompts";
 import { getLanguageInstruction } from "../utils/languageSupport";
+import type { AppContext } from "../types/electron";
 
 export const CLEANUP_PROMPT = promptData.CLEANUP_PROMPT;
 export const FULL_PROMPT = promptData.FULL_PROMPT;
@@ -36,7 +37,8 @@ export function getSystemPrompt(
   customDictionary?: string[],
   language?: string,
   transcript?: string,
-  uiLanguage?: string
+  uiLanguage?: string,
+  appContext?: AppContext | null
 ): string {
   const name = agentName?.trim() || "Assistant";
   const prompts = getPromptBundle(uiLanguage);
@@ -67,6 +69,14 @@ export function getSystemPrompt(
   const langInstruction = getLanguageInstruction(language);
   if (langInstruction) {
     prompt += "\n\n" + langInstruction;
+  }
+
+  if (appContext?.appName) {
+    let contextSection = `\nContext (the user is currently working in):\nApp: ${appContext.appName}`;
+    if (appContext.fileName) {
+      contextSection += `\nFile: ${appContext.fileName}`;
+    }
+    prompt += "\n" + contextSection;
   }
 
   if (customDictionary && customDictionary.length > 0) {

@@ -69,6 +69,7 @@ class AudioManager {
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
     this.skipReasoning = false;
+    this.appContext = null;
   }
 
   getWorkletBlobUrl() {
@@ -757,7 +758,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const startTime = Date.now();
 
     try {
-      const result = await ReasoningService.processText(text, model, agentName);
+      const contextEnabled = getSettings().contextAwarenessEnabled !== false;
+      const config = this.appContext && contextEnabled ? { appContext: this.appContext } : {};
+      const result = await ReasoningService.processText(text, model, agentName, config);
 
       const processingTime = Date.now() - startTime;
 
