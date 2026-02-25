@@ -1374,7 +1374,8 @@
     "meeting": {
       "title": "Notas de reunião",
       "description": "Identificação de falantes e resumos estruturados",
-      "comingSoon": "Em breve"
+      "comingSoon": "Em breve",
+      "back": "Voltar"
     },
     "context": {
       "moveToFolder": "Mover para pasta",

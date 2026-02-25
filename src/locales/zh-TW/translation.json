@@ -1370,7 +1370,8 @@
     "meeting": {
       "title": "會議筆記",
       "description": "說話者辨識與結構化摘要",
-      "comingSoon": "即將推出"
+      "comingSoon": "即將推出",
+      "back": "返回"
     },
     "context": {
       "moveToFolder": "移動到資料夾",

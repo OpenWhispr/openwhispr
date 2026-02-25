@@ -1349,7 +1349,8 @@
     "meeting": {
       "title": "議事録",
       "description": "話者識別と構造化されたサマリー",
-      "comingSoon": "近日公開"
+      "comingSoon": "近日公開",
+      "back": "戻る"
     },
     "onboarding": {
       "llm": {

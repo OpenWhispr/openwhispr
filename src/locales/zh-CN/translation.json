@@ -1370,7 +1370,8 @@
     "meeting": {
       "title": "会议笔记",
       "description": "说话人识别与结构化摘要",
-      "comingSoon": "即将推出"
+      "comingSoon": "即将推出",
+      "back": "返回"
     },
     "context": {
       "moveToFolder": "移动到文件夹",

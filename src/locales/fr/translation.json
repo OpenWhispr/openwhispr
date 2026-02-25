@@ -1410,7 +1410,8 @@
     "meeting": {
       "title": "Notes de réunion",
       "description": "Identification des intervenants et résumés structurés",
-      "comingSoon": "Bientôt disponible"
+      "comingSoon": "Bientôt disponible",
+      "back": "Retour"
     },
     "empty": {
       "title": "Aucune note ici pour l'instant",

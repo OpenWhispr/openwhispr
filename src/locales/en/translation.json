@@ -1441,7 +1441,8 @@
     "meeting": {
       "title": "Meeting Notes",
       "description": "Speaker identification & structured summaries",
-      "comingSoon": "Coming Soon"
+      "comingSoon": "Coming Soon",
+      "back": "Back"
     },
     "empty": {
       "title": "No notes here yet",

@@ -1374,7 +1374,8 @@
     "meeting": {
       "title": "Note delle riunioni",
       "description": "Identificazione degli interlocutori e riassunti strutturati",
-      "comingSoon": "Prossimamente"
+      "comingSoon": "Prossimamente",
+      "back": "Indietro"
     },
     "context": {
       "moveToFolder": "Sposta nella cartella",
