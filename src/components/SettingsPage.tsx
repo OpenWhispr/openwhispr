@@ -71,7 +71,11 @@ export type SettingsSectionType =
   | "transcription"
   | "intelligence"
   | "privacyData"
-  | "system";
+  | "system"
+  | "dictionary"
+  | "aiModels"
+  | "agentConfig"
+  | "prompts";
 
 interface SettingsPageProps {
   activeSection?: SettingsSectionType;
@@ -712,6 +716,27 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
   useClipboard(showAlertDialog);
   const { agentName, setAgentName } = useAgentName();
   const [agentNameInput, setAgentNameInput] = useState(agentName);
+  const [newDictionaryWord, setNewDictionaryWord] = useState("");
+
+  const handleAddDictionaryWord = useCallback(() => {
+    const words = newDictionaryWord
+      .split(",")
+      .map((w) => w.trim())
+      .filter((w) => w && !customDictionary.includes(w));
+    if (words.length > 0) {
+      setCustomDictionary([...customDictionary, ...words]);
+      setNewDictionaryWord("");
+    }
+  }, [newDictionaryWord, customDictionary, setCustomDictionary]);
+
+  const handleRemoveDictionaryWord = useCallback(
+    (word: string) => {
+      if (word === agentName) return;
+      setCustomDictionary(customDictionary.filter((w) => w !== word));
+    },
+    [customDictionary, setCustomDictionary, agentName]
+  );
+
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
   const hasShownApproachingToast = useRef(false);
@@ -1846,10 +1871,15 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                   <div className="flex items-center justify-between w-full">
                     <div>
                       <p className="text-[12px] font-medium text-foreground">
-                        {t("settingsPage.dictionary.autoLearnTitle", { defaultValue: "Auto-learn from corrections" })}
+                        {t("settingsPage.dictionary.autoLearnTitle", {
+                          defaultValue: "Auto-learn from corrections",
+                        })}
                       </p>
                       <p className="text-[10px] text-muted-foreground/50 mt-0.5">
-                        {t("settingsPage.dictionary.autoLearnDescription", { defaultValue: "When you correct a transcription in the target app, the corrected word is automatically added to your dictionary." })}
+                        {t("settingsPage.dictionary.autoLearnDescription", {
+                          defaultValue:
+                            "When you correct a transcription in the target app, the corrected word is automatically added to your dictionary.",
+                        })}
                       </p>
                     </div>
                     <button

@@ -1028,6 +1028,28 @@
       "resetAppData": "Restablecer datos de la app",
       "resetAppDataDescription": "Elimina permanentemente todos los ajustes, transcripciones y datos en caché"
     },
+    "dictionary": {
+      "title": "Diccionario personalizado",
+      "description": "Enseña a la IA tu vocabulario: nombres, jerga y términos que podría pasar por alto",
+      "addWordOrPhrase": "Añadir palabra o frase",
+      "placeholder": "Añadir una palabra o frase...",
+      "add": "Añadir",
+      "pressEnterToAdd": "Pulsa Enter para añadir",
+      "autoLearnTitle": "Aprender automáticamente de las correcciones",
+      "autoLearnDescription": "Cuando corriges una transcripción en la aplicación de destino, la palabra corregida se añade automáticamente a tu diccionario.",
+      "yourWords": "Tus palabras",
+      "clearDictionaryTitle": "¿Borrar diccionario?",
+      "clearDictionaryDescription": "Esto eliminará todas las palabras de tu diccionario personalizado. Esta acción no se puede deshacer.",
+      "clearAll": "Borrar todo",
+      "agentNameAutoManaged": "Gestionado automáticamente — sincronizado con el nombre del agente",
+      "removeWord": "Eliminar palabra",
+      "noWords": "Aún no hay palabras",
+      "wordsAppearHere": "Las palabras que añadas aparecerán aquí",
+      "howItWorksTitle": "Cómo funciona",
+      "howItWorksDescription": "Las palabras se envían como pistas de contexto al modelo de voz, ayudándole a reconocer términos poco comunes. Para palabras difíciles, intenta añadir contexto como \"The word is Synty\" junto con la propia palabra.",
+      "tipLabel": "Consejo",
+      "tipDescription": "Separa varias palabras con comas. Añade frases de contexto como \"The word is Synty\" para un mejor reconocimiento."
+    },
     "general": {
       "appearance": {
         "auto": "Auto",
@@ -1536,7 +1558,10 @@
       "hotkeyUnavailable": {
         "title": "Atajo no disponible",
         "description": "No se pudo registrar el atajo seleccionado. Elige otro en la configuración."
-      }
+      },
+      "dictionaryUpdated": "Diccionario actualizado",
+      "savedToDict": "{{words}} guardado en el diccionario",
+      "undo": "Deshacer"
     },
     "mic": {
       "hotkeyToSpeak": "Pulsa {{hotkey}} para hablar",

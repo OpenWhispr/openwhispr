@@ -1028,6 +1028,28 @@
       "resetAppData": "Réinitialiser les données de l'application",
       "resetAppDataDescription": "Supprime définitivement tous les paramètres, transcriptions et données en cache"
     },
+    "dictionary": {
+      "title": "Dictionnaire personnalisé",
+      "description": "Apprenez à l'IA votre vocabulaire — noms, jargon et termes qu'elle pourrait autrement manquer",
+      "addWordOrPhrase": "Ajouter un mot ou une expression",
+      "placeholder": "Ajouter un mot ou une expression...",
+      "add": "Ajouter",
+      "pressEnterToAdd": "Appuyez sur Entrée pour ajouter",
+      "autoLearnTitle": "Apprentissage automatique à partir des corrections",
+      "autoLearnDescription": "Lorsque vous corrigez une transcription dans l'application cible, le mot corrigé est automatiquement ajouté à votre dictionnaire.",
+      "yourWords": "Vos mots",
+      "clearDictionaryTitle": "Effacer le dictionnaire ?",
+      "clearDictionaryDescription": "Cela supprimera tous les mots de votre dictionnaire personnalisé. Cette action est irréversible.",
+      "clearAll": "Tout effacer",
+      "agentNameAutoManaged": "Géré automatiquement — synchronisé avec le nom de l'agent",
+      "removeWord": "Supprimer le mot",
+      "noWords": "Aucun mot pour l'instant",
+      "wordsAppearHere": "Les mots que vous ajoutez apparaîtront ici",
+      "howItWorksTitle": "Comment ça fonctionne",
+      "howItWorksDescription": "Les mots sont fournis comme indices de contexte au modèle vocal, l'aidant à reconnaître les termes peu courants. Pour les mots difficiles, essayez d'ajouter du contexte comme « The word is Synty » en plus du mot lui-même.",
+      "tipLabel": "Astuce",
+      "tipDescription": "Séparez plusieurs mots par des virgules. Ajoutez des phrases de contexte comme « The word is Synty » pour une meilleure reconnaissance."
+    },
     "general": {
       "appearance": {
         "auto": "Auto",
@@ -1536,7 +1558,10 @@
       "hotkeyUnavailable": {
         "title": "Raccourci indisponible",
         "description": "Le raccourci sélectionné n’a pas pu être enregistré. Veuillez en choisir un autre dans les paramètres."
-      }
+      },
+      "dictionaryUpdated": "Dictionnaire mis à jour",
+      "savedToDict": "{{words}} enregistré dans le dictionnaire",
+      "undo": "Annuler"
     },
     "mic": {
       "hotkeyToSpeak": "Appuyez sur {{hotkey}} pour parler",

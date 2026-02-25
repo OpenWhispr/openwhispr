@@ -139,7 +139,11 @@ class IPCHandlers {
     if (!this.textEditMonitor) return;
 
     this._textEditHandler = (data) => {
-      if (!data || typeof data.originalText !== "string" || typeof data.newFieldValue !== "string") {
+      if (
+        !data ||
+        typeof data.originalText !== "string" ||
+        typeof data.newFieldValue !== "string"
+      ) {
         debugLogger.debug("[AutoLearn] Invalid event payload, skipping");
         return;
       }
@@ -179,7 +183,10 @@ class IPCHandlers {
       const { extractCorrections } = require("../utils/correctionLearner");
       const currentDict = this._getDictionarySafe();
       const corrections = extractCorrections(originalText, newFieldValue, currentDict);
-      debugLogger.debug("[AutoLearn] Corrections result", { corrections, dictSize: currentDict.length });
+      debugLogger.debug("[AutoLearn] Corrections result", {
+        corrections,
+        dictSize: currentDict.length,
+      });
 
       if (corrections.length > 0) {
         const dictSet = new Set(currentDict.map((w) => w.toLowerCase()));
@@ -205,7 +212,6 @@ class IPCHandlers {
       debugLogger.debug("[AutoLearn] Error processing corrections", { error: error.message });
     }
   }
-
 
   _syncStartupEnv(setVars, clearVars = []) {
     let changed = false;
@@ -356,6 +362,24 @@ class IPCHandlers {
         throw new Error("words must be an array");
       }
       return this.databaseManager.setDictionary(words);
+    });
+
+    ipcMain.handle("undo-learned-corrections", async (_event, words) => {
+      try {
+        if (!Array.isArray(words) || words.length === 0) {
+          return { success: false };
+        }
+        const currentDict = this._getDictionarySafe();
+        const removeSet = new Set(words.map((w) => w.toLowerCase()));
+        const updatedDict = currentDict.filter((w) => !removeSet.has(w.toLowerCase()));
+        this.databaseManager.setDictionary(updatedDict);
+        this.broadcastToWindows("dictionary-updated", updatedDict);
+        debugLogger.debug("[AutoLearn] Undo: removed words", { words });
+        return { success: true };
+      } catch (err) {
+        debugLogger.debug("[AutoLearn] Undo failed", { error: err.message });
+        return { success: false };
+      }
     });
 
     ipcMain.handle(
@@ -569,13 +593,22 @@ class IPCHandlers {
           await new Promise((resolve) => setTimeout(resolve, 80));
         }
       }
-      const result = await this.clipboardManager.pasteText(text, { ...options, webContents: event.sender });
+      const result = await this.clipboardManager.pasteText(text, {
+        ...options,
+        webContents: event.sender,
+      });
       const targetPid = this.textEditMonitor?.lastTargetPid || null;
-      debugLogger.debug("[AutoLearn] Paste completed", { autoLearnEnabled: this._autoLearnEnabled, hasMonitor: !!this.textEditMonitor, targetPid });
+      debugLogger.debug("[AutoLearn] Paste completed", {
+        autoLearnEnabled: this._autoLearnEnabled,
+        hasMonitor: !!this.textEditMonitor,
+        targetPid,
+      });
       if (this.textEditMonitor && this._autoLearnEnabled) {
         setTimeout(() => {
           try {
-            debugLogger.debug("[AutoLearn] Starting monitoring", { textPreview: text.substring(0, 80) });
+            debugLogger.debug("[AutoLearn] Starting monitoring", {
+              textPreview: text.substring(0, 80),
+            });
             this.textEditMonitor.startMonitoring(text, 30000, { targetPid });
           } catch (err) {
             debugLogger.debug("[AutoLearn] Failed to start monitoring", { error: err.message });

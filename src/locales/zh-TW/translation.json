@@ -1024,6 +1024,28 @@
       "resetAppData": "重設應用程式資料",
       "resetAppDataDescription": "永久刪除所有設定、轉錄記錄和快取資料"
     },
+    "dictionary": {
+      "title": "自訂詞典",
+      "description": "教 AI 你的詞彙 — 名字、術語和它可能遺漏的詞語",
+      "addWordOrPhrase": "新增單字或片語",
+      "placeholder": "新增一個單字或片語...",
+      "add": "新增",
+      "pressEnterToAdd": "按 Enter 新增",
+      "autoLearnTitle": "從校正中自動學習",
+      "autoLearnDescription": "當你在目標應用程式中校正轉錄時，校正後的字詞會自動新增到你的詞典中。",
+      "yourWords": "你的字詞",
+      "clearDictionaryTitle": "清除詞典？",
+      "clearDictionaryDescription": "這將移除自訂詞典中的所有字詞。此操作無法復原。",
+      "clearAll": "全部清除",
+      "agentNameAutoManaged": "自動管理 — 與助理名稱同步",
+      "removeWord": "移除字詞",
+      "noWords": "尚無字詞",
+      "wordsAppearHere": "你新增的字詞將顯示在這裡",
+      "howItWorksTitle": "運作方式",
+      "howItWorksDescription": "字詞會作為上下文提示提供給語音模型，幫助它辨識不常見的術語。對於難以辨識的字詞，可以嘗試在字詞旁新增上下文，例如 \"The word is Synty\"。",
+      "tipLabel": "提示",
+      "tipDescription": "用逗號分隔多個字詞。新增上下文片語如 \"The word is Synty\" 以獲得更好的辨識效果。"
+    },
     "general": {
       "appearance": {
         "auto": "自動",
@@ -1532,7 +1554,10 @@
       "hotkeyUnavailable": {
         "title": "快捷鍵無法使用",
         "description": "無法註冊所選快捷鍵。請在設定中選擇其他快捷鍵。"
-      }
+      },
+      "dictionaryUpdated": "詞典已更新",
+      "savedToDict": "已將 {{words}} 儲存到詞典",
+      "undo": "復原"
     },
     "mic": {
       "hotkeyToSpeak": "按 {{hotkey}} 開始說話",

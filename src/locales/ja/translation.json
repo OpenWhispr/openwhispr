@@ -1024,6 +1024,28 @@
       "resetAppData": "アプリデータをリセット",
       "resetAppDataDescription": "すべての設定、文字起こし履歴、キャッシュデータを完全に削除"
     },
+    "dictionary": {
+      "title": "カスタム辞書",
+      "description": "AIにあなたの語彙を教えましょう — 名前、専門用語、見逃しがちな用語など",
+      "addWordOrPhrase": "単語またはフレーズを追加",
+      "placeholder": "単語またはフレーズを追加...",
+      "add": "追加",
+      "pressEnterToAdd": "Enterキーで追加",
+      "autoLearnTitle": "修正から自動学習",
+      "autoLearnDescription": "対象アプリで文字起こしを修正すると、修正された単語が自動的に辞書に追加されます。",
+      "yourWords": "あなたの単語",
+      "clearDictionaryTitle": "辞書をクリアしますか？",
+      "clearDictionaryDescription": "カスタム辞書からすべての単語が削除されます。この操作は元に戻せません。",
+      "clearAll": "すべてクリア",
+      "agentNameAutoManaged": "自動管理 — エージェント名と同期",
+      "removeWord": "単語を削除",
+      "noWords": "まだ単語がありません",
+      "wordsAppearHere": "追加した単語がここに表示されます",
+      "howItWorksTitle": "仕組み",
+      "howItWorksDescription": "単語は音声モデルへのコンテキストヒントとして提供され、一般的でない用語の認識を助けます。難しい単語には、単語自体に加えて \"The word is Synty\" のようなコンテキストを追加してみてください。",
+      "tipLabel": "ヒント",
+      "tipDescription": "複数の単語はカンマで区切ってください。より良い認識のために \"The word is Synty\" のようなコンテキストフレーズを追加してください。"
+    },
     "general": {
       "appearance": {
         "auto": "自動",
@@ -1532,7 +1554,10 @@
       "hotkeyUnavailable": {
         "title": "ホットキーが使用できません",
         "description": "選択したホットキーを登録できませんでした。設定から別のホットキーを選択してください。"
-      }
+      },
+      "dictionaryUpdated": "辞書が更新されました",
+      "savedToDict": "{{words}} を辞書に保存しました",
+      "undo": "元に戻す"
     },
     "mic": {
       "hotkeyToSpeak": "{{hotkey}} を押して話す",

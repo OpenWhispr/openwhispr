@@ -85,16 +85,21 @@ class TextEditMonitor extends EventEmitter {
     this.stopMonitoring();
     this.currentOriginalText = originalText;
 
-    // macOS: use osascript polling instead of compiled binary
-    // osascript is Apple-signed and inherits the Electron app's accessibility trust
     if (process.platform === "darwin") {
+      const resolved = this.resolveBinary();
+      if (resolved) {
+        this._startMacOSNative(originalText, timeoutMs, options.targetPid, resolved);
+        return;
+      }
       this._startMacOSPolling(originalText, timeoutMs, options.targetPid);
       return;
     }
 
     const resolved = this.resolveBinary();
     if (!resolved) {
-      debugLogger.debug("[TextEditMonitor] No binary found for platform", { platform: process.platform });
+      debugLogger.debug("[TextEditMonitor] No binary found for platform", {
+        platform: process.platform,
+      });
       return;
     }
 
@@ -111,7 +116,9 @@ class TextEditMonitor extends EventEmitter {
       }
     }
 
-    debugLogger.debug("[TextEditMonitor] Spawning monitor", { textPreview: originalText.substring(0, 80) });
+    debugLogger.debug("[TextEditMonitor] Spawning monitor", {
+      textPreview: originalText.substring(0, 80),
+    });
 
     this.process = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
@@ -131,7 +138,9 @@ class TextEditMonitor extends EventEmitter {
         .forEach((line) => {
           if (line.startsWith("CHANGED:")) {
             const newFieldValue = line.slice("CHANGED:".length);
-            debugLogger.debug("[TextEditMonitor] Text changed", { newFieldValue: newFieldValue.substring(0, 80) });
+            debugLogger.debug("[TextEditMonitor] Text changed", {
+              newFieldValue: newFieldValue.substring(0, 80),
+            });
             this.emit("text-edited", {
               originalText: this.currentOriginalText,
               newFieldValue,
@@ -192,13 +201,102 @@ class TextEditMonitor extends EventEmitter {
       const script = MACOS_AX_ENABLE_SCRIPT(pid);
       execFile("osascript", ["-e", script], { timeout: 3000 }, (err) => {
         if (err) {
-          debugLogger.debug("[TextEditMonitor] macOS: AXEnhancedUserInterface failed", { error: err.message });
+          debugLogger.debug("[TextEditMonitor] macOS: AXEnhancedUserInterface failed", {
+            error: err.message,
+          });
         } else {
           debugLogger.debug("[TextEditMonitor] macOS: AXEnhancedUserInterface enabled", { pid });
         }
         resolve();
       });
     });
+  }
+
+  /**
+   * macOS: use the native Swift AXObserver binary for event-based text monitoring.
+   * Falls back to osascript polling if the binary fails to start.
+   */
+  async _startMacOSNative(originalText, timeoutMs, targetPid, resolved) {
+    if (!targetPid) {
+      debugLogger.debug("[TextEditMonitor] macOS native: no target PID");
+      this.stopMonitoring();
+      return;
+    }
+
+    debugLogger.debug("[TextEditMonitor] macOS native: starting", {
+      targetPid,
+      textPreview: originalText.substring(0, 80),
+    });
+
+    await this._enableAccessibility(targetPid);
+    if (this.currentOriginalText === null) return;
+
+    await new Promise((r) => setTimeout(r, INITIAL_QUERY_DELAY_MS));
+    if (this.currentOriginalText === null) return;
+
+    const { command, args } = resolved;
+
+    try {
+      fs.accessSync(command, fs.constants.X_OK);
+    } catch {
+      debugLogger.debug(
+        "[TextEditMonitor] macOS native: binary not executable, falling back to polling",
+        { command }
+      );
+      this._startMacOSPolling(originalText, timeoutMs, targetPid);
+      return;
+    }
+
+    this.process = spawn(command, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    this.process.stdin.write(originalText + "\n");
+    this.process.stdin.end();
+
+    this.process.stdout.setEncoding("utf8");
+    this.process.stdout.on("data", (chunk) => {
+      debugLogger.debug("[TextEditMonitor] stdout", { data: chunk.trim() });
+      chunk
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .forEach((line) => {
+          if (line.startsWith("CHANGED:")) {
+            const newFieldValue = line.slice("CHANGED:".length);
+            debugLogger.debug("[TextEditMonitor] Text changed", {
+              newFieldValue: newFieldValue.substring(0, 80),
+            });
+            this.emit("text-edited", {
+              originalText: this.currentOriginalText,
+              newFieldValue,
+            });
+          } else if (line === "NO_ELEMENT" || line === "NO_VALUE") {
+            debugLogger.debug("[TextEditMonitor] No target element", { status: line });
+            this.stopMonitoring();
+          }
+        });
+    });
+
+    this.process.stderr.setEncoding("utf8");
+    this.process.stderr.on("data", (data) => {
+      debugLogger.debug("[TextEditMonitor] stderr", { data: data.trim() });
+    });
+
+    this.process.on("error", (err) => {
+      debugLogger.debug("[TextEditMonitor] macOS native: process error, falling back to polling", {
+        error: err.message,
+      });
+      this.process = null;
+      this._startMacOSPolling(originalText, timeoutMs, targetPid);
+    });
+
+    this.process.on("exit", (code, signal) => {
+      debugLogger.debug("[TextEditMonitor] Process exited", { code, signal });
+      this.process = null;
+    });
+
+    this.timeout = setTimeout(() => this.stopMonitoring(), timeoutMs);
   }
 
   /**
@@ -232,13 +330,19 @@ class TextEditMonitor extends EventEmitter {
       return;
     }
 
-    debugLogger.debug("[TextEditMonitor] macOS: starting osascript polling", { targetPid, textPreview: originalText.substring(0, 80) });
+    debugLogger.debug("[TextEditMonitor] macOS: starting osascript polling", {
+      targetPid,
+      textPreview: originalText.substring(0, 80),
+    });
 
     // Enable accessibility on the target app first (needed for Chromium/Electron apps),
     // then delay before querying to let the paste keystroke be processed.
     this._enableAccessibility(targetPid).then(() => {
       if (this.currentOriginalText === null) return; // guard against stopMonitoring()
-      setTimeout(() => this._queryInitialValue(targetPid, originalText, timeoutMs), INITIAL_QUERY_DELAY_MS);
+      setTimeout(
+        () => this._queryInitialValue(targetPid, originalText, timeoutMs),
+        INITIAL_QUERY_DELAY_MS
+      );
     });
   }
 
@@ -261,8 +365,14 @@ class TextEditMonitor extends EventEmitter {
 
     if (!initialValue) {
       if (attempt < INITIAL_QUERY_RETRIES) {
-        debugLogger.debug("[TextEditMonitor] macOS: AXValue empty, retrying", { attempt, maxRetries: INITIAL_QUERY_RETRIES });
-        setTimeout(() => this._queryInitialValue(targetPid, originalText, timeoutMs, attempt + 1), INITIAL_QUERY_RETRY_DELAY_MS);
+        debugLogger.debug("[TextEditMonitor] macOS: AXValue empty, retrying", {
+          attempt,
+          maxRetries: INITIAL_QUERY_RETRIES,
+        });
+        setTimeout(
+          () => this._queryInitialValue(targetPid, originalText, timeoutMs, attempt + 1),
+          INITIAL_QUERY_RETRY_DELAY_MS
+        );
         return;
       }
       debugLogger.debug("[TextEditMonitor] macOS: no text value after retries");
@@ -271,7 +381,10 @@ class TextEditMonitor extends EventEmitter {
     }
 
     this._lastValue = initialValue;
-    debugLogger.debug("[TextEditMonitor] macOS: initial value", { valuePreview: initialValue.substring(0, 80), attempt });
+    debugLogger.debug("[TextEditMonitor] macOS: initial value", {
+      valuePreview: initialValue.substring(0, 80),
+      attempt,
+    });
 
     this._pollInterval = setInterval(async () => {
       const currentValue = await this._queryMacOSValue(targetPid);
@@ -286,7 +399,9 @@ class TextEditMonitor extends EventEmitter {
 
       if (currentValue !== this._lastValue) {
         this._lastValue = currentValue;
-        debugLogger.debug("[TextEditMonitor] macOS: text changed", { newValuePreview: currentValue.substring(0, 80) });
+        debugLogger.debug("[TextEditMonitor] macOS: text changed", {
+          newValuePreview: currentValue.substring(0, 80),
+        });
         this.emit("text-edited", {
           originalText: this.currentOriginalText,
           newFieldValue: currentValue,
@@ -314,6 +429,12 @@ class TextEditMonitor extends EventEmitter {
     if (platform === "win32") {
       const binaryPath = this._findFile("windows-text-monitor.exe");
       return binaryPath ? { command: binaryPath, args: [] } : null;
+    }
+
+    if (platform === "darwin") {
+      const nativePath = this._findFile("macos-text-monitor");
+      if (nativePath) return { command: nativePath, args: [] };
+      return null;
     }
 
     return null;

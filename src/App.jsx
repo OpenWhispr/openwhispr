@@ -118,10 +118,24 @@ export default function App() {
       if (words && words.length > 0) {
         const wordList = words.map((w) => `"${w}"`).join(", ");
         toast({
-          title: "Dictionary Updated",
-          description: `Saved ${wordList} to dictionary`,
+          title: t("app.toasts.dictionaryUpdated"),
+          description: t("app.toasts.savedToDict", { words: wordList }),
           variant: "success",
-          duration: 4000,
+          duration: 6000,
+          action: (
+            <button
+              onClick={async () => {
+                try {
+                  await window.electronAPI?.undoLearnedCorrections?.(words);
+                } catch {
+                  // silently fail — word stays in dictionary
+                }
+              }}
+              className="text-[10px] font-medium px-2 py-0.5 rounded-[3px] text-white/60 hover:text-white/90 bg-white/5 hover:bg-white/10 border border-white/8 hover:border-white/15 transition-colors duration-150 whitespace-nowrap"
+            >
+              {t("app.toasts.undo")}
+            </button>
+          ),
         });
       }
     });

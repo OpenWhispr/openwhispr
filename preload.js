@@ -49,6 +49,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("corrections-learned", listener);
     return () => ipcRenderer.removeListener("corrections-learned", listener);
   },
+  undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
   saveNote: (title, content, noteType, sourceFile, audioDuration, folderId) =>

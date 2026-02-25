@@ -1024,6 +1024,28 @@
       "resetAppData": "重置应用数据",
       "resetAppDataDescription": "永久删除所有设置、转录记录和缓存数据"
     },
+    "dictionary": {
+      "title": "自定义词典",
+      "description": "教 AI 你的词汇 — 名字、术语和它可能遗漏的词语",
+      "addWordOrPhrase": "添加单词或短语",
+      "placeholder": "添加一个单词或短语...",
+      "add": "添加",
+      "pressEnterToAdd": "按 Enter 添加",
+      "autoLearnTitle": "从纠正中自动学习",
+      "autoLearnDescription": "当你在目标应用中纠正转录时，纠正后的词语会自动添加到你的词典中。",
+      "yourWords": "你的词语",
+      "clearDictionaryTitle": "清除词典？",
+      "clearDictionaryDescription": "这将删除自定义词典中的所有词语。此操作无法撤消。",
+      "clearAll": "全部清除",
+      "agentNameAutoManaged": "自动管理 — 与助手名称同步",
+      "removeWord": "移除词语",
+      "noWords": "暂无词语",
+      "wordsAppearHere": "你添加的词语将显示在这里",
+      "howItWorksTitle": "工作原理",
+      "howItWorksDescription": "词语作为上下文提示提供给语音模型，帮助它识别不常见的术语。对于难以识别的词语，可以尝试添加上下文，例如在词语旁添加 \"The word is Synty\"。",
+      "tipLabel": "提示",
+      "tipDescription": "用逗号分隔多个词语。添加上下文短语如 \"The word is Synty\" 以获得更好的识别效果。"
+    },
     "general": {
       "appearance": {
         "auto": "自动",
@@ -1532,7 +1554,10 @@
       "hotkeyUnavailable": {
         "title": "快捷键不可用",
         "description": "无法注册所选快捷键。请在设置中选择其他快捷键。"
-      }
+      },
+      "dictionaryUpdated": "词典已更新",
+      "savedToDict": "已将 {{words}} 保存到词典",
+      "undo": "撤消"
     },
     "mic": {
       "hotkeyToSpeak": "按 {{hotkey}} 开始说话",

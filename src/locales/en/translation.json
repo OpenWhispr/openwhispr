@@ -1024,6 +1024,28 @@
       "resetAppData": "Reset app data",
       "resetAppDataDescription": "Permanently delete all settings, transcriptions, and cached data"
     },
+    "dictionary": {
+      "title": "Custom Dictionary",
+      "description": "Teach the AI your vocabulary — names, jargon, and terms it might otherwise miss",
+      "addWordOrPhrase": "Add word or phrase",
+      "placeholder": "Add a word or phrase...",
+      "add": "Add",
+      "pressEnterToAdd": "Press Enter to add",
+      "autoLearnTitle": "Auto-learn from corrections",
+      "autoLearnDescription": "When you correct a transcription in the target app, the corrected word is automatically added to your dictionary.",
+      "yourWords": "Your words",
+      "clearDictionaryTitle": "Clear dictionary?",
+      "clearDictionaryDescription": "This will remove all words from your custom dictionary. This action cannot be undone.",
+      "clearAll": "Clear all",
+      "agentNameAutoManaged": "Auto-managed — synced from agent name",
+      "removeWord": "Remove word",
+      "noWords": "No words yet",
+      "wordsAppearHere": "Words you add will appear here",
+      "howItWorksTitle": "How it works",
+      "howItWorksDescription": "Words are fed as context hints to the speech model, helping it recognize uncommon terms. For difficult words, try adding context like \"The word is Synty\" alongside the word itself.",
+      "tipLabel": "Tip",
+      "tipDescription": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition."
+    },
     "general": {
       "appearance": {
         "auto": "Auto",
@@ -1532,7 +1554,10 @@
       "hotkeyUnavailable": {
         "title": "Hotkey unavailable",
         "description": "The selected hotkey could not be registered. Please choose a different one in settings."
-      }
+      },
+      "dictionaryUpdated": "Dictionary Updated",
+      "savedToDict": "Saved {{words}} to dictionary",
+      "undo": "Undo"
     },
     "mic": {
       "hotkeyToSpeak": "Press {{hotkey}} to speak",
