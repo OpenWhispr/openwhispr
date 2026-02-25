@@ -52,6 +52,11 @@ interface NoteEditorProps {
   actionPicker?: React.ReactNode;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
+  isMeetingTranscribing?: boolean;
+  meetingTranscript?: string;
+  meetingPartialTranscript?: string;
+  meetingEvent?: { summary: string };
+  onStopMeetingRecording?: () => void;
 }
 
 interface DictationRange {
@@ -144,6 +149,11 @@ export default function NoteEditor({
   actionPicker,
   actionProcessingState,
   actionName,
+  isMeetingTranscribing,
+  meetingTranscript,
+  meetingPartialTranscript,
+  meetingEvent,
+  onStopMeetingRecording,
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<"raw" | "enhanced">("raw");
@@ -695,6 +705,24 @@ export default function NoteEditor({
         </div>
       </div>
 
+      {isMeetingTranscribing && meetingEvent && (
+        <div className="flex items-center gap-2 px-4 py-1.5 border-b border-destructive/10 bg-destructive/3">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive/75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-destructive" />
+          </span>
+          <span className="text-[11px] font-medium text-destructive/70 flex-1 truncate">
+            Recording: {meetingEvent.summary}
+          </span>
+          <button
+            onClick={onStopMeetingRecording}
+            className="text-[11px] font-medium text-destructive/60 hover:text-destructive transition-colors"
+          >
+            Stop
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 relative min-h-0">
         <div className="h-full overflow-y-auto">
           {viewMode === "enhanced" && enhancement ? (
@@ -726,6 +754,24 @@ export default function NoteEditor({
           actionPicker={actionPicker}
         />
       </div>
+
+      {(isMeetingTranscribing || meetingTranscript) && (
+        <div className="border-t border-border/50 bg-surface-0/50 dark:bg-surface-1/30">
+          <div className="px-4 py-1.5 flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+              Transcript
+            </span>
+          </div>
+          <div className="px-4 pb-3 max-h-32 overflow-y-auto">
+            <p className="text-xs text-muted-foreground/70 leading-relaxed whitespace-pre-wrap">
+              {meetingTranscript}
+              {meetingPartialTranscript && (
+                <span className="text-muted-foreground/40">{meetingPartialTranscript}</span>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

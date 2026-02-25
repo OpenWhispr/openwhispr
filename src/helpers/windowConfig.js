@@ -72,6 +72,28 @@ const CONTROL_PANEL_CONFIG = {
   type: "normal",
 };
 
+const NOTIFICATION_WINDOW_CONFIG = {
+  width: 380,
+  height: 88,
+  frame: false,
+  transparent: true,
+  alwaysOnTop: true,
+  skipTaskbar: true,
+  resizable: false,
+  focusable: false,
+  hasShadow: false,
+  show: false,
+  webPreferences: {
+    preload: path.join(__dirname, "..", "..", "preload.js"),
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+  },
+  visibleOnAllWorkspaces: process.platform !== "win32",
+  type:
+    process.platform === "darwin" ? "panel" : process.platform === "linux" ? "toolbar" : "normal",
+};
+
 class WindowPositionUtil {
   static getMainWindowPosition(display, customSize = null) {
     const { width, height } = customSize || WINDOW_SIZES.BASE;
@@ -79,6 +101,16 @@ class WindowPositionUtil {
     const workArea = display.workArea || display.bounds;
     const x = Math.max(0, workArea.x + workArea.width - width - MARGIN);
     const y = Math.max(0, workArea.y + workArea.height - height - MARGIN);
+    return { x, y, width, height };
+  }
+
+  static getNotificationPosition(display) {
+    const width = 380;
+    const height = 88;
+    const MARGIN = 16;
+    const workArea = display.workArea || display.bounds;
+    const x = Math.max(0, workArea.x + workArea.width - width - MARGIN);
+    const y = Math.max(0, workArea.y + MARGIN);
     return { x, y, width, height };
   }
 
@@ -107,6 +139,7 @@ class WindowPositionUtil {
 module.exports = {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
+  NOTIFICATION_WINDOW_CONFIG,
   WINDOW_SIZES,
   WindowPositionUtil,
 };

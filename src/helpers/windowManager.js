@@ -9,6 +9,7 @@ const { DEV_SERVER_PORT } = DevServerManager;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
+  NOTIFICATION_WINDOW_CONFIG,
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
@@ -17,6 +18,8 @@ class WindowManager {
   constructor() {
     this.mainWindow = null;
     this.controlPanelWindow = null;
+    this.notificationWindow = null;
+    this._notificationTimeout = null;
     this.tray = null;
     this.hotkeyManager = new HotkeyManager();
     this.dragManager = new DragManager();
@@ -653,6 +656,98 @@ class WindowManager {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       WindowPositionUtil.setupAlwaysOnTop(this.mainWindow);
     }
+  }
+
+  async showMeetingNotification(promptData) {
+    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      this.notificationWindow.close();
+      this.notificationWindow = null;
+    }
+    if (this._notificationTimeout) {
+      clearTimeout(this._notificationTimeout);
+      this._notificationTimeout = null;
+    }
+
+    const display = screen.getPrimaryDisplay();
+    const position = WindowPositionUtil.getNotificationPosition(display);
+
+    this.notificationWindow = new BrowserWindow({
+      ...NOTIFICATION_WINDOW_CONFIG,
+      ...position,
+    });
+
+    WindowPositionUtil.setupAlwaysOnTop(this.notificationWindow);
+
+    if (process.env.NODE_ENV === "development") {
+      await DevServerManager.waitForDevServer();
+      await this.notificationWindow.loadURL(
+        `${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`
+      );
+    } else {
+      const fileInfo = DevServerManager.getAppFilePath(false);
+      await this.notificationWindow.loadFile(fileInfo.path, {
+        query: { ...fileInfo.query, "meeting-notification": "true" },
+      });
+    }
+
+    this._pendingNotificationData = promptData;
+
+    setTimeout(() => {
+      if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+        this.notificationWindow.webContents.send("meeting-notification-data", promptData);
+        this.notificationWindow.showInactive();
+      }
+    }, 300);
+
+    this._notificationTimeout = setTimeout(() => {
+      this.dismissMeetingNotification();
+    }, 30000);
+
+    this.notificationWindow.on("closed", () => {
+      this.notificationWindow = null;
+      if (this._notificationTimeout) {
+        clearTimeout(this._notificationTimeout);
+        this._notificationTimeout = null;
+      }
+    });
+  }
+
+  dismissMeetingNotification() {
+    if (this._notificationTimeout) {
+      clearTimeout(this._notificationTimeout);
+      this._notificationTimeout = null;
+    }
+    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      this.notificationWindow.close();
+    }
+    this.notificationWindow = null;
+  }
+
+  sendToControlPanel(channel, data) {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return;
+    if (win.webContents.isLoading()) {
+      win.webContents.once("did-finish-load", () => {
+        if (!win.isDestroyed()) win.webContents.send(channel, data);
+      });
+    } else {
+      win.webContents.send(channel, data);
+    }
+  }
+
+  snapControlPanelToMeetingMode() {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return;
+    const display = screen.getPrimaryDisplay();
+    const workArea = display.workArea;
+    const width = Math.round(workArea.width / 3);
+    win.setBounds({
+      x: workArea.x + workArea.width - width,
+      y: workArea.y,
+      width,
+      height: workArea.height,
+    });
+    win.focus();
   }
 
   refreshLocalizedUi() {

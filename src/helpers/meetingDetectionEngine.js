@@ -1,13 +1,21 @@
-const { Notification, BrowserWindow } = require("electron");
+const { BrowserWindow } = require("electron");
 const debugLogger = require("./debugLogger");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 
 class MeetingDetectionEngine {
-  constructor(googleCalendarManager, meetingProcessDetector, audioActivityDetector) {
+  constructor(
+    googleCalendarManager,
+    meetingProcessDetector,
+    audioActivityDetector,
+    windowManager,
+    databaseManager
+  ) {
     this.googleCalendarManager = googleCalendarManager;
     this.meetingProcessDetector = meetingProcessDetector;
     this.audioActivityDetector = audioActivityDetector;
+    this.windowManager = windowManager;
+    this.databaseManager = databaseManager;
     this.activeDetections = new Map();
     this.preferences = { processDetection: true, audioDetection: true };
     this._bindListeners();
@@ -90,45 +98,38 @@ class MeetingDetectionEngine {
 
     debugLogger.info("Showing notification", { detectionId, title }, "meeting");
 
-    const notif = new Notification({ title, body });
+    let event;
+    if (imminentEvent) {
+      event = imminentEvent;
+    } else {
+      event = {
+        id: `detected-${Date.now()}`,
+        calendar_id: "__detected__",
+        summary: data.appName ? `${data.appName} Meeting` : "Detected Meeting",
+        start_time: new Date().toISOString(),
+        end_time: new Date(Date.now() + 3600000).toISOString(),
+        is_all_day: 0,
+        status: "confirmed",
+        hangout_link: null,
+        conference_data: null,
+        organizer_email: null,
+        attendees_count: 0,
+      };
+    }
 
-    notif.on("click", () => {
-      debugLogger.info("Notification clicked — starting recording", { detectionId }, "meeting");
+    const detection = this.activeDetections.get(detectionId);
+    if (detection) {
+      detection.event = event;
+    }
 
-      let event;
-      if (imminentEvent) {
-        event = imminentEvent;
-      } else {
-        event = {
-          id: `detected-${Date.now()}`,
-          calendar_id: "__detected__",
-          summary: data.appName ? `${data.appName} Meeting` : "Detected Meeting",
-          start_time: new Date().toISOString(),
-          end_time: new Date(Date.now() + 3600000).toISOString(),
-          is_all_day: 0,
-          status: "confirmed",
-          hangout_link: null,
-          conference_data: null,
-          organizer_email: null,
-          attendees_count: 0,
-        };
-      }
-
-      this.broadcastToWindows("meeting-detected-start-recording", {
-        event,
-        source,
-        detectionId,
-      });
+    this.windowManager.showMeetingNotification({
+      detectionId,
+      source,
+      key,
+      title,
+      body,
+      event,
     });
-
-    notif.on("close", () => {
-      debugLogger.debug("Notification closed", { detectionId }, "meeting");
-      this._dismiss(source, key);
-      const detection = this.activeDetections.get(detectionId);
-      if (detection) detection.dismissed = true;
-    });
-
-    notif.show();
 
     this.broadcastToWindows("meeting-detected", {
       detectionId,
@@ -147,6 +148,35 @@ class MeetingDetectionEngine {
         detection.dismissed = true;
       }
     }
+  }
+
+  async handleNotificationResponse(detectionId, action) {
+    debugLogger.info("Notification response", { detectionId, action }, "meeting");
+    const detection = this.activeDetections.get(detectionId);
+
+    if (action === "start" && detection) {
+      const eventSummary = detection.event?.summary || "Meeting";
+
+      const noteResult = this.databaseManager.saveNote(eventSummary, "", "meeting");
+      const meetingsFolder = this.databaseManager.getMeetingsFolder();
+
+      if (noteResult?.id && meetingsFolder?.id) {
+        await this.windowManager.createControlPanelWindow();
+        this.windowManager.snapControlPanelToMeetingMode();
+        this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
+          noteId: noteResult.id,
+          folderId: meetingsFolder.id,
+          event: detection.event,
+        });
+      }
+    } else if (action === "dismiss") {
+      if (detection) {
+        this._dismiss(detection.source, detection.key);
+        detection.dismissed = true;
+      }
+    }
+
+    this.windowManager.dismissMeetingNotification();
   }
 
   _dismiss(source, key) {

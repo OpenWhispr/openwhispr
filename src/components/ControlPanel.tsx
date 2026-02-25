@@ -45,6 +45,11 @@ export default function ControlPanel() {
   const [showReferrals, setShowReferrals] = useState(false);
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const [meetingRecordingRequest, setMeetingRecordingRequest] = useState<{
+    noteId: number;
+    folderId: number;
+    event: any;
+  } | null>(null);
   const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{ cuda: boolean; vulkan: boolean }>({
     cuda: false,
     vulkan: false,
@@ -178,6 +183,16 @@ export default function ControlPanel() {
     };
     detect();
   }, [useLocalWhisper, localTranscriptionProvider, useReasoningModel, gpuBannerDismissed]);
+
+  useEffect(() => {
+    const cleanup = window.electronAPI?.onNavigateToMeetingNote?.((data) => {
+      setActiveFolderId(data.folderId);
+      setActiveNoteId(data.noteId);
+      setActiveView("personal-notes");
+      setMeetingRecordingRequest(data);
+    });
+    return () => cleanup?.();
+  }, []);
 
   const loadTranscriptions = async () => {
     try {
@@ -508,6 +523,8 @@ export default function ControlPanel() {
                     setSettingsSection(section);
                     setShowSettings(true);
                   }}
+                  meetingRecordingRequest={meetingRecordingRequest}
+                  onMeetingRecordingRequestHandled={() => setMeetingRecordingRequest(null)}
                 />
               </Suspense>
             )}

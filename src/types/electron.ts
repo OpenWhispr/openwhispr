@@ -910,6 +910,15 @@ declare global {
       ) => Promise<{ success: boolean }>;
       onMeetingDetected?: (callback: (data: any) => void) => () => void;
       onMeetingDetectedStartRecording?: (callback: (data: any) => void) => () => void;
+      onMeetingNotificationData?: (callback: (data: any) => void) => () => void;
+      getMeetingNotificationData?: () => Promise<any>;
+      meetingNotificationRespond?: (
+        detectionId: string,
+        action: string
+      ) => Promise<{ success: boolean }>;
+      onNavigateToMeetingNote?: (
+        callback: (data: { noteId: number; folderId: number; event: any }) => void
+      ) => () => void;
     };
 
     api?: {

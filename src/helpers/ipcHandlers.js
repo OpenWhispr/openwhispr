@@ -2747,6 +2747,19 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("meeting-notification-respond", async (_event, detectionId, action) => {
+      try {
+        await this.meetingDetectionEngine.handleNotificationResponse(detectionId, action);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("get-meeting-notification-data", async () => {
+      return this.windowManager?._pendingNotificationData ?? null;
+    });
+
     ipcMain.handle("get-desktop-sources", async (_event, types) => {
       try {
         const { desktopCapturer } = require("electron");

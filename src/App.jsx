@@ -9,7 +9,6 @@ import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useAuth } from "./hooks/useAuth";
 import { useSettingsStore } from "./stores/settingsStore";
-import { useMeetingRecording } from "./hooks/useMeetingRecording";
 
 // Sound Wave Icon Component (for idle/hover states)
 const SoundWaveIcon = ({ size = 16 }) => {
@@ -81,8 +80,6 @@ export default function App() {
   const { hotkey } = useHotkey();
   const { isDragging, handleMouseDown, handleMouseUp } = useWindowDrag();
   const { isSignedIn } = useAuth();
-  useMeetingRecording();
-
   const [dragStartPos, setDragStartPos] = useState(null);
   const [hasDragged, setHasDragged] = useState(false);
 

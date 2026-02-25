@@ -31,6 +31,7 @@ import {
   setActiveNoteId,
   setActiveFolderId,
 } from "../../stores/noteStore";
+import { useMeetingTranscription } from "../../hooks/useMeetingTranscription";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import NotesOnboarding from "./NotesOnboarding";
 import RealtimeTranscriptionBanner from "./RealtimeTranscriptionBanner";
@@ -44,9 +45,15 @@ function makeContentHash(content: string): string {
 
 interface PersonalNotesViewProps {
   onOpenSettings?: (section: string) => void;
+  meetingRecordingRequest?: { noteId: number; folderId: number; event: any } | null;
+  onMeetingRecordingRequestHandled?: () => void;
 }
 
-export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewProps) {
+export default function PersonalNotesView({
+  onOpenSettings,
+  meetingRecordingRequest,
+  onMeetingRecordingRequestHandled,
+}: PersonalNotesViewProps) {
   const { t } = useTranslation();
   const notes = useNotes();
   const activeNoteId = useActiveNoteId();
@@ -73,6 +80,14 @@ export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewP
     isProLoading,
     complete: completeOnboarding,
   } = useNotesOnboarding();
+
+  const {
+    isTranscribing: isMeetingTranscribing,
+    transcript: meetingTranscript,
+    partialTranscript: meetingPartialTranscript,
+    startTranscription: startMeetingTranscription,
+    stopTranscription: stopMeetingTranscription,
+  } = useMeetingTranscription();
 
   const {
     folders,
@@ -191,7 +206,7 @@ export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewP
   );
 
   const handleNewNote = useCallback(async () => {
-    if (!activeFolderId || isMeetingsFolder) return;
+    if (!activeFolderId) return;
     const result = await window.electronAPI.saveNote(
       t("notes.list.untitledNote"),
       "",
@@ -204,7 +219,7 @@ export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewP
       setActiveNoteId(result.note.id);
       loadFolders();
     }
-  }, [activeFolderId, isMeetingsFolder, loadFolders]);
+  }, [activeFolderId, loadFolders]);
 
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {
@@ -317,6 +332,26 @@ export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewP
     },
     [activeNoteId]
   );
+
+  useEffect(() => {
+    if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
+    startMeetingTranscription();
+    onMeetingRecordingRequestHandled?.();
+  }, [meetingRecordingRequest, activeNoteId]);
+
+  const prevTranscribingRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      prevTranscribingRef.current &&
+      !isMeetingTranscribing &&
+      activeNoteId &&
+      meetingTranscript
+    ) {
+      window.electronAPI.updateNote(activeNoteId, { transcript: meetingTranscript });
+    }
+    prevTranscribingRef.current = isMeetingTranscribing;
+  }, [isMeetingTranscribing, activeNoteId, meetingTranscript]);
 
   const editorNote = activeNote
     ? { ...activeNote, title: localTitle, content: localContent }
@@ -508,129 +543,123 @@ export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewP
         <div className="mx-3 h-px bg-border/10 dark:bg-white/4 my-2" />
 
         {/* Notes list */}
-        {!isMeetingsFolder && (
-          <>
-            <div className="flex items-center justify-between px-3 py-1">
-              <span className="text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-foreground/25">
-                {t("notes.list.title")}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleNewNote}
-                aria-label={t("notes.list.newNote")}
-                className="h-5 w-5 rounded-md text-muted-foreground/50 dark:text-muted-foreground/30 hover:text-foreground/60 hover:bg-foreground/5"
+        <div className="flex items-center justify-between px-3 py-1">
+          <span className="text-xs font-medium uppercase tracking-wider text-foreground/50 dark:text-foreground/25">
+            {t("notes.list.title")}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleNewNote}
+            aria-label={t("notes.list.newNote")}
+            className="h-5 w-5 rounded-md text-muted-foreground/50 dark:text-muted-foreground/30 hover:text-foreground/60 hover:bg-foreground/5"
+          >
+            <Plus size={13} />
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 size={12} className="animate-spin text-foreground/15" />
+            </div>
+          ) : notes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 px-4">
+              <svg
+                className="text-foreground dark:text-white mb-3"
+                width="40"
+                height="36"
+                viewBox="0 0 40 36"
+                fill="none"
               >
-                <Plus size={13} />
-              </Button>
+                <rect
+                  x="12"
+                  y="1"
+                  width="20"
+                  height="26"
+                  rx="2"
+                  transform="rotate(5 22 14)"
+                  fill="currentColor"
+                  fillOpacity={0.025}
+                  stroke="currentColor"
+                  strokeOpacity={0.06}
+                />
+                <rect
+                  x="8"
+                  y="3"
+                  width="20"
+                  height="26"
+                  rx="2"
+                  fill="currentColor"
+                  fillOpacity={0.04}
+                  stroke="currentColor"
+                  strokeOpacity={0.08}
+                />
+                <rect
+                  x="12"
+                  y="9"
+                  width="10"
+                  height="1.5"
+                  rx="0.75"
+                  fill="currentColor"
+                  fillOpacity={0.07}
+                />
+                <rect
+                  x="12"
+                  y="13"
+                  width="12"
+                  height="1.5"
+                  rx="0.75"
+                  fill="currentColor"
+                  fillOpacity={0.05}
+                />
+                <rect
+                  x="12"
+                  y="17"
+                  width="8"
+                  height="1.5"
+                  rx="0.75"
+                  fill="currentColor"
+                  fillOpacity={0.04}
+                />
+              </svg>
+              <p className="text-xs text-foreground/50 dark:text-foreground/25 mb-3">
+                {t("notes.empty.emptyFolder")}
+              </p>
+              <div className="flex flex-col gap-1.5 w-full max-w-36">
+                <button
+                  onClick={handleNewNote}
+                  className="flex items-center justify-center gap-1.5 h-6 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
+                >
+                  <Plus size={10} />
+                  {t("notes.empty.createNote")}
+                </button>
+                <button
+                  onClick={() => setShowAddNotesDialog(true)}
+                  className="flex items-center justify-center gap-1.5 h-6 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
+                >
+                  {t("notes.addToFolder.addExisting")}
+                </button>
+              </div>
             </div>
-
-            <div className="flex-1 overflow-y-auto">
-              {isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 size={12} className="animate-spin text-foreground/15" />
-                </div>
-              ) : notes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 px-4">
-                  <svg
-                    className="text-foreground dark:text-white mb-3"
-                    width="40"
-                    height="36"
-                    viewBox="0 0 40 36"
-                    fill="none"
-                  >
-                    <rect
-                      x="12"
-                      y="1"
-                      width="20"
-                      height="26"
-                      rx="2"
-                      transform="rotate(5 22 14)"
-                      fill="currentColor"
-                      fillOpacity={0.025}
-                      stroke="currentColor"
-                      strokeOpacity={0.06}
-                    />
-                    <rect
-                      x="8"
-                      y="3"
-                      width="20"
-                      height="26"
-                      rx="2"
-                      fill="currentColor"
-                      fillOpacity={0.04}
-                      stroke="currentColor"
-                      strokeOpacity={0.08}
-                    />
-                    <rect
-                      x="12"
-                      y="9"
-                      width="10"
-                      height="1.5"
-                      rx="0.75"
-                      fill="currentColor"
-                      fillOpacity={0.07}
-                    />
-                    <rect
-                      x="12"
-                      y="13"
-                      width="12"
-                      height="1.5"
-                      rx="0.75"
-                      fill="currentColor"
-                      fillOpacity={0.05}
-                    />
-                    <rect
-                      x="12"
-                      y="17"
-                      width="8"
-                      height="1.5"
-                      rx="0.75"
-                      fill="currentColor"
-                      fillOpacity={0.04}
-                    />
-                  </svg>
-                  <p className="text-xs text-foreground/50 dark:text-foreground/25 mb-3">
-                    {t("notes.empty.emptyFolder")}
-                  </p>
-                  <div className="flex flex-col gap-1.5 w-full max-w-36">
-                    <button
-                      onClick={handleNewNote}
-                      className="flex items-center justify-center gap-1.5 h-6 rounded-md bg-primary/8 dark:bg-primary/10 border border-primary/12 dark:border-primary/15 text-xs font-medium text-primary/70 hover:bg-primary/12 hover:text-primary hover:border-primary/20 transition-colors"
-                    >
-                      <Plus size={10} />
-                      {t("notes.empty.createNote")}
-                    </button>
-                    <button
-                      onClick={() => setShowAddNotesDialog(true)}
-                      className="flex items-center justify-center gap-1.5 h-6 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
-                    >
-                      {t("notes.addToFolder.addExisting")}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                notes.map((note) => (
-                  <NoteListItem
-                    key={note.id}
-                    note={note}
-                    isActive={note.id === activeNoteId}
-                    onClick={() => setActiveNoteId(note.id)}
-                    onDelete={handleDelete}
-                    folders={folders}
-                    currentFolderId={activeFolderId}
-                    onMoveToFolder={handleMoveToFolder}
-                    onCreateFolderAndMove={handleCreateFolderAndMove}
-                    dragHandlers={noteDragHandlers(note.id, note.title)}
-                    isDragging={dragState.draggingNoteId === note.id}
-                  />
-                ))
-              )}
-            </div>
-          </>
-        )}
-
-        {isMeetingsFolder && <div className="flex-1" />}
+          ) : (
+            notes.map((note) => (
+              <NoteListItem
+                key={note.id}
+                note={note}
+                isActive={note.id === activeNoteId}
+                onClick={() => setActiveNoteId(note.id)}
+                onDelete={handleDelete}
+                folders={folders}
+                currentFolderId={activeFolderId}
+                onMoveToFolder={handleMoveToFolder}
+                onCreateFolderAndMove={handleCreateFolderAndMove}
+                dragHandlers={noteDragHandlers(note.id, note.title)}
+                isDragging={dragState.draggingNoteId === note.id}
+              />
+            ))
+          )}
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
@@ -639,109 +668,7 @@ export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewP
             onUpgrade={onOpenSettings ? () => onOpenSettings("plansBilling") : undefined}
           />
         )}
-        {isMeetingsFolder ? (
-          <div className="flex flex-col items-center justify-center h-full -mt-6">
-            <svg
-              className="text-foreground dark:text-white mb-5"
-              width="72"
-              height="56"
-              viewBox="0 0 72 56"
-              fill="none"
-            >
-              <ellipse cx="36" cy="48" rx="24" ry="2" fill="currentColor" fillOpacity={0.03} />
-              <circle
-                cx="24"
-                cy="20"
-                r="7"
-                fill="currentColor"
-                fillOpacity={0.04}
-                stroke="currentColor"
-                strokeOpacity={0.08}
-              />
-              <path
-                d="M13 40c0-6 5-11 11-11s11 5 11 11"
-                fill="currentColor"
-                fillOpacity={0.03}
-                stroke="currentColor"
-                strokeOpacity={0.06}
-              />
-              <circle
-                cx="48"
-                cy="20"
-                r="7"
-                fill="currentColor"
-                fillOpacity={0.04}
-                stroke="currentColor"
-                strokeOpacity={0.08}
-              />
-              <path
-                d="M37 40c0-6 5-11 11-11s11 5 11 11"
-                fill="currentColor"
-                fillOpacity={0.03}
-                stroke="currentColor"
-                strokeOpacity={0.06}
-              />
-              <rect
-                x="16"
-                y="6"
-                width="14"
-                height="8"
-                rx="3"
-                fill="currentColor"
-                fillOpacity={0.04}
-                stroke="currentColor"
-                strokeOpacity={0.07}
-              />
-              <rect
-                x="18.5"
-                y="8.5"
-                width="5"
-                height="1"
-                rx="0.5"
-                fill="currentColor"
-                fillOpacity={0.06}
-              />
-              <rect
-                x="18.5"
-                y="11"
-                width="8"
-                height="1"
-                rx="0.5"
-                fill="currentColor"
-                fillOpacity={0.04}
-              />
-              <rect
-                x="44"
-                y="9"
-                width="12"
-                height="7"
-                rx="2.5"
-                fill="currentColor"
-                fillOpacity={0.03}
-                stroke="currentColor"
-                strokeOpacity={0.06}
-              />
-              <rect
-                x="46.5"
-                y="11.5"
-                width="4"
-                height="1"
-                rx="0.5"
-                fill="currentColor"
-                fillOpacity={0.05}
-              />
-            </svg>
-            <h3 className="text-xs font-semibold text-foreground/60 mb-1">
-              {t("notes.meeting.title")}
-            </h3>
-            <p className="text-xs text-foreground/50 dark:text-foreground/25 text-center max-w-52 mb-3">
-              {t("notes.meeting.description")}
-            </p>
-            <span className="text-[8px] font-semibold uppercase tracking-widest text-primary/40 bg-primary/5 dark:bg-primary/8 px-2.5 py-1 rounded-md border border-primary/8 dark:border-primary/12">
-              {t("notes.meeting.comingSoon")}
-            </span>
-          </div>
-        ) : editorNote ? (
+        {editorNote ? (
           <>
             <NoteEditor
               note={editorNote}
@@ -767,6 +694,11 @@ export default function PersonalNotesView({ onOpenSettings }: PersonalNotesViewP
                     }
                   : undefined
               }
+              isMeetingTranscribing={isMeetingTranscribing}
+              meetingTranscript={meetingTranscript}
+              meetingPartialTranscript={meetingPartialTranscript}
+              meetingEvent={meetingRecordingRequest?.event}
+              onStopMeetingRecording={stopMeetingTranscription}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
               actionPicker={

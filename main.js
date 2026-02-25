@@ -253,7 +253,9 @@ function initializeCoreManagers() {
   meetingDetectionEngine = new MeetingDetectionEngine(
     googleCalendarManager,
     new MeetingProcessDetector(),
-    new AudioActivityDetector()
+    new AudioActivityDetector(),
+    windowManager,
+    databaseManager
   );
   updateManager = new UpdateManager();
   windowsKeyManager = new WindowsKeyManager();
