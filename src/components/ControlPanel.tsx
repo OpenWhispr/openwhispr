@@ -194,6 +194,11 @@ export default function ControlPanel() {
     return () => cleanup?.();
   }, []);
 
+  const handleMeetingRecordingRequestHandled = useCallback(
+    () => setMeetingRecordingRequest(null),
+    []
+  );
+
   const loadTranscriptions = async () => {
     try {
       setIsLoading(true);
@@ -524,7 +529,7 @@ export default function ControlPanel() {
                     setShowSettings(true);
                   }}
                   meetingRecordingRequest={meetingRecordingRequest}
-                  onMeetingRecordingRequestHandled={() => setMeetingRecordingRequest(null)}
+                  onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                 />
               </Suspense>
             )}

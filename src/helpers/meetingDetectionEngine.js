@@ -152,31 +152,35 @@ class MeetingDetectionEngine {
 
   async handleNotificationResponse(detectionId, action) {
     debugLogger.info("Notification response", { detectionId, action }, "meeting");
-    const detection = this.activeDetections.get(detectionId);
+    try {
+      const detection = this.activeDetections.get(detectionId);
 
-    if (action === "start" && detection) {
-      const eventSummary = detection.event?.summary || "Meeting";
+      if (action === "start" && detection) {
+        const eventSummary = detection.event?.summary || "Meeting";
 
-      const noteResult = this.databaseManager.saveNote(eventSummary, "", "meeting");
-      const meetingsFolder = this.databaseManager.getMeetingsFolder();
+        const noteResult = this.databaseManager.saveNote(eventSummary, "", "meeting");
+        const meetingsFolder = this.databaseManager.getMeetingsFolder();
 
-      if (noteResult?.id && meetingsFolder?.id) {
-        await this.windowManager.createControlPanelWindow();
-        this.windowManager.snapControlPanelToMeetingMode();
-        this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
-          noteId: noteResult.id,
-          folderId: meetingsFolder.id,
-          event: detection.event,
-        });
+        if (noteResult?.note?.id && meetingsFolder?.id) {
+          await this.windowManager.createControlPanelWindow();
+          this.windowManager.snapControlPanelToMeetingMode();
+          this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
+            noteId: noteResult.note.id,
+            folderId: meetingsFolder.id,
+            event: detection.event,
+          });
+        }
+
+        this.activeDetections.delete(detectionId);
+      } else if (action === "dismiss") {
+        if (detection) {
+          this._dismiss(detection.source, detection.key);
+          detection.dismissed = true;
+        }
       }
-    } else if (action === "dismiss") {
-      if (detection) {
-        this._dismiss(detection.source, detection.key);
-        detection.dismissed = true;
-      }
+    } finally {
+      this.windowManager.dismissMeetingNotification();
     }
-
-    this.windowManager.dismissMeetingNotification();
   }
 
   _dismiss(source, key) {

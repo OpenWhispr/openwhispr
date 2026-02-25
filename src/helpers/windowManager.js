@@ -713,6 +713,7 @@ class WindowManager {
   }
 
   dismissMeetingNotification() {
+    this._pendingNotificationData = null;
     if (this._notificationTimeout) {
       clearTimeout(this._notificationTimeout);
       this._notificationTimeout = null;

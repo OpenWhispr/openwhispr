@@ -4,8 +4,10 @@ import { X } from "lucide-react";
 interface NotificationData {
   detectionId: string;
   source: string;
+  key: string;
   title: string;
   body: string;
+  event: any;
 }
 
 export default function MeetingNotificationOverlay() {
@@ -21,8 +23,8 @@ export default function MeetingNotificationOverlay() {
     );
 
     window.electronAPI?.getMeetingNotificationData?.().then((pulled: NotificationData | null) => {
-      if (pulled && !data) {
-        setData(pulled);
+      if (pulled) {
+        setData((prev) => prev ?? pulled);
         setTimeout(() => setIsVisible(true), 50);
       }
     });

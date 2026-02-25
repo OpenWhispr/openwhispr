@@ -88,6 +88,8 @@ export default function PersonalNotesView({
     startTranscription: startMeetingTranscription,
     stopTranscription: stopMeetingTranscription,
   } = useMeetingTranscription();
+  const [activeMeetingEvent, setActiveMeetingEvent] = useState<any>(null);
+  const meetingNoteIdRef = useRef<number | null>(null);
 
   const {
     folders,
@@ -335,9 +337,16 @@ export default function PersonalNotesView({
 
   useEffect(() => {
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
+    setActiveMeetingEvent(meetingRecordingRequest.event);
+    meetingNoteIdRef.current = meetingRecordingRequest.noteId;
     startMeetingTranscription();
     onMeetingRecordingRequestHandled?.();
-  }, [meetingRecordingRequest, activeNoteId]);
+  }, [
+    meetingRecordingRequest,
+    activeNoteId,
+    startMeetingTranscription,
+    onMeetingRecordingRequestHandled,
+  ]);
 
   const prevTranscribingRef = useRef(false);
 
@@ -345,13 +354,15 @@ export default function PersonalNotesView({
     if (
       prevTranscribingRef.current &&
       !isMeetingTranscribing &&
-      activeNoteId &&
+      meetingNoteIdRef.current &&
       meetingTranscript
     ) {
-      window.electronAPI.updateNote(activeNoteId, { transcript: meetingTranscript });
+      window.electronAPI.updateNote(meetingNoteIdRef.current, { transcript: meetingTranscript });
+      meetingNoteIdRef.current = null;
+      setActiveMeetingEvent(null);
     }
     prevTranscribingRef.current = isMeetingTranscribing;
-  }, [isMeetingTranscribing, activeNoteId, meetingTranscript]);
+  }, [isMeetingTranscribing, meetingTranscript]);
 
   const editorNote = activeNote
     ? { ...activeNote, title: localTitle, content: localContent }
@@ -697,7 +708,7 @@ export default function PersonalNotesView({
               isMeetingTranscribing={isMeetingTranscribing}
               meetingTranscript={meetingTranscript}
               meetingPartialTranscript={meetingPartialTranscript}
-              meetingEvent={meetingRecordingRequest?.event}
+              meetingEvent={activeMeetingEvent}
               onStopMeetingRecording={stopMeetingTranscription}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
