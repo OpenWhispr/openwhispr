@@ -718,7 +718,8 @@
       },
       "saved": {
         "description": "Votre prompt personnalisé sera utilisé pour tout le traitement IA futur.",
-        "title": "Prompt enregistré"
+        "title": "Prompt enregistré",
+        "descriptionLegacy": "Your custom prompts will be used for all future AI processing."
       }
     },
     "edit": {
@@ -726,7 +727,11 @@
       "cautionLabel": "Attention",
       "cautionTextPrefix": "Modifier ce prompt peut affecter la qualité de la transcription.",
       "cautionTextSuffix": "Conservez le placeholder {{agentName}} pour préserver la détection de l'agent.",
-      "placeholder": "Saisissez votre prompt système personnalisé..."
+      "placeholder": "Saisissez votre prompt système personnalisé...",
+      "agentPromptLabel": "Agent Prompt",
+      "agentPromptPlaceholder": "Enter your agent prompt...",
+      "normalPromptLabel": "Normal Prompt",
+      "normalPromptPlaceholder": "Enter your normal prompt..."
     },
     "tabs": {
       "customize": "Personnaliser",
@@ -753,7 +758,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Fournisseur",
       "run": "Lancer le test",
-      "customEndpoint": "Endpoint personnalisé"
+      "customEndpoint": "Endpoint personnalisé",
+      "modeLabel": "Mode"
     },
     "view": {
       "customPrompt": "Prompt personnalisé",
@@ -768,7 +774,15 @@
           "label": "Correction"
         }
       },
-      "modified": "Modifié"
+      "modified": "Modifié",
+      "agentPrompt": "Agent Prompt",
+      "normalPrompt": "Normal Prompt"
+    },
+    "modeSelector": {
+      "unified": "Unified",
+      "unifiedDescription": "One smart prompt that handles cleanup and instructions.",
+      "agentNormal": "Agent + Normal",
+      "agentNormalDescription": "Separate prompts for agent commands and normal cleanup."
     }
   },
   "resetPassword": {
@@ -797,7 +811,9 @@
       "account": "Compte",
       "app": "Application",
       "speechAi": "Parole & IA",
-      "system": "Système"
+      "system": "Système",
+      "speech": "Speech",
+      "intelligence": "Intelligence"
     },
     "sections": {
       "account": {
@@ -831,6 +847,18 @@
       "system": {
         "description": "Mises à jour, stockage & outils de développement",
         "label": "Système"
+      },
+      "aiModels": {
+        "label": "AI Models",
+        "description": "Model selection and AI text cleanup"
+      },
+      "agentConfig": {
+        "label": "Agent",
+        "description": "Agent name and instruction mode behavior"
+      },
+      "prompts": {
+        "label": "Prompts",
+        "description": "Customize system prompts and test output"
       }
     },
     "title": "Paramètres"

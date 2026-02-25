@@ -718,7 +718,8 @@
       },
       "saved": {
         "description": "Ваш пользовательский промпт будет использоваться для всей последующей обработки ИИ.",
-        "title": "Промпт сохранён"
+        "title": "Промпт сохранён",
+        "descriptionLegacy": "Your custom prompts will be used for all future AI processing."
       }
     },
     "edit": {
@@ -726,7 +727,11 @@
       "cautionLabel": "Внимание",
       "cautionTextPrefix": "Изменение этого промпта может повлиять на качество транскрипции.",
       "cautionTextSuffix": "Сохраняйте заполнитель {{agentName}}, чтобы обнаружение агента работало корректно.",
-      "placeholder": "Введите пользовательский системный промпт..."
+      "placeholder": "Введите пользовательский системный промпт...",
+      "agentPromptLabel": "Agent Prompt",
+      "agentPromptPlaceholder": "Enter your agent prompt...",
+      "normalPromptLabel": "Normal Prompt",
+      "normalPromptPlaceholder": "Enter your normal prompt..."
     },
     "tabs": {
       "customize": "Настроить",
@@ -753,7 +758,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Провайдер",
       "run": "Запустить тест",
-      "customEndpoint": "Пользовательская конечная точка"
+      "customEndpoint": "Пользовательская конечная точка",
+      "modeLabel": "Mode"
     },
     "view": {
       "customPrompt": "Пользовательский промпт",
@@ -768,7 +774,15 @@
           "label": "Очистка"
         }
       },
-      "modified": "Изменён"
+      "modified": "Изменён",
+      "agentPrompt": "Agent Prompt",
+      "normalPrompt": "Normal Prompt"
+    },
+    "modeSelector": {
+      "unified": "Unified",
+      "unifiedDescription": "One smart prompt that handles cleanup and instructions.",
+      "agentNormal": "Agent + Normal",
+      "agentNormalDescription": "Separate prompts for agent commands and normal cleanup."
     }
   },
   "resetPassword": {
@@ -797,7 +811,9 @@
       "account": "Аккаунт",
       "app": "Приложение",
       "speechAi": "Речь и ИИ",
-      "system": "Система"
+      "system": "Система",
+      "speech": "Speech",
+      "intelligence": "Intelligence"
     },
     "sections": {
       "account": {
@@ -831,6 +847,18 @@
       "system": {
         "description": "Обновления, хранилище и инструменты разработчика",
         "label": "Система"
+      },
+      "aiModels": {
+        "label": "AI Models",
+        "description": "Model selection and AI text cleanup"
+      },
+      "agentConfig": {
+        "label": "Agent",
+        "description": "Agent name and instruction mode behavior"
+      },
+      "prompts": {
+        "label": "Prompts",
+        "description": "Customize system prompts and test output"
       }
     },
     "title": "Настройки"

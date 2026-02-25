@@ -718,7 +718,8 @@
       },
       "saved": {
         "description": "カスタムプロンプトが今後すべての AI 処理に使用されます。",
-        "title": "プロンプトを保存しました"
+        "title": "プロンプトを保存しました",
+        "descriptionLegacy": "Your custom prompts will be used for all future AI processing."
       }
     },
     "edit": {
@@ -726,7 +727,11 @@
       "cautionLabel": "注意",
       "cautionTextPrefix": "このプロンプトを変更すると文字起こしの品質に影響する場合があります。",
       "cautionTextSuffix": "エージェント検出を維持するために {{agentName}} プレースホルダーを残してください。",
-      "placeholder": "カスタムシステムプロンプトを入力..."
+      "placeholder": "カスタムシステムプロンプトを入力...",
+      "agentPromptLabel": "Agent Prompt",
+      "agentPromptPlaceholder": "Enter your agent prompt...",
+      "normalPromptLabel": "Normal Prompt",
+      "normalPromptPlaceholder": "Enter your normal prompt..."
     },
     "tabs": {
       "customize": "カスタマイズ",
@@ -753,7 +758,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "プロバイダー",
       "run": "テスト実行",
-      "customEndpoint": "カスタムエンドポイント"
+      "customEndpoint": "カスタムエンドポイント",
+      "modeLabel": "Mode"
     },
     "view": {
       "customPrompt": "カスタムプロンプト",
@@ -768,7 +774,15 @@
           "label": "クリーンアップ"
         }
       },
-      "modified": "変更済み"
+      "modified": "変更済み",
+      "agentPrompt": "Agent Prompt",
+      "normalPrompt": "Normal Prompt"
+    },
+    "modeSelector": {
+      "unified": "Unified",
+      "unifiedDescription": "One smart prompt that handles cleanup and instructions.",
+      "agentNormal": "Agent + Normal",
+      "agentNormalDescription": "Separate prompts for agent commands and normal cleanup."
     }
   },
   "resetPassword": {
@@ -797,7 +811,9 @@
       "account": "アカウント",
       "app": "アプリ",
       "speechAi": "音声 & AI",
-      "system": "システム"
+      "system": "システム",
+      "speech": "Speech",
+      "intelligence": "Intelligence"
     },
     "sections": {
       "account": {
@@ -831,6 +847,18 @@
       "system": {
         "description": "更新、ストレージ、開発者ツール",
         "label": "システム"
+      },
+      "aiModels": {
+        "label": "AI Models",
+        "description": "Model selection and AI text cleanup"
+      },
+      "agentConfig": {
+        "label": "Agent",
+        "description": "Agent name and instruction mode behavior"
+      },
+      "prompts": {
+        "label": "Prompts",
+        "description": "Customize system prompts and test output"
       }
     },
     "title": "設定"
@@ -921,7 +949,11 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "カスタム",
-          "features": ["クラウド同期", "チーム機能（近日公開）", "SSO & コンプライアンス"],
+          "features": [
+            "クラウド同期",
+            "チーム機能（近日公開）",
+            "SSO & コンプライアンス"
+          ],
           "cta": "お問い合わせ"
         },
         "currentPlan": "現在のプラン"
