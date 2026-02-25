@@ -15,7 +15,8 @@ class GoogleCalendarManager {
     this.meetingEndTimer = null;
     this.activeMeeting = null;
     this.notifiedMeetings = new Set();
-    this.SYNC_INTERVAL_MS = 10 * 60 * 1000;
+    this.SYNC_INTERVAL_MS = 2 * 60 * 1000;
+    this._lastFocusSync = 0;
   }
 
   start() {
@@ -269,6 +270,27 @@ class GoogleCalendarManager {
     this.syncEvents().catch((err) =>
       debugLogger.error("Post-wake sync failed", { error: err.message }, "gcal")
     );
+  }
+
+  syncOnFocus() {
+    if (!this.isConnected()) return;
+    const now = Date.now();
+    if (now - this._lastFocusSync < 30000) return;
+    this._lastFocusSync = now;
+
+    this.syncEvents()
+      .then(() => this.scheduleNextMeeting())
+      .catch((err) =>
+        debugLogger.error("Focus-triggered sync failed", { error: err.message }, "gcal")
+      );
+  }
+
+  getActiveMeetingState() {
+    return {
+      activeMeeting: this.activeMeeting,
+      activeEvents: this.databaseManager.getActiveEvents(),
+      upcomingEvents: this.databaseManager.getUpcomingEvents(15),
+    };
   }
 
   getCalendars() {

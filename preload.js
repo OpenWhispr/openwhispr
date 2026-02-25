@@ -474,4 +474,19 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "gcal-events-synced",
     (callback) => (_event, data) => callback(data)
   ),
+
+  // Meeting detection
+  meetingDetectionGetPreferences: () => ipcRenderer.invoke("meeting-detection-get-preferences"),
+  meetingDetectionSetPreferences: (prefs) =>
+    ipcRenderer.invoke("meeting-detection-set-preferences", prefs),
+  meetingDetectionRespond: (detectionId, action) =>
+    ipcRenderer.invoke("meeting-detection-respond", detectionId, action),
+  onMeetingDetected: registerListener(
+    "meeting-detected",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingDetectedStartRecording: registerListener(
+    "meeting-detected-start-recording",
+    (callback) => (_event, data) => callback(data)
+  ),
 });

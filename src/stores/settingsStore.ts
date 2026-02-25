@@ -56,6 +56,8 @@ const BOOLEAN_SETTINGS = new Set([
   "audioCuesEnabled",
   "floatingIconAutoHide",
   "gcalConnected",
+  "meetingProcessDetection",
+  "meetingAudioDetection",
   "isSignedIn",
 ]);
 
@@ -87,6 +89,8 @@ export interface SettingsState
   floatingIconAutoHide: boolean;
   gcalConnected: boolean;
   gcalEmail: string;
+  meetingProcessDetection: boolean;
+  meetingAudioDetection: boolean;
 
   setUseLocalWhisper: (value: boolean) => void;
   setWhisperModel: (value: string) => void;
@@ -130,6 +134,8 @@ export interface SettingsState
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setGcalConnected: (value: boolean) => void;
   setGcalEmail: (value: string) => void;
+  setMeetingProcessDetection: (value: boolean) => void;
+  setMeetingAudioDetection: (value: boolean) => void;
   setIsSignedIn: (value: boolean) => void;
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
@@ -243,6 +249,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
   gcalConnected: readBoolean("gcalConnected", false),
   gcalEmail: readString("gcalEmail", ""),
+  meetingProcessDetection: readBoolean("meetingProcessDetection", true),
+  meetingAudioDetection: readBoolean("meetingAudioDetection", true),
   isSignedIn: readBoolean("isSignedIn", false),
 
   setUseLocalWhisper: createBooleanSetter("useLocalWhisper"),
@@ -378,6 +386,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setGcalConnected: createBooleanSetter("gcalConnected"),
   setGcalEmail: createStringSetter("gcalEmail"),
+  setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
+  setMeetingAudioDetection: createBooleanSetter("meetingAudioDetection"),
 
   setIsSignedIn: (value: boolean) => {
     if (isBrowser) localStorage.setItem("isSignedIn", String(value));

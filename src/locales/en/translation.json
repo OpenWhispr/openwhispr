@@ -515,7 +515,15 @@
     "noUpcoming": "No upcoming events",
     "meetingStarting": "Meeting starting now",
     "today": "Today",
-    "tomorrow": "Tomorrow"
+    "tomorrow": "Tomorrow",
+    "detection": {
+      "title": "Meeting Detection",
+      "description": "Automatically detect unscheduled meetings",
+      "processDetection": "App Detection",
+      "processDescription": "Detect meetings in Zoom, Teams, and FaceTime",
+      "audioDetection": "Audio Detection",
+      "audioDescription": "Prompt when sustained conversation is detected"
+    }
   },
   "cleanupPrompt": "Cleanup",
   "developerSection": {

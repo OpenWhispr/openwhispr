@@ -223,6 +223,15 @@ export function useMeetingRecording(): UseMeetingRecordingReturn {
     });
     if (startRecordingCleanup) cleanups.push(startRecordingCleanup);
 
+    const detectedStartCleanup = window.electronAPI?.onMeetingDetectedStartRecording?.(
+      (data: any) => {
+        if (data?.event && !activeMeetingRef.current) {
+          startRecording(data.event);
+        }
+      }
+    );
+    if (detectedStartCleanup) cleanups.push(detectedStartCleanup);
+
     return () => {
       cleanups.forEach((fn) => fn());
       cleanup();

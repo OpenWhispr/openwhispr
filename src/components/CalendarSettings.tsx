@@ -71,7 +71,16 @@ function formatEventTime(startTime: string): string {
 
 export default function CalendarSettings() {
   const { t } = useTranslation();
-  const { gcalConnected, gcalEmail, setGcalConnected, setGcalEmail } = useSettingsStore();
+  const {
+    gcalConnected,
+    gcalEmail,
+    setGcalConnected,
+    setGcalEmail,
+    meetingProcessDetection,
+    meetingAudioDetection,
+    setMeetingProcessDetection,
+    setMeetingAudioDetection,
+  } = useSettingsStore();
   const [calendars, setCalendars] = useState<GoogleCalendar[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -299,6 +308,47 @@ export default function CalendarSettings() {
           </SettingsPanel>
         </div>
       )}
+
+      <div>
+        <SectionHeader
+          title={t("calendar.detection.title")}
+          description={t("calendar.detection.description")}
+        />
+        <SettingsPanel>
+          <SettingsPanelRow>
+            <SettingsRow
+              label={t("calendar.detection.processDetection")}
+              description={t("calendar.detection.processDescription")}
+            >
+              <Toggle
+                checked={meetingProcessDetection}
+                onChange={(checked) => {
+                  setMeetingProcessDetection(checked);
+                  window.electronAPI?.meetingDetectionSetPreferences?.({
+                    processDetection: checked,
+                  });
+                }}
+              />
+            </SettingsRow>
+          </SettingsPanelRow>
+          <SettingsPanelRow>
+            <SettingsRow
+              label={t("calendar.detection.audioDetection")}
+              description={t("calendar.detection.audioDescription")}
+            >
+              <Toggle
+                checked={meetingAudioDetection}
+                onChange={(checked) => {
+                  setMeetingAudioDetection(checked);
+                  window.electronAPI?.meetingDetectionSetPreferences?.({
+                    audioDetection: checked,
+                  });
+                }}
+              />
+            </SettingsRow>
+          </SettingsPanelRow>
+        </SettingsPanel>
+      </div>
     </div>
   );
 }

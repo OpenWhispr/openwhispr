@@ -899,6 +899,17 @@ declare global {
       onGcalStartRecording?: (callback: (data: any) => void) => () => void;
       onGcalConnectionChanged?: (callback: (data: any) => void) => () => void;
       onGcalEventsSynced?: (callback: (data: any) => void) => () => void;
+
+      meetingDetectionGetPreferences?: () => Promise<{ success: boolean; preferences?: any }>;
+      meetingDetectionSetPreferences?: (
+        prefs: Record<string, boolean>
+      ) => Promise<{ success: boolean }>;
+      meetingDetectionRespond?: (
+        detectionId: string,
+        action: string
+      ) => Promise<{ success: boolean }>;
+      onMeetingDetected?: (callback: (data: any) => void) => () => void;
+      onMeetingDetectedStartRecording?: (callback: (data: any) => void) => () => void;
     };
 
     api?: {

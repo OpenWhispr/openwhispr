@@ -96,6 +96,7 @@ class IPCHandlers {
     this.getTrayManager = managers.getTrayManager;
     this.whisperCudaManager = managers.whisperCudaManager;
     this.googleCalendarManager = managers.googleCalendarManager;
+    this.meetingDetectionEngine = managers.meetingDetectionEngine;
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
@@ -2717,6 +2718,32 @@ class IPCHandlers {
         };
       } catch (error) {
         return { success: false, events: [] };
+      }
+    });
+
+    ipcMain.handle("meeting-detection-get-preferences", async () => {
+      try {
+        return { success: true, preferences: this.meetingDetectionEngine.getPreferences() };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("meeting-detection-set-preferences", async (_event, prefs) => {
+      try {
+        this.meetingDetectionEngine.setPreferences(prefs);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("meeting-detection-respond", async (_event, detectionId, action) => {
+      try {
+        this.meetingDetectionEngine.handleUserResponse(detectionId, action);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
       }
     });
 

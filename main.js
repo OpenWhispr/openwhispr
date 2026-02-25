@@ -166,6 +166,9 @@ const DevServerManager = require("./src/helpers/devServerManager");
 const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
+const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
+const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
+const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 
 // Manager instances - initialized after app.whenReady()
@@ -183,6 +186,7 @@ let globeKeyManager = null;
 let windowsKeyManager = null;
 let whisperCudaManager = null;
 let googleCalendarManager = null;
+let meetingDetectionEngine = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 
@@ -246,6 +250,11 @@ function initializeCoreManagers() {
   }
   parakeetManager = new ParakeetManager();
   googleCalendarManager = new GoogleCalendarManager(databaseManager, windowManager);
+  meetingDetectionEngine = new MeetingDetectionEngine(
+    googleCalendarManager,
+    new MeetingProcessDetector(),
+    new AudioActivityDetector()
+  );
   updateManager = new UpdateManager();
   windowsKeyManager = new WindowsKeyManager();
 
@@ -261,6 +270,7 @@ function initializeCoreManagers() {
     windowsKeyManager,
     whisperCudaManager,
     googleCalendarManager,
+    meetingDetectionEngine,
     getTrayManager: () => trayManager,
   });
 }
@@ -299,6 +309,7 @@ function initializeDeferredManagers() {
   }
 
   googleCalendarManager.start();
+  meetingDetectionEngine.start();
 }
 
 app.on("open-url", (event, url) => {
@@ -494,6 +505,10 @@ async function startApp() {
 
   // Phase 2: Initialize remaining managers after windows are visible
   initializeDeferredManagers();
+
+  app.on("browser-window-focus", () => {
+    if (googleCalendarManager) googleCalendarManager.syncOnFocus();
+  });
 
   const { powerMonitor } = require("electron");
   powerMonitor.on("resume", () => {
@@ -928,6 +943,9 @@ if (gotSingleInstanceLock) {
     }
     if (windowsKeyManager) {
       windowsKeyManager.stop();
+    }
+    if (meetingDetectionEngine) {
+      meetingDetectionEngine.stop();
     }
     if (googleCalendarManager) {
       googleCalendarManager.stop();
