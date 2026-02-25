@@ -3,8 +3,7 @@ import ReactDOM from "react-dom/client";
 import { I18nextProvider, useTranslation } from "react-i18next";
 import App from "./App.jsx";
 import AuthenticationStep from "./components/AuthenticationStep.tsx";
-import TitleBar from "./components/TitleBar.tsx";
-import SupportDropdown from "./components/ui/SupportDropdown.tsx";
+import WindowControls from "./components/WindowControls.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
 import ErrorBoundary from "./components/ErrorBoundary.tsx";
 import { ToastProvider } from "./components/ui/Toast.tsx";
@@ -350,14 +349,17 @@ function AppRouter() {
         className="h-screen flex flex-col bg-background"
         style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
-        <div className="shrink-0 z-10">
-          <TitleBar
-            showTitle={true}
-            className="bg-background backdrop-blur-xl border-b border-border shadow-sm"
-            actions={<SupportDropdown />}
-          />
+        <div
+          className="flex items-center justify-end w-full h-10 shrink-0"
+          style={{ WebkitAppRegion: "drag" }}
+        >
+          {window.electronAPI?.getPlatform?.() !== "darwin" && (
+            <div className="pr-1" style={{ WebkitAppRegion: "no-drag" }}>
+              <WindowControls />
+            </div>
+          )}
         </div>
-        <div className="flex-1 px-6 md:px-12 overflow-y-auto flex items-center">
+        <div className="flex-1 px-6 overflow-y-auto flex items-center">
           <div className="w-full max-w-sm mx-auto">
             <Card className="bg-card/90 backdrop-blur-2xl border border-border/50 dark:border-white/5 shadow-lg rounded-xl overflow-hidden">
               <CardContent className="p-6">
@@ -389,7 +391,7 @@ function AppRouter() {
 
 function LoadingFallback({ message }) {
   const { t } = useTranslation();
-  const fallbackMessage = message || t("app.loading");
+  const fallbackMessage = message || t("common.loading");
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">

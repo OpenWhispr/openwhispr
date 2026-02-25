@@ -45,7 +45,9 @@ function fetchJson(url, redirectCount = 0) {
             reject(new Error("Redirect without location header"));
             return;
           }
-          fetchJson(redirectUrl, redirectCount + 1).then(resolve).catch(reject);
+          fetchJson(redirectUrl, redirectCount + 1)
+            .then(resolve)
+            .catch(reject);
           return;
         }
 
@@ -211,7 +213,8 @@ function downloadFile(url, dest, retryCount = 0) {
 
     request(url);
   }).catch(async (error) => {
-    const isTransient = error.message.includes("timed out") ||
+    const isTransient =
+      error.message.includes("timed out") ||
       error.code === "ECONNRESET" ||
       error.code === "ETIMEDOUT";
 
@@ -227,9 +230,14 @@ function downloadFile(url, dest, retryCount = 0) {
   });
 }
 
-function extractZip(zipPath, destDir) {
+async function extractZip(zipPath, destDir) {
   if (process.platform === "win32") {
-    execSync(`tar -xf "${zipPath}" -C "${destDir}"`, { stdio: "inherit" });
+    // Use unzipper package on Windows for better path handling
+    const unzipper = require("unzipper");
+    await fs
+      .createReadStream(zipPath)
+      .pipe(unzipper.Extract({ path: destDir }))
+      .promise();
   } else {
     execSync(`unzip -o "${zipPath}" -d "${destDir}"`, { stdio: "inherit" });
   }
@@ -239,11 +247,11 @@ function extractTarGz(tarPath, destDir) {
   execSync(`tar -xzf "${tarPath}" -C "${destDir}"`, { stdio: "inherit" });
 }
 
-function extractArchive(archivePath, destDir) {
+async function extractArchive(archivePath, destDir) {
   if (archivePath.endsWith(".tar.gz") || archivePath.endsWith(".tgz")) {
     extractTarGz(archivePath, destDir);
   } else {
-    extractZip(archivePath, destDir);
+    await extractZip(archivePath, destDir);
   }
 }
 
@@ -268,9 +276,10 @@ function findBinaryInDir(dir, binaryName, maxDepth = 5, currentDepth = 0) {
 
 function parseArgs() {
   const args = process.argv;
-  let targetPlatform = process.platform;
-  let targetArch = process.arch;
+  let targetPlatform = process.env.TARGET_PLATFORM || process.platform;
+  let targetArch = process.env.TARGET_ARCH || process.arch;
 
+  // CLI args override env vars
   const platformIndex = args.indexOf("--platform");
   if (platformIndex !== -1 && args[platformIndex + 1]) {
     targetPlatform = args[platformIndex + 1];
@@ -288,7 +297,8 @@ function parseArgs() {
     isCurrent: args.includes("--current"),
     isAll: args.includes("--all"),
     isForce: args.includes("--force"),
-    shouldCleanup: args.includes("--clean") ||
+    shouldCleanup:
+      args.includes("--clean") ||
       process.env.CI === "true" ||
       process.env.GITHUB_ACTIONS === "true",
   };

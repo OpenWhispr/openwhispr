@@ -76,7 +76,7 @@ class ParakeetWsServer {
       `--decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
       `--joiner=${path.join(modelDir, "joiner.int8.onnx")}`,
       `--port=${this.port}`,
-      `--num-threads=${Math.max(1, Math.floor(os.cpus().length * 0.75))}`,
+      `--num-threads=${Math.max(1, Math.min(4, Math.floor(os.cpus().length * 0.75)))}`,
     ];
 
     debugLogger.debug("Starting parakeet WS server", { port: this.port, modelName, args });

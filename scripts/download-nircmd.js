@@ -44,7 +44,7 @@ async function main() {
     console.log("  Extracting...");
     const extractDir = path.join(BIN_DIR, "temp-nircmd");
     fs.mkdirSync(extractDir, { recursive: true });
-    extractZip(zipPath, extractDir);
+    await extractZip(zipPath, extractDir);
 
     // Copy nircmd.exe to bin directory
     const extractedPath = path.join(extractDir, "nircmd.exe");

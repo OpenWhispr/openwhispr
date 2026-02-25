@@ -203,10 +203,10 @@
       "name": "Anthropic",
       "models": [
         {
-          "id": "claude-sonnet-4-5",
-          "name": "Claude Sonnet 4.5",
+          "id": "claude-sonnet-4-6",
+          "name": "Claude Sonnet 4.6",
           "description": "Balanced performance",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6"
         },
         {
           "id": "claude-haiku-4-5",
@@ -215,10 +215,10 @@
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5"
         },
         {
-          "id": "claude-opus-4-5",
-          "name": "Claude Opus 4.5",
+          "id": "claude-opus-4-6",
+          "name": "Claude Opus 4.6",
           "description": "Most capable Claude model",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6"
         }
       ]
     },
@@ -227,10 +227,10 @@
       "name": "Google Gemini",
       "models": [
         {
-          "id": "gemini-3-pro-preview",
-          "name": "Gemini 3 Pro",
+          "id": "gemini-3.1-pro-preview",
+          "name": "Gemini 3.1 Pro",
           "description": "Next-gen flagship model for complex reasoning",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_pro_preview"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview"
         },
         {
           "id": "gemini-3-flash-preview",

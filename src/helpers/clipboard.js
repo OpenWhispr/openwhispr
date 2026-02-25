@@ -1,4 +1,4 @@
-const { clipboard } = require("electron");
+const { clipboard, systemPreferences } = require("electron");
 const { spawn, spawnSync } = require("child_process");
 const { killProcess } = require("../utils/process");
 const path = require("path");
@@ -7,10 +7,9 @@ const debugLogger = require("./debugLogger");
 
 const CACHE_TTL_MS = 30000;
 
-// macOS accessibility: once granted, permissions persist across app sessions,
-// so use a long TTL. Denied results re-check quickly so granting takes effect fast.
-const ACCESSIBILITY_GRANTED_TTL_MS = 24 * 60 * 60 * 1000;
-const ACCESSIBILITY_DENIED_TTL_MS = 5000;
+// isTrustedAccessibilityClient() is a cheap synchronous syscall, so the cache
+// only exists to debounce the dialog shown on denial.
+const ACCESSIBILITY_CHECK_TTL_MS = 5000;
 
 const getLinuxDesktopEnv = () =>
   [process.env.XDG_CURRENT_DESKTOP, process.env.XDG_SESSION_DESKTOP, process.env.DESKTOP_SESSION]
@@ -46,6 +45,7 @@ const getLinuxSessionInfo = () => {
 
 const PASTE_DELAYS = {
   darwin: 120,
+  win32_fast: 10,
   win32_nircmd: 30,
   win32_pwsh: 40,
   linux: 50,
@@ -74,6 +74,8 @@ class ClipboardManager {
     this.nircmdChecked = false;
     this.fastPastePath = null;
     this.fastPasteChecked = false;
+    this.winFastPastePath = null;
+    this.winFastPasteChecked = false;
     this.linuxFastPastePath = null;
     this.linuxFastPasteChecked = false;
   }
@@ -199,6 +201,15 @@ class ClipboardManager {
     );
   }
 
+  resolveWindowsFastPasteBinary() {
+    return this._resolveNativeBinary(
+      "windows-fast-paste.exe",
+      "win32",
+      "winFastPasteChecked",
+      "winFastPastePath"
+    );
+  }
+
   resolveLinuxFastPasteBinary() {
     return this._resolveNativeBinary(
       "linux-fast-paste",
@@ -242,6 +253,47 @@ class ClipboardManager {
     } catch {}
     this._uinputCache = { accessible, expiresAt: now + 30000 };
     return accessible;
+  }
+
+  _detectKdeWindowClass() {
+    if (this.commandExists("kdotool")) {
+      try {
+        const idResult = spawnSync("kdotool", ["getactivewindow"], { timeout: 1000 });
+        if (idResult.status === 0) {
+          const winId = idResult.stdout.toString().trim();
+          const classResult = spawnSync("kdotool", ["getwindowclassname", winId], {
+            timeout: 1000,
+          });
+          if (classResult.status === 0) {
+            const cls = classResult.stdout.toString().toLowerCase().trim();
+            if (cls) return cls;
+          }
+        }
+      } catch {}
+    }
+
+    const qdbus = ["qdbus6", "qdbus"].find((cmd) => this.commandExists(cmd));
+    if (qdbus) {
+      try {
+        const result = spawnSync(qdbus, ["org.kde.KWin", "/KWin", "supportInformation"], {
+          timeout: 2000,
+          maxBuffer: 512 * 1024,
+        });
+        if (result.status === 0) {
+          const lines = result.stdout.toString().split("\n");
+          let lastClass = null;
+          for (const line of lines) {
+            const classMatch = line.match(/^\s*resourceClass:\s+(.+)$/);
+            if (classMatch) lastClass = classMatch[1].trim();
+            if (/^\s*active:\s+(1|true)\s*$/i.test(line) && lastClass) {
+              return lastClass.toLowerCase();
+            }
+          }
+        }
+      } catch {}
+    }
+
+    return null;
   }
 
   safeLog(...args) {
@@ -315,10 +367,22 @@ class ClipboardManager {
         }
 
         this.safeLog("✅ Permissions granted, attempting to paste...");
-        await this.pasteMacOS(originalClipboard, options);
+        try {
+          await this.pasteMacOS(originalClipboard, options);
+        } catch (firstError) {
+          this.safeLog("⚠️ First paste attempt failed, retrying...", firstError?.message);
+          clipboard.writeText(text);
+          await new Promise((r) => setTimeout(r, 200));
+          await this.pasteMacOS(originalClipboard, options);
+        }
       } else if (platform === "win32") {
-        const nircmdPath = this.getNircmdPath();
-        method = nircmdPath ? "nircmd" : "powershell";
+        const winFastPaste = this.resolveWindowsFastPasteBinary();
+        if (winFastPaste) {
+          method = "sendinput";
+        } else {
+          const nircmdPath = this.getNircmdPath();
+          method = nircmdPath ? "nircmd" : "powershell";
+        }
         await this.pasteWindows(originalClipboard);
       } else {
         method = this.resolveLinuxFastPasteBinary() ? "linux-xtest" : "linux-tools";
@@ -467,13 +531,92 @@ class ClipboardManager {
   }
 
   async pasteWindows(originalClipboard) {
-    const nircmdPath = this.getNircmdPath();
+    const fastPastePath = this.resolveWindowsFastPasteBinary();
 
+    if (fastPastePath) {
+      return this.pasteWithFastPaste(fastPastePath, originalClipboard);
+    }
+
+    return this.pasteWithNircmdOrPowerShell(originalClipboard);
+  }
+
+  async pasteWithFastPaste(fastPastePath, originalClipboard) {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        let hasTimedOut = false;
+        const startTime = Date.now();
+
+        this.safeLog("⚡ Windows fast-paste starting");
+
+        const pasteProcess = spawn(fastPastePath, [], {
+          stdio: ["ignore", "pipe", "pipe"],
+          windowsHide: true,
+        });
+
+        let stdoutData = "";
+        let stderrData = "";
+
+        pasteProcess.stdout.on("data", (data) => {
+          stdoutData += data.toString();
+        });
+
+        pasteProcess.stderr.on("data", (data) => {
+          stderrData += data.toString();
+        });
+
+        pasteProcess.on("close", (code) => {
+          if (hasTimedOut) return;
+          clearTimeout(timeoutId);
+
+          const elapsed = Date.now() - startTime;
+          const output = stdoutData.trim();
+
+          if (code === 0) {
+            this.safeLog("✅ Windows fast-paste success", {
+              elapsedMs: elapsed,
+              output,
+            });
+            setTimeout(() => {
+              clipboard.writeText(originalClipboard);
+              this.safeLog("🔄 Clipboard restored");
+            }, RESTORE_DELAYS.win32_nircmd);
+            resolve();
+          } else {
+            this.safeLog(
+              `❌ Windows fast-paste failed (code ${code}), falling back to nircmd/PowerShell`,
+              { elapsedMs: elapsed, stderr: stderrData.trim() }
+            );
+            this.pasteWithNircmdOrPowerShell(originalClipboard).then(resolve).catch(reject);
+          }
+        });
+
+        pasteProcess.on("error", (error) => {
+          if (hasTimedOut) return;
+          clearTimeout(timeoutId);
+          this.safeLog("❌ Windows fast-paste error, falling back to nircmd/PowerShell", {
+            elapsedMs: Date.now() - startTime,
+            error: error.message,
+          });
+          this.pasteWithNircmdOrPowerShell(originalClipboard).then(resolve).catch(reject);
+        });
+
+        const timeoutId = setTimeout(() => {
+          hasTimedOut = true;
+          this.safeLog("⏱️ Windows fast-paste timeout, falling back to nircmd/PowerShell");
+          killProcess(pasteProcess, "SIGKILL");
+          pasteProcess.removeAllListeners();
+          this.pasteWithNircmdOrPowerShell(originalClipboard).then(resolve).catch(reject);
+        }, 2000);
+      }, PASTE_DELAYS.win32_fast);
+    });
+  }
+
+  async pasteWithNircmdOrPowerShell(originalClipboard) {
+    const nircmdPath = this.getNircmdPath();
     if (nircmdPath) {
       return this.pasteWithNircmd(nircmdPath, originalClipboard);
-    } else {
-      return this.pasteWithPowerShell(originalClipboard);
     }
+    return this.pasteWithPowerShell(originalClipboard);
   }
 
   async pasteWithNircmd(nircmdPath, originalClipboard) {
@@ -696,6 +839,7 @@ class ClipboardManager {
       "tabby",
       "sakura",
       "warp",
+      "termius",
     ];
 
     // Pre-detect the target window BEFORE our window takes focus or blurs,
@@ -724,18 +868,25 @@ class ClipboardManager {
     };
 
     const targetWindowId = preDetectTargetWindow();
-    const xdotoolWindowClass = preDetectWindowClass(targetWindowId);
+    let detectedWindowClass = preDetectWindowClass(targetWindowId);
+
+    if (!detectedWindowClass && isKde) {
+      detectedWindowClass = this._detectKdeWindowClass();
+      if (detectedWindowClass) {
+        debugLogger.debug("KDE window class detected", { detectedWindowClass }, "clipboard");
+      }
+    }
 
     if (linuxFastPaste) {
-      const earlyIsTerminal = xdotoolWindowClass
-        ? terminalClasses.some((t) => xdotoolWindowClass.includes(t))
+      const earlyIsTerminal = detectedWindowClass
+        ? terminalClasses.some((t) => detectedWindowClass.includes(t))
         : false;
 
       const spawnFastPaste = (args, label) =>
         new Promise((resolve, reject) => {
           debugLogger.debug(
             `Attempting native linux-fast-paste (${label})`,
-            { linuxFastPaste, args, targetWindowId, xdotoolWindowClass, earlyIsTerminal },
+            { linuxFastPaste, args, targetWindowId, detectedWindowClass, earlyIsTerminal },
             "clipboard"
           );
           const proc = spawn(linuxFastPaste, args);
@@ -847,32 +998,12 @@ class ClipboardManager {
 
     // Terminals use Ctrl+Shift+V instead of Ctrl+V
     const isTerminal = () => {
-      if (xdotoolWindowClass) {
-        const isTerminalWindow = terminalClasses.some((term) => xdotoolWindowClass.includes(term));
-        if (isTerminalWindow) {
-          this.safeLog(`🖥️ Terminal detected via xdotool: ${xdotoolWindowClass}`);
-        }
-        return isTerminalWindow;
+      if (!detectedWindowClass) return false;
+      const isTerminalWindow = terminalClasses.some((term) => detectedWindowClass.includes(term));
+      if (isTerminalWindow) {
+        this.safeLog(`🖥️ Terminal detected: ${detectedWindowClass}`);
       }
-
-      try {
-        if (this.commandExists("kdotool")) {
-          const windowIdResult = spawnSync("kdotool", ["getactivewindow"]);
-          if (windowIdResult.status === 0) {
-            const windowId = windowIdResult.stdout.toString().trim();
-            const classResult = spawnSync("kdotool", ["getwindowclassname", windowId]);
-            if (classResult.status === 0) {
-              const className = classResult.stdout.toString().toLowerCase().trim();
-              const isTerminalWindow = terminalClasses.some((term) => className.includes(term));
-              if (isTerminalWindow) {
-                this.safeLog(`🖥️ Terminal detected via kdotool: ${className}`);
-              }
-              return isTerminalWindow;
-            }
-          }
-        }
-      } catch {}
-      return false;
+      return isTerminalWindow;
     };
 
     const inTerminal = isTerminal();
@@ -889,12 +1020,15 @@ class ClipboardManager {
 
     if (targetWindowId) {
       this.safeLog(
-        `🎯 Targeting window ID ${targetWindowId} for paste (class: ${xdotoolWindowClass})`
+        `🎯 Targeting window ID ${targetWindowId} for paste (class: ${detectedWindowClass})`
       );
     }
 
-    // Use key names for ydotool 0.1.x compat (Ubuntu ships 0.1.8)
-    const ydotoolArgs = inTerminal ? ["key", "ctrl+shift+v"] : ["key", "ctrl+v"];
+    // Raw keycodes work across both ydotool 0.1.x and 1.0.x (key names silently fail on 1.0.x)
+    // 29 = KEY_LEFTCTRL, 42 = KEY_LEFTSHIFT, 47 = KEY_V
+    const ydotoolArgs = inTerminal
+      ? ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
+      : ["key", "29:1", "47:1", "47:0", "29:0"];
 
     const wtypeEntry = canUseWtype
       ? [
@@ -918,8 +1052,8 @@ class ClipboardManager {
       // wlroots (Sway, Hyprland, etc.): wtype is native; then xdotool for XWayland; ydotool last
       candidates = [...wtypeEntry, ...xdotoolEntry, ...ydotoolEntry];
     } else {
-      // GNOME, KDE, or unknown Wayland: xdotool for XWayland apps first; ydotool fallback; wtype last resort
-      candidates = [...xdotoolEntry, ...ydotoolEntry, ...wtypeEntry];
+      // GNOME, KDE, or unknown Wayland: ydotool (uinput) works for all windows; xdotool for XWayland only
+      candidates = [...ydotoolEntry, ...xdotoolEntry, ...wtypeEntry];
     }
 
     const available = candidates.filter((c) => this.commandExists(c.cmd));
@@ -930,7 +1064,7 @@ class ClipboardManager {
         candidateTools: candidates.map((c) => c.cmd),
         availableTools: available.map((c) => c.cmd),
         targetWindowId,
-        xdotoolWindowClass,
+        detectedWindowClass,
         inTerminal,
         pasteKeys,
       },
@@ -1144,44 +1278,17 @@ class ClipboardManager {
       return this.accessibilityCache.value;
     }
 
-    return new Promise((resolve) => {
-      const testProcess = spawn("osascript", [
-        "-e",
-        'tell application "System Events" to get name of first process',
-      ]);
+    const allowed = systemPreferences.isTrustedAccessibilityClient(false);
+    this.accessibilityCache = {
+      value: allowed,
+      expiresAt: Date.now() + ACCESSIBILITY_CHECK_TTL_MS,
+    };
 
-      let testOutput = "";
-      let testError = "";
+    if (!allowed) {
+      this.showAccessibilityDialog("not allowed assistive access");
+    }
 
-      testProcess.stdout.on("data", (data) => {
-        testOutput += data.toString();
-      });
-
-      testProcess.stderr.on("data", (data) => {
-        testError += data.toString();
-      });
-
-      testProcess.on("close", (code) => {
-        const allowed = code === 0;
-        this.accessibilityCache = {
-          value: allowed,
-          expiresAt:
-            Date.now() + (allowed ? ACCESSIBILITY_GRANTED_TTL_MS : ACCESSIBILITY_DENIED_TTL_MS),
-        };
-        if (!allowed) {
-          this.showAccessibilityDialog(testError);
-        }
-        resolve(allowed);
-      });
-
-      testProcess.on("error", (error) => {
-        this.accessibilityCache = {
-          value: false,
-          expiresAt: Date.now() + ACCESSIBILITY_DENIED_TTL_MS,
-        };
-        resolve(false);
-      });
-    });
+    return allowed;
   }
 
   showAccessibilityDialog(testError) {
@@ -1314,11 +1421,13 @@ Would you like to open System Settings now?`;
     }
 
     if (platform === "win32") {
+      const winFastPaste = this.resolveWindowsFastPasteBinary();
       return {
         platform: "win32",
         available: true,
-        method: "powershell",
+        method: winFastPaste ? "sendinput" : "powershell",
         requiresPermission: false,
+        terminalAware: !!winFastPaste,
         tools: [],
       };
     }

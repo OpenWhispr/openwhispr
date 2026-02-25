@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* OpenWhispr Theme — registers color tokens with Tailwind v4.
      These are the light-mode defaults; .dark overrides them below. */
@@ -8,7 +10,7 @@
   --color-secondary: #f5f5f5;
   --color-secondary-foreground: #171717;
   --color-muted: #f5f5f5;
-  --color-muted-foreground: #737373;
+  --color-muted-foreground: #525252;
   --color-accent: oklch(0.55 0.22 285);
   --color-accent-foreground: #ffffff;
   --color-destructive: #dc2626;
@@ -59,7 +61,7 @@
   --radius-sm: 0.25rem; /* 4px - minimal rounding */
   --radius-md: 0.375rem; /* 6px - standard */
   --radius-lg: 0.5rem; /* 8px - cards, panels */
-  --radius-xl: 0.5rem; /* 8px - large cards (reduced from 10px) */
+  --radius-xl: 0.625rem; /* 10px - large cards */
 
   /* Custom Light Mode Brand Colors (Parchment Theme) */
   --color-parchment-bg: #f9f6f1;
@@ -78,57 +80,59 @@
 }
 
 .dark {
-  /* Dark mode — clear surface hierarchy: bg < muted < card < popover */
-  --color-background: oklch(0.1 0.005 270);
-  --color-foreground: oklch(0.95 0 0);
-  --color-card: oklch(0.15 0.008 270);
-  --color-card-foreground: oklch(0.95 0 0);
-  --color-popover: oklch(0.17 0.008 270);
-  --color-popover-foreground: oklch(0.95 0 0);
-  --color-primary: oklch(0.62 0.22 260);
+  /* Dark mode — charcoal surfaces with clear elevation hierarchy
+     Base L=0.22 (charcoal) with 0.05 steps between layers.
+     Hue 260 (neutral blue) with minimal chroma for sophistication. */
+  --color-background: oklch(0.22 0.006 260);
+  --color-foreground: oklch(0.93 0 0);
+  --color-card: oklch(0.27 0.008 260);
+  --color-card-foreground: oklch(0.93 0 0);
+  --color-popover: oklch(0.29 0.009 260);
+  --color-popover-foreground: oklch(0.93 0 0);
+  --color-primary: oklch(0.65 0.2 260);
   --color-primary-foreground: oklch(0.99 0 0);
-  --color-secondary: oklch(0.18 0.005 270);
-  --color-secondary-foreground: oklch(0.92 0 0);
-  --color-muted: oklch(0.13 0.005 270);
-  --color-muted-foreground: oklch(0.55 0 0);
-  --color-accent: oklch(0.68 0.2 285);
+  --color-secondary: oklch(0.28 0.007 260);
+  --color-secondary-foreground: oklch(0.9 0 0);
+  --color-muted: oklch(0.24 0.006 260);
+  --color-muted-foreground: oklch(0.65 0 0);
+  --color-accent: oklch(0.68 0.18 285);
   --color-accent-foreground: oklch(0.99 0 0);
-  --color-destructive: oklch(0.6 0.25 25);
+  --color-destructive: oklch(0.62 0.22 25);
   --color-destructive-foreground: oklch(0.99 0 0);
-  --color-border: oklch(0.23 0.005 270);
-  --color-input: oklch(0.12 0.005 270);
-  --color-ring: oklch(0.62 0.22 260);
+  --color-border: oklch(0.35 0.007 260);
+  --color-input: oklch(0.19 0.005 260);
+  --color-ring: oklch(0.65 0.2 260);
   --color-success: oklch(0.7 0.18 145);
   --color-success-foreground: oklch(0.99 0 0);
   --color-warning: oklch(0.75 0.15 70);
   --color-warning-foreground: oklch(0.15 0 0);
-  --color-info: oklch(0.68 0.2 240);
+  --color-info: oklch(0.68 0.18 240);
   --color-info-foreground: oklch(0.99 0 0);
 
-  /* Surface hierarchy — layered depth system */
-  --color-surface-0: oklch(0.1 0.005 270);
-  --color-surface-1: oklch(0.13 0.006 270);
-  --color-surface-2: oklch(0.155 0.008 270);
-  --color-surface-3: oklch(0.18 0.01 270);
-  --color-surface-raised: oklch(0.2 0.012 270);
+  /* Surface hierarchy — charcoal depth system (0.22 → 0.33) */
+  --color-surface-0: oklch(0.22 0.006 260);
+  --color-surface-1: oklch(0.25 0.007 260);
+  --color-surface-2: oklch(0.27 0.008 260);
+  --color-surface-3: oklch(0.3 0.009 260);
+  --color-surface-raised: oklch(0.33 0.01 260);
 
   /* Border states */
-  --color-border-subtle: oklch(0.2 0.004 270);
-  --color-border-hover: oklch(0.28 0.01 270);
-  --color-border-active: oklch(0.45 0.15 260);
-  --color-link: oklch(0.64 0.09 250);
+  --color-border-subtle: oklch(0.33 0.006 260);
+  --color-border-hover: oklch(0.42 0.01 260);
+  --color-border-active: oklch(0.5 0.15 260);
+  --color-link: oklch(0.67 0.1 250);
 
-  /* Card depth shadows — no glow, clean depth only */
-  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.25);
-  --shadow-card-hover: 0 2px 8px oklch(0 0 0 / 0.35);
-  --shadow-elevated: 0 8px 24px oklch(0 0 0 / 0.4);
-  --shadow-modal: 0 24px 48px -12px oklch(0 0 0 / 0.5);
+  /* Card depth shadows — softer for charcoal, with top highlight for premium depth */
+  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.2), inset 0 1px 0 oklch(1 0 0 / 0.03);
+  --shadow-card-hover: 0 4px 12px oklch(0 0 0 / 0.25), inset 0 1px 0 oklch(1 0 0 / 0.04);
+  --shadow-elevated: 0 8px 24px oklch(0 0 0 / 0.3);
+  --shadow-modal: 0 24px 48px -12px oklch(0 0 0 / 0.4);
 
-  /* Model picker premium effects */
-  --shadow-metallic-dark: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* Premium effects */
+  --shadow-metallic-dark: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.2);
   --shadow-selected-glow:
-    inset 0 0 0 1px oklch(0.62 0.22 260 / 0.15), 0 0 16px -4px oklch(0.62 0.22 260 / 0.25);
-  --shadow-card-hover-subtle: 0 2px 8px -2px rgba(0, 0, 0, 0.15);
+    inset 0 0 0 1px oklch(0.65 0.2 260 / 0.2), 0 0 16px -4px oklch(0.65 0.2 260 / 0.2);
+  --shadow-card-hover-subtle: 0 2px 8px -2px rgba(0, 0, 0, 0.12);
 }
 
 @layer base {
@@ -137,8 +141,7 @@
     transition:
       background-color 150ms ease,
       border-color 150ms ease,
-      color 150ms ease,
-      box-shadow 150ms ease;
+      color 150ms ease;
   }
 
   body {
@@ -170,6 +173,16 @@
 
   body:has(.dictation-window) #root {
     background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
@@ -217,7 +230,9 @@ button {
 button:hover,
 [role="button"]:hover,
 .cursor-pointer:hover,
-svg:hover,
+button svg:hover,
+[role="button"] svg:hover,
+a svg:hover,
 [data-icon]:hover,
 .icon:hover {
   cursor: pointer;
@@ -227,7 +242,11 @@ svg:hover,
 input,
 textarea {
   border-radius: var(--radius);
-  transition: all 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
   font-family: var(--font-family-sans);
   box-shadow: inset 0 1px 2px oklch(from var(--color-foreground) l c h / 0.06);
 }
@@ -270,7 +289,9 @@ textarea {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card, 0 1px 3px oklch(from var(--color-foreground) l c h / 0.08));
-  transition: all 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .card:hover {
@@ -349,7 +370,7 @@ a:hover {
   height: 1px;
   background: linear-gradient(
     90deg,
-    oklch(0.62 0.22 260 / 0.5),
+    oklch(0.65 0.2 260 / 0.5),
     oklch(0.7 0.18 280 / 0.3),
     transparent 80%
   );
@@ -369,8 +390,8 @@ a:hover {
 
 /* Toast — opaque dark HUD surface, same in light & dark mode */
 .toast-surface {
-  background: oklch(0.13 0.005 270);
-  border: 1px solid oklch(0.22 0.005 270);
+  background: oklch(0.15 0.006 260);
+  border: 1px solid oklch(0.25 0.006 260);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.04),
     0 8px 24px -4px oklch(0 0 0 / 0.5),
@@ -390,11 +411,11 @@ a:hover {
 @keyframes pulse-glow {
   0%,
   100% {
-    box-shadow: 0 0 6px oklch(0.62 0.22 260 / 0.4);
+    box-shadow: 0 0 6px oklch(0.65 0.2 260 / 0.4);
     opacity: 0.8;
   }
   50% {
-    box-shadow: 0 0 8px oklch(0.62 0.22 260 / 0.6);
+    box-shadow: 0 0 8px oklch(0.65 0.2 260 / 0.6);
     opacity: 1;
   }
 }
@@ -421,6 +442,115 @@ a:hover {
   }
 }
 
+@keyframes waveform-bar {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes float-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes grow-to-bar {
+  from {
+    transform: scale(0.55);
+    opacity: 0;
+    border-radius: 28px;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+    border-radius: 12px;
+  }
+}
+
+@keyframes fade-in-content {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ring-fill {
+  from {
+    stroke-dashoffset: 94.25;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes draw-check {
+  from {
+    stroke-dashoffset: 24;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes drag-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.02);
+    opacity: 0.7;
+  }
+}
+
+@keyframes shimmer-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes check-pop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
 /* Indeterminate progress bar sweep */
 @keyframes indeterminate {
   0% {
@@ -428,6 +558,213 @@ a:hover {
   }
   100% {
     transform: translateX(300%);
+  }
+}
+
+/* Action processing scanner sweep */
+@keyframes scanner-sweep {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  95% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+/* ---- Referral Modal v2 ---- */
+
+/* Animated mesh gradient — slow-drifting color blobs */
+.referral-mesh-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.referral-mesh-bg::before,
+.referral-mesh-bg::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  animation: mesh-drift 25s ease-in-out infinite alternate;
+}
+
+.referral-mesh-bg::before {
+  width: 300px;
+  height: 300px;
+  background: oklch(0.65 0.2 260);
+  opacity: 0.04;
+  top: -80px;
+  right: -60px;
+}
+
+.referral-mesh-bg::after {
+  width: 250px;
+  height: 250px;
+  background: oklch(0.6 0.18 180);
+  opacity: 0.04;
+  bottom: -60px;
+  left: -40px;
+  animation-delay: -12s;
+  animation-direction: alternate-reverse;
+}
+
+@keyframes mesh-drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -20px) scale(1.05);
+  }
+  66% {
+    transform: translate(-20px, 15px) scale(0.95);
+  }
+  100% {
+    transform: translate(10px, -10px) scale(1.02);
+  }
+}
+
+/* 3D perspective-tilt card */
+.tilt-card {
+  --tilt-x: 0deg;
+  --tilt-y: 0deg;
+  --highlight-x: 50%;
+  --highlight-y: 50%;
+  --highlight-opacity: 0;
+  transform-style: preserve-3d;
+  transform: perspective(800px) rotateX(var(--tilt-x)) rotateY(var(--tilt-y));
+  transition: transform 0.6s cubic-bezier(0.03, 0.98, 0.52, 0.99);
+  position: relative;
+  isolation: isolate;
+  will-change: transform;
+}
+
+.tilt-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--highlight-x) var(--highlight-y),
+    oklch(1 0 0 / 0.07),
+    transparent 60%
+  );
+  opacity: var(--highlight-opacity);
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tilt-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from 180deg at 50% 50%,
+    oklch(0.65 0.2 260 / 0.2),
+    oklch(0.55 0.2 320 / 0.1),
+    oklch(0.6 0.18 180 / 0.15),
+    oklch(0.55 0.2 100 / 0.1),
+    oklch(0.65 0.2 260 / 0.2)
+  );
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.tilt-card:hover::after {
+  opacity: 1;
+}
+
+/* Stat gauge — accent bottom bar */
+.stat-gauge {
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-gauge::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: oklch(0.65 0.2 260 / 0.4);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.3s;
+}
+
+.stat-gauge[data-active="true"]::after {
+  transform: scaleX(1);
+}
+
+/* Spectrogram playback scan line — synced to audio */
+@keyframes spectrogram-play {
+  0% {
+    left: 0%;
+    opacity: 1;
+  }
+  95% {
+    opacity: 1;
+  }
+  100% {
+    left: 100%;
+    opacity: 0;
+  }
+}
+
+.spectrogram-play {
+  animation: spectrogram-play linear both;
+}
+
+/* Reduced motion: disable all referral effects */
+@media (prefers-reduced-motion: reduce) {
+  .referral-mesh-bg::before,
+  .referral-mesh-bg::after {
+    animation: none;
+  }
+
+  .tilt-card {
+    transform: none !important;
+    transition: none;
+  }
+
+  .tilt-card::before,
+  .tilt-card::after {
+    display: none;
+  }
+
+  .stat-gauge::after {
+    transition: none;
+    transform: scaleX(1);
+  }
+
+  .spectrogram-play {
+    animation: none;
+    opacity: 0;
+  }
+
+  .scanner-sweep-line {
+    animation: none !important;
+    top: 50% !important;
+    opacity: 0.5 !important;
+  }
+
+  [data-scanner-progress] {
+    animation: none !important;
+    width: 60% !important;
   }
 }
 

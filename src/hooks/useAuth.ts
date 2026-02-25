@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { authClient, isWithinGracePeriod } from "../lib/neonAuth";
 import logger from "../utils/logger";
+import { useSettingsStore } from "../stores/settingsStore";
 
 const useStaticSession = () => ({
   data: null,
@@ -16,24 +17,21 @@ export function useAuth() {
   const rawIsSignedIn = Boolean(user);
   const gracePeriodActive = isWithinGracePeriod();
 
-  // CRITICAL: During the grace period after OAuth, session cookies may not
-  // be fully established yet. The Neon Auth SDK's useSession hook can return
-  // null during this time, but we should NOT report signed out to the UI.
-  // Instead, we keep reporting signed in and let withSessionRefresh handle retries.
+  // Only sync true to the store — signOut() handles setting false via localStorage + reload.
+  // The Neon SDK's useSession() flickers in Electron (renderer can't access main process cookies).
   const isSignedIn = rawIsSignedIn || gracePeriodActive;
 
-  // Track last synced state to prevent duplicate syncs
-  const lastSyncedStateRef = useRef<boolean | null>(null);
+  const lastSyncedRef = useRef(false);
 
   useEffect(() => {
-    if (!isPending && lastSyncedStateRef.current !== isSignedIn) {
+    if (!isPending && isSignedIn && !lastSyncedRef.current) {
       logger.debug(
         "Auth state sync",
         { isSignedIn, rawIsSignedIn, gracePeriod: gracePeriodActive },
         "auth"
       );
-      localStorage.setItem("isSignedIn", String(isSignedIn));
-      lastSyncedStateRef.current = isSignedIn;
+      useSettingsStore.getState().setIsSignedIn(true);
+      lastSyncedRef.current = true;
     }
   }, [isSignedIn, rawIsSignedIn, gracePeriodActive, isPending]);
 

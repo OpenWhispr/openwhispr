@@ -22,8 +22,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 🎯 **Agent Naming**: Personalize your AI assistant with a custom name for natural interactions
 - 🧠 **Multi-Provider AI**:
   - **OpenAI**: GPT-5, GPT-4.1, o-series reasoning models
-  - **Anthropic**: Claude Opus 4.5, Claude Sonnet 4.5
-  - **Google**: Gemini 2.5 Pro/Flash/Flash-Lite
+  - **Anthropic**: Claude Opus 4.6, Claude Sonnet 4.5
+  - **Google**: Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5 Pro/Flash
   - **Groq**: Ultra-fast inference with Llama and Mixtral models
   - **Local**: Qwen, LLaMA, Mistral models via llama.cpp
 - 🔒 **Privacy-First**: Local processing keeps your voice data completely private
@@ -43,6 +43,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 🎙️ **Push-to-Talk (Windows)**: Native low-level keyboard hook for true push-to-talk with compound hotkey support
 - 📖 **Custom Dictionary**: Add words, names, and technical terms to improve transcription accuracy
 - 🐧 **GNOME Wayland Support**: Native global shortcuts via D-Bus for GNOME Wayland users
+- 📝 **Notes System**: Create, edit, and organize transcription notes with folders, audio upload, and real-time dictation
+- 🤖 **AI Actions**: Apply AI-powered actions to notes with customizable processing templates
+- 🔗 **Referral Program**: Invite friends and earn free Pro months with shareable referral cards
 
 ## Prerequisites
 
@@ -55,19 +58,22 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### For Personal Use (Recommended)
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/OpenWhispr/openwhispr.git
    cd openwhispr
    ```
 
 2. **Install dependencies**:
+
    ```bash
    npm install
    ```
 
 3. **Optional: Set up API keys** (only needed for cloud processing):
-   
+
    **Method A - Environment file**:
+
    ```bash
    cp .env.example .env
    # Edit .env and add your API keys:
@@ -77,17 +83,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
    # GROQ_API_KEY=your_groq_key
    # MISTRAL_API_KEY=your_mistral_key
    ```
-   
+
    **Method B - In-app configuration**:
    - Run the app and configure API keys through the Control Panel
    - Keys are automatically saved and persist across app restarts
 
 4. **Build the application**:
+
    ```bash
    npm run build
    ```
 
 5. **Run the application**:
+
    ```bash
    npm run dev  # Development mode with hot reload
    # OR
@@ -115,12 +123,40 @@ npm run pack
 
 **Note**: On macOS, you may see a security warning when first opening the unsigned app. Right-click and select "Open" to bypass this.
 
+#### Windows
+
+**Native Paste Binary (`windows-fast-paste`)**:
+
+OpenWhispr ships a native C binary for pasting text on Windows, using the Win32 `SendInput` API. This is the **primary** paste mechanism — `nircmd` and PowerShell are only used as fallbacks if the native binary fails.
+
+How it works:
+
+- **Normal applications**: Simulates `Ctrl+V` via `SendInput` with virtual key codes (`VK_CONTROL` + `V`)
+- **Terminal emulators**: Detects the foreground window's class name and simulates `Ctrl+Shift+V` instead
+- **Terminal detection**: Recognizes Windows Terminal, cmd.exe, PowerShell, mintty (Git Bash), PuTTY, Alacritty, WezTerm, kitty, Hyper, MobaXterm, and ConEmu/Cmder
+- **Detect-only mode**: Supports `--detect-only` flag to report the foreground window class without sending keystrokes
+
+Compilation (handled automatically by the build system):
+
+```bash
+# MSVC
+cl /O2 windows-fast-paste.c /Fe:windows-fast-paste.exe user32.lib
+
+# MinGW
+gcc -O2 windows-fast-paste.c -o windows-fast-paste.exe -luser32
+```
+
+The build script (`scripts/build-windows-fast-paste.js`) first attempts to download a prebuilt binary from GitHub releases. If unavailable, it compiles from source using MSVC, MinGW-w64, or Clang. Falls back to `nircmd` or PowerShell `SendKeys` if neither option works.
+
+> ℹ️ **Note**: `CASCADIA_HOSTING_WINDOW_CLASS` covers all shells running inside Windows Terminal (PowerShell, CMD, WSL, etc.), so most modern Windows terminal usage is covered by a single class entry.
+
 #### Linux (Multiple Package Formats)
 
 OpenWhispr now supports multiple Linux package formats for maximum compatibility:
 
 **Available Formats**:
-- `.deb` - Debian, Ubuntu, Linux Mint, Pop!_OS
+
+- `.deb` - Debian, Ubuntu, Linux Mint, Pop!\_OS
 - `.rpm` - Fedora, Red Hat, CentOS, openSUSE
 - `.tar.gz` - Universal archive (works on any distro)
 - `.flatpak` - Sandboxed cross-distro package
@@ -177,11 +213,45 @@ chmod +x dist/OpenWhispr-*.AppImage
 ./dist/OpenWhispr-*.AppImage
 ```
 
-**Optional Dependencies for Automatic Paste**:
+**Native Paste Binary (`linux-fast-paste`)**:
 
-The clipboard paste feature requires platform-specific tools:
+OpenWhispr ships a native C binary for pasting text on Linux, compiled automatically at build time. This is the **primary** paste mechanism — external tools like `xdotool` and `wtype` are only used as fallbacks if the native binary fails.
+
+How it works:
+
+- **X11**: Uses the XTest extension to synthesize `Ctrl+V` (or `Ctrl+Shift+V` in terminals) directly, with no external dependencies beyond X11 itself
+- **Wayland**: Uses the Linux `uinput` subsystem to create a virtual keyboard and inject keystrokes. Falls back to XTest via XWayland if uinput is unavailable
+- **Terminal detection**: Recognizes 20+ terminal emulators (kitty, alacritty, gnome-terminal, wezterm, ghostty, etc.) and automatically uses `Ctrl+Shift+V` instead of `Ctrl+V`
+- **Window targeting**: Can target a specific window ID via `--window` to ensure keystrokes reach the correct application
+
+Build dependencies (for compiling from source):
+
+```bash
+# Debian/Ubuntu
+sudo apt install gcc libx11-dev libxtst-dev
+
+# Fedora/RHEL
+sudo dnf install gcc libX11-devel libXtst-devel
+
+# Arch
+sudo pacman -S gcc libx11 libxtst
+```
+
+The build script (`scripts/build-linux-fast-paste.js`) runs during `npm run compile:linux-paste` and:
+
+1. Detects whether `linux/uinput.h` headers are available
+2. Compiles with `-DHAVE_UINPUT` if so (enables Wayland uinput support)
+3. Caches the binary and skips rebuilds unless the source or flags change
+4. Gracefully falls back to system tools if compilation fails
+
+If the native binary isn't available, OpenWhispr falls back to external paste tools in this order:
+
+**Fallback Dependencies for Automatic Paste**:
+
+The following tools are used as fallbacks when the native paste binary is unavailable or fails:
 
 **X11 (Traditional Linux Desktop)**:
+
 ```bash
 # Debian/Ubuntu
 sudo apt install xdotool
@@ -196,6 +266,7 @@ sudo pacman -S xdotool
 **Wayland (Modern Linux Desktop)**:
 
 **Recommended:** Install `wl-clipboard` for reliable clipboard sharing between Wayland apps:
+
 ```bash
 sudo apt install wl-clipboard    # Debian/Ubuntu
 sudo dnf install wl-clipboard    # Fedora/RHEL
@@ -205,6 +276,7 @@ sudo pacman -S wl-clipboard      # Arch
 Choose **one** of the following paste tools:
 
 **Option 1: wtype** (requires virtual keyboard protocol support)
+
 ```bash
 # Debian/Ubuntu
 sudo apt install wtype
@@ -217,6 +289,7 @@ sudo pacman -S wtype
 ```
 
 **Option 2: ydotool** (works on more compositors, requires daemon)
+
 ```bash
 # Debian/Ubuntu
 sudo apt install ydotool
@@ -232,6 +305,7 @@ sudo systemctl enable --now ydotoold
 ```
 
 **Terminal Detection** (Optional - for KDE Wayland users):
+
 ```bash
 # On KDE Wayland, kdotool enables automatic terminal detection
 # to paste with Ctrl+Shift+V instead of Ctrl+V
@@ -240,7 +314,7 @@ sudo dnf install kdotool  # Fedora/RHEL
 sudo pacman -S kdotool    # Arch
 ```
 
-> ℹ️ **Note**: OpenWhispr automatically tries paste tools in this order: `wtype` → `ydotool` → `xdotool` (for XWayland apps). If no paste tool is installed, text will still be copied to the clipboard - you'll just need to paste manually with Ctrl+V.
+> ℹ️ **Note**: OpenWhispr automatically tries paste methods in this order: native `linux-fast-paste` binary (XTest or uinput) → `wtype` → `ydotool` → `xdotool` (for XWayland apps). If no paste method works, text will still be copied to the clipboard - you'll just need to paste manually with Ctrl+V.
 
 > ⚠️ **ydotool Requirements**: The `ydotoold` daemon must be running for ydotool to work. Start it manually with `sudo ydotoold &` or enable the systemd service as shown above.
 
@@ -290,6 +364,7 @@ npm run build:linux  # Linux
 ## Usage
 
 ### Basic Dictation
+
 1. **Start the app** - A small draggable panel appears on your screen
 2. **Press your hotkey** (default: backtick `) - Start dictating (panel shows recording animation)
 3. **Press your hotkey again** - Stop dictation and begin transcription (panel shows processing animation)
@@ -297,6 +372,7 @@ npm run build:linux  # Linux
 5. **Drag the panel** - Click and drag to move the dictation panel anywhere on your screen
 
 ### Control Panel
+
 - **Access**: Right-click the tray icon (macOS) or through the system menu
 - **Configure**: Choose between local and cloud processing
 - **History**: View, copy, and delete past transcriptions
@@ -305,28 +381,33 @@ npm run build:linux  # Linux
 - **Settings**: Configure API keys, customize hotkeys, and manage permissions
 
 ### Uninstall & Cache Cleanup
-- **In-App**: Use *Settings → General → Local Model Storage → Remove Downloaded Models* to clear `~/.cache/openwhispr/whisper-models` (or `%USERPROFILE%\.cache\openwhispr\whisper-models` on Windows).
+
+- **In-App**: Use _Settings → General → Local Model Storage → Remove Downloaded Models_ to clear `~/.cache/openwhispr/whisper-models` (or `%USERPROFILE%\.cache\openwhispr\whisper-models` on Windows).
 - **Windows Uninstall**: The NSIS uninstaller automatically deletes the same cache directory.
 - **Linux Packages**: `deb`/`rpm` post-uninstall scripts also remove cached models.
 - **macOS**: If you uninstall manually, remove `~/Library/Caches` or `~/.cache/openwhispr/whisper-models` if desired.
 
 ### Agent Naming & AI Processing
+
 Once you've named your agent during setup, you can interact with it using multiple AI providers:
 
 **🎯 Agent Commands** (for AI assistance):
+
 - "Hey [AgentName], make this more professional"
 - "Hey [AgentName], format this as a list"
 - "Hey [AgentName], write a thank you email"
 - "Hey [AgentName], convert this to bullet points"
 
 **🤖 AI Provider Options**:
+
 - **OpenAI**: GPT-5, GPT-4.1, o-series reasoning models
-- **Anthropic**: Claude Opus 4.5, Sonnet 4.5, Haiku 4.5
-- **Google**: Gemini 2.5 Pro/Flash/Flash-Lite
+- **Anthropic**: Claude Opus 4.6, Sonnet 4.5, Haiku 4.5
+- **Google**: Gemini 3.1 Pro, Gemini 3 Flash, Gemini 2.5 Pro/Flash
 - **Groq**: Ultra-fast Llama and Mixtral inference
 - **Local**: Qwen, LLaMA, Mistral via llama.cpp
 
 **📝 Regular Dictation** (for normal text):
+
 - "This is just normal text I want transcribed"
 - "Meeting notes: John mentioned the quarterly report"
 - "Dear Sarah, thank you for your help"
@@ -334,6 +415,7 @@ Once you've named your agent during setup, you can interact with it using multip
 The AI automatically detects when you're giving it commands versus dictating regular text, and removes agent name references from the final output.
 
 ### Custom Dictionary
+
 Improve transcription accuracy for specific words, names, or technical terms:
 
 1. **Access Settings**: Open Control Panel → Settings → Custom Dictionary
@@ -341,12 +423,14 @@ Improve transcription accuracy for specific words, names, or technical terms:
 3. **How It Works**: Words are provided as context hints to the speech recognition model
 
 **Examples of words to add**:
+
 - Uncommon names (e.g., "Sergey", "Xanthe")
 - Technical jargon (e.g., "Kubernetes", "OAuth")
 - Brand names (e.g., "OpenWhispr", "whisper.cpp")
 - Domain-specific terms (e.g., "amortization", "polymerase")
 
 ### Processing Options
+
 - **OpenWhispr Cloud**:
   - Sign in with Google or email — no API keys needed
   - Free plan: 2,000 words/week with 7-day Pro trial for new accounts
@@ -421,7 +505,7 @@ open-whispr/
 - `npm run download:llama-server:all` - Download llama.cpp server for all platforms
 - `npm run download:sherpa-onnx` - Download sherpa-onnx for Parakeet local transcription
 - `npm run download:sherpa-onnx:all` - Download sherpa-onnx for all platforms
-- `npm run compile:native` - Compile native helpers (Globe key listener for macOS, key listener for Windows)
+- `npm run compile:native` - Compile native helpers (Globe key listener for macOS, key listener and fast paste for Windows, fast paste for Linux)
 - `npm run build` - Full build with signing (requires certificates)
 - `npm run build:mac` - macOS build with signing
 - `npm run build:win` - Windows build with signing
@@ -436,6 +520,7 @@ open-whispr/
 ### Architecture
 
 The app consists of two main windows:
+
 1. **Main Window**: Minimal overlay for dictation controls
 2. **Control Panel**: Full settings and history interface
 
@@ -453,6 +538,7 @@ Both use the same React codebase but render different components based on URL pa
 ### Tailwind CSS v4 Setup
 
 This project uses the latest Tailwind CSS v4 with:
+
 - CSS-first configuration using `@theme` directive
 - Vite plugin for optimal performance
 - Custom design tokens for consistent theming
@@ -516,12 +602,14 @@ For local processing, OpenWhispr uses OpenAI's Whisper model via whisper.cpp - a
 3. **No Dependencies**: No Python or other runtime required
 
 **System Fallback**: If the bundled binary fails, install via package manager:
+
 - macOS: `brew install whisper-cpp`
 - Linux: Build from source at https://github.com/ggml-org/whisper.cpp
 
 **From Source**: When running locally (not a packaged build), download the binary with `npm run download:whisper-cpp` so `resources/bin/` has your platform executable.
 
 **Requirements**:
+
 - Sufficient disk space for models (75MB - 3GB depending on model)
 
 **Upgrading from Python-based version**: If you previously used the Python-based Whisper, you'll need to re-download models in GGML format. You can safely delete the old Python environment (`~/.openwhispr/python/`) and PyTorch models (`~/.cache/whisper/`) to reclaim disk space.
@@ -535,9 +623,11 @@ OpenWhispr also supports NVIDIA Parakeet models via sherpa-onnx - a fast alterna
 3. **Models stored in**: `~/.cache/openwhispr/parakeet-models/`
 
 **Available Models**:
+
 - `parakeet-tdt-0.6b-v3`: Multilingual (25 languages), ~680MB
 
 **When to use Parakeet vs Whisper**:
+
 - **Parakeet**: Best for speed-critical use cases or lower-end hardware
 - **Whisper**: Best for quality-critical use cases or when you need specific model sizes
 
@@ -567,6 +657,7 @@ We welcome contributions! Please follow these steps:
 - Follow the existing code style
 - Update documentation as needed
 - Test on your target platform before submitting
+
 ## Security
 
 OpenWhispr is designed with privacy and security in mind:
@@ -639,7 +730,7 @@ A: OpenWhispr supports 58 languages including English, Spanish, French, German, 
 
 ## Project Status
 
-OpenWhispr is actively maintained and ready for production use. Current version: 1.4.9
+OpenWhispr is actively maintained and ready for production use. Current version: 1.5.3
 
 - ✅ Core functionality complete
 - ✅ Cross-platform support (macOS, Windows, Linux)
@@ -652,6 +743,8 @@ OpenWhispr is actively maintained and ready for production use. Current version:
 - ✅ Custom dictionary for improved transcription accuracy
 - ✅ NVIDIA Parakeet support via sherpa-onnx
 - ✅ GNOME Wayland native global shortcuts
+- ✅ Notes system with folders, audio upload, and AI actions
+- ✅ Referral program with shareable invite cards
 
 ## Acknowledgments
 

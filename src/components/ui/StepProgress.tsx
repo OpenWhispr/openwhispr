@@ -23,7 +23,7 @@ export default function StepProgress({ steps, currentStep, className = "" }: Ste
         return (
           <React.Fragment key={index}>
             <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-all duration-150 ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md transition-colors duration-150 ${
                 isActive
                   ? "bg-primary/10 text-primary"
                   : isCompleted
@@ -32,7 +32,7 @@ export default function StepProgress({ steps, currentStep, className = "" }: Ste
               }`}
             >
               <div
-                className={`w-4.5 h-4.5 rounded-md flex items-center justify-center shrink-0 transition-all duration-150 ${
+                className={`w-4.5 h-4.5 rounded-md flex items-center justify-center shrink-0 transition-colors duration-150 ${
                   isActive
                     ? "bg-primary text-primary-foreground"
                     : isCompleted
@@ -47,7 +47,7 @@ export default function StepProgress({ steps, currentStep, className = "" }: Ste
                 )}
               </div>
               <span
-                className={`text-[10px] font-medium hidden md:block tracking-wide ${
+                className={`text-xs font-medium hidden md:block tracking-wide ${
                   isActive
                     ? "text-primary"
                     : isCompleted

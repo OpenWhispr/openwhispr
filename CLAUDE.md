@@ -110,7 +110,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Detects when user addresses their named agent
   - Routes to appropriate AI provider (OpenAI/Anthropic/Gemini)
   - Removes agent name from final output
-  - Supports GPT-5, Claude Opus 4.1, and Gemini 2.5 models
+  - Supports GPT-5, Claude 4.6 (Opus/Sonnet/Haiku), and Gemini 3.1 Pro / 3 Flash models
 
 ### whisper.cpp Integration
 
@@ -237,14 +237,13 @@ Environment variables persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - GPT-5 Nano (`gpt-5-nano`) - Ultra-fast, low latency
     - GPT-4.1 Series (`gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`) - Strong baseline with 1M context
   - **Anthropic** (Via IPC bridge to avoid CORS):
-    - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Balanced performance
+    - Claude Sonnet 4.6 (`claude-sonnet-4-6`) - Balanced performance
     - Claude Haiku 4.5 (`claude-haiku-4-5`) - Fast with near-frontier intelligence
-    - Claude Opus 4.5 (`claude-opus-4-5`) - Most capable Claude model
+    - Claude Opus 4.6 (`claude-opus-4-6`) - Most capable Claude model
   - **Google Gemini** (Direct API integration):
-    - Gemini 2.5 Pro (`gemini-2.5-pro`) - Most capable Gemini model
-    - Gemini 2.5 Flash (`gemini-2.5-flash`) - High-performance with thinking
+    - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
+    - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
     - Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`) - Lowest latency and cost
-    - Gemini 2.0 Flash (`gemini-2.0-flash`) - Fast, long-context option
   - **Local**: GGUF models via llama.cpp (Qwen, Llama, Mistral, GPT-OSS)
 
 ### 8. Model Registry Architecture
@@ -283,11 +282,11 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 **Anthropic Integration**:
 - Routes through IPC handler to avoid CORS issues in renderer process
 - Uses main process for API calls with proper error handling
-- Model IDs use alias format (e.g., `claude-sonnet-4-5` not date-suffixed versions)
+- Model IDs use alias format (e.g., `claude-sonnet-4-6` not date-suffixed versions)
 
 **Gemini Integration**:
 - Direct API calls from renderer process
-- Increased token limits for Gemini 2.5 Pro (2000 minimum)
+- Increased token limits for Gemini 3.1 Pro (2000 minimum)
 - Proper handling of thinking process in responses
 - Error handling for MAX_TOKENS finish reason
 
@@ -399,12 +398,37 @@ On GNOME Wayland, Electron's `globalShortcut` API doesn't work due to Wayland's 
 
 ## Development Guidelines
 
+### Internationalization (i18n) — REQUIRED
+
+All user-facing strings **must** use the i18n system. Never hardcode UI text in components.
+
+**Setup**: react-i18next (v15) with i18next (v25). Translation files in `src/locales/{lang}/translation.json`.
+
+**Supported languages**: en, es, fr, de, pt, it, ru, zh-CN, zh-TW
+
+**How to use**:
+```tsx
+import { useTranslation } from "react-i18next";
+
+const { t } = useTranslation();
+// Simple: t("notes.list.title")
+// With interpolation: t("notes.upload.using", { model: "Whisper" })
+```
+
+**Rules**:
+1. Every new UI string must have a translation key in `en/translation.json` and all other language files
+2. Use `useTranslation()` hook in components and hooks
+3. Keep `{{variable}}` interpolation syntax for dynamic values
+4. Do NOT translate: brand names (OpenWhispr, Pro), technical terms (Markdown, Signal ID), format names (MP3, WAV), AI system prompts
+5. Group keys by feature area (e.g., `notes.editor.*`, `referral.toasts.*`)
+
 ### Adding New Features
 
 1. **New IPC Channel**: Add to both ipcHandlers.js and preload.js
 2. **New Setting**: Update useSettings.ts and SettingsPage.tsx
 3. **New UI Component**: Follow shadcn/ui patterns in src/components/ui
 4. **New Manager**: Create in src/helpers/, initialize in main.js
+5. **New UI Strings**: Add translation keys to all 9 language files (see i18n section above)
 
 ### Testing Checklist
 
@@ -529,7 +553,7 @@ On GNOME Wayland, Electron's `globalShortcut` API doesn't work due to Wayland's 
 
 - Streaming transcription support
 - Custom wake word detection
-- Multi-language UI
+- ~~Multi-language UI~~ (implemented — 9 languages via react-i18next)
 - Cloud model selection
 - Batch transcription
 - Export formats beyond clipboard

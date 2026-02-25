@@ -1,6 +1,6 @@
 {
   "name": "open-whispr",
-  "version": "1.4.9",
+  "version": "1.5.3",
   "description": "A desktop dictation application using whisper.cpp for speech-to-text transcription",
   "main": "main.js",
   "private": true,
@@ -9,8 +9,9 @@
     "compile:fast-paste": "node scripts/build-macos-fast-paste.js",
     "compile:winkeys": "node scripts/build-windows-key-listener.js",
     "compile:text-monitor": "node scripts/build-text-monitor.js",
+    "compile:winpaste": "node scripts/build-windows-fast-paste.js",
     "compile:linux-paste": "node scripts/build-linux-fast-paste.js",
-    "compile:native": "npm run compile:globe && npm run compile:fast-paste && npm run compile:winkeys && npm run compile:linux-paste && npm run compile:text-monitor",
+    "compile:native": "npm run compile:globe && npm run compile:fast-paste && npm run compile:winkeys && npm run compile:winpaste && npm run compile:linux-paste && npm run compile:text-monitor",
     "prestart": "npm run compile:native",
     "start": "electron .",
     "predev": "npm run compile:native",
@@ -24,7 +25,7 @@
     "build:renderer": "cd src && vite build",
     "prebuild:mac": "npm run compile:native && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx",
     "build:mac": "npm run build:renderer && electron-builder --mac",
-    "prebuild:win": "npm run compile:native && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx",
+    "prebuild:win": "npm run compile:native && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx && npm run download:nircmd && npm run download:windows-fast-paste && npm run download:windows-key-listener",
     "build:win": "npm run build:renderer && electron-builder --win",
     "prebuild:linux": "npm run compile:native && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx",
     "build:linux": "npm run build:renderer && electron-builder --linux",
@@ -39,6 +40,9 @@
     "download:llama-server:all": "node scripts/download-llama-server.js --all",
     "download:sherpa-onnx": "node scripts/download-sherpa-onnx.js --current",
     "download:sherpa-onnx:all": "node scripts/download-sherpa-onnx.js --all",
+    "download:nircmd": "node scripts/download-nircmd.js",
+    "download:windows-fast-paste": "node scripts/download-windows-fast-paste.js",
+    "download:windows-key-listener": "node scripts/download-windows-key-listener.js",
     "format:js": "eslint . --fix && cd src && eslint . --fix && prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "format": "npm run format:js",
     "format:check": "eslint . && cd src && eslint . && prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
@@ -86,6 +90,7 @@
     "vite": "^6.3.5"
   },
   "dependencies": {
+    "@neondatabase/auth": "^0.1.0-beta.21",
     "@neondatabase/neon-js": "^0.1.0-beta.22",
     "@radix-ui/react-accordion": "^1.1.2",
     "@radix-ui/react-dialog": "^1.1.14",
@@ -114,6 +119,7 @@
     "tar": "^7.4.3",
     "tw-animate-css": "^1.3.4",
     "unzipper": "^0.12.3",
-    "ws": "^8.19.0"
+    "ws": "^8.19.0",
+    "zustand": "^5.0.11"
   }
 }

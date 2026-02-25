@@ -1,13 +1,8 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Minus, Square, X, Copy } from "lucide-react";
 
-/**
- * Window control buttons for Linux and Windows platforms
- * Provides minimize, maximize/restore, and close functionality
- * macOS uses native window controls so this component is not rendered there
- */
 export default function WindowControls() {
   const { t } = useTranslation();
   const [isMaximized, setIsMaximized] = useState(false);
@@ -15,22 +10,14 @@ export default function WindowControls() {
   useEffect(() => {
     let mounted = true;
 
-    // Sync maximized state with main process
     const syncIsMaximized = async () => {
       try {
         const maximized = await window.electronAPI?.windowIsMaximized?.();
-        if (mounted) {
-          setIsMaximized(!!maximized);
-        }
-      } catch {
-        // Silently handle if API not available
-      }
+        if (mounted) setIsMaximized(!!maximized);
+      } catch {}
     };
 
-    // Initial sync
     syncIsMaximized();
-
-    // Poll for changes (window can be maximized via double-click on title bar, etc.)
     const intervalId = setInterval(syncIsMaximized, 1000);
 
     return () => {
@@ -42,28 +29,21 @@ export default function WindowControls() {
   const handleMinimize = async () => {
     try {
       await window.electronAPI?.windowMinimize?.();
-    } catch {
-      // Silently handle if API not available
-    }
+    } catch {}
   };
 
   const handleMaximize = async () => {
     try {
       await window.electronAPI?.windowMaximize?.();
-      // Update state after toggle
       const maximized = await window.electronAPI?.windowIsMaximized?.();
       setIsMaximized(!!maximized);
-    } catch {
-      // Silently handle if API not available
-    }
+    } catch {}
   };
 
   const handleClose = async () => {
     try {
       await window.electronAPI?.windowClose?.();
-    } catch {
-      // Silently handle if API not available
-    }
+    } catch {}
   };
 
   return (

@@ -1,4 +1,5 @@
 import logger from "./logger";
+import { getSettings } from "../stores/settingsStore";
 
 const START_NOTES = [523.25, 659.25];
 const STOP_NOTES = [587.33, 440];
@@ -68,7 +69,7 @@ const scheduleTone = (context, frequency, startTime) => {
   oscillator.stop(stopTime + 0.01);
 };
 
-const isEnabled = () => localStorage.getItem("audioCuesEnabled") !== "false";
+const isEnabled = () => getSettings().audioCuesEnabled;
 
 const playCue = async (notes) => {
   try {

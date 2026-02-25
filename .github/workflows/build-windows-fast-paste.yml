@@ -1,0 +1,73 @@
+name: Build Windows Fast Paste
+
+on:
+  push:
+    paths:
+      - 'resources/windows-fast-paste.c'
+      - '.github/workflows/build-windows-fast-paste.yml'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., 1.0.0)'
+        required: false
+        default: '1.0.0'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Compile Windows Fast Paste
+        run: |
+          cl /O2 /nologo resources/windows-fast-paste.c /Fe:windows-fast-paste.exe user32.lib
+        shell: cmd
+
+      - name: Verify binary
+        run: |
+          if (Test-Path "windows-fast-paste.exe") {
+            Write-Host "Binary built successfully"
+            Get-Item "windows-fast-paste.exe" | Select-Object Name, Length
+          } else {
+            Write-Error "Binary not found"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Create zip archive
+        run: |
+          Compress-Archive -Path windows-fast-paste.exe -DestinationPath windows-fast-paste-win32-x64.zip
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-fast-paste
+          path: windows-fast-paste-win32-x64.zip
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-fast-paste-v${{ inputs.version || '1.0.0' }}
+          name: Windows Fast Paste v${{ inputs.version || '1.0.0' }}
+          body: |
+            Prebuilt Windows fast-paste binary for clipboard paste operations.
+
+            Uses Win32 SendInput API with automatic terminal detection
+            (Ctrl+V for normal apps, Ctrl+Shift+V for terminals).
+          files: windows-fast-paste-win32-x64.zip
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

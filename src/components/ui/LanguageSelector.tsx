@@ -158,7 +158,7 @@ export default function LanguageSelector({
           h-7 px-2.5 text-left
           rounded text-xs font-medium
           border shadow-sm backdrop-blur-sm
-          transition-all duration-200 ease-out
+          transition-[background-color,border-color,transform] duration-200 ease-out
           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-offset-1
           ${
             isOpen
@@ -176,7 +176,7 @@ export default function LanguageSelector({
           {items.find((l) => l.value === value)?.label ?? value}
         </span>
         <ChevronDown
-          className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-all duration-200 ${
+          className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-[color,transform] duration-200 ${
             isOpen ? "rotate-180 text-primary" : "group-hover:text-foreground"
           }`}
         />
@@ -241,7 +241,7 @@ export default function LanguageSelector({
                         className={`
                           group w-full flex items-center justify-between gap-2
                           h-7 px-2.5 text-left text-xs font-medium
-                          rounded transition-all duration-150 ease-out
+                          rounded transition-[background-color,color,transform] duration-150 ease-out
                           ${
                             isSelected
                               ? "bg-primary/15 text-primary shadow-sm"

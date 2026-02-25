@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execFileSync } = require("child_process");
 const {
   downloadFile,
   findBinaryInDir,
@@ -50,8 +50,13 @@ function getDownloadUrl(archiveName) {
 
 function extractTarBz2(archivePath, destDir) {
   fs.mkdirSync(destDir, { recursive: true });
-  // tar is available on Windows 10+ and all Unix systems
-  execSync(`tar -xjf "${archivePath}" -C "${destDir}"`, { stdio: "inherit" });
+  // Use relative paths from archive dir as cwd, so neither -f nor -C args
+  // contain Windows drive letter colons (GNU tar treats C: as remote host)
+  const cwd = path.dirname(archivePath);
+  execFileSync("tar", ["-xjf", path.basename(archivePath), "-C", path.relative(cwd, destDir)], {
+    stdio: "inherit",
+    cwd,
+  });
 }
 
 function findLibrariesInDir(dir, pattern, maxDepth = 5, currentDepth = 0) {

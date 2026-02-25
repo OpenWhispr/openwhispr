@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Download, Trash2, Cloud, Lock, X } from "lucide-react";
+import { Download, Trash2, Cloud, Lock, X, Zap, Check } from "lucide-react";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
@@ -10,7 +10,7 @@ import { DownloadProgressBar } from "./ui/DownloadProgressBar";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import { ConfirmDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
-import { useModelDownload } from "../hooks/useModelDownload";
+import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
 import {
   getTranscriptionProviders,
   TranscriptionProviderData,
@@ -23,8 +23,11 @@ import {
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
-import { API_ENDPOINTS } from "../config/constants";
+import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { createExternalLinkHandler } from "../utils/externalLinks";
+import { getCachedPlatform } from "../utils/platform";
+import type { CudaWhisperStatus } from "../types/electron";
+import logger from "../utils/logger";
 
 interface LocalModel {
   model: string;
@@ -81,7 +84,7 @@ function LocalModelCard({
   return (
     <div
       onClick={handleClick}
-      className={`relative w-full text-left overflow-hidden rounded-md border transition-all duration-200 group ${
+      className={`relative w-full text-left overflow-hidden rounded-md border transition-colors duration-200 group ${
         isSelected ? cardStyles.modelCard.selected : cardStyles.modelCard.default
       } ${isDownloaded && !isSelected ? "cursor-pointer" : ""}`}
     >
@@ -110,14 +113,14 @@ function LocalModelCard({
           <span className="font-semibold text-sm text-foreground truncate tracking-tight">
             {name}
           </span>
-          <span className="text-[11px] text-muted-foreground/50 tabular-nums shrink-0">
+          <span className="text-xs text-muted-foreground/50 tabular-nums shrink-0">
             {actualSizeMb ? `${actualSizeMb}MB` : size}
           </span>
           {recommended && (
             <span className={cardStyles.badges.recommended}>{t("common.recommended")}</span>
           )}
           {languageLabel && (
-            <span className="text-[11px] text-muted-foreground/50 font-medium shrink-0">
+            <span className="text-xs text-muted-foreground/50 font-medium shrink-0">
               {languageLabel}
             </span>
           )}
@@ -127,7 +130,7 @@ function LocalModelCard({
           {isDownloaded ? (
             <>
               {isSelected && (
-                <span className="text-[10px] font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
+                <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
                   {t("common.active")}
                 </span>
               )}
@@ -138,7 +141,7 @@ function LocalModelCard({
                 }}
                 size="sm"
                 variant="ghost"
-                className="h-6 w-6 p-0 text-muted-foreground/40 hover:text-destructive opacity-0 group-hover:opacity-100 transition-all active:scale-95"
+                className="h-6 w-6 p-0 text-muted-foreground/40 hover:text-destructive opacity-0 group-hover:opacity-100 transition-[color,opacity,transform] active:scale-95"
               >
                 <Trash2 size={12} />
               </Button>
@@ -152,7 +155,7 @@ function LocalModelCard({
               disabled={isCancelling}
               size="sm"
               variant="outline"
-              className="h-6 px-2.5 text-[11px] text-destructive border-destructive/25 hover:bg-destructive/8"
+              className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
             >
               <X size={11} className="mr-0.5" />
               {isCancelling ? "..." : t("common.cancel")}
@@ -165,7 +168,7 @@ function LocalModelCard({
               }}
               size="sm"
               variant="default"
-              className="h-6 px-2.5 text-[11px]"
+              className="h-6 px-2.5 text-xs"
             >
               <Download size={11} className="mr-1" />
               {t("common.download")}
@@ -282,6 +285,14 @@ export default function TranscriptionModelPicker({
   const [internalLocalProvider, setInternalLocalProvider] = useState(selectedLocalProvider);
   const hasLoadedRef = useRef(false);
   const hasLoadedParakeetRef = useRef(false);
+  const [cudaStatus, setCudaStatus] = useState<CudaWhisperStatus | null>(null);
+  const [cudaDownloading, setCudaDownloading] = useState(false);
+  const [cudaProgress, setCudaProgress] = useState<DownloadProgress>({
+    downloadedBytes: 0,
+    totalBytes: 0,
+    percentage: 0,
+  });
+  const [cudaDismissed, setCudaDismissed] = useState(false);
 
   useEffect(() => {
     if (selectedLocalProvider !== internalLocalProvider) {
@@ -336,7 +347,7 @@ export default function TranscriptionModelPicker({
         validateAndSelectModel(result.models);
       }
     } catch (error) {
-      console.error("[TranscriptionModelPicker] Failed to load models:", error);
+      logger.error("Failed to load models", { error }, "models");
       setLocalModels([]);
     } finally {
       isLoadingRef.current = false;
@@ -353,7 +364,7 @@ export default function TranscriptionModelPicker({
         setParakeetModels(result.models);
       }
     } catch (error) {
-      console.error("[TranscriptionModelPicker] Failed to load Parakeet models:", error);
+      logger.error("Failed to load Parakeet models", { error }, "models");
       setParakeetModels([]);
     } finally {
       isLoadingParakeetRef.current = false;
@@ -435,6 +446,47 @@ export default function TranscriptionModelPicker({
     window.addEventListener("openwhispr-models-cleared", handleModelsCleared);
     return () => window.removeEventListener("openwhispr-models-cleared", handleModelsCleared);
   }, [loadLocalModels, loadParakeetModels]);
+
+  useEffect(() => {
+    if (!useLocalWhisper || internalLocalProvider !== "whisper") return;
+    if (getCachedPlatform() === "darwin") return;
+    window.electronAPI
+      ?.getCudaWhisperStatus?.()
+      ?.then(setCudaStatus)
+      .catch(() => {});
+  }, [useLocalWhisper, internalLocalProvider]);
+
+  useEffect(() => {
+    if (!cudaDownloading) return;
+    const cleanup = window.electronAPI?.onCudaDownloadProgress?.((data) => {
+      setCudaProgress(data);
+    });
+    return cleanup;
+  }, [cudaDownloading]);
+
+  const handleCudaDownload = async () => {
+    setCudaDownloading(true);
+    try {
+      const result = await window.electronAPI?.downloadCudaWhisperBinary?.();
+      if (result?.success) {
+        const status = await window.electronAPI?.getCudaWhisperStatus?.();
+        setCudaStatus(status || null);
+      }
+    } finally {
+      setCudaDownloading(false);
+    }
+  };
+
+  const handleCudaDelete = async () => {
+    await window.electronAPI?.deleteCudaWhisperBinary?.();
+    const status = await window.electronAPI?.getCudaWhisperStatus?.();
+    setCudaStatus(status || null);
+  };
+
+  const handleCudaCancel = async () => {
+    await window.electronAPI?.cancelCudaWhisperDownload?.();
+    setCudaDownloading(false);
+  };
 
   const {
     downloadingModel,
@@ -526,7 +578,6 @@ export default function TranscriptionModelPicker({
     const trimmed = (cloudTranscriptionBaseUrl || "").trim();
     if (!trimmed) return;
 
-    const { normalizeBaseUrl } = require("../config/constants");
     const normalized = normalizeBaseUrl(trimmed);
 
     if (normalized && normalized !== cloudTranscriptionBaseUrl) {
@@ -772,7 +823,7 @@ export default function TranscriptionModelPicker({
               providers={cloudProviderTabs}
               selectedId={selectedCloudProvider}
               onSelect={handleCloudProviderChange}
-              colorScheme={colorScheme === "purple" ? "purple" : "indigo"}
+              colorScheme="purple"
               scrollable
             />
           </div>
@@ -828,7 +879,7 @@ export default function TranscriptionModelPicker({
                           openai: "https://platform.openai.com/api-keys",
                         }[selectedCloudProvider] || "https://platform.openai.com/api-keys"
                       )}
-                      className="text-[11px] text-white/70 hover:text-white transition-colors cursor-pointer"
+                      className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
                     >
                       {t("transcription.getKey")}
                     </button>
@@ -855,7 +906,7 @@ export default function TranscriptionModelPicker({
                     models={cloudModelOptions}
                     selectedModel={selectedCloudModel}
                     onModelSelect={onCloudModelSelect}
-                    colorScheme={colorScheme === "purple" ? "purple" : "indigo"}
+                    colorScheme="purple"
                   />
                 </div>
               </div>
@@ -869,11 +920,75 @@ export default function TranscriptionModelPicker({
               providers={LOCAL_PROVIDER_TABS}
               selectedId={internalLocalProvider}
               onSelect={handleLocalProviderChange}
-              colorScheme={colorScheme === "purple" ? "purple" : "indigo"}
+              colorScheme="purple"
             />
           </div>
 
           {progressDisplay}
+
+          {cudaDownloading && internalLocalProvider === "whisper" && (
+            <div>
+              <DownloadProgressBar modelName="GPU acceleration" progress={cudaProgress} />
+              <div className="px-2.5 pb-1 flex justify-end">
+                <button
+                  onClick={handleCudaCancel}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {internalLocalProvider === "whisper" &&
+            !cudaDismissed &&
+            !cudaDownloading &&
+            getCachedPlatform() !== "darwin" &&
+            cudaStatus?.gpuInfo.hasNvidiaGpu && (
+              <div className="mx-2 mt-2 rounded-md border border-border bg-surface-1 p-2.5">
+                {cudaStatus.downloaded ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Check size={13} className="text-success" />
+                      <span className="text-xs font-medium text-foreground">{t("gpu.active")}</span>
+                    </div>
+                    <Button
+                      onClick={handleCudaDelete}
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                    >
+                      {t("gpu.remove")}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2.5">
+                    <Zap size={13} className="text-primary shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground">
+                        {t("gpu.transcriptionBanner")}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <Button
+                          onClick={handleCudaDownload}
+                          size="sm"
+                          variant="default"
+                          className="h-6 px-2.5 text-xs"
+                        >
+                          {t("gpu.enableButton")}
+                        </Button>
+                        <button
+                          onClick={() => setCudaDismissed(true)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {t("gpu.dismiss")}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
           <div className="p-2">
             {internalLocalProvider === "whisper" && renderLocalModels()}

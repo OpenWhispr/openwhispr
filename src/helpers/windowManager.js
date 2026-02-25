@@ -1,4 +1,5 @@
 const { app, screen, BrowserWindow, shell, dialog } = require("electron");
+const debugLogger = require("./debugLogger");
 const HotkeyManager = require("./hotkeyManager");
 const DragManager = require("./dragManager");
 const MenuManager = require("./menuManager");
@@ -22,18 +23,14 @@ class WindowManager {
     this.isQuitting = false;
     this.isMainWindowInteractive = false;
     this.loadErrorShown = false;
-    this.windowsPushToTalkAvailable = false;
     this.macCompoundPushState = null;
+    this.winPushState = null;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
     });
-  }
-
-  setWindowsPushToTalkAvailable(available) {
-    this.windowsPushToTalkAvailable = available;
   }
 
   async createMainWindow() {
@@ -44,11 +41,6 @@ class WindowManager {
       ...MAIN_WINDOW_CONFIG,
       ...position,
     });
-
-    // Main window (dictation overlay) should never appear in dock/taskbar
-    // On macOS, users access the app via the menu bar tray icon
-    // On Windows/Linux, the control panel stays in the taskbar when minimized
-    this.mainWindow.setSkipTaskbar(true);
 
     this.setMainWindowInteractivity(false);
     this.registerMainWindowEvents();
@@ -165,7 +157,7 @@ class WindowManager {
         return;
       }
 
-      const activationMode = await this.getActivationMode();
+      const activationMode = this.getActivationMode();
       const currentHotkey = this.hotkeyManager.getCurrentHotkey?.();
 
       if (
@@ -179,11 +171,9 @@ class WindowManager {
         return;
       }
 
-      // Windows push mode: defer to windowsKeyManager if available, else fall through to toggle
-      if (process.platform === "win32" && this.windowsPushToTalkAvailable) {
-        if (activationMode === "push") {
-          return;
-        }
+      // Windows push mode: always defer to native listener (globalShortcut can't detect key-up)
+      if (process.platform === "win32" && activationMode === "push") {
+        return;
       }
 
       const now = Date.now();
@@ -218,7 +208,7 @@ class WindowManager {
 
     const safetyTimeoutId = setTimeout(() => {
       if (this.macCompoundPushState?.active) {
-        console.warn("[WindowManager] Compound PTT safety timeout triggered - stopping recording");
+        debugLogger.warn("Compound PTT safety timeout", undefined, "ptt");
         this.forceStopMacCompoundPush("timeout");
       }
     }, MAX_PUSH_DURATION_MS);
@@ -296,6 +286,8 @@ class WindowManager {
       switch (part) {
         case "Command":
         case "Cmd":
+        case "RightCommand":
+        case "RightCmd":
         case "CommandOrControl":
         case "Super":
         case "Meta":
@@ -303,13 +295,18 @@ class WindowManager {
           break;
         case "Control":
         case "Ctrl":
+        case "RightControl":
+        case "RightCtrl":
           required.add("control");
           break;
         case "Alt":
         case "Option":
+        case "RightAlt":
+        case "RightOption":
           required.add("option");
           break;
         case "Shift":
+        case "RightShift":
           required.add("shift");
           break;
         case "Fn":
@@ -321,6 +318,53 @@ class WindowManager {
     }
 
     return required;
+  }
+
+  startWindowsPushToTalk() {
+    if (this.winPushState?.active) {
+      return;
+    }
+
+    const MIN_HOLD_DURATION_MS = 150;
+    const downTime = Date.now();
+
+    this.showDictationPanel();
+
+    this.winPushState = {
+      active: true,
+      downTime,
+      isRecording: false,
+    };
+
+    setTimeout(() => {
+      if (!this.winPushState || this.winPushState.downTime !== downTime) {
+        return;
+      }
+
+      if (!this.winPushState.isRecording) {
+        this.winPushState.isRecording = true;
+        this.sendStartDictation();
+      }
+    }, MIN_HOLD_DURATION_MS);
+  }
+
+  handleWindowsPushKeyUp() {
+    if (!this.winPushState?.active) {
+      return;
+    }
+
+    const wasRecording = this.winPushState.isRecording;
+    this.winPushState = null;
+
+    if (wasRecording) {
+      this.sendStopDictation();
+    } else {
+      this.hideDictationPanel();
+    }
+  }
+
+  resetWindowsPushState() {
+    this.winPushState = null;
   }
 
   sendStartDictation() {
@@ -457,11 +501,7 @@ class WindowManager {
     this.controlPanelWindow.on("close", (event) => {
       if (!this.isQuitting) {
         event.preventDefault();
-        if (process.platform === "darwin") {
-          this.hideControlPanelToTray();
-        } else {
-          this.controlPanelWindow.minimize();
-        }
+        this.hideControlPanelToTray();
       }
     });
 
@@ -494,6 +534,24 @@ class WindowManager {
       }
     );
 
+    this.controlPanelWindow.webContents.on("render-process-gone", (_event, details) => {
+      if (details.reason === "crashed" || details.reason === "killed" || details.reason === "oom") {
+        debugLogger.error(
+          "Control panel renderer process gone",
+          { reason: details.reason, exitCode: details.exitCode },
+          "window"
+        );
+        setTimeout(() => this.loadControlPanel(), 1000);
+      }
+    });
+
+    this.controlPanelWindow.on("show", () => {
+      if (this.controlPanelWindow.webContents.isCrashed()) {
+        debugLogger.error("Control panel crashed, reloading on show", undefined, "window");
+        this.loadControlPanel();
+      }
+    });
+
     await this.loadControlPanel();
   }
 
@@ -504,6 +562,9 @@ class WindowManager {
   showDictationPanel(options = {}) {
     const { focus = false } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      if (this.mainWindow.isMinimized()) {
+        this.mainWindow.restore();
+      }
       if (!this.mainWindow.isVisible()) {
         if (typeof this.mainWindow.showInactive === "function") {
           this.mainWindow.showInactive();
@@ -531,11 +592,7 @@ class WindowManager {
 
   hideDictationPanel() {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      if (process.platform === "darwin") {
-        this.mainWindow.hide();
-      } else {
-        this.mainWindow.minimize();
-      }
+      this.mainWindow.hide();
     }
   }
 

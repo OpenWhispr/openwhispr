@@ -99,6 +99,7 @@
         "sherpa-onnx-*",
         "windows-key-listener*",
         "windows-text-monitor*",
+        "windows-fast-paste*",
         "*.dylib",
         "*.dll",
         "*.so*"

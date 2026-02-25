@@ -369,6 +369,7 @@ class ModelManager {
       await this.serverManager.start(modelPath, {
         contextSize: options.contextSize || modelInfo.model.contextLength || 4096,
         threads: options.threads || 4,
+        gpuLayers: 99,
       });
       this.currentServerModelId = modelId;
 
@@ -441,6 +442,7 @@ class ModelManager {
       await this.serverManager.start(modelPath, {
         contextSize: modelInfo.model.contextLength || 4096,
         threads: 4,
+        gpuLayers: 99,
       });
       this.currentServerModelId = modelId;
       debugLogger.info("llama-server pre-warmed", { modelId });

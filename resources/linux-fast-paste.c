@@ -21,7 +21,7 @@ static const char *terminal_classes[] = {
     "konsole", "gnome-terminal", "terminal", "kitty", "alacritty",
     "terminator", "xterm", "urxvt", "rxvt", "tilix", "terminology",
     "wezterm", "foot", "st", "yakuake", "ghostty", "guake", "tilda",
-    "hyper", "tabby", "sakura", "warp", NULL
+    "hyper", "tabby", "sakura", "warp", "termius", NULL
 };
 
 static int is_terminal(const char *wm_class) {

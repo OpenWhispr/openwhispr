@@ -1,23 +1,7 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import {
-  Trash2,
-  Settings,
-  FileText,
-  Mic,
-  Download,
-  RefreshCw,
-  Loader2,
-  Sparkles,
-  Cloud,
-  X,
-  AlertTriangle,
-} from "lucide-react";
-import type { SettingsSectionType } from "./SettingsModal";
-import TitleBar from "./TitleBar";
-import SupportDropdown from "./ui/SupportDropdown";
-import TranscriptionItem from "./ui/TranscriptionItem";
+import { Download, RefreshCw, Loader2, AlertTriangle, Zap } from "lucide-react";
 import UpgradePrompt from "./UpgradePrompt";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
@@ -31,11 +15,20 @@ import {
   useTranscriptions,
   initializeTranscriptions,
   removeTranscription as removeFromStore,
-  clearTranscriptions as clearStoreTranscriptions,
 } from "../stores/transcriptionStore";
-import { formatHotkeyLabel } from "../utils/hotkeys";
+import ControlPanelSidebar, { type ControlPanelView } from "./ControlPanelSidebar";
+import WindowControls from "./WindowControls";
+import { getCachedPlatform } from "../utils/platform";
+import { setActiveNoteId, setActiveFolderId } from "../stores/noteStore";
+import HistoryView from "./HistoryView";
+
+const platform = getCachedPlatform();
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
+const ReferralModal = React.lazy(() => import("./ReferralModal"));
+const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
+const DictionaryView = React.lazy(() => import("./DictionaryView"));
+const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
 
 export default function ControlPanel() {
   const { t } = useTranslation();
@@ -45,16 +38,31 @@ export default function ControlPanel() {
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
-  const [settingsSection, setSettingsSection] = useState<SettingsSectionType | undefined>();
+  const [settingsSection, setSettingsSection] = useState<string | undefined>();
   const [aiCTADismissed, setAiCTADismissed] = useState(
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
+  const [showReferrals, setShowReferrals] = useState(false);
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
+  const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{ cuda: boolean; vulkan: boolean }>({
+    cuda: false,
+    vulkan: false,
+  });
+  const [gpuBannerDismissed, setGpuBannerDismissed] = useState(
+    () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
+  );
   const cloudMigrationProcessed = useRef(false);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
-  const { useReasoningModel, setUseLocalWhisper, setCloudTranscriptionMode } = useSettings();
-  const { isSignedIn, isLoaded: authLoaded } = useAuth();
+  const {
+    useLocalWhisper,
+    localTranscriptionProvider,
+    useReasoningModel,
+    setUseLocalWhisper,
+    setCloudTranscriptionMode,
+  } = useSettings();
+  const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
   const usage = useUsage();
 
   const {
@@ -147,6 +155,30 @@ export default function ControlPanel() {
     setShowCloudMigrationBanner(true);
   }, [authLoaded, isSignedIn, setUseLocalWhisper, setCloudTranscriptionMode]);
 
+  useEffect(() => {
+    if (platform === "darwin" || gpuBannerDismissed) return;
+    const detect = async () => {
+      const results = { cuda: false, vulkan: false };
+      if (useLocalWhisper && localTranscriptionProvider === "whisper") {
+        try {
+          const status = await window.electronAPI?.getCudaWhisperStatus?.();
+          if (status?.gpuInfo.hasNvidiaGpu && !status.downloaded) results.cuda = true;
+        } catch {}
+      }
+      if (useReasoningModel) {
+        try {
+          const [gpu, vulkan] = await Promise.all([
+            window.electronAPI?.detectVulkanGpu?.(),
+            window.electronAPI?.getLlamaVulkanStatus?.(),
+          ]);
+          if (gpu?.available && !vulkan?.downloaded) results.vulkan = true;
+        } catch {}
+      }
+      setGpuAccelAvailable(results);
+    };
+    detect();
+  }, [useLocalWhisper, localTranscriptionProvider, useReasoningModel, gpuBannerDismissed]);
+
   const loadTranscriptions = async () => {
     try {
       setIsLoading(true);
@@ -182,34 +214,6 @@ export default function ControlPanel() {
     [toast, t]
   );
 
-  const clearHistory = useCallback(async () => {
-    showConfirmDialog({
-      title: t("controlPanel.history.clearTitle"),
-      description: t("controlPanel.history.clearDescription"),
-      onConfirm: async () => {
-        try {
-          const result = await window.electronAPI.clearTranscriptions();
-          clearStoreTranscriptions();
-          toast({
-            title: t("controlPanel.history.clearedTitle"),
-            description: t("controlPanel.history.clearedDescription", {
-              count: result.cleared,
-            }),
-            variant: "success",
-            duration: 3000,
-          });
-        } catch (error) {
-          toast({
-            title: t("controlPanel.history.couldNotClearTitle"),
-            description: t("controlPanel.history.couldNotClearDescription"),
-            variant: "destructive",
-          });
-        }
-      },
-      variant: "destructive",
-    });
-  }, [showConfirmDialog, toast, t]);
-
   const deleteTranscription = useCallback(
     async (id: number) => {
       showConfirmDialog({
@@ -226,7 +230,7 @@ export default function ControlPanel() {
                 description: t("controlPanel.history.couldNotDeleteDescription"),
               });
             }
-          } catch (error) {
+          } catch {
             showAlertDialog({
               title: t("controlPanel.history.couldNotDeleteTitle"),
               description: t("controlPanel.history.couldNotDeleteDescriptionGeneric"),
@@ -306,7 +310,7 @@ export default function ControlPanel() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-screen bg-background flex flex-col">
       <ConfirmDialog
         open={confirmDialog.open}
         onOpenChange={hideConfirmDialog}
@@ -331,40 +335,6 @@ export default function ControlPanel() {
         limit={limitData?.limit}
       />
 
-      <TitleBar
-        actions={
-          <>
-            {!updateStatus.isDevelopment &&
-              (updateStatus.updateAvailable ||
-                updateStatus.updateDownloaded ||
-                isDownloading ||
-                isInstalling) && (
-                <Button
-                  variant={updateStatus.updateDownloaded ? "default" : "outline"}
-                  size="sm"
-                  onClick={handleUpdateClick}
-                  disabled={isInstalling || isDownloading}
-                  className="gap-1.5 text-xs"
-                >
-                  {getUpdateButtonContent()}
-                </Button>
-              )}
-            <SupportDropdown />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setSettingsSection(undefined);
-                setShowSettings(true);
-              }}
-              className="text-foreground/70 hover:text-foreground hover:bg-foreground/10"
-            >
-              <Settings size={16} />
-            </Button>
-          </>
-        }
-      />
-
       {showSettings && (
         <Suspense fallback={null}>
           <SettingsModal
@@ -378,180 +348,191 @@ export default function ControlPanel() {
         </Suspense>
       )}
 
-      <div className="p-4">
-        <div className="max-w-3xl mx-auto">
-          {usage?.isPastDue && (
-            <div className="mb-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
-              <div className="flex items-start gap-3">
-                <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                  <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-amber-900 dark:text-amber-200 mb-0.5">
-                    {t("controlPanel.billing.pastDueTitle")}
-                  </p>
-                  <p className="text-[12px] text-amber-700 dark:text-amber-300/80 mb-2">
-                    {t("controlPanel.billing.bannerDescription", {
-                      limit: usage.limit.toLocaleString(),
-                    })}
-                  </p>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-7 text-[11px]"
-                    onClick={() => {
-                      setSettingsSection("account");
-                      setShowSettings(true);
-                    }}
-                  >
-                    {t("controlPanel.billing.updatePayment")}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
+      {showReferrals && (
+        <Suspense fallback={null}>
+          <ReferralModal open={showReferrals} onOpenChange={setShowReferrals} />
+        </Suspense>
+      )}
 
-          <div className="flex items-center justify-between mb-3 px-1">
-            <div className="flex items-center gap-2">
-              <FileText size={14} className="text-primary" />
-              <h2 className="text-sm font-semibold text-foreground">
-                {t("controlPanel.history.title")}
-              </h2>
-              {history.length > 0 && (
-                <span className="text-[11px] text-muted-foreground tabular-nums">
-                  ({history.length})
-                </span>
-              )}
-            </div>
-            {history.length > 0 && (
+      <div className="flex flex-1 overflow-hidden">
+        <ControlPanelSidebar
+          activeView={activeView}
+          onViewChange={setActiveView}
+          onOpenSettings={() => {
+            setSettingsSection(undefined);
+            setShowSettings(true);
+          }}
+          onOpenReferrals={() => setShowReferrals(true)}
+          onUpgrade={() => {
+            setSettingsSection("plansBilling");
+            setShowSettings(true);
+          }}
+          onUpgradeCheckout={() => usage?.openCheckout()}
+          isOverLimit={usage?.isOverLimit ?? false}
+          userName={user?.name}
+          userEmail={user?.email}
+          userImage={user?.image}
+          isSignedIn={isSignedIn}
+          authLoaded={authLoaded}
+          isProUser={!!(usage?.isSubscribed || usage?.isTrial)}
+          usageLoaded={usage?.hasLoaded ?? false}
+          updateAction={
+            !updateStatus.isDevelopment &&
+            (updateStatus.updateAvailable ||
+              updateStatus.updateDownloaded ||
+              isDownloading ||
+              isInstalling) ? (
               <Button
-                onClick={clearHistory}
-                variant="ghost"
+                variant={updateStatus.updateDownloaded ? "default" : "outline"}
                 size="sm"
-                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                onClick={handleUpdateClick}
+                disabled={isInstalling || isDownloading}
+                className="gap-1.5 text-xs w-full h-7"
               >
-                <Trash2 size={12} className="mr-1" />
-                {t("controlPanel.history.clear")}
+                {getUpdateButtonContent()}
               </Button>
-            )}
-          </div>
-
-          {showCloudMigrationBanner && (
-            <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
-              <button
-                onClick={() => {
-                  setShowCloudMigrationBanner(false);
-                  localStorage.setItem("cloudMigrationShown", "true");
-                }}
-                className="absolute top-2 right-2 p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-              >
-                <X size={14} />
-              </button>
-              <div className="flex items-start gap-3 pr-6">
-                <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                  <Cloud size={16} className="text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-foreground mb-0.5">
-                    {t("controlPanel.cloudMigration.title")}
-                  </p>
-                  <p className="text-[12px] text-muted-foreground mb-2">
-                    {t("controlPanel.cloudMigration.description")}
-                  </p>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-7 text-[11px]"
-                    onClick={() => {
-                      setShowCloudMigrationBanner(false);
-                      localStorage.setItem("cloudMigrationShown", "true");
-                      setSettingsSection("transcription");
-                      setShowSettings(true);
-                    }}
-                  >
-                    {t("controlPanel.cloudMigration.viewSettings")}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!useReasoningModel && !aiCTADismissed && (
-            <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
-              <button
-                onClick={() => {
-                  localStorage.setItem("aiCTADismissed", "true");
-                  setAiCTADismissed(true);
-                }}
-                className="absolute top-2 right-2 p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-              >
-                <X size={14} />
-              </button>
-              <div className="flex items-start gap-3 pr-6">
-                <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                  <Sparkles size={16} className="text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-foreground mb-0.5">
-                    {t("controlPanel.aiCta.title")}
-                  </p>
-                  <p className="text-[12px] text-muted-foreground mb-2">
-                    {t("controlPanel.aiCta.description")}
-                  </p>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-7 text-[11px]"
-                    onClick={() => {
-                      setSettingsSection("aiModels");
-                      setShowSettings(true);
-                    }}
-                  >
-                    {t("controlPanel.aiCta.enable")}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="rounded-lg border border-border bg-card/50 dark:bg-card/30 backdrop-blur-sm">
-            {isLoading ? (
-              <div className="flex items-center justify-center gap-2 py-8">
-                <Loader2 size={14} className="animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">{t("controlPanel.loading")}</span>
-              </div>
-            ) : history.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 px-4">
-                <div className="w-10 h-10 rounded-md bg-muted/50 dark:bg-white/4 flex items-center justify-center mb-3">
-                  <Mic size={18} className="text-muted-foreground" />
-                </div>
-                <p className="text-sm text-muted-foreground mb-3">
-                  {t("controlPanel.history.empty")}
-                </p>
-                <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
-                  <span>{t("controlPanel.history.press")}</span>
-                  <kbd className="inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-1 dark:bg-white/6 border border-border text-[11px] font-mono font-medium">
-                    {formatHotkeyLabel(hotkey)}
-                  </kbd>
-                  <span>{t("controlPanel.history.toStart")}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="divide-y divide-border/50 max-h-[calc(100vh-180px)] overflow-y-auto">
-                {history.map((item, index) => (
-                  <TranscriptionItem
-                    key={item.id}
-                    item={item}
-                    index={index}
-                    total={history.length}
-                    onCopy={copyToClipboard}
-                    onDelete={deleteTranscription}
-                  />
-                ))}
+            ) : undefined
+          }
+        />
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <div
+            className="flex items-center justify-end w-full h-10 shrink-0"
+            style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+          >
+            {platform !== "darwin" && (
+              <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+                <WindowControls />
               </div>
             )}
           </div>
-        </div>
+          <div className="flex-1 overflow-y-auto pt-1">
+            {usage?.isPastDue && activeView === "home" && (
+              <div className="max-w-3xl mx-auto w-full mb-3">
+                <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                      <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
+                        {t("controlPanel.billing.pastDueTitle")}
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-300/80 mb-2">
+                        {t("controlPanel.billing.bannerDescription", {
+                          limit: usage.limit.toLocaleString(),
+                        })}
+                      </p>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                          setSettingsSection("account");
+                          setShowSettings(true);
+                        }}
+                      >
+                        {t("controlPanel.billing.updatePayment")}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {(gpuAccelAvailable.cuda || gpuAccelAvailable.vulkan) &&
+              activeView === "home" &&
+              !gpuBannerDismissed && (
+                <div className="max-w-3xl mx-auto w-full mb-3">
+                  <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/5 p-3">
+                    <div className="flex items-start gap-3">
+                      <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center">
+                        <Zap size={16} className="text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground mb-0.5">
+                          {t("controlPanel.gpu.bannerTitle")}
+                        </p>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {t("controlPanel.gpu.bannerDescription")}
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => {
+                              setSettingsSection(
+                                gpuAccelAvailable.cuda ? "transcription" : "intelligence"
+                              );
+                              setShowSettings(true);
+                            }}
+                          >
+                            {t("controlPanel.gpu.enableButton")}
+                          </Button>
+                          <button
+                            onClick={() => {
+                              setGpuBannerDismissed(true);
+                              localStorage.setItem("gpuBannerDismissedUnified", "true");
+                            }}
+                            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {t("controlPanel.gpu.dismissButton")}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            {activeView === "home" && (
+              <HistoryView
+                history={history}
+                isLoading={isLoading}
+                hotkey={hotkey}
+                showCloudMigrationBanner={showCloudMigrationBanner}
+                setShowCloudMigrationBanner={setShowCloudMigrationBanner}
+                aiCTADismissed={aiCTADismissed}
+                setAiCTADismissed={setAiCTADismissed}
+                useReasoningModel={useReasoningModel}
+                copyToClipboard={copyToClipboard}
+                deleteTranscription={deleteTranscription}
+                onOpenSettings={(section) => {
+                  setSettingsSection(section);
+                  setShowSettings(true);
+                }}
+              />
+            )}
+            {activeView === "personal-notes" && (
+              <Suspense fallback={null}>
+                <PersonalNotesView
+                  onOpenSettings={(section) => {
+                    setSettingsSection(section);
+                    setShowSettings(true);
+                  }}
+                />
+              </Suspense>
+            )}
+            {activeView === "dictionary" && (
+              <Suspense fallback={null}>
+                <DictionaryView />
+              </Suspense>
+            )}
+            {activeView === "upload" && (
+              <Suspense fallback={null}>
+                <UploadAudioView
+                  onNoteCreated={(noteId, folderId) => {
+                    setActiveNoteId(noteId);
+                    if (folderId) setActiveFolderId(folderId);
+                    setActiveView("personal-notes");
+                  }}
+                  onOpenSettings={(section) => {
+                    setSettingsSection(section);
+                    setShowSettings(true);
+                  }}
+                />
+              </Suspense>
+            )}
+          </div>
+        </main>
       </div>
     </div>
   );

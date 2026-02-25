@@ -11,6 +11,7 @@ export const SUPPORTED_UI_LANGUAGES = [
   "pt",
   "it",
   "ru",
+  "ja",
   "zh-CN",
   "zh-TW",
 ] as const;
@@ -64,6 +65,10 @@ const resources = {
     translation: TRANSLATIONS_BY_LOCALE.ru,
     prompts: PROMPTS_BY_LOCALE.ru,
   },
+  ja: {
+    translation: TRANSLATIONS_BY_LOCALE.ja,
+    prompts: PROMPTS_BY_LOCALE.ja,
+  },
   "zh-CN": {
     translation: TRANSLATIONS_BY_LOCALE["zh-CN"],
     prompts: PROMPTS_BY_LOCALE["zh-CN"],
@@ -91,7 +96,7 @@ void i18n.use(initReactI18next).init({
   interpolation: {
     escapeValue: false,
   },
-  returnEmptyString: false,
+  returnEmptyString: true,
   returnNull: false,
 });
 

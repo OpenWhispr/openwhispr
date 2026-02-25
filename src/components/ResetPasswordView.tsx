@@ -55,7 +55,7 @@ export default function ResetPasswordView({ token, onSuccess, onBack }: ResetPas
     return (
       <div className="space-y-3">
         <div className="bg-warning/5 p-2.5 rounded border border-warning/20">
-          <p className="text-[10px] text-warning text-center leading-snug">
+          <p className="text-xs text-warning text-center leading-snug">
             {t("resetPassword.notConfigured")}
           </p>
         </div>
@@ -94,7 +94,7 @@ export default function ResetPasswordView({ token, onSuccess, onBack }: ResetPas
       <button
         type="button"
         onClick={onBack}
-        className="text-[10px] text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5"
+        className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5"
       >
         <ArrowLeft className="w-3 h-3" />
         {t("resetPassword.backToSignIn")}
@@ -132,14 +132,14 @@ export default function ResetPasswordView({ token, onSuccess, onBack }: ResetPas
           disabled={isSubmitting}
         />
 
-        <p className="text-[9px] text-muted-foreground/70 leading-tight">
+        <p className="text-xs text-muted-foreground/70 leading-tight">
           {t("resetPassword.passwordMinLength")}
         </p>
 
         {error && (
           <div className="px-2.5 py-1.5 rounded bg-destructive/5 border border-destructive/20 flex items-center gap-1.5">
             <AlertCircle className="w-3 h-3 text-destructive shrink-0" />
-            <p className="text-[10px] text-destructive leading-snug">{error}</p>
+            <p className="text-xs text-destructive leading-snug">{error}</p>
           </div>
         )}
 

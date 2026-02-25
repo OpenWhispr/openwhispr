@@ -15,6 +15,77 @@ const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcription
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
 
+const AUDIO_MIME_TYPES = {
+  mp3: "audio/mpeg",
+  wav: "audio/wav",
+  m4a: "audio/mp4",
+  webm: "audio/webm",
+  ogg: "audio/ogg",
+  flac: "audio/flac",
+  aac: "audio/aac",
+};
+
+function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
+  const boundary = `----OpenWhispr${Date.now()}`;
+  const parts = [];
+
+  parts.push(
+    `--${boundary}\r\n` +
+      `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
+      `Content-Type: ${contentType}\r\n\r\n`
+  );
+  parts.push(fileBuffer);
+  parts.push("\r\n");
+
+  for (const [name, value] of Object.entries(fields)) {
+    if (value != null) {
+      parts.push(
+        `--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="${name}"\r\n\r\n` +
+          `${value}\r\n`
+      );
+    }
+  }
+
+  parts.push(`--${boundary}--\r\n`);
+
+  const bodyParts = parts.map((p) => (typeof p === "string" ? Buffer.from(p) : p));
+  return { body: Buffer.concat(bodyParts), boundary };
+}
+
+function postMultipart(url, body, boundary, headers = {}) {
+  const httpModule = url.protocol === "https:" ? https : http;
+  return new Promise((resolve, reject) => {
+    const req = httpModule.request(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === "https:" ? 443 : 80),
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": `multipart/form-data; boundary=${boundary}`,
+          "Content-Length": body.length,
+          ...headers,
+        },
+      },
+      (res) => {
+        let responseData = "";
+        res.on("data", (chunk) => (responseData += chunk));
+        res.on("end", () => {
+          try {
+            resolve({ statusCode: res.statusCode, data: JSON.parse(responseData) });
+          } catch (e) {
+            reject(new Error(`Invalid JSON response: ${responseData.slice(0, 200)}`));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -27,6 +98,7 @@ class IPCHandlers {
     this.windowsKeyManager = managers.windowsKeyManager;
     this.textEditMonitor = managers.textEditMonitor;
     this.getTrayManager = managers.getTrayManager;
+    this.whisperCudaManager = managers.whisperCudaManager;
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
@@ -36,6 +108,12 @@ class IPCHandlers {
     this._textEditHandler = null;
     this._setupTextEditMonitor();
     this.setupHandlers();
+
+    if (this.whisperManager?.serverManager) {
+      this.whisperManager.serverManager.on("cuda-fallback", () => {
+        this.broadcastToWindows("cuda-fallback-notification", {});
+      });
+    }
   }
 
   _getDictionarySafe() {
@@ -153,7 +231,6 @@ class IPCHandlers {
   }
 
   setupHandlers() {
-    // Window control handlers
     ipcMain.handle("window-minimize", () => {
       if (this.windowManager.controlPanelWindow) {
         this.windowManager.controlPanelWindow.minimize();
@@ -216,7 +293,6 @@ class IPCHandlers {
       return this.windowManager.resizeMainWindow(sizeKey);
     });
 
-    // Environment handlers
     ipcMain.handle("get-openai-key", async (event) => {
       return this.environmentManager.getOpenAIKey();
     });
@@ -282,14 +358,216 @@ class IPCHandlers {
       return this.databaseManager.setDictionary(words);
     });
 
-    // Clipboard handlers
+    ipcMain.handle(
+      "db-save-note",
+      async (event, title, content, noteType, sourceFile, audioDuration, folderId) => {
+        const result = this.databaseManager.saveNote(
+          title,
+          content,
+          noteType,
+          sourceFile,
+          audioDuration,
+          folderId
+        );
+        if (result?.success && result?.note) {
+          setImmediate(() => {
+            this.broadcastToWindows("note-added", result.note);
+          });
+        }
+        return result;
+      }
+    );
+
+    ipcMain.handle("db-get-note", async (event, id) => {
+      return this.databaseManager.getNote(id);
+    });
+
+    ipcMain.handle("db-get-notes", async (event, noteType, limit, folderId) => {
+      return this.databaseManager.getNotes(noteType, limit, folderId);
+    });
+
+    ipcMain.handle("db-update-note", async (event, id, updates) => {
+      const result = this.databaseManager.updateNote(id, updates);
+      if (result?.success && result?.note) {
+        setImmediate(() => {
+          this.broadcastToWindows("note-updated", result.note);
+        });
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-delete-note", async (event, id) => {
+      const result = this.databaseManager.deleteNote(id);
+      if (result?.success) {
+        setImmediate(() => {
+          this.broadcastToWindows("note-deleted", { id });
+        });
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-get-folders", async () => {
+      return this.databaseManager.getFolders();
+    });
+
+    ipcMain.handle("db-create-folder", async (event, name) => {
+      const result = this.databaseManager.createFolder(name);
+      if (result?.success && result?.folder) {
+        setImmediate(() => {
+          this.broadcastToWindows("folder-created", result.folder);
+        });
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-delete-folder", async (event, id) => {
+      const result = this.databaseManager.deleteFolder(id);
+      if (result?.success) {
+        setImmediate(() => {
+          this.broadcastToWindows("folder-deleted", { id });
+        });
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-rename-folder", async (event, id, name) => {
+      const result = this.databaseManager.renameFolder(id, name);
+      if (result?.success && result?.folder) {
+        setImmediate(() => {
+          this.broadcastToWindows("folder-renamed", result.folder);
+        });
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-get-folder-note-counts", async () => {
+      return this.databaseManager.getFolderNoteCounts();
+    });
+
+    ipcMain.handle("db-get-actions", async () => {
+      return this.databaseManager.getActions();
+    });
+
+    ipcMain.handle("db-get-action", async (event, id) => {
+      return this.databaseManager.getAction(id);
+    });
+
+    ipcMain.handle("db-create-action", async (event, name, description, prompt, icon) => {
+      const result = this.databaseManager.createAction(name, description, prompt, icon);
+      if (result?.success && result?.action) {
+        setImmediate(() => {
+          this.broadcastToWindows("action-created", result.action);
+        });
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-update-action", async (event, id, updates) => {
+      const result = this.databaseManager.updateAction(id, updates);
+      if (result?.success && result?.action) {
+        setImmediate(() => {
+          this.broadcastToWindows("action-updated", result.action);
+        });
+      }
+      return result;
+    });
+
+    ipcMain.handle("db-delete-action", async (event, id) => {
+      const result = this.databaseManager.deleteAction(id);
+      if (result?.success) {
+        setImmediate(() => {
+          this.broadcastToWindows("action-deleted", { id });
+        });
+      }
+      return result;
+    });
+
+    ipcMain.handle("export-note", async (event, noteId, format) => {
+      try {
+        const note = this.databaseManager.getNote(noteId);
+        if (!note) return { success: false, error: "Note not found" };
+
+        const { dialog } = require("electron");
+        const fs = require("fs");
+        const ext = format === "txt" ? "txt" : "md";
+        const safeName = (note.title || "Untitled").replace(/[/\\?%*:|"<>]/g, "-");
+
+        const result = await dialog.showSaveDialog({
+          defaultPath: `${safeName}.${ext}`,
+          filters: [
+            { name: "Markdown", extensions: ["md"] },
+            { name: "Text", extensions: ["txt"] },
+          ],
+        });
+
+        if (result.canceled || !result.filePath) return { success: false };
+
+        let exportContent;
+        if (format === "txt") {
+          exportContent = (note.content || "")
+            .replace(/#{1,6}\s+/g, "")
+            .replace(/[*_~`]+/g, "")
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+            .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1")
+            .replace(/^>\s+/gm, "")
+            .trim();
+        } else {
+          exportContent = note.enhanced_content || note.content;
+        }
+
+        fs.writeFileSync(result.filePath, exportContent, "utf-8");
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Error exporting note", { error: error.message }, "notes");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("select-audio-file", async () => {
+      const { dialog } = require("electron");
+      const result = await dialog.showOpenDialog({
+        properties: ["openFile"],
+        filters: [
+          { name: "Audio Files", extensions: ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"] },
+        ],
+      });
+      if (result.canceled || !result.filePaths.length) {
+        return { canceled: true };
+      }
+      return { canceled: false, filePath: result.filePaths[0] };
+    });
+
+    ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
+      const fs = require("fs");
+      try {
+        const audioBuffer = fs.readFileSync(filePath);
+        if (options.provider === "nvidia") {
+          const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
+          return result;
+        }
+        const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, options);
+        return result;
+      } catch (error) {
+        debugLogger.error("Audio file transcription error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("paste-text", async (event, text, options) => {
-      // If the floating dictation panel currently has focus, blur it first so the
+      // If the floating dictation panel currently has focus, dismiss it so the
       // paste keystroke lands in the user's target app instead of the overlay.
       const mainWindow = this.windowManager?.mainWindow;
       if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
-        mainWindow.blur();
-        await new Promise((resolve) => setTimeout(resolve, 80));
+        if (process.platform === "darwin") {
+          // hide() forces macOS to activate the previous app; showInactive()
+          // restores the overlay without stealing focus.
+          mainWindow.hide();
+          await new Promise((resolve) => setTimeout(resolve, 120));
+          mainWindow.showInactive();
+        } else {
+          mainWindow.blur();
+          await new Promise((resolve) => setTimeout(resolve, 80));
+        }
       }
       const result = await this.clipboardManager.pasteText(text, { ...options, webContents: event.sender });
       const targetPid = this.textEditMonitor?.lastTargetPid || null;
@@ -307,6 +585,10 @@ class IPCHandlers {
       return result;
     });
 
+    ipcMain.handle("check-accessibility-permission", async () => {
+      return this.clipboardManager.checkAccessibilityPermissions();
+    });
+
     ipcMain.handle("read-clipboard", async (event) => {
       return this.clipboardManager.readClipboard();
     });
@@ -319,7 +601,6 @@ class IPCHandlers {
       return this.clipboardManager.checkPasteTools();
     });
 
-    // Whisper handlers
     ipcMain.handle("transcribe-local-whisper", async (event, audioBlob, options = {}) => {
       debugLogger.log("transcribe-local-whisper called", {
         audioBlobType: typeof audioBlob,
@@ -451,9 +732,10 @@ class IPCHandlers {
       return this.whisperManager.cancelDownload();
     });
 
-    // Whisper server handlers (for faster repeated transcriptions)
     ipcMain.handle("whisper-server-start", async (event, modelName) => {
-      return this.whisperManager.startServer(modelName);
+      const useCuda =
+        process.env.WHISPER_CUDA_ENABLED === "true" && this.whisperCudaManager?.isDownloaded();
+      return this.whisperManager.startServer(modelName, { useCuda });
     });
 
     ipcMain.handle("whisper-server-stop", async () => {
@@ -464,11 +746,63 @@ class IPCHandlers {
       return this.whisperManager.getServerStatus();
     });
 
+    ipcMain.handle("detect-gpu", async () => {
+      const { detectNvidiaGpu } = require("../utils/gpuDetection");
+      return detectNvidiaGpu();
+    });
+
+    ipcMain.handle("get-cuda-whisper-status", async () => {
+      const { detectNvidiaGpu } = require("../utils/gpuDetection");
+      const gpuInfo = await detectNvidiaGpu();
+      if (!this.whisperCudaManager) {
+        return { downloaded: false, path: null, gpuInfo };
+      }
+      return {
+        downloaded: this.whisperCudaManager.isDownloaded(),
+        path: this.whisperCudaManager.getCudaBinaryPath(),
+        gpuInfo,
+      };
+    });
+
+    ipcMain.handle("download-cuda-whisper-binary", async (event) => {
+      if (!this.whisperCudaManager) {
+        return { success: false, error: "CUDA not supported on this platform" };
+      }
+      try {
+        await this.whisperCudaManager.download((progress) => {
+          if (progress.type === "progress" && !event.sender.isDestroyed()) {
+            event.sender.send("cuda-download-progress", {
+              downloadedBytes: progress.downloaded_bytes,
+              totalBytes: progress.total_bytes,
+              percentage: progress.percentage,
+            });
+          }
+        });
+        this._syncStartupEnv({ WHISPER_CUDA_ENABLED: "true" });
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("cancel-cuda-whisper-download", async () => {
+      if (!this.whisperCudaManager) return { success: false };
+      return this.whisperCudaManager.cancelDownload();
+    });
+
+    ipcMain.handle("delete-cuda-whisper-binary", async () => {
+      if (!this.whisperCudaManager) return { success: false };
+      const result = await this.whisperCudaManager.delete();
+      if (result.success) {
+        this._syncStartupEnv({}, ["WHISPER_CUDA_ENABLED"]);
+      }
+      return result;
+    });
+
     ipcMain.handle("check-ffmpeg-availability", async (event) => {
       return this.whisperManager.checkFFmpegAvailability();
     });
 
-    // Parakeet (NVIDIA) handlers
     ipcMain.handle("transcribe-local-parakeet", async (event, audioBlob, options = {}) => {
       debugLogger.log("transcribe-local-parakeet called", {
         audioBlobType: typeof audioBlob,
@@ -571,7 +905,6 @@ class IPCHandlers {
       return this.parakeetManager.getDiagnostics();
     });
 
-    // Parakeet server handlers (for faster repeated transcriptions)
     ipcMain.handle("parakeet-server-start", async (event, modelName) => {
       const result = await this.parakeetManager.startServer(modelName);
       process.env.LOCAL_TRANSCRIPTION_PROVIDER = "nvidia";
@@ -592,14 +925,9 @@ class IPCHandlers {
       return this.parakeetManager.getServerStatus();
     });
 
-    // Utility handlers
     ipcMain.handle("cleanup-app", async (event) => {
-      try {
-        AppUtils.cleanup(this.windowManager.mainWindow);
-        return { success: true, message: "Cleanup completed successfully" };
-      } catch (error) {
-        throw error;
-      }
+      AppUtils.cleanup(this.windowManager.mainWindow);
+      return { success: true, message: "Cleanup completed successfully" };
     });
 
     ipcMain.handle("update-hotkey", async (event, hotkey) => {
@@ -666,7 +994,7 @@ class IPCHandlers {
         }
 
         if (process.platform === "win32" && this.windowsKeyManager) {
-          const activationMode = await this.windowManager.getActivationMode();
+          const activationMode = this.windowManager.getActivationMode();
           debugLogger.log(
             `[IPC] Exiting hotkey capture mode, activationMode="${activationMode}", hotkey="${effectiveHotkey}"`
           );
@@ -710,7 +1038,6 @@ class IPCHandlers {
       return await this.windowManager.stopWindowDrag();
     });
 
-    // External link handler
     ipcMain.handle("open-external", async (event, url) => {
       try {
         await shell.openExternal(url);
@@ -720,7 +1047,6 @@ class IPCHandlers {
       }
     });
 
-    // Auto-start handlers
     ipcMain.handle("get-auto-start-enabled", async () => {
       try {
         const loginSettings = app.getLoginItemSettings();
@@ -745,7 +1071,6 @@ class IPCHandlers {
       }
     });
 
-    // Model management handlers
     ipcMain.handle("model-get-all", async () => {
       try {
         debugLogger.debug("model-get-all called", undefined, "ipc");
@@ -877,7 +1202,6 @@ class IPCHandlers {
       return this.environmentManager.saveMistralKey(key);
     });
 
-    // Proxy Mistral transcription through main process to avoid CORS
     ipcMain.handle(
       "proxy-mistral-transcription",
       async (event, { audioBuffer, model, language, contextBias }) => {
@@ -932,7 +1256,6 @@ class IPCHandlers {
       return this.environmentManager.saveCustomReasoningKey(key);
     });
 
-    // Dictation key handlers for reliable persistence across restarts
     ipcMain.handle("get-dictation-key", async () => {
       return this.environmentManager.getDictationKey();
     });
@@ -984,16 +1307,36 @@ class IPCHandlers {
         if (prefs.localTranscriptionProvider === "nvidia") {
           setVars.PARAKEET_MODEL = prefs.model;
           clearVars.push("LOCAL_WHISPER_MODEL");
+          this.whisperManager.stopServer().catch((err) => {
+            debugLogger.error("Failed to stop whisper-server on provider switch", {
+              error: err.message,
+            });
+          });
         } else {
           setVars.LOCAL_WHISPER_MODEL = prefs.model;
           clearVars.push("PARAKEET_MODEL");
+          this.parakeetManager.stopServer().catch((err) => {
+            debugLogger.error("Failed to stop parakeet-server on provider switch", {
+              error: err.message,
+            });
+          });
         }
       } else if (prefs.useLocalWhisper) {
         // Local mode enabled but no model selected - clear pre-warming vars
         clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
       } else {
-        // Cloud mode - clear all local transcription vars
+        // Cloud mode - stop local servers to free RAM
         clearVars.push("LOCAL_TRANSCRIPTION_PROVIDER", "PARAKEET_MODEL", "LOCAL_WHISPER_MODEL");
+        this.whisperManager.stopServer().catch((err) => {
+          debugLogger.error("Failed to stop whisper-server on cloud switch", {
+            error: err.message,
+          });
+        });
+        this.parakeetManager.stopServer().catch((err) => {
+          debugLogger.error("Failed to stop parakeet-server on cloud switch", {
+            error: err.message,
+          });
+        });
       }
 
       if (prefs.reasoningProvider === "local" && prefs.reasoningModel) {
@@ -1001,12 +1344,17 @@ class IPCHandlers {
         setVars.LOCAL_REASONING_MODEL = prefs.reasoningModel;
       } else if (prefs.reasoningProvider && prefs.reasoningProvider !== "local") {
         clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
+        const modelManager = require("./modelManagerBridge").default;
+        modelManager.stopServer().catch((err) => {
+          debugLogger.error("Failed to stop llama-server on provider switch", {
+            error: err.message,
+          });
+        });
       }
 
       this._syncStartupEnv(setVars, clearVars);
     });
 
-    // Local reasoning handler
     ipcMain.handle("process-local-reasoning", async (event, text, modelId, _agentName, config) => {
       try {
         const LocalReasoningService = require("../services/localReasoningBridge").default;
@@ -1017,7 +1365,6 @@ class IPCHandlers {
       }
     });
 
-    // Anthropic reasoning handler
     ipcMain.handle(
       "process-anthropic-reasoning",
       async (event, text, modelId, _agentName, config) => {
@@ -1077,7 +1424,6 @@ class IPCHandlers {
       }
     );
 
-    // Check if local reasoning is available
     ipcMain.handle("check-local-reasoning-available", async () => {
       try {
         const LocalReasoningService = require("../services/localReasoningBridge").default;
@@ -1087,7 +1433,6 @@ class IPCHandlers {
       }
     });
 
-    // llama.cpp installation handlers
     ipcMain.handle("llama-cpp-check", async () => {
       try {
         const llamaCppInstaller = require("./llamaCppInstaller").default;
@@ -1119,7 +1464,6 @@ class IPCHandlers {
       }
     });
 
-    // llama-server management handlers
     ipcMain.handle("llama-server-start", async (event, modelId) => {
       try {
         const modelManager = require("./modelManagerBridge").default;
@@ -1133,9 +1477,11 @@ class IPCHandlers {
         await modelManager.serverManager.start(modelPath, {
           contextSize: modelInfo.model.contextLength || 4096,
           threads: 4,
+          gpuLayers: 99,
         });
         modelManager.currentServerModelId = modelId;
 
+        this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
         return { success: true, port: modelManager.serverManager.port };
       } catch (error) {
         return { success: false, error: error.message };
@@ -1158,6 +1504,101 @@ class IPCHandlers {
         return modelManager.getServerStatus();
       } catch (error) {
         return { available: false, running: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("llama-gpu-reset", async () => {
+      try {
+        const modelManager = require("./modelManagerBridge").default;
+        modelManager.serverManager.resetGpuDetection();
+        await modelManager.stopServer();
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("detect-vulkan-gpu", async () => {
+      try {
+        const { detectVulkanGpu } = require("../utils/vulkanDetection");
+        return await detectVulkanGpu();
+      } catch (error) {
+        return { available: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("get-llama-vulkan-status", async () => {
+      try {
+        if (!this._llamaVulkanManager) {
+          const LlamaVulkanManager = require("./llamaVulkanManager");
+          this._llamaVulkanManager = new LlamaVulkanManager();
+        }
+        return this._llamaVulkanManager.getStatus();
+      } catch (error) {
+        return { supported: false, downloaded: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("download-llama-vulkan-binary", async (event) => {
+      try {
+        if (!this._llamaVulkanManager) {
+          const LlamaVulkanManager = require("./llamaVulkanManager");
+          this._llamaVulkanManager = new LlamaVulkanManager();
+        }
+
+        const result = await this._llamaVulkanManager.download((downloaded, total) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send("llama-vulkan-download-progress", {
+              downloaded,
+              total,
+              percentage: total > 0 ? Math.round((downloaded / total) * 100) : 0,
+            });
+          }
+        });
+
+        if (result.success) {
+          process.env.LLAMA_VULKAN_ENABLED = "true";
+          delete process.env.LLAMA_GPU_BACKEND;
+          const modelManager = require("./modelManagerBridge").default;
+          modelManager.serverManager.cachedServerBinaryPaths = null;
+          this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+        }
+
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("cancel-llama-vulkan-download", async () => {
+      if (this._llamaVulkanManager) {
+        return { success: this._llamaVulkanManager.cancelDownload() };
+      }
+      return { success: false };
+    });
+
+    ipcMain.handle("delete-llama-vulkan-binary", async () => {
+      try {
+        if (!this._llamaVulkanManager) {
+          const LlamaVulkanManager = require("./llamaVulkanManager");
+          this._llamaVulkanManager = new LlamaVulkanManager();
+        }
+
+        const modelManager = require("./modelManagerBridge").default;
+        if (modelManager.serverManager.activeBackend === "vulkan") {
+          await modelManager.stopServer();
+        }
+
+        const result = await this._llamaVulkanManager.deleteBinary();
+
+        delete process.env.LLAMA_VULKAN_ENABLED;
+        delete process.env.LLAMA_GPU_BACKEND;
+        modelManager.serverManager.cachedServerBinaryPaths = null;
+        this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
       }
     });
 
@@ -1241,8 +1682,6 @@ class IPCHandlers {
         return { success: false, error: error.message };
       }
     });
-
-    // --- OpenWhispr Cloud API handlers ---
 
     // In production, VITE_* env vars aren't available in the main process because
     // Vite only inlines them into the renderer bundle at build time. Load the
@@ -1329,56 +1768,15 @@ class IPCHandlers {
         if (!cookieHeader) throw new Error("No session cookies available");
 
         const audioData = Buffer.from(audioBuffer);
-        const boundary = `----OpenWhispr${Date.now()}`;
-        const parts = [];
-
-        parts.push(
-          `--${boundary}\r\n` +
-            `Content-Disposition: form-data; name="file"; filename="audio.webm"\r\n` +
-            `Content-Type: audio/webm\r\n\r\n`
-        );
-        parts.push(audioData);
-        parts.push("\r\n");
-
-        if (opts.language) {
-          parts.push(
-            `--${boundary}\r\n` +
-              `Content-Disposition: form-data; name="language"\r\n\r\n` +
-              `${opts.language}\r\n`
-          );
-        }
-
-        if (opts.prompt) {
-          parts.push(
-            `--${boundary}\r\n` +
-              `Content-Disposition: form-data; name="prompt"\r\n\r\n` +
-              `${opts.prompt}\r\n`
-          );
-        }
-
-        // Add client metadata for logging
-        parts.push(
-          `--${boundary}\r\n` +
-            `Content-Disposition: form-data; name="clientType"\r\n\r\n` +
-            `desktop\r\n`
-        );
-
-        parts.push(
-          `--${boundary}\r\n` +
-            `Content-Disposition: form-data; name="appVersion"\r\n\r\n` +
-            `${app.getVersion()}\r\n`
-        );
-
-        parts.push(
-          `--${boundary}\r\n` +
-            `Content-Disposition: form-data; name="sessionId"\r\n\r\n` +
-            `${this.sessionId}\r\n`
-        );
-
-        parts.push(`--${boundary}--\r\n`);
-
-        const bodyParts = parts.map((p) => (typeof p === "string" ? Buffer.from(p) : p));
-        const body = Buffer.concat(bodyParts);
+        const { body, boundary } = buildMultipartBody(audioData, "audio.webm", "audio/webm", {
+          language: opts.language,
+          prompt: opts.prompt,
+          sendLogs: opts.sendLogs,
+          clientType: "desktop",
+          appVersion: app.getVersion(),
+          clientVersion: app.getVersion(),
+          sessionId: this.sessionId,
+        });
 
         debugLogger.debug(
           "Cloud transcribe request",
@@ -1387,38 +1785,7 @@ class IPCHandlers {
         );
 
         const url = new URL(`${apiUrl}/api/transcribe`);
-        const httpModule = url.protocol === "https:" ? https : http;
-
-        const data = await new Promise((resolve, reject) => {
-          const req = httpModule.request(
-            {
-              hostname: url.hostname,
-              port: url.port || (url.protocol === "https:" ? 443 : 80),
-              path: url.pathname,
-              method: "POST",
-              headers: {
-                "Content-Type": `multipart/form-data; boundary=${boundary}`,
-                "Content-Length": body.length,
-                Cookie: cookieHeader,
-              },
-            },
-            (res) => {
-              let responseData = "";
-              res.on("data", (chunk) => (responseData += chunk));
-              res.on("end", () => {
-                try {
-                  const parsed = JSON.parse(responseData);
-                  resolve({ statusCode: res.statusCode, data: parsed });
-                } catch (e) {
-                  reject(new Error(`Invalid JSON response: ${responseData.slice(0, 200)}`));
-                }
-              });
-            }
-          );
-          req.on("error", reject);
-          req.write(body);
-          req.end();
-        });
+        const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
 
         debugLogger.debug(
           "Cloud transcribe response",
@@ -1449,6 +1816,10 @@ class IPCHandlers {
           wordsRemaining: data.data.wordsRemaining,
           plan: data.data.plan,
           limitReached: data.data.limitReached || false,
+          sttProvider: data.data.sttProvider,
+          sttModel: data.data.sttModel,
+          sttProcessingMs: data.data.sttProcessingMs,
+          audioDurationMs: data.data.audioDurationMs,
         };
       } catch (error) {
         debugLogger.error("Cloud transcription error", { error: error.message }, "cloud-api");
@@ -1461,23 +1832,19 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        console.log("[cloud-reason] ⬇ IPC called", {
-          apiUrl,
-          model: opts.model || "(default)",
-          agentName: opts.agentName || "(none)",
-          language: opts.language || "(auto)",
-          locale: opts.locale || "en",
-          hasCustomPrompt: !!opts.customPrompt,
-          textLength: text?.length || 0,
-          textPreview: text?.substring(0, 80) || "(empty)",
-        });
-
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        console.log(`[cloud-reason] → Fetching ${apiUrl}/api/reason ...`);
+        debugLogger.debug(
+          "Cloud reason request",
+          {
+            model: opts.model || "(default)",
+            agentName: opts.agentName || "(none)",
+            textLength: text?.length || 0,
+          },
+          "cloud-api"
+        );
 
-        const fetchStart = Date.now();
         const response = await fetch(`${apiUrl}/api/reason`, {
           method: "POST",
           headers: {
@@ -1490,46 +1857,89 @@ class IPCHandlers {
             agentName: opts.agentName,
             customDictionary: opts.customDictionary,
             customPrompt: opts.customPrompt,
+            systemPrompt: opts.systemPrompt,
             language: opts.language,
             locale: opts.locale,
             sessionId: this.sessionId,
             clientType: "desktop",
             appVersion: app.getVersion(),
+            clientVersion: app.getVersion(),
+            sttProvider: opts.sttProvider,
+            sttModel: opts.sttModel,
+            sttProcessingMs: opts.sttProcessingMs,
+            audioDurationMs: opts.audioDurationMs,
+            audioSizeBytes: opts.audioSizeBytes,
+            audioFormat: opts.audioFormat,
           }),
-        });
-        const fetchMs = Date.now() - fetchStart;
-
-        console.log("[cloud-reason] ← Response", {
-          status: response.status,
-          ok: response.ok,
-          fetchMs,
         });
 
         if (!response.ok) {
           if (response.status === 401) {
-            console.log("[cloud-reason] ✗ 401 - session expired");
             return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
           }
           const errorData = await response.json().catch(() => ({}));
-          console.log("[cloud-reason] ✗ API error", { status: response.status, errorData });
           throw new Error(errorData.error || `API error: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log("[cloud-reason] ✓ Success", {
-          model: data.model,
-          provider: data.provider,
-          processingMs: data.processingMs,
-          resultLength: data.text?.length || 0,
-          resultPreview: data.text?.substring(0, 80) || "(empty)",
-        });
+        debugLogger.debug(
+          "Cloud reason response",
+          {
+            model: data.model,
+            provider: data.provider,
+            resultLength: data.text?.length || 0,
+          },
+          "cloud-api"
+        );
         return { success: true, text: data.text, model: data.model, provider: data.provider };
       } catch (error) {
-        console.log("[cloud-reason] ✗ Error:", error.message);
         debugLogger.error("Cloud reasoning error:", error);
         return { success: false, error: error.message };
       }
     });
+
+    ipcMain.handle(
+      "cloud-streaming-usage",
+      async (event, text, audioDurationSeconds, opts = {}) => {
+        try {
+          const apiUrl = getApiUrl();
+          if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+          const cookieHeader = await getSessionCookies(event);
+          if (!cookieHeader) throw new Error("No session cookies available");
+
+          const response = await fetch(`${apiUrl}/api/streaming-usage`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Cookie: cookieHeader,
+            },
+            body: JSON.stringify({
+              text,
+              audioDurationSeconds,
+              sessionId: this.sessionId,
+              clientType: "desktop",
+              appVersion: app.getVersion(),
+              clientVersion: app.getVersion(),
+              sendLogs: opts.sendLogs,
+            }),
+          });
+
+          if (response.status === 401) {
+            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          }
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+
+          const data = await response.json();
+          return { success: true, ...data };
+        } catch (error) {
+          debugLogger.error("Cloud streaming usage error", { error: error.message }, "cloud-api");
+          return { success: false, error: error.message };
+        }
+      }
+    );
 
     ipcMain.handle("cloud-usage", async (event) => {
       try {
@@ -1558,7 +1968,7 @@ class IPCHandlers {
       }
     });
 
-    const fetchStripeUrl = async (event, endpoint, errorPrefix) => {
+    const fetchStripeUrl = async (event, endpoint, errorPrefix, body) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -1566,10 +1976,14 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}${endpoint}`, {
-          method: "POST",
-          headers: { Cookie: cookieHeader },
-        });
+        const headers = { Cookie: cookieHeader };
+        const fetchOpts = { method: "POST", headers };
+        if (body) {
+          headers["Content-Type"] = "application/json";
+          fetchOpts.body = JSON.stringify(body);
+        }
+
+        const response = await fetch(`${apiUrl}${endpoint}`, fetchOpts);
 
         if (!response.ok) {
           if (response.status === 401) {
@@ -1587,13 +2001,216 @@ class IPCHandlers {
       }
     };
 
-    ipcMain.handle("cloud-checkout", (event) =>
-      fetchStripeUrl(event, "/api/stripe/checkout", "Cloud checkout error")
+    ipcMain.handle("cloud-checkout", (event, plan) =>
+      fetchStripeUrl(
+        event,
+        "/api/stripe/checkout",
+        "Cloud checkout error",
+        plan ? { plan } : undefined
+      )
     );
 
     ipcMain.handle("cloud-billing-portal", (event) =>
       fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
     );
+
+    ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
+      const fs = require("fs");
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        const audioBuffer = fs.readFileSync(filePath);
+        const ext = path.extname(filePath).toLowerCase().replace(".", "");
+        const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
+        const fileName = path.basename(filePath);
+
+        const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, {
+          source: "file_upload",
+          clientType: "desktop",
+          appVersion: app.getVersion(),
+          clientVersion: app.getVersion(),
+          sessionId: this.sessionId,
+        });
+
+        const url = new URL(`${apiUrl}/api/transcribe`);
+        const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
+
+        if (data.statusCode === 401) {
+          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+        }
+        if (data.statusCode === 429) {
+          return {
+            success: false,
+            error: "Daily word limit reached",
+            code: "LIMIT_REACHED",
+            ...data.data,
+          };
+        }
+        if (data.statusCode !== 200) {
+          throw new Error(data.data?.error || `API error: ${data.statusCode}`);
+        }
+
+        return { success: true, text: data.data.text };
+      } catch (error) {
+        debugLogger.error("Cloud audio file transcription error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle(
+      "transcribe-audio-file-byok",
+      async (event, { filePath, apiKey, baseUrl, model }) => {
+        const fs = require("fs");
+        try {
+          if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
+          if (!baseUrl) throw new Error("No transcription endpoint configured.");
+
+          const audioBuffer = fs.readFileSync(filePath);
+          const ext = path.extname(filePath).toLowerCase().replace(".", "");
+          const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
+          const fileName = path.basename(filePath);
+
+          let transcriptionUrl = baseUrl.replace(/\/+$/, "");
+          if (!transcriptionUrl.endsWith("/audio/transcriptions")) {
+            transcriptionUrl += "/audio/transcriptions";
+          }
+
+          const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, {
+            model: model || "whisper-1",
+          });
+
+          const url = new URL(transcriptionUrl);
+          const data = await postMultipart(url, body, boundary, {
+            Authorization: `Bearer ${apiKey}`,
+          });
+
+          if (data.statusCode === 401) {
+            return { success: false, error: "Invalid API key. Check your key in Settings." };
+          }
+          if (data.statusCode === 429) {
+            return { success: false, error: "Rate limit exceeded. Please try again later." };
+          }
+          if (data.statusCode !== 200) {
+            throw new Error(
+              data.data?.error?.message || data.data?.error || `API error: ${data.statusCode}`
+            );
+          }
+
+          return { success: true, text: data.data.text };
+        } catch (error) {
+          debugLogger.error("BYOK audio file transcription error", { error: error.message });
+          return { success: false, error: error.message };
+        }
+      }
+    );
+
+    ipcMain.handle("get-referral-stats", async (event) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) {
+          throw new Error("OpenWhispr API URL not configured");
+        }
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) {
+          throw new Error("No session cookies available");
+        }
+
+        const response = await fetch(`${apiUrl}/api/referrals/stats`, {
+          headers: {
+            Cookie: cookieHeader,
+          },
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error("Unauthorized - please sign in");
+          }
+          throw new Error(`Failed to fetch referral stats: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        debugLogger.error("Error fetching referral stats:", error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle("send-referral-invite", async (event, email) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) {
+          throw new Error("OpenWhispr API URL not configured");
+        }
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) {
+          throw new Error("No session cookies available");
+        }
+
+        const response = await fetch(`${apiUrl}/api/referrals/invite`, {
+          method: "POST",
+          headers: {
+            Cookie: cookieHeader,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email }),
+        });
+
+        if (!response.ok) {
+          let errorMessage = `Failed to send invite: ${response.status}`;
+          try {
+            const errorData = await response.json();
+            if (errorData.error) errorMessage = errorData.error;
+          } catch (_) {}
+          throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        debugLogger.error("Error sending referral invite:", error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle("get-referral-invites", async (event) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) {
+          throw new Error("OpenWhispr API URL not configured");
+        }
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) {
+          throw new Error("No session cookies available");
+        }
+
+        const response = await fetch(`${apiUrl}/api/referrals/invites`, {
+          headers: {
+            Cookie: cookieHeader,
+          },
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            throw new Error("Unauthorized - please sign in");
+          }
+          throw new Error(`Failed to fetch referral invites: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        debugLogger.error("Error fetching referral invites:", error);
+        throw error;
+      }
+    });
 
     ipcMain.handle("open-whisper-models-folder", async () => {
       try {
@@ -1606,7 +2223,6 @@ class IPCHandlers {
       }
     });
 
-    // Debug logging handlers
     ipcMain.handle("get-debug-state", async () => {
       try {
         return {
@@ -1688,7 +2304,6 @@ class IPCHandlers {
       }
     });
 
-    // Update handlers
     ipcMain.handle("check-for-updates", async () => {
       return this.updateManager.checkForUpdates();
     });
@@ -1713,9 +2328,6 @@ class IPCHandlers {
       return this.updateManager.getUpdateInfo();
     });
 
-    // --- Assembly AI Streaming handlers ---
-
-    // Helper to fetch streaming token
     const fetchStreamingToken = async (event) => {
       const apiUrl = getApiUrl();
       if (!apiUrl) {
@@ -1915,8 +2527,6 @@ class IPCHandlers {
       }
       return this.assemblyAiStreaming.getStatus();
     });
-
-    // --- Deepgram Streaming handlers ---
 
     let deepgramTokenWindowId = null;
 

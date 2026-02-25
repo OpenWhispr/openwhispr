@@ -73,7 +73,7 @@ function createAuthExpiredError(originalError: unknown): Error {
   return error;
 }
 
-export function clearLastSignInTime(): void {
+function clearLastSignInTime(): void {
   lastSignInTime = null;
   persistLastSignInTime(null);
 }
@@ -98,19 +98,6 @@ export function isWithinGracePeriod(): boolean {
   return elapsed < GRACE_PERIOD_MS;
 }
 
-export async function refreshSession(): Promise<boolean> {
-  if (!authClient) {
-    return false;
-  }
-
-  try {
-    const result = await authClient.getSession();
-    return Boolean((result.data?.session as any)?.user);
-  } catch {
-    return false;
-  }
-}
-
 export async function signOut(): Promise<void> {
   try {
     if (window.electronAPI?.authClearSession) {
@@ -128,7 +115,6 @@ export async function signOut(): Promise<void> {
 export async function withSessionRefresh<T>(operation: () => Promise<T>): Promise<T> {
   const startedInGracePeriod = isWithinGracePeriod();
   let graceRetriesUsed = 0;
-  let refreshAttempted = false;
 
   while (true) {
     try {
@@ -150,15 +136,6 @@ export async function withSessionRefresh<T>(operation: () => Promise<T>): Promis
         continue;
       }
 
-      if (!refreshAttempted) {
-        refreshAttempted = true;
-        const refreshed = await refreshSession();
-        if (refreshed) {
-          continue;
-        }
-      }
-
-      markSignedOutState();
       throw createAuthExpiredError(error);
     }
   }
@@ -189,7 +166,12 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ provider, callbackURL, disableRedirect: true }),
+        body: JSON.stringify({
+          provider,
+          callbackURL,
+          newUserCallbackURL: callbackURL,
+          disableRedirect: true,
+        }),
       });
 
       const text = await response.text();
