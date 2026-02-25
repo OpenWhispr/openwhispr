@@ -357,7 +357,11 @@ export default function PersonalNotesView({
       meetingNoteIdRef.current &&
       meetingTranscript
     ) {
-      window.electronAPI.updateNote(meetingNoteIdRef.current, { transcript: meetingTranscript });
+      setLocalContent(meetingTranscript);
+      window.electronAPI.updateNote(meetingNoteIdRef.current, {
+        content: meetingTranscript,
+        transcript: meetingTranscript,
+      });
       meetingNoteIdRef.current = null;
       setActiveMeetingEvent(null);
     }
