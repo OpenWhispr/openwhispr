@@ -7,7 +7,6 @@ import { LoadingDots } from "./components/ui/LoadingDots";
 import { useHotkey } from "./hooks/useHotkey";
 import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
-import { useAuth } from "./hooks/useAuth";
 import { useSettingsStore } from "./stores/settingsStore";
 
 // Sound Wave Icon Component (for idle/hover states)
@@ -79,7 +78,6 @@ export default function App() {
   const { t } = useTranslation();
   const { hotkey } = useHotkey();
   const { isDragging, handleMouseDown, handleMouseUp } = useWindowDrag();
-  const { isSignedIn } = useAuth();
 
   const [dragStartPos, setDragStartPos] = useState(null);
   const [hasDragged, setHasDragged] = useState(false);
@@ -148,25 +146,10 @@ export default function App() {
     setWindowInteractivity(false);
   }, [setWindowInteractivity]);
 
-  const {
-    isRecording,
-    isProcessing,
-    toggleListening,
-    cancelRecording,
-    cancelProcessing,
-    warmupStreaming,
-  } = useAudioRecording(toast, {
-    onToggle: handleDictationToggle,
-  });
-
-  // Trigger streaming warmup when user signs in (covers first-time account creation).
-  // Pass isSignedIn directly to bypass the localStorage race condition where
-  // useAuth's useEffect may not have written localStorage yet.
-  useEffect(() => {
-    if (isSignedIn) {
-      warmupStreaming({ isSignedIn: true });
-    }
-  }, [isSignedIn, warmupStreaming]);
+  const { isRecording, isProcessing, toggleListening, cancelRecording, cancelProcessing } =
+    useAudioRecording(toast, {
+      onToggle: handleDictationToggle,
+    });
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {

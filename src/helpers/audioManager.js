@@ -26,6 +26,33 @@ const isValidApiKey = (key, provider = "openai") => {
   return key !== placeholder;
 };
 
+const STREAMING_PROVIDERS = {
+  deepgram: {
+    warmup: (opts) => window.electronAPI.deepgramStreamingWarmup(opts),
+    start: (opts) => window.electronAPI.deepgramStreamingStart(opts),
+    send: (buf) => window.electronAPI.deepgramStreamingSend(buf),
+    finalize: () => window.electronAPI.deepgramStreamingFinalize(),
+    stop: () => window.electronAPI.deepgramStreamingStop(),
+    status: () => window.electronAPI.deepgramStreamingStatus(),
+    onPartial: (cb) => window.electronAPI.onDeepgramPartialTranscript(cb),
+    onFinal: (cb) => window.electronAPI.onDeepgramFinalTranscript(cb),
+    onError: (cb) => window.electronAPI.onDeepgramError(cb),
+    onSessionEnd: (cb) => window.electronAPI.onDeepgramSessionEnd(cb),
+  },
+  assemblyai: {
+    warmup: (opts) => window.electronAPI.assemblyAiStreamingWarmup(opts),
+    start: (opts) => window.electronAPI.assemblyAiStreamingStart(opts),
+    send: (buf) => window.electronAPI.assemblyAiStreamingSend(buf),
+    finalize: () => window.electronAPI.assemblyAiStreamingForceEndpoint(),
+    stop: () => window.electronAPI.assemblyAiStreamingStop(),
+    status: () => window.electronAPI.assemblyAiStreamingStatus(),
+    onPartial: (cb) => window.electronAPI.onAssemblyAiPartialTranscript(cb),
+    onFinal: (cb) => window.electronAPI.onAssemblyAiFinalTranscript(cb),
+    onError: (cb) => window.electronAPI.onAssemblyAiError(cb),
+    onSessionEnd: (cb) => window.electronAPI.onAssemblyAiSessionEnd(cb),
+  },
+};
+
 class AudioManager {
   constructor() {
     this.mediaRecorder = null;
@@ -69,6 +96,8 @@ class AudioManager {
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
     this.skipReasoning = false;
+    this.context = "dictation";
+    this.sttConfig = null;
   }
 
   getWorkletBlobUrl() {
@@ -136,6 +165,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   setSkipReasoning(skip) {
     this.skipReasoning = skip;
+  }
+
+  setContext(context) {
+    this.context = context;
+  }
+
+  setSttConfig(config) {
+    this.sttConfig = config;
+  }
+
+  getStreamingProvider() {
+    const providerName = this.sttConfig?.streamingProvider || "deepgram";
+    return STREAMING_PROVIDERS[providerName] || STREAMING_PROVIDERS.deepgram;
   }
 
   async getAudioConstraints() {
@@ -1731,17 +1773,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   shouldUseStreaming(isSignedInOverride) {
     const s = getSettings();
-    const cloudTranscriptionMode = s.cloudTranscriptionMode;
     const isSignedIn = isSignedInOverride ?? s.isSignedIn;
-    const useLocalWhisper = s.useLocalWhisper;
-    const streamingDisabled = localStorage.getItem("deepgramStreaming") === "false";
+    if (s.useLocalWhisper || s.cloudTranscriptionMode !== "openwhispr" || !isSignedIn) {
+      return false;
+    }
 
-    return (
-      !useLocalWhisper &&
-      cloudTranscriptionMode === "openwhispr" &&
-      isSignedIn &&
-      !streamingDisabled
-    );
+    // For notes context, check user preference first
+    if (this.context === "notes") {
+      const userPref = localStorage.getItem("notesStreamingPreference");
+      if (userPref === "streaming") return true;
+      if (userPref === "batch") return false;
+    }
+
+    // Config-driven: check mode for this context
+    if (this.sttConfig) {
+      const contextConfig =
+        this.context === "notes" ? this.sttConfig.notes : this.sttConfig.dictation;
+      return contextConfig?.mode === "streaming";
+    }
+
+    // Fallback when config not yet loaded
+    return localStorage.getItem("deepgramStreaming") !== "false";
   }
 
   async warmupStreamingConnection({ isSignedIn: isSignedInOverride } = {}) {
@@ -1751,11 +1803,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     try {
+      const provider = this.getStreamingProvider();
       const [, wsResult] = await Promise.all([
         this.cacheMicrophoneDeviceId(),
         withSessionRefresh(async () => {
           const warmupLang = getSettings().preferredLanguage;
-          const res = await window.electronAPI.deepgramStreamingWarmup({
+          const res = await provider.warmup({
             sampleRate: 16000,
             language: warmupLang && warmupLang !== "auto" ? warmupLang : undefined,
             keyterms: this.getKeyterms(),
@@ -1807,7 +1860,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
 
         logger.info(
-          "Deepgram streaming connection warmed up",
+          "Streaming connection warmed up",
           { alreadyWarm: wsResult.alreadyWarm, micCached: !!this.cachedMicDeviceId },
           "streaming"
         );
@@ -1816,11 +1869,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         logger.debug("Streaming warmup skipped - API not configured", {}, "streaming");
         return false;
       } else {
-        logger.warn("Deepgram warmup failed", { error: wsResult.error }, "streaming");
+        logger.warn("Streaming warmup failed", { error: wsResult.error }, "streaming");
         return false;
       }
     } catch (error) {
-      logger.error("Deepgram warmup error", { error: error.message }, "streaming");
+      logger.error("Streaming warmup error", { error: error.message }, "streaming");
       return false;
     }
   }
@@ -1900,10 +1953,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
+      const provider = this.getStreamingProvider();
 
       this.streamingProcessor.port.onmessage = (event) => {
         if (!this.isStreaming) return;
-        window.electronAPI.deepgramStreamingSend(event.data);
+        provider.send(event.data);
       };
 
       this.isStreaming = true;
@@ -1917,13 +1971,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.streamingTextResolve = null;
       this.streamingTextDebounce = null;
 
-      const partialCleanup = window.electronAPI.onDeepgramPartialTranscript((text) => {
+      const partialCleanup = provider.onPartial((text) => {
         this.streamingPartialText = text;
         this.onPartialTranscript?.(text);
       });
 
-      const finalCleanup = window.electronAPI.onDeepgramFinalTranscript((text) => {
-        // text = accumulated final text from deepgramStreaming.
+      const finalCleanup = provider.onFinal((text) => {
+        // text = accumulated final text from streaming provider.
         // Extract just the new segment (delta from previous accumulated final).
         const prevLen = this.streamingFinalText.length;
         this.streamingFinalText = text;
@@ -1934,8 +1988,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       });
 
-      const errorCleanup = window.electronAPI.onDeepgramError((error) => {
-        logger.error("Deepgram streaming error", { error }, "streaming");
+      const errorCleanup = provider.onError((error) => {
+        logger.error("Streaming provider error", { error }, "streaming");
         this.onError?.({
           title: "Streaming Error",
           description: error,
@@ -1952,8 +2006,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       });
 
-      const sessionEndCleanup = window.electronAPI.onDeepgramSessionEnd((data) => {
-        logger.debug("Deepgram session ended", data, "streaming");
+      const sessionEndCleanup = provider.onSessionEnd((data) => {
+        logger.debug("Streaming session ended", data, "streaming");
         if (data.text) {
           this.streamingFinalText = data.text;
         }
@@ -1968,7 +2022,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       //    so Deepgram receives data immediately (no idle timeout).
       const result = await withSessionRefresh(async () => {
         const preferredLang = getSettings().preferredLanguage;
-        const res = await window.electronAPI.deepgramStreamingStart({
+        const res = await provider.start({
           sampleRate: 16000,
           language: preferredLang && preferredLang !== "auto" ? preferredLang : undefined,
           keyterms: this.getKeyterms(),
@@ -2120,14 +2174,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     await new Promise((resolve) => setTimeout(resolve, 120));
     this.isStreaming = false;
 
-    // 4. Finalize tells Deepgram to process any buffered audio and send final Results.
-    //    Wait briefly so the server sends back the from_finalize transcript before
-    //    CloseStream triggers connection close.
-    window.electronAPI.deepgramStreamingFinalize?.();
+    // 4. Finalize tells the provider to process any buffered audio and send final results.
+    //    Wait briefly so the server sends back the finalized transcript before disconnect.
+    const provider = this.getStreamingProvider();
+    provider.finalize?.();
     await new Promise((resolve) => setTimeout(resolve, 300));
     const tForceEndpoint = performance.now();
 
-    const stopResult = await window.electronAPI.deepgramStreamingStop().catch((e) => {
+    const stopResult = await provider.stop().catch((e) => {
       logger.debug("Streaming disconnect error", { error: e.message }, "streaming");
       return { success: false };
     });
@@ -2186,7 +2240,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               customPrompt: this.getCustomPrompt(),
               language: stSettings.preferredLanguage || "auto",
               locale: stSettings.uiLanguage || "en",
-              sttProvider: "deepgram",
+              sttProvider: this.sttConfig?.streamingProvider || "deepgram",
               sttModel: streamingSttModel,
               sttProcessingMs: streamingSttProcessingMs,
               sttWordCount: streamingSttWordCount,
@@ -2272,7 +2326,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onTranscriptionComplete?.({
         success: true,
         text: finalText,
-        source: "deepgram-streaming",
+        source: `${this.sttConfig?.streamingProvider || "deepgram"}-streaming`,
       });
 
       if (!usedBatchFallback) {
@@ -2284,7 +2338,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                 durationSeconds ?? 0,
                 {
                   sendLogs: !usedCloudReasoning,
-                  sttProvider: "deepgram",
+                  sttProvider: this.sttConfig?.streamingProvider || "deepgram",
                   sttModel: streamingSttModel,
                   sttProcessingMs: streamingSttProcessingMs,
                   sttLanguage: streamingSttLanguage,
@@ -2406,7 +2460,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.workletBlobUrl = null;
     }
     try {
-      window.electronAPI?.deepgramStreamingStop?.();
+      this.getStreamingProvider().stop?.();
     } catch (e) {
       // Ignore errors during cleanup (page may be unloading)
     }
