@@ -75,7 +75,7 @@ export default function App() {
   const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
   const commandMenuRef = useRef(null);
   const buttonRef = useRef(null);
-  const { toast, toastCount } = useToast();
+  const { toast, dismiss, toastCount } = useToast();
   const { t } = useTranslation();
   const { hotkey } = useHotkey();
   const { isDragging, handleMouseDown, handleMouseUp } = useWindowDrag();
@@ -117,7 +117,8 @@ export default function App() {
     const unsubscribeCorrections = window.electronAPI?.onCorrectionsLearned?.((words) => {
       if (words && words.length > 0) {
         const wordList = words.map((w) => `\u201c${w}\u201d`).join(", ");
-        toast({
+        let toastId;
+        toastId = toast({
           title: t("app.toasts.addedToDict", { words: wordList }),
           variant: "success",
           duration: 6000,
@@ -126,6 +127,7 @@ export default function App() {
               onClick={async () => {
                 try {
                   await window.electronAPI?.undoLearnedCorrections?.(words);
+                  dismiss(toastId);
                 } catch {
                   // silently fail — word stays in dictionary
                 }
@@ -148,7 +150,7 @@ export default function App() {
       unsubscribeFailed?.();
       unsubscribeCorrections?.();
     };
-  }, [toast, t]);
+  }, [toast, dismiss, t]);
 
   useEffect(() => {
     if (isCommandMenuOpen || toastCount > 0) {
