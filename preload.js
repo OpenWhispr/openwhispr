@@ -333,6 +333,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
   cloudCheckout: (plan) => ipcRenderer.invoke("cloud-checkout", plan),
   cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),
+  getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
 
   // Cloud audio file transcription
   transcribeAudioFileCloud: (filePath) =>

@@ -1404,7 +1404,8 @@
       "saving": "Saving",
       "wordsCount": "{{count}} words",
       "startWriting": "Start writing...",
-      "staleIndicator": "Content has changed since enhancement"
+      "staleIndicator": "Content has changed since enhancement",
+      "live": "Live"
     },
     "upload": {
       "title": "Upload Audio",

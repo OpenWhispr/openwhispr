@@ -82,12 +82,22 @@ export function useNoteRecording({
       }) => {
         if (result.success) {
           callbacksRef.current.onTranscriptionComplete(result.text);
-          manager.warmupStreamingConnection();
+          if (manager.shouldUseStreaming()) {
+            manager.warmupStreamingConnection();
+          }
         }
       },
     });
 
-    manager.warmupStreamingConnection();
+    manager.setContext("notes");
+    window.electronAPI.getSttConfig?.().then((config) => {
+      if (config && audioManagerRef.current) {
+        audioManagerRef.current.setSttConfig(config);
+        if (manager.shouldUseStreaming()) {
+          manager.warmupStreamingConnection();
+        }
+      }
+    });
 
     return () => {
       manager.cleanup();

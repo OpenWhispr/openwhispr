@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Download, Loader2, FileText, Sparkles, AlignLeft } from "lucide-react";
+import { Download, Loader2, FileText, Sparkles, AlignLeft, Radio } from "lucide-react";
 import { MarkdownTextarea } from "../ui/MarkdownTextarea";
 import {
   DropdownMenu,
@@ -14,6 +14,7 @@ import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import DictationWidget from "./DictationWidget";
 import { normalizeDbDate } from "../../utils/dateFormatting";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 function formatNoteDate(dateStr: string): string {
   const date = normalizeDbDate(dateStr);
@@ -160,6 +161,24 @@ export default function NoteEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const titleRef = useRef<HTMLDivElement>(null);
   const prevNoteIdRef = useRef<number>(note.id);
+
+  const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const cloudMode = useSettingsStore((s) => s.cloudTranscriptionMode);
+  const useLocalWhisper = useSettingsStore((s) => s.useLocalWhisper);
+  const canStream = isSignedIn && cloudMode === "openwhispr" && !useLocalWhisper;
+
+  const [liveMode, setLiveMode] = useState(() => {
+    const pref = localStorage.getItem("notesStreamingPreference");
+    return pref === "streaming" || (pref !== "batch" && canStream);
+  });
+
+  const handleLiveToggle = useCallback(() => {
+    setLiveMode((prev) => {
+      const next = !prev;
+      localStorage.setItem("notesStreamingPreference", next ? "streaming" : "batch");
+      return next;
+    });
+  }, []);
 
   const cursorPosRef = useRef(0);
   const selectionEndRef = useRef(0);
@@ -678,6 +697,21 @@ export default function NoteEditor({
                   )}
                 </button>
               </div>
+            )}
+            {canStream && (
+              <button
+                onClick={handleLiveToggle}
+                className={cn(
+                  "shrink-0 h-6 px-1.5 flex items-center gap-1 rounded-md text-xs font-medium transition-colors duration-150",
+                  liveMode
+                    ? "bg-primary/8 text-primary/70 hover:bg-primary/12 dark:bg-primary/12 dark:text-primary/80"
+                    : "bg-foreground/3 dark:bg-white/3 text-foreground/25 hover:text-foreground/40 hover:bg-foreground/6 dark:hover:bg-white/6"
+                )}
+                aria-label={t("notes.editor.live")}
+              >
+                <Radio size={9} />
+                {t("notes.editor.live")}
+              </button>
             )}
             {onExportNote && (
               <DropdownMenu>
