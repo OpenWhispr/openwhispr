@@ -41,7 +41,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 🌐 **Globe Key Toggle (macOS)**: Optional Fn/Globe key listener for a hardware-level dictation trigger
 - ⌨️ **Compound Hotkeys**: Support for multi-key combinations like `Cmd+Shift+K`
 - 🎙️ **Push-to-Talk (Windows)**: Native low-level keyboard hook for true push-to-talk with compound hotkey support
-- 📖 **Custom Dictionary**: Add words, names, and technical terms to improve transcription accuracy
+- 📖 **Custom Dictionary**: Add words, names, and technical terms to improve transcription accuracy, with auto-learn that detects your corrections and updates the dictionary automatically
 - 🐧 **GNOME Wayland Support**: Native global shortcuts via D-Bus for GNOME Wayland users
 - 📝 **Notes System**: Create, edit, and organize transcription notes with folders, audio upload, and real-time dictation
 - 🤖 **AI Actions**: Apply AI-powered actions to notes with customizable processing templates
@@ -730,7 +730,7 @@ A: OpenWhispr supports 58 languages including English, Spanish, French, German, 
 
 ## Project Status
 
-OpenWhispr is actively maintained and ready for production use. Current version: 1.5.3
+OpenWhispr is actively maintained and ready for production use. Current version: 1.5.4
 
 - ✅ Core functionality complete
 - ✅ Cross-platform support (macOS, Windows, Linux)
