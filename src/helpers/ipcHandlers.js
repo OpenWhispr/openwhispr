@@ -2526,6 +2526,7 @@ class IPCHandlers {
     });
 
     let deepgramStreamingStartInProgress = false;
+    let sendDropCount = 0;
 
     ipcMain.handle("deepgram-streaming-start", async (event, options = {}) => {
       if (deepgramStreamingStartInProgress) {
@@ -2599,12 +2600,22 @@ class IPCHandlers {
           }
         };
 
+        sendDropCount = 0;
         await this.deepgramStreaming.connect({ ...options, token });
-        debugLogger.debug("Deepgram streaming started", {}, "streaming");
+        debugLogger.debug(
+          "Deepgram streaming started",
+          {
+            isConnected: this.deepgramStreaming.isConnected,
+            hasWs: !!this.deepgramStreaming.ws,
+            wsReadyState: this.deepgramStreaming.ws?.readyState,
+            forceNew: !!options.forceNew,
+          },
+          "streaming"
+        );
 
         return {
           success: true,
-          usedWarmConnection: hasWarm,
+          usedWarmConnection: hasWarm && !options.forceNew,
         };
       } catch (error) {
         debugLogger.error("Deepgram streaming start error", { error: error.message });
@@ -2617,11 +2628,38 @@ class IPCHandlers {
       }
     });
 
+    let sendDropCount = 0;
     ipcMain.on("deepgram-streaming-send", (event, audioBuffer) => {
       try {
         if (!this.deepgramStreaming) return;
         const buffer = Buffer.from(audioBuffer);
-        this.deepgramStreaming.sendAudio(buffer);
+        const sent = this.deepgramStreaming.sendAudio(buffer);
+        if (!sent) {
+          sendDropCount++;
+          if (sendDropCount <= 3 || sendDropCount % 50 === 0) {
+            debugLogger.warn(
+              "Deepgram audio send dropped",
+              {
+                dropCount: sendDropCount,
+                hasWs: !!this.deepgramStreaming.ws,
+                isConnected: this.deepgramStreaming.isConnected,
+                wsReadyState: this.deepgramStreaming.ws?.readyState,
+              },
+              "streaming"
+            );
+          }
+        } else {
+          if (sendDropCount > 0) {
+            debugLogger.debug(
+              "Deepgram audio send resumed after drops",
+              {
+                previousDrops: sendDropCount,
+              },
+              "streaming"
+            );
+            sendDropCount = 0;
+          }
+        }
       } catch (error) {
         debugLogger.error("Deepgram streaming send error", { error: error.message });
       }

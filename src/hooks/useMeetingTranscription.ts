@@ -156,8 +156,6 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
     streamRef.current = stream;
 
     try {
-      await window.electronAPI?.deepgramStreamingWarmup?.();
-
       const audioContext = new AudioContext({ sampleRate: 16000 });
       audioContextRef.current = audioContext;
 
@@ -212,6 +210,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
 
       const result = await window.electronAPI?.deepgramStreamingStart?.({
         sampleRate: 16000,
+        forceNew: true,
       });
 
       logger.info(

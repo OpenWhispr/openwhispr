@@ -852,7 +852,11 @@ declare global {
         error?: string;
         code?: string;
       }>;
-      deepgramStreamingStart?: (options?: { sampleRate?: number; language?: string }) => Promise<{
+      deepgramStreamingStart?: (options?: {
+        sampleRate?: number;
+        language?: string;
+        forceNew?: boolean;
+      }) => Promise<{
         success: boolean;
         usedWarmConnection?: boolean;
         error?: string;

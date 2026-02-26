@@ -717,7 +717,15 @@ class DeepgramStreaming {
   }
 
   sendAudio(pcmBuffer) {
-    if (!this.ws) return false;
+    if (!this.ws) {
+      if (this.audioBytesSent === 0 && pcmBuffer.length > 0) {
+        debugLogger.warn("Deepgram sendAudio: ws is null, audio dropped", {
+          bufferSize: pcmBuffer.length,
+          isConnected: this.isConnected,
+        });
+      }
+      return false;
+    }
 
     if (this.ws.readyState !== WebSocket.OPEN) {
       // Buffer audio during cold start so no frames are lost while WebSocket connects
