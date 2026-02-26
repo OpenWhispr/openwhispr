@@ -84,12 +84,14 @@ export default function PersonalNotesView({
   } = useNotesOnboarding();
 
   const {
-    isTranscribing: isMeetingTranscribing,
+    isRecording: isMeetingRecording,
+    isProcessing: isMeetingProcessing,
     transcript: meetingTranscript,
-    partialTranscript: meetingPartialTranscript,
+    error: meetingError,
     startTranscription: startMeetingTranscription,
     stopTranscription: stopMeetingTranscription,
   } = useMeetingTranscription();
+  const isMeetingActive = isMeetingRecording || isMeetingProcessing;
   const [activeMeetingEvent, setActiveMeetingEvent] = useState<any>(null);
   const meetingNoteIdRef = useRef<number | null>(null);
 
@@ -346,12 +348,12 @@ export default function PersonalNotesView({
     onMeetingRecordingRequestHandled,
   ]);
 
-  const prevTranscribingRef = useRef(false);
+  const prevProcessingRef = useRef(false);
 
   useEffect(() => {
     if (
-      prevTranscribingRef.current &&
-      !isMeetingTranscribing &&
+      prevProcessingRef.current &&
+      !isMeetingProcessing &&
       meetingNoteIdRef.current &&
       meetingTranscript
     ) {
@@ -363,8 +365,8 @@ export default function PersonalNotesView({
       meetingNoteIdRef.current = null;
       setActiveMeetingEvent(null);
     }
-    prevTranscribingRef.current = isMeetingTranscribing;
-  }, [isMeetingTranscribing, meetingTranscript]);
+    prevProcessingRef.current = isMeetingProcessing;
+  }, [isMeetingProcessing, meetingTranscript]);
 
   const editorNote = activeNote
     ? { ...activeNote, title: localTitle, content: localContent }
@@ -704,9 +706,9 @@ export default function PersonalNotesView({
                     }
                   : undefined
               }
-              isMeetingTranscribing={isMeetingTranscribing}
+              isMeetingRecording={isMeetingRecording}
+              isMeetingProcessing={isMeetingProcessing}
               meetingTranscript={meetingTranscript}
-              meetingPartialTranscript={meetingPartialTranscript}
               meetingEvent={activeMeetingEvent}
               onStopMeetingRecording={stopMeetingTranscription}
               actionProcessingState={actionProcessingState}

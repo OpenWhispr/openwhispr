@@ -53,9 +53,9 @@ interface NoteEditorProps {
   actionPicker?: React.ReactNode;
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
-  isMeetingTranscribing?: boolean;
+  isMeetingRecording?: boolean;
+  isMeetingProcessing?: boolean;
   meetingTranscript?: string;
-  meetingPartialTranscript?: string;
   meetingEvent?: { summary: string };
   onStopMeetingRecording?: () => void;
 }
@@ -150,9 +150,9 @@ export default function NoteEditor({
   actionPicker,
   actionProcessingState,
   actionName,
-  isMeetingTranscribing,
+  isMeetingRecording,
+  isMeetingProcessing,
   meetingTranscript,
-  meetingPartialTranscript,
   meetingEvent,
   onStopMeetingRecording,
 }: NoteEditorProps) {
@@ -763,15 +763,15 @@ export default function NoteEditor({
           style={{ background: "linear-gradient(to bottom, transparent, var(--color-background))" }}
         />
         <DictationWidget
-          isRecording={isRecording || !!isMeetingTranscribing}
-          isProcessing={isProcessing}
+          isRecording={isRecording || !!isMeetingRecording}
+          isProcessing={isProcessing || !!isMeetingProcessing}
           onStart={handleStartRecording}
-          onStop={isMeetingTranscribing ? onStopMeetingRecording! : onStopRecording}
-          actionPicker={isMeetingTranscribing ? undefined : actionPicker}
+          onStop={isMeetingRecording ? onStopMeetingRecording! : onStopRecording}
+          actionPicker={isMeetingRecording ? undefined : actionPicker}
         />
       </div>
 
-      {(isMeetingTranscribing || meetingTranscript) && (
+      {(isMeetingRecording || isMeetingProcessing || meetingTranscript) && (
         <div className="border-t border-border/50 bg-surface-0/50 dark:bg-surface-1/30">
           <div className="px-4 py-1.5 flex items-center gap-1.5">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
@@ -779,12 +779,13 @@ export default function NoteEditor({
             </span>
           </div>
           <div className="px-4 pb-3 max-h-32 overflow-y-auto">
-            <p className="text-xs text-muted-foreground/70 leading-relaxed whitespace-pre-wrap">
-              {meetingTranscript}
-              {meetingPartialTranscript && (
-                <span className="text-muted-foreground/40">{meetingPartialTranscript}</span>
-              )}
-            </p>
+            {isMeetingProcessing && !meetingTranscript ? (
+              <p className="text-xs text-muted-foreground/50 italic">Transcribing meeting audio...</p>
+            ) : (
+              <p className="text-xs text-muted-foreground/70 leading-relaxed whitespace-pre-wrap">
+                {meetingTranscript}
+              </p>
+            )}
           </div>
         </div>
       )}

@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import logger from "../utils/logger";
+import { buildWav } from "../utils/wavBuilder";
+import { OPENWHISPR_API_URL } from "../config/constants";
 
 interface UseMeetingTranscriptionReturn {
-  isTranscribing: boolean;
+  isRecording: boolean;
+  isProcessing: boolean;
   transcript: string;
-  partialTranscript: string;
+  error: string | null;
   startTranscription: () => Promise<void>;
   stopTranscription: () => Promise<void>;
 }
@@ -81,22 +84,20 @@ const getSystemAudioStream = async (): Promise<MediaStream | null> => {
 };
 
 export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
-  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [partialTranscript, setPartialTranscript] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const processorRef = useRef<AudioWorkletNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const ipcCleanupsRef = useRef<Array<() => void>>([]);
-  const isTranscribingRef = useRef(false);
+  const isRecordingRef = useRef(false);
   const workletBlobUrlRef = useRef<string | null>(null);
+  const chunksRef = useRef<ArrayBuffer[]>([]);
 
   const cleanup = useCallback(async () => {
-    ipcCleanupsRef.current.forEach((fn) => fn());
-    ipcCleanupsRef.current = [];
-
     if (processorRef.current) {
       processorRef.current.port.postMessage("stop");
       processorRef.current.disconnect();
@@ -126,20 +127,63 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
       URL.revokeObjectURL(workletBlobUrlRef.current);
       workletBlobUrlRef.current = null;
     }
-
-    await window.electronAPI?.deepgramStreamingStop?.();
   }, []);
 
   const stopTranscription = useCallback(async () => {
-    if (!isTranscribingRef.current) return;
-    isTranscribingRef.current = false;
-    setIsTranscribing(false);
+    if (!isRecordingRef.current) return;
+    isRecordingRef.current = false;
+    setIsRecording(false);
+
     await cleanup();
+
+    const chunks = chunksRef.current;
+    chunksRef.current = [];
+
+    if (chunks.length === 0) {
+      logger.info("Meeting transcription stopped (no audio captured)", {}, "meeting");
+      return;
+    }
+
+    setIsProcessing(true);
+    setError(null);
+
+    try {
+      const totalLength = chunks.reduce((sum, buf) => sum + buf.byteLength / 2, 0);
+      const allSamples = new Int16Array(totalLength);
+      let offset = 0;
+      for (const buf of chunks) {
+        const chunk = new Int16Array(buf);
+        allSamples.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      const wavBlob = buildWav(allSamples, 16000);
+
+      const { upload } = await import("@vercel/blob/client");
+      const blob = await upload(`meeting-${Date.now()}.wav`, wavBlob, {
+        access: "public",
+        handleUploadUrl: `${OPENWHISPR_API_URL}/api/upload-audio`,
+      });
+
+      const result = await window.electronAPI?.meetingTranscribeChain(blob.url);
+
+      if (result?.success) {
+        setTranscript(result.text);
+      } else {
+        setError(result?.error || "Transcription failed");
+      }
+    } catch (err) {
+      setError((err as Error).message);
+      logger.error("Meeting transcription failed", { error: (err as Error).message }, "meeting");
+    } finally {
+      setIsProcessing(false);
+    }
+
     logger.info("Meeting transcription stopped", {}, "meeting");
   }, [cleanup]);
 
   const startTranscription = useCallback(async () => {
-    if (isTranscribingRef.current) return;
+    if (isRecordingRef.current) return;
 
     logger.info("Meeting transcription starting...", {}, "meeting");
 
@@ -171,66 +215,28 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
       const processor = new AudioWorkletNode(audioContext, "pcm-meeting-processor");
       processorRef.current = processor;
 
+      chunksRef.current = [];
+      setTranscript("");
+      setError(null);
+
       let chunkCount = 0;
       processor.port.onmessage = (event) => {
-        if (!isTranscribingRef.current) return;
+        if (!isRecordingRef.current) return;
         chunkCount++;
         if (chunkCount <= 3 || chunkCount % 50 === 0) {
           logger.debug(
-            "Audio chunk sent",
+            "Audio chunk buffered",
             { chunk: chunkCount, bytes: event.data.byteLength },
             "meeting"
           );
         }
-        window.electronAPI?.deepgramStreamingSend?.(event.data);
+        chunksRef.current.push(event.data);
       };
 
       source.connect(processor);
 
-      const partialCleanup = window.electronAPI?.onDeepgramPartialTranscript?.((text) => {
-        logger.debug(
-          "Meeting partial transcript",
-          { length: text.length, preview: text.slice(-80) },
-          "meeting"
-        );
-        setPartialTranscript(text);
-      });
-      if (partialCleanup) ipcCleanupsRef.current.push(partialCleanup);
-
-      const finalCleanup = window.electronAPI?.onDeepgramFinalTranscript?.((text) => {
-        logger.info(
-          "Meeting final transcript",
-          { length: text.length, preview: text.slice(-80) },
-          "meeting"
-        );
-        setTranscript(text);
-        setPartialTranscript("");
-      });
-      if (finalCleanup) ipcCleanupsRef.current.push(finalCleanup);
-
-      const result = await window.electronAPI?.deepgramStreamingStart?.({
-        sampleRate: 16000,
-        forceNew: true,
-      });
-
-      logger.info(
-        "Deepgram streaming start result",
-        { success: result?.success, error: result?.error },
-        "meeting"
-      );
-
-      if (!result?.success) {
-        logger.error(
-          "Failed to start Deepgram streaming",
-          { error: result?.error, code: result?.code },
-          "meeting"
-        );
-        await cleanup();
-        return;
-      }
-
-      isTranscribingRef.current = true;
-      setIsTranscribing(true);
+      isRecordingRef.current = true;
+      setIsRecording(true);
       logger.info("Meeting transcription started successfully", {}, "meeting");
     } catch (err) {
       logger.error(
@@ -244,17 +250,18 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
 
   useEffect(() => {
     return () => {
-      if (isTranscribingRef.current) {
-        isTranscribingRef.current = false;
+      if (isRecordingRef.current) {
+        isRecordingRef.current = false;
         cleanup();
       }
     };
   }, [cleanup]);
 
   return {
-    isTranscribing,
+    isRecording,
+    isProcessing,
     transcript,
-    partialTranscript,
+    error,
     startTranscription,
     stopTranscription,
   };

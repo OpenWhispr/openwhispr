@@ -911,6 +911,24 @@ declare global {
         windowMinutes?: number
       ) => Promise<{ success: boolean; events: any[] }>;
 
+      // Meeting chain transcription (BaseTen)
+      meetingTranscribeChain?: (
+        blobUrl: string,
+        opts?: {
+          skipCleanup?: boolean;
+          agentName?: string;
+          customDictionary?: string[];
+        }
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        rawText?: string;
+        cleanedText?: string;
+        processingDurationSec?: number;
+        speedupFactor?: number;
+        error?: string;
+      }>;
+
       // Desktop audio capture
       getDesktopSources?: (types: string[]) => Promise<Array<{ id: string; name: string }>>;
 

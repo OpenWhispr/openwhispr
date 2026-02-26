@@ -395,6 +395,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, data) => callback(data)
   ),
 
+  // Meeting chain transcription (BaseTen)
+  meetingTranscribeChain: (blobUrl, opts) =>
+    ipcRenderer.invoke("meeting-transcribe-chain", blobUrl, opts),
+
   // Usage limit events (for showing UpgradePrompt in ControlPanel)
   notifyLimitReached: (data) => ipcRenderer.send("limit-reached", data),
   onLimitReached: registerListener("limit-reached", (callback) => (_event, data) => callback(data)),

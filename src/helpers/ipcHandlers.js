@@ -1712,6 +1712,54 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("meeting-transcribe-chain", async (event, blobUrl, opts = {}) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        const response = await fetch(`${apiUrl}/api/transcribe-chain`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: cookieHeader,
+          },
+          body: JSON.stringify({
+            mediaUrl: blobUrl,
+            skipCleanup: opts.skipCleanup ?? false,
+            agentName: opts.agentName,
+            customDictionary: opts.customDictionary,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || `Chain failed: ${response.status}`);
+        }
+
+        fetch(`${apiUrl}/api/delete-audio`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+          body: JSON.stringify({ url: blobUrl }),
+        }).catch((err) => debugLogger.warn("Blob cleanup failed", { error: err.message }));
+
+        return {
+          success: true,
+          text: data.text,
+          rawText: data.rawText,
+          cleanedText: data.cleanedText,
+          processingDurationSec: data.processingDurationSec,
+          speedupFactor: data.speedupFactor,
+        };
+      } catch (error) {
+        debugLogger.error("Meeting chain transcription error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("cloud-reason", async (event, text, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
