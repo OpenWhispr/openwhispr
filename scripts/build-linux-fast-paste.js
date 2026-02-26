@@ -65,7 +65,10 @@ const uinputAvailable = hasUinputHeaders();
 function computeBuildHash() {
   const sourceContent = fs.readFileSync(cSource, "utf8");
   const flags = uinputAvailable ? "uinput" : "nouinput";
-  return crypto.createHash("sha256").update(sourceContent + flags).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(sourceContent + flags)
+    .digest("hex");
 }
 
 if (!needsBuild && fs.existsSync(outputBinary)) {
@@ -99,14 +102,7 @@ function attemptCompile(command, args) {
   });
 }
 
-const compileArgs = [
-  "-O2",
-  cSource,
-  "-o",
-  outputBinary,
-  "-lX11",
-  "-lXtst",
-];
+const compileArgs = ["-O2", cSource, "-o", outputBinary, "-lX11", "-lXtst"];
 
 if (uinputAvailable) {
   log("uinput headers found, enabling uinput support");
@@ -122,7 +118,9 @@ if (result.status !== 0) {
 }
 
 if (result.status !== 0) {
-  console.warn("[linux-fast-paste] Failed to compile Linux fast-paste binary. Install libx11-dev and libxtst-dev to enable native paste. Falling back to system tools.");
+  console.warn(
+    "[linux-fast-paste] Failed to compile Linux fast-paste binary. Install libx11-dev and libxtst-dev to enable native paste. Falling back to system tools."
+  );
   process.exit(0);
 }
 

@@ -95,7 +95,9 @@ async function downloadBinary(platformArch, config, release, isForce = false) {
       setExecutable(outputPath);
       console.log(`  [server] ${platformArch}: Extracted to ${config.outputName}`);
     } else {
-      console.error(`  [server] ${platformArch}: Binary "${config.binaryName}" not found in archive`);
+      console.error(
+        `  [server] ${platformArch}: Binary "${config.binaryName}" not found in archive`
+      );
       return false;
     }
 
@@ -138,7 +140,12 @@ async function main() {
     }
 
     console.log(`Downloading for target platform (${args.platformArch}):`);
-    const ok = await downloadBinary(args.platformArch, BINARIES[args.platformArch], release, args.isForce);
+    const ok = await downloadBinary(
+      args.platformArch,
+      BINARIES[args.platformArch],
+      release,
+      args.isForce
+    );
     if (!ok) {
       console.error(`Failed to download binaries for ${args.platformArch}`);
       process.exitCode = 1;

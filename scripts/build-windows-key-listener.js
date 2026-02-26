@@ -193,7 +193,9 @@ async function main() {
   // Neither worked - warn but don't fail
   console.warn("[windows-key-listener] Could not obtain Windows key listener binary.");
   console.warn("[windows-key-listener] Push-to-Talk on Windows will use fallback mode.");
-  console.warn("[windows-key-listener] To compile locally, install Visual Studio Build Tools or MinGW-w64.");
+  console.warn(
+    "[windows-key-listener] To compile locally, install Visual Studio Build Tools or MinGW-w64."
+  );
 }
 
 main().catch((error) => {

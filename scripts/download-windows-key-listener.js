@@ -12,7 +12,12 @@
 
 const fs = require("fs");
 const path = require("path");
-const { downloadFile, extractZip, fetchLatestRelease, setExecutable } = require("./lib/download-utils");
+const {
+  downloadFile,
+  extractZip,
+  fetchLatestRelease,
+  setExecutable,
+} = require("./lib/download-utils");
 
 const REPO = "OpenWhispr/openwhispr";
 const TAG_PREFIX = "windows-key-listener-v";
@@ -52,7 +57,9 @@ async function main() {
 
   if (!release) {
     console.error("[windows-key-listener] Could not find a release matching prefix:", TAG_PREFIX);
-    console.log("[windows-key-listener] Push-to-Talk will use fallback mode (compile locally or tap mode)");
+    console.log(
+      "[windows-key-listener] Push-to-Talk will use fallback mode (compile locally or tap mode)"
+    );
     return;
   }
 
@@ -60,7 +67,10 @@ async function main() {
   const zipAsset = release.assets.find((a) => a.name === ZIP_NAME);
   if (!zipAsset) {
     console.error(`[windows-key-listener] Release ${release.tag} does not contain ${ZIP_NAME}`);
-    console.log("[windows-key-listener] Available assets:", release.assets.map((a) => a.name).join(", "));
+    console.log(
+      "[windows-key-listener] Available assets:",
+      release.assets.map((a) => a.name).join(", ")
+    );
     return;
   }
 
@@ -99,7 +109,9 @@ async function main() {
     }
 
     const stats = fs.statSync(outputPath);
-    console.log(`\n[windows-key-listener] Successfully downloaded ${release.tag} (${Math.round(stats.size / 1024)}KB)`);
+    console.log(
+      `\n[windows-key-listener] Successfully downloaded ${release.tag} (${Math.round(stats.size / 1024)}KB)`
+    );
   } catch (error) {
     console.error(`\n[windows-key-listener] Download failed: ${error.message}`);
 
@@ -109,8 +121,12 @@ async function main() {
     }
 
     // Don't fail the build - Push-to-Talk can fall back to tap mode
-    console.log("[windows-key-listener] Push-to-Talk will use fallback mode (compile locally or tap mode)");
-    console.log("[windows-key-listener] To compile locally, install Visual Studio Build Tools or MinGW-w64");
+    console.log(
+      "[windows-key-listener] Push-to-Talk will use fallback mode (compile locally or tap mode)"
+    );
+    console.log(
+      "[windows-key-listener] To compile locally, install Visual Studio Build Tools or MinGW-w64"
+    );
   }
 }
 

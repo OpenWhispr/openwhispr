@@ -2102,7 +2102,11 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                         onChange={(e) => setAgentNameInput(e.target.value)}
                         className="flex-1 text-center text-base font-mono"
                       />
-                      <Button onClick={handleSaveAgentName} disabled={!agentNameInput.trim()} size="sm">
+                      <Button
+                        onClick={handleSaveAgentName}
+                        disabled={!agentNameInput.trim()}
+                        size="sm"
+                      >
                         {t("settingsPage.agentConfig.save")}
                       </Button>
                     </div>
