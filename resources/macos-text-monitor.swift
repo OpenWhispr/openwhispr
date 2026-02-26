@@ -4,19 +4,31 @@ import Darwin
 
 let TIMEOUT_SECONDS: Double = 30.0
 let MAX_OUTPUT_BYTES = 10240
+let MAX_BASE64_SOURCE_CHARS = 7000
 
 var monitoredElement: AXUIElement?
 var observer: AXObserver?
 var monitoredPid: pid_t = 0
 
 func writeOutput(_ message: String) {
-    let truncated = String(message.prefix(MAX_OUTPUT_BYTES))
-    FileHandle.standardOutput.write((truncated + "\n").data(using: .utf8)!)
+    FileHandle.standardOutput.write((message + "\n").data(using: .utf8)!)
     fflush(stdout)
 }
 
 func writeError(_ message: String) {
     FileHandle.standardError.write((message + "\n").data(using: .utf8)!)
+}
+
+func writeTextOutput(_ prefix: String, _ value: String) {
+    let truncated = String(value.prefix(MAX_OUTPUT_BYTES))
+    if truncated.contains("\n") || truncated.contains("\r") {
+        let capped = String(truncated.prefix(MAX_BASE64_SOURCE_CHARS))
+        let encoded = Data(capped.utf8).base64EncodedString()
+        writeOutput("\(prefix)_B64:\(encoded)")
+        return
+    }
+
+    writeOutput("\(prefix):\(truncated)")
 }
 
 func readCurrentValue() -> String? {
@@ -34,7 +46,7 @@ func observerCallback(
     _ refcon: UnsafeMutableRawPointer?
 ) {
     if let value = readCurrentValue() {
-        writeOutput("CHANGED:\(value)")
+        writeTextOutput("CHANGED", value)
     }
 }
 
@@ -99,7 +111,7 @@ guard let initialValue = readCurrentValue() else {
     exit(0)
 }
 
-writeOutput("INITIAL_VALUE:\(initialValue)")
+writeTextOutput("INITIAL_VALUE", initialValue)
 
 // Create AXObserver for the target application's PID
 var createdObserver: AXObserver?

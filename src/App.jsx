@@ -126,8 +126,10 @@ export default function App() {
             <button
               onClick={async () => {
                 try {
-                  await window.electronAPI?.undoLearnedCorrections?.(words);
-                  dismiss(toastId);
+                  const result = await window.electronAPI?.undoLearnedCorrections?.(words);
+                  if (result?.success) {
+                    dismiss(toastId);
+                  }
                 } catch {
                   // silently fail — word stays in dictionary
                 }

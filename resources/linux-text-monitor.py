@@ -8,7 +8,9 @@ Exits after a timeout or on receiving SIGTERM.
 
 Protocol (stdout):
   INITIAL_VALUE:<text>  - Initial text field value
+  INITIAL_VALUE_B64:<base64> - Initial text field value (multiline)
   CHANGED:<text>        - Text field value after a change
+  CHANGED_B64:<base64>  - Text field value after a change (multiline)
   NO_ELEMENT            - Could not get focused element
   NO_VALUE              - Focused element has no text value
 
@@ -21,6 +23,7 @@ Requires: python3-atspi / pyatspi (gi.repository.Atspi)
 import sys
 import signal
 import threading
+import base64
 
 TIMEOUT_SECONDS = 30
 MAX_OUTPUT_CHARS = 10240
@@ -50,6 +53,15 @@ def _find_focused(accessible):
     except Exception:
         pass
     return None
+
+
+def _emit_text(prefix, value):
+    truncated = value[:MAX_OUTPUT_CHARS]
+    if "\n" in truncated or "\r" in truncated:
+        encoded = base64.b64encode(truncated.encode("utf-8")).decode("ascii")
+        print(f"{prefix}_B64:{encoded}", flush=True)
+    else:
+        print(f"{prefix}:{truncated}", flush=True)
 
 
 def main():
@@ -99,7 +111,7 @@ def main():
     try:
         char_count = text_iface.get_character_count()
         initial_value = text_iface.get_text(0, min(char_count, MAX_OUTPUT_CHARS))
-        print(f"INITIAL_VALUE:{initial_value}", flush=True)
+        _emit_text("INITIAL_VALUE", initial_value)
     except Exception:
         print("NO_VALUE", flush=True)
         sys.exit(0)
@@ -118,7 +130,7 @@ def main():
             new_value = ti.get_text(0, min(cc, MAX_OUTPUT_CHARS))
             if new_value != last_value[0]:
                 last_value[0] = new_value
-                print(f"CHANGED:{new_value}", flush=True)
+                _emit_text("CHANGED", new_value)
         except Exception:
             pass
 

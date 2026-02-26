@@ -719,10 +719,16 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
   const [newDictionaryWord, setNewDictionaryWord] = useState("");
 
   const handleAddDictionaryWord = useCallback(() => {
+    const existingWords = new Set(customDictionary.map((w) => w.toLowerCase()));
     const words = newDictionaryWord
       .split(",")
       .map((w) => w.trim())
-      .filter((w) => w && !customDictionary.includes(w));
+      .filter((w) => {
+        const normalized = w.toLowerCase();
+        if (!w || existingWords.has(normalized)) return false;
+        existingWords.add(normalized);
+        return true;
+      });
     if (words.length > 0) {
       setCustomDictionary([...customDictionary, ...words]);
       setNewDictionaryWord("");
@@ -736,6 +742,38 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     },
     [customDictionary, setCustomDictionary, agentName]
   );
+
+  const handleSaveAgentName = useCallback(() => {
+    const trimmed = agentNameInput.trim();
+    const previousName = agentName;
+
+    setAgentName(trimmed);
+    setAgentNameInput(trimmed);
+
+    let nextDictionary = customDictionary.filter((w) => w !== previousName);
+    if (trimmed) {
+      const hasName = nextDictionary.some((w) => w.toLowerCase() === trimmed.toLowerCase());
+      if (!hasName) {
+        nextDictionary = [trimmed, ...nextDictionary];
+      }
+    }
+    setCustomDictionary(nextDictionary);
+
+    showAlertDialog({
+      title: t("settingsPage.agentConfig.dialogs.updatedTitle"),
+      description: t("settingsPage.agentConfig.dialogs.updatedDescription", {
+        name: trimmed,
+      }),
+    });
+  }, [
+    agentNameInput,
+    agentName,
+    customDictionary,
+    setAgentName,
+    setCustomDictionary,
+    showAlertDialog,
+    t,
+  ]);
 
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
@@ -2064,21 +2102,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                         onChange={(e) => setAgentNameInput(e.target.value)}
                         className="flex-1 text-center text-base font-mono"
                       />
-                      <Button
-                        onClick={() => {
-                          const trimmed = agentNameInput.trim();
-                          setAgentName(trimmed);
-                          setAgentNameInput(trimmed);
-                          showAlertDialog({
-                            title: t("settingsPage.agentConfig.dialogs.updatedTitle"),
-                            description: t("settingsPage.agentConfig.dialogs.updatedDescription", {
-                              name: trimmed,
-                            }),
-                          });
-                        }}
-                        disabled={!agentNameInput.trim()}
-                        size="sm"
-                      >
+                      <Button onClick={handleSaveAgentName} disabled={!agentNameInput.trim()} size="sm">
                         {t("settingsPage.agentConfig.save")}
                       </Button>
                     </div>
@@ -2215,24 +2239,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                             className="flex-1 text-center text-base font-mono"
                           />
                           <Button
-                            onClick={() => {
-                              const trimmed = agentNameInput.trim();
-                              const oldName = agentName;
-                              setAgentName(trimmed);
-                              setAgentNameInput(trimmed);
-                              let dict = customDictionary.filter((w) => w !== oldName);
-                              if (trimmed && !dict.includes(trimmed)) dict = [trimmed, ...dict];
-                              setCustomDictionary(dict);
-                              showAlertDialog({
-                                title: t("settingsPage.agentConfig.dialogs.updatedTitle"),
-                                description: t(
-                                  "settingsPage.agentConfig.dialogs.updatedDescription",
-                                  {
-                                    name: trimmed,
-                                  }
-                                ),
-                              });
-                            }}
+                            onClick={handleSaveAgentName}
                             disabled={!agentNameInput.trim()}
                             size="sm"
                           >

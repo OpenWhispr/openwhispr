@@ -55,7 +55,7 @@ function isBinaryUpToDate() {
 async function tryDownload() {
   log("Attempting to download prebuilt binary...");
 
-  const downloadScript = path.join(__dirname, "download-windows-text-monitor.js");
+  const downloadScript = path.join(__dirname, "download-text-monitor.js");
   if (!fs.existsSync(downloadScript)) {
     log("Download script not found, skipping download");
     return false;
@@ -172,8 +172,12 @@ async function main() {
   }
 
   console.warn("[windows-text-monitor] Could not obtain Windows text monitor binary.");
-  console.warn("[windows-text-monitor] Auto-learn correction monitoring will be disabled on Windows.");
-  console.warn("[windows-text-monitor] To compile locally, install Visual Studio Build Tools or MinGW-w64.");
+  console.warn(
+    "[windows-text-monitor] Auto-learn correction monitoring will be disabled on Windows."
+  );
+  console.warn(
+    "[windows-text-monitor] To compile locally, install Visual Studio Build Tools or MinGW-w64."
+  );
 }
 
 main().catch((error) => {

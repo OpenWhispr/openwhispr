@@ -129,6 +129,7 @@ class IPCHandlers {
       clearTimeout(this._autoLearnDebounceTimer);
       this._autoLearnDebounceTimer = null;
     }
+    this._autoLearnLatestData = null;
     if (this.textEditMonitor && this._textEditHandler) {
       this.textEditMonitor.removeListener("text-edited", this._textEditHandler);
       this._textEditHandler = null;
@@ -170,9 +171,11 @@ class IPCHandlers {
   }
 
   _processCorrections() {
+    this._autoLearnDebounceTimer = null;
     if (!this._autoLearnLatestData) return;
     if (!this._autoLearnEnabled) {
       debugLogger.debug("[AutoLearn] Disabled, skipping correction processing");
+      this._autoLearnLatestData = null;
       return;
     }
 
@@ -189,27 +192,20 @@ class IPCHandlers {
       });
 
       if (corrections.length > 0) {
-        const dictSet = new Set(currentDict.map((w) => w.toLowerCase()));
-        const newCorrections = corrections.filter((c) => !dictSet.has(c.toLowerCase()));
+        const updatedDict = [...currentDict, ...corrections];
+        const saveResult = this.databaseManager.setDictionary(updatedDict);
 
-        if (newCorrections.length > 0) {
-          const updatedDict = [...currentDict, ...newCorrections];
-          const saveResult = this.databaseManager.setDictionary(updatedDict);
-
-          if (saveResult?.success === false) {
-            debugLogger.debug("[AutoLearn] Failed to save dictionary", { error: saveResult.error });
-            return;
-          }
-
-          this.broadcastToWindows("dictionary-updated", updatedDict);
-
-          // Show the overlay so the toast is visible (it may have been hidden after dictation)
-          this.windowManager.showDictationPanel();
-          this.broadcastToWindows("corrections-learned", newCorrections);
-          debugLogger.debug("[AutoLearn] Saved corrections", { corrections: newCorrections });
-        } else {
-          debugLogger.debug("[AutoLearn] All corrections already in dictionary");
+        if (saveResult?.success === false) {
+          debugLogger.debug("[AutoLearn] Failed to save dictionary", { error: saveResult.error });
+          return;
         }
+
+        this.broadcastToWindows("dictionary-updated", updatedDict);
+
+        // Show the overlay so the toast is visible (it may have been hidden after dictation)
+        this.windowManager.showDictationPanel();
+        this.broadcastToWindows("corrections-learned", corrections);
+        debugLogger.debug("[AutoLearn] Saved corrections", { corrections });
       }
     } catch (error) {
       debugLogger.debug("[AutoLearn] Error processing corrections", { error: error.message });
@@ -353,6 +349,13 @@ class IPCHandlers {
     // Dictionary handlers
     ipcMain.on("auto-learn-changed", (_event, enabled) => {
       this._autoLearnEnabled = !!enabled;
+      if (!this._autoLearnEnabled) {
+        if (this._autoLearnDebounceTimer) {
+          clearTimeout(this._autoLearnDebounceTimer);
+          this._autoLearnDebounceTimer = null;
+        }
+        this._autoLearnLatestData = null;
+      }
       debugLogger.debug("[AutoLearn] Setting changed", { enabled: this._autoLearnEnabled });
     });
 
@@ -372,12 +375,22 @@ class IPCHandlers {
         if (!Array.isArray(words) || words.length === 0) {
           return { success: false };
         }
+        const validWords = words.filter((w) => typeof w === "string" && w.trim().length > 0);
+        if (validWords.length === 0) {
+          return { success: false };
+        }
         const currentDict = this._getDictionarySafe();
-        const removeSet = new Set(words.map((w) => w.toLowerCase()));
+        const removeSet = new Set(validWords.map((w) => w.toLowerCase()));
         const updatedDict = currentDict.filter((w) => !removeSet.has(w.toLowerCase()));
-        this.databaseManager.setDictionary(updatedDict);
+        const saveResult = this.databaseManager.setDictionary(updatedDict);
+        if (saveResult?.success === false) {
+          debugLogger.debug("[AutoLearn] Undo failed to save dictionary", {
+            error: saveResult.error,
+          });
+          return { success: false };
+        }
         this.broadcastToWindows("dictionary-updated", updatedDict);
-        debugLogger.debug("[AutoLearn] Undo: removed words", { words });
+        debugLogger.debug("[AutoLearn] Undo: removed words", { words: validWords });
         return { success: true };
       } catch (err) {
         debugLogger.debug("[AutoLearn] Undo failed", { error: err.message });

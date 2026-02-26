@@ -34,24 +34,19 @@ function tokenize(text) {
 
 /**
  * Find the region in fieldValue that corresponds to the pasted originalText.
- * Returns the matched region (which may have been edited by the user).
  * If the field only contains the pasted text, returns fieldValue as-is.
  */
 function findEditedRegion(originalText, fieldValue) {
-  // Exact match — field contains only our text (possibly edited)
   if (fieldValue.length <= originalText.length * 1.5) {
     return fieldValue;
   }
 
-  // Field has existing content — find where our text was pasted
   const idx = fieldValue.indexOf(originalText);
   if (idx !== -1) {
-    // Original text found verbatim (not yet edited) — no correction to learn
     return originalText;
   }
 
-  // Original text was already edited — find the closest matching region.
-  // Use the original text length as a window and slide it across the field value.
+  // Sliding window: find the region with highest word overlap
   const origWords = tokenize(originalText);
   const fieldWords = tokenize(fieldValue);
   const windowSize = origWords.length;
@@ -84,15 +79,11 @@ function findEditedRegion(originalText, fieldValue) {
   return fieldWords.slice(bestStart, bestStart + windowSize).join(" ");
 }
 
-/**
- * Compute word-level LCS (Longest Common Subsequence) to find substitutions.
- * Returns pairs of [originalWord, editedWord] for words that were replaced.
- */
+/** Word-level LCS to find [originalWord, editedWord] substitution pairs. */
 function findSubstitutions(origWords, editedWords) {
   const m = origWords.length;
   const n = editedWords.length;
 
-  // LCS table
   const dp = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
@@ -104,7 +95,6 @@ function findSubstitutions(origWords, editedWords) {
     }
   }
 
-  // Backtrack to find aligned pairs
   const aligned = [];
   let i = m,
     j = n;
@@ -122,13 +112,12 @@ function findSubstitutions(origWords, editedWords) {
     }
   }
 
-  // Extract substitutions: consecutive delete+insert = substitution
+  // Consecutive [origWord, null] + [null, editedWord] = substitution
   const subs = [];
   for (let k = 0; k < aligned.length - 1; k++) {
     const [origW, editW] = aligned[k];
     const [nextOrigW, nextEditW] = aligned[k + 1];
 
-    // Pattern: [origWord, null] followed by [null, editedWord] = substitution
     if (origW !== null && editW === null && nextOrigW === null && nextEditW !== null) {
       subs.push([origW, nextEditW]);
     }
@@ -163,26 +152,25 @@ function extractCorrections(originalText, fieldValue, existingDictionary) {
 
   const safeDict = Array.isArray(existingDictionary) ? existingDictionary : [];
   const dictSet = new Set(safeDict.map((w) => w.toLowerCase()));
+  const seenCorrections = new Set();
   const results = [];
 
   for (const [origWord, correctedWord] of subs) {
-    // Skip words already in dictionary
-    if (dictSet.has(correctedWord.toLowerCase())) continue;
+    const normalizedCorrected = correctedWord.toLowerCase();
 
-    // Skip case-only changes
-    if (origWord.toLowerCase() === correctedWord.toLowerCase()) continue;
-
-    // Skip very short words (unlikely to benefit from dictionary hints)
+    if (dictSet.has(normalizedCorrected)) continue;
+    if (seenCorrections.has(normalizedCorrected)) continue;
+    if (origWord.toLowerCase() === normalizedCorrected) continue;
     if (correctedWord.length < 3) continue;
 
-    // Skip if edit distance is too large relative to word length — semantic change, not correction.
-    // Threshold of 0.65 allows phonetic corrections like "Shunade" → "Sinead" (dist 4/7 = 0.57)
-    // while still filtering out completely unrelated word replacements.
+    // 0.65 threshold allows phonetic corrections like "Shunade" → "Sinead" (dist 4/7 = 0.57)
+    // while filtering out unrelated word replacements.
     const dist = editDistance(origWord.toLowerCase(), correctedWord.toLowerCase());
     const maxLen = Math.max(origWord.length, correctedWord.length);
     if (dist / maxLen > 0.65) continue;
 
     results.push(correctedWord);
+    seenCorrections.add(normalizedCorrected);
   }
 
   return results;

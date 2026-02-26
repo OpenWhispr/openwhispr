@@ -51,6 +51,7 @@ class TextEditMonitor extends EventEmitter {
     this.timeout = null;
     this._pollInterval = null;
     this._lastValue = null;
+    this._stdoutBuffer = "";
     this.lastTargetPid = null;
   }
 
@@ -100,6 +101,7 @@ class TextEditMonitor extends EventEmitter {
       debugLogger.debug("[TextEditMonitor] No binary found for platform", {
         platform: process.platform,
       });
+      this.currentOriginalText = null;
       return;
     }
 
@@ -112,6 +114,7 @@ class TextEditMonitor extends EventEmitter {
         fs.accessSync(command, fs.constants.X_OK);
       } catch {
         debugLogger.debug("[TextEditMonitor] Binary not executable", { command });
+        this.currentOriginalText = null;
         return;
       }
     }
@@ -128,28 +131,11 @@ class TextEditMonitor extends EventEmitter {
     this.process.stdin.write(originalText + "\n");
     this.process.stdin.end();
 
+    this._stdoutBuffer = "";
     this.process.stdout.setEncoding("utf8");
     this.process.stdout.on("data", (chunk) => {
       debugLogger.debug("[TextEditMonitor] stdout", { data: chunk.trim() });
-      chunk
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .forEach((line) => {
-          if (line.startsWith("CHANGED:")) {
-            const newFieldValue = line.slice("CHANGED:".length);
-            debugLogger.debug("[TextEditMonitor] Text changed", {
-              newFieldValue: newFieldValue.substring(0, 80),
-            });
-            this.emit("text-edited", {
-              originalText: this.currentOriginalText,
-              newFieldValue,
-            });
-          } else if (line === "NO_ELEMENT" || line === "NO_VALUE") {
-            debugLogger.debug("[TextEditMonitor] No target element", { status: line });
-            this.stopMonitoring();
-          }
-        });
+      this._handleProcessStdoutChunk(chunk);
     });
 
     this.process.stderr.setEncoding("utf8");
@@ -181,6 +167,7 @@ class TextEditMonitor extends EventEmitter {
       this._pollInterval = null;
     }
     this._lastValue = null;
+    this._stdoutBuffer = "";
     if (this.process) {
       try {
         this.process.kill();
@@ -190,6 +177,62 @@ class TextEditMonitor extends EventEmitter {
       this.process = null;
     }
     this.currentOriginalText = null;
+  }
+
+  _handleProcessStdoutChunk(chunk) {
+    this._stdoutBuffer += chunk;
+    const lines = this._stdoutBuffer.split(/\r?\n/);
+    this._stdoutBuffer = lines.pop() || "";
+
+    for (const rawLine of lines) {
+      if (!rawLine) continue;
+      this._handleProcessLine(rawLine);
+    }
+  }
+
+  _decodeBase64Payload(encoded) {
+    try {
+      return Buffer.from(encoded, "base64").toString("utf8");
+    } catch (error) {
+      debugLogger.debug("[TextEditMonitor] Failed to decode base64 payload", {
+        error: error.message,
+      });
+      return null;
+    }
+  }
+
+  _emitTextEdited(newFieldValue) {
+    if (typeof newFieldValue !== "string" || this.currentOriginalText === null) {
+      return;
+    }
+
+    debugLogger.debug("[TextEditMonitor] Text changed", {
+      newFieldValue: newFieldValue.substring(0, 80),
+    });
+    this.emit("text-edited", {
+      originalText: this.currentOriginalText,
+      newFieldValue,
+    });
+  }
+
+  _handleProcessLine(line) {
+    if (line.startsWith("CHANGED_B64:")) {
+      const decoded = this._decodeBase64Payload(line.slice("CHANGED_B64:".length));
+      if (decoded !== null) {
+        this._emitTextEdited(decoded);
+      }
+      return;
+    }
+
+    if (line.startsWith("CHANGED:")) {
+      this._emitTextEdited(line.slice("CHANGED:".length));
+      return;
+    }
+
+    if (line === "NO_ELEMENT" || line === "NO_VALUE") {
+      debugLogger.debug("[TextEditMonitor] No target element", { status: line });
+      this.stopMonitoring();
+    }
   }
 
   /**
@@ -254,28 +297,11 @@ class TextEditMonitor extends EventEmitter {
     this.process.stdin.write(originalText + "\n");
     this.process.stdin.end();
 
+    this._stdoutBuffer = "";
     this.process.stdout.setEncoding("utf8");
     this.process.stdout.on("data", (chunk) => {
       debugLogger.debug("[TextEditMonitor] stdout", { data: chunk.trim() });
-      chunk
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .forEach((line) => {
-          if (line.startsWith("CHANGED:")) {
-            const newFieldValue = line.slice("CHANGED:".length);
-            debugLogger.debug("[TextEditMonitor] Text changed", {
-              newFieldValue: newFieldValue.substring(0, 80),
-            });
-            this.emit("text-edited", {
-              originalText: this.currentOriginalText,
-              newFieldValue,
-            });
-          } else if (line === "NO_ELEMENT" || line === "NO_VALUE") {
-            debugLogger.debug("[TextEditMonitor] No target element", { status: line });
-            this.stopMonitoring();
-          }
-        });
+      this._handleProcessStdoutChunk(chunk);
     });
 
     this.process.stderr.setEncoding("utf8");
@@ -288,6 +314,7 @@ class TextEditMonitor extends EventEmitter {
         error: err.message,
       });
       this.process = null;
+      if (this.currentOriginalText === null) return;
       this._startMacOSPolling(originalText, timeoutMs, targetPid);
     });
 

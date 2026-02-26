@@ -7,7 +7,9 @@
  *
  * Protocol (stdout):
  *   INITIAL_VALUE:<text>  - Initial text field value
+ *   INITIAL_VALUE_B64:<base64> - Initial text field value (multiline)
  *   CHANGED:<text>        - Text field value after a change
+ *   CHANGED_B64:<base64>  - Text field value after a change (multiline)
  *   NO_ELEMENT            - Could not get focused element
  *   NO_VALUE              - Focused element has no text value
  *
@@ -31,10 +33,59 @@
 #define MAX_OUTPUT_CHARS 10240
 
 static volatile sig_atomic_t running = 1;
+static const char BASE64_TABLE[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 static void signal_handler(int sig) {
     (void)sig;
     running = 0;
+}
+
+static char *base64_encode(const unsigned char *data, size_t len) {
+    size_t out_len = 4 * ((len + 2) / 3);
+    char *out = (char *)malloc(out_len + 1);
+    if (!out) return NULL;
+
+    size_t i = 0, j = 0;
+    while (i < len) {
+        unsigned int octet_a = i < len ? data[i++] : 0;
+        unsigned int octet_b = i < len ? data[i++] : 0;
+        unsigned int octet_c = i < len ? data[i++] : 0;
+        unsigned int triple = (octet_a << 16) | (octet_b << 8) | octet_c;
+
+        out[j++] = BASE64_TABLE[(triple >> 18) & 0x3F];
+        out[j++] = BASE64_TABLE[(triple >> 12) & 0x3F];
+        out[j++] = BASE64_TABLE[(triple >> 6) & 0x3F];
+        out[j++] = BASE64_TABLE[triple & 0x3F];
+    }
+
+    if (len % 3 == 1) {
+        out[out_len - 1] = '=';
+        out[out_len - 2] = '=';
+    } else if (len % 3 == 2) {
+        out[out_len - 1] = '=';
+    }
+
+    out[out_len] = '\0';
+    return out;
+}
+
+static void print_text_output(const char *name, const char *value) {
+    if (!value) return;
+
+    size_t len = strlen(value);
+    size_t limit = len < MAX_OUTPUT_CHARS ? len : MAX_OUTPUT_CHARS;
+
+    if (memchr(value, '\n', limit) || memchr(value, '\r', limit)) {
+        char *encoded = base64_encode((const unsigned char *)value, limit);
+        if (!encoded) return;
+        printf("%s_B64:%s\n", name, encoded);
+        fflush(stdout);
+        free(encoded);
+        return;
+    }
+
+    printf("%s:%.*s\n", name, (int)limit, value);
+    fflush(stdout);
 }
 
 static AtspiAccessible *find_focused(AtspiAccessible *accessible) {
@@ -166,8 +217,7 @@ int main(void) {
         return 0;
     }
 
-    printf("INITIAL_VALUE:%s\n", last_value);
-    fflush(stdout);
+    print_text_output("INITIAL_VALUE", last_value);
 
     /* Poll for changes */
     struct timespec start;
@@ -186,8 +236,7 @@ int main(void) {
         if (!current_value) continue;
 
         if (strcmp(current_value, last_value) != 0) {
-            printf("CHANGED:%s\n", current_value);
-            fflush(stdout);
+            print_text_output("CHANGED", current_value);
             g_free(last_value);
             last_value = current_value;
         } else {

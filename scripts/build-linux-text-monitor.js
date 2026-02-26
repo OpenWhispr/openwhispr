@@ -60,7 +60,10 @@ function isBinaryUpToDate() {
     const pkgFlags = getPkgConfigFlags();
     const flagStr = pkgFlags ? pkgFlags.join(" ") : "";
     const sourceContent = fs.readFileSync(cSource, "utf8");
-    const currentHash = crypto.createHash("sha256").update(sourceContent + flagStr).digest("hex");
+    const currentHash = crypto
+      .createHash("sha256")
+      .update(sourceContent + flagStr)
+      .digest("hex");
 
     if (fs.existsSync(hashFile)) {
       const savedHash = fs.readFileSync(hashFile, "utf8").trim();
@@ -82,7 +85,7 @@ function isBinaryUpToDate() {
 async function tryDownload() {
   log("Attempting to download prebuilt binary...");
 
-  const downloadScript = path.join(__dirname, "download-linux-text-monitor.js");
+  const downloadScript = path.join(__dirname, "download-text-monitor.js");
   if (!fs.existsSync(downloadScript)) {
     log("Download script not found, skipping download");
     return false;
@@ -164,7 +167,10 @@ function tryCompile() {
   try {
     const sourceContent = fs.readFileSync(cSource, "utf8");
     const flagStr = pkgFlags.join(" ");
-    const hash = crypto.createHash("sha256").update(sourceContent + flagStr).digest("hex");
+    const hash = crypto
+      .createHash("sha256")
+      .update(sourceContent + flagStr)
+      .digest("hex");
     fs.writeFileSync(hashFile, hash);
   } catch (err) {
     log(`Warning: Could not save source hash: ${err.message}`);
@@ -194,7 +200,9 @@ async function main() {
 
   console.warn("[linux-text-monitor] Could not obtain Linux text monitor binary.");
   console.warn("[linux-text-monitor] Auto-learn correction monitoring will be disabled on Linux.");
-  console.warn("[linux-text-monitor] To compile locally, install libatspi2.0-dev and libglib2.0-dev. Falling back to Python script.");
+  console.warn(
+    "[linux-text-monitor] To compile locally, install libatspi2.0-dev and libglib2.0-dev. Falling back to Python script."
+  );
 }
 
 main().catch((error) => {
