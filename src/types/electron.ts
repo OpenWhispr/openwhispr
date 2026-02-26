@@ -270,6 +270,14 @@ declare global {
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
 
+      // STT config
+      getSttConfig?: () => Promise<{
+        success: boolean;
+        dictation: { mode: string };
+        notes: { mode: string };
+        streamingProvider: string;
+      } | null>;
+
       // Database operations
       saveTranscription: (text: string) => Promise<{ id: number; success: boolean }>;
       getTranscriptions: (limit?: number) => Promise<TranscriptionItem[]>;
@@ -707,7 +715,16 @@ declare global {
       cloudStreamingUsage?: (
         text: string,
         audioDurationSeconds: number,
-        opts?: { sendLogs?: boolean }
+        opts?: {
+          sendLogs?: boolean;
+          sttProvider?: string;
+          sttModel?: string;
+          sttProcessingMs?: number;
+          sttLanguage?: string;
+          audioSizeBytes?: number;
+          audioFormat?: string;
+          clientTotalMs?: number;
+        }
       ) => Promise<{
         success: boolean;
         wordsUsed?: number;

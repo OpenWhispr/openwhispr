@@ -1359,7 +1359,8 @@
       "saving": "Guardando",
       "wordsCount": "{{count}} palabras",
       "startWriting": "Comienza a escribir...",
-      "staleIndicator": "El contenido ha cambiado desde la mejora"
+      "staleIndicator": "El contenido ha cambiado desde la mejora",
+      "live": "En vivo"
     },
     "upload": {
       "title": "Subir audio",

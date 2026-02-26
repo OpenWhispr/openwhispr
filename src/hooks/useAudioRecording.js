@@ -133,12 +133,22 @@ export const useAudioRecording = (toast, options = {}) => {
             });
           }
 
-          audioManagerRef.current.warmupStreamingConnection();
+          if (audioManagerRef.current.sttConfig?.dictation?.mode === "streaming") {
+            audioManagerRef.current.warmupStreamingConnection();
+          }
         }
       },
     });
 
-    audioManagerRef.current.warmupStreamingConnection();
+    audioManagerRef.current.setContext("dictation");
+    window.electronAPI.getSttConfig?.().then((config) => {
+      if (config && audioManagerRef.current) {
+        audioManagerRef.current.setSttConfig(config);
+        if (config.dictation?.mode === "streaming") {
+          audioManagerRef.current.warmupStreamingConnection();
+        }
+      }
+    });
 
     const handleToggle = async () => {
       if (!audioManagerRef.current) return;
@@ -230,10 +240,6 @@ export const useAudioRecording = (toast, options = {}) => {
     }
   };
 
-  const warmupStreaming = useCallback((opts) => {
-    audioManagerRef.current?.warmupStreamingConnection(opts);
-  }, []);
-
   return {
     isRecording,
     isProcessing,
@@ -245,6 +251,5 @@ export const useAudioRecording = (toast, options = {}) => {
     cancelRecording,
     cancelProcessing,
     toggleListening,
-    warmupStreaming,
   };
 };

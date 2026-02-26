@@ -1868,6 +1868,8 @@ class IPCHandlers {
           sttProvider: data.data.sttProvider,
           sttModel: data.data.sttModel,
           sttProcessingMs: data.data.sttProcessingMs,
+          sttWordCount: data.data.sttWordCount,
+          sttLanguage: data.data.sttLanguage,
           audioDurationMs: data.data.audioDurationMs,
         };
       } catch (error) {
@@ -1916,9 +1918,12 @@ class IPCHandlers {
             sttProvider: opts.sttProvider,
             sttModel: opts.sttModel,
             sttProcessingMs: opts.sttProcessingMs,
+            sttWordCount: opts.sttWordCount,
+            sttLanguage: opts.sttLanguage,
             audioDurationMs: opts.audioDurationMs,
             audioSizeBytes: opts.audioSizeBytes,
             audioFormat: opts.audioFormat,
+            clientTotalMs: opts.clientTotalMs,
           }),
         });
 
@@ -1970,6 +1975,13 @@ class IPCHandlers {
               clientType: "desktop",
               appVersion: app.getVersion(),
               clientVersion: app.getVersion(),
+              sttProvider: opts.sttProvider,
+              sttModel: opts.sttModel,
+              sttProcessingMs: opts.sttProcessingMs,
+              sttLanguage: opts.sttLanguage,
+              audioSizeBytes: opts.audioSizeBytes,
+              audioFormat: opts.audioFormat,
+              clientTotalMs: opts.clientTotalMs,
               sendLogs: opts.sendLogs,
             }),
           });
@@ -2062,6 +2074,33 @@ class IPCHandlers {
     ipcMain.handle("cloud-billing-portal", (event) =>
       fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
     );
+
+    ipcMain.handle("get-stt-config", async (event) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        const response = await fetch(`${apiUrl}/api/stt-config`, {
+          headers: { Cookie: cookieHeader },
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          }
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return { success: true, ...data };
+      } catch (error) {
+        debugLogger.error("STT config fetch error:", error);
+        return null;
+      }
+    });
 
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
       const fs = require("fs");
@@ -2799,12 +2838,14 @@ class IPCHandlers {
 
     ipcMain.handle("deepgram-streaming-stop", async () => {
       try {
+        const model = this.deepgramStreaming?.currentModel || "nova-3";
+        const audioBytesSent = this.deepgramStreaming?.audioBytesSent || 0;
         let result = { text: "" };
         if (this.deepgramStreaming) {
           result = await this.deepgramStreaming.disconnect(true);
         }
 
-        return { success: true, text: result?.text || "" };
+        return { success: true, text: result?.text || "", model, audioBytesSent };
       } catch (error) {
         debugLogger.error("Deepgram streaming stop error", { error: error.message });
         return { success: false, error: error.message };

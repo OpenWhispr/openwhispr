@@ -99,6 +99,7 @@ class DeepgramStreaming {
     this.proactiveRefreshTimer = null;
     this._generation = 0;
     this.audioBytesSent = 0;
+    this.currentModel = "nova-3";
     this.resultsReceived = 0;
     this.livenessTimer = null;
     this.replayBuffer = [];
@@ -116,6 +117,7 @@ class DeepgramStreaming {
     const baseLang = lang ? lang.split("-")[0].toLowerCase() : null;
     const useNova3 = !lang || NOVA3_LANGUAGES.has(lang) || NOVA3_LANGUAGES.has(baseLang);
     const model = useNova3 ? "nova-3" : "nova-2";
+    this.currentModel = model;
 
     if (!useNova3) {
       debugLogger.debug("Deepgram falling back to nova-2", { language: lang });

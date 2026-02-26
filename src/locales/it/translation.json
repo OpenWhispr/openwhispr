@@ -1359,7 +1359,8 @@
       "saving": "Salvataggio",
       "wordsCount": "{{count}} parole",
       "startWriting": "Inizia a scrivere...",
-      "staleIndicator": "Il contenuto è cambiato dall'ultimo miglioramento"
+      "staleIndicator": "Il contenuto è cambiato dall'ultimo miglioramento",
+      "live": "Dal vivo"
     },
     "upload": {
       "title": "Carica audio",

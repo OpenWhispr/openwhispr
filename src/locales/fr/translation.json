@@ -1395,7 +1395,8 @@
       "saving": "Enregistrement",
       "wordsCount": "{{count}} mots",
       "startWriting": "Commencez à écrire...",
-      "staleIndicator": "Le contenu a changé depuis l'amélioration"
+      "staleIndicator": "Le contenu a changé depuis l'amélioration",
+      "live": "En direct"
     },
     "upload": {
       "title": "Téléverser un fichier audio",

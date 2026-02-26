@@ -1254,6 +1254,7 @@
     "editor": {
       "transcribe": "文字起こし",
       "staleIndicator": "強化後にコンテンツが変更されました",
+      "live": "ライブ",
       "untitled": "無題",
       "noteTitle": "ノートのタイトル",
       "stop": "停止",
