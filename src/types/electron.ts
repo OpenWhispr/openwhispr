@@ -3,6 +3,9 @@ export interface AppContext {
   appName: string | null;
   windowTitle: string | null;
   fileName: string | null;
+  projectName: string | null;
+  openTabs: string[] | null;
+  projectFiles: string[] | null;
 }
 
 export type LocalTranscriptionProvider = "whisper" | "nvidia";

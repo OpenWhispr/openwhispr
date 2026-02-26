@@ -144,6 +144,64 @@ function parseFileName(windowTitle, appIdentifier) {
   return null;
 }
 
+function parseProjectName(windowTitle, appIdentifier) {
+  if (!windowTitle) return null;
+  const id = (appIdentifier || "").toLowerCase();
+
+  // VS Code / Cursor / Windsurf: "file.ts — project — Visual Studio Code"
+  if (
+    matchesApp(
+      id,
+      windowTitle,
+      ["vscode", "cursor", "windsurf"],
+      ["Visual Studio Code", "Cursor", "Windsurf"]
+    ) ||
+    /^code(\.exe)?$/i.test(appIdentifier || "")
+  ) {
+    const parts = windowTitle.split(" \u2014 ");
+    if (parts.length >= 2) return parts[parts.length - 2].trim();
+    return null;
+  }
+
+  // JetBrains: "project – file.ts [path]"
+  const jetbrainsIds = [
+    "jetbrains",
+    "intellij",
+    "webstorm",
+    "pycharm",
+    "phpstorm",
+    "rubymine",
+    "goland",
+    "rider",
+    "clion",
+    "datagrip",
+    "appcode",
+    "idea",
+  ];
+  if (matchesApp(id, windowTitle, jetbrainsIds, [])) {
+    const parts = windowTitle.split(" \u2013 ");
+    if (parts[0]) return parts[0].trim();
+    return null;
+  }
+
+  // Xcode: "Project — file.swift" — first non-file segment
+  if (matchesApp(id, windowTitle, ["xcode"], ["Xcode"])) {
+    for (const part of windowTitle.split(" \u2014 ")) {
+      if (!hasCodeExtension(part)) return part.trim();
+    }
+    return null;
+  }
+
+  // Sublime Text: "file.ts - Project"
+  if (matchesApp(id, windowTitle, ["sublime"], ["Sublime Text"])) {
+    const parts = windowTitle.split(" - ");
+    if (parts.length >= 2) return parts[parts.length - 1].trim();
+    return null;
+  }
+
+  return null;
+}
+
 class ContextCaptureManager {
   constructor() {
     this._linuxStrategy = undefined;
@@ -169,17 +227,24 @@ class ContextCaptureManager {
       if (!raw) return null;
 
       const fileName = parseFileName(raw.windowTitle, raw.appIdentifier);
+      const projectName = parseProjectName(raw.windowTitle, raw.appIdentifier);
       const context = {
         bundleId: raw.appIdentifier || null,
         appName: raw.appName || null,
         windowTitle: raw.windowTitle || null,
         fileName,
+        projectName,
+        openTabs: raw.openTabs || null,
+        projectFiles: raw.sidebarFiles || null,
       };
 
       debugLogger.info("[ContextCapture] Context captured", {
         platform: process.platform,
         appName: context.appName,
         fileName: context.fileName,
+        projectName: context.projectName,
+        openTabs: context.openTabs?.length ?? 0,
+        projectFiles: context.projectFiles?.length ?? 0,
       });
       return context;
     } catch (err) {
@@ -205,6 +270,8 @@ class ContextCaptureManager {
       appName: parsed.appName || null,
       windowTitle: parsed.windowTitle || null,
       appIdentifier: parsed.bundleId || null,
+      openTabs: parsed.openTabs || null,
+      sidebarFiles: parsed.sidebarFiles || null,
     };
   }
 

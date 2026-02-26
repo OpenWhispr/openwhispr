@@ -73,8 +73,21 @@ export function getSystemPrompt(
 
   if (appContext?.appName) {
     let contextSection = `\nContext (the user is currently working in):\nApp: ${appContext.appName}`;
+    if (appContext.projectName) {
+      contextSection += `\nProject: ${appContext.projectName}`;
+    }
     if (appContext.fileName) {
       contextSection += `\nFile: ${appContext.fileName}`;
+    }
+    if (appContext.openTabs && appContext.openTabs.length > 0) {
+      contextSection += `\nOpen tabs: ${appContext.openTabs.join(", ")}`;
+    }
+    if (appContext.projectFiles && appContext.projectFiles.length > 0) {
+      const fileList = appContext.projectFiles.slice(0, 50).join(", ");
+      contextSection += `\nProject files: ${fileList}`;
+    }
+    if (appContext.projectName) {
+      contextSection += `\nWhen the user references a file from this project, format it as @${appContext.projectName}/filename.`;
     }
     prompt += "\n" + contextSection;
   }
