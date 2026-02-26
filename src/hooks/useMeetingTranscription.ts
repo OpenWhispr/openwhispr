@@ -141,11 +141,18 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const startTranscription = useCallback(async () => {
     if (isTranscribingRef.current) return;
 
+    logger.info("Meeting transcription starting...", {}, "meeting");
+
     const stream = await getSystemAudioStream();
     if (!stream) {
       logger.error("Could not capture system audio for meeting transcription", {}, "meeting");
       return;
     }
+    logger.info(
+      "System audio stream captured",
+      { tracks: stream.getAudioTracks().length },
+      "meeting"
+    );
     streamRef.current = stream;
 
     try {
@@ -166,19 +173,38 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
       const processor = new AudioWorkletNode(audioContext, "pcm-meeting-processor");
       processorRef.current = processor;
 
+      let chunkCount = 0;
       processor.port.onmessage = (event) => {
         if (!isTranscribingRef.current) return;
+        chunkCount++;
+        if (chunkCount <= 3 || chunkCount % 50 === 0) {
+          logger.debug(
+            "Audio chunk sent",
+            { chunk: chunkCount, bytes: event.data.byteLength },
+            "meeting"
+          );
+        }
         window.electronAPI?.deepgramStreamingSend?.(event.data);
       };
 
       source.connect(processor);
 
       const partialCleanup = window.electronAPI?.onDeepgramPartialTranscript?.((text) => {
+        logger.debug(
+          "Meeting partial transcript",
+          { length: text.length, preview: text.slice(-80) },
+          "meeting"
+        );
         setPartialTranscript(text);
       });
       if (partialCleanup) ipcCleanupsRef.current.push(partialCleanup);
 
       const finalCleanup = window.electronAPI?.onDeepgramFinalTranscript?.((text) => {
+        logger.info(
+          "Meeting final transcript",
+          { length: text.length, preview: text.slice(-80) },
+          "meeting"
+        );
         setTranscript(text);
         setPartialTranscript("");
       });
@@ -187,6 +213,12 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
       const result = await window.electronAPI?.deepgramStreamingStart?.({
         sampleRate: 16000,
       });
+
+      logger.info(
+        "Deepgram streaming start result",
+        { success: result?.success, error: result?.error },
+        "meeting"
+      );
 
       if (!result?.success) {
         logger.error(
@@ -200,7 +232,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
 
       isTranscribingRef.current = true;
       setIsTranscribing(true);
-      logger.info("Meeting transcription started", {}, "meeting");
+      logger.info("Meeting transcription started successfully", {}, "meeting");
     } catch (err) {
       logger.error(
         "Meeting transcription setup failed",

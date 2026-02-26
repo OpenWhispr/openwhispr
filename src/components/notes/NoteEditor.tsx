@@ -705,24 +705,6 @@ export default function NoteEditor({
         </div>
       </div>
 
-      {isMeetingTranscribing && meetingEvent && (
-        <div className="flex items-center gap-2 px-4 py-1.5 border-b border-destructive/10 bg-destructive/3">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive/75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-destructive" />
-          </span>
-          <span className="text-[11px] font-medium text-destructive/70 flex-1 truncate">
-            Recording: {meetingEvent.summary}
-          </span>
-          <button
-            onClick={onStopMeetingRecording}
-            className="text-[11px] font-medium text-destructive/60 hover:text-destructive transition-colors"
-          >
-            Stop
-          </button>
-        </div>
-      )}
-
       <div className="flex-1 relative min-h-0">
         <div className="h-full overflow-y-auto">
           {viewMode === "enhanced" && enhancement ? (
@@ -747,11 +729,11 @@ export default function NoteEditor({
           style={{ background: "linear-gradient(to bottom, transparent, var(--color-background))" }}
         />
         <DictationWidget
-          isRecording={isRecording}
+          isRecording={isRecording || !!isMeetingTranscribing}
           isProcessing={isProcessing}
           onStart={handleStartRecording}
-          onStop={onStopRecording}
-          actionPicker={actionPicker}
+          onStop={isMeetingTranscribing ? onStopMeetingRecording! : onStopRecording}
+          actionPicker={isMeetingTranscribing ? undefined : actionPicker}
         />
       </div>
 

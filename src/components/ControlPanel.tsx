@@ -434,12 +434,12 @@ export default function ControlPanel() {
               <button
                 onClick={() => setIsMeetingMode(false)}
                 className={cn(
-                  "flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors",
-                  platform === "darwin" ? "pl-20" : "pl-3"
+                  "flex items-center gap-1 text-xs font-medium text-muted-foreground/70 hover:text-foreground transition-colors",
+                  platform === "darwin" ? "ml-19" : "ml-3"
                 )}
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
-                <ArrowLeft size={14} />
+                <ArrowLeft size={13} strokeWidth={2} />
                 {t("notes.meeting.back")}
               </button>
             )}
