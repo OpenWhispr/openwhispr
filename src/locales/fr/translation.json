@@ -1559,8 +1559,7 @@
         "title": "Raccourci indisponible",
         "description": "Le raccourci sélectionné n’a pas pu être enregistré. Veuillez en choisir un autre dans les paramètres."
       },
-      "dictionaryUpdated": "Dictionnaire mis à jour",
-      "savedToDict": "{{words}} enregistré dans le dictionnaire",
+      "addedToDict": "{{words}} ajouté à votre dictionnaire",
       "undo": "Annuler"
     },
     "mic": {

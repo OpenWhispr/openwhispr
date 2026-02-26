@@ -204,6 +204,7 @@ class WindowManager {
     const MAX_PUSH_DURATION_MS = 300000; // 5 minutes max recording
     const downTime = Date.now();
 
+    if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
     this.showDictationPanel();
 
     const safetyTimeoutId = setTimeout(() => {

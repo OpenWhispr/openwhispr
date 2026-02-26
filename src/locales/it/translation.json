@@ -1559,8 +1559,7 @@
         "title": "Scorciatoia non disponibile",
         "description": "Non è stato possibile registrare la scorciatoia selezionata. Scegline un’altra nelle impostazioni."
       },
-      "dictionaryUpdated": "Dizionario aggiornato",
-      "savedToDict": "{{words}} salvato nel dizionario",
+      "addedToDict": "{{words}} aggiunto al tuo dizionario",
       "undo": "Annulla"
     },
     "mic": {

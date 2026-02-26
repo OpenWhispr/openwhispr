@@ -116,10 +116,9 @@ export default function App() {
 
     const unsubscribeCorrections = window.electronAPI?.onCorrectionsLearned?.((words) => {
       if (words && words.length > 0) {
-        const wordList = words.map((w) => `"${w}"`).join(", ");
+        const wordList = words.map((w) => `\u201c${w}\u201d`).join(", ");
         toast({
-          title: t("app.toasts.dictionaryUpdated"),
-          description: t("app.toasts.savedToDict", { words: wordList }),
+          title: t("app.toasts.addedToDict", { words: wordList }),
           variant: "success",
           duration: 6000,
           action: (
@@ -131,7 +130,11 @@ export default function App() {
                   // silently fail — word stays in dictionary
                 }
               }}
-              className="text-[10px] font-medium px-2 py-0.5 rounded-[3px] text-white/60 hover:text-white/90 bg-white/5 hover:bg-white/10 border border-white/8 hover:border-white/15 transition-colors duration-150 whitespace-nowrap"
+              className="text-[10px] font-medium px-2.5 py-1 rounded-sm whitespace-nowrap
+                text-emerald-100/90 hover:text-white
+                bg-emerald-500/15 hover:bg-emerald-500/25
+                border border-emerald-400/20 hover:border-emerald-400/35
+                transition-all duration-150"
             >
               {t("app.toasts.undo")}
             </button>

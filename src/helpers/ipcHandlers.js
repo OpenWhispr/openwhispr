@@ -202,6 +202,9 @@ class IPCHandlers {
           }
 
           this.broadcastToWindows("dictionary-updated", updatedDict);
+
+          // Show the overlay so the toast is visible (it may have been hidden after dictation)
+          this.windowManager.showDictationPanel();
           this.broadcastToWindows("corrections-learned", newCorrections);
           debugLogger.debug("[AutoLearn] Saved corrections", { corrections: newCorrections });
         } else {

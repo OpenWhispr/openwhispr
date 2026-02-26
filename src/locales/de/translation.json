@@ -1555,8 +1555,7 @@
         "title": "Tastenkombination nicht verfügbar",
         "description": "Die ausgewählte Tastenkombination konnte nicht registriert werden. Bitte wähle eine andere in den Einstellungen."
       },
-      "dictionaryUpdated": "Wörterbuch aktualisiert",
-      "savedToDict": "{{words}} im Wörterbuch gespeichert",
+      "addedToDict": "{{words}} zu deinem Wörterbuch hinzugefügt",
       "undo": "Rückgängig"
     },
     "mic": {

@@ -1555,8 +1555,7 @@
         "title": "ホットキーが使用できません",
         "description": "選択したホットキーを登録できませんでした。設定から別のホットキーを選択してください。"
       },
-      "dictionaryUpdated": "辞書が更新されました",
-      "savedToDict": "{{words}} を辞書に保存しました",
+      "addedToDict": "{{words}} を辞書に追加しました",
       "undo": "元に戻す"
     },
     "mic": {

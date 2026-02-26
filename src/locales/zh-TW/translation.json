@@ -1555,8 +1555,7 @@
         "title": "快捷鍵無法使用",
         "description": "無法註冊所選快捷鍵。請在設定中選擇其他快捷鍵。"
       },
-      "dictionaryUpdated": "詞典已更新",
-      "savedToDict": "已將 {{words}} 儲存到詞典",
+      "addedToDict": "已將 {{words}} 加入到你的詞典",
       "undo": "復原"
     },
     "mic": {

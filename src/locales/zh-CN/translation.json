@@ -1555,8 +1555,7 @@
         "title": "快捷键不可用",
         "description": "无法注册所选快捷键。请在设置中选择其他快捷键。"
       },
-      "dictionaryUpdated": "词典已更新",
-      "savedToDict": "已将 {{words}} 保存到词典",
+      "addedToDict": "已将 {{words}} 添加到你的词典",
       "undo": "撤消"
     },
     "mic": {

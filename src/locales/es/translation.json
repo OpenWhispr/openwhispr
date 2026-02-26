@@ -1559,8 +1559,7 @@
         "title": "Atajo no disponible",
         "description": "No se pudo registrar el atajo seleccionado. Elige otro en la configuración."
       },
-      "dictionaryUpdated": "Diccionario actualizado",
-      "savedToDict": "{{words}} guardado en el diccionario",
+      "addedToDict": "{{words}} añadido a tu diccionario",
       "undo": "Deshacer"
     },
     "mic": {

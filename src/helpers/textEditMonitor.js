@@ -247,7 +247,7 @@ class TextEditMonitor extends EventEmitter {
       return;
     }
 
-    this.process = spawn(command, args, {
+    this.process = spawn(command, [...args, String(targetPid)], {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
@@ -433,7 +433,7 @@ class TextEditMonitor extends EventEmitter {
 
     if (platform === "darwin") {
       const nativePath = this._findFile("macos-text-monitor");
-      if (nativePath) return { command: nativePath, args: [] };
+      if (nativePath) return { command: nativePath, args: [] }; // PID added at spawn time
       return null;
     }
 

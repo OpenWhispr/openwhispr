@@ -38,54 +38,45 @@ func observerCallback(
     }
 }
 
-// Read original text from stdin (not used by the binary itself, but available for protocol)
+// Usage: macos-text-monitor <pid>
+guard CommandLine.arguments.count >= 2,
+      let targetPid = Int32(CommandLine.arguments[1]),
+      targetPid > 0 else {
+    writeError("Usage: macos-text-monitor <pid>")
+    writeOutput("NO_ELEMENT")
+    exit(1)
+}
+
+monitoredPid = targetPid
+
+// Read original text from stdin
 var originalText = ""
 if let line = readLine(strippingNewline: true) {
     originalText = line
 }
 
-// Use the system-wide element to find the globally focused element.
-// This works regardless of which app macOS considers "frontmost",
-// which matters because OpenWhispr's overlay window can confuse
-// NSWorkspace.frontmostApplication.
-let systemWide = AXUIElementCreateSystemWide()
+// Target the specific application by PID (passed from the Electron host
+// which captures it BEFORE the overlay steals focus).
+let appElement = AXUIElementCreateApplication(monitoredPid)
 let maxRetries = 5
 var focusedElement: AXUIElement? = nil
 
 for attempt in 1...maxRetries {
-    var focusedValue: AnyObject?
-    let focusResult = AXUIElementCopyAttributeValue(
-        systemWide,
-        kAXFocusedApplicationAttribute as CFString,
-        &focusedValue
+    var elementValue: AnyObject?
+    let elementResult = AXUIElementCopyAttributeValue(
+        appElement,
+        kAXFocusedUIElementAttribute as CFString,
+        &elementValue
     )
 
-    if focusResult == .success, let focusedApp = focusedValue {
-        // Now get the focused element within that application
-        var elementValue: AnyObject?
-        let elementResult = AXUIElementCopyAttributeValue(
-            focusedApp as! AXUIElement,
-            kAXFocusedUIElementAttribute as CFString,
-            &elementValue
-        )
-
-        if elementResult == .success, let element = elementValue {
-            focusedElement = (element as! AXUIElement)
-
-            // Get the PID from the focused application element
-            var extractedPid: pid_t = 0
-            AXUIElementGetPid(focusedApp as! AXUIElement, &extractedPid)
-            monitoredPid = extractedPid
-
-            if attempt > 1 {
-                writeError("Got focused element on attempt \(attempt)")
-            }
-            break
-        } else {
-            writeError("Attempt \(attempt)/\(maxRetries): Got app but no focused element (error: \(elementResult.rawValue))")
+    if elementResult == .success, let element = elementValue {
+        focusedElement = (element as! AXUIElement)
+        if attempt > 1 {
+            writeError("Got focused element on attempt \(attempt)")
         }
+        break
     } else {
-        writeError("Attempt \(attempt)/\(maxRetries): Cannot get focused application (error: \(focusResult.rawValue))")
+        writeError("Attempt \(attempt)/\(maxRetries): Cannot get focused element for PID \(monitoredPid) (error: \(elementResult.rawValue))")
     }
 
     if attempt < maxRetries {
@@ -93,7 +84,7 @@ for attempt in 1...maxRetries {
     }
 }
 
-guard let resolvedElement = focusedElement, monitoredPid != 0 else {
+guard let resolvedElement = focusedElement else {
     writeOutput("NO_ELEMENT")
     exit(1)
 }

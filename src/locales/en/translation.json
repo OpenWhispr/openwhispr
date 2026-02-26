@@ -1555,8 +1555,7 @@
         "title": "Hotkey unavailable",
         "description": "The selected hotkey could not be registered. Please choose a different one in settings."
       },
-      "dictionaryUpdated": "Dictionary Updated",
-      "savedToDict": "Saved {{words}} to dictionary",
+      "addedToDict": "Added {{words}} to your dictionary",
       "undo": "Undo"
     },
     "mic": {

@@ -1559,8 +1559,7 @@
         "title": "Atalho indisponível",
         "description": "Não foi possível registrar o atalho selecionado. Escolha outro nas configurações."
       },
-      "dictionaryUpdated": "Dicionário atualizado",
-      "savedToDict": "{{words}} salvo no dicionário",
+      "addedToDict": "{{words}} adicionado ao seu dicionário",
       "undo": "Desfazer"
     },
     "mic": {
