@@ -1337,7 +1337,8 @@
       "saving": "Salvando",
       "wordsCount": "{{count}} palavras",
       "startWriting": "Comece a escrever...",
-      "staleIndicator": "O conteúdo mudou desde o aprimoramento"
+      "staleIndicator": "O conteúdo mudou desde o aprimoramento",
+      "live": "Ao vivo"
     },
     "upload": {
       "title": "Enviar áudio",

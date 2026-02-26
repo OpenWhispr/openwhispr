@@ -1907,6 +1907,33 @@ class IPCHandlers {
       fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
     );
 
+    ipcMain.handle("get-stt-config", async (event) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        const response = await fetch(`${apiUrl}/api/stt-config`, {
+          headers: { Cookie: cookieHeader },
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          }
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return { success: true, ...data };
+      } catch (error) {
+        debugLogger.error("STT config fetch error:", error);
+        return null;
+      }
+    });
+
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
       const fs = require("fs");
       try {

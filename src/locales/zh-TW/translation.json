@@ -1333,7 +1333,8 @@
       "saving": "儲存中",
       "wordsCount": "{{count}} 個字",
       "startWriting": "開始撰寫...",
-      "staleIndicator": "內容在增強後已變更"
+      "staleIndicator": "內容在增強後已變更",
+      "live": "即時"
     },
     "upload": {
       "title": "上傳音訊",

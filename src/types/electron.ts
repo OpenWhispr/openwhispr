@@ -270,6 +270,14 @@ declare global {
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
 
+      // STT config
+      getSttConfig?: () => Promise<{
+        success: boolean;
+        dictation: { mode: string };
+        notes: { mode: string };
+        streamingProvider: string;
+      } | null>;
+
       // Database operations
       saveTranscription: (text: string) => Promise<{ id: number; success: boolean }>;
       getTranscriptions: (limit?: number) => Promise<TranscriptionItem[]>;
