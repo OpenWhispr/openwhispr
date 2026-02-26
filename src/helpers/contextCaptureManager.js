@@ -197,6 +197,7 @@ function parseProjectName(windowTitle, appIdentifier) {
   const id = (appIdentifier || "").toLowerCase();
 
   // VS Code / Cursor / Windsurf: "file.ts — project — Visual Studio Code"
+  // Extension panels may omit the app suffix: "Panel Title — project"
   if (
     matchesApp(
       id,
@@ -207,8 +208,13 @@ function parseProjectName(windowTitle, appIdentifier) {
     /^code(\.exe)?$/i.test(appIdentifier || "")
   ) {
     const parts = windowTitle.split(" \u2014 ");
-    if (parts.length >= 2) return parts[parts.length - 2].trim();
-    return null;
+    if (parts.length < 2) return null;
+    const last = parts[parts.length - 1].trim();
+    const appNames = ["Visual Studio Code", "Cursor", "Windsurf"];
+    if (appNames.some((a) => last === a)) {
+      return parts[parts.length - 2].trim();
+    }
+    return last;
   }
 
   // JetBrains: "project – file.ts [path]"
