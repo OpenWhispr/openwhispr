@@ -1,9 +1,57 @@
 const { spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const debugLogger = require("./debugLogger");
 
 const COMMAND_CACHE_TTL_MS = 30000;
+const STORAGE_CACHE_TTL_MS = 120000;
+const FILESCAN_CACHE_TTL_MS = 60000;
+const MAX_PROJECT_FILES = 200;
+const MAX_SCAN_DEPTH = 4;
+
+const EDITOR_STORAGE_DIRS = {
+  "com.microsoft.VSCode": "Code",
+  "com.todesktop.230313mzl4w4u92": "Cursor",
+  "com.exafunction.windsurf": "Windsurf",
+  "com.codeium.windsurf": "Windsurf",
+  code: "Code",
+  "code.exe": "Code",
+  cursor: "Cursor",
+  "cursor.exe": "Cursor",
+  windsurf: "Windsurf",
+  "windsurf.exe": "Windsurf",
+};
+
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  ".next",
+  ".nuxt",
+  "__pycache__",
+  "venv",
+  ".venv",
+  "target",
+  "out",
+  "coverage",
+  ".turbo",
+  ".svelte-kit",
+  ".vercel",
+  "vendor",
+  ".cache",
+  ".parcel-cache",
+  "android",
+  "ios",
+  ".expo",
+  ".gradle",
+  "Pods",
+  "bin",
+  "obj",
+  ".vs",
+  ".idea",
+]);
 
 const CODE_EXTENSIONS = new Set([
   "swift",
@@ -228,6 +276,16 @@ class ContextCaptureManager {
 
       const fileName = parseFileName(raw.windowTitle, raw.appIdentifier);
       const projectName = parseProjectName(raw.windowTitle, raw.appIdentifier);
+
+      let projectFiles = raw.sidebarFiles || null;
+      if ((!projectFiles || projectFiles.length === 0) && projectName) {
+        const projectPath = this._resolveProjectPath(projectName, raw.appIdentifier, raw.appName);
+        if (projectPath) {
+          projectFiles = this._scanProjectDirectory(projectPath);
+        }
+      }
+
+      const filesSource = raw.sidebarFiles?.length ? "ax-tree" : projectFiles ? "dir-scan" : "none";
       const context = {
         bundleId: raw.appIdentifier || null,
         appName: raw.appName || null,
@@ -235,7 +293,7 @@ class ContextCaptureManager {
         fileName,
         projectName,
         openTabs: raw.openTabs || null,
-        projectFiles: raw.sidebarFiles || null,
+        projectFiles,
       };
 
       debugLogger.info("[ContextCapture] Context captured", {
@@ -245,6 +303,7 @@ class ContextCaptureManager {
         projectName: context.projectName,
         openTabs: context.openTabs?.length ?? 0,
         projectFiles: context.projectFiles?.length ?? 0,
+        filesSource,
       });
       return context;
     } catch (err) {
@@ -442,6 +501,127 @@ class ContextCaptureManager {
       if (found) return found;
     }
     return null;
+  }
+
+  // --- Project directory scan (fallback for AX tree) ---
+
+  _getStorageJsonPath(appIdentifier, appName) {
+    const editorDir =
+      EDITOR_STORAGE_DIRS[appIdentifier] ||
+      EDITOR_STORAGE_DIRS[appName] ||
+      EDITOR_STORAGE_DIRS[(appIdentifier || "").toLowerCase()] ||
+      EDITOR_STORAGE_DIRS[(appName || "").toLowerCase()];
+    if (!editorDir) return null;
+
+    let basePath;
+    switch (process.platform) {
+      case "darwin":
+        basePath = path.join(os.homedir(), "Library", "Application Support");
+        break;
+      case "win32":
+        basePath = process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming");
+        break;
+      case "linux":
+        basePath = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+        break;
+      default:
+        return null;
+    }
+    return path.join(basePath, editorDir, "User", "globalStorage", "storage.json");
+  }
+
+  _resolveProjectPath(projectName, appIdentifier, appName) {
+    if (!projectName) return null;
+
+    const cacheKey = `path:${appIdentifier || appName}:${projectName}`;
+    const now = Date.now();
+    const cached = this._commandCache.get(cacheKey);
+    if (cached && now < cached.expiresAt) return cached.value;
+
+    const storagePath = this._getStorageJsonPath(appIdentifier, appName);
+    if (!storagePath) return null;
+
+    let storageData;
+    try {
+      storageData = JSON.parse(fs.readFileSync(storagePath, "utf-8"));
+    } catch {
+      this._commandCache.set(cacheKey, { value: null, expiresAt: now + STORAGE_CACHE_TTL_MS });
+      return null;
+    }
+
+    const folderUris = new Set();
+    const lastActive = storageData?.windowsState?.lastActiveWindow;
+    if (lastActive?.folder) folderUris.add(lastActive.folder);
+    for (const w of storageData?.windowsState?.openedWindows || []) {
+      if (w.folder) folderUris.add(w.folder);
+    }
+    const workspaces = storageData?.profileAssociations?.workspaces;
+    if (workspaces && typeof workspaces === "object") {
+      for (const uri of Object.keys(workspaces)) folderUris.add(uri);
+    }
+
+    const lowerProject = projectName.toLowerCase();
+    for (const uri of folderUris) {
+      try {
+        let decoded = decodeURIComponent(uri.replace(/^file:\/\//, ""));
+        if (process.platform === "win32" && /^\/[A-Za-z]:/.test(decoded)) {
+          decoded = decoded.slice(1);
+        }
+        if (
+          path.basename(decoded).toLowerCase() === lowerProject &&
+          fs.statSync(decoded).isDirectory()
+        ) {
+          this._commandCache.set(cacheKey, {
+            value: decoded,
+            expiresAt: now + STORAGE_CACHE_TTL_MS,
+          });
+          return decoded;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    this._commandCache.set(cacheKey, { value: null, expiresAt: now + STORAGE_CACHE_TTL_MS });
+    return null;
+  }
+
+  _scanProjectDirectory(projectPath) {
+    if (!projectPath) return null;
+
+    const cacheKey = `files:${projectPath}`;
+    const now = Date.now();
+    const cached = this._commandCache.get(cacheKey);
+    if (cached && now < cached.expiresAt) return cached.value;
+
+    const files = [];
+    const scan = (dir, depth) => {
+      if (depth > MAX_SCAN_DEPTH || files.length >= MAX_PROJECT_FILES) return;
+      let entries;
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (files.length >= MAX_PROJECT_FILES) break;
+        const name = entry.name;
+        if (entry.isDirectory()) {
+          if (!name.startsWith(".") && !SKIP_DIRS.has(name)) {
+            scan(path.join(dir, name), depth + 1);
+          }
+        } else if (entry.isFile() && hasCodeExtension(name)) {
+          files.push(path.relative(projectPath, path.join(dir, name)));
+        }
+      }
+    };
+    scan(projectPath, 0);
+    files.sort();
+
+    const result = files.length > 0 ? files : null;
+    this._commandCache.set(cacheKey, { value: result, expiresAt: now + FILESCAN_CACHE_TTL_MS });
+    debugLogger.info("[ContextCapture] Directory scan", { projectPath, fileCount: files.length });
+    return result;
   }
 
   // --- Utilities ---
