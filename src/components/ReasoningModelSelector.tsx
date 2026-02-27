@@ -110,7 +110,7 @@ function GpuStatusBadge() {
     const timeout = setTimeout(() => {
       setActivating(false);
       setActivationFailed(true);
-    }, 15000);
+    }, 30000);
     return () => clearTimeout(timeout);
   }, [activating, serverStatus?.gpuAccelerated]);
 

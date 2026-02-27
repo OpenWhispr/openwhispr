@@ -1559,8 +1559,15 @@ class IPCHandlers {
     ipcMain.handle("llama-gpu-reset", async () => {
       try {
         const modelManager = require("./modelManagerBridge").default;
+        const previousModelId = modelManager.currentServerModelId;
         modelManager.serverManager.resetGpuDetection();
         await modelManager.stopServer();
+
+        // Restart server with previous model so Vulkan binary is picked up
+        if (previousModelId) {
+          modelManager.prewarmServer(previousModelId).catch(() => {});
+        }
+
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
