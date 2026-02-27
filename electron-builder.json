@@ -166,7 +166,9 @@
       "--deb-suggests",
       "wtype",
       "--deb-recommends",
-      "wl-clipboard"
+      "wl-clipboard",
+      "--deb-depends",
+      "at-spi2-core"
     ]
   },
   "rpm": {
@@ -176,7 +178,9 @@
       "--rpm-tag",
       "Suggests: wtype",
       "--rpm-tag",
-      "Recommends: wl-clipboard"
+      "Recommends: wl-clipboard",
+      "--rpm-tag",
+      "Requires: at-spi2-core"
     ]
   },
   "nsis": {
