@@ -929,6 +929,22 @@ declare global {
         error?: string;
       }>;
 
+      // Meeting transcription (streaming)
+      meetingTranscriptionStart?: (options: {
+        provider?: string;
+        model?: string;
+        language?: string;
+      }) => Promise<{ success: boolean; error?: string }>;
+      meetingTranscriptionSend?: (buffer: ArrayBuffer) => void;
+      meetingTranscriptionStop?: () => Promise<{
+        success: boolean;
+        transcript?: string;
+        error?: string;
+      }>;
+      onMeetingTranscriptionPartial?: (callback: (text: string) => void) => () => void;
+      onMeetingTranscriptionFinal?: (callback: (text: string) => void) => () => void;
+      onMeetingTranscriptionError?: (callback: (error: string) => void) => () => void;
+
       // Desktop audio capture
       getDesktopSources?: (types: string[]) => Promise<Array<{ id: string; name: string }>>;
 

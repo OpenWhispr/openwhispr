@@ -399,6 +399,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
   meetingTranscribeChain: (blobUrl, opts) =>
     ipcRenderer.invoke("meeting-transcribe-chain", blobUrl, opts),
 
+  // Meeting transcription (streaming)
+  meetingTranscriptionStart: (options) =>
+    ipcRenderer.invoke("meeting-transcription-start", options),
+  meetingTranscriptionSend: (buffer) => ipcRenderer.send("meeting-transcription-send", buffer),
+  meetingTranscriptionStop: () => ipcRenderer.invoke("meeting-transcription-stop"),
+  onMeetingTranscriptionPartial: registerListener(
+    "meeting-transcription-partial",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingTranscriptionFinal: registerListener(
+    "meeting-transcription-final",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingTranscriptionError: registerListener(
+    "meeting-transcription-error",
+    (callback) => (_event, data) => callback(data)
+  ),
+
   // Usage limit events (for showing UpgradePrompt in ControlPanel)
   notifyLimitReached: (data) => ipcRenderer.send("limit-reached", data),
   onLimitReached: registerListener("limit-reached", (callback) => (_event, data) => callback(data)),

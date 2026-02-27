@@ -9,6 +9,7 @@ const GnomeShortcutManager = require("./gnomeShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
+const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
@@ -100,6 +101,7 @@ class IPCHandlers {
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
+    this.openaiRealtimeStreaming = null;
     this.setupHandlers();
 
     if (this.whisperManager?.serverManager) {
@@ -1760,6 +1762,100 @@ class IPCHandlers {
       }
     });
 
+    let meetingTranscriptionStartInProgress = false;
+
+    ipcMain.handle("meeting-transcription-start", async (event, options = {}) => {
+      if (meetingTranscriptionStartInProgress) {
+        debugLogger.debug("Meeting transcription start already in progress, ignoring");
+        return { success: false, error: "Operation in progress" };
+      }
+
+      meetingTranscriptionStartInProgress = true;
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+
+        if (options.provider !== "openai-realtime") {
+          return { success: false, error: `Unsupported provider: ${options.provider}` };
+        }
+
+        const apiUrl = getApiUrl();
+        if (!apiUrl) return { success: false, error: "OpenWhispr API URL not configured" };
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) return { success: false, error: "No session cookies available" };
+
+        const tokenResponse = await fetch(`${apiUrl}/api/openai-realtime-token`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+          body: JSON.stringify({ model: options.model, language: options.language }),
+        });
+
+        if (!tokenResponse.ok) {
+          const err = await tokenResponse.json().catch(() => ({}));
+          return { success: false, error: err.error || `Token request failed: ${tokenResponse.status}` };
+        }
+
+        const { clientSecret } = await tokenResponse.json();
+        if (!clientSecret) return { success: false, error: "No client secret received" };
+
+        if (this.openaiRealtimeStreaming?.isConnected) {
+          await this.openaiRealtimeStreaming.disconnect();
+        }
+
+        this.openaiRealtimeStreaming = new OpenAIRealtimeStreaming();
+
+        this.openaiRealtimeStreaming.onPartialTranscript = (text) => {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send("meeting-transcription-partial", text);
+          }
+        };
+
+        this.openaiRealtimeStreaming.onFinalTranscript = (text) => {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send("meeting-transcription-final", text);
+          }
+        };
+
+        this.openaiRealtimeStreaming.onError = (error) => {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send("meeting-transcription-error", error.message);
+          }
+        };
+
+        await this.openaiRealtimeStreaming.connect({
+          apiKey: clientSecret,
+          model: options.model,
+          language: options.language,
+        });
+
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Meeting transcription start error", { error: error.message });
+        return { success: false, error: error.message };
+      } finally {
+        meetingTranscriptionStartInProgress = false;
+      }
+    });
+
+    ipcMain.on("meeting-transcription-send", (_event, audioBuffer) => {
+      if (!this.openaiRealtimeStreaming) return;
+      this.openaiRealtimeStreaming.sendAudio(Buffer.from(audioBuffer));
+    });
+
+    ipcMain.handle("meeting-transcription-stop", async () => {
+      try {
+        let result = { text: "" };
+        if (this.openaiRealtimeStreaming) {
+          result = await this.openaiRealtimeStreaming.disconnect();
+          this.openaiRealtimeStreaming = null;
+        }
+        return { success: true, transcript: result?.text || "" };
+      } catch (error) {
+        debugLogger.error("Meeting transcription stop error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("cloud-reason", async (event, text, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
@@ -2715,7 +2811,6 @@ class IPCHandlers {
       }
     });
 
-    let sendDropCount = 0;
     ipcMain.on("deepgram-streaming-send", (event, audioBuffer) => {
       try {
         if (!this.deepgramStreaming) return;

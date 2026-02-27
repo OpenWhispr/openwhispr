@@ -85,13 +85,12 @@ export default function PersonalNotesView({
 
   const {
     isRecording: isMeetingRecording,
-    isProcessing: isMeetingProcessing,
     transcript: meetingTranscript,
+    partialTranscript: meetingPartialTranscript,
     error: meetingError,
     startTranscription: startMeetingTranscription,
     stopTranscription: stopMeetingTranscription,
   } = useMeetingTranscription();
-  const isMeetingActive = isMeetingRecording || isMeetingProcessing;
   const [activeMeetingEvent, setActiveMeetingEvent] = useState<any>(null);
   const meetingNoteIdRef = useRef<number | null>(null);
 
@@ -348,12 +347,12 @@ export default function PersonalNotesView({
     onMeetingRecordingRequestHandled,
   ]);
 
-  const prevProcessingRef = useRef(false);
+  const prevMeetingRecordingRef = useRef(false);
 
   useEffect(() => {
     if (
-      prevProcessingRef.current &&
-      !isMeetingProcessing &&
+      prevMeetingRecordingRef.current &&
+      !isMeetingRecording &&
       meetingNoteIdRef.current &&
       meetingTranscript
     ) {
@@ -365,8 +364,8 @@ export default function PersonalNotesView({
       meetingNoteIdRef.current = null;
       setActiveMeetingEvent(null);
     }
-    prevProcessingRef.current = isMeetingProcessing;
-  }, [isMeetingProcessing, meetingTranscript]);
+    prevMeetingRecordingRef.current = isMeetingRecording;
+  }, [isMeetingRecording, meetingTranscript]);
 
   const editorNote = activeNote
     ? { ...activeNote, title: localTitle, content: localContent }
@@ -707,8 +706,8 @@ export default function PersonalNotesView({
                   : undefined
               }
               isMeetingRecording={isMeetingRecording}
-              isMeetingProcessing={isMeetingProcessing}
               meetingTranscript={meetingTranscript}
+              meetingPartialTranscript={meetingPartialTranscript}
               meetingEvent={activeMeetingEvent}
               onStopMeetingRecording={stopMeetingTranscription}
               actionProcessingState={actionProcessingState}

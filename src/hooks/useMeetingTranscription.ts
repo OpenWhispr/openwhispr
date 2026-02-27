@@ -1,82 +1,43 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import logger from "../utils/logger";
-import { buildWav } from "../utils/wavBuilder";
-import { OPENWHISPR_API_URL } from "../config/constants";
 
 interface UseMeetingTranscriptionReturn {
   isRecording: boolean;
-  isProcessing: boolean;
   transcript: string;
+  partialTranscript: string;
   error: string | null;
   startTranscription: () => Promise<void>;
   stopTranscription: () => Promise<void>;
 }
 
-const WORKLET_CODE = `
-const BUFFER_SIZE = 800;
-class PCMStreamingProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    this._buffer = new Int16Array(BUFFER_SIZE);
-    this._offset = 0;
-    this._stopped = false;
-    this.port.onmessage = (event) => {
-      if (event.data === "stop") {
-        if (this._offset > 0) {
-          const partial = this._buffer.slice(0, this._offset);
-          this.port.postMessage(partial.buffer, [partial.buffer]);
-          this._buffer = new Int16Array(BUFFER_SIZE);
-          this._offset = 0;
-        }
-        this._stopped = true;
-      }
-    };
-  }
-  process(inputs) {
-    if (this._stopped) return false;
-    const input = inputs[0]?.[0];
-    if (!input) return true;
-    for (let i = 0; i < input.length; i++) {
-      const s = Math.max(-1, Math.min(1, input[i]));
-      this._buffer[this._offset++] = s < 0 ? s * 0x8000 : s * 0x7fff;
-      if (this._offset >= BUFFER_SIZE) {
-        this.port.postMessage(this._buffer.buffer, [this._buffer.buffer]);
-        this._buffer = new Int16Array(BUFFER_SIZE);
-        this._offset = 0;
-      }
-    }
-    return true;
-  }
-}
-registerProcessor("pcm-meeting-processor", PCMStreamingProcessor);
-`;
-
 const getSystemAudioStream = async (): Promise<MediaStream | null> => {
   try {
-    const sources = await window.electronAPI?.getDesktopSources(["screen"]);
-    if (!sources?.length) return null;
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        mandatory: {
-          chromeMediaSource: "desktop",
-          chromeMediaSourceId: sources[0].id,
-        },
-      } as any,
-      video: {
-        mandatory: {
-          chromeMediaSource: "desktop",
-          chromeMediaSourceId: sources[0].id,
-          minWidth: 1,
-          maxWidth: 1,
-          minHeight: 1,
-          maxHeight: 1,
-        },
-      } as any,
+    // Use getDisplayMedia (handled by setDisplayMediaRequestHandler in main process)
+    // which properly captures system audio via macOS ScreenCaptureKit loopback.
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      audio: true,
+      video: true,
     });
 
-    stream.getVideoTracks().forEach((t) => t.stop());
-    return new MediaStream(stream.getAudioTracks());
+    const audioTracks = stream.getAudioTracks();
+    const videoTracks = stream.getVideoTracks();
+
+    if (!audioTracks.length) {
+      logger.error("No audio track in display media stream", {}, "meeting");
+      videoTracks.forEach((t) => t.stop());
+      return null;
+    }
+
+    // Stop video tracks — with getDisplayMedia the audio track lifecycle is independent
+    videoTracks.forEach((t) => t.stop());
+
+    // Monitor audio track health
+    audioTracks[0].addEventListener("ended", () => {
+      logger.error("Audio track ended unexpectedly", {}, "meeting");
+    });
+
+    const audioOnlyStream = new MediaStream(audioTracks);
+    return audioOnlyStream;
   } catch (err) {
     logger.error("Failed to capture system audio", { error: (err as Error).message }, "meeting");
     return null;
@@ -85,23 +46,23 @@ const getSystemAudioStream = async (): Promise<MediaStream | null> => {
 
 export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [partialTranscript, setPartialTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const processorRef = useRef<AudioWorkletNode | null>(null);
+  const scriptNodeRef = useRef<ScriptProcessorNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const isRecordingRef = useRef(false);
-  const workletBlobUrlRef = useRef<string | null>(null);
-  const chunksRef = useRef<ArrayBuffer[]>([]);
+  const isStartingRef = useRef(false);
+  const ipcCleanupsRef = useRef<Array<() => void>>([]);
 
   const cleanup = useCallback(async () => {
-    if (processorRef.current) {
-      processorRef.current.port.postMessage("stop");
-      processorRef.current.disconnect();
-      processorRef.current = null;
+    if (scriptNodeRef.current) {
+      scriptNodeRef.current.onaudioprocess = null;
+      scriptNodeRef.current.disconnect();
+      scriptNodeRef.current = null;
     }
 
     if (sourceRef.current) {
@@ -123,10 +84,8 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
       audioContextRef.current = null;
     }
 
-    if (workletBlobUrlRef.current) {
-      URL.revokeObjectURL(workletBlobUrlRef.current);
-      workletBlobUrlRef.current = null;
-    }
+    ipcCleanupsRef.current.forEach((fn) => fn());
+    ipcCleanupsRef.current = [];
   }, []);
 
   const stopTranscription = useCallback(async () => {
@@ -136,106 +95,105 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
 
     await cleanup();
 
-    const chunks = chunksRef.current;
-    chunksRef.current = [];
-
-    if (chunks.length === 0) {
-      logger.info("Meeting transcription stopped (no audio captured)", {}, "meeting");
-      return;
-    }
-
-    setIsProcessing(true);
-    setError(null);
-
     try {
-      const totalLength = chunks.reduce((sum, buf) => sum + buf.byteLength / 2, 0);
-      const allSamples = new Int16Array(totalLength);
-      let offset = 0;
-      for (const buf of chunks) {
-        const chunk = new Int16Array(buf);
-        allSamples.set(chunk, offset);
-        offset += chunk.length;
-      }
-
-      const wavBlob = buildWav(allSamples, 16000);
-
-      const { upload } = await import("@vercel/blob/client");
-      const blob = await upload(`meeting-${Date.now()}.wav`, wavBlob, {
-        access: "public",
-        handleUploadUrl: `${OPENWHISPR_API_URL}/api/upload-audio`,
-      });
-
-      const result = await window.electronAPI?.meetingTranscribeChain(blob.url);
-
-      if (result?.success) {
-        setTranscript(result.text);
-      } else {
-        setError(result?.error || "Transcription failed");
+      const result = await window.electronAPI?.meetingTranscriptionStop?.();
+      if (result?.success && result.transcript) {
+        setTranscript(result.transcript);
+      } else if (result?.error) {
+        setError(result.error);
       }
     } catch (err) {
       setError((err as Error).message);
-      logger.error("Meeting transcription failed", { error: (err as Error).message }, "meeting");
-    } finally {
-      setIsProcessing(false);
+      logger.error(
+        "Meeting transcription stop failed",
+        { error: (err as Error).message },
+        "meeting"
+      );
     }
 
     logger.info("Meeting transcription stopped", {}, "meeting");
   }, [cleanup]);
 
   const startTranscription = useCallback(async () => {
-    if (isRecordingRef.current) return;
+    if (isRecordingRef.current || isStartingRef.current) return;
+    isStartingRef.current = true;
 
     logger.info("Meeting transcription starting...", {}, "meeting");
 
-    const stream = await getSystemAudioStream();
-    if (!stream) {
-      logger.error("Could not capture system audio for meeting transcription", {}, "meeting");
-      return;
-    }
-    logger.info(
-      "System audio stream captured",
-      { tracks: stream.getAudioTracks().length },
-      "meeting"
-    );
-    streamRef.current = stream;
-
     try {
-      const audioContext = new AudioContext({ sampleRate: 16000 });
+      const startResult = await window.electronAPI?.meetingTranscriptionStart?.({
+        provider: "openai-realtime",
+        model: "gpt-4o-mini-transcribe",
+      });
+      if (!startResult?.success) {
+        logger.error(
+          "Meeting transcription IPC start failed",
+          { error: startResult?.error },
+          "meeting"
+        );
+        isStartingRef.current = false;
+        return;
+      }
+
+      const stream = await getSystemAudioStream();
+      if (!stream) {
+        logger.error("Could not capture system audio for meeting transcription", {}, "meeting");
+        await window.electronAPI?.meetingTranscriptionStop?.();
+        isStartingRef.current = false;
+        return;
+      }
+      streamRef.current = stream;
+
+      const audioContext = new AudioContext({ sampleRate: 24000 });
       audioContextRef.current = audioContext;
 
-      const blobUrl = URL.createObjectURL(
-        new Blob([WORKLET_CODE], { type: "application/javascript" })
-      );
-      workletBlobUrlRef.current = blobUrl;
-      await audioContext.audioWorklet.addModule(blobUrl);
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
 
       const source = audioContext.createMediaStreamSource(stream);
       sourceRef.current = source;
 
-      const processor = new AudioWorkletNode(audioContext, "pcm-meeting-processor");
-      processorRef.current = processor;
+      const scriptNode = audioContext.createScriptProcessor(4096, 1, 1);
+      scriptNodeRef.current = scriptNode;
 
-      chunksRef.current = [];
       setTranscript("");
+      setPartialTranscript("");
       setError(null);
 
-      let chunkCount = 0;
-      processor.port.onmessage = (event) => {
+      const partialCleanup = window.electronAPI?.onMeetingTranscriptionPartial?.((text) => {
+        setPartialTranscript(text);
+      });
+      if (partialCleanup) ipcCleanupsRef.current.push(partialCleanup);
+
+      const finalCleanup = window.electronAPI?.onMeetingTranscriptionFinal?.((text) => {
+        setTranscript(text);
+        setPartialTranscript("");
+      });
+      if (finalCleanup) ipcCleanupsRef.current.push(finalCleanup);
+
+      const errorCleanup = window.electronAPI?.onMeetingTranscriptionError?.((err) => {
+        setError(err);
+        logger.error("Meeting transcription stream error", { error: err }, "meeting");
+      });
+      if (errorCleanup) ipcCleanupsRef.current.push(errorCleanup);
+
+      scriptNode.onaudioprocess = (event) => {
         if (!isRecordingRef.current) return;
-        chunkCount++;
-        if (chunkCount <= 3 || chunkCount % 50 === 0) {
-          logger.debug(
-            "Audio chunk buffered",
-            { chunk: chunkCount, bytes: event.data.byteLength },
-            "meeting"
-          );
+        const input = event.inputBuffer.getChannelData(0);
+        const pcm = new Int16Array(input.length);
+        for (let i = 0; i < input.length; i++) {
+          const s = Math.max(-1, Math.min(1, input[i]));
+          pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
         }
-        chunksRef.current.push(event.data);
+        window.electronAPI?.meetingTranscriptionSend?.(pcm.buffer);
       };
 
-      source.connect(processor);
+      source.connect(scriptNode);
+      scriptNode.connect(audioContext.destination);
 
       isRecordingRef.current = true;
+      isStartingRef.current = false;
       setIsRecording(true);
       logger.info("Meeting transcription started successfully", {}, "meeting");
     } catch (err) {
@@ -244,6 +202,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
         { error: (err as Error).message },
         "meeting"
       );
+      isStartingRef.current = false;
       await cleanup();
     }
   }, [cleanup]);
@@ -259,8 +218,8 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
 
   return {
     isRecording,
-    isProcessing,
     transcript,
+    partialTranscript,
     error,
     startTranscription,
     stopTranscription,

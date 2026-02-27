@@ -475,6 +475,18 @@ async function startApp() {
     }
   );
 
+  // Handle getDisplayMedia() calls from the renderer — auto-select the first
+  // screen source with loopback audio so no system picker dialog is shown.
+  const { desktopCapturer } = require("electron");
+  session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+    const sources = await desktopCapturer.getSources({ types: ["screen"] });
+    if (!sources.length) {
+      callback({});
+      return;
+    }
+    callback({ video: sources[0], audio: "loopback" });
+  });
+
   windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
 
@@ -954,6 +966,9 @@ if (gotSingleInstanceLock) {
     }
     if (updateManager) {
       updateManager.cleanup();
+    }
+    if (clipboardManager) {
+      clipboardManager.dispose();
     }
     // Stop whisper server if running
     if (whisperManager) {
