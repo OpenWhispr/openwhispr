@@ -1697,7 +1697,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async safePaste(text, options = {}) {
     try {
-      await window.electronAPI.pasteText(text, options);
+      // Append a trailing space so the cursor is ready for the next word or
+      // dictation, matching the behaviour of other dictation tools.
+      const textToInsert = text && text.length > 0 ? text + " " : text;
+      await window.electronAPI.pasteText(textToInsert, options);
       return true;
     } catch (error) {
       const message =

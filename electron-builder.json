@@ -87,6 +87,7 @@
     "src/assets/**/*",
     "resources/bin/macos-globe-listener",
     "resources/bin/macos-fast-paste",
+    "resources/bin/macos-clipboard-marker",
     "resources/bin/linux-fast-paste",
     {
       "from": "resources/bin/",

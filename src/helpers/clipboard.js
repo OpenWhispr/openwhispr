@@ -58,6 +58,63 @@ const RESTORE_DELAYS = {
   linux: 200,
 };
 
+// Custom pasteboard type so clipboard managers (e.g. Maccy) can identify and
+// ignore transient clipboard writes made by OpenWhispr during paste operations.
+// Users can add this type to their clipboard manager's ignore list.
+const OPENWHISPR_PASTEBOARD_TYPE = "com.openwhispr.transcription";
+
+/**
+ * Resolve the path to the compiled macos-clipboard-marker binary, which writes
+ * text to the pasteboard alongside a custom marker type.
+ */
+function resolveClipboardMarkerBinary() {
+  const candidates = [
+    // Development: resources/bin/
+    path.join(__dirname, "..", "..", "resources", "bin", "macos-clipboard-marker"),
+    // Packaged app: resources/bin/ (asar unpacked)
+    path.join(
+      (require("electron").app || { getAppPath: () => "" }).getAppPath(),
+      "..",
+      "resources",
+      "bin",
+      "macos-clipboard-marker"
+    ),
+  ];
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) {
+        fs.accessSync(p, fs.constants.X_OK);
+        return p;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * Write text to the clipboard with a custom marker pasteboard type so that
+ * clipboard managers can identify (and optionally ignore) OpenWhispr's
+ * transient writes. Falls back to plain clipboard.writeText on failure or
+ * on non-macOS platforms.
+ */
+function writeClipboardWithMarker(text) {
+  if (process.platform === "darwin") {
+    const binary = resolveClipboardMarkerBinary();
+    if (binary) {
+      try {
+        const result = spawnSync(binary, [text, OPENWHISPR_PASTEBOARD_TYPE], { timeout: 3000 });
+        if (result.status === 0) {
+          return;
+        }
+        debugLogger.log("⚠️ clipboard-marker binary failed, falling back to writeText");
+      } catch (e) {
+        debugLogger.log("⚠️ clipboard-marker binary error, falling back to writeText:", e?.message);
+      }
+    }
+  }
+  clipboard.writeText(text);
+}
+
 function writeClipboardInRenderer(webContents, text) {
   if (!webContents || !webContents.executeJavaScript) {
     return Promise.reject(new Error("Invalid webContents for clipboard write"));
@@ -350,7 +407,7 @@ class ClipboardManager {
       if (platform === "linux" && this._isWayland()) {
         this._writeClipboardWayland(text, webContents);
       } else {
-        clipboard.writeText(text);
+        writeClipboardWithMarker(text);
       }
       this.safeLog("📋 Text copied to clipboard:", text.substring(0, 50) + "...");
 
@@ -371,7 +428,7 @@ class ClipboardManager {
           await this.pasteMacOS(originalClipboard, options);
         } catch (firstError) {
           this.safeLog("⚠️ First paste attempt failed, retrying...", firstError?.message);
-          clipboard.writeText(text);
+          writeClipboardWithMarker(text);
           await new Promise((r) => setTimeout(r, 200));
           await this.pasteMacOS(originalClipboard, options);
         }
@@ -1401,7 +1458,7 @@ Would you like to open System Settings now?`;
     if (process.platform === "linux" && this._isWayland()) {
       this._writeClipboardWayland(text, webContents);
     } else {
-      clipboard.writeText(text);
+      writeClipboardWithMarker(text);
     }
     return { success: true };
   }

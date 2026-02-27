@@ -692,6 +692,7 @@ OpenWhispr is designed with privacy and security in mind:
    - Linux Wayland: Install `wtype` or `ydotool` for paste simulation (ensure `ydotoold` daemon is running)
    - All platforms: Text is always copied to clipboard - use Ctrl+V (Cmd+V on macOS) to paste manually
 7. **Panel position**: If the panel appears off-screen, restart the app to reset position
+8. **Clipboard manager capturing dictations**: OpenWhispr briefly writes transcribed text to the system clipboard before pasting it into your active app. Clipboard managers (e.g. [Maccy](https://maccy.app), Paste, CopyClip) may capture these transient writes. On macOS, OpenWhispr includes a custom pasteboard type (`com.openwhispr.transcription`) alongside the text. To prevent your clipboard manager from storing dictations, add `com.openwhispr.transcription` to its ignored pasteboard types. In Maccy: Settings → Ignore → add `com.openwhispr.transcription` under pasteboard types.
 
 ### Getting Help
 
