@@ -1231,12 +1231,10 @@
         "groq_openai_gpt_oss_20b": "Быстрая открытая модель, 1000 т/с",
         "groq_llama_3_3_70b_versatile": "Универсальная модель Meta, 280 т/с",
         "groq_llama_3_1_8b_instant": "Сверхбыстрая 560 т/с, контекст 131K",
-        "groq_llama_4_maverick": "Мультимодальная модель Meta, 600 т/с",
         "groq_llama_4_scout": "Эффективная мультимодальная Meta, 750 т/с",
         "groq_compound": "Система Compound от Groq, 450 т/с",
         "groq_compound_mini": "Быстрая система Compound, 3x ниже задержка",
-        "groq_kimi_k2_instruct": "Moonshot AI 1T MoE, 200 т/с",
-        "groq_kimi_k2": "Улучшенная Kimi K2, контекст 256K"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, контекст 256K"
       },
       "local": {
         "qwen_qwen3_8b_q4_k_m": "Новейшая Qwen3 с поддержкой режима размышления",

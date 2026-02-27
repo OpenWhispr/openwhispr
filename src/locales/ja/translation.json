@@ -1231,12 +1231,10 @@
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
         "groq_llama_3_3_70b_versatile": "Meta の汎用モデル、280 T/秒",
         "groq_llama_3_1_8b_instant": "超高速 560 T/秒、131K コンテキスト",
-        "groq_llama_4_maverick": "Meta のマルチモーダルモデル、600 T/秒",
         "groq_llama_4_scout": "Meta の効率的マルチモーダル、750 T/秒",
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
-        "groq_kimi_k2_instruct": "Moonshot AI 1T MoE、200 T/秒",
-        "groq_kimi_k2": "改良版 Kimi K2、256K コンテキスト"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト"
       },
       "local": {
         "qwen_qwen3_8b_q4_k_m": "思考モード対応の最新 Qwen3",

@@ -288,12 +288,6 @@
           "descriptionKey": "models.descriptions.cloud.groq_llama_3_1_8b_instant"
         },
         {
-          "id": "meta-llama/llama-4-maverick-17b-128e-instruct",
-          "name": "Llama 4 Maverick",
-          "description": "Meta's multimodal model, 600 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_llama_4_maverick"
-        },
-        {
           "id": "meta-llama/llama-4-scout-17b-16e-instruct",
           "name": "Llama 4 Scout",
           "description": "Meta's efficient multimodal, 750 T/sec",
@@ -312,16 +306,10 @@
           "descriptionKey": "models.descriptions.cloud.groq_compound_mini"
         },
         {
-          "id": "moonshotai/kimi-k2-instruct",
-          "name": "Kimi K2 Instruct",
-          "description": "Moonshot AI's 1T MoE, 200 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_kimi_k2_instruct"
-        },
-        {
           "id": "moonshotai/kimi-k2-instruct-0905",
-          "name": "Kimi K2",
-          "description": "Improved Kimi K2, 256K context",
-          "descriptionKey": "models.descriptions.cloud.groq_kimi_k2"
+          "name": "Kimi K2 0905",
+          "description": "Moonshot AI's 1T MoE, 256K context",
+          "descriptionKey": "models.descriptions.cloud.groq_kimi_k2_0905"
         }
       ]
     }
