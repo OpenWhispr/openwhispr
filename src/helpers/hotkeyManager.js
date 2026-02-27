@@ -36,6 +36,10 @@ function isModifierOnlyHotkey(hotkey) {
   return hotkey.split("+").every((part) => MODIFIER_NAMES.has(part.toLowerCase()));
 }
 
+function isGlobeLikeHotkey(hotkey) {
+  return hotkey === "GLOBE" || hotkey === "Fn";
+}
+
 function normalizeToAccelerator(hotkey) {
   let accelerator = hotkey.startsWith("Fn+") ? hotkey.slice(3) : hotkey;
   accelerator = accelerator
@@ -128,7 +132,7 @@ class HotkeyManager {
     const checkAccelerator = normalizeToAccelerator(hotkey);
     if (
       hotkey === this.currentHotkey &&
-      hotkey !== "GLOBE" &&
+      !isGlobeLikeHotkey(hotkey) &&
       !isRightSideModifier(hotkey) &&
       !isModifierOnlyHotkey(hotkey) &&
       globalShortcut.isRegistered(checkAccelerator)
@@ -144,7 +148,7 @@ class HotkeyManager {
     // Unregister the previous hotkey (skip native-listener-only hotkeys)
     if (
       this.currentHotkey &&
-      this.currentHotkey !== "GLOBE" &&
+      !isGlobeLikeHotkey(this.currentHotkey) &&
       !isRightSideModifier(this.currentHotkey) &&
       !isModifierOnlyHotkey(this.currentHotkey)
     ) {
@@ -160,7 +164,7 @@ class HotkeyManager {
     }
 
     try {
-      if (hotkey === "GLOBE") {
+      if (isGlobeLikeHotkey(hotkey)) {
         if (process.platform !== "darwin") {
           debugLogger.log("[HotkeyManager] GLOBE key rejected - not on macOS");
           return {
@@ -169,7 +173,7 @@ class HotkeyManager {
           };
         }
         this.currentHotkey = hotkey;
-        debugLogger.log("[HotkeyManager] GLOBE key set successfully");
+        debugLogger.log("[HotkeyManager] GLOBE/Fn key set successfully");
         return { success: true, hotkey };
       }
 
@@ -241,7 +245,7 @@ class HotkeyManager {
   _restorePreviousHotkey(previousHotkey, callback) {
     if (
       !previousHotkey ||
-      previousHotkey === "GLOBE" ||
+      isGlobeLikeHotkey(previousHotkey) ||
       isRightSideModifier(previousHotkey) ||
       isModifierOnlyHotkey(previousHotkey)
     ) {

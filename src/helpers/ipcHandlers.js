@@ -991,9 +991,10 @@ class IPCHandlers {
       const effectiveHotkey = !enabled && newHotkey ? newHotkey : hotkeyManager.getCurrentHotkey();
 
       const { isModifierOnlyHotkey, isRightSideModifier } = require("./hotkeyManager");
+      const isGlobeLikeHotkey = (hotkey) => hotkey === "GLOBE" || hotkey === "Fn";
       const usesNativeListener = (hotkey) =>
         !hotkey ||
-        hotkey === "GLOBE" ||
+        isGlobeLikeHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
         isRightSideModifier(hotkey);
 
