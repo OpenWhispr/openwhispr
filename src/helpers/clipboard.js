@@ -78,6 +78,9 @@ class ClipboardManager {
     this.winFastPasteChecked = false;
     this.linuxFastPastePath = null;
     this.linuxFastPasteChecked = false;
+    this._fastPasteDaemonProcess = null;
+    this._fastPasteDaemonReady = false;
+    this._fastPasteDaemonStarting = false;
   }
 
   _isWayland() {
@@ -87,21 +90,18 @@ class ClipboardManager {
   }
 
   _writeClipboardWayland(text, webContents) {
-    if (this.commandExists("wl-copy")) {
-      try {
-        const result = spawnSync("wl-copy", ["--", text], { timeout: 2000 });
-        if (result.status === 0) {
-          clipboard.writeText(text);
-          return;
-        }
-      } catch {}
-    }
+    clipboard.writeText(text);
 
     if (webContents && !webContents.isDestroyed()) {
       writeClipboardInRenderer(webContents, text).catch(() => {});
     }
 
-    clipboard.writeText(text);
+    if (this.commandExists("wl-copy")) {
+      try {
+        const proc = spawn("wl-copy", ["--", text], { stdio: "ignore", detached: true });
+        proc.unref();
+      } catch {}
+    }
   }
 
   getNircmdPath() {
@@ -255,6 +255,114 @@ class ClipboardManager {
     return accessible;
   }
 
+  _getFastPasteSocketPath() {
+    const runtimeDir = process.env.XDG_RUNTIME_DIR;
+    if (runtimeDir) {
+      return path.join(runtimeDir, "openwhispr-paste.sock");
+    }
+    const uid = process.getuid?.();
+    return `/tmp/openwhispr-paste-${uid}.sock`;
+  }
+
+  _ensureFastPasteDaemon() {
+    if (this._fastPasteDaemonReady) return Promise.resolve(true);
+    if (this._fastPasteDaemonStarting) return Promise.resolve(false);
+
+    const linuxFastPaste = this.resolveLinuxFastPasteBinary();
+    if (!linuxFastPaste || !this._canAccessUinput()) return Promise.resolve(false);
+
+    this._fastPasteDaemonStarting = true;
+
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      const proc = spawn(linuxFastPaste, ["--daemon"], {
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+
+      this._fastPasteDaemonProcess = proc;
+
+      proc.stdout.on("data", (data) => {
+        if (!resolved && data.toString().includes("READY")) {
+          resolved = true;
+          this._fastPasteDaemonReady = true;
+          this._fastPasteDaemonStarting = false;
+          debugLogger.info("Fast-paste daemon ready", {}, "clipboard");
+          resolve(true);
+        }
+      });
+
+      proc.stderr.on("data", (data) => {
+        debugLogger.debug("Fast-paste daemon stderr", { data: data.toString().trim() }, "clipboard");
+      });
+
+      proc.on("close", (code) => {
+        this._fastPasteDaemonProcess = null;
+        this._fastPasteDaemonReady = false;
+        this._fastPasteDaemonStarting = false;
+        if (!resolved) {
+          resolved = true;
+          debugLogger.warn("Fast-paste daemon exited during startup", { code }, "clipboard");
+          resolve(false);
+        } else {
+          debugLogger.debug("Fast-paste daemon exited", { code }, "clipboard");
+        }
+      });
+
+      proc.on("error", (error) => {
+        this._fastPasteDaemonProcess = null;
+        this._fastPasteDaemonReady = false;
+        this._fastPasteDaemonStarting = false;
+        if (!resolved) {
+          resolved = true;
+          debugLogger.warn("Fast-paste daemon failed to start", { error: error.message }, "clipboard");
+          resolve(false);
+        }
+      });
+
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          this._fastPasteDaemonStarting = false;
+          debugLogger.warn("Fast-paste daemon startup timed out", {}, "clipboard");
+          resolve(false);
+        }
+      }, 2000);
+    });
+  }
+
+  _sendFastPasteViaDaemon(isTerminal) {
+    const net = require("net");
+    const socketPath = this._getFastPasteSocketPath();
+
+    return new Promise((resolve) => {
+      const client = net.createConnection(socketPath, () => {
+        client.write(isTerminal ? "t" : "p");
+      });
+
+      client.on("data", (data) => {
+        client.destroy();
+        resolve(data[0] === 0x30);
+      });
+
+      client.on("error", () => resolve(false));
+
+      setTimeout(() => {
+        client.destroy();
+        resolve(false);
+      }, 1000);
+    });
+  }
+
+  stopFastPasteDaemon() {
+    if (!this._fastPasteDaemonProcess) return;
+    try {
+      this._fastPasteDaemonProcess.kill("SIGTERM");
+    } catch {}
+    this._fastPasteDaemonProcess = null;
+    this._fastPasteDaemonReady = false;
+  }
+
   _detectKdeWindowClass() {
     if (this.commandExists("kdotool")) {
       try {
@@ -339,9 +447,14 @@ class ClipboardManager {
     const platform = process.platform;
     let method = "unknown";
     const webContents = options.webContents;
+    const _t = (label) => {
+      const elapsed = Date.now() - startTime;
+      debugLogger.debug(`Paste timing: ${label}`, { elapsedMs: elapsed }, "clipboard");
+    };
 
     try {
       const originalClipboard = clipboard.readText();
+      _t("readClipboard");
       this.safeLog(
         "💾 Saved original clipboard content:",
         originalClipboard.substring(0, 50) + "..."
@@ -349,8 +462,10 @@ class ClipboardManager {
 
       if (platform === "linux" && this._isWayland()) {
         this._writeClipboardWayland(text, webContents);
+        _t("writeClipboardWayland");
       } else {
         clipboard.writeText(text);
+        _t("writeClipboard");
       }
       this.safeLog("📋 Text copied to clipboard:", text.substring(0, 50) + "...");
 
@@ -776,13 +891,19 @@ class ClipboardManager {
   }
 
   async pasteLinux(originalClipboard, options = {}) {
+    const _lt = Date.now();
+    const _ltt = (label) => debugLogger.debug(`pasteLinux: ${label}`, { elapsedMs: Date.now() - _lt }, "clipboard");
+
     const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots } = getLinuxSessionInfo();
     const webContents = options.webContents;
     const xdotoolExists = this.commandExists("xdotool");
     const wtypeExists = this.commandExists("wtype");
     const ydotoolExists = this.commandExists("ydotool");
+    _ltt("commandExists checks");
     const ydotoolDaemonRunning = ydotoolExists && this._isYdotoolDaemonRunning();
+    _ltt("ydotool daemon check");
     const linuxFastPaste = this.resolveLinuxFastPasteBinary();
+    _ltt("resolve binary");
 
     debugLogger.debug(
       "Linux paste environment",
@@ -868,10 +989,13 @@ class ClipboardManager {
     };
 
     const targetWindowId = preDetectTargetWindow();
+    _ltt("preDetectTargetWindow");
     let detectedWindowClass = preDetectWindowClass(targetWindowId);
+    _ltt("preDetectWindowClass");
 
     if (!detectedWindowClass && isKde) {
       detectedWindowClass = this._detectKdeWindowClass();
+      _ltt("KDE window class detect");
       if (detectedWindowClass) {
         debugLogger.debug("KDE window class detected", { detectedWindowClass }, "clipboard");
       }
@@ -924,6 +1048,28 @@ class ClipboardManager {
         });
 
       if (isWayland) {
+        try {
+          const daemonReady = await this._ensureFastPasteDaemon();
+          _ltt("ensureFastPasteDaemon");
+          if (daemonReady) {
+            const ok = await this._sendFastPasteViaDaemon(earlyIsTerminal);
+            _ltt("sendFastPasteViaDaemon");
+            if (ok) {
+              this.safeLog("✅ Paste successful using fast-paste daemon");
+              debugLogger.info(
+                "Paste successful",
+                { tool: "linux-fast-paste", method: "daemon" },
+                "clipboard"
+              );
+              restoreClipboard();
+              return;
+            }
+            debugLogger.warn("Daemon paste command failed, falling back", {}, "clipboard");
+          }
+        } catch (daemonError) {
+          debugLogger.warn("Daemon paste failed", { error: daemonError?.message }, "clipboard");
+        }
+
         const uinputArgs = ["--uinput"];
         if (earlyIsTerminal) uinputArgs.push("--terminal");
 

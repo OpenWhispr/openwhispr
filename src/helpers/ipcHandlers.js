@@ -594,6 +594,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("paste-text", async (event, text, options) => {
+      const _ipcStart = Date.now();
       // If the floating dictation panel currently has focus, dismiss it so the
       // paste keystroke lands in the user's target app instead of the overlay.
       const mainWindow = this.windowManager?.mainWindow;
@@ -608,11 +609,13 @@ class IPCHandlers {
           mainWindow.blur();
           await new Promise((resolve) => setTimeout(resolve, 80));
         }
+        debugLogger.debug("paste-text: window blur", { elapsedMs: Date.now() - _ipcStart }, "clipboard");
       }
       const result = await this.clipboardManager.pasteText(text, {
         ...options,
         webContents: event.sender,
       });
+      debugLogger.debug("paste-text: IPC total", { elapsedMs: Date.now() - _ipcStart }, "clipboard");
       const targetPid = this.textEditMonitor?.lastTargetPid || null;
       debugLogger.debug("[AutoLearn] Paste completed", {
         autoLearnEnabled: this._autoLearnEnabled,

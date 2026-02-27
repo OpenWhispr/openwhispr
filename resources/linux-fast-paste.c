@@ -15,6 +15,11 @@
 #include <linux/input.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/stat.h>
+#include <poll.h>
+#include <signal.h>
 #endif
 
 static const char *terminal_classes[] = {
@@ -74,12 +79,12 @@ static void activate_window(Display *dpy, Window win) {
     XFlush(dpy);
 
     /* Give the WM time to process the activation request */
-    usleep(50000);
+    usleep(20000);
 
     /* Fallback: also set X input focus directly */
     XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
     XFlush(dpy);
-    usleep(20000);
+    usleep(10000);
 }
 
 #ifdef HAVE_UINPUT
@@ -133,16 +138,16 @@ static int paste_via_uinput(int use_shift) {
         emit(fd, EV_SYN, SYN_REPORT, 0);
     }
 
-    usleep(8000);
+    usleep(2000);
 
     emit(fd, EV_KEY, KEY_V, 1);
     emit(fd, EV_SYN, SYN_REPORT, 0);
-    usleep(8000);
+    usleep(2000);
 
     emit(fd, EV_KEY, KEY_V, 0);
     emit(fd, EV_SYN, SYN_REPORT, 0);
 
-    usleep(8000);
+    usleep(2000);
 
     if (use_shift) {
         emit(fd, EV_KEY, KEY_LEFTSHIFT, 0);
@@ -152,17 +157,199 @@ static int paste_via_uinput(int use_shift) {
     emit(fd, EV_KEY, KEY_LEFTCTRL, 0);
     emit(fd, EV_SYN, SYN_REPORT, 0);
 
-    usleep(20000);
+    usleep(5000);
 
     ioctl(fd, UI_DEV_DESTROY);
     close(fd);
     return 0;
+}
+
+static void get_socket_path(char *buf, size_t buflen) {
+    const char *runtime_dir = getenv("XDG_RUNTIME_DIR");
+    if (runtime_dir) {
+        snprintf(buf, buflen, "%s/openwhispr-paste.sock", runtime_dir);
+    } else {
+        snprintf(buf, buflen, "/tmp/openwhispr-paste-%d.sock", getuid());
+    }
+}
+
+static volatile sig_atomic_t daemon_running = 1;
+
+static void daemon_signal_handler(int sig) {
+    (void)sig;
+    daemon_running = 0;
+}
+
+static void daemon_paste(int uinput_fd, int use_shift) {
+    emit(uinput_fd, EV_KEY, KEY_LEFTCTRL, 1);
+    emit(uinput_fd, EV_SYN, SYN_REPORT, 0);
+
+    if (use_shift) {
+        emit(uinput_fd, EV_KEY, KEY_LEFTSHIFT, 1);
+        emit(uinput_fd, EV_SYN, SYN_REPORT, 0);
+    }
+
+    usleep(2000);
+
+    emit(uinput_fd, EV_KEY, KEY_V, 1);
+    emit(uinput_fd, EV_SYN, SYN_REPORT, 0);
+    usleep(2000);
+
+    emit(uinput_fd, EV_KEY, KEY_V, 0);
+    emit(uinput_fd, EV_SYN, SYN_REPORT, 0);
+
+    usleep(2000);
+
+    if (use_shift) {
+        emit(uinput_fd, EV_KEY, KEY_LEFTSHIFT, 0);
+        emit(uinput_fd, EV_SYN, SYN_REPORT, 0);
+    }
+
+    emit(uinput_fd, EV_KEY, KEY_LEFTCTRL, 0);
+    emit(uinput_fd, EV_SYN, SYN_REPORT, 0);
+
+    usleep(3000);
+}
+
+static int run_daemon(void) {
+    int uinput_fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+    if (uinput_fd < 0) {
+        fprintf(stderr, "Cannot open /dev/uinput: %s\n", strerror(errno));
+        return 1;
+    }
+
+    if (ioctl(uinput_fd, UI_SET_EVBIT, EV_KEY) < 0 ||
+        ioctl(uinput_fd, UI_SET_KEYBIT, KEY_LEFTCTRL) < 0 ||
+        ioctl(uinput_fd, UI_SET_KEYBIT, KEY_LEFTSHIFT) < 0 ||
+        ioctl(uinput_fd, UI_SET_KEYBIT, KEY_V) < 0) {
+        close(uinput_fd);
+        return 2;
+    }
+
+    struct uinput_setup usetup;
+    memset(&usetup, 0, sizeof(usetup));
+    usetup.id.bustype = BUS_USB;
+    usetup.id.vendor  = 0x1234;
+    usetup.id.product = 0x5678;
+    snprintf(usetup.name, UINPUT_MAX_NAME_SIZE, "openwhispr-paste");
+
+    if (ioctl(uinput_fd, UI_DEV_SETUP, &usetup) < 0 ||
+        ioctl(uinput_fd, UI_DEV_CREATE) < 0) {
+        close(uinput_fd);
+        return 2;
+    }
+
+    usleep(50000);
+
+    char sock_path[256];
+    get_socket_path(sock_path, sizeof(sock_path));
+    unlink(sock_path);
+
+    int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock_fd < 0) {
+        ioctl(uinput_fd, UI_DEV_DESTROY);
+        close(uinput_fd);
+        return 3;
+    }
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
+
+    if (bind(sock_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(sock_fd);
+        ioctl(uinput_fd, UI_DEV_DESTROY);
+        close(uinput_fd);
+        return 3;
+    }
+
+    chmod(sock_path, 0600);
+
+    if (listen(sock_fd, 4) < 0) {
+        close(sock_fd);
+        unlink(sock_path);
+        ioctl(uinput_fd, UI_DEV_DESTROY);
+        close(uinput_fd);
+        return 3;
+    }
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = daemon_signal_handler;
+    sigaction(SIGTERM, &sa, NULL);
+    sigaction(SIGINT, &sa, NULL);
+
+    printf("READY\n");
+    fflush(stdout);
+
+    while (daemon_running) {
+        struct pollfd pfd = { .fd = sock_fd, .events = POLLIN };
+        int ret = poll(&pfd, 1, 1000);
+        if (ret <= 0) continue;
+
+        int client_fd = accept(sock_fd, NULL, NULL);
+        if (client_fd < 0) continue;
+
+        char cmd;
+        if (read(client_fd, &cmd, 1) == 1) {
+            if (cmd == 'q') {
+                if (write(client_fd, "0", 1) < 0) { /* best-effort */ }
+                close(client_fd);
+                break;
+            }
+
+            daemon_paste(uinput_fd, cmd == 't');
+            if (write(client_fd, "0", 1) < 0) { /* best-effort */ }
+        }
+        close(client_fd);
+    }
+
+    ioctl(uinput_fd, UI_DEV_DESTROY);
+    close(uinput_fd);
+    close(sock_fd);
+    unlink(sock_path);
+    return 0;
+}
+
+static int send_to_daemon(char cmd) {
+    char sock_path[256];
+    get_socket_path(sock_path, sizeof(sock_path));
+
+    int sock_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock_fd < 0) return 1;
+
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
+
+    if (connect(sock_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(sock_fd);
+        return 1;
+    }
+
+    if (write(sock_fd, &cmd, 1) < 0) {
+        close(sock_fd);
+        return 1;
+    }
+
+    char response;
+    if (read(sock_fd, &response, 1) != 1) {
+        close(sock_fd);
+        return 1;
+    }
+
+    close(sock_fd);
+    return (response == '0') ? 0 : 1;
 }
 #endif
 
 int main(int argc, char *argv[]) {
     int force_terminal = 0;
     int use_uinput = 0;
+    int daemon_mode = 0;
+    char send_cmd = 0;
     Window target_window = None;
 
     for (int i = 1; i < argc; i++) {
@@ -172,8 +359,27 @@ int main(int argc, char *argv[]) {
             use_uinput = 1;
         } else if (strcmp(argv[i], "--window") == 0 && i + 1 < argc) {
             target_window = (Window)strtoul(argv[++i], NULL, 0);
+        } else if (strcmp(argv[i], "--daemon") == 0) {
+            daemon_mode = 1;
+        } else if (strcmp(argv[i], "--send") == 0 && i + 1 < argc) {
+            send_cmd = argv[++i][0];
         }
     }
+
+#ifdef HAVE_UINPUT
+    if (daemon_mode) {
+        return run_daemon();
+    }
+
+    if (send_cmd) {
+        return send_to_daemon(send_cmd);
+    }
+#else
+    if (daemon_mode || send_cmd) {
+        fprintf(stderr, "uinput support not compiled in\n");
+        return 3;
+    }
+#endif
 
     if (use_uinput) {
 #ifdef HAVE_UINPUT
@@ -216,19 +422,19 @@ int main(int argc, char *argv[]) {
     XTestFakeKeyEvent(dpy, ctrl, True, CurrentTime);
     if (use_shift)
         XTestFakeKeyEvent(dpy, shift, True, CurrentTime);
-    usleep(8000);
+    usleep(2000);
 
     XTestFakeKeyEvent(dpy, v, True, CurrentTime);
-    usleep(8000);
+    usleep(2000);
     XTestFakeKeyEvent(dpy, v, False, CurrentTime);
 
-    usleep(8000);
+    usleep(2000);
     if (use_shift)
         XTestFakeKeyEvent(dpy, shift, False, CurrentTime);
     XTestFakeKeyEvent(dpy, ctrl, False, CurrentTime);
 
     XFlush(dpy);
-    usleep(20000);
+    usleep(5000);
     XCloseDisplay(dpy);
     return 0;
 }
