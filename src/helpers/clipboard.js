@@ -1532,6 +1532,9 @@ Would you like to open System Settings now?`;
   preWarmAccessibility() {
     if (process.platform === "linux") {
       this.resolveLinuxFastPasteBinary();
+      if (this._isWayland()) {
+        this._ensureFastPasteDaemon();
+      }
       return;
     }
     if (process.platform !== "darwin") return;
