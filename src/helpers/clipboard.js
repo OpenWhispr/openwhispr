@@ -305,7 +305,7 @@ class ClipboardManager {
           debugLogger.warn("Fast-paste daemon exited during startup", { code }, "clipboard");
           resolve(false);
         } else {
-          debugLogger.debug("Fast-paste daemon exited", { code }, "clipboard");
+          debugLogger.info("Fast-paste daemon exited", { code }, "clipboard");
         }
       });
 
@@ -356,6 +356,7 @@ class ClipboardManager {
 
   stopFastPasteDaemon() {
     if (!this._fastPasteDaemonProcess) return;
+    debugLogger.info("Stopping fast-paste daemon", {}, "clipboard");
     try {
       this._fastPasteDaemonProcess.kill("SIGTERM");
     } catch {}
