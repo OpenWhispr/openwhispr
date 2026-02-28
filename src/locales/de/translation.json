@@ -1489,7 +1489,14 @@
     "description": "Bringe der KI dein Vokabular bei – Namen, Fachbegriffe und Ausdrücke, die sie sonst übersehen könnte",
     "clearTitle": "Wörterbuch leeren?",
     "clearDescription": "Dadurch werden alle Wörter aus deinem benutzerdefinierten Wörterbuch entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
-    "addPlaceholder": "Ein Wort oder eine Phrase hinzufügen..."
+    "addPlaceholder": "Ein Wort oder eine Phrase hinzufügen...",
+    "importButton": "Importieren",
+    "importTitle": "Wörter importieren",
+    "importDescription": "Füge eine Liste von Wörtern oder Begriffen ein. Trenne sie mit Kommas, Semikolons oder Zeilenumbrüchen.",
+    "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
+    "importCount": "{{count}} Wort/Wörter erkannt",
+    "importConfirm": "Importieren",
+    "importCancel": "Abbrechen"
   },
   "sidebar": {
     "home": "Startseite",

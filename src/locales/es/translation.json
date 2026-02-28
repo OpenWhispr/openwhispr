@@ -1489,7 +1489,14 @@
     "description": "Enseña a la IA tu vocabulario: nombres, jerga y términos que podría pasar por alto",
     "clearTitle": "¿Borrar el diccionario?",
     "clearDescription": "Esto eliminará todas las palabras de tu diccionario personalizado. Esta acción no se puede deshacer.",
-    "addPlaceholder": "Añadir una palabra o frase..."
+    "addPlaceholder": "Añadir una palabra o frase...",
+    "importButton": "Importar",
+    "importTitle": "Importar palabras",
+    "importDescription": "Pega una lista de palabras o frases. Sepáralas con comas, punto y coma o saltos de línea.",
+    "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
+    "importCount": "{{count}} palabra(s) detectada(s)",
+    "importConfirm": "Importar",
+    "importCancel": "Cancelar"
   },
   "sidebar": {
     "home": "Inicio",

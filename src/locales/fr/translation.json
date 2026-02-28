@@ -1525,7 +1525,14 @@
     "howItWorks": "Comment ça marche",
     "howItWorksDetail": "Les mots sont transmis comme indices contextuels au modèle vocal, l'aidant à reconnaître les termes peu courants. Pour les mots difficiles, essayez d'ajouter du contexte comme « Le mot est Synty » en plus du mot lui-même.",
     "autoManaged": "Géré automatiquement — synchronisé depuis le nom de l'agent",
-    "inputHint": "Séparez les mots par des virgules. Ajoutez des phrases de contexte comme « Le mot est Synty » pour une meilleure reconnaissance."
+    "inputHint": "Séparez les mots par des virgules. Ajoutez des phrases de contexte comme « Le mot est Synty » pour une meilleure reconnaissance.",
+    "importButton": "Importer",
+    "importTitle": "Importer des mots",
+    "importDescription": "Collez une liste de mots ou d'expressions. Séparez-les par des virgules, des points-virgules ou des retours à la ligne.",
+    "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
+    "importCount": "{{count}} mot(s) détecté(s)",
+    "importConfirm": "Importer",
+    "importCancel": "Annuler"
   },
   "support": {
     "joinDiscord": "Rejoindre Discord",

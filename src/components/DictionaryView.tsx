@@ -1,8 +1,17 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, X, CornerDownLeft, Info } from "lucide-react";
+import { BookOpen, X, CornerDownLeft, Info, Upload } from "lucide-react";
 import { Input } from "./ui/input";
-import { ConfirmDialog } from "./ui/dialog";
+import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  ConfirmDialog,
+} from "./ui/dialog";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
 
@@ -13,6 +22,8 @@ export default function DictionaryView() {
   const [newWord, setNewWord] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
 
   const isEmpty = customDictionary.length === 0;
 
@@ -35,6 +46,34 @@ export default function DictionaryView() {
     [customDictionary, setCustomDictionary, agentName]
   );
 
+  /** Parse pasted text: split by lines first, then by comma/semicolon
+   *  within each line.  This preserves terms like "Vue.js" and ".tsx"
+   *  because the dot is never used as a separator. */
+  const parseWordList = (text: string): string[] => {
+    return text
+      .split(/\r?\n/)
+      .flatMap((line) => line.split(/[,;]/))
+      .map((w) => w.trim())
+      .filter((w) => w.length > 0);
+  };
+
+  const handleImport = useCallback(() => {
+    const existing = new Set(customDictionary.map((w) => w.toLowerCase()));
+    const words = parseWordList(importText).filter((w) => {
+      const norm = w.toLowerCase();
+      if (existing.has(norm)) return false;
+      existing.add(norm);
+      return true;
+    });
+    if (words.length > 0) {
+      setCustomDictionary([...customDictionary, ...words]);
+    }
+    setImportText("");
+    setShowImport(false);
+  }, [importText, customDictionary, setCustomDictionary]);
+
+  const importWordCount = parseWordList(importText).length;
+
   return (
     <div className="flex flex-col h-full">
       <ConfirmDialog
@@ -45,6 +84,34 @@ export default function DictionaryView() {
         onConfirm={() => setCustomDictionary(customDictionary.filter((w) => w === agentName))}
         variant="destructive"
       />
+
+      <Dialog open={showImport} onOpenChange={(open) => { setShowImport(open); if (!open) setImportText(""); }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>{t("dictionary.importTitle")}</DialogTitle>
+            <DialogDescription>{t("dictionary.importDescription")}</DialogDescription>
+          </DialogHeader>
+          <textarea
+            value={importText}
+            onChange={(e) => setImportText(e.target.value)}
+            placeholder={t("dictionary.importPlaceholder")}
+            className="w-full h-40 rounded-lg border border-border/40 dark:border-white/8 bg-foreground/[0.02] dark:bg-white/[0.03] px-3 py-2.5 text-xs text-foreground placeholder:text-foreground/20 focus:outline-none focus:ring-1 focus:ring-primary/30 resize-none font-mono"
+          />
+          {importWordCount > 0 && (
+            <p className="text-xs text-foreground/30">
+              {t("dictionary.importCount", { count: importWordCount })}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => { setShowImport(false); setImportText(""); }}>
+              {t("dictionary.importCancel")}
+            </Button>
+            <Button size="sm" onClick={handleImport} disabled={importWordCount === 0}>
+              {t("dictionary.importConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isEmpty ? (
         /* ─── Empty state ─── */
@@ -98,7 +165,15 @@ export default function DictionaryView() {
             ))}
           </div>
 
-          <div className="mt-8 w-full max-w-[260px]">
+          <button
+            onClick={() => setShowImport(true)}
+            className="mt-5 flex items-center gap-1.5 text-xs text-foreground/20 hover:text-primary/60 transition-colors"
+          >
+            <Upload size={11} />
+            {t("dictionary.importButton")}
+          </button>
+
+          <div className="mt-5 w-full max-w-[260px]">
             <button
               onClick={() => setShowInfo(!showInfo)}
               aria-expanded={showInfo}
@@ -127,13 +202,22 @@ export default function DictionaryView() {
                 {customDictionary.length}
               </span>
             </div>
-            <button
-              onClick={() => setConfirmClear(true)}
-              aria-label={t("dictionary.clearAll")}
-              className="text-xs text-foreground/15 hover:text-destructive/70 transition-colors"
-            >
-              {t("dictionary.clearAll")}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowImport(true)}
+                className="text-xs text-foreground/15 hover:text-primary/70 transition-colors flex items-center gap-1"
+              >
+                <Upload size={10} />
+                {t("dictionary.importButton")}
+              </button>
+              <button
+                onClick={() => setConfirmClear(true)}
+                aria-label={t("dictionary.clearAll")}
+                className="text-xs text-foreground/15 hover:text-destructive/70 transition-colors"
+              >
+                {t("dictionary.clearAll")}
+              </button>
+            </div>
           </div>
 
           <div className="px-5 pb-3">

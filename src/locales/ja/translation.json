@@ -1417,7 +1417,14 @@
     "description": "AIに語彙を学習させましょう — 名前、専門用語、見落とされがちな表現など",
     "clearTitle": "辞書をクリアしますか？",
     "clearDescription": "カスタム辞書のすべての単語が削除されます。この操作は元に戻せません。",
-    "addPlaceholder": "単語やフレーズを追加..."
+    "addPlaceholder": "単語やフレーズを追加...",
+    "importButton": "インポート",
+    "importTitle": "単語をインポート",
+    "importDescription": "単語やフレーズのリストを貼り付けてください。カンマ、セミコロン、または改行で区切ります。",
+    "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
+    "importCount": "{{count}} 個の単語を検出",
+    "importConfirm": "インポート",
+    "importCancel": "キャンセル"
   },
   "referral": {
     "title": "紹介して特典をゲット",
