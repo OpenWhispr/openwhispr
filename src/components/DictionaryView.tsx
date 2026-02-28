@@ -1,10 +1,22 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, X, CornerDownLeft, Info } from "lucide-react";
+import { BookOpen, X, CornerDownLeft, Info, Upload, Sparkles, Loader2 } from "lucide-react";
 import { Input } from "./ui/input";
-import { ConfirmDialog } from "./ui/dialog";
+import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  ConfirmDialog,
+} from "./ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
+import ReasoningService from "../services/ReasoningService";
+import { useSettingsStore } from "../stores/settingsStore";
 
 export default function DictionaryView() {
   const { t } = useTranslation();
@@ -13,6 +25,8 @@ export default function DictionaryView() {
   const [newWord, setNewWord] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState("");
 
   const isEmpty = customDictionary.length === 0;
 
@@ -35,6 +49,112 @@ export default function DictionaryView() {
     [customDictionary, setCustomDictionary, agentName]
   );
 
+  /** Parse pasted text: split by lines first, then by comma/semicolon
+   *  within each line.  This preserves terms like "Vue.js" and ".tsx"
+   *  because the dot is never used as a separator. */
+  const parseWordList = (text: string): string[] => {
+    return text
+      .split(/\r?\n/)
+      .flatMap((line) => line.split(/[,;]/))
+      .map((w) => w.trim())
+      .filter((w) => w.length > 0);
+  };
+
+  const handleImport = useCallback(() => {
+    const existing = new Set(customDictionary.map((w) => w.toLowerCase()));
+    const words = parseWordList(importText).filter((w) => {
+      const norm = w.toLowerCase();
+      if (existing.has(norm)) return false;
+      existing.add(norm);
+      return true;
+    });
+    if (words.length > 0) {
+      setCustomDictionary([...customDictionary, ...words]);
+    }
+    setImportText("");
+    setShowImport(false);
+  }, [importText, customDictionary, setCustomDictionary]);
+
+  const importWordCount = parseWordList(importText).length;
+
+  /* ─── AI extraction state ─── */
+  const [extractText, setExtractText] = useState("");
+  const [extractedWords, setExtractedWords] = useState<string[]>([]);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractError, setExtractError] = useState("");
+  const [importTab, setImportTab] = useState("list");
+  const reasoningModel = useSettingsStore((s) => s.reasoningModel);
+
+  const handleExtract = useCallback(async () => {
+    if (!extractText.trim() || isExtracting) return;
+    setIsExtracting(true);
+    setExtractError("");
+    setExtractedWords([]);
+
+    try {
+      const result = await ReasoningService.processText(extractText, reasoningModel, null, {
+        systemPrompt:
+          "You are a dictionary term extractor for a speech recognition system. " +
+          "Extract ONLY individual words or short compound terms (1-3 words maximum) that a speech-to-text engine might misspell or fail to recognize. " +
+          "Focus on: proper nouns, brand names, product names, technical abbreviations, acronyms, domain-specific jargon, unusual spellings, foreign words. " +
+          "NEVER return full sentences, phrases longer than 3 words, or common everyday words. " +
+          "Each term must be a single concept — not a description or explanation. " +
+          "Return ONLY a comma-separated list. No explanations, no numbering, no categories, no quotes. " +
+          "Example input: 'We deployed the app on Kubernetes using gRPC and PostgreSQL with OAuth2 authentication.' " +
+          "Example output: Kubernetes, gRPC, PostgreSQL, OAuth2",
+        temperature: 0.1,
+        maxTokens: 1024,
+      });
+
+      const words = result
+        .split(/[,\n]/)
+        .map((w) => w.trim().replace(/^[-•*\d.)\s]+/, "").replace(/^["']|["']$/g, ""))
+        .filter((w) => {
+          if (w.length === 0 || w.length > 50) return false;
+          // Reject anything with more than 3 words (likely a sentence/phrase)
+          const wordCount = w.split(/\s+/).length;
+          if (wordCount > 3) return false;
+          return true;
+        });
+
+      if (words.length === 0) {
+        setExtractError(t("dictionary.extractEmpty"));
+      } else {
+        setExtractedWords(words);
+      }
+    } catch (err: any) {
+      setExtractError(err?.message || t("dictionary.extractError"));
+    } finally {
+      setIsExtracting(false);
+    }
+  }, [extractText, reasoningModel, isExtracting, t]);
+
+  const handleImportExtracted = useCallback(() => {
+    const existing = new Set(customDictionary.map((w) => w.toLowerCase()));
+    const words = extractedWords.filter((w) => {
+      const norm = w.toLowerCase();
+      if (existing.has(norm)) return false;
+      existing.add(norm);
+      return true;
+    });
+    if (words.length > 0) {
+      setCustomDictionary([...customDictionary, ...words]);
+    }
+    setExtractText("");
+    setExtractedWords([]);
+    setExtractError("");
+    setShowImport(false);
+    setImportTab("list");
+  }, [extractedWords, customDictionary, setCustomDictionary]);
+
+  const resetImportDialog = useCallback(() => {
+    setImportText("");
+    setExtractText("");
+    setExtractedWords([]);
+    setExtractError("");
+    setImportTab("list");
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
       <ConfirmDialog
@@ -45,6 +165,119 @@ export default function DictionaryView() {
         onConfirm={() => setCustomDictionary(customDictionary.filter((w) => w === agentName))}
         variant="destructive"
       />
+
+      <Dialog open={showImport} onOpenChange={(open) => { setShowImport(open); if (!open) resetImportDialog(); }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>{t("dictionary.importTitle")}</DialogTitle>
+          </DialogHeader>
+          <Tabs value={importTab} onValueChange={setImportTab}>
+            <TabsList className="w-full">
+              <TabsTrigger value="list" className="flex-1 gap-1.5">
+                <Upload size={12} />
+                {t("dictionary.tabList")}
+              </TabsTrigger>
+              <TabsTrigger value="extract" className="flex-1 gap-1.5">
+                <Sparkles size={12} />
+                {t("dictionary.tabExtract")}
+              </TabsTrigger>
+            </TabsList>
+
+            {/* ─── List tab (existing) ─── */}
+            <TabsContent value="list">
+              <DialogDescription className="mb-2">{t("dictionary.importDescription")}</DialogDescription>
+              <textarea
+                value={importText}
+                onChange={(e) => setImportText(e.target.value)}
+                placeholder={t("dictionary.importPlaceholder")}
+                className="w-full h-40 rounded-lg border border-border/40 dark:border-white/8 bg-foreground/[0.02] dark:bg-white/[0.03] px-3 py-2.5 text-xs text-foreground placeholder:text-foreground/20 focus:outline-none focus:ring-1 focus:ring-primary/30 resize-none font-mono"
+              />
+              {importWordCount > 0 && (
+                <p className="text-xs text-foreground/30 mt-1.5">
+                  {t("dictionary.importCount", { count: importWordCount })}
+                </p>
+              )}
+              <DialogFooter className="mt-3">
+                <Button variant="outline" size="sm" onClick={() => { setShowImport(false); resetImportDialog(); }}>
+                  {t("dictionary.importCancel")}
+                </Button>
+                <Button size="sm" onClick={handleImport} disabled={importWordCount === 0}>
+                  {t("dictionary.importConfirm")}
+                </Button>
+              </DialogFooter>
+            </TabsContent>
+
+            {/* ─── Extract tab (AI) ─── */}
+            <TabsContent value="extract">
+              <DialogDescription className="mb-2">{t("dictionary.extractDescription")}</DialogDescription>
+              <textarea
+                value={extractText}
+                onChange={(e) => { setExtractText(e.target.value); setExtractedWords([]); setExtractError(""); }}
+                placeholder={t("dictionary.extractPlaceholder")}
+                className="w-full h-32 rounded-lg border border-border/40 dark:border-white/8 bg-foreground/[0.02] dark:bg-white/[0.03] px-3 py-2.5 text-xs text-foreground placeholder:text-foreground/20 focus:outline-none focus:ring-1 focus:ring-primary/30 resize-none"
+                disabled={isExtracting}
+              />
+
+              {extractError && (
+                <p className="text-xs text-destructive mt-1.5">{extractError}</p>
+              )}
+
+              {extractedWords.length > 0 && (
+                <div className="mt-2">
+                  <p className="text-xs text-foreground/30 mb-1.5">
+                    {t("dictionary.extractCount", { count: extractedWords.length })}
+                  </p>
+                  <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto p-2 rounded-md bg-foreground/[0.02] dark:bg-white/[0.02] border border-foreground/5 dark:border-white/4">
+                    {extractedWords.map((word) => (
+                      <span
+                        key={word}
+                        className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-[5px] text-xs bg-primary/8 dark:bg-primary/12 text-foreground/60 border border-primary/15"
+                      >
+                        {word}
+                        <button
+                          onClick={() => setExtractedWords((prev) => prev.filter((w) => w !== word))}
+                          className="p-0.5 rounded-sm text-foreground/25 hover:text-destructive/70 transition-colors"
+                        >
+                          <X size={9} strokeWidth={2} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <DialogFooter className="mt-3">
+                <Button variant="outline" size="sm" onClick={() => { setShowImport(false); resetImportDialog(); }}>
+                  {t("dictionary.importCancel")}
+                </Button>
+                {extractedWords.length > 0 ? (
+                  <Button size="sm" onClick={handleImportExtracted}>
+                    {t("dictionary.importConfirm")} ({extractedWords.length})
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={handleExtract}
+                    disabled={!extractText.trim() || isExtracting || !reasoningModel}
+                  >
+                    {isExtracting ? (
+                      <>
+                        <Loader2 size={12} className="animate-spin mr-1" />
+                        {t("dictionary.extracting")}
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={12} className="mr-1" />
+                        {t("dictionary.extractButton")}
+                      </>
+                    )}
+                  </Button>
+                )}
+              </DialogFooter>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
 
       {isEmpty ? (
         /* ─── Empty state ─── */
@@ -98,7 +331,15 @@ export default function DictionaryView() {
             ))}
           </div>
 
-          <div className="mt-8 w-full max-w-[260px]">
+          <button
+            onClick={() => setShowImport(true)}
+            className="mt-5 flex items-center gap-1.5 text-xs text-foreground/20 hover:text-primary/60 transition-colors"
+          >
+            <Upload size={11} />
+            {t("dictionary.importButton")}
+          </button>
+
+          <div className="mt-5 w-full max-w-[260px]">
             <button
               onClick={() => setShowInfo(!showInfo)}
               aria-expanded={showInfo}
@@ -127,13 +368,22 @@ export default function DictionaryView() {
                 {customDictionary.length}
               </span>
             </div>
-            <button
-              onClick={() => setConfirmClear(true)}
-              aria-label={t("dictionary.clearAll")}
-              className="text-xs text-foreground/15 hover:text-destructive/70 transition-colors"
-            >
-              {t("dictionary.clearAll")}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowImport(true)}
+                className="text-xs text-foreground/15 hover:text-primary/70 transition-colors flex items-center gap-1"
+              >
+                <Upload size={10} />
+                {t("dictionary.importButton")}
+              </button>
+              <button
+                onClick={() => setConfirmClear(true)}
+                aria-label={t("dictionary.clearAll")}
+                className="text-xs text-foreground/15 hover:text-destructive/70 transition-colors"
+              >
+                {t("dictionary.clearAll")}
+              </button>
+            </div>
           </div>
 
           <div className="px-5 pb-3">
