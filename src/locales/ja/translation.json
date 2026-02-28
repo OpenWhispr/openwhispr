@@ -1424,7 +1424,16 @@
     "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
     "importCount": "{{count}} 個の単語を検出",
     "importConfirm": "インポート",
-    "importCancel": "キャンセル"
+    "importCancel": "キャンセル",
+    "tabList": "リスト",
+    "tabExtract": "テキストから抽出",
+    "extractDescription": "任意のテキスト（会議メモ、ドキュメント、メール）を貼り付けて、AIに専門用語を抽出させます。",
+    "extractPlaceholder": "ここにテキストを貼り付けてください — 例：会議メモ、ドキュメント、専門用語を含むテキスト…",
+    "extractButton": "用語を抽出",
+    "extracting": "抽出中…",
+    "extractCount": "{{count}}件の用語が見つかりました",
+    "extractEmpty": "このテキストから用語を抽出できませんでした。",
+    "extractError": "用語の抽出に失敗しました。AIモデルの設定を確認してください。"
   },
   "referral": {
     "title": "紹介して特典をゲット",

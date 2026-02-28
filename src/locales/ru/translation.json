@@ -1496,7 +1496,16 @@
     "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
     "importCount": "{{count}} слово(а) обнаружено",
     "importConfirm": "Импортировать",
-    "importCancel": "Отмена"
+    "importCancel": "Отмена",
+    "tabList": "Список",
+    "tabExtract": "Извлечь из текста",
+    "extractDescription": "Вставьте любой текст (заметки с совещаний, документацию, письма) и позвольте ИИ извлечь технические термины.",
+    "extractPlaceholder": "Вставьте текст сюда — например, заметки с совещаний, документацию или любой текст со специальными терминами…",
+    "extractButton": "Извлечь термины",
+    "extracting": "Извлечение…",
+    "extractCount": "Найдено терминов: {{count}}",
+    "extractEmpty": "Не удалось извлечь термины из этого текста.",
+    "extractError": "Ошибка извлечения. Проверьте настройки модели ИИ."
   },
   "sidebar": {
     "home": "Главная",

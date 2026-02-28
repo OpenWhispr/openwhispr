@@ -1496,7 +1496,16 @@
     "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
     "importCount": "{{count}} Wort/Wörter erkannt",
     "importConfirm": "Importieren",
-    "importCancel": "Abbrechen"
+    "importCancel": "Abbrechen",
+    "tabList": "Liste",
+    "tabExtract": "Aus Text extrahieren",
+    "extractDescription": "Füge beliebigen Text ein (Meetingnotizen, Dokumentation, E-Mails) und lass die KI Fachbegriffe extrahieren.",
+    "extractPlaceholder": "Text hier einfügen — z. B. Meetingnotizen, Dokumentation oder beliebiger Text mit Fachbegriffen…",
+    "extractButton": "Begriffe extrahieren",
+    "extracting": "Extrahiere…",
+    "extractCount": "{{count}} Begriff(e) gefunden",
+    "extractEmpty": "Aus diesem Text konnten keine Begriffe extrahiert werden.",
+    "extractError": "Extraktion fehlgeschlagen. Bitte KI-Modell-Konfiguration prüfen."
   },
   "sidebar": {
     "home": "Startseite",

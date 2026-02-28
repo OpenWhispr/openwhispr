@@ -1496,7 +1496,16 @@
     "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
     "importCount": "检测到 {{count}} 个词语",
     "importConfirm": "导入",
-    "importCancel": "取消"
+    "importCancel": "取消",
+    "tabList": "列表",
+    "tabExtract": "从文本提取",
+    "extractDescription": "粘贴任意文本（会议记录、文档、邮件），让AI提取专业术语。",
+    "extractPlaceholder": "在此粘贴文本 — 例如会议记录、文档或包含专业术语的任何文本…",
+    "extractButton": "提取术语",
+    "extracting": "提取中…",
+    "extractCount": "找到 {{count}} 个术语",
+    "extractEmpty": "无法从此文本中提取术语。",
+    "extractError": "术语提取失败。请检查AI模型配置。"
   },
   "sidebar": {
     "home": "首页",

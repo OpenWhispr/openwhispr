@@ -1532,7 +1532,16 @@
     "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
     "importCount": "{{count}} mot(s) détecté(s)",
     "importConfirm": "Importer",
-    "importCancel": "Annuler"
+    "importCancel": "Annuler",
+    "tabList": "Liste",
+    "tabExtract": "Extraire du texte",
+    "extractDescription": "Collez n'importe quel texte (notes de réunion, documentation, e-mails) et laissez l'IA extraire les termes techniques.",
+    "extractPlaceholder": "Collez votre texte ici — p. ex. notes de réunion, documentation ou tout texte contenant des termes spécialisés…",
+    "extractButton": "Extraire les termes",
+    "extracting": "Extraction…",
+    "extractCount": "{{count}} terme(s) trouvé(s)",
+    "extractEmpty": "Aucun terme n'a pu être extrait de ce texte.",
+    "extractError": "Échec de l'extraction. Vérifiez la configuration du modèle IA."
   },
   "support": {
     "joinDiscord": "Rejoindre Discord",
