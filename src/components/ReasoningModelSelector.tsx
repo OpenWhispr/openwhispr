@@ -102,7 +102,7 @@ function GpuStatusBadge() {
 
   useEffect(() => {
     if (!activating) return;
-    if (serverStatus?.gpuAccelerated) {
+    if (serverStatus?.gpuAccelerated || vulkanStatus?.downloaded) {
       setActivating(false);
       setActivationFailed(false);
       return;
@@ -110,15 +110,16 @@ function GpuStatusBadge() {
     const timeout = setTimeout(() => {
       setActivating(false);
       setActivationFailed(true);
-    }, 30000);
+    }, 10000);
     const fastPoll = setInterval(() => {
       window.electronAPI?.llamaServerStatus?.().then(setServerStatus).catch(() => {});
+      window.electronAPI?.getLlamaVulkanStatus?.().then(setVulkanStatus).catch(() => {});
     }, 1000);
     return () => {
       clearTimeout(timeout);
       clearInterval(fastPoll);
     };
-  }, [activating, serverStatus?.gpuAccelerated]);
+  }, [activating, serverStatus?.gpuAccelerated, vulkanStatus?.downloaded]);
 
   const handleDownload = async () => {
     setDownloading(true);
