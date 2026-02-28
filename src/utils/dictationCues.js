@@ -3,6 +3,7 @@ import { getSettings } from "../stores/settingsStore";
 
 const START_NOTES = [523.25, 659.25];
 const STOP_NOTES = [587.33, 440];
+const CANCEL_NOTES = [440, 349.23, 261.63];
 const NOTE_DURATION_SECONDS = 0.09;
 const NOTE_GAP_SECONDS = 0.025;
 const NOTE_ATTACK_SECONDS = 0.015;
@@ -97,3 +98,5 @@ const playCue = async (notes) => {
 export const playStartCue = () => playCue(START_NOTES);
 
 export const playStopCue = () => playCue(STOP_NOTES);
+
+export const playCancelCue = () => playCue(CANCEL_NOTES);

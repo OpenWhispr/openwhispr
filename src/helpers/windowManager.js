@@ -387,6 +387,16 @@ class WindowManager {
     }
   }
 
+  /** Cancel recording without transcribing/pasting (used by focus-loss auto-stop). */
+  sendCancelDictation() {
+    if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("cancel-dictation");
+    }
+  }
+
   getActivationMode() {
     return this._cachedActivationMode;
   }
@@ -638,13 +648,18 @@ class WindowManager {
       }
     });
 
-    this.mainWindow.on("show", () => {
-      this.enforceMainWindowOnTop();
-    });
+    // On Windows, calling setAlwaysOnTop on every show/focus event can steal
+    // focus from the active application.  The initial ready-to-show call is
+    // sufficient — the window stays on top once configured.
+    if (process.platform !== "win32") {
+      this.mainWindow.on("show", () => {
+        this.enforceMainWindowOnTop();
+      });
 
-    this.mainWindow.on("focus", () => {
-      this.enforceMainWindowOnTop();
-    });
+      this.mainWindow.on("focus", () => {
+        this.enforceMainWindowOnTop();
+      });
+    }
 
     this.mainWindow.on("closed", () => {
       this.dragManager.cleanup();

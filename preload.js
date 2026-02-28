@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
+  onCancelDictation: registerListener("cancel-dictation", (callback) => () => callback()),
+  notifyRecordingState: (isRecording) => ipcRenderer.send("recording-state-changed", isRecording),
 
   // Database functions
   saveTranscription: (text) => ipcRenderer.invoke("db-save-transcription", text),
@@ -44,6 +46,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("dictionary-updated", listener);
   },
   setAutoLearnEnabled: (enabled) => ipcRenderer.send("auto-learn-changed", enabled),
+  setStopOnFocusLoss: (enabled) => ipcRenderer.send("stop-on-focus-loss-changed", enabled),
   onCorrectionsLearned: (callback) => {
     const listener = (_event, words) => callback?.(words);
     ipcRenderer.on("corrections-learned", listener);
@@ -220,6 +223,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   stopWindowDrag: () => ipcRenderer.invoke("stop-window-drag"),
   setMainWindowInteractivity: (interactive) =>
     ipcRenderer.invoke("set-main-window-interactivity", interactive),
+  blurMainWindow: () => ipcRenderer.invoke("blur-main-window"),
   resizeMainWindow: (sizeKey) => ipcRenderer.invoke("resize-main-window", sizeKey),
 
   // Update functions

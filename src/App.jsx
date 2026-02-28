@@ -354,8 +354,13 @@ export default function App() {
               }}
               onClick={(e) => {
                 if (!hasDragged) {
+                  const wasRecording = isRecording;
                   setIsCommandMenuOpen(false);
                   toggleListening();
+                  // Return focus to the target app only when stopping via click
+                  if (wasRecording) {
+                    window.electronAPI?.blurMainWindow?.();
+                  }
                 }
                 e.preventDefault();
               }}

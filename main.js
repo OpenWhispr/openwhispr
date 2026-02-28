@@ -2,6 +2,7 @@ const { app, globalShortcut, BrowserWindow, dialog, ipcMain, session } = require
 const path = require("path");
 const http = require("http");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
+const { FocusWatcher } = require("./src/helpers/focusWatcher");
 
 const VALID_CHANNELS = new Set(["development", "staging", "production"]);
 const DEFAULT_OAUTH_PROTOCOL_BY_CHANNEL = {
@@ -65,6 +66,12 @@ if (process.platform === "linux") {
 
 if (process.platform === "win32") {
   app.commandLine.appendSwitch("disable-gpu-compositing");
+  // Prevent Chromium from throttling CSS animations / requestAnimationFrame
+  // in unfocused or background windows.  The dictation overlay intentionally
+  // never holds focus, so without these switches the sonar-ring and spinner
+  // animations freeze.
+  app.commandLine.appendSwitch("disable-renderer-backgrounding");
+  app.commandLine.appendSwitch("disable-background-timer-throttling");
 }
 
 // Enable native Wayland support: Ozone platform for native rendering,
@@ -794,6 +801,32 @@ async function startApp() {
     });
   }
 }
+
+// Focus-loss auto-stop: stop recording when user switches to another application
+let stopOnFocusLossEnabled = false; // opt-in; synced from renderer on mount
+const focusWatcher = new FocusWatcher();
+focusWatcher.on("focus-changed", () => {
+  if (windowManager) {
+    // Cancel (discard audio) instead of stop (which would transcribe & paste
+    // into the now-focused app — dangerous when switching away mid-dictation).
+    windowManager.sendCancelDictation();
+  }
+});
+
+ipcMain.on("recording-state-changed", (_event, isRecording) => {
+  if (isRecording && stopOnFocusLossEnabled) {
+    focusWatcher.start();
+  } else {
+    focusWatcher.stop();
+  }
+});
+
+ipcMain.on("stop-on-focus-loss-changed", (_event, enabled) => {
+  stopOnFocusLossEnabled = !!enabled;
+  if (!stopOnFocusLossEnabled) {
+    focusWatcher.stop();
+  }
+});
 
 // Listen for usage limit reached from dictation overlay, forward to control panel
 ipcMain.on("limit-reached", (_event, data) => {

@@ -17,6 +17,7 @@ const MAIN_WINDOW_CONFIG = {
     nodeIntegration: false,
     contextIsolation: true,
     sandbox: true,
+    backgroundThrottling: false,
   },
   frame: false,
   alwaysOnTop: true,
@@ -97,7 +98,10 @@ class WindowPositionUtil {
         window.setAlwaysOnTop(true, "floating", 1);
       }
     } else if (process.platform === "win32") {
-      window.setAlwaysOnTop(true, "pop-up-menu");
+      // "floating" keeps the window on top without stealing focus from the
+      // active application.  "pop-up-menu" is more aggressive and can cause
+      // Windows to bring the overlay into the foreground unexpectedly.
+      window.setAlwaysOnTop(true, "floating");
     } else {
       window.setAlwaysOnTop(true, "screen-saver");
     }

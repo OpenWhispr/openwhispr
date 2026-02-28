@@ -1066,6 +1066,12 @@
         "description": "控制听写图标在屏幕上的显示",
         "title": "悬浮图标"
       },
+      "dictationBehavior": {
+        "title": "听写行为",
+        "description": "控制听写会话的启动和停止方式",
+        "stopOnFocusLoss": "切换应用时停止",
+        "stopOnFocusLossDescription": "切换到其他应用程序时自动停止录音"
+      },
       "hotkey": {
         "activationMode": "激活模式",
         "description": "用于开始和停止语音听写的组合键",

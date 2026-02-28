@@ -1066,6 +1066,12 @@
         "description": "画面上のディクテーションアイコンの表示を制御",
         "title": "フローティングアイコン"
       },
+      "dictationBehavior": {
+        "title": "ディクテーションの動作",
+        "description": "ディクテーションセッションの開始と停止を制御",
+        "stopOnFocusLoss": "アプリ切り替え時に停止",
+        "stopOnFocusLossDescription": "別のアプリケーションに切り替えると自動的に録音を停止する"
+      },
       "hotkey": {
         "activationMode": "起動モード",
         "description": "音声ディクテーションの開始/停止に使用するキーの組み合わせ",

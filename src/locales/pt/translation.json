@@ -1038,6 +1038,12 @@
         "description": "Controle quando o ícone de ditado fica visível na tela",
         "title": "Ícone flutuante"
       },
+      "dictationBehavior": {
+        "title": "Comportamento do ditado",
+        "description": "Controle como as sessões de ditado iniciam e param",
+        "stopOnFocusLoss": "Parar ao trocar de app",
+        "stopOnFocusLossDescription": "Parar automaticamente a gravação ao clicar em outro aplicativo"
+      },
       "hotkey": {
         "activationMode": "Modo de ativação",
         "description": "A combinação de teclas que inicia e para o ditado por voz",
