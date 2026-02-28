@@ -465,6 +465,7 @@ function AiModelsSection({
                   onClick={() => {
                     if (!isCloudMode) {
                       setCloudReasoningMode("openwhispr");
+                      window.electronAPI?.llamaServerStop?.();
                       toast({
                         title: t("settingsPage.aiModels.toasts.switchedCloud.title"),
                         description: t("settingsPage.aiModels.toasts.switchedCloud.description"),

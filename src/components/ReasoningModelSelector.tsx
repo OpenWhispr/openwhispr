@@ -634,6 +634,7 @@ export default function ReasoningModelSelector({
     setSelectedMode(newMode);
 
     if (newMode === "cloud") {
+      window.electronAPI?.llamaServerStop?.();
       setLocalReasoningProvider(selectedCloudProvider);
 
       if (selectedCloudProvider === "custom") {
