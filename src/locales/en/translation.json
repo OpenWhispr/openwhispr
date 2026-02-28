@@ -1525,7 +1525,14 @@
     "howItWorks": "How it works",
     "howItWorksDetail": "Words are fed as context hints to the speech model, helping it recognize uncommon terms. For difficult words, try adding context like \"The word is Synty\" alongside the word itself.",
     "autoManaged": "Auto-managed — synced from agent name",
-    "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition."
+    "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition.",
+    "importButton": "Import",
+    "importTitle": "Import Words",
+    "importDescription": "Paste a list of words or phrases. Separate them with commas, semicolons, or line breaks.",
+    "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
+    "importCount": "{{count}} word(s) detected",
+    "importConfirm": "Import",
+    "importCancel": "Cancel"
   },
   "support": {
     "joinDiscord": "Join Discord",

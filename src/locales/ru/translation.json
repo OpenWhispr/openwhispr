@@ -1489,7 +1489,14 @@
     "title": "Словарь",
     "description": "Добавьте слова для улучшения транскрипции",
     "clearTitle": "Очистить словарь?",
-    "clearDescription": "Все слова будут удалены без возможности восстановления."
+    "clearDescription": "Все слова будут удалены без возможности восстановления.",
+    "importButton": "Импорт",
+    "importTitle": "Импорт слов",
+    "importDescription": "Вставьте список слов или фраз. Разделяйте их запятыми, точками с запятой или переносами строк.",
+    "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
+    "importCount": "{{count}} слово(а) обнаружено",
+    "importConfirm": "Импортировать",
+    "importCancel": "Отмена"
   },
   "sidebar": {
     "home": "Главная",

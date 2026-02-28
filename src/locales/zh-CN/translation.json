@@ -1489,7 +1489,14 @@
     "description": "教 AI 学习你的词汇 — 名字、行话和它可能遗漏的术语",
     "clearTitle": "清空词典？",
     "clearDescription": "这将删除自定义词典中的所有词汇，此操作无法撤销。",
-    "addPlaceholder": "添加词语或短语..."
+    "addPlaceholder": "添加词语或短语...",
+    "importButton": "导入",
+    "importTitle": "导入词汇",
+    "importDescription": "粘贴词语或短语列表。使用逗号、分号或换行分隔。",
+    "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
+    "importCount": "检测到 {{count}} 个词语",
+    "importConfirm": "导入",
+    "importCancel": "取消"
   },
   "sidebar": {
     "home": "首页",

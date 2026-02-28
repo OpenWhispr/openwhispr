@@ -1489,7 +1489,14 @@
     "description": "Ensine a IA o seu vocabulário — nomes, jargões e termos que ela poderia não reconhecer",
     "clearTitle": "Limpar o dicionário?",
     "clearDescription": "Isso removerá todas as palavras do seu dicionário personalizado. Esta ação não pode ser desfeita.",
-    "addPlaceholder": "Adicionar uma palavra ou frase..."
+    "addPlaceholder": "Adicionar uma palavra ou frase...",
+    "importButton": "Importar",
+    "importTitle": "Importar palavras",
+    "importDescription": "Cole uma lista de palavras ou frases. Separe-as com vírgulas, ponto e vírgula ou quebras de linha.",
+    "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
+    "importCount": "{{count}} palavra(s) detectada(s)",
+    "importConfirm": "Importar",
+    "importCancel": "Cancelar"
   },
   "sidebar": {
     "home": "Início",

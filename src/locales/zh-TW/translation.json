@@ -1485,7 +1485,14 @@
     "description": "教 AI 學習你的詞彙 — 名字、專業術語和它可能遺漏的表達",
     "clearTitle": "清空字典？",
     "clearDescription": "這將移除自訂字典中的所有詞彙。此操作無法復原。",
-    "addPlaceholder": "新增詞語或片語..."
+    "addPlaceholder": "新增詞語或片語...",
+    "importButton": "匯入",
+    "importTitle": "匯入詞彙",
+    "importDescription": "貼上詞語或片語清單。使用逗號、分號或換行分隔。",
+    "importPlaceholder": "Kubernetes, Docker, GraphQL\nTypeScript\nMicroservice; Deployment",
+    "importCount": "偵測到 {{count}} 個詞語",
+    "importConfirm": "匯入",
+    "importCancel": "取消"
   },
   "sidebar": {
     "home": "首頁",
