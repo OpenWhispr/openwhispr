@@ -111,7 +111,13 @@ function GpuStatusBadge() {
       setActivating(false);
       setActivationFailed(true);
     }, 30000);
-    return () => clearTimeout(timeout);
+    const fastPoll = setInterval(() => {
+      window.electronAPI?.llamaServerStatus?.().then(setServerStatus).catch(() => {});
+    }, 1000);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(fastPoll);
+    };
   }, [activating, serverStatus?.gpuAccelerated]);
 
   const handleDownload = async () => {
