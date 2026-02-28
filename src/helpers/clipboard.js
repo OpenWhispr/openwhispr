@@ -877,7 +877,9 @@ class ClipboardManager {
       }
     }
 
-    if (linuxFastPaste) {
+    const useShiftInsertFallback = isWayland && isGnome && !detectedWindowClass;
+
+    if (linuxFastPaste && !useShiftInsertFallback) {
       const earlyIsTerminal = detectedWindowClass
         ? terminalClasses.some((t) => detectedWindowClass.includes(t))
         : false;
@@ -1007,7 +1009,11 @@ class ClipboardManager {
     };
 
     const inTerminal = isTerminal();
-    const pasteKeys = inTerminal ? "ctrl+shift+v" : "ctrl+v";
+    const pasteKeys = useShiftInsertFallback
+      ? "Shift+Insert"
+      : inTerminal
+        ? "ctrl+shift+v"
+        : "ctrl+v";
 
     const canUseWtype = isWayland && isWlroots;
     const canUseYdotool = ydotoolDaemonRunning;
@@ -1026,9 +1032,11 @@ class ClipboardManager {
 
     // Raw keycodes work across both ydotool 0.1.x and 1.0.x (key names silently fail on 1.0.x)
     // 29 = KEY_LEFTCTRL, 42 = KEY_LEFTSHIFT, 47 = KEY_V
-    const ydotoolArgs = inTerminal
-      ? ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
-      : ["key", "29:1", "47:1", "47:0", "29:0"];
+    const ydotoolArgs = useShiftInsertFallback
+      ? ["key", "42:1", "110:1", "110:0", "42:0"]
+      : inTerminal
+        ? ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
+        : ["key", "29:1", "47:1", "47:0", "29:0"];
 
     const wtypeEntry = canUseWtype
       ? [
@@ -1048,6 +1056,10 @@ class ClipboardManager {
     if (!isWayland) {
       // X11: xdotool is native and needs no daemon; ydotool as fallback
       candidates = [...xdotoolEntry, ...ydotoolEntry];
+    } else if (isGnome && !detectedWindowClass) {
+      // GNOME Wayland: when X11 window class cannot be detected, prefer ydotool first
+      // to avoid xdotool targeting issues on some Wayland-focused apps.
+      candidates = [...ydotoolEntry, ...xdotoolEntry, ...wtypeEntry];
     } else if (isWlroots) {
       // wlroots (Sway, Hyprland, etc.): wtype is native; then xdotool for XWayland; ydotool last
       candidates = [...wtypeEntry, ...xdotoolEntry, ...ydotoolEntry];
