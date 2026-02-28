@@ -244,10 +244,10 @@ function GpuStatusBadge() {
     return (
       <div className="flex items-center gap-1.5 mt-2 px-1">
         <span
-          className="inline-block w-1.5 h-1.5 rounded-full shrink-0 bg-success"
+          className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${isGpu ? "bg-success" : "bg-primary"}`}
         />
         <span className="text-xs text-muted-foreground">
-          {t("gpu.active")}
+          {isGpu ? t("gpu.active") : t("gpu.ready")}
         </span>
         <button
           type="button"

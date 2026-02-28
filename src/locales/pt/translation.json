@@ -1547,6 +1547,7 @@
     "reasoningBanner": "Acelere o processamento de IA com GPU",
     "enableButton": "Ativar GPU",
     "active": "Aceleração GPU ativa",
+    "ready": "Aceleração GPU pronta",
     "activating": "Ativando GPU...",
     "activationFailed": "Não foi possível ativar a GPU",
     "retry": "Tentar novamente",

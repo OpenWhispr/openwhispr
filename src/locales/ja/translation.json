@@ -1547,6 +1547,7 @@
     "reasoningBanner": "GPU で AI 処理を高速化",
     "enableButton": "GPU を有効化",
     "active": "GPU アクセラレーション有効",
+    "ready": "GPUアクセラレーション準備完了",
     "activating": "GPU を有効化中...",
     "activationFailed": "GPU を有効化できませんでした",
     "retry": "再試行",
