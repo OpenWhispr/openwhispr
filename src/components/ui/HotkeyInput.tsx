@@ -308,11 +308,22 @@ export function HotkeyInput({
       };
 
       // Track which specific keys are pressed (for left/right detection)
-      const code = e.nativeEvent.code;
-      if (code === "ControlLeft" || code === "ControlRight") {
-        modifierCodesRef.current.ctrl = code;
-      } else if (code === "MetaLeft" || code === "MetaRight") {
-        modifierCodesRef.current.meta = code;
+    const code = e.nativeEvent.code;
+    if (code === "Fn") {
+      setIsFnHeld(true);
+      fnHeldRef.current = true;
+      fnCapturedKeyRef.current = false;
+      setActiveModifiers((prev) => new Set([...prev, "Fn"]));
+      if (keyDownTimeRef.current === 0) {
+        keyDownTimeRef.current = Date.now();
+      }
+      return;
+    }
+
+    if (code === "ControlLeft" || code === "ControlRight") {
+      modifierCodesRef.current.ctrl = code;
+    } else if (code === "MetaLeft" || code === "MetaRight") {
+      modifierCodesRef.current.meta = code;
       } else if (code === "AltLeft" || code === "AltRight") {
         modifierCodesRef.current.alt = code;
       } else if (code === "ShiftLeft" || code === "ShiftRight") {
@@ -357,6 +368,18 @@ export function HotkeyInput({
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       if (disabled) return;
       e.preventDefault();
+
+      if (e.nativeEvent.code === "Fn") {
+        if (fnHeldRef.current && !fnCapturedKeyRef.current) {
+          finalizeCapture("Fn");
+        }
+        clearFnHeld();
+        heldModifiersRef.current = { ctrl: false, meta: false, alt: false, shift: false };
+        modifierCodesRef.current = {};
+        setActiveModifiers(new Set());
+        keyDownTimeRef.current = 0;
+        return;
+      }
 
       const wasHoldingModifiers =
         heldModifiersRef.current.ctrl ||
@@ -441,7 +464,7 @@ export function HotkeyInput({
 
     const disposeUp = window.electronAPI?.onGlobeKeyReleased?.(() => {
       if (fnHeldRef.current && !fnCapturedKeyRef.current) {
-        finalizeCapture("GLOBE");
+        finalizeCapture("Fn");
       }
       setIsFnHeld(false);
       fnHeldRef.current = false;

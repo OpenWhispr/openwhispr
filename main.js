@@ -539,6 +539,7 @@ async function startApp() {
     let globeLastStopTime = 0;
     const MIN_HOLD_DURATION_MS = 150;
     const POST_STOP_COOLDOWN_MS = 300;
+    const isGlobeLikeHotkey = (hotkey) => hotkey === "GLOBE" || hotkey === "Fn";
 
     globeKeyManager.on("globe-down", async () => {
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
@@ -555,7 +556,7 @@ async function startApp() {
       }
 
       // Handle dictation if Globe is the current hotkey
-      if (currentHotkey === "GLOBE") {
+      if (isGlobeLikeHotkey(currentHotkey)) {
         if (mainWindowLive) {
           // Capture target app PID BEFORE showing the overlay
           if (textEditMonitor) textEditMonitor.captureTargetPid();
@@ -598,7 +599,7 @@ async function startApp() {
       }
 
       // Handle push-to-talk release if Globe is the current hotkey
-      if (hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey() === "GLOBE") {
+      if (hotkeyManager.getCurrentHotkey && isGlobeLikeHotkey(hotkeyManager.getCurrentHotkey())) {
         const activationMode = windowManager.getActivationMode();
         if (activationMode === "push") {
           globeKeyDownTime = 0;
