@@ -112,6 +112,12 @@ function useSettingsInternal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Sync stop-on-focus-loss setting to main process on mount
+  useEffect(() => {
+    window.electronAPI?.setStopOnFocusLoss?.(store.stopOnFocusLoss);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Sync startup pre-warming preferences to main process
   const {
     useLocalWhisper,
@@ -215,6 +221,8 @@ function useSettingsInternal() {
     setAudioCuesEnabled: store.setAudioCuesEnabled,
     floatingIconAutoHide: store.floatingIconAutoHide,
     setFloatingIconAutoHide: store.setFloatingIconAutoHide,
+    stopOnFocusLoss: store.stopOnFocusLoss,
+    setStopOnFocusLoss: store.setStopOnFocusLoss,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
     setPreferBuiltInMic: store.setPreferBuiltInMic,

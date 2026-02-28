@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import AudioManager from "../helpers/audioManager";
 import logger from "../utils/logger";
-import { playStartCue, playStopCue } from "../utils/dictationCues";
+import { playStartCue, playStopCue, playCancelCue } from "../utils/dictationCues";
 import { getSettings } from "../stores/settingsStore";
 import { getRecordingErrorTitle } from "../utils/recordingErrors";
 
@@ -73,6 +73,7 @@ export const useAudioRecording = (toast, options = {}) => {
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming }) => {
         setIsRecording(isRecording);
+        window.electronAPI?.notifyRecordingState?.(isRecording);
         setIsProcessing(isProcessing);
         setIsStreaming(isStreaming ?? false);
         if (!isStreaming) {
@@ -184,6 +185,22 @@ export const useAudioRecording = (toast, options = {}) => {
       onToggle?.();
     });
 
+    // Focus-loss auto-stop sends cancel (discard audio, no transcription/paste)
+    const disposeCancel = window.electronAPI.onCancelDictation?.(() => {
+      if (audioManagerRef.current) {
+        const state = audioManagerRef.current.getState();
+        if (state.isRecording || state.isStreamingStartInProgress) {
+          void playCancelCue();
+          if (state.isStreaming || state.isStreamingStartInProgress) {
+            audioManagerRef.current.stopStreamingRecording();
+          } else {
+            audioManagerRef.current.cancelRecording();
+          }
+          onToggle?.();
+        }
+      }
+    });
+
     const handleNoAudioDetected = () => {
       toast({
         title: t("hooks.audioRecording.noAudio.title"),
@@ -199,6 +216,7 @@ export const useAudioRecording = (toast, options = {}) => {
       disposeToggle?.();
       disposeStart?.();
       disposeStop?.();
+      disposeCancel?.();
       disposeNoAudio?.();
       if (audioManagerRef.current) {
         audioManagerRef.current.cleanup();

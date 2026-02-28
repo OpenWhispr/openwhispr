@@ -1066,6 +1066,12 @@
         "description": "Controlla quando l'icona di dettatura è visibile sullo schermo",
         "title": "Icona flottante"
       },
+      "dictationBehavior": {
+        "title": "Comportamento della dettatura",
+        "description": "Controlla come le sessioni di dettatura iniziano e si fermano",
+        "stopOnFocusLoss": "Ferma al cambio di app",
+        "stopOnFocusLossDescription": "Ferma automaticamente la registrazione quando passi a un'altra applicazione"
+      },
       "hotkey": {
         "activationMode": "Modalità di attivazione",
         "description": "La combinazione di tasti che avvia e ferma la dettatura vocale",

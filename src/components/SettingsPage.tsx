@@ -676,6 +676,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setAudioCuesEnabled,
     floatingIconAutoHide,
     setFloatingIconAutoHide,
+    stopOnFocusLoss,
+    setStopOnFocusLoss,
     cloudBackupEnabled,
     setCloudBackupEnabled,
     telemetryEnabled,
@@ -1703,6 +1705,28 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
+
+            {/* Dictation Behavior (Windows only) */}
+            {platform === "win32" && (
+              <div>
+                <SectionHeader
+                  title={t("settingsPage.general.dictationBehavior.title")}
+                  description={t("settingsPage.general.dictationBehavior.description")}
+                />
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.general.dictationBehavior.stopOnFocusLoss")}
+                      description={t(
+                        "settingsPage.general.dictationBehavior.stopOnFocusLossDescription"
+                      )}
+                    >
+                      <Toggle checked={stopOnFocusLoss} onChange={setStopOnFocusLoss} />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                </SettingsPanel>
+              </div>
+            )}
 
             {/* Language */}
             <div>

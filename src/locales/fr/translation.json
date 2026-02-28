@@ -1066,6 +1066,12 @@
         "description": "Contrôlez quand l'icône de dictée est visible à l'écran",
         "title": "Icône flottante"
       },
+      "dictationBehavior": {
+        "title": "Comportement de la dictée",
+        "description": "Contrôlez comment les sessions de dictée démarrent et s'arrêtent",
+        "stopOnFocusLoss": "Arrêter lors du changement d'app",
+        "stopOnFocusLossDescription": "Arrêter automatiquement l'enregistrement lorsque vous passez à une autre application"
+      },
       "hotkey": {
         "activationMode": "Mode d'activation",
         "description": "La combinaison de touches qui démarre et arrête la dictée vocale",

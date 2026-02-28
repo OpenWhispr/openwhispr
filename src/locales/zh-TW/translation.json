@@ -1062,6 +1062,12 @@
         "description": "控制語音輸入圖示在畫面上的顯示時機",
         "title": "浮動圖示"
       },
+      "dictationBehavior": {
+        "title": "語音輸入行為",
+        "description": "控制語音輸入會話的啟動和停止方式",
+        "stopOnFocusLoss": "切換應用程式時停止",
+        "stopOnFocusLossDescription": "切換到其他應用程式時自動停止錄音"
+      },
       "hotkey": {
         "activationMode": "啟用模式",
         "description": "用來開始和停止語音輸入的組合鍵",

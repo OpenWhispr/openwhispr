@@ -294,6 +294,13 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("blur-main-window", () => {
+      if (this.windowManager?.mainWindow && !this.windowManager.mainWindow.isDestroyed()) {
+        this.windowManager.mainWindow.blur();
+      }
+      return { success: true };
+    });
+
     ipcMain.handle("resize-main-window", (event, sizeKey) => {
       return this.windowManager.resizeMainWindow(sizeKey);
     });

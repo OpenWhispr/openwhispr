@@ -1066,6 +1066,12 @@
         "description": "Steuern Sie, wann das Diktat-Symbol auf Ihrem Bildschirm sichtbar ist",
         "title": "Schwebendes Symbol"
       },
+      "dictationBehavior": {
+        "title": "Diktat-Verhalten",
+        "description": "Steuern Sie, wie Diktat-Sitzungen gestartet und gestoppt werden",
+        "stopOnFocusLoss": "Stoppen beim App-Wechsel",
+        "stopOnFocusLossDescription": "Aufnahme automatisch stoppen, wenn Sie in eine andere Anwendung wechseln"
+      },
       "hotkey": {
         "activationMode": "Aktivierungsmodus",
         "description": "Die Tastenkombination, die das Sprachdiktat startet und stoppt",

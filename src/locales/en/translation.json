@@ -1066,6 +1066,12 @@
         "description": "Control when the dictation icon is visible on your screen",
         "title": "Floating Icon"
       },
+      "dictationBehavior": {
+        "title": "Dictation Behavior",
+        "description": "Control how dictation sessions start and stop",
+        "stopOnFocusLoss": "Stop when switching apps",
+        "stopOnFocusLossDescription": "Automatically stop recording when you click into another application"
+      },
       "hotkey": {
         "activationMode": "Activation Mode",
         "description": "The key combination that starts and stops voice dictation",
