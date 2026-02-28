@@ -705,12 +705,12 @@ async function startApp() {
     const isRightSideMod = (hotkey) =>
       /^Right(Control|Ctrl|Alt|Option|Shift|Super|Win|Meta|Command|Cmd)$/i.test(hotkey);
 
-    const { isModifierOnlyHotkey } = require("./src/helpers/hotkeyManager");
+    const { isModifierOnlyHotkey, hasNonStandardKey } = require("./src/helpers/hotkeyManager");
 
     const needsNativeListener = (hotkey, mode) => {
       if (!isValidHotkey(hotkey)) return false;
       if (mode === "push") return true;
-      return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey);
+      return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey) || hasNonStandardKey(hotkey);
     };
 
     windowsKeyManager.on("key-down", (_key) => {

@@ -100,6 +100,8 @@ DWORD ParseKeyCode(const char* keyName) {
     if (strcmp(keyName, "[") == 0) return VK_OEM_4;
     if (strcmp(keyName, "]") == 0) return VK_OEM_6;
     if (strcmp(keyName, "\\") == 0) return VK_OEM_5;
+    // Circumflex/caret dead key (German QWERTZ keyboard: top-left key)
+    if (strcmp(keyName, "^") == 0 || _stricmp(keyName, "Caret") == 0) return VK_OEM_5;
     if (strcmp(keyName, ";") == 0) return VK_OEM_1;
     if (strcmp(keyName, "'") == 0) return VK_OEM_7;
     if (strcmp(keyName, ",") == 0) return VK_OEM_COMMA;
@@ -170,18 +172,24 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         // Check for the target key
         if (kbd->vkCode == g_targetVk) {
             if (isKeyDown) {
-                // Only trigger if modifiers are satisfied and not already down
-                if (!g_isKeyDown && AreModifiersPressed()) {
-                    g_isKeyDown = TRUE;
-                    printf("KEY_DOWN\n");
-                    fflush(stdout);
+                // Only trigger if modifiers are satisfied
+                if (AreModifiersPressed()) {
+                    if (!g_isKeyDown) {
+                        g_isKeyDown = TRUE;
+                        printf("KEY_DOWN\n");
+                        fflush(stdout);
+                    }
+                    // Swallow the key event so it doesn't reach the foreground app
+                    // (prevents dead keys like ^ from leaking into text fields)
+                    return 1;
                 }
             } else if (isKeyUp) {
-                // Target key released
+                // Target key released - swallow if we captured the key-down
                 if (g_isKeyDown) {
                     g_isKeyDown = FALSE;
                     printf("KEY_UP\n");
                     fflush(stdout);
+                    return 1;
                 }
             }
         }

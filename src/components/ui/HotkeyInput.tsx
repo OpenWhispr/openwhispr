@@ -4,6 +4,12 @@ import { AlertTriangle } from "lucide-react";
 import { formatHotkeyLabel } from "../../utils/hotkeys";
 import { getPlatform } from "../../utils/platform";
 
+// Dead key overrides: when e.key === "Dead", use these instead of CODE_TO_KEY.
+// On German QWERTZ, the physical Backquote key produces ^ (circumflex dead key).
+const DEAD_KEY_OVERRIDES: Record<string, string> = {
+  Backquote: "^",
+};
+
 const CODE_TO_KEY: Record<string, string> = {
   Backquote: "`",
   Digit1: "1",
@@ -154,7 +160,12 @@ export function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
     return null;
   }
 
-  const baseKey = CODE_TO_KEY[e.code];
+  // Dead keys (e.g. ^ on German QWERTZ) report e.key === "Dead".
+  // Use the dead-key override map to get the correct character.
+  const isDead = e.key === "Dead";
+  const baseKey = isDead
+    ? DEAD_KEY_OVERRIDES[e.code] ?? CODE_TO_KEY[e.code]
+    : CODE_TO_KEY[e.code];
   if (!baseKey) {
     return null;
   }

@@ -990,12 +990,13 @@ class IPCHandlers {
       // When exiting capture mode with a new hotkey, use that to avoid reading stale state
       const effectiveHotkey = !enabled && newHotkey ? newHotkey : hotkeyManager.getCurrentHotkey();
 
-      const { isModifierOnlyHotkey, isRightSideModifier } = require("./hotkeyManager");
+      const { isModifierOnlyHotkey, isRightSideModifier, hasNonStandardKey } = require("./hotkeyManager");
       const usesNativeListener = (hotkey) =>
         !hotkey ||
         hotkey === "GLOBE" ||
         isModifierOnlyHotkey(hotkey) ||
-        isRightSideModifier(hotkey);
+        isRightSideModifier(hotkey) ||
+        hasNonStandardKey(hotkey);
 
       if (enabled) {
         // Entering capture mode - unregister globalShortcut so it doesn't consume key events
