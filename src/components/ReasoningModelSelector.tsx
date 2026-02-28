@@ -102,7 +102,7 @@ function GpuStatusBadge() {
 
   useEffect(() => {
     if (!activating) return;
-    if (serverStatus?.gpuAccelerated) {
+    if (serverStatus?.gpuAccelerated || vulkanStatus?.downloaded) {
       setActivating(false);
       setActivationFailed(false);
       return;
@@ -110,9 +110,16 @@ function GpuStatusBadge() {
     const timeout = setTimeout(() => {
       setActivating(false);
       setActivationFailed(true);
-    }, 15000);
-    return () => clearTimeout(timeout);
-  }, [activating, serverStatus?.gpuAccelerated]);
+    }, 10000);
+    const fastPoll = setInterval(() => {
+      window.electronAPI?.llamaServerStatus?.().then(setServerStatus).catch(() => {});
+      window.electronAPI?.getLlamaVulkanStatus?.().then(setVulkanStatus).catch(() => {});
+    }, 1000);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(fastPoll);
+    };
+  }, [activating, serverStatus?.gpuAccelerated, vulkanStatus?.downloaded]);
 
   const handleDownload = async () => {
     setDownloading(true);
@@ -237,10 +244,10 @@ function GpuStatusBadge() {
     return (
       <div className="flex items-center gap-1.5 mt-2 px-1">
         <span
-          className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${isGpu ? "bg-success" : "bg-warning"}`}
+          className={`inline-block w-1.5 h-1.5 rounded-full shrink-0 ${isGpu ? "bg-success" : "bg-primary"}`}
         />
         <span className="text-xs text-muted-foreground">
-          {isGpu ? t("gpu.active") : t("gpu.activating")}
+          {isGpu ? t("gpu.active") : t("gpu.ready")}
         </span>
         <button
           type="button"
@@ -627,6 +634,7 @@ export default function ReasoningModelSelector({
     setSelectedMode(newMode);
 
     if (newMode === "cloud") {
+      window.electronAPI?.llamaServerStop?.();
       setLocalReasoningProvider(selectedCloudProvider);
 
       if (selectedCloudProvider === "custom") {

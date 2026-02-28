@@ -1547,6 +1547,7 @@
     "reasoningBanner": "Speed up AI processing with GPU acceleration",
     "enableButton": "Enable GPU",
     "active": "GPU acceleration active",
+    "ready": "GPU acceleration ready",
     "activating": "Activating GPU...",
     "activationFailed": "GPU could not be activated",
     "retry": "Retry",

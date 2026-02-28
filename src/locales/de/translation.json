@@ -1547,6 +1547,7 @@
     "reasoningBanner": "KI-Verarbeitung mit GPU beschleunigen",
     "enableButton": "GPU aktivieren",
     "active": "GPU-Beschleunigung aktiv",
+    "ready": "GPU-Beschleunigung bereit",
     "activating": "GPU wird aktiviert...",
     "activationFailed": "GPU konnte nicht aktiviert werden",
     "retry": "Erneut versuchen",

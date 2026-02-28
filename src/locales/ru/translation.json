@@ -1547,6 +1547,7 @@
     "reasoningBanner": "Ускорьте обработку ИИ с помощью GPU",
     "enableButton": "Включить GPU",
     "active": "Ускорение GPU активно",
+    "ready": "Ускорение GPU готово",
     "activating": "Активация GPU...",
     "activationFailed": "Не удалось активировать GPU",
     "retry": "Повторить",

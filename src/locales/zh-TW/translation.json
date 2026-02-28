@@ -1543,6 +1543,7 @@
     "reasoningBanner": "使用 GPU 加速 AI 處理",
     "enableButton": "啟用 GPU",
     "active": "GPU 加速已啟用",
+    "ready": "GPU 加速已就緒",
     "activating": "正在啟動 GPU...",
     "activationFailed": "無法啟動 GPU",
     "retry": "重試",
