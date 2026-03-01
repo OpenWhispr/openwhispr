@@ -30,7 +30,7 @@ import LanguageSelector from "./ui/LanguageSelector";
 import AuthenticationStep from "./AuthenticationStep";
 import EmailVerificationStep from "./EmailVerificationStep";
 import { setAgentName as saveAgentName } from "../utils/agentName";
-import { formatHotkeyLabel, getDefaultHotkey } from "../utils/hotkeys";
+import { formatHotkeyLabel, getDefaultHotkey, isGlobeLikeHotkey } from "../utils/hotkeys";
 import { useAuth } from "../hooks/useAuth";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
@@ -207,7 +207,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
         // Only auto-register if no hotkey is currently set
         const shouldAutoRegister =
-          !hotkey || hotkey.trim() === "" || (platform !== "darwin" && hotkey === "GLOBE");
+          !hotkey || hotkey.trim() === "" || (platform !== "darwin" && isGlobeLikeHotkey(hotkey));
 
         if (shouldAutoRegister) {
           // Try to register the default hotkey silently

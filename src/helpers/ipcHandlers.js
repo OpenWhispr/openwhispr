@@ -1053,7 +1053,7 @@ class IPCHandlers {
           );
           const needsListener =
             effectiveHotkey &&
-            effectiveHotkey !== "GLOBE" &&
+            !isGlobeLikeHotkey(effectiveHotkey) &&
             (activationMode === "push" || isModifierOnlyHotkey(effectiveHotkey));
           if (needsListener) {
             debugLogger.log(`[IPC] Restarting Windows key listener for hotkey: ${effectiveHotkey}`);

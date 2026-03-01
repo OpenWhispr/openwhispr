@@ -700,12 +700,14 @@ async function startApp() {
   if (process.platform === "win32") {
     debugLogger.debug("[Push-to-Talk] Windows Push-to-Talk setup starting");
 
-    const isValidHotkey = (hotkey) => hotkey && hotkey !== "GLOBE";
+    const {
+      isGlobeLikeHotkey: isGlobeLike,
+      isModifierOnlyHotkey,
+    } = require("./src/helpers/hotkeyManager");
+    const isValidHotkey = (hotkey) => hotkey && !isGlobeLike(hotkey);
 
     const isRightSideMod = (hotkey) =>
       /^Right(Control|Ctrl|Alt|Option|Shift|Super|Win|Meta|Command|Cmd)$/i.test(hotkey);
-
-    const { isModifierOnlyHotkey } = require("./src/helpers/hotkeyManager");
 
     const needsNativeListener = (hotkey, mode) => {
       if (!isValidHotkey(hotkey)) return false;
