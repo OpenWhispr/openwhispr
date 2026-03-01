@@ -219,15 +219,6 @@ class ClipboardManager {
     );
   }
 
-  resolvePortalPasteBinary() {
-    return this._resolveNativeBinary(
-      "portal-paste",
-      "linux",
-      "portalPasteChecked",
-      "portalPastePath"
-    );
-  }
-
   _isYdotoolDaemonRunning() {
     const uid = process.getuid?.();
     const socketPaths = [
@@ -311,9 +302,9 @@ class ClipboardManager {
     }
   }
 
-  _runPortalPaste(binaryPath, useShift) {
+  _runPortalPaste(fastPasteBinary, useShift) {
     return new Promise((resolve, reject) => {
-      const args = [];
+      const args = ["--portal"];
       if (useShift) args.push("--terminal");
 
       const restoreToken = this._readPortalToken();
@@ -322,12 +313,12 @@ class ClipboardManager {
       }
 
       debugLogger.debug(
-        "Attempting portal-paste (RemoteDesktop D-Bus portal)",
-        { binaryPath, args: args.filter((a) => a !== restoreToken), hasToken: !!restoreToken },
+        "Attempting linux-fast-paste --portal (RemoteDesktop D-Bus)",
+        { binary: fastPasteBinary, hasToken: !!restoreToken },
         "clipboard"
       );
 
-      const proc = spawn(binaryPath, args);
+      const proc = spawn(fastPasteBinary, args);
       let stdout = "";
       let stderr = "";
 
@@ -346,19 +337,20 @@ class ClipboardManager {
       }, 15000); // Portal may show a user dialog, allow more time
 
       proc.on("close", (code) => {
-        if (timedOut) return reject(new Error("portal-paste timed out"));
+        if (timedOut) return reject(new Error("linux-fast-paste --portal timed out"));
         clearTimeout(timeoutId);
         if (code === 0) {
-          // Save new restore token from stdout (if any)
           const newToken = stdout.trim();
           if (newToken) {
             this._savePortalToken(newToken);
           }
           resolve(newToken || null);
+        } else if (code === 5) {
+          reject(new Error("portal support not compiled in"));
         } else {
           reject(
             new Error(
-              `portal-paste exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`
+              `linux-fast-paste --portal exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`
             )
           );
         }
@@ -899,7 +891,6 @@ class ClipboardManager {
     const ydotoolExists = this.commandExists("ydotool");
     const ydotoolDaemonRunning = ydotoolExists && this._isYdotoolDaemonRunning();
     const linuxFastPaste = this.resolveLinuxFastPasteBinary();
-    const portalPaste = this.resolvePortalPasteBinary();
 
     debugLogger.debug(
       "Linux paste environment",
@@ -910,7 +901,6 @@ class ClipboardManager {
         isKde,
         isWlroots,
         linuxFastPaste: !!linuxFastPaste,
-        portalPaste: !!portalPaste,
         canAccessUinput: this._canAccessUinput(),
         xdotoolExists,
         wtypeExists,
@@ -1042,23 +1032,23 @@ class ClipboardManager {
         });
 
       if (isWayland) {
-        // On GNOME/KDE Wayland, try portal-paste first (RemoteDesktop D-Bus portal).
+        // On GNOME/KDE Wayland, try portal mode first (RemoteDesktop D-Bus portal).
         // uinput events are accepted by the kernel but Mutter doesn't reliably
         // route them to focused native Wayland windows (issue #292).
-        if ((isGnome || isKde) && portalPaste) {
+        if ((isGnome || isKde) && linuxFastPaste) {
           try {
-            const portalResult = await this._runPortalPaste(portalPaste, earlyIsTerminal);
-            this.safeLog("✅ Paste successful using portal-paste (RemoteDesktop portal)");
+            const portalResult = await this._runPortalPaste(linuxFastPaste, earlyIsTerminal);
+            this.safeLog("✅ Paste successful using linux-fast-paste --portal (RemoteDesktop)");
             debugLogger.info(
               "Paste successful",
-              { tool: "portal-paste", method: "portal-paste", token: !!portalResult },
+              { tool: "linux-fast-paste", method: "portal", token: !!portalResult },
               "clipboard"
             );
             restoreClipboard();
-            return "portal-paste";
+            return "portal";
           } catch (portalError) {
             debugLogger.warn(
-              "portal-paste failed, falling back to uinput",
+              "linux-fast-paste --portal failed, falling back to uinput",
               { error: portalError?.message },
               "clipboard"
             );
@@ -1531,7 +1521,6 @@ Would you like to open System Settings now?`;
   preWarmAccessibility() {
     if (process.platform === "linux") {
       this.resolveLinuxFastPasteBinary();
-      this.resolvePortalPasteBinary();
       return;
     }
     if (process.platform !== "darwin") return;
