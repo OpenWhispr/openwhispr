@@ -1,4 +1,4 @@
-const { spawn } = require("child_process");
+const { spawn, execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const WebSocket = require("ws");
@@ -28,6 +28,16 @@ class ParakeetWsServer {
     this.healthCheckInterval = null;
     this.transcribing = false;
     this.cachedWsBinaryPath = null;
+    this.lastBackendTrace = {
+      launch: null,
+      providerPreference: "auto",
+      providerAttempted: null,
+      providerUsed: null,
+      fallbackUsed: false,
+      cudaLibDirs: [],
+      evidenceLines: [],
+      lastError: null,
+    };
   }
 
   getWsBinaryPath() {
@@ -48,12 +58,137 @@ class ParakeetWsServer {
     return this.getWsBinaryPath() !== null;
   }
 
+  getProviderPreference() {
+    const raw = String(process.env.OPENWHISPR_PARAKEET_PROVIDER || "auto")
+      .trim()
+      .toLowerCase();
+    if (raw === "gpu") return "cuda";
+    if (raw === "cuda" || raw === "cpu" || raw === "auto") return raw;
+    return "auto";
+  }
+
+  hasNvidiaGpu() {
+    try {
+      const output = execSync("nvidia-smi -L", {
+        stdio: ["ignore", "pipe", "ignore"],
+        encoding: "utf8",
+        timeout: 3000,
+      });
+      return Boolean(output && output.trim());
+    } catch {
+      return false;
+    }
+  }
+
+  buildSpawnEnv(wsBinaryDir) {
+    const spawnEnv = { ...process.env };
+    const pathSep = process.platform === "win32" ? ";" : ":";
+
+    // Keep companion shared libraries resolvable.
+    spawnEnv.PATH = wsBinaryDir + pathSep + (process.env.PATH || "");
+
+    const trace = { cudaLibDirs: [], ldLibraryPathConfigured: false };
+
+    if (process.platform === "linux") {
+      const homeDir = os.homedir();
+      const localCuda12Root =
+        process.env.OPENWHISPR_CUDA12_RUNTIME_DIR ||
+        path.join(homeDir, ".cache", "openwhispr", "cuda12-runtime");
+
+      const cudaLibDirs = [
+        wsBinaryDir,
+        "/opt/cuda/targets/x86_64-linux/lib",
+        "/opt/cuda/lib64",
+        "/usr/local/cuda/targets/x86_64-linux/lib",
+        "/usr/local/cuda/lib64",
+        path.join(localCuda12Root, "nvidia", "cuda_runtime", "lib"),
+        path.join(localCuda12Root, "nvidia", "cublas", "lib"),
+        path.join(localCuda12Root, "nvidia", "cufft", "lib"),
+        path.join(localCuda12Root, "nvidia", "nvjitlink", "lib"),
+        path.join(localCuda12Root, "nvidia", "cudnn", "lib"),
+      ].filter((dir) => fs.existsSync(dir));
+
+      trace.cudaLibDirs = cudaLibDirs;
+
+      if (cudaLibDirs.length > 0) {
+        const ldLibraryPath = process.env.LD_LIBRARY_PATH || "";
+        const ldParts = ldLibraryPath.split(":").filter(Boolean);
+        const merged = [...cudaLibDirs, ...ldParts].filter(
+          (dir, index, arr) => arr.indexOf(dir) === index
+        );
+        spawnEnv.LD_LIBRARY_PATH = merged.join(":");
+        trace.ldLibraryPathConfigured = true;
+      }
+    }
+
+    return { spawnEnv, trace };
+  }
+
+  shouldPreferCuda(providerPreference, wsBinaryDir) {
+    if (providerPreference === "cpu") return false;
+    if (providerPreference === "cuda") return true;
+
+    if (process.platform !== "linux" || process.arch !== "x64") return false;
+    const hasCudaProviderLib = fs.existsSync(
+      path.join(wsBinaryDir, "libonnxruntime_providers_cuda.so")
+    );
+    return hasCudaProviderLib && this.hasNvidiaGpu();
+  }
+
+  getProviderAttemptOrder(providerPreference, wsBinaryDir) {
+    if (this.shouldPreferCuda(providerPreference, wsBinaryDir)) {
+      return ["cuda", "cpu"];
+    }
+    return ["cpu"];
+  }
+
   async start(modelName, modelDir) {
     if (this.startupPromise) return this.startupPromise;
     if (this.ready && this.modelName === modelName) return;
     if (this.process) await this.stop();
 
-    this.startupPromise = this._doStart(modelName, modelDir);
+    const wsBinary = this.getWsBinaryPath();
+    const wsBinaryDir = wsBinary ? path.dirname(wsBinary) : getSafeTempDir();
+    const providerPreference = this.getProviderPreference();
+    const providerAttempts = this.getProviderAttemptOrder(providerPreference, wsBinaryDir);
+
+    this.startupPromise = (async () => {
+      let lastError = null;
+      for (let i = 0; i < providerAttempts.length; i += 1) {
+        const provider = providerAttempts[i];
+        const isFallbackAttempt = i > 0;
+
+        try {
+          debugLogger.info("Parakeet backend attempt", {
+            providerPreference,
+            provider,
+            isFallbackAttempt,
+            providerAttempts,
+          });
+
+          await this._doStart(modelName, modelDir, {
+            provider,
+            providerPreference,
+            isFallbackAttempt,
+            providerAttempts,
+          });
+          return;
+        } catch (error) {
+          lastError = error;
+          this.lastBackendTrace.lastError = error.message;
+          debugLogger.warn("Parakeet backend startup attempt failed", {
+            provider,
+            isFallbackAttempt,
+            error: error.message,
+          });
+          try {
+            await this.stop();
+          } catch {}
+        }
+      }
+
+      throw lastError || new Error("Parakeet backend failed to start");
+    })();
     try {
       await this.startupPromise;
     } finally {
@@ -61,7 +196,7 @@ class ParakeetWsServer {
     }
   }
 
-  async _doStart(modelName, modelDir) {
+  async _doStart(modelName, modelDir, options = {}) {
     const wsBinary = this.getWsBinaryPath();
     if (!wsBinary) throw new Error("sherpa-onnx WS server binary not found");
     if (!fs.existsSync(modelDir)) throw new Error(`Model directory not found: ${modelDir}`);
@@ -69,8 +204,12 @@ class ParakeetWsServer {
     this.port = await findAvailablePort(PORT_RANGE_START, PORT_RANGE_END);
     this.modelName = modelName;
     this.modelDir = modelDir;
+    const provider = options.provider || "cpu";
+    const wsBinaryDir = path.dirname(wsBinary);
+    const { spawnEnv, trace: envTrace } = this.buildSpawnEnv(wsBinaryDir);
 
     const args = [
+      `--provider=${provider}`,
       `--tokens=${path.join(modelDir, "tokens.txt")}`,
       `--encoder=${path.join(modelDir, "encoder.int8.onnx")}`,
       `--decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
@@ -79,12 +218,45 @@ class ParakeetWsServer {
       `--num-threads=${Math.max(1, Math.min(4, Math.floor(os.cpus().length * 0.75)))}`,
     ];
 
+    let wsBinarySizeMb = null;
+    try {
+      wsBinarySizeMb = Math.round(fs.statSync(wsBinary).size / (1024 * 1024));
+    } catch {}
+
+    this.lastBackendTrace = {
+      launch: {
+        binaryPath: wsBinary,
+        binarySizeMb: wsBinarySizeMb,
+        port: this.port,
+        provider,
+        providerPreference: options.providerPreference || "auto",
+        providerAttempts: options.providerAttempts || [provider],
+      },
+      providerPreference: options.providerPreference || "auto",
+      providerAttempted: provider,
+      providerUsed: null,
+      fallbackUsed: Boolean(options.isFallbackAttempt),
+      cudaLibDirs: envTrace.cudaLibDirs,
+      evidenceLines: [],
+      lastError: null,
+    };
+
+    if (envTrace.cudaLibDirs.length > 0) {
+      debugLogger.info("Parakeet CUDA runtime search paths configured", {
+        provider,
+        cudaLibDirs: envTrace.cudaLibDirs,
+        ldLibraryPathConfigured: envTrace.ldLibraryPathConfigured,
+      });
+    }
+
     debugLogger.debug("Starting parakeet WS server", { port: this.port, modelName, args });
+    debugLogger.info("Parakeet backend launch trace", this.lastBackendTrace.launch);
 
     this.process = spawn(wsBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
       cwd: getSafeTempDir(),
+      env: spawnEnv,
     });
 
     let stderrBuffer = "";
@@ -95,19 +267,64 @@ class ParakeetWsServer {
     });
 
     this.process.stdout.on("data", (data) => {
-      debugLogger.debug("parakeet-ws stdout", { data: data.toString().trim() });
+      const text = data.toString();
+      debugLogger.debug("parakeet-ws stdout", { data: text.trim() });
+
+      for (const rawLine of text.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line) continue;
+
+        if (/provider/i.test(line) || /CUDAExecutionProvider/i.test(line)) {
+          this.lastBackendTrace.evidenceLines.push(line);
+          debugLogger.info("Parakeet provider trace", { stream: "stdout", line });
+        }
+      }
     });
 
     this.process.stderr.on("data", (data) => {
-      stderrBuffer += data.toString();
-      debugLogger.debug("parakeet-ws stderr", { data: data.toString().trim() });
-      if (data.toString().includes("Listening on:")) {
+      const text = data.toString();
+      stderrBuffer += text;
+      debugLogger.debug("parakeet-ws stderr", { data: text.trim() });
+
+      for (const rawLine of text.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line) continue;
+
+        if (
+          /Available providers:|Fallback to cpu|provider=.*cuda|CPUExecutionProvider|CUDAExecutionProvider/i.test(
+            line
+          )
+        ) {
+          this.lastBackendTrace.evidenceLines.push(line);
+          debugLogger.info("Parakeet provider trace", { stream: "stderr", line });
+
+          if (/Fallback to cpu/i.test(line)) {
+            this.lastBackendTrace.providerUsed = "cpu";
+          }
+        }
+
+        if (
+          /libonnxruntime_providers_cuda\.so|libcudart\.so\.12|libcublas(?:Lt)?\.so\.12|libcufft\.so\.11|Failed to load shared library/i.test(
+            line
+          )
+        ) {
+          this.lastBackendTrace.lastError = line;
+          debugLogger.error("Parakeet CUDA startup error", { line });
+        }
+
+        if (line.includes("Listening on:")) {
+          readyResolve(true);
+        }
+      }
+
+      if (text.includes("Listening on:")) {
         readyResolve(true);
       }
     });
 
     this.process.on("error", (error) => {
       debugLogger.error("parakeet-ws process error", { error: error.message });
+      this.lastBackendTrace.lastError = error.message;
       this.ready = false;
       readyResolve(false);
     });
@@ -124,9 +341,12 @@ class ParakeetWsServer {
     await this._waitForReady(readyFromStderr, () => ({ stderr: stderrBuffer, exitCode }));
     this._startHealthCheck();
 
+    this.lastBackendTrace.providerUsed = this.lastBackendTrace.providerUsed || provider;
     debugLogger.info("parakeet-ws server started successfully", {
       port: this.port,
       model: modelName,
+      providerAttempted: provider,
+      providerUsed: this.lastBackendTrace.providerUsed,
     });
 
     await this._warmUp();
@@ -310,6 +530,7 @@ class ParakeetWsServer {
       running: this.ready && this.process !== null,
       port: this.port,
       modelName: this.modelName,
+      backendTrace: this.lastBackendTrace,
     };
   }
 }
