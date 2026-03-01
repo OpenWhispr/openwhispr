@@ -890,7 +890,6 @@
           "name": "Gratuit",
           "price": "$0",
           "period": "pour toujours",
-          "trialNote": "Inclut 7 jours gratuits d'OpenWhispr Pro",
           "features": [
             "2 000 mots/semaine",
             "Modèles IA locaux",

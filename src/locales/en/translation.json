@@ -890,7 +890,6 @@
           "name": "Free",
           "price": "$0",
           "period": "forever",
-          "trialNote": "Includes 7 days free of OpenWhispr Pro",
           "features": [
             "2,000 words/week",
             "Local AI models",
@@ -921,11 +920,7 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "Custom",
-          "features": [
-            "Cloud sync",
-            "Team features (coming soon)",
-            "SSO & compliance"
-          ],
+          "features": ["Cloud sync", "Team features (coming soon)", "SSO & compliance"],
           "cta": "Contact Us"
         },
         "currentPlan": "Current plan"

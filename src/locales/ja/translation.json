@@ -890,7 +890,6 @@
           "name": "無料",
           "price": "$0",
           "period": "永久",
-          "trialNote": "OpenWhispr Pro の 7 日間無料トライアル付き",
           "features": [
             "週 2,000 ワード",
             "ローカル AI モデル",
@@ -921,11 +920,7 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "カスタム",
-          "features": [
-            "クラウド同期",
-            "チーム機能（近日公開）",
-            "SSO & コンプライアンス"
-          ],
+          "features": ["クラウド同期", "チーム機能（近日公開）", "SSO & コンプライアンス"],
           "cta": "お問い合わせ"
         },
         "currentPlan": "現在のプラン"

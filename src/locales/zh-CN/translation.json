@@ -910,7 +910,6 @@
           "name": "免费版",
           "price": "$0",
           "period": "永久",
-          "trialNote": "含 7 天免费 Pro 试用",
           "features": [
             "每周 2,000 字",
             "本地 AI 模型",
@@ -941,11 +940,7 @@
         "enterprise": {
           "name": "企业版",
           "price": "自定义",
-          "features": [
-            "云端同步",
-            "团队功能（即将推出）",
-            "SSO 与合规"
-          ],
+          "features": ["云端同步", "团队功能（即将推出）", "SSO 与合规"],
           "cta": "联系我们"
         },
         "currentPlan": "当前套餐"
