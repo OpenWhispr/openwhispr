@@ -1428,7 +1428,10 @@
       "errorOccurred": "Une erreur est survenue",
       "noProviderTitle": "Aucun fournisseur de transcription configuré",
       "noProviderDescription": "Ajoutez une clé API ou téléchargez un modèle local pour commencer à transcrire.",
-      "noProviderAction": "Ouvrir les paramètres de transcription"
+      "noProviderAction": "Ouvrir les paramètres de transcription",
+      "fileTooLarge": "Ce fichier dépasse la limite de 500 MB.",
+      "proRequired": "Les fichiers de plus de 25 MB nécessitent un abonnement OpenWhispr Pro.",
+      "largeFileNote": "Les fichiers volumineux sont traités dans le cloud et peuvent prendre quelques minutes."
     },
     "meeting": {
       "title": "Notes de réunion",

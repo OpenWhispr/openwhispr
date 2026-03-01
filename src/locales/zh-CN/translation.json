@@ -1388,7 +1388,10 @@
       "errorOccurred": "发生错误",
       "noProviderTitle": "尚未设置转录服务商",
       "noProviderDescription": "添加 API Key 或下载本地模型以开始转录。",
-      "noProviderAction": "打开转录设置"
+      "noProviderAction": "打开转录设置",
+      "fileTooLarge": "此文件超过了 500 MB 的大小限制。",
+      "proRequired": "超过 25 MB 的文件需要订阅 OpenWhispr Pro。",
+      "largeFileNote": "大文件将在云端处理，可能需要几分钟时间。"
     },
     "meeting": {
       "title": "会议笔记",

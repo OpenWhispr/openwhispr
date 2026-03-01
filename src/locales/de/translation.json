@@ -1388,7 +1388,10 @@
       "errorOccurred": "Ein Fehler ist aufgetreten",
       "noProviderTitle": "Kein Transkriptionsanbieter eingerichtet",
       "noProviderDescription": "Fügen Sie einen API-Schlüssel hinzu oder laden Sie ein lokales Modell herunter, um mit der Transkription zu beginnen.",
-      "noProviderAction": "Transkriptionseinstellungen öffnen"
+      "noProviderAction": "Transkriptionseinstellungen öffnen",
+      "fileTooLarge": "Diese Datei überschreitet das Limit von 500 MB.",
+      "proRequired": "Dateien über 25 MB erfordern ein OpenWhispr Pro-Abonnement.",
+      "largeFileNote": "Große Dateien werden in der Cloud verarbeitet und können einige Minuten dauern."
     },
     "meeting": {
       "title": "Besprechungsnotizen",

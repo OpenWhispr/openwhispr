@@ -1388,7 +1388,10 @@
       "errorOccurred": "發生錯誤",
       "noProviderTitle": "尚未設定轉錄服務供應商",
       "noProviderDescription": "新增 API Key 或下載本機模型以開始轉錄。",
-      "noProviderAction": "開啟轉錄設定"
+      "noProviderAction": "開啟轉錄設定",
+      "fileTooLarge": "此檔案超過 500 MB 的大小限制。",
+      "proRequired": "超過 25 MB 的檔案需要訂閱 OpenWhispr Pro。",
+      "largeFileNote": "大型檔案將在雲端處理，可能需要幾分鐘時間。"
     },
     "meeting": {
       "title": "會議筆記",

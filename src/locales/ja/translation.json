@@ -1367,7 +1367,10 @@
       "errorOccurred": "エラーが発生しました",
       "noProviderTitle": "文字起こしプロバイダーが設定されていません",
       "noProviderDescription": "API キーを追加するか、ローカルモデルをダウンロードして文字起こしを開始してください。",
-      "noProviderAction": "文字起こし設定を開く"
+      "noProviderAction": "文字起こし設定を開く",
+      "fileTooLarge": "このファイルは 500 MB の制限を超えています。",
+      "proRequired": "25 MB を超えるファイルには OpenWhispr Pro のサブスクリプションが必要です。",
+      "largeFileNote": "大容量ファイルはクラウドで処理されるため、数分かかる場合があります。"
     },
     "meeting": {
       "title": "議事録",
