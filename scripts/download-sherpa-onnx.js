@@ -35,10 +35,20 @@ const BINARIES = {
     libPattern: "*.dll",
   },
   "linux-x64": {
-    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2`,
-    binaryPath: "sherpa-onnx-offline-websocket-server",
-    outputName: "sherpa-onnx-ws-linux-x64",
-    libPattern: "*.so*",
+    variants: {
+      cpu: {
+        archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2`,
+        binaryPath: "sherpa-onnx-offline-websocket-server",
+        outputName: "sherpa-onnx-ws-linux-x64",
+        libPattern: "*.so*",
+      },
+      gpu: {
+        archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-cuda-12.x-cudnn-9.x-linux-x64-gpu.tar.bz2`,
+        binaryPath: "sherpa-onnx-offline-websocket-server",
+        outputName: "sherpa-onnx-ws-linux-x64",
+        libPattern: "*.so*",
+      },
+    },
   },
 };
 
@@ -91,6 +101,72 @@ function matchesPattern(filename, pattern) {
     return /\.so(\.\d+)*$/.test(filename) || filename.endsWith(".so");
   }
   return false;
+}
+
+function parseVariantPreference() {
+  const argv = process.argv;
+
+  if (argv.includes("--gpu")) return "gpu";
+  if (argv.includes("--cpu")) return "cpu";
+
+  const variantIndex = argv.indexOf("--variant");
+  if (variantIndex !== -1 && argv[variantIndex + 1]) {
+    const raw = String(argv[variantIndex + 1]).toLowerCase();
+    if (raw === "cuda") return "gpu";
+    return raw;
+  }
+
+  const envVariant = String(process.env.SHERPA_ONNX_VARIANT || "auto").toLowerCase();
+  return envVariant === "cuda" ? "gpu" : envVariant;
+}
+
+function hasNvidiaGpu() {
+  try {
+    const output = execFileSync("nvidia-smi", ["-L"], {
+      stdio: ["ignore", "pipe", "ignore"],
+      encoding: "utf8",
+      timeout: 3000,
+    });
+    return Boolean(output && output.trim());
+  } catch {
+    return false;
+  }
+}
+
+function selectBinaryConfig(platformArch, { variantPreference = "auto", isCurrent = false } = {}) {
+  const entry = BINARIES[platformArch];
+  if (!entry) return { config: null, variant: null, reason: "unsupported platform" };
+
+  if (!entry.variants) {
+    return { config: entry, variant: "default", reason: "single variant platform" };
+  }
+
+  const available = Object.keys(entry.variants);
+  const normalizedPreference = ["auto", ...available].includes(variantPreference)
+    ? variantPreference
+    : "auto";
+
+  if (normalizedPreference !== variantPreference) {
+    console.warn(`  ${platformArch}: Unknown variant "${variantPreference}", falling back to auto`);
+  }
+
+  if (normalizedPreference === "cpu") {
+    return { config: entry.variants.cpu, variant: "cpu", reason: "explicit cpu" };
+  }
+
+  if (normalizedPreference === "gpu") {
+    if (entry.variants.gpu) {
+      return { config: entry.variants.gpu, variant: "gpu", reason: "explicit gpu" };
+    }
+    return { config: entry.variants.cpu, variant: "cpu", reason: "gpu unsupported on platform" };
+  }
+
+  // auto: prefer GPU only for current host when NVIDIA is detected.
+  if (isCurrent && entry.variants.gpu && hasNvidiaGpu()) {
+    return { config: entry.variants.gpu, variant: "gpu", reason: "auto-detected NVIDIA GPU" };
+  }
+
+  return { config: entry.variants.cpu, variant: "cpu", reason: "auto default" };
 }
 
 async function downloadBinary(platformArch, config, isForce = false) {
@@ -190,16 +266,23 @@ async function main() {
   fs.mkdirSync(BIN_DIR, { recursive: true });
 
   const args = parseArgs();
+  const variantPreference = parseVariantPreference();
 
   if (args.isCurrent) {
-    if (!BINARIES[args.platformArch]) {
+    const selection = selectBinaryConfig(args.platformArch, {
+      variantPreference,
+      isCurrent: true,
+    });
+    if (!selection.config) {
       console.error(`Unsupported platform/arch: ${args.platformArch}`);
       process.exitCode = 1;
       return;
     }
 
-    console.log(`Downloading for target platform (${args.platformArch}):`);
-    const ok = await downloadBinary(args.platformArch, BINARIES[args.platformArch], args.isForce);
+    console.log(
+      `Downloading for target platform (${args.platformArch}, variant: ${selection.variant}, reason: ${selection.reason}):`
+    );
+    const ok = await downloadBinary(args.platformArch, selection.config, args.isForce);
     if (!ok) {
       console.error(`Failed to download binaries for ${args.platformArch}`);
       process.exitCode = 1;
@@ -222,7 +305,16 @@ async function main() {
   } else {
     console.log("Downloading binaries for all platforms:");
     for (const platformArch of Object.keys(BINARIES)) {
-      await downloadBinary(platformArch, BINARIES[platformArch], args.isForce);
+      const selection = selectBinaryConfig(platformArch, {
+        variantPreference,
+        isCurrent: false,
+      });
+      if (!selection.config) {
+        console.log(`  ${platformArch}: Not supported`);
+        continue;
+      }
+      console.log(`  ${platformArch}: variant=${selection.variant} (${selection.reason})`);
+      await downloadBinary(platformArch, selection.config, args.isForce);
     }
   }
 
@@ -249,6 +341,8 @@ module.exports = {
   BINARIES,
   BIN_DIR,
   getDownloadUrl,
+  parseVariantPreference,
+  selectBinaryConfig,
 };
 
 // Only run main() when executed directly
