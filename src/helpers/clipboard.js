@@ -219,6 +219,15 @@ class ClipboardManager {
     );
   }
 
+  resolvePortalPasteBinary() {
+    return this._resolveNativeBinary(
+      "portal-paste",
+      "linux",
+      "portalPasteChecked",
+      "portalPastePath"
+    );
+  }
+
   _isYdotoolDaemonRunning() {
     const uid = process.getuid?.();
     const socketPaths = [
@@ -253,6 +262,96 @@ class ClipboardManager {
     } catch {}
     this._uinputCache = { accessible, expiresAt: now + 30000 };
     return accessible;
+  }
+
+  _getPortalTokenPath() {
+    const cacheDir = path.join(
+      process.env.XDG_CACHE_HOME || path.join(require("os").homedir(), ".cache"),
+      "openwhispr"
+    );
+    return path.join(cacheDir, "portal-paste-token");
+  }
+
+  _readPortalToken() {
+    try {
+      return fs.readFileSync(this._getPortalTokenPath(), "utf8").trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  _savePortalToken(token) {
+    try {
+      const tokenPath = this._getPortalTokenPath();
+      const dir = path.dirname(tokenPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(tokenPath, token);
+    } catch (err) {
+      debugLogger.warn("Failed to save portal-paste token", { error: err.message }, "clipboard");
+    }
+  }
+
+  _runPortalPaste(binaryPath, useShift) {
+    return new Promise((resolve, reject) => {
+      const args = [];
+      if (useShift) args.push("--terminal");
+
+      const restoreToken = this._readPortalToken();
+      if (restoreToken) {
+        args.push("--restore-token", restoreToken);
+      }
+
+      debugLogger.debug(
+        "Attempting portal-paste (RemoteDesktop D-Bus portal)",
+        { binaryPath, args: args.filter((a) => a !== restoreToken), hasToken: !!restoreToken },
+        "clipboard"
+      );
+
+      const proc = spawn(binaryPath, args);
+      let stdout = "";
+      let stderr = "";
+
+      proc.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      proc.stderr?.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      let timedOut = false;
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        killProcess(proc, "SIGKILL");
+      }, 15000); // Portal may show a user dialog, allow more time
+
+      proc.on("close", (code) => {
+        if (timedOut) return reject(new Error("portal-paste timed out"));
+        clearTimeout(timeoutId);
+        if (code === 0) {
+          // Save new restore token from stdout (if any)
+          const newToken = stdout.trim();
+          if (newToken) {
+            this._savePortalToken(newToken);
+          }
+          resolve(newToken || null);
+        } else {
+          reject(
+            new Error(
+              `portal-paste exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`
+            )
+          );
+        }
+      });
+
+      proc.on("error", (error) => {
+        if (timedOut) return;
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+    });
   }
 
   _detectKdeWindowClass() {
@@ -385,8 +484,7 @@ class ClipboardManager {
         }
         await this.pasteWindows(originalClipboard);
       } else {
-        method = this.resolveLinuxFastPasteBinary() ? "linux-xtest" : "linux-tools";
-        await this.pasteLinux(originalClipboard, options);
+        method = (await this.pasteLinux(originalClipboard, options)) || "linux-tools";
       }
 
       this.safeLog("✅ Paste operation complete", {
@@ -783,6 +881,7 @@ class ClipboardManager {
     const ydotoolExists = this.commandExists("ydotool");
     const ydotoolDaemonRunning = ydotoolExists && this._isYdotoolDaemonRunning();
     const linuxFastPaste = this.resolveLinuxFastPasteBinary();
+    const portalPaste = this.resolvePortalPasteBinary();
 
     debugLogger.debug(
       "Linux paste environment",
@@ -793,6 +892,7 @@ class ClipboardManager {
         isKde,
         isWlroots,
         linuxFastPaste: !!linuxFastPaste,
+        portalPaste: !!portalPaste,
         canAccessUinput: this._canAccessUinput(),
         xdotoolExists,
         wtypeExists,
@@ -924,6 +1024,29 @@ class ClipboardManager {
         });
 
       if (isWayland) {
+        // On GNOME/KDE Wayland, try portal-paste first (RemoteDesktop D-Bus portal).
+        // uinput events are accepted by the kernel but Mutter doesn't reliably
+        // route them to focused native Wayland windows (issue #292).
+        if ((isGnome || isKde) && portalPaste) {
+          try {
+            const portalResult = await this._runPortalPaste(portalPaste, earlyIsTerminal);
+            this.safeLog("✅ Paste successful using portal-paste (RemoteDesktop portal)");
+            debugLogger.info(
+              "Paste successful",
+              { tool: "portal-paste", method: "portal-paste", token: !!portalResult },
+              "clipboard"
+            );
+            restoreClipboard();
+            return "portal-paste";
+          } catch (portalError) {
+            debugLogger.warn(
+              "portal-paste failed, falling back to uinput",
+              { error: portalError?.message },
+              "clipboard"
+            );
+          }
+        }
+
         const uinputArgs = ["--uinput"];
         if (earlyIsTerminal) uinputArgs.push("--terminal");
 
@@ -936,7 +1059,7 @@ class ClipboardManager {
             "clipboard"
           );
           restoreClipboard();
-          return;
+          return "uinput";
         } catch (uinputError) {
           debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
 
@@ -954,7 +1077,7 @@ class ClipboardManager {
                 "clipboard"
               );
               restoreClipboard();
-              return;
+              return "xtest-xwayland";
             } catch (xtestError) {
               debugLogger.warn(
                 "XTest/XWayland fallback also failed",
@@ -982,7 +1105,7 @@ class ClipboardManager {
             "clipboard"
           );
           restoreClipboard();
-          return;
+          return "xtest";
         } catch (error) {
           this.safeLog(
             `⚠️ Native linux-fast-paste failed: ${error?.message || error}, falling back to system tools`
@@ -1164,7 +1287,7 @@ class ClipboardManager {
         await pasteWith(tool);
         this.safeLog(`✅ Paste successful using ${tool.cmd}`);
         debugLogger.info("Paste successful", { tool: tool.cmd }, "clipboard");
-        return;
+        return tool.cmd;
       } catch (error) {
         const failureInfo = {
           tool: tool.cmd,
@@ -1199,7 +1322,7 @@ class ClipboardManager {
         await pasteWith({ cmd: "xdotool", args: typeArgs });
         this.safeLog("✅ Paste successful using xdotool type fallback");
         debugLogger.info("Terminal paste successful via xdotool type", {}, "clipboard");
-        return;
+        return "xdotool-type";
       } catch (error) {
         const fallbackFailure = {
           tool: "xdotool type",
@@ -1386,6 +1509,7 @@ Would you like to open System Settings now?`;
   preWarmAccessibility() {
     if (process.platform === "linux") {
       this.resolveLinuxFastPasteBinary();
+      this.resolvePortalPasteBinary();
       return;
     }
     if (process.platform !== "darwin") return;
