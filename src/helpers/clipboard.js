@@ -249,6 +249,24 @@ class ClipboardManager {
     }
   }
 
+  _isYdotoolLegacy() {
+    if (this._ydotoolLegacyChecked !== undefined) return this._ydotoolLegacyChecked;
+    try {
+      const result = spawnSync("ydotool", ["help"], { stdio: "pipe", timeout: 2000 });
+      const output = (result.stdout?.toString() || "") + (result.stderr?.toString() || "");
+      // ydotool 1.0.x has 'bakers' subcommand that 0.1.x doesn't
+      this._ydotoolLegacyChecked = !output.includes("bakers");
+    } catch {
+      this._ydotoolLegacyChecked = false;
+    }
+    debugLogger.debug(
+      "ydotool version detection",
+      { legacy: this._ydotoolLegacyChecked },
+      "clipboard"
+    );
+    return this._ydotoolLegacyChecked;
+  }
+
   _canAccessUinput() {
     if (process.platform !== "linux") return false;
     const now = Date.now();
@@ -1147,11 +1165,15 @@ class ClipboardManager {
       );
     }
 
-    // Raw keycodes work across both ydotool 0.1.x and 1.0.x (key names silently fail on 1.0.x)
-    // 29 = KEY_LEFTCTRL, 42 = KEY_LEFTSHIFT, 47 = KEY_V
-    const ydotoolArgs = inTerminal
-      ? ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
-      : ["key", "29:1", "47:1", "47:0", "29:0"];
+    // ydotool 0.1.x (Ubuntu 24.04) uses key names; 1.0.x uses raw keycodes
+    const legacyYdotool = this._isYdotoolLegacy();
+    const ydotoolArgs = legacyYdotool
+      ? inTerminal
+        ? ["key", "ctrl+shift+v"]
+        : ["key", "ctrl+v"]
+      : inTerminal
+        ? ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
+        : ["key", "29:1", "47:1", "47:0", "29:0"];
 
     const wtypeEntry = canUseWtype
       ? [
