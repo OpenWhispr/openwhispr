@@ -505,6 +505,7 @@ open-whispr/
 - `npm run download:llama-server:all` - Download llama.cpp server for all platforms
 - `npm run download:sherpa-onnx` - Download sherpa-onnx for Parakeet local transcription
 - `npm run download:sherpa-onnx:all` - Download sherpa-onnx for all platforms
+- `npm run download:sherpa-onnx -- --variant auto|cpu|gpu` - Select sherpa-onnx Linux variant (default: `auto`)
 - `npm run compile:native` - Compile native helpers (Globe key listener for macOS, key listener and fast paste for Windows, fast paste for Linux)
 - `npm run build` - Full build with signing (requires certificates)
 - `npm run build:mac` - macOS build with signing
@@ -626,6 +627,28 @@ OpenWhispr also supports NVIDIA Parakeet models via sherpa-onnx - a fast alterna
 
 - `parakeet-tdt-0.6b-v3`: Multilingual (25 languages), ~680MB
 
+**Parakeet provider controls (Linux x64)**:
+
+- Download-time binary variant: `SHERPA_ONNX_VARIANT=auto|cpu|gpu`
+- Runtime provider preference: `OPENWHISPR_PARAKEET_PROVIDER=auto|cpu|cuda|gpu`
+- Optional CUDA user-space runtime root: `OPENWHISPR_CUDA12_RUNTIME_DIR` (defaults to `~/.cache/openwhispr/cuda12-runtime`)
+
+Examples:
+
+```bash
+# Force GPU-capable sherpa-onnx package
+SHERPA_ONNX_VARIANT=gpu npm run download:sherpa-onnx -- --current --force
+
+# Force CPU-only sherpa-onnx package
+SHERPA_ONNX_VARIANT=cpu npm run download:sherpa-onnx -- --current --force
+
+# Force runtime provider (debug/troubleshooting)
+OPENWHISPR_PARAKEET_PROVIDER=cpu npm run dev
+OPENWHISPR_PARAKEET_PROVIDER=cuda npm run dev
+```
+
+In `auto` mode, OpenWhispr attempts CUDA first only when GPU/provider prerequisites are detected, then safely falls back to CPU.
+
 **When to use Parakeet vs Whisper**:
 
 - **Parakeet**: Best for speed-critical use cases or lower-end hardware
@@ -684,14 +707,19 @@ OpenWhispr is designed with privacy and security in mind:
    - whisper.cpp is bundled with the app
    - If bundled binary fails, install via `brew install whisper-cpp` (macOS)
    - Check available disk space for models
-5. **Global hotkey conflicts**: Change the hotkey in the Control Panel - any key can be used
+5. **Parakeet CUDA not activating** (Linux x64):
+   - Re-download sherpa-onnx with GPU variant: `SHERPA_ONNX_VARIANT=gpu npm run download:sherpa-onnx -- --current --force`
+   - Check NVIDIA visibility: `nvidia-smi -L`
+   - If CUDA libraries are not in system paths, set `OPENWHISPR_CUDA12_RUNTIME_DIR` to a folder containing `nvidia/*/lib`
+   - Use `OPENWHISPR_PARAKEET_PROVIDER=cpu` as immediate fallback
+6. **Global hotkey conflicts**: Change the hotkey in the Control Panel - any key can be used
    - GNOME Wayland: Hotkeys are registered via gsettings; check Settings → Keyboard → Shortcuts for conflicts
-6. **Text not pasting**:
+7. **Text not pasting**:
    - macOS: Check accessibility permissions (System Settings → Privacy & Security → Accessibility)
    - Linux X11: Install `xdotool`
    - Linux Wayland: Install `wtype` or `ydotool` for paste simulation (ensure `ydotoold` daemon is running)
    - All platforms: Text is always copied to clipboard - use Ctrl+V (Cmd+V on macOS) to paste manually
-7. **Panel position**: If the panel appears off-screen, restart the app to reset position
+8. **Panel position**: If the panel appears off-screen, restart the app to reset position
 
 ### Getting Help
 

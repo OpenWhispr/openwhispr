@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Parakeet sherpa-onnx Variant Selection (Linux x64)**: `download-sherpa-onnx` now supports `cpu|gpu|auto` selection via `--variant` and `SHERPA_ONNX_VARIANT`.
+- **Parakeet Provider Diagnostics**: `get-parakeet-diagnostics` now includes server backend trace (provider preference, attempted/used provider, fallback flag, CUDA search paths, evidence lines, and last startup error).
+
+### Changed
+
+- **Parakeet Runtime Provider Startup**: Added `OPENWHISPR_PARAKEET_PROVIDER=auto|cpu|cuda|gpu` support, CUDA-first attempt in eligible auto mode, and automatic CPU fallback on CUDA initialization failure.
+- **Parakeet CUDA Runtime Resolution**: Linux startup now merges known CUDA library locations (including optional `OPENWHISPR_CUDA12_RUNTIME_DIR`) into `LD_LIBRARY_PATH` for sherpa-onnx launch.
+
 ## [1.5.4] - 2026-02-25
 
 ### Added
