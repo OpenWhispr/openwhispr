@@ -1424,7 +1424,10 @@
       "errorOccurred": "An error occurred",
       "noProviderTitle": "No transcription provider set up",
       "noProviderDescription": "Add an API key or download a local model to start transcribing.",
-      "noProviderAction": "Open Transcription Settings"
+      "noProviderAction": "Open Transcription Settings",
+      "fileTooLarge": "This file exceeds the 500 MB limit.",
+      "proRequired": "Files over 25 MB require an OpenWhispr Pro subscription.",
+      "largeFileNote": "Large files are processed in the cloud and may take a few minutes."
     },
     "meeting": {
       "title": "Meeting Notes",

@@ -577,6 +577,16 @@ class IPCHandlers {
       return { canceled: false, filePath: result.filePaths[0] };
     });
 
+    ipcMain.handle("get-file-size", async (_event, filePath) => {
+      const fs = require("fs");
+      try {
+        const stats = fs.statSync(filePath);
+        return stats.size;
+      } catch {
+        return 0;
+      }
+    });
+
     ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
       const fs = require("fs");
       try {
@@ -1808,6 +1818,63 @@ class IPCHandlers {
       return getSessionCookiesFromWindow(win);
     };
 
+    const uploadToBlob = async (filePath, cookieHeader) => {
+      const fs = require("fs");
+      const apiUrl = getApiUrl();
+
+      const fileBuffer = fs.readFileSync(filePath);
+      const ext = path.extname(filePath).toLowerCase().replace(".", "");
+      const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
+      const fileName = path.basename(filePath);
+      const pathname = `audio/${Date.now()}-${fileName}`;
+
+      const tokenRes = await fetch(`${apiUrl}/api/upload-audio`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: cookieHeader,
+        },
+        body: JSON.stringify({
+          type: "blob.generate-client-token",
+          payload: {
+            pathname,
+            callbackUrl: `${apiUrl}/api/upload-audio`,
+          },
+        }),
+      });
+
+      if (!tokenRes.ok) {
+        const err = await tokenRes.json().catch(() => ({}));
+        throw new Error(err.error || `Upload authorization failed: ${tokenRes.status}`);
+      }
+
+      const { clientToken } = await tokenRes.json();
+      const tokenPayload = JSON.parse(
+        Buffer.from(clientToken.slice("vercel_blob_client_".length), "base64").toString()
+      );
+
+      const { put } = require("@vercel/blob");
+      const blob = await put(pathname, fileBuffer, {
+        access: "public",
+        token: tokenPayload.token,
+        contentType,
+      });
+
+      return { url: blob.url, size: fileBuffer.length };
+    };
+
+    const deleteBlobFile = async (blobUrl, cookieHeader) => {
+      const apiUrl = getApiUrl();
+      await fetch(`${apiUrl}/api/delete-audio`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Cookie: cookieHeader,
+        },
+        body: JSON.stringify({ url: blobUrl }),
+      }).catch((err) => debugLogger.warn("Blob cleanup failed", { error: err.message }));
+    };
+
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
@@ -2104,12 +2171,57 @@ class IPCHandlers {
 
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
       const fs = require("fs");
+      const FILE_SIZE_LIMIT = 25 * 1024 * 1024;
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
+
+        const fileSize = fs.statSync(filePath).size;
+
+        if (fileSize > FILE_SIZE_LIMIT) {
+          debugLogger.debug("Large file detected, using blob upload chain", {
+            fileSize,
+            filePath: path.basename(filePath),
+          });
+
+          const blobResult = await uploadToBlob(filePath, cookieHeader);
+
+          const chainRes = await fetch(`${apiUrl}/api/transcribe-chain`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Cookie: cookieHeader,
+            },
+            body: JSON.stringify({
+              mediaUrl: blobResult.url,
+              skipCleanup: false,
+            }),
+          });
+
+          const chainData = await chainRes.json();
+
+          deleteBlobFile(blobResult.url, cookieHeader);
+
+          if (chainRes.status === 401) {
+            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          }
+          if (chainRes.status === 429) {
+            return {
+              success: false,
+              error: "Daily word limit reached",
+              code: "LIMIT_REACHED",
+              ...chainData,
+            };
+          }
+          if (!chainRes.ok) {
+            throw new Error(chainData.error || `Chain transcription failed: ${chainRes.status}`);
+          }
+
+          return { success: true, text: chainData.text };
+        }
 
         const audioBuffer = fs.readFileSync(filePath);
         const ext = path.extname(filePath).toLowerCase().replace(".", "");

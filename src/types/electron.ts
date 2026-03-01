@@ -362,6 +362,7 @@ declare global {
 
       // Audio file operations
       selectAudioFile: () => Promise<{ canceled: boolean; filePath?: string }>;
+      getFileSize?: (filePath: string) => Promise<number>;
       transcribeAudioFile: (
         filePath: string,
         options?: {

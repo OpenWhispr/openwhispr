@@ -40,6 +40,9 @@ type UploadState = "idle" | "selected" | "transcribing" | "complete" | "error";
 
 const SUPPORTED_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"];
 
+const FREE_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
+const PRO_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
+
 const TITLE_SYSTEM_PROMPT =
   "Generate a concise 3-8 word title for these transcribed notes. Return ONLY the title text, nothing else — no quotes, no prefix, no explanation.";
 
@@ -57,7 +60,12 @@ interface UploadAudioViewProps {
 export default function UploadAudioView({ onNoteCreated, onOpenSettings }: UploadAudioViewProps) {
   const { t } = useTranslation();
   const [state, setState] = useState<UploadState>("idle");
-  const [file, setFile] = useState<{ name: string; path: string; size: string } | null>(null);
+  const [file, setFile] = useState<{
+    name: string;
+    path: string;
+    size: string;
+    sizeBytes: number;
+  } | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [noteId, setNoteId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +89,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const { isSignedIn } = useAuth();
   const usage = useUsage();
   const isProUser = usage?.isSubscribed || usage?.isTrial;
+
+  const fileTooLarge = file ? file.sizeBytes > PRO_MAX_FILE_SIZE : false;
+  const requiresUpgrade = file && !isProUser && file.sizeBytes > FREE_MAX_FILE_SIZE;
+  const isLargeFile = file ? file.sizeBytes > FREE_MAX_FILE_SIZE : false;
 
   const {
     useLocalWhisper,
@@ -236,7 +248,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     const res = await window.electronAPI.selectAudioFile();
     if (!res.canceled && res.filePath) {
       const name = res.filePath.split(/[/\\]/).pop() || "audio";
-      setFile({ name, path: res.filePath, size: "" });
+      const sizeBytes = (await window.electronAPI.getFileSize?.(res.filePath)) ?? 0;
+      setFile({
+        name,
+        path: res.filePath,
+        size: sizeBytes ? formatFileSize(sizeBytes) : "",
+        sizeBytes,
+      });
       setState("selected");
       setError(null);
     }
@@ -251,7 +269,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (SUPPORTED_EXTENSIONS.includes(ext)) {
       const filePath = window.electronAPI.getPathForFile(f);
       if (!filePath) return;
-      setFile({ name: f.name, path: filePath, size: formatFileSize(f.size) });
+      setFile({ name: f.name, path: filePath, size: formatFileSize(f.size), sizeBytes: f.size });
       setState("selected");
       setError(null);
     }
@@ -520,6 +538,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               getActiveModelLabel={getActiveModelLabel}
               reset={reset}
               handleTranscribe={handleTranscribe}
+              requiresUpgrade={!!requiresUpgrade}
+              fileTooLarge={fileTooLarge}
+              isLargeFile={isLargeFile}
+              isOpenWhisprCloud={isOpenWhisprCloud}
+              onUpgrade={() => usage?.openCheckout()}
             />
           )}
 
@@ -775,10 +798,15 @@ function IdleView({
 
 interface SelectedViewProps {
   t: (key: string) => string;
-  file: { name: string; path: string; size: string };
+  file: { name: string; path: string; size: string; sizeBytes: number };
   getActiveModelLabel: () => string;
   reset: () => void;
   handleTranscribe: () => void;
+  requiresUpgrade: boolean;
+  fileTooLarge: boolean;
+  isLargeFile: boolean;
+  isOpenWhisprCloud: boolean;
+  onUpgrade: () => void;
 }
 
 function SelectedView({
@@ -787,6 +815,11 @@ function SelectedView({
   getActiveModelLabel,
   reset,
   handleTranscribe,
+  requiresUpgrade,
+  fileTooLarge,
+  isLargeFile,
+  isOpenWhisprCloud,
+  onUpgrade,
 }: SelectedViewProps) {
   return (
     <div style={{ animation: "float-up 0.3s ease-out" }}>
@@ -809,10 +842,44 @@ function SelectedView({
         </div>
       </div>
 
+      {fileTooLarge && (
+        <div className="rounded-lg border border-destructive/12 dark:border-destructive/15 bg-destructive/[0.03] px-3 py-2.5 mb-3">
+          <p className="text-xs text-destructive/60 leading-relaxed">
+            {t("notes.upload.fileTooLarge")}
+          </p>
+        </div>
+      )}
+
+      {requiresUpgrade && !fileTooLarge && (
+        <div className="rounded-lg border border-primary/12 dark:border-primary/15 bg-primary/[0.03] px-3 py-2.5 mb-3">
+          <p className="text-xs text-foreground/50 leading-relaxed">
+            {t("notes.upload.proRequired")}
+          </p>
+        </div>
+      )}
+
+      {isLargeFile && !requiresUpgrade && !fileTooLarge && isOpenWhisprCloud && (
+        <p className="text-xs text-foreground/20 text-center mb-3">
+          {t("notes.upload.largeFileNote")}
+        </p>
+      )}
+
       <div className="flex items-center gap-2 justify-center">
-        <Button variant="default" size="sm" onClick={handleTranscribe} className="h-8 text-xs px-5">
-          {t("notes.upload.transcribe")}
-        </Button>
+        {requiresUpgrade ? (
+          <Button variant="default" size="sm" onClick={onUpgrade} className="h-8 text-xs px-5">
+            {t("sidebar.upgradeToPro")}
+          </Button>
+        ) : (
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleTranscribe}
+            disabled={fileTooLarge}
+            className="h-8 text-xs px-5"
+          >
+            {t("notes.upload.transcribe")}
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -830,7 +897,7 @@ interface TranscribingViewProps {
   t: (key: string) => string;
   progress: number;
   getTranscribingLabel: () => string;
-  file: { name: string; path: string; size: string } | null;
+  file: { name: string; path: string; size: string; sizeBytes: number } | null;
 }
 
 function TranscribingView({ t, progress, getTranscribingLabel, file }: TranscribingViewProps) {
