@@ -102,7 +102,11 @@ async function tryStartYdotoold(log) {
     log.info("ydotoold started", {}, "clipboard");
     return;
   } catch (error) {
-    log.debug("ydotoold start failed, retrying after cleanup", { error: error.message }, "clipboard");
+    log.debug(
+      "ydotoold start failed, retrying after cleanup",
+      { error: error.message },
+      "clipboard"
+    );
   }
 
   // Cleanup stale state — scoped to current user via systemctl

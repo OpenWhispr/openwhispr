@@ -1172,9 +1172,7 @@ class ClipboardManager {
         ? ["key", "ctrl+shift+v"]
         : ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"];
     } else {
-      ydotoolArgs = legacyYdotool
-        ? ["key", "ctrl+v"]
-        : ["key", "29:1", "47:1", "47:0", "29:0"];
+      ydotoolArgs = legacyYdotool ? ["key", "ctrl+v"] : ["key", "29:1", "47:1", "47:0", "29:0"];
     }
 
     let wtypeArgs;

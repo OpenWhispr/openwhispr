@@ -381,7 +381,7 @@ static void activate_window(Display *dpy, Window win) {
     ev.xclient.window       = win;
     ev.xclient.message_type = net_active;
     ev.xclient.format       = 32;
-    ev.xclient.data.l[0]    = 2;
+    ev.xclient.data.l[0]    = 2; /* source: pager */
     ev.xclient.data.l[1]    = CurrentTime;
     ev.xclient.data.l[2]    = 0;
 

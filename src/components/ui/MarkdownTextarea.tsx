@@ -255,8 +255,10 @@ export function MarkdownTextarea({
           applyChange(ta, start, end, "**");
           ta.setSelectionRange(start + 1, start + 1);
         } else if (
-          val[start - 1] === "*" && val[start - 2] !== "*" &&
-          val[end] === "*" && val[end + 1] !== "*"
+          val[start - 1] === "*" &&
+          val[start - 2] !== "*" &&
+          val[end] === "*" &&
+          val[end + 1] !== "*"
         ) {
           applyChange(ta, start - 1, end + 1, sel);
           ta.setSelectionRange(start - 1, start - 1 + sel.length);
