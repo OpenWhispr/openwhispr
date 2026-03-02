@@ -910,7 +910,6 @@
           "name": "免費",
           "price": "$0",
           "period": "永久",
-          "trialNote": "含 7 天免費 Pro 試用",
           "features": [
             "每週 2,000 字",
             "本機 AI 模型",
@@ -1206,6 +1205,7 @@
         "openai_gpt_4o_transcribe": "最高準確度的轉錄",
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍即時速度",
+        "groq_whisper_large_v3": "Large v3 模型，快速且精準",
         "mistral_voxtral_mini_latest": "快速多語言轉錄"
       },
       "cloud": {
@@ -1226,8 +1226,10 @@
         "groq_openai_gpt_oss_20b": "快速開源模型，1000 T/sec",
         "groq_llama_3_3_70b_versatile": "Meta 多功能模型，280 T/sec",
         "groq_llama_3_1_8b_instant": "超快速 560 T/sec，131K 上下文",
-        "groq_mixtral_8x7b_32768": "32K 上下文，混合專家架構",
-        "groq_gemma2_9b_it": "Google 高效模型"
+        "groq_llama_4_scout": "Meta 高效多模態，750 T/sec",
+        "groq_compound": "Groq Compound 系統，450 T/sec",
+        "groq_compound_mini": "快速 Compound 系統，3x 更低延遲",
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文"
       },
       "local": {
         "qwen_qwen3_8b_q4_k_m": "最新 Qwen3，支援思考模式",
@@ -1246,7 +1248,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "極小型模型，適合邊緣裝置",
         "llama_llama_3_2_3b_instruct_q4_k_m": "小巧但有能力的多語言模型",
         "llama_llama_3_1_8b_instruct_q4_k_m": "強大的高效能模型",
-        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI 開放權重模型，適用於消費級硬體"
+        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI 開放權重模型，適用於消費級硬體",
+        "gemma_gemma_3_4b_it_q4_k_m": "Google 開放權重模型，速度與品質的絕佳平衡",
+        "gemma_gemma_3_1b_it_q4_k_m": "超快 Google 模型，最適合短語音清理"
       }
     }
   },
@@ -1543,6 +1547,7 @@
     "reasoningBanner": "使用 GPU 加速 AI 處理",
     "enableButton": "啟用 GPU",
     "active": "GPU 加速已啟用",
+    "ready": "GPU 加速已就緒",
     "activating": "正在啟動 GPU...",
     "activationFailed": "無法啟動 GPU",
     "retry": "重試",

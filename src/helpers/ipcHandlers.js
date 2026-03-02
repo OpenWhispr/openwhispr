@@ -1000,10 +1000,14 @@ class IPCHandlers {
       // When exiting capture mode with a new hotkey, use that to avoid reading stale state
       const effectiveHotkey = !enabled && newHotkey ? newHotkey : hotkeyManager.getCurrentHotkey();
 
-      const { isModifierOnlyHotkey, isRightSideModifier } = require("./hotkeyManager");
+      const {
+        isGlobeLikeHotkey,
+        isModifierOnlyHotkey,
+        isRightSideModifier,
+      } = require("./hotkeyManager");
       const usesNativeListener = (hotkey) =>
         !hotkey ||
-        hotkey === "GLOBE" ||
+        isGlobeLikeHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
         isRightSideModifier(hotkey);
 
@@ -1059,7 +1063,7 @@ class IPCHandlers {
           );
           const needsListener =
             effectiveHotkey &&
-            effectiveHotkey !== "GLOBE" &&
+            !isGlobeLikeHotkey(effectiveHotkey) &&
             (activationMode === "push" || isModifierOnlyHotkey(effectiveHotkey));
           if (needsListener) {
             debugLogger.log(`[IPC] Restarting Windows key listener for hotkey: ${effectiveHotkey}`);
@@ -1569,8 +1573,15 @@ class IPCHandlers {
     ipcMain.handle("llama-gpu-reset", async () => {
       try {
         const modelManager = require("./modelManagerBridge").default;
+        const previousModelId = modelManager.currentServerModelId;
         modelManager.serverManager.resetGpuDetection();
         await modelManager.stopServer();
+
+        // Restart server with previous model so Vulkan binary is picked up
+        if (previousModelId) {
+          modelManager.prewarmServer(previousModelId).catch(() => {});
+        }
+
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };

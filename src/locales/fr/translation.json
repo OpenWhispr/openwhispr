@@ -890,7 +890,6 @@
           "name": "Gratuit",
           "price": "$0",
           "period": "pour toujours",
-          "trialNote": "Inclut 7 jours gratuits d'OpenWhispr Pro",
           "features": [
             "2 000 mots/semaine",
             "Modèles IA locaux",
@@ -1209,6 +1208,7 @@
         "openai_gpt_4o_mini_transcribe": "Transcription rapide et précise",
         "openai_gpt_4o_transcribe": "Transcription la plus précise",
         "openai_whisper_1": "Modèle Whisper original",
+        "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide"
       },
@@ -1230,8 +1230,10 @@
         "groq_openai_gpt_oss_20b": "Modèle open source rapide, 1000 T/s",
         "groq_llama_3_3_70b_versatile": "Modèle polyvalent de Meta, 280 T/s",
         "groq_llama_3_1_8b_instant": "Ultra-rapide 560 T/s, contexte 131K",
-        "groq_mixtral_8x7b_32768": "Contexte 32K, mélange d'experts",
-        "groq_gemma2_9b_it": "Modèle efficace de Google"
+        "groq_llama_4_scout": "Multimodal efficace de Meta, 750 T/s",
+        "groq_compound": "Système compound de Groq, 450 T/s",
+        "groq_compound_mini": "Système compound rapide, 3x latence réduite",
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexte 256K"
       },
       "local": {
         "qwen_qwen3_8b_q4_k_m": "Dernier Qwen3 avec prise en charge du mode réflexion",
@@ -1250,7 +1252,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "Modèle minuscule pour appareils edge",
         "llama_llama_3_2_3b_instruct_q4_k_m": "Petit modèle multilingue mais performant",
         "llama_llama_3_1_8b_instruct_q4_k_m": "Modèle puissant avec d'excellentes performances",
-        "openai_oss_gpt_oss_20b_mxfp4": "Modèle open-weight d'OpenAI pour matériel grand public"
+        "openai_oss_gpt_oss_20b_mxfp4": "Modèle open-weight d'OpenAI pour matériel grand public",
+        "gemma_gemma_3_4b_it_q4_k_m": "Modèle open-weight de Google, excellent équilibre vitesse/qualité",
+        "gemma_gemma_3_1b_it_q4_k_m": "Modèle Google ultra-rapide, idéal pour le nettoyage de courtes dictées"
       }
     }
   },
@@ -1547,6 +1551,7 @@
     "reasoningBanner": "Accélérez le traitement IA avec le GPU",
     "enableButton": "Activer le GPU",
     "active": "Accélération GPU active",
+    "ready": "Accélération GPU prête",
     "activating": "Activation du GPU...",
     "activationFailed": "Impossible d'activer le GPU",
     "retry": "Réessayer",

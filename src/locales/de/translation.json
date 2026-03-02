@@ -890,7 +890,6 @@
           "name": "Kostenlos",
           "price": "$0",
           "period": "für immer",
-          "trialNote": "Enthält 7 Tage OpenWhispr Pro gratis",
           "features": [
             "2.000 Wörter/Woche",
             "Lokale KI-Modelle",
@@ -1205,6 +1204,7 @@
         "openai_gpt_4o_mini_transcribe": "Schnelle und genaue Transkription",
         "openai_gpt_4o_transcribe": "Genaueste Transkription",
         "openai_whisper_1": "Originales Whisper-Modell",
+        "groq_whisper_large_v3": "Hochpräzise Spracherkennung",
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription"
       },
@@ -1226,8 +1226,10 @@
         "groq_openai_gpt_oss_20b": "Schnelles Open-Source-Modell, 1000 T/s",
         "groq_llama_3_3_70b_versatile": "Vielseitiges Modell von Meta, 280 T/s",
         "groq_llama_3_1_8b_instant": "Ultraschnell 560 T/s, 131K Kontext",
-        "groq_mixtral_8x7b_32768": "32K Kontext, Mixture-of-Experts",
-        "groq_gemma2_9b_it": "Effizientes Modell von Google"
+        "groq_llama_4_scout": "Effizientes Multimodal von Meta, 750 T/s",
+        "groq_compound": "Groqs Compound-System, 450 T/s",
+        "groq_compound_mini": "Schnelles Compound-System, 3x niedrigere Latenz",
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, 256K Kontext"
       },
       "local": {
         "qwen_qwen3_8b_q4_k_m": "Neuestes Qwen3 mit Thinking-Mode-Unterstützung",
@@ -1246,7 +1248,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "Winziges Modell für Edge-Geräte",
         "llama_llama_3_2_3b_instruct_q4_k_m": "Kleines, aber fähiges mehrsprachiges Modell",
         "llama_llama_3_1_8b_instruct_q4_k_m": "Leistungsstarkes Modell mit hoher Performance",
-        "openai_oss_gpt_oss_20b_mxfp4": "Open-Weight-Modell von OpenAI für Consumer-Hardware"
+        "openai_oss_gpt_oss_20b_mxfp4": "Open-Weight-Modell von OpenAI für Consumer-Hardware",
+        "gemma_gemma_3_4b_it_q4_k_m": "Googles Open-Weight-Modell, gutes Gleichgewicht aus Geschwindigkeit und Qualität",
+        "gemma_gemma_3_1b_it_q4_k_m": "Ultraschnelles Google-Modell, ideal für kurze Diktat-Bereinigung"
       }
     }
   },
@@ -1543,6 +1547,7 @@
     "reasoningBanner": "KI-Verarbeitung mit GPU beschleunigen",
     "enableButton": "GPU aktivieren",
     "active": "GPU-Beschleunigung aktiv",
+    "ready": "GPU-Beschleunigung bereit",
     "activating": "GPU wird aktiviert...",
     "activationFailed": "GPU konnte nicht aktiviert werden",
     "retry": "Erneut versuchen",

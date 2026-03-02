@@ -272,8 +272,9 @@ export function getModelProvider(modelId: string): string {
       modelId.includes("openai/") ||
       modelId.includes("llama-3.1-8b-instant") ||
       modelId.includes("llama-3.3-") ||
-      modelId.includes("mixtral-") ||
-      modelId.includes("gemma2-")
+      modelId.includes("meta-llama/llama-4-") ||
+      modelId.includes("groq/compound") ||
+      modelId.includes("moonshotai/kimi-k2-")
     )
       return "groq";
     if (

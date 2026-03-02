@@ -1,6 +1,7 @@
 const { app, screen, BrowserWindow, shell, dialog } = require("electron");
 const debugLogger = require("./debugLogger");
 const HotkeyManager = require("./hotkeyManager");
+const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
@@ -164,7 +165,7 @@ class WindowManager {
         process.platform === "darwin" &&
         activationMode === "push" &&
         currentHotkey &&
-        currentHotkey !== "GLOBE" &&
+        !isGlobeLikeHotkey(currentHotkey) &&
         currentHotkey.includes("+")
       ) {
         this.startMacCompoundPushToTalk(currentHotkey);

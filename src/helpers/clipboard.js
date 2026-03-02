@@ -3,6 +3,7 @@ const { spawn, spawnSync } = require("child_process");
 const { killProcess } = require("../utils/process");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const debugLogger = require("./debugLogger");
 
 const CACHE_TTL_MS = 30000;
@@ -89,7 +90,7 @@ class ClipboardManager {
   _writeClipboardWayland(text, webContents) {
     if (this.commandExists("wl-copy")) {
       try {
-        const result = spawnSync("wl-copy", ["--", text], { timeout: 2000 });
+        const result = spawnSync("wl-copy", ["--", text], { timeout: 1 });
         if (result.status === 0) {
           clipboard.writeText(text);
           return;
@@ -240,6 +241,24 @@ class ClipboardManager {
     }
   }
 
+  _isYdotoolLegacy() {
+    if (this._ydotoolLegacyChecked !== undefined) return this._ydotoolLegacyChecked;
+    try {
+      const result = spawnSync("ydotool", ["help"], { stdio: "pipe", timeout: 2000 });
+      const output = (result.stdout?.toString() || "") + (result.stderr?.toString() || "");
+      // ydotool 1.0.x has 'bakers' subcommand that 0.1.x doesn't
+      this._ydotoolLegacyChecked = !output.includes("bakers");
+    } catch {
+      this._ydotoolLegacyChecked = false;
+    }
+    debugLogger.debug(
+      "ydotool version detection",
+      { legacy: this._ydotoolLegacyChecked },
+      "clipboard"
+    );
+    return this._ydotoolLegacyChecked;
+  }
+
   _canAccessUinput() {
     if (process.platform !== "linux") return false;
     const now = Date.now();
@@ -253,6 +272,97 @@ class ClipboardManager {
     } catch {}
     this._uinputCache = { accessible, expiresAt: now + 30000 };
     return accessible;
+  }
+
+  _getPortalTokenPath() {
+    const cacheDir = path.join(
+      process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"),
+      "openwhispr"
+    );
+    return path.join(cacheDir, "portal-paste-token");
+  }
+
+  _readPortalToken() {
+    try {
+      return fs.readFileSync(this._getPortalTokenPath(), "utf8").trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  _savePortalToken(token) {
+    try {
+      const tokenPath = this._getPortalTokenPath();
+      const dir = path.dirname(tokenPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(tokenPath, token);
+    } catch (err) {
+      debugLogger.warn("Failed to save portal-paste token", { error: err.message }, "clipboard");
+    }
+  }
+
+  _runPortalPaste(fastPasteBinary, useShift) {
+    return new Promise((resolve, reject) => {
+      const args = ["--portal"];
+      if (useShift) args.push("--terminal");
+
+      const restoreToken = this._readPortalToken();
+      if (restoreToken) {
+        args.push("--restore-token", restoreToken);
+      }
+
+      debugLogger.debug(
+        "Attempting linux-fast-paste --portal (RemoteDesktop D-Bus)",
+        { binary: fastPasteBinary, hasToken: !!restoreToken },
+        "clipboard"
+      );
+
+      const proc = spawn(fastPasteBinary, args);
+      let stdout = "";
+      let stderr = "";
+
+      proc.stdout?.on("data", (data) => {
+        stdout += data.toString();
+      });
+
+      proc.stderr?.on("data", (data) => {
+        stderr += data.toString();
+      });
+
+      let timedOut = false;
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        killProcess(proc, "SIGKILL");
+      }, 15000); // Portal may show a user dialog, allow more time
+
+      proc.on("close", (code) => {
+        if (timedOut) return reject(new Error("linux-fast-paste --portal timed out"));
+        clearTimeout(timeoutId);
+        if (code === 0) {
+          const newToken = stdout.trim();
+          if (newToken) {
+            this._savePortalToken(newToken);
+          }
+          resolve(newToken || null);
+        } else if (code === 5) {
+          reject(new Error("portal support not compiled in"));
+        } else {
+          reject(
+            new Error(
+              `linux-fast-paste --portal exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`
+            )
+          );
+        }
+      });
+
+      proc.on("error", (error) => {
+        if (timedOut) return;
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+    });
   }
 
   _detectKdeWindowClass() {
@@ -385,8 +495,7 @@ class ClipboardManager {
         }
         await this.pasteWindows(originalClipboard);
       } else {
-        method = this.resolveLinuxFastPasteBinary() ? "linux-xtest" : "linux-tools";
-        await this.pasteLinux(originalClipboard, options);
+        method = (await this.pasteLinux(originalClipboard, options)) || "linux-tools";
       }
 
       this.safeLog("✅ Paste operation complete", {
@@ -924,6 +1033,29 @@ class ClipboardManager {
         });
 
       if (isWayland) {
+        // On GNOME/KDE Wayland, try portal mode first (RemoteDesktop D-Bus portal).
+        // uinput events are accepted by the kernel but Mutter doesn't reliably
+        // route them to focused native Wayland windows (issue #292).
+        if ((isGnome || isKde) && linuxFastPaste) {
+          try {
+            const portalResult = await this._runPortalPaste(linuxFastPaste, earlyIsTerminal);
+            this.safeLog("✅ Paste successful using linux-fast-paste --portal (RemoteDesktop)");
+            debugLogger.info(
+              "Paste successful",
+              { tool: "linux-fast-paste", method: "portal", token: !!portalResult },
+              "clipboard"
+            );
+            restoreClipboard();
+            return "portal";
+          } catch (portalError) {
+            debugLogger.warn(
+              "linux-fast-paste --portal failed, falling back to uinput",
+              { error: portalError?.message },
+              "clipboard"
+            );
+          }
+        }
+
         const uinputArgs = ["--uinput"];
         if (earlyIsTerminal) uinputArgs.push("--terminal");
 
@@ -936,7 +1068,7 @@ class ClipboardManager {
             "clipboard"
           );
           restoreClipboard();
-          return;
+          return "uinput";
         } catch (uinputError) {
           debugLogger.warn("uinput paste failed", { error: uinputError?.message }, "clipboard");
 
@@ -954,7 +1086,7 @@ class ClipboardManager {
                 "clipboard"
               );
               restoreClipboard();
-              return;
+              return "xtest-xwayland";
             } catch (xtestError) {
               debugLogger.warn(
                 "XTest/XWayland fallback also failed",
@@ -982,7 +1114,7 @@ class ClipboardManager {
             "clipboard"
           );
           restoreClipboard();
-          return;
+          return "xtest";
         } catch (error) {
           this.safeLog(
             `⚠️ Native linux-fast-paste failed: ${error?.message || error}, falling back to system tools`
@@ -1007,7 +1139,10 @@ class ClipboardManager {
     };
 
     const inTerminal = isTerminal();
-    const pasteKeys = inTerminal ? "ctrl+shift+v" : "ctrl+v";
+    // On Wayland, when window class is unknown, use Shift+Insert as universal paste
+    // (works in both terminals and GUI apps, avoids Ctrl+V printing ^V in terminals)
+    const useShiftInsert = isWayland && !detectedWindowClass;
+    const pasteKeys = useShiftInsert ? "shift+Insert" : inTerminal ? "ctrl+shift+v" : "ctrl+v";
 
     const canUseWtype = isWayland && isWlroots;
     const canUseYdotool = ydotoolDaemonRunning;
@@ -1024,22 +1159,31 @@ class ClipboardManager {
       );
     }
 
-    // Raw keycodes work across both ydotool 0.1.x and 1.0.x (key names silently fail on 1.0.x)
-    // 29 = KEY_LEFTCTRL, 42 = KEY_LEFTSHIFT, 47 = KEY_V
-    const ydotoolArgs = inTerminal
-      ? ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
-      : ["key", "29:1", "47:1", "47:0", "29:0"];
+    // ydotool 0.1.x (Ubuntu 24.04) uses key names; 1.0.x uses raw keycodes
+    // 29 = KEY_LEFTCTRL, 42 = KEY_LEFTSHIFT, 47 = KEY_V, 110 = KEY_INSERT
+    const legacyYdotool = this._isYdotoolLegacy();
+    let ydotoolArgs;
+    if (useShiftInsert) {
+      ydotoolArgs = legacyYdotool
+        ? ["key", "shift+Insert"]
+        : ["key", "42:1", "110:1", "110:0", "42:0"];
+    } else if (inTerminal) {
+      ydotoolArgs = legacyYdotool
+        ? ["key", "ctrl+shift+v"]
+        : ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"];
+    } else {
+      ydotoolArgs = legacyYdotool ? ["key", "ctrl+v"] : ["key", "29:1", "47:1", "47:0", "29:0"];
+    }
 
-    const wtypeEntry = canUseWtype
-      ? [
-          inTerminal
-            ? {
-                cmd: "wtype",
-                args: ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"],
-              }
-            : { cmd: "wtype", args: ["-M", "ctrl", "-k", "v", "-m", "ctrl"] },
-        ]
-      : [];
+    let wtypeArgs;
+    if (useShiftInsert) {
+      wtypeArgs = ["-M", "shift", "-k", "Insert", "-m", "shift"];
+    } else if (inTerminal) {
+      wtypeArgs = ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"];
+    } else {
+      wtypeArgs = ["-M", "ctrl", "-k", "v", "-m", "ctrl"];
+    }
+    const wtypeEntry = canUseWtype ? [{ cmd: "wtype", args: wtypeArgs }] : [];
     const xdotoolEntry = canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : [];
     const ydotoolEntry = canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : [];
 
@@ -1066,6 +1210,7 @@ class ClipboardManager {
         targetWindowId,
         detectedWindowClass,
         inTerminal,
+        useShiftInsert,
         pasteKeys,
       },
       "clipboard"
@@ -1164,7 +1309,7 @@ class ClipboardManager {
         await pasteWith(tool);
         this.safeLog(`✅ Paste successful using ${tool.cmd}`);
         debugLogger.info("Paste successful", { tool: tool.cmd }, "clipboard");
-        return;
+        return tool.cmd;
       } catch (error) {
         const failureInfo = {
           tool: tool.cmd,
@@ -1199,7 +1344,7 @@ class ClipboardManager {
         await pasteWith({ cmd: "xdotool", args: typeArgs });
         this.safeLog("✅ Paste successful using xdotool type fallback");
         debugLogger.info("Terminal paste successful via xdotool type", {}, "clipboard");
-        return;
+        return "xdotool-type";
       } catch (error) {
         const fallbackFailure = {
           tool: "xdotool type",

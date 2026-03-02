@@ -1,5 +1,10 @@
 const path = require("path");
 
+const isGnomeWayland =
+  process.platform === "linux" &&
+  process.env.XDG_SESSION_TYPE === "wayland" &&
+  /gnome|ubuntu|unity/i.test(process.env.XDG_CURRENT_DESKTOP || "");
+
 const WINDOW_SIZES = {
   BASE: { width: 96, height: 96 },
   WITH_MENU: { width: 240, height: 280 },
@@ -30,7 +35,13 @@ const MAIN_WINDOW_CONFIG = {
   hasShadow: false,
   acceptsFirstMouse: true,
   type:
-    process.platform === "darwin" ? "panel" : process.platform === "linux" ? "toolbar" : "normal",
+    process.platform === "darwin"
+      ? "panel"
+      : process.platform === "linux"
+        ? isGnomeWayland
+          ? "normal"
+          : "toolbar"
+        : "normal",
 };
 
 // Control panel window configuration
@@ -98,6 +109,8 @@ class WindowPositionUtil {
       }
     } else if (process.platform === "win32") {
       window.setAlwaysOnTop(true, "pop-up-menu");
+    } else if (isGnomeWayland) {
+      window.setAlwaysOnTop(true, "floating");
     } else {
       window.setAlwaysOnTop(true, "screen-saver");
     }

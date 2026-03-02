@@ -5,10 +5,10 @@
 
 import { getPlatform, type Platform } from "./platform";
 
-/**
- * Maps Electron accelerator parts to user-friendly labels.
- * Automatically adapts to the current platform (macOS vs Windows/Linux).
- */
+export function isGlobeLikeHotkey(hotkey: string): boolean {
+  return hotkey === "GLOBE" || hotkey === "Fn";
+}
+
 function formatModifierPart(part: string, platform: Platform): string {
   switch (part) {
     case "CommandOrControl":
@@ -60,7 +60,7 @@ export function formatHotkeyLabelForPlatform(hotkey: string, platform: Platform)
     return "";
   }
 
-  if (hotkey === "GLOBE") {
+  if (isGlobeLikeHotkey(hotkey)) {
     return "Globe/Fn";
   }
 
@@ -148,8 +148,7 @@ export function isValidHotkeyFormat(hotkey: string): boolean {
     return false;
   }
 
-  // Special keys are always valid
-  if (hotkey === "GLOBE") {
+  if (isGlobeLikeHotkey(hotkey)) {
     return true;
   }
 

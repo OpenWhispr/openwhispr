@@ -890,7 +890,6 @@
           "name": "Free",
           "price": "$0",
           "period": "forever",
-          "trialNote": "Includes 7 days free of OpenWhispr Pro",
           "features": [
             "2,000 words/week",
             "Local AI models",
@@ -1205,6 +1204,7 @@
         "openai_gpt_4o_mini_transcribe": "Fast and accurate transcription",
         "openai_gpt_4o_transcribe": "Most accurate transcription",
         "openai_whisper_1": "Original Whisper model",
+        "groq_whisper_large_v3": "High accuracy speech recognition",
         "groq_whisper_large_v3_turbo": "216x real-time speed",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription"
       },
@@ -1226,8 +1226,10 @@
         "groq_openai_gpt_oss_20b": "Fast open-source model, 1000 T/sec",
         "groq_llama_3_3_70b_versatile": "Meta's versatile model, 280 T/sec",
         "groq_llama_3_1_8b_instant": "Ultra-fast 560 T/sec, 131K context",
-        "groq_mixtral_8x7b_32768": "32K context, mixture of experts",
-        "groq_gemma2_9b_it": "Google's efficient model"
+        "groq_llama_4_scout": "Meta's efficient multimodal, 750 T/sec",
+        "groq_compound": "Groq's compound system, 450 T/sec",
+        "groq_compound_mini": "Fast compound system, 3x lower latency",
+        "groq_kimi_k2_0905": "Moonshot AI's 1T MoE, 256K context"
       },
       "local": {
         "qwen_qwen3_8b_q4_k_m": "Latest Qwen3 with thinking mode support",
@@ -1246,7 +1248,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "Tiny model for edge devices",
         "llama_llama_3_2_3b_instruct_q4_k_m": "Small but capable multilingual model",
         "llama_llama_3_1_8b_instruct_q4_k_m": "Powerful model with great performance",
-        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI's open-weight model for consumer hardware"
+        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI's open-weight model for consumer hardware",
+        "gemma_gemma_3_4b_it_q4_k_m": "Google's open-weight model, great balance of speed and quality",
+        "gemma_gemma_3_1b_it_q4_k_m": "Ultra-fast Google model, best for short dictation cleanup"
       }
     }
   },
@@ -1552,6 +1556,7 @@
     "reasoningBanner": "Speed up AI processing with GPU acceleration",
     "enableButton": "Enable GPU",
     "active": "GPU acceleration active",
+    "ready": "GPU acceleration ready",
     "activating": "Activating GPU...",
     "activationFailed": "GPU could not be activated",
     "retry": "Retry",

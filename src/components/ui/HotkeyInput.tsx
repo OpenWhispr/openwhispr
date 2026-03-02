@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
-import { formatHotkeyLabel } from "../../utils/hotkeys";
+import { formatHotkeyLabel, isGlobeLikeHotkey } from "../../utils/hotkeys";
 import { getPlatform } from "../../utils/platform";
 
 const CODE_TO_KEY: Record<string, string> = {
@@ -455,7 +455,7 @@ export function HotkeyInput({
   }, [isCapturing, isMac, finalizeCapture]);
 
   const displayValue = formatHotkeyLabel(value);
-  const isGlobe = value === "GLOBE";
+  const isGlobe = isGlobeLikeHotkey(value);
   const hotkeyParts = value?.includes("+") ? displayValue.split("+") : [];
 
   // Hero variant: large centered key display for onboarding

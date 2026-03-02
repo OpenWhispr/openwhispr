@@ -910,7 +910,6 @@
           "name": "Бесплатный",
           "price": "$0",
           "period": "навсегда",
-          "trialNote": "Включает 7 дней бесплатного Pro",
           "features": [
             "2 000 слов/неделя",
             "Локальные модели ИИ",
@@ -1210,6 +1209,7 @@
         "openai_gpt_4o_transcribe": "Максимально точная транскрипция",
         "openai_whisper_1": "Оригинальная модель Whisper",
         "groq_whisper_large_v3_turbo": "Скорость в 216 раз быстрее реального времени",
+        "groq_whisper_large_v3": "Модель Large v3, быстрая и точная",
         "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция"
       },
       "cloud": {
@@ -1230,8 +1230,10 @@
         "groq_openai_gpt_oss_20b": "Быстрая открытая модель, 1000 т/с",
         "groq_llama_3_3_70b_versatile": "Универсальная модель Meta, 280 т/с",
         "groq_llama_3_1_8b_instant": "Сверхбыстрая 560 т/с, контекст 131K",
-        "groq_mixtral_8x7b_32768": "Контекст 32K, смесь экспертов",
-        "groq_gemma2_9b_it": "Эффективная модель Google"
+        "groq_llama_4_scout": "Эффективная мультимодальная Meta, 750 т/с",
+        "groq_compound": "Система Compound от Groq, 450 т/с",
+        "groq_compound_mini": "Быстрая система Compound, 3x ниже задержка",
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, контекст 256K"
       },
       "local": {
         "qwen_qwen3_8b_q4_k_m": "Новейшая Qwen3 с поддержкой режима размышления",
@@ -1250,7 +1252,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "Миниатюрная модель для маломощных устройств",
         "llama_llama_3_2_3b_instruct_q4_k_m": "Маленькая, но способная многоязычная модель",
         "llama_llama_3_1_8b_instruct_q4_k_m": "Мощная модель с отличной производительностью",
-        "openai_oss_gpt_oss_20b_mxfp4": "Открытая модель OpenAI для потребительского оборудования"
+        "openai_oss_gpt_oss_20b_mxfp4": "Открытая модель OpenAI для потребительского оборудования",
+        "gemma_gemma_3_4b_it_q4_k_m": "Открытая модель Google, отличный баланс скорости и качества",
+        "gemma_gemma_3_1b_it_q4_k_m": "Сверхбыстрая модель Google, лучшая для очистки коротких диктовок"
       }
     }
   },
@@ -1547,6 +1551,7 @@
     "reasoningBanner": "Ускорьте обработку ИИ с помощью GPU",
     "enableButton": "Включить GPU",
     "active": "Ускорение GPU активно",
+    "ready": "Ускорение GPU готово",
     "activating": "Активация GPU...",
     "activationFailed": "Не удалось активировать GPU",
     "retry": "Повторить",

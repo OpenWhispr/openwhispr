@@ -890,7 +890,6 @@
           "name": "無料",
           "price": "$0",
           "period": "永久",
-          "trialNote": "OpenWhispr Pro の 7 日間無料トライアル付き",
           "features": [
             "週 2,000 ワード",
             "ローカル AI モデル",
@@ -1206,6 +1205,7 @@
         "openai_gpt_4o_transcribe": "最も正確な文字起こし",
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
+        "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし"
       },
       "cloud": {
@@ -1226,8 +1226,10 @@
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
         "groq_llama_3_3_70b_versatile": "Meta の汎用モデル、280 T/秒",
         "groq_llama_3_1_8b_instant": "超高速 560 T/秒、131K コンテキスト",
-        "groq_mixtral_8x7b_32768": "32K コンテキスト、Mixture of Experts",
-        "groq_gemma2_9b_it": "Google の高効率モデル"
+        "groq_llama_4_scout": "Meta の効率的マルチモーダル、750 T/秒",
+        "groq_compound": "Groq の Compound システム、450 T/秒",
+        "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト"
       },
       "local": {
         "qwen_qwen3_8b_q4_k_m": "思考モード対応の最新 Qwen3",
@@ -1246,7 +1248,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "エッジデバイス向け超小型モデル",
         "llama_llama_3_2_3b_instruct_q4_k_m": "小型ながら高性能な多言語モデル",
         "llama_llama_3_1_8b_instruct_q4_k_m": "優れた性能を持つ強力なモデル",
-        "openai_oss_gpt_oss_20b_mxfp4": "一般消費者向けハードウェア用 OpenAI オープンウェイトモデル"
+        "openai_oss_gpt_oss_20b_mxfp4": "一般消費者向けハードウェア用 OpenAI オープンウェイトモデル",
+        "gemma_gemma_3_4b_it_q4_k_m": "Google のオープンウェイトモデル、速度と品質の優れたバランス",
+        "gemma_gemma_3_1b_it_q4_k_m": "超高速 Google モデル、短い口述のクリーンアップに最適"
       }
     }
   },
@@ -1543,6 +1547,7 @@
     "reasoningBanner": "GPU で AI 処理を高速化",
     "enableButton": "GPU を有効化",
     "active": "GPU アクセラレーション有効",
+    "ready": "GPUアクセラレーション準備完了",
     "activating": "GPU を有効化中...",
     "activationFailed": "GPU を有効化できませんでした",
     "retry": "再試行",
