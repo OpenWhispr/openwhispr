@@ -244,15 +244,15 @@ export default function HistoryView({
         ) : (
           <div>
             {groupedHistory.map((group, index) => (
-              <div key={group.label}>
+              <div key={group.label} className={index > 0 ? "mt-4" : ""}>
                 <div
-                  className={`sticky top-0 z-10 bg-background px-1 pb-2 ${index === 0 ? "pt-1" : "pt-5"}`}
+                  className="sticky -top-1 z-10 -mx-4 px-5 pt-2 pb-2 bg-background"
                 >
                   <span className="text-[11px] font-semibold text-muted-foreground dark:text-muted-foreground uppercase tracking-wide">
                     {group.label}
                   </span>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 relative z-0">
                   {group.items.map((item) => (
                     <TranscriptionItem
                       key={item.id}
