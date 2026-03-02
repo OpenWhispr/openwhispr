@@ -1138,7 +1138,10 @@ class ClipboardManager {
     };
 
     const inTerminal = isTerminal();
-    const pasteKeys = inTerminal ? "ctrl+shift+v" : "ctrl+v";
+    // On Wayland, when window class is unknown, use Shift+Insert as universal paste
+    // (works in both terminals and GUI apps, avoids Ctrl+V printing ^V in terminals)
+    const useShiftInsert = isWayland && !detectedWindowClass;
+    const pasteKeys = useShiftInsert ? "shift+Insert" : inTerminal ? "ctrl+shift+v" : "ctrl+v";
 
     const canUseWtype = isWayland && isWlroots;
     const canUseYdotool = ydotoolDaemonRunning;
@@ -1156,25 +1159,32 @@ class ClipboardManager {
     }
 
     // ydotool 0.1.x (Ubuntu 24.04) uses key names; 1.0.x uses raw keycodes
+    // 29 = KEY_LEFTCTRL, 42 = KEY_LEFTSHIFT, 47 = KEY_V, 110 = KEY_INSERT
     const legacyYdotool = this._isYdotoolLegacy();
-    const ydotoolArgs = legacyYdotool
-      ? inTerminal
+    let ydotoolArgs;
+    if (useShiftInsert) {
+      ydotoolArgs = legacyYdotool
+        ? ["key", "shift+Insert"]
+        : ["key", "42:1", "110:1", "110:0", "42:0"];
+    } else if (inTerminal) {
+      ydotoolArgs = legacyYdotool
         ? ["key", "ctrl+shift+v"]
-        : ["key", "ctrl+v"]
-      : inTerminal
-        ? ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"]
+        : ["key", "29:1", "42:1", "47:1", "47:0", "42:0", "29:0"];
+    } else {
+      ydotoolArgs = legacyYdotool
+        ? ["key", "ctrl+v"]
         : ["key", "29:1", "47:1", "47:0", "29:0"];
+    }
 
-    const wtypeEntry = canUseWtype
-      ? [
-          inTerminal
-            ? {
-                cmd: "wtype",
-                args: ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"],
-              }
-            : { cmd: "wtype", args: ["-M", "ctrl", "-k", "v", "-m", "ctrl"] },
-        ]
-      : [];
+    let wtypeArgs;
+    if (useShiftInsert) {
+      wtypeArgs = ["-M", "shift", "-k", "Insert", "-m", "shift"];
+    } else if (inTerminal) {
+      wtypeArgs = ["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"];
+    } else {
+      wtypeArgs = ["-M", "ctrl", "-k", "v", "-m", "ctrl"];
+    }
+    const wtypeEntry = canUseWtype ? [{ cmd: "wtype", args: wtypeArgs }] : [];
     const xdotoolEntry = canUseXdotool ? [{ cmd: "xdotool", args: xdotoolArgs }] : [];
     const ydotoolEntry = canUseYdotool ? [{ cmd: "ydotool", args: ydotoolArgs }] : [];
 
@@ -1201,6 +1211,7 @@ class ClipboardManager {
         targetWindowId,
         detectedWindowClass,
         inTerminal,
+        useShiftInsert,
         pasteKeys,
       },
       "clipboard"
