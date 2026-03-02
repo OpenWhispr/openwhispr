@@ -971,14 +971,24 @@ function SelectedView({
       <div className="flex items-center gap-2 justify-center flex-wrap">
         {/* BYOK too large — not signed in: Create Account */}
         {byokTooLarge && requiresAccount && (
-          <Button variant="default" size="sm" onClick={onCreateAccount} className="h-8 text-xs px-5">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={onCreateAccount}
+            className="h-8 text-xs px-5"
+          >
             {t("notes.upload.createAccount")}
           </Button>
         )}
 
         {/* BYOK too large — signed in, Pro: Switch to Cloud */}
         {byokTooLarge && !requiresAccount && isProUser && (
-          <Button variant="default" size="sm" onClick={onSwitchToCloud} className="h-8 text-xs px-5">
+          <Button
+            variant="default"
+            size="sm"
+            onClick={onSwitchToCloud}
+            className="h-8 text-xs px-5"
+          >
             {t("notes.upload.switchToCloud")}
           </Button>
         )}

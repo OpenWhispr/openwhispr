@@ -772,11 +772,7 @@ declare global {
       }>;
 
       onUploadTranscriptionProgress?: (
-        callback: (data: {
-          stage: string;
-          chunksTotal: number;
-          chunksCompleted: number;
-        }) => void
+        callback: (data: { stage: string; chunksTotal: number; chunksCompleted: number }) => void
       ) => () => void;
 
       // BYOK audio file transcription

@@ -295,7 +295,9 @@ function splitAudioFile(inputPath, outputDir, options = {}) {
         const stderrPreview = stderr.slice(-500).trim();
         debugLogger.debug("FFmpeg split failed", { code, stderr: stderrPreview });
         reject(
-          new Error(`FFmpeg split exited with code ${code}${stderrPreview ? `: ${stderrPreview}` : ""}`)
+          new Error(
+            `FFmpeg split exited with code ${code}${stderrPreview ? `: ${stderrPreview}` : ""}`
+          )
         );
         return;
       }
