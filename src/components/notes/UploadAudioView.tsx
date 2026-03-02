@@ -40,8 +40,9 @@ type UploadState = "idle" | "selected" | "transcribing" | "complete" | "error";
 
 const SUPPORTED_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"];
 
-const FREE_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
-const PRO_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB
+const BYOK_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB — hard limit for bring-your-own-key
+const CLOUD_FREE_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB — free plan cloud limit
+const CLOUD_PRO_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB — pro plan cloud limit
 
 const TITLE_SYSTEM_PROMPT =
   "Generate a concise 3-8 word title for these transcribed notes. Return ONLY the title text, nothing else — no quotes, no prefix, no explanation.";
@@ -95,10 +96,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const usage = useUsage();
   const isProUser = usage?.isSubscribed || usage?.isTrial;
 
-  const fileTooLarge = file ? file.sizeBytes > PRO_MAX_FILE_SIZE : false;
-  const requiresUpgrade = file && !isProUser && file.sizeBytes > FREE_MAX_FILE_SIZE;
-  const isLargeFile = file ? file.sizeBytes > FREE_MAX_FILE_SIZE : false;
-
   const {
     useLocalWhisper,
     setUseLocalWhisper,
@@ -139,6 +136,36 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const showSetup = usageLoaded && !isProUser && !setupDismissed && state === "idle";
   const showModelPicker = !isSignedIn || cloudTranscriptionMode === "byok" || useLocalWhisper;
   const shouldCenter = !showSetup && !advancedOpen;
+
+  // Mode detection
+  const isByok = !useLocalWhisper && !isOpenWhisprCloud;
+
+  // Mode-aware file size validation
+  // Local: no limits at all
+  // BYOK: 25 MB hard max regardless of plan
+  // Cloud free: 25 MB max (upgrade to Pro for more)
+  // Cloud pro: 500 MB max
+  let fileTooLarge = false;
+  let requiresUpgrade = false;
+  let requiresAccount = false;
+  let byokTooLarge = false;
+  let isLargeFile = false;
+
+  if (file) {
+    if (useLocalWhisper) {
+      // Local transcription: no file size restrictions
+    } else if (isByok) {
+      byokTooLarge = file.sizeBytes > BYOK_MAX_FILE_SIZE;
+      if (byokTooLarge && !isSignedIn) {
+        requiresAccount = true;
+      }
+    } else {
+      // Cloud (OpenWhispr) — user is always signed in here
+      fileTooLarge = file.sizeBytes > CLOUD_PRO_MAX_FILE_SIZE;
+      requiresUpgrade = !isProUser && file.sizeBytes > CLOUD_FREE_MAX_FILE_SIZE;
+      isLargeFile = file.sizeBytes > CLOUD_FREE_MAX_FILE_SIZE;
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -428,6 +455,19 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
   };
 
+  const handleCreateAccount = () => {
+    localStorage.setItem("pendingCloudMigration", "true");
+    localStorage.setItem("onboardingCurrentStep", "0");
+    localStorage.removeItem("onboardingCompleted");
+    window.location.reload();
+  };
+
+  const switchToCloud = () => {
+    setCloudTranscriptionMode("openwhispr");
+    setUseLocalWhisper(false);
+    updateTranscriptionSettings({ useLocalWhisper: false });
+  };
+
   const getTranscribingLabel = (): string => {
     if (isOpenWhisprCloud) return t("notes.upload.transcribingCloud");
     if (useLocalWhisper) return t("notes.upload.transcribingLocal");
@@ -570,7 +610,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               fileTooLarge={fileTooLarge}
               isLargeFile={isLargeFile}
               isOpenWhisprCloud={isOpenWhisprCloud}
+              byokTooLarge={byokTooLarge}
+              requiresAccount={requiresAccount}
+              isProUser={!!isProUser}
               onUpgrade={() => usage?.openCheckout()}
+              onCreateAccount={handleCreateAccount}
+              onSwitchToCloud={switchToCloud}
             />
           )}
 
@@ -831,7 +876,12 @@ interface SelectedViewProps {
   fileTooLarge: boolean;
   isLargeFile: boolean;
   isOpenWhisprCloud: boolean;
+  byokTooLarge: boolean;
+  requiresAccount: boolean;
+  isProUser: boolean;
   onUpgrade: () => void;
+  onCreateAccount: () => void;
+  onSwitchToCloud: () => void;
 }
 
 function SelectedView({
@@ -844,8 +894,15 @@ function SelectedView({
   fileTooLarge,
   isLargeFile,
   isOpenWhisprCloud,
+  byokTooLarge,
+  requiresAccount,
+  isProUser,
   onUpgrade,
+  onCreateAccount,
+  onSwitchToCloud,
 }: SelectedViewProps) {
+  const canTranscribe = !fileTooLarge && !requiresUpgrade && !byokTooLarge;
+
   return (
     <div style={{ animation: "float-up 0.3s ease-out" }}>
       <div className="rounded-lg border border-foreground/8 dark:border-white/6 bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm p-4 mb-3">
@@ -867,6 +924,7 @@ function SelectedView({
         </div>
       </div>
 
+      {/* Cloud absolute limit (500 MB) */}
       {fileTooLarge && (
         <div className="rounded-lg border border-destructive/12 dark:border-destructive/15 bg-destructive/[0.03] px-3 py-2.5 mb-3">
           <p className="text-xs text-destructive/60 leading-relaxed">
@@ -875,36 +933,83 @@ function SelectedView({
         </div>
       )}
 
-      {requiresUpgrade && !fileTooLarge && (
+      {/* BYOK file too large — shared explanation */}
+      {byokTooLarge && (
         <div className="rounded-lg border border-primary/12 dark:border-primary/15 bg-primary/[0.03] px-3 py-2.5 mb-3">
           <p className="text-xs text-foreground/50 leading-relaxed">
-            {t("notes.upload.proRequired")}
+            {t("notes.upload.byokTooLarge")}
+          </p>
+          <p className="text-xs text-foreground/35 leading-relaxed mt-1.5">
+            {t("notes.upload.byokTooLargeDetail")}
+          </p>
+          <p className="text-xs text-foreground/50 leading-relaxed mt-1.5 font-medium">
+            {requiresAccount
+              ? t("notes.upload.byokTooLargeNeedsAccount")
+              : isProUser
+                ? t("notes.upload.switchToCloudForLargeFiles")
+                : t("notes.upload.byokTooLargeNeedsUpgrade")}
           </p>
         </div>
       )}
 
+      {/* Cloud free user, file > 25 MB → needs paid plan */}
+      {requiresUpgrade && !fileTooLarge && (
+        <div className="rounded-lg border border-primary/12 dark:border-primary/15 bg-primary/[0.03] px-3 py-2.5 mb-3">
+          <p className="text-xs text-foreground/50 leading-relaxed">
+            {t("notes.upload.paidPlanRequired")}
+          </p>
+        </div>
+      )}
+
+      {/* Cloud large file info (Pro user, will be chunked) */}
       {isLargeFile && !requiresUpgrade && !fileTooLarge && isOpenWhisprCloud && (
         <p className="text-xs text-foreground/20 text-center mb-3">
           {t("notes.upload.largeFileNote")}
         </p>
       )}
 
-      <div className="flex items-center gap-2 justify-center">
-        {requiresUpgrade ? (
-          <Button variant="default" size="sm" onClick={onUpgrade} className="h-8 text-xs px-5">
-            {t("sidebar.upgradeToPro")}
+      <div className="flex items-center gap-2 justify-center flex-wrap">
+        {/* BYOK too large — not signed in: Create Account */}
+        {byokTooLarge && requiresAccount && (
+          <Button variant="default" size="sm" onClick={onCreateAccount} className="h-8 text-xs px-5">
+            {t("notes.upload.createAccount")}
           </Button>
-        ) : (
+        )}
+
+        {/* BYOK too large — signed in, Pro: Switch to Cloud */}
+        {byokTooLarge && !requiresAccount && isProUser && (
+          <Button variant="default" size="sm" onClick={onSwitchToCloud} className="h-8 text-xs px-5">
+            {t("notes.upload.switchToCloud")}
+          </Button>
+        )}
+
+        {/* BYOK too large — signed in, Free: Upgrade */}
+        {byokTooLarge && !requiresAccount && !isProUser && (
+          <Button variant="default" size="sm" onClick={onUpgrade} className="h-8 text-xs px-5">
+            {t("notes.upload.upgrade")}
+          </Button>
+        )}
+
+        {/* Cloud requires upgrade */}
+        {!byokTooLarge && requiresUpgrade && (
+          <Button variant="default" size="sm" onClick={onUpgrade} className="h-8 text-xs px-5">
+            {t("notes.upload.upgrade")}
+          </Button>
+        )}
+
+        {/* Normal: can transcribe */}
+        {canTranscribe && (
           <Button
             variant="default"
             size="sm"
             onClick={handleTranscribe}
-            disabled={fileTooLarge}
             className="h-8 text-xs px-5"
           >
             {t("notes.upload.transcribe")}
           </Button>
         )}
+
+        {/* Cancel button — always shown */}
         <Button
           variant="ghost"
           size="sm"

@@ -1390,7 +1390,6 @@
       "noProviderDescription": "添加 API Key 或下载本地模型以开始转录。",
       "noProviderAction": "打开转录设置",
       "fileTooLarge": "此文件超过了 500 MB 的大小限制。",
-      "proRequired": "超过 25 MB 的文件需要订阅 OpenWhispr Pro。",
       "largeFileNote": "大文件将被分割并平行转录。",
       "chunkProgress": "正在转录第 {{completed}} 部分，共 {{total}} 部分..."
     },

@@ -1394,7 +1394,6 @@
       "noProviderDescription": "Adicione uma chave API ou baixe um modelo local para começar a transcrever.",
       "noProviderAction": "Abrir configurações de transcrição",
       "fileTooLarge": "Este arquivo excede o limite de 500 MB.",
-      "proRequired": "Arquivos acima de 25 MB exigem uma assinatura OpenWhispr Pro.",
       "largeFileNote": "Arquivos grandes são divididos e transcritos em paralelo.",
       "chunkProgress": "Transcrevendo parte {{completed}} de {{total}}..."
     },

@@ -1394,7 +1394,6 @@
       "noProviderDescription": "Agrega una clave API o descarga un modelo local para comenzar a transcribir.",
       "noProviderAction": "Abrir configuración de transcripción",
       "fileTooLarge": "Este archivo supera el límite de 500 MB.",
-      "proRequired": "Los archivos de más de 25 MB requieren una suscripción a OpenWhispr Pro.",
       "largeFileNote": "Los archivos grandes se dividen y transcriben en paralelo.",
       "chunkProgress": "Transcribiendo parte {{completed}} de {{total}}..."
     },

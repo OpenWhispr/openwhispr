@@ -2290,9 +2290,18 @@ class IPCHandlers {
       "transcribe-audio-file-byok",
       async (event, { filePath, apiKey, baseUrl, model }) => {
         const fs = require("fs");
+        const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
           if (!baseUrl) throw new Error("No transcription endpoint configured.");
+
+          const fileSize = fs.statSync(filePath).size;
+          if (fileSize > BYOK_FILE_SIZE_LIMIT) {
+            return {
+              success: false,
+              error: "File too large. Maximum size for bring-your-own-key is 25 MB.",
+            };
+          }
 
           const audioBuffer = fs.readFileSync(filePath);
           const ext = path.extname(filePath).toLowerCase().replace(".", "");

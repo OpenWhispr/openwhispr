@@ -1426,9 +1426,17 @@
       "noProviderDescription": "Add an API key or download a local model to start transcribing.",
       "noProviderAction": "Open Transcription Settings",
       "fileTooLarge": "This file exceeds the 500 MB limit.",
-      "proRequired": "Files over 25 MB require an OpenWhispr Pro subscription.",
+      "paidPlanRequired": "Cloud transcription for files over 25 MB requires a paid plan. Large files are processed with OpenWhispr Cloud for reliable, high-quality results.",
       "largeFileNote": "Large files are split and transcribed in parallel.",
-      "chunkProgress": "Transcribing part {{completed}} of {{total}}..."
+      "chunkProgress": "Transcribing part {{completed}} of {{total}}...",
+      "byokTooLarge": "Third-party API keys only support files up to 25 MB.",
+      "byokTooLargeDetail": "For files over 25 MB, OpenWhispr Cloud handles splitting, parallel processing, and reassembly — so you get reliable results without depending on third-party provider limits.",
+      "byokTooLargeNeedsAccount": "Create an account and upgrade to a paid plan to transcribe larger files with OpenWhispr Cloud.",
+      "byokTooLargeNeedsUpgrade": "Upgrade to a paid plan to transcribe larger files with OpenWhispr Cloud.",
+      "switchToCloudForLargeFiles": "Switch to OpenWhispr Cloud to transcribe this file.",
+      "createAccount": "Create Account",
+      "upgrade": "Upgrade",
+      "switchToCloud": "OpenWhispr Cloud"
     },
     "meeting": {
       "title": "Meeting Notes",
