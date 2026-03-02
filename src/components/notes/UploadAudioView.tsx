@@ -72,6 +72,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const [isDragOver, setIsDragOver] = useState(false);
   const [progress, setProgress] = useState(0);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [chunkProgress, setChunkProgress] = useState<{
+    chunksTotal: number;
+    chunksCompleted: number;
+  } | null>(null);
+  const progressCleanupRef = useRef<(() => void) | null>(null);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
@@ -277,12 +282,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const reset = () => {
     if (progressRef.current) clearInterval(progressRef.current);
+    if (progressCleanupRef.current) progressCleanupRef.current();
+    progressCleanupRef.current = null;
     setState("idle");
     setFile(null);
     setResult(null);
     setNoteId(null);
     setError(null);
     setProgress(0);
+    setChunkProgress(null);
     const personal = findDefaultFolder(folders);
     if (personal) setSelectedFolderId(String(personal.id));
   };
@@ -292,16 +300,32 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setState("transcribing");
     setError(null);
     setProgress(0);
+    setChunkProgress(null);
 
-    progressRef.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) {
-          if (progressRef.current) clearInterval(progressRef.current);
-          return prev;
-        }
-        return prev + Math.random() * 6;
-      });
-    }, 500);
+    const useChunkProgress = isOpenWhisprCloud && isLargeFile;
+
+    if (useChunkProgress) {
+      progressCleanupRef.current =
+        window.electronAPI.onUploadTranscriptionProgress?.((data) => {
+          if (data.chunksTotal > 0) {
+            setChunkProgress({
+              chunksTotal: data.chunksTotal,
+              chunksCompleted: data.chunksCompleted,
+            });
+            setProgress((data.chunksCompleted / data.chunksTotal) * 90);
+          }
+        }) ?? null;
+    } else {
+      progressRef.current = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 90) {
+            if (progressRef.current) clearInterval(progressRef.current);
+            return prev;
+          }
+          return prev + Math.random() * 6;
+        });
+      }, 500);
+    }
 
     try {
       let res: { success: boolean; text?: string; error?: string; code?: string };
@@ -331,6 +355,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       }
 
       if (progressRef.current) clearInterval(progressRef.current);
+      if (progressCleanupRef.current) progressCleanupRef.current();
+      progressCleanupRef.current = null;
 
       if (res.success && res.text) {
         setProgress(100);
@@ -362,6 +388,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       }
     } catch (err) {
       if (progressRef.current) clearInterval(progressRef.current);
+      if (progressCleanupRef.current) progressCleanupRef.current();
+      progressCleanupRef.current = null;
       setProgress(0);
       setError(err instanceof Error ? err.message : t("notes.upload.errorOccurred"));
       setState("error");
@@ -552,6 +580,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               progress={progress}
               getTranscribingLabel={getTranscribingLabel}
               file={file}
+              chunkProgress={chunkProgress}
             />
           )}
 
@@ -638,10 +667,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     </div>
   );
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Private sub-components — one per upload state variant                      */
-/* -------------------------------------------------------------------------- */
 
 interface NoProviderViewProps {
   t: (key: string, options?: Record<string, unknown>) => string;
@@ -894,13 +919,22 @@ function SelectedView({
 }
 
 interface TranscribingViewProps {
-  t: (key: string) => string;
+  t: (key: string, options?: Record<string, unknown>) => string;
   progress: number;
   getTranscribingLabel: () => string;
   file: { name: string; path: string; size: string; sizeBytes: number } | null;
+  chunkProgress: { chunksTotal: number; chunksCompleted: number } | null;
 }
 
-function TranscribingView({ t, progress, getTranscribingLabel, file }: TranscribingViewProps) {
+function TranscribingView({
+  t,
+  progress,
+  getTranscribingLabel,
+  file,
+  chunkProgress,
+}: TranscribingViewProps) {
+  const hasChunkInfo = chunkProgress !== null && chunkProgress.chunksTotal > 0;
+
   return (
     <div className="flex flex-col items-center" style={{ animation: "float-up 0.3s ease-out" }}>
       <div className="flex items-end justify-center gap-[3px] h-10 mb-5">
@@ -925,9 +959,17 @@ function TranscribingView({ t, progress, getTranscribingLabel, file }: Transcrib
       </div>
 
       <p className="text-xs text-foreground/50 font-medium">{getTranscribingLabel()}</p>
-      {file && (
-        <p className="text-xs text-foreground/20 mt-1 truncate max-w-[200px]">{file.name}</p>
-      )}
+      {hasChunkInfo ? (
+        <p className="text-xs text-foreground/20 mt-1">
+          {t("notes.upload.chunkProgress", {
+            completed: chunkProgress.chunksCompleted,
+            total: chunkProgress.chunksTotal,
+          })}
+        </p>
+      ) : null}
+      {!hasChunkInfo && file ? (
+        <p className="text-xs text-foreground/20 mt-1 truncate max-w-50">{file.name}</p>
+      ) : null}
     </div>
   );
 }

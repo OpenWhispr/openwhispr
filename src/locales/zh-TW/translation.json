@@ -1391,7 +1391,8 @@
       "noProviderAction": "開啟轉錄設定",
       "fileTooLarge": "此檔案超過 500 MB 的大小限制。",
       "proRequired": "超過 25 MB 的檔案需要訂閱 OpenWhispr Pro。",
-      "largeFileNote": "大型檔案將在雲端處理，可能需要幾分鐘時間。"
+      "largeFileNote": "大型檔案將被分割並平行轉錄。",
+      "chunkProgress": "正在轉錄第 {{completed}} 部分，共 {{total}} 部分..."
     },
     "meeting": {
       "title": "會議筆記",

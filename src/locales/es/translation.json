@@ -1395,7 +1395,8 @@
       "noProviderAction": "Abrir configuración de transcripción",
       "fileTooLarge": "Este archivo supera el límite de 500 MB.",
       "proRequired": "Los archivos de más de 25 MB requieren una suscripción a OpenWhispr Pro.",
-      "largeFileNote": "Los archivos grandes se procesan en la nube y pueden tardar unos minutos."
+      "largeFileNote": "Los archivos grandes se dividen y transcriben en paralelo.",
+      "chunkProgress": "Transcribiendo parte {{completed}} de {{total}}..."
     },
     "meeting": {
       "title": "Notas de reunión",

@@ -771,6 +771,14 @@ declare global {
         code?: string;
       }>;
 
+      onUploadTranscriptionProgress?: (
+        callback: (data: {
+          stage: string;
+          chunksTotal: number;
+          chunksCompleted: number;
+        }) => void
+      ) => () => void;
+
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;

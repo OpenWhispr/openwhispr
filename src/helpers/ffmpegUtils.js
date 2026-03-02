@@ -237,6 +237,86 @@ function computeFloat32RMS(float32Buffer) {
   return Math.sqrt(sumSquares / numSamples);
 }
 
+function splitAudioFile(inputPath, outputDir, options = {}) {
+  const { segmentDuration = 600, audioBitrate = "128k" } = options;
+
+  return new Promise((resolve, reject) => {
+    const ffmpegPath = getFFmpegPath();
+    if (!ffmpegPath) {
+      reject(new Error("FFmpeg not found - required for audio splitting"));
+      return;
+    }
+
+    const outputPattern = path.join(outputDir, "chunk-%03d.mp3");
+
+    const args = [
+      "-i",
+      inputPath,
+      "-f",
+      "segment",
+      "-segment_time",
+      String(segmentDuration),
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      audioBitrate,
+      "-ar",
+      "16000",
+      "-ac",
+      "1",
+      "-y",
+      outputPattern,
+    ];
+
+    debugLogger.debug("Splitting audio with FFmpeg", {
+      input: inputPath,
+      outputDir,
+      segmentDuration,
+      audioBitrate,
+    });
+
+    const proc = spawn(ffmpegPath, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+
+    let stderr = "";
+
+    proc.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on("error", (error) => {
+      reject(new Error(`FFmpeg split error: ${error.message}`));
+    });
+
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        const stderrPreview = stderr.slice(-500).trim();
+        debugLogger.debug("FFmpeg split failed", { code, stderr: stderrPreview });
+        reject(
+          new Error(`FFmpeg split exited with code ${code}${stderrPreview ? `: ${stderrPreview}` : ""}`)
+        );
+        return;
+      }
+
+      const chunks = fs
+        .readdirSync(outputDir)
+        .filter((f) => f.startsWith("chunk-") && f.endsWith(".mp3"))
+        .sort()
+        .map((f) => path.join(outputDir, f));
+
+      if (chunks.length === 0) {
+        reject(new Error("FFmpeg split produced no output files"));
+        return;
+      }
+
+      debugLogger.debug("FFmpeg split complete", { chunkCount: chunks.length });
+      resolve(chunks);
+    });
+  });
+}
+
 function clearCache() {
   cachedFFmpegPath = null;
 }
@@ -245,6 +325,7 @@ module.exports = {
   getFFmpegPath,
   isWavFormat,
   convertToWav,
+  splitAudioFile,
   wavToFloat32Samples,
   computeFloat32RMS,
   clearCache,

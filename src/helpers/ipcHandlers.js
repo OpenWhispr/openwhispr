@@ -1818,63 +1818,6 @@ class IPCHandlers {
       return getSessionCookiesFromWindow(win);
     };
 
-    const uploadToBlob = async (filePath, cookieHeader) => {
-      const fs = require("fs");
-      const apiUrl = getApiUrl();
-
-      const fileBuffer = fs.readFileSync(filePath);
-      const ext = path.extname(filePath).toLowerCase().replace(".", "");
-      const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
-      const fileName = path.basename(filePath);
-      const pathname = `audio/${Date.now()}-${fileName}`;
-
-      const tokenRes = await fetch(`${apiUrl}/api/upload-audio`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Cookie: cookieHeader,
-        },
-        body: JSON.stringify({
-          type: "blob.generate-client-token",
-          payload: {
-            pathname,
-            callbackUrl: `${apiUrl}/api/upload-audio`,
-          },
-        }),
-      });
-
-      if (!tokenRes.ok) {
-        const err = await tokenRes.json().catch(() => ({}));
-        throw new Error(err.error || `Upload authorization failed: ${tokenRes.status}`);
-      }
-
-      const { clientToken } = await tokenRes.json();
-      const tokenPayload = JSON.parse(
-        Buffer.from(clientToken.slice("vercel_blob_client_".length), "base64").toString()
-      );
-
-      const { put } = require("@vercel/blob");
-      const blob = await put(pathname, fileBuffer, {
-        access: "public",
-        token: tokenPayload.token,
-        contentType,
-      });
-
-      return { url: blob.url, size: fileBuffer.length };
-    };
-
-    const deleteBlobFile = async (blobUrl, cookieHeader) => {
-      const apiUrl = getApiUrl();
-      await fetch(`${apiUrl}/api/delete-audio`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Cookie: cookieHeader,
-        },
-        body: JSON.stringify({ url: blobUrl }),
-      }).catch((err) => debugLogger.warn("Blob cleanup failed", { error: err.message }));
-    };
-
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
@@ -2171,7 +2114,10 @@ class IPCHandlers {
 
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
       const fs = require("fs");
+      const os = require("os");
+      const { splitAudioFile } = require("./ffmpegUtils");
       const FILE_SIZE_LIMIT = 25 * 1024 * 1024;
+      const CONCURRENCY_LIMIT = 5;
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -2182,45 +2128,121 @@ class IPCHandlers {
         const fileSize = fs.statSync(filePath).size;
 
         if (fileSize > FILE_SIZE_LIMIT) {
-          debugLogger.debug("Large file detected, using blob upload chain", {
+          debugLogger.debug("Large file detected, using client-side chunking", {
             fileSize,
             filePath: path.basename(filePath),
           });
 
-          const blobResult = await uploadToBlob(filePath, cookieHeader);
+          const chunkDir = path.join(os.tmpdir(), `ow-chunks-${Date.now()}`);
+          fs.mkdirSync(chunkDir, { recursive: true });
 
-          const chainRes = await fetch(`${apiUrl}/api/transcribe-chain`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Cookie: cookieHeader,
-            },
-            body: JSON.stringify({
-              mediaUrl: blobResult.url,
-              skipCleanup: false,
-            }),
-          });
+          try {
+            event.sender.send("upload-transcription-progress", {
+              stage: "splitting",
+              chunksTotal: 0,
+              chunksCompleted: 0,
+            });
 
-          const chainData = await chainRes.json();
+            const chunkPaths = await splitAudioFile(filePath, chunkDir);
+            const totalChunks = chunkPaths.length;
 
-          deleteBlobFile(blobResult.url, cookieHeader);
+            debugLogger.debug("Audio split into chunks", { totalChunks });
 
-          if (chainRes.status === 401) {
-            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-          }
-          if (chainRes.status === 429) {
-            return {
-              success: false,
-              error: "Daily word limit reached",
-              code: "LIMIT_REACHED",
-              ...chainData,
+            event.sender.send("upload-transcription-progress", {
+              stage: "transcribing",
+              chunksTotal: totalChunks,
+              chunksCompleted: 0,
+            });
+
+            const results = new Array(totalChunks).fill(null);
+            let completedCount = 0;
+
+            const transcribeChunk = async (index) => {
+              const chunkBuffer = fs.readFileSync(chunkPaths[index]);
+              const chunkName = path.basename(chunkPaths[index]);
+
+              const { body, boundary } = buildMultipartBody(chunkBuffer, chunkName, "audio/mpeg", {
+                source: "file_upload",
+                clientType: "desktop",
+                appVersion: app.getVersion(),
+                clientVersion: app.getVersion(),
+                sessionId: this.sessionId,
+              });
+
+              const url = new URL(`${apiUrl}/api/transcribe`);
+              const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
+
+              if (data.statusCode === 401) {
+                throw Object.assign(new Error("Session expired"), { code: "AUTH_EXPIRED" });
+              }
+              if (data.statusCode === 429) {
+                throw Object.assign(new Error("Daily word limit reached"), {
+                  code: "LIMIT_REACHED",
+                  ...data.data,
+                });
+              }
+              if (data.statusCode !== 200) {
+                throw new Error(data.data?.error || `API error: ${data.statusCode}`);
+              }
+
+              results[index] = data.data;
+              completedCount++;
+
+              event.sender.send("upload-transcription-progress", {
+                stage: "transcribing",
+                chunksTotal: totalChunks,
+                chunksCompleted: completedCount,
+              });
             };
-          }
-          if (!chainRes.ok) {
-            throw new Error(chainData.error || `Chain transcription failed: ${chainRes.status}`);
-          }
 
-          return { success: true, text: chainData.text };
+            const indices = Array.from({ length: totalChunks }, (_, i) => i);
+            const executing = new Set();
+
+            for (const index of indices) {
+              const p = transcribeChunk(index).then(
+                () => executing.delete(p),
+                (err) => {
+                  executing.delete(p);
+                  if (err.code === "AUTH_EXPIRED" || err.code === "LIMIT_REACHED") throw err;
+                  debugLogger.warn(`Chunk ${index} failed`, { error: err.message });
+                }
+              );
+              executing.add(p);
+              if (executing.size >= CONCURRENCY_LIMIT) {
+                await Promise.race(executing);
+              }
+            }
+            await Promise.all(executing);
+
+            const succeeded = results.filter((r) => r !== null);
+            if (succeeded.length === 0) {
+              throw new Error("All chunks failed to transcribe");
+            }
+
+            const fullText = results
+              .filter((r) => r !== null)
+              .map((r) => r.text)
+              .join(" ")
+              .replace(/\s+/g, " ")
+              .trim();
+
+            const failed = results.filter((r) => r === null).length;
+            if (failed > 0) {
+              debugLogger.warn("Some chunks failed", { failed, total: totalChunks });
+            }
+
+            return {
+              success: true,
+              text: fullText,
+              ...(failed > 0 ? { warning: `${failed} of ${totalChunks} chunks failed` } : {}),
+            };
+          } finally {
+            try {
+              fs.rmSync(chunkDir, { recursive: true, force: true });
+            } catch (cleanupErr) {
+              debugLogger.warn("Failed to cleanup chunk dir", { error: cleanupErr.message });
+            }
+          }
         }
 
         const audioBuffer = fs.readFileSync(filePath);
@@ -2257,6 +2279,9 @@ class IPCHandlers {
         return { success: true, text: data.data.text };
       } catch (error) {
         debugLogger.error("Cloud audio file transcription error", { error: error.message });
+        if (error.code === "AUTH_EXPIRED" || error.code === "LIMIT_REACHED") {
+          return { success: false, error: error.message, code: error.code, ...error };
+        }
         return { success: false, error: error.message };
       }
     });
