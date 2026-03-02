@@ -101,7 +101,8 @@ async function ensureYdotool() {
       await setupUinputAccess(log);
     }
 
-    await ensureYdotooldDaemon(log);
+    const hasUserConsent = needsInstall || needsUinput;
+    await ensureYdotooldDaemon(log, { hasUserConsent });
     markSetupDone();
     log.info("ydotool setup completed", {}, "clipboard");
   } catch (error) {

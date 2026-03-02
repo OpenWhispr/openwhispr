@@ -78,7 +78,7 @@ async function setupUinputAccess(log) {
   const lines = ["#!/bin/sh", "set -e"];
 
   if (needsRule) {
-    lines.push(`printf '%s\\n' '${UDEV_RULE}' > ${UDEV_RULE_PATH}`);
+    lines.push(`printf '%s\\n' '${UDEV_RULE}' > '${UDEV_RULE_PATH}'`);
   }
 
   if (needsGroup) {
@@ -97,8 +97,10 @@ async function setupUinputAccess(log) {
 
   if (lines.length <= 2) return;
 
-  const tmpScript = path.join(os.tmpdir(), `openwhispr-uinput-${process.pid}.sh`);
-  fs.writeFileSync(tmpScript, lines.join("\n") + "\n", { mode: 0o755 });
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-"));
+  fs.chmodSync(tmpDir, 0o700);
+  const tmpScript = path.join(tmpDir, "uinput-setup.sh");
+  fs.writeFileSync(tmpScript, lines.join("\n") + "\n", { mode: 0o700 });
 
   try {
     log.info("Setting up /dev/uinput via pkexec", {}, "clipboard");
@@ -107,6 +109,7 @@ async function setupUinputAccess(log) {
   } finally {
     try {
       fs.unlinkSync(tmpScript);
+      fs.rmdirSync(tmpDir);
     } catch (error) {
       log.debug("Setup script cleanup failed", { error: error.message }, "clipboard");
     }

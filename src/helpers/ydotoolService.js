@@ -130,13 +130,13 @@ async function tryStartYdotoold(log) {
   }
 }
 
-async function ensureYdotooldDaemon(log) {
+async function ensureYdotooldDaemon(log, { hasUserConsent = false } = {}) {
   const { commandExists } = require("./ydotoolInstaller");
 
   let ydotooldPath = findBinary("ydotoold");
 
   // On some distros (Ubuntu 24.04) ydotoold is a separate package
-  if (!ydotooldPath && commandExists("apt-get")) {
+  if (!ydotooldPath && hasUserConsent && commandExists("apt-get")) {
     log.info("Installing ydotoold package separately", {}, "clipboard");
     try {
       await execFileAsync("pkexec", ["apt-get", "install", "-y", "ydotoold"], {

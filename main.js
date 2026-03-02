@@ -270,7 +270,9 @@ function initializeCoreManagers() {
 
 // Phase 2: Non-critical setup after windows are visible
 function initializeDeferredManagers() {
-  ensureYdotool().catch(() => {});
+  ensureYdotool().catch((err) => {
+    require("./src/helpers/debugLogger").warn("ydotool setup error", { error: err?.message }, "clipboard");
+  });
   clipboardManager.preWarmAccessibility();
   trayManager = new TrayManager();
   globeKeyManager = new GlobeKeyManager();
