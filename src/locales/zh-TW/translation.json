@@ -910,7 +910,6 @@
           "name": "免費",
           "price": "$0",
           "period": "永久",
-          "trialNote": "含 7 天免費 Pro 試用",
           "features": [
             "每週 2,000 字",
             "本機 AI 模型",
@@ -1249,7 +1248,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "極小型模型，適合邊緣裝置",
         "llama_llama_3_2_3b_instruct_q4_k_m": "小巧但有能力的多語言模型",
         "llama_llama_3_1_8b_instruct_q4_k_m": "強大的高效能模型",
-        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI 開放權重模型，適用於消費級硬體"
+        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI 開放權重模型，適用於消費級硬體",
+        "gemma_gemma_3_4b_it_q4_k_m": "Google 開放權重模型，速度與品質的絕佳平衡",
+        "gemma_gemma_3_1b_it_q4_k_m": "超快 Google 模型，最適合短語音清理"
       }
     }
   },

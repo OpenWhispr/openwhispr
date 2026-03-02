@@ -890,7 +890,6 @@
           "name": "無料",
           "price": "$0",
           "period": "永久",
-          "trialNote": "OpenWhispr Pro の 7 日間無料トライアル付き",
           "features": [
             "週 2,000 ワード",
             "ローカル AI モデル",
@@ -921,11 +920,7 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "カスタム",
-          "features": [
-            "クラウド同期",
-            "チーム機能（近日公開）",
-            "SSO & コンプライアンス"
-          ],
+          "features": ["クラウド同期", "チーム機能（近日公開）", "SSO & コンプライアンス"],
           "cta": "お問い合わせ"
         },
         "currentPlan": "現在のプラン"
@@ -1253,7 +1248,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "エッジデバイス向け超小型モデル",
         "llama_llama_3_2_3b_instruct_q4_k_m": "小型ながら高性能な多言語モデル",
         "llama_llama_3_1_8b_instruct_q4_k_m": "優れた性能を持つ強力なモデル",
-        "openai_oss_gpt_oss_20b_mxfp4": "一般消費者向けハードウェア用 OpenAI オープンウェイトモデル"
+        "openai_oss_gpt_oss_20b_mxfp4": "一般消費者向けハードウェア用 OpenAI オープンウェイトモデル",
+        "gemma_gemma_3_4b_it_q4_k_m": "Google のオープンウェイトモデル、速度と品質の優れたバランス",
+        "gemma_gemma_3_1b_it_q4_k_m": "超高速 Google モデル、短い口述のクリーンアップに最適"
       }
     }
   },

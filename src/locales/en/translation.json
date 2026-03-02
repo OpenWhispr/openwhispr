@@ -890,7 +890,6 @@
           "name": "Free",
           "price": "$0",
           "period": "forever",
-          "trialNote": "Includes 7 days free of OpenWhispr Pro",
           "features": [
             "2,000 words/week",
             "Local AI models",
@@ -921,11 +920,7 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "Custom",
-          "features": [
-            "Cloud sync",
-            "Team features (coming soon)",
-            "SSO & compliance"
-          ],
+          "features": ["Cloud sync", "Team features (coming soon)", "SSO & compliance"],
           "cta": "Contact Us"
         },
         "currentPlan": "Current plan"
@@ -1253,7 +1248,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "Tiny model for edge devices",
         "llama_llama_3_2_3b_instruct_q4_k_m": "Small but capable multilingual model",
         "llama_llama_3_1_8b_instruct_q4_k_m": "Powerful model with great performance",
-        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI's open-weight model for consumer hardware"
+        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI's open-weight model for consumer hardware",
+        "gemma_gemma_3_4b_it_q4_k_m": "Google's open-weight model, great balance of speed and quality",
+        "gemma_gemma_3_1b_it_q4_k_m": "Ultra-fast Google model, best for short dictation cleanup"
       }
     }
   },

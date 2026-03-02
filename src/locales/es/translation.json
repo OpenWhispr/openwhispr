@@ -890,7 +890,6 @@
           "name": "Gratis",
           "price": "$0",
           "period": "para siempre",
-          "trialNote": "Incluye 7 días gratis de OpenWhispr Pro",
           "features": [
             "2.000 palabras/semana",
             "Modelos de IA locales",
@@ -1253,7 +1252,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "Modelo diminuto para dispositivos edge",
         "llama_llama_3_2_3b_instruct_q4_k_m": "Modelo multilingüe pequeño pero capaz",
         "llama_llama_3_1_8b_instruct_q4_k_m": "Modelo potente con gran rendimiento",
-        "openai_oss_gpt_oss_20b_mxfp4": "Modelo open-weight de OpenAI para hardware de consumo"
+        "openai_oss_gpt_oss_20b_mxfp4": "Modelo open-weight de OpenAI para hardware de consumo",
+        "gemma_gemma_3_4b_it_q4_k_m": "Modelo open-weight de Google, excelente equilibrio entre velocidad y calidad",
+        "gemma_gemma_3_1b_it_q4_k_m": "Modelo Google ultrarrápido, ideal para limpieza de dictado corto"
       }
     }
   },

@@ -167,6 +167,7 @@ const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
+const { ensureYdotool } = require("./src/helpers/ensureYdotool");
 
 // Manager instances - initialized after app.whenReady()
 let debugLogger = null;
@@ -269,6 +270,9 @@ function initializeCoreManagers() {
 
 // Phase 2: Non-critical setup after windows are visible
 function initializeDeferredManagers() {
+  ensureYdotool().catch((err) => {
+    require("./src/helpers/debugLogger").warn("ydotool setup error", { error: err?.message }, "clipboard");
+  });
   clipboardManager.preWarmAccessibility();
   trayManager = new TrayManager();
   globeKeyManager = new GlobeKeyManager();
@@ -534,6 +538,7 @@ async function startApp() {
   updateManager.checkForUpdatesOnStartup();
 
   if (process.platform === "darwin") {
+    const { isGlobeLikeHotkey } = require("./src/helpers/hotkeyManager");
     let globeKeyDownTime = 0;
     let globeKeyIsRecording = false;
     let globeLastStopTime = 0;
@@ -554,8 +559,8 @@ async function startApp() {
         windowManager.controlPanelWindow.webContents.send("globe-key-pressed");
       }
 
-      // Handle dictation if Globe is the current hotkey
-      if (currentHotkey === "GLOBE") {
+      // Handle dictation if Globe/Fn is the current hotkey
+      if (isGlobeLikeHotkey(currentHotkey)) {
         if (mainWindowLive) {
           // Capture target app PID BEFORE showing the overlay
           if (textEditMonitor) textEditMonitor.captureTargetPid();
@@ -597,8 +602,7 @@ async function startApp() {
         windowManager.controlPanelWindow.webContents.send("globe-key-released");
       }
 
-      // Handle push-to-talk release if Globe is the current hotkey
-      if (hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey() === "GLOBE") {
+      if (hotkeyManager.getCurrentHotkey && isGlobeLikeHotkey(hotkeyManager.getCurrentHotkey())) {
         const activationMode = windowManager.getActivationMode();
         if (activationMode === "push") {
           globeKeyDownTime = 0;
@@ -700,12 +704,14 @@ async function startApp() {
   if (process.platform === "win32") {
     debugLogger.debug("[Push-to-Talk] Windows Push-to-Talk setup starting");
 
-    const isValidHotkey = (hotkey) => hotkey && hotkey !== "GLOBE";
+    const {
+      isGlobeLikeHotkey: isGlobeLike,
+      isModifierOnlyHotkey,
+    } = require("./src/helpers/hotkeyManager");
+    const isValidHotkey = (hotkey) => hotkey && !isGlobeLike(hotkey);
 
     const isRightSideMod = (hotkey) =>
       /^Right(Control|Ctrl|Alt|Option|Shift|Super|Win|Meta|Command|Cmd)$/i.test(hotkey);
-
-    const { isModifierOnlyHotkey } = require("./src/helpers/hotkeyManager");
 
     const needsNativeListener = (hotkey, mode) => {
       if (!isValidHotkey(hotkey)) return false;

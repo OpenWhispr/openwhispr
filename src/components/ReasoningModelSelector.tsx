@@ -112,8 +112,14 @@ function GpuStatusBadge() {
       setActivationFailed(true);
     }, 10000);
     const fastPoll = setInterval(() => {
-      window.electronAPI?.llamaServerStatus?.().then(setServerStatus).catch(() => {});
-      window.electronAPI?.getLlamaVulkanStatus?.().then(setVulkanStatus).catch(() => {});
+      window.electronAPI
+        ?.llamaServerStatus?.()
+        .then(setServerStatus)
+        .catch(() => {});
+      window.electronAPI
+        ?.getLlamaVulkanStatus?.()
+        .then(setVulkanStatus)
+        .catch(() => {});
     }, 1000);
     return () => {
       clearTimeout(timeout);

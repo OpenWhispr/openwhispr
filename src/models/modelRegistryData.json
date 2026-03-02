@@ -554,6 +554,40 @@
           "descriptionKey": "models.descriptions.local.openai_oss_gpt_oss_20b_mxfp4"
         }
       ]
+    },
+    {
+      "id": "gemma",
+      "name": "Gemma (Google)",
+      "baseUrl": "https://huggingface.co",
+      "promptTemplate": "<bos><start_of_turn>user\n{system}\n\n{user}<end_of_turn>\n<start_of_turn>model\n",
+      "models": [
+        {
+          "id": "gemma-3-4b-it-q4_k_m",
+          "name": "Gemma 3 4B",
+          "size": "2.49GB",
+          "sizeBytes": 2489758112,
+          "description": "Google's open-weight model, great balance of speed and quality",
+          "fileName": "google_gemma-3-4b-it-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 131072,
+          "hfRepo": "bartowski/google_gemma-3-4b-it-GGUF",
+          "recommended": true,
+          "descriptionKey": "models.descriptions.local.gemma_gemma_3_4b_it_q4_k_m"
+        },
+        {
+          "id": "gemma-3-1b-it-q4_k_m",
+          "name": "Gemma 3 1B",
+          "size": "0.81GB",
+          "sizeBytes": 806058496,
+          "description": "Ultra-fast Google model, best for short dictation cleanup",
+          "fileName": "google_gemma-3-1b-it-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 32768,
+          "hfRepo": "bartowski/google_gemma-3-1b-it-GGUF",
+          "recommended": false,
+          "descriptionKey": "models.descriptions.local.gemma_gemma_3_1b_it_q4_k_m"
+        }
+      ]
     }
   ],
   "openwhisprCloudModels": {

@@ -910,7 +910,6 @@
           "name": "免费版",
           "price": "$0",
           "period": "永久",
-          "trialNote": "含 7 天免费 Pro 试用",
           "features": [
             "每周 2,000 字",
             "本地 AI 模型",
@@ -941,11 +940,7 @@
         "enterprise": {
           "name": "企业版",
           "price": "自定义",
-          "features": [
-            "云端同步",
-            "团队功能（即将推出）",
-            "SSO 与合规"
-          ],
+          "features": ["云端同步", "团队功能（即将推出）", "SSO 与合规"],
           "cta": "联系我们"
         },
         "currentPlan": "当前套餐"
@@ -1253,7 +1248,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "超小模型，适用于边缘设备",
         "llama_llama_3_2_3b_instruct_q4_k_m": "小而强的多语言模型",
         "llama_llama_3_1_8b_instruct_q4_k_m": "强大模型，性能出色",
-        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI 开源模型，适用于消费级硬件"
+        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI 开源模型，适用于消费级硬件",
+        "gemma_gemma_3_4b_it_q4_k_m": "谷歌开放权重模型，速度与质量的绝佳平衡",
+        "gemma_gemma_3_1b_it_q4_k_m": "超快谷歌模型，最适合短听写清理"
       }
     }
   },
