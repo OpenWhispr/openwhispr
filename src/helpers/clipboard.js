@@ -3,6 +3,7 @@ const { spawn, spawnSync } = require("child_process");
 const { killProcess } = require("../utils/process");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const debugLogger = require("./debugLogger");
 
 const CACHE_TTL_MS = 30000;
@@ -275,7 +276,7 @@ class ClipboardManager {
 
   _getPortalTokenPath() {
     const cacheDir = path.join(
-      process.env.XDG_CACHE_HOME || path.join(require("os").homedir(), ".cache"),
+      process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"),
       "openwhispr"
     );
     return path.join(cacheDir, "portal-paste-token");
