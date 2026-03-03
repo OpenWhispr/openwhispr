@@ -2008,9 +2008,9 @@ class IPCHandlers {
       try {
         let result;
         // Try local engines first
-        if (this.parakeetManager?.isReady?.()) {
+        if (this.parakeetManager?.serverManager?.isAvailable?.()) {
           result = await this.parakeetManager.transcribeLocalParakeet(buffer, {});
-        } else if (this.whisperManager?.serverManager?.isReady?.()) {
+        } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
           result = await this.whisperManager.transcribeLocalWhisper(buffer, {});
         }
 
