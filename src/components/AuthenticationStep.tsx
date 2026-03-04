@@ -100,15 +100,18 @@ export default function AuthenticationStep({
     const initAndComplete = async () => {
       if (OPENWHISPR_API_URL) {
         try {
-          const res = await fetch(`${OPENWHISPR_API_URL}/api/auth/init-user`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userId: user.id,
-              email: user.email,
-              name: user.name || null,
-            }),
-          });
+          const res = await (window as any).electronAPI.proxyFetch(
+            `${OPENWHISPR_API_URL}/api/auth/init-user`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userId: user.id,
+                email: user.email,
+                name: user.name || null,
+              }),
+            }
+          );
           if (!res.ok) {
             logger.error("init-user returned non-OK", { status: res.status }, "auth");
           }
@@ -177,17 +180,21 @@ export default function AuthenticationStep({
         return;
       }
 
-      const response = await fetch(`${OPENWHISPR_API_URL}/api/check-user`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
-      });
+      const response = await (window as any).electronAPI.proxyFetch(
+        `${OPENWHISPR_API_URL}/api/check-user`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim() }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(t("auth.errors.failedUserCheck"));
       }
 
-      const data = await response.json().catch(() => ({}));
+      let data: any = {};
+      try { data = JSON.parse(response.body || "{}"); } catch {}
       setAuthMode(data.exists ? "sign-in" : "sign-up");
     } catch (err) {
       logger.error("Error checking user existence", err, "auth");
@@ -242,15 +249,18 @@ export default function AuthenticationStep({
 
             if (OPENWHISPR_API_URL) {
               try {
-                await fetch(`${OPENWHISPR_API_URL}/api/auth/init-user`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    userId: result.data?.user?.id,
-                    email: email.trim(),
-                    name: fullName.trim() || email.trim().split("@")[0],
-                  }),
-                });
+                await (window as any).electronAPI.proxyFetch(
+                  `${OPENWHISPR_API_URL}/api/auth/init-user`,
+                  {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      userId: result.data?.user?.id,
+                      email: email.trim(),
+                      name: fullName.trim() || email.trim().split("@")[0],
+                    }),
+                  }
+                );
               } catch (initErr) {
                 logger.error("Failed to init user", initErr, "auth");
               }

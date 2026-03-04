@@ -1432,7 +1432,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       logger.debug(
-        "Making transcription API request",
+        "Making transcription API request via IPC proxy",
         {
           endpoint,
           shouldStream,
@@ -1440,116 +1440,37 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           provider,
           isCustomEndpoint,
           hasApiKey: !!apiKey,
-          apiKeyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : "(none)",
         },
         "transcription"
       );
 
-      // Build headers - only include Authorization if we have an API key
-      const headers = {};
-      if (apiKey) {
-        headers.Authorization = `Bearer ${apiKey}`;
-      }
-
-      logger.debug(
-        "STT request details",
-        {
-          endpoint,
-          method: "POST",
-          hasAuthHeader: !!apiKey,
-          formDataFields: [
-            "file",
-            "model",
-            language && language !== "auto" ? "language" : null,
-            shouldStream ? "stream" : null,
-          ].filter(Boolean),
-        },
-        "transcription"
-      );
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: formData,
+      // Convert audio blob to ArrayBuffer for IPC transfer
+      const audioBuffer = await optimizedAudio.arrayBuffer();
+      const proxyResult = await window.electronAPI.proxyCloudTranscriptionByok({
+        audioBuffer,
+        model,
+        language,
+        provider,
+        endpoint,
+        prompt: dictionaryPrompt || undefined,
+        stream: shouldStream,
+        apiKey: apiKey || undefined,
       });
 
-      const responseContentType = response.headers.get("content-type") || "";
+      if (!proxyResult.success) {
+        throw new Error(proxyResult.error || "Cloud transcription failed");
+      }
+
+      const result = { text: proxyResult.text || "" };
 
       logger.debug(
-        "Transcription API response received",
+        "Transcription IPC proxy result",
         {
-          status: response.status,
-          statusText: response.statusText,
-          contentType: responseContentType,
-          ok: response.ok,
+          hasText: !!result.text,
+          textLength: result.text?.length,
         },
         "transcription"
       );
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        logger.error(
-          "Transcription API error response",
-          {
-            status: response.status,
-            errorText,
-          },
-          "transcription"
-        );
-        throw new Error(`API Error: ${response.status} ${errorText}`);
-      }
-
-      let result;
-      const contentType = responseContentType;
-
-      if (shouldStream && contentType.includes("text/event-stream")) {
-        logger.debug("Processing streaming response", { contentType }, "transcription");
-        const streamedText = await this.readTranscriptionStream(response);
-        result = { text: streamedText };
-        logger.debug(
-          "Streaming response parsed",
-          {
-            hasText: !!streamedText,
-            textLength: streamedText?.length,
-          },
-          "transcription"
-        );
-      } else {
-        const rawText = await response.text();
-        logger.debug(
-          "Raw API response body",
-          {
-            rawText: rawText.substring(0, 1000),
-            fullLength: rawText.length,
-          },
-          "transcription"
-        );
-
-        try {
-          result = JSON.parse(rawText);
-        } catch (parseError) {
-          logger.error(
-            "Failed to parse JSON response",
-            {
-              parseError: parseError.message,
-              rawText: rawText.substring(0, 500),
-            },
-            "transcription"
-          );
-          throw new Error(`Failed to parse API response: ${parseError.message}`);
-        }
-
-        logger.debug(
-          "Parsed transcription result",
-          {
-            hasText: !!result.text,
-            textLength: result.text?.length,
-            resultKeys: Object.keys(result),
-            fullResult: result,
-          },
-          "transcription"
-        );
-      }
 
       // Check for text - handle both empty string and missing field
       if (result.text && result.text.trim().length > 0) {

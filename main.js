@@ -1,4 +1,4 @@
-const { app, globalShortcut, BrowserWindow, dialog, ipcMain, session } = require("electron");
+const { app, globalShortcut, BrowserWindow, dialog, ipcMain, session, protocol, net } = require("electron");
 const path = require("path");
 const http = require("http");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
@@ -83,6 +83,21 @@ if (process.platform === "win32") {
     APP_CHANNEL === "production" ? BASE_WINDOWS_APP_ID : `${BASE_WINDOWS_APP_ID}.${APP_CHANNEL}`;
   app.setAppUserModelId(windowsAppId);
 }
+
+// Register app:// as a privileged scheme before app is ready.
+// This allows the renderer to load from app:// URLs with proper security
+// (same-origin policy, fetch API support, etc.) instead of file://.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "app",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: false,
+    },
+  },
+]);
 
 function getOAuthProtocol() {
   const fromEnv = (process.env.VITE_OPENWHISPR_PROTOCOL || process.env.OPENWHISPR_PROTOCOL || "")
@@ -331,10 +346,9 @@ function navigateControlPanelWithVerifier(verifier) {
     const urlWithVerifier = `${appUrl}${separator}neon_auth_session_verifier=${encodeURIComponent(verifier)}`;
     windowManager.controlPanelWindow.loadURL(urlWithVerifier);
   } else {
-    const fileInfo = DevServerManager.getAppFilePath(true);
-    if (!fileInfo) return;
-    fileInfo.query.neon_auth_session_verifier = verifier;
-    windowManager.controlPanelWindow.loadFile(fileInfo.path, { query: fileInfo.query });
+    // Production: use app:// protocol
+    const urlWithVerifier = `app://app/index.html?panel=true&neon_auth_session_verifier=${encodeURIComponent(verifier)}`;
+    windowManager.controlPanelWindow.loadURL(urlWithVerifier);
   }
 
   if (debugLogger) {
@@ -453,6 +467,21 @@ async function startApp() {
   initializeCoreManagers();
   startAuthBridgeServer();
 
+  // Register app:// protocol handler for production builds.
+  // Serves files from src/dist/ so the renderer loads from app://app/
+  // instead of file://, enabling proper CSP and same-origin enforcement.
+  protocol.handle("app", (request) => {
+    const url = new URL(request.url);
+    let filePath = url.pathname;
+    // Serve index.html for root path
+    if (filePath === "/" || filePath === "") {
+      filePath = "/index.html";
+    }
+    // Resolve relative to the app's dist directory
+    const resolvedPath = path.join(app.getAppPath(), "src", "dist", filePath);
+    return net.fetch(`file://${resolvedPath}`);
+  });
+
   // Electron's file:// sends no Origin header, which Neon Auth rejects.
   session.defaultSession.webRequest.onBeforeSendHeaders(
     { urls: ["https://*.neon.tech/*"] },
@@ -465,6 +494,51 @@ async function startApp() {
       callback({ requestHeaders: details.requestHeaders });
     }
   );
+
+  // Add Content-Security-Policy headers.
+  // Most API calls are routed through IPC, but the Neon Auth SDK
+  // (signUp/signIn/signOut) makes direct fetch calls that must be allowed.
+  const neonAuthOrigin = (process.env.VITE_NEON_AUTH_URL || "").trim();
+  let neonAuthCspSource = "";
+  if (neonAuthOrigin) {
+    try {
+      neonAuthCspSource = " " + new URL(neonAuthOrigin).origin;
+    } catch {}
+  }
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const isDevMode = process.env.NODE_ENV === "development";
+    let csp;
+    if (isDevMode) {
+      // Dev mode: allow localhost for HMR/WebSocket
+      csp =
+        "default-src 'self' app: http://localhost:* ws://localhost:*; " +
+        "script-src 'self' app: http://localhost:* 'unsafe-inline'; " +
+        "style-src 'self' app: http://localhost:* 'unsafe-inline'; " +
+        "img-src 'self' app: http://localhost:* data: blob:; " +
+        "connect-src 'self' app: http://localhost:* ws://localhost:*" + neonAuthCspSource + "; " +
+        "font-src 'self' app: http://localhost:* data:; " +
+        "media-src 'self' app: http://localhost:* blob:; " +
+        "object-src 'none'";
+    } else {
+      csp =
+        "default-src 'self' app:; " +
+        "script-src 'self' app:; " +
+        "style-src 'self' app: 'unsafe-inline'; " +
+        "img-src 'self' app: data: blob:; " +
+        "connect-src 'self' app:" + neonAuthCspSource + "; " +
+        "font-src 'self' app: data:; " +
+        "media-src 'self' app: blob:; " +
+        "object-src 'none'";
+    }
+
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [csp],
+      },
+    });
+  });
 
   windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());

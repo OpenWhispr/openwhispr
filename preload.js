@@ -254,6 +254,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
   modelCancelDownload: (modelId) => ipcRenderer.invoke("model-cancel-download", modelId),
   onModelDownloadProgress: registerListener("model-download-progress"),
 
+  // AI provider reasoning (proxied through main process)
+  processOpenAIReasoning: (text, modelId, agentName, config) =>
+    ipcRenderer.invoke("process-openai-reasoning", text, modelId, agentName, config),
+  processGeminiReasoning: (text, modelId, agentName, config) =>
+    ipcRenderer.invoke("process-gemini-reasoning", text, modelId, agentName, config),
+  processGroqReasoning: (text, modelId, agentName, config) =>
+    ipcRenderer.invoke("process-groq-reasoning", text, modelId, agentName, config),
+
+  // Cloud transcription BYOK (proxied through main process)
+  proxyCloudTranscriptionByok: (data) => ipcRenderer.invoke("proxy-cloud-transcription-byok", data),
+
+  // Custom model discovery (proxied through main process)
+  fetchCustomModels: (options) => ipcRenderer.invoke("fetch-custom-models", options),
+
+  // Generic fetch proxy for auth calls (uses electron.net.fetch for cookie jar)
+  proxyFetch: (url, options) => ipcRenderer.invoke("proxy-fetch", url, options),
+
   // Anthropic API
   getAnthropicKey: () => ipcRenderer.invoke("get-anthropic-key"),
   saveAnthropicKey: (key) => ipcRenderer.invoke("save-anthropic-key", key),

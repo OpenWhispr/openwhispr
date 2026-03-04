@@ -31,9 +31,10 @@ export default function EmailVerificationStep({ email, onVerified }: EmailVerifi
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(url, { credentials: "include" });
+        const res = await (window as any).electronAPI.proxyFetch(url);
         if (res.ok) {
-          const data = await res.json();
+          let data: any = {};
+          try { data = JSON.parse(res.body || "{}"); } catch {}
           if (data.verified) {
             setVerified(true);
             if (pollRef.current) clearInterval(pollRef.current);
@@ -58,14 +59,15 @@ export default function EmailVerificationStep({ email, onVerified }: EmailVerifi
     setIsResending(true);
     setError(null);
     try {
-      const res = await fetch(`${OPENWHISPR_API_URL}/api/auth/send-verification-email`, {
-        method: "POST",
-        credentials: "include",
-      });
+      const res = await (window as any).electronAPI.proxyFetch(
+        `${OPENWHISPR_API_URL}/api/auth/send-verification-email`,
+        { method: "POST" }
+      );
       if (res.ok) {
         setResendCooldown(60);
       } else {
-        const data = await res.json();
+        let data: any = {};
+        try { data = JSON.parse(res.body || "{}"); } catch {}
         setError(data.error || t("emailVerification.errors.resendFailed"));
       }
     } catch {

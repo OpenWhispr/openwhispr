@@ -409,23 +409,17 @@ export default function ReasoningModelSelector({
           return;
         }
 
-        const headers: Record<string, string> = {};
-        if (apiKey) {
-          headers.Authorization = `Bearer ${apiKey}`;
-        }
-
         const modelsUrl = buildApiUrl(normalizedBase, "/models");
-        const response = await fetch(modelsUrl, { method: "GET", headers });
+        const result = await (window as any).electronAPI.fetchCustomModels({
+          baseUrl: normalizedBase,
+          apiKey: apiKey || "",
+        });
 
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => "");
-          const summary = errorText
-            ? `${response.status} ${errorText.slice(0, 200)}`
-            : `${response.status} ${response.statusText}`;
-          throw new Error(summary.trim());
+        if (!result.success) {
+          throw new Error(result.error || "Failed to fetch models");
         }
 
-        const payload = await response.json().catch(() => ({}));
+        const payload = result.data || {};
         const rawModels = Array.isArray(payload?.data)
           ? payload.data
           : Array.isArray(payload?.models)

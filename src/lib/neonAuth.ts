@@ -145,10 +145,14 @@ function getElectronOAuthCallbackURL(): string {
   const configuredUrl = (import.meta.env.VITE_OPENWHISPR_OAUTH_CALLBACK_URL || "").trim();
   if (configuredUrl) return configuredUrl;
 
-  if (window.location.protocol !== "file:") return `${window.location.origin}/?panel=true`;
+  const proto = window.location.protocol;
+  // file:// and app:// are non-HTTP protocols — OAuth callbacks need a real HTTP URL
+  if (proto === "file:" || proto === "app:") {
+    const port = import.meta.env.VITE_DEV_SERVER_PORT || "5183";
+    return `http://localhost:${port}/?panel=true`;
+  }
 
-  const port = import.meta.env.VITE_DEV_SERVER_PORT || "5183";
-  return `http://localhost:${port}/?panel=true`;
+  return `${window.location.origin}/?panel=true`;
 }
 
 export async function signInWithSocial(provider: SocialProvider): Promise<{ error?: Error }> {
@@ -162,19 +166,21 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
     if (isElectron) {
       const callbackURL = getElectronOAuthCallbackURL();
 
-      const response = await fetch(`${NEON_AUTH_URL}/sign-in/social`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          provider,
-          callbackURL,
-          newUserCallbackURL: callbackURL,
-          disableRedirect: true,
-        }),
-      });
+      const response = await (window as any).electronAPI.proxyFetch(
+        `${NEON_AUTH_URL}/sign-in/social`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider,
+            callbackURL,
+            newUserCallbackURL: callbackURL,
+            disableRedirect: true,
+          }),
+        }
+      );
 
-      const text = await response.text();
+      const text = response.body || "";
 
       if (!response.ok) {
         logger.error(`Social sign-in failed: ${response.status}`, text.slice(0, 200), "auth");
@@ -210,14 +216,18 @@ export async function requestPasswordReset(email: string): Promise<{ error?: Err
 
   try {
     if (OPENWHISPR_API_URL) {
-      const res = await fetch(`${OPENWHISPR_API_URL}/api/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
-      });
+      const res = await (window as any).electronAPI.proxyFetch(
+        `${OPENWHISPR_API_URL}/api/auth/forgot-password`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim() }),
+        }
+      );
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        let data: any = {};
+        try { data = JSON.parse(res.body || "{}"); } catch {}
         throw new Error(data.error || "Failed to send reset email");
       }
 

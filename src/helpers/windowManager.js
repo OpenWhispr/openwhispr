@@ -130,18 +130,10 @@ class WindowManager {
       await DevServerManager.waitForDevServer();
       await window.loadURL(appUrl);
     } else {
-      // Production: use loadFile() for better compatibility with Electron 36+
-      const fileInfo = DevServerManager.getAppFilePath(isControlPanel);
-      if (!fileInfo) {
-        throw new Error("Failed to get app file path");
-      }
-
-      const fs = require("fs");
-      if (!fs.existsSync(fileInfo.path)) {
-        throw new Error(`HTML file not found: ${fileInfo.path}`);
-      }
-
-      await window.loadFile(fileInfo.path, { query: fileInfo.query });
+      // Production: use app:// protocol for proper CSP and same-origin enforcement.
+      // The app:// handler (registered in main.js) serves files from src/dist/.
+      const query = isControlPanel ? "?panel=true" : "";
+      await window.loadURL(`app://app/index.html${query}`);
     }
   }
 
@@ -451,10 +443,11 @@ class WindowManager {
 
     this.controlPanelWindow.webContents.on("will-navigate", (event, url) => {
       const appUrl = DevServerManager.getAppUrl(true);
-      const controlPanelUrl = appUrl.startsWith("http") ? appUrl : `file://${appUrl}`;
+      const controlPanelUrl = appUrl ? (appUrl.startsWith("http") ? appUrl : `file://${appUrl}`) : "";
 
       if (
-        url.startsWith(controlPanelUrl) ||
+        url.startsWith("app://") ||
+        (controlPanelUrl && url.startsWith(controlPanelUrl)) ||
         url.startsWith("file://") ||
         url.startsWith("devtools://")
       ) {

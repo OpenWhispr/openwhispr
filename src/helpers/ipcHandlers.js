@@ -108,6 +108,7 @@ class IPCHandlers {
     this._textEditHandler = null;
     this._setupTextEditMonitor();
     this.setupHandlers();
+    this._setupProxyHandlers();
 
     if (this.whisperManager?.serverManager) {
       this.whisperManager.serverManager.on("cuda-fallback", () => {
@@ -3016,6 +3017,463 @@ class IPCHandlers {
         return { isConnected: false, sessionId: null };
       }
       return this.deepgramStreaming.getStatus();
+    });
+  }
+
+  _setupProxyHandlers() {
+    // ── OpenAI reasoning (Responses API → Chat Completions fallback) ──
+    ipcMain.handle(
+      "process-openai-reasoning",
+      async (event, text, modelId, _agentName, config) => {
+        try {
+          const isCustomProvider = config?.isCustomProvider || false;
+          const apiKey = isCustomProvider
+            ? this.environmentManager.getCustomReasoningKey()
+            : this.environmentManager.getOpenAIKey();
+
+          if (!apiKey) {
+            throw new Error(
+              isCustomProvider
+                ? "Custom reasoning API key not configured"
+                : "OpenAI API key not configured"
+            );
+          }
+
+          const systemPrompt = config?.systemPrompt || "";
+          const customBaseUrl = config?.customBaseUrl || "";
+          const defaultBase = "https://api.openai.com/v1";
+          const base = (isCustomProvider && customBaseUrl) ? customBaseUrl : defaultBase;
+
+          const messages = [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: text },
+          ];
+
+          // Build endpoint candidates (Responses API first, then Chat Completions)
+          const lower = base.toLowerCase();
+          let endpointCandidates;
+          if (lower.endsWith("/responses") || lower.endsWith("/chat/completions")) {
+            const type = lower.endsWith("/responses") ? "responses" : "chat";
+            endpointCandidates = [{ url: base, type }];
+          } else {
+            endpointCandidates = [
+              { url: `${base}/responses`, type: "responses" },
+              { url: `${base}/chat/completions`, type: "chat" },
+            ];
+          }
+
+          const isOlderModel = modelId && (modelId.startsWith("gpt-4") || modelId.startsWith("gpt-3"));
+
+          let lastError = null;
+          for (const { url: endpoint, type } of endpointCandidates) {
+            try {
+              const requestBody = { model: modelId };
+              if (type === "responses") {
+                requestBody.input = messages;
+                requestBody.store = false;
+              } else {
+                requestBody.messages = messages;
+                if (isOlderModel) {
+                  requestBody.temperature = config?.temperature || 0.3;
+                }
+                if (config?.maxTokens) {
+                  requestBody.max_tokens = config.maxTokens;
+                }
+              }
+
+              if (config?.reasoningEffort) {
+                requestBody.reasoning_effort = config.reasoningEffort;
+              }
+
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+              let response;
+              try {
+                response = await fetch(endpoint, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${apiKey}`,
+                  },
+                  body: JSON.stringify(requestBody),
+                  signal: controller.signal,
+                });
+              } finally {
+                clearTimeout(timeoutId);
+              }
+
+              if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                const errorMessage =
+                  errorData.error?.message || errorData.message || `OpenAI API error: ${response.status}`;
+
+                // Fall back to chat completions if responses endpoint is not supported
+                const isUnsupportedEndpoint =
+                  (response.status === 404 || response.status === 405) && type === "responses";
+                if (isUnsupportedEndpoint) {
+                  lastError = new Error(errorMessage);
+                  continue;
+                }
+                throw new Error(errorMessage);
+              }
+
+              const data = await response.json();
+
+              // Extract text from either Responses or Chat Completions format
+              let responseText = "";
+              if (Array.isArray(data?.output)) {
+                for (const item of data.output) {
+                  if (item.type === "message" && item.content) {
+                    for (const content of item.content) {
+                      if (content.type === "output_text" && content.text) {
+                        responseText = content.text.trim();
+                        break;
+                      }
+                    }
+                    if (responseText) break;
+                  }
+                }
+              }
+              if (!responseText && typeof data?.output_text === "string") {
+                responseText = data.output_text.trim();
+              }
+              if (!responseText && Array.isArray(data?.choices)) {
+                for (const choice of data.choices) {
+                  const message = choice?.message ?? choice?.delta;
+                  const content = message?.content;
+                  if (typeof content === "string" && content.trim()) {
+                    responseText = content.trim();
+                    break;
+                  }
+                }
+              }
+
+              if (!responseText) {
+                return { success: true, text: text }; // Fallback to original text
+              }
+
+              return { success: true, text: responseText };
+            } catch (error) {
+              if (error.name === "AbortError") {
+                throw new Error("Request timed out after 30s");
+              }
+              lastError = error;
+              if (type === "responses") continue;
+              throw error;
+            }
+          }
+
+          throw lastError || new Error("No OpenAI endpoint responded");
+        } catch (error) {
+          debugLogger.error("OpenAI reasoning error:", error);
+          return { success: false, error: error.message };
+        }
+      }
+    );
+
+    // ── Gemini reasoning ──
+    ipcMain.handle(
+      "process-gemini-reasoning",
+      async (event, text, modelId, _agentName, config) => {
+        try {
+          const apiKey = this.environmentManager.getGeminiKey();
+          if (!apiKey) {
+            throw new Error("Gemini API key not configured");
+          }
+
+          const systemPrompt = config?.systemPrompt || "";
+          const userPrompt = text;
+
+          const requestBody = {
+            contents: [
+              {
+                parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }],
+              },
+            ],
+            generationConfig: {
+              temperature: config?.temperature || 0.3,
+              maxOutputTokens: config?.maxTokens || 4096,
+            },
+          };
+
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+          let response;
+          try {
+            response = await fetch(endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": apiKey,
+              },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeoutId);
+          }
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            let errorData = { error: response.statusText };
+            try {
+              errorData = JSON.parse(errorText);
+            } catch {
+              errorData = { error: errorText || response.statusText };
+            }
+            throw new Error(
+              errorData.error?.message || errorData.message || errorData.error || `Gemini API error: ${response.status}`
+            );
+          }
+
+          const data = await response.json();
+
+          if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            const candidate = data.candidates?.[0];
+            if (candidate?.finishReason === "MAX_TOKENS") {
+              throw new Error("Gemini reached token limit before generating response.");
+            }
+            throw new Error("Gemini returned empty response");
+          }
+
+          return { success: true, text: data.candidates[0].content.parts[0].text.trim() };
+        } catch (error) {
+          if (error.name === "AbortError") {
+            return { success: false, error: "Request timed out after 30s" };
+          }
+          debugLogger.error("Gemini reasoning error:", error);
+          return { success: false, error: error.message };
+        }
+      }
+    );
+
+    // ── Groq reasoning (Chat Completions format) ──
+    ipcMain.handle(
+      "process-groq-reasoning",
+      async (event, text, modelId, _agentName, config) => {
+        try {
+          const apiKey = this.environmentManager.getGroqKey();
+          if (!apiKey) {
+            throw new Error("Groq API key not configured");
+          }
+
+          const systemPrompt = config?.systemPrompt || "";
+          const endpoint = "https://api.groq.com/openai/v1/chat/completions";
+
+          const requestBody = {
+            model: modelId,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: text },
+            ],
+            temperature: config?.temperature ?? 0.3,
+            max_tokens: config?.maxTokens || 4096,
+          };
+
+          if (config?.reasoningEffort) {
+            requestBody.reasoning_effort = config.reasoningEffort;
+          }
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+          let response;
+          try {
+            response = await fetch(endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeoutId);
+          }
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            let errorData = { error: response.statusText };
+            try {
+              errorData = JSON.parse(errorText);
+            } catch {
+              errorData = { error: errorText || response.statusText };
+            }
+            throw new Error(
+              errorData.error?.message || errorData.message || errorData.error || `Groq API error: ${response.status}`
+            );
+          }
+
+          const data = await response.json();
+
+          if (!data.choices?.[0]?.message?.content) {
+            throw new Error("Invalid response structure from Groq API");
+          }
+
+          return { success: true, text: data.choices[0].message.content.trim() };
+        } catch (error) {
+          if (error.name === "AbortError") {
+            return { success: false, error: "Request timed out after 30s" };
+          }
+          debugLogger.error("Groq reasoning error:", error);
+          return { success: false, error: error.message };
+        }
+      }
+    );
+
+    // ── Cloud transcription BYOK (OpenAI Whisper, Groq, custom STT) ──
+    ipcMain.handle(
+      "proxy-cloud-transcription-byok",
+      async (event, { audioBuffer, model, language, provider, endpoint, prompt, stream, apiKey: providedKey }) => {
+        try {
+          let apiKey = providedKey || "";
+          if (!apiKey) {
+            if (provider === "openai") {
+              apiKey = this.environmentManager.getOpenAIKey();
+            } else if (provider === "groq") {
+              apiKey = this.environmentManager.getGroqKey();
+            } else if (provider === "custom") {
+              apiKey = this.environmentManager.getCustomTranscriptionKey();
+            }
+          }
+
+          const ext = "webm";
+          const contentType = "audio/webm";
+          const fields = { model };
+          if (language && language !== "auto") fields.language = language;
+          if (prompt) fields.prompt = prompt;
+          if (stream) fields.stream = "true";
+
+          const fileBuffer = Buffer.from(audioBuffer);
+          const { body, boundary } = buildMultipartBody(fileBuffer, `audio.${ext}`, contentType, fields);
+
+          const parsedUrl = new URL(endpoint);
+          const headers = {};
+          if (apiKey) {
+            headers.Authorization = `Bearer ${apiKey}`;
+          }
+
+          const result = await postMultipart(parsedUrl, body, boundary, headers);
+
+          if (result.statusCode < 200 || result.statusCode >= 300) {
+            const errorMsg = result.data?.error?.message || result.data?.error || `API Error: ${result.statusCode}`;
+            throw new Error(errorMsg);
+          }
+
+          return { success: true, text: result.data?.text || "" };
+        } catch (error) {
+          debugLogger.error("Cloud transcription BYOK error:", error);
+          return { success: false, error: error.message };
+        }
+      }
+    );
+
+    // ── Custom model discovery ──
+    ipcMain.handle("fetch-custom-models", async (event, { baseUrl, apiKey }) => {
+      try {
+        const modelsUrl = `${baseUrl}/models`;
+
+        const headers = {};
+        if (apiKey) {
+          headers.Authorization = `Bearer ${apiKey}`;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        let response;
+        try {
+          response = await fetch(modelsUrl, { method: "GET", headers, signal: controller.signal });
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!response.ok) {
+          const errorText = await response.text().catch(() => "");
+          const summary = errorText
+            ? `${response.status} ${errorText.slice(0, 200)}`
+            : `${response.status} ${response.statusText}`;
+          throw new Error(summary.trim());
+        }
+
+        const payload = await response.json().catch(() => ({}));
+        return { success: true, data: payload };
+      } catch (error) {
+        if (error.name === "AbortError") {
+          return { success: false, error: "Request timed out" };
+        }
+        return { success: false, error: error.message };
+      }
+    });
+
+    // ── Generic fetch proxy for auth calls (with origin allowlist) ──
+    ipcMain.handle("proxy-fetch", async (event, url, options) => {
+      try {
+        const { net } = require("electron");
+
+        // Validate URL against allowlist
+        const parsed = new URL(url);
+        const allowedOrigins = [];
+
+        const neonAuthUrl = process.env.VITE_NEON_AUTH_URL || "";
+        const openwhisprApiUrl = process.env.VITE_OPENWHISPR_API_URL || "";
+
+        if (neonAuthUrl) {
+          try {
+            allowedOrigins.push(new URL(neonAuthUrl).origin);
+          } catch {}
+        }
+        if (openwhisprApiUrl) {
+          try {
+            allowedOrigins.push(new URL(openwhisprApiUrl).origin);
+          } catch {}
+        }
+
+        if (allowedOrigins.length > 0 && !allowedOrigins.includes(parsed.origin)) {
+          throw new Error(`URL origin ${parsed.origin} not in allowlist`);
+        }
+
+        const fetchOptions = {
+          method: options?.method || "GET",
+          headers: options?.headers || {},
+        };
+
+        if (options?.body) {
+          fetchOptions.body = options.body;
+        }
+
+        // Use electron.net.fetch to share cookie jar with renderer
+        const response = await net.fetch(url, fetchOptions);
+        const bodyText = await response.text();
+
+        // Convert headers to plain object
+        const responseHeaders = {};
+        response.headers.forEach((value, key) => {
+          responseHeaders[key] = value;
+        });
+
+        return {
+          ok: response.ok,
+          status: response.status,
+          statusText: response.statusText,
+          headers: responseHeaders,
+          body: bodyText,
+        };
+      } catch (error) {
+        debugLogger.error("Proxy fetch error:", { url, error: error.message });
+        return {
+          ok: false,
+          status: 0,
+          statusText: error.message,
+          headers: {},
+          body: "",
+        };
+      }
     });
   }
 
