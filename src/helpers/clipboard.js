@@ -1036,7 +1036,10 @@ class ClipboardManager {
         // On GNOME/KDE Wayland, try portal mode first (RemoteDesktop D-Bus portal).
         // uinput events are accepted by the kernel but Mutter doesn't reliably
         // route them to focused native Wayland windows (issue #292).
-        if ((isGnome || isKde) && linuxFastPaste) {
+        // On KDE, skip portal when no token — the binary exits 0 without
+        // actually pasting, silently swallowing the text.
+        const hasPortalToken = !!this._readPortalToken();
+        if ((isGnome || (isKde && hasPortalToken)) && linuxFastPaste) {
           try {
             const portalResult = await this._runPortalPaste(linuxFastPaste, earlyIsTerminal);
             this.safeLog("✅ Paste successful using linux-fast-paste --portal (RemoteDesktop)");
