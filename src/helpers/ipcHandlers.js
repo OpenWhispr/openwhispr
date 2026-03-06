@@ -12,6 +12,15 @@ const DeepgramStreaming = require("./deepgramStreaming");
 const { isSecureEndpoint } = require("./urlValidation.mjs");
 const { withRetry, createApiRetryStrategy } = require("./retry");
 
+const MODEL_ID_REGEX = /^[a-zA-Z0-9._\/-]+$/;
+
+function validateModelId(modelId, providerName = "") {
+  if (!modelId || !MODEL_ID_REGEX.test(modelId)) {
+    const prefix = providerName ? `Invalid ${providerName} model ID` : "Invalid model ID";
+    throw new Error(`${prefix}: ${modelId}`);
+  }
+}
+
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
 // Debounce delay: wait for user to stop typing before processing corrections
@@ -1432,6 +1441,7 @@ class IPCHandlers {
 
     ipcMain.handle("process-local-reasoning", async (event, text, modelId, _agentName, config) => {
       try {
+        validateModelId(modelId, "Local");
         const LocalReasoningService = require("../services/localReasoningBridge").default;
         const result = await LocalReasoningService.processText(text, modelId, config);
         return { success: true, text: result };
@@ -1453,9 +1463,7 @@ class IPCHandlers {
           const systemPrompt = config?.systemPrompt || "";
           const userPrompt = text;
 
-          if (!modelId) {
-            throw new Error("No model specified for Anthropic API call");
-          }
+          validateModelId(modelId, "Anthropic");
 
           const requestBody = {
             model: modelId,
@@ -3082,9 +3090,7 @@ class IPCHandlers {
             );
           }
 
-          if (!modelId || !/^[a-zA-Z0-9._-]+$/.test(modelId)) {
-            throw new Error(`Invalid model ID: ${modelId}`);
-          }
+          validateModelId(modelId);
 
           const systemPrompt = config?.systemPrompt || "";
           const defaultBase = "https://api.openai.com/v1";
@@ -3266,9 +3272,7 @@ class IPCHandlers {
             },
           };
 
-          if (!modelId || !/^[a-zA-Z0-9._-]+$/.test(modelId)) {
-            throw new Error(`Invalid Gemini model ID: ${modelId}`);
-          }
+          validateModelId(modelId, "Gemini");
 
           const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
 
@@ -3339,9 +3343,7 @@ class IPCHandlers {
             throw new Error("Groq API key not configured");
           }
 
-          if (!modelId || !/^[a-zA-Z0-9._\/-]+$/.test(modelId)) {
-            throw new Error(`Invalid model ID: ${modelId}`);
-          }
+          validateModelId(modelId);
 
           const systemPrompt = config?.systemPrompt || "";
           const endpoint = "https://api.groq.com/openai/v1/chat/completions";
