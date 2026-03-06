@@ -1247,7 +1247,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         model,
         language,
         provider,
-        endpoint,
         prompt: dictionaryPrompt || undefined,
       });
 

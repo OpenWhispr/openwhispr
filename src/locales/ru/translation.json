@@ -268,7 +268,8 @@
       "noModels": "Модели не найдены. Проверьте URL конечной точки.",
       "providerName": "Пользовательский",
       "ownerLabel": "Автор: {{owner}}",
-      "unableToLoadModels": "Не удалось загрузить модели с конечной точки."
+      "unableToLoadModels": "Не удалось загрузить модели с конечной точки.",
+      "urlSaveFailed": "Не удалось сохранить URL конечной точки. Убедитесь, что используется HTTPS."
     },
     "getApiKey": "Получить API-ключ ->",
     "selectModel": "Выберите модель",
@@ -291,7 +292,10 @@
       "whisperModelDescription": "Модель",
       "parakeetModelDescription": "Модель NVIDIA Parakeet"
     },
-    "whisperModels": "Модели Whisper"
+    "whisperModels": "Модели Whisper",
+    "custom": {
+      "urlSaveFailed": "Не удалось сохранить URL конечной точки. Убедитесь, что используется HTTPS."
+    }
   },
   "hooks": {
     "audioRecording": {

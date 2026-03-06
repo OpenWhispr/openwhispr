@@ -268,7 +268,8 @@
       "noModels": "モデルが見つかりません。エンドポイント URL を確認してください。",
       "providerName": "カスタム",
       "ownerLabel": "提供元: {{owner}}",
-      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。"
+      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。",
+      "urlSaveFailed": "エンドポイントURLの保存に失敗しました。HTTPSを使用していることを確認してください。"
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
@@ -291,7 +292,10 @@
       "whisperModelDescription": "モデル",
       "parakeetModelDescription": "NVIDIA Parakeet モデル"
     },
-    "whisperModels": "Whisper モデル"
+    "whisperModels": "Whisper モデル",
+    "custom": {
+      "urlSaveFailed": "エンドポイントURLの保存に失敗しました。HTTPSを使用していることを確認してください。"
+    }
   },
   "hooks": {
     "audioRecording": {

@@ -2324,11 +2324,30 @@ class IPCHandlers {
         try {
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
 
-          // Use persisted custom transcription URL if available, otherwise fall back to renderer-provided baseUrl
-          // (for known providers like OpenAI/Groq the renderer provides the standard URL which is safe)
+          // Resolve endpoint from hardcoded map or persisted config — never fall back to renderer input
+          const BYOK_FILE_PROVIDER_BASES = {
+            "api.openai.com": "https://api.openai.com/v1",
+            "api.groq.com": "https://api.groq.com/openai/v1",
+          };
           const persistedCustomUrl = this.environmentManager.getCustomTranscriptionBaseUrl();
-          const resolvedBaseUrl = persistedCustomUrl || baseUrl;
-          if (!resolvedBaseUrl) throw new Error("No transcription endpoint configured.");
+          let resolvedBaseUrl;
+          if (persistedCustomUrl) {
+            resolvedBaseUrl = persistedCustomUrl;
+          } else if (baseUrl) {
+            // Only allow renderer-provided URL if it matches a known provider
+            try {
+              const parsed = new URL(baseUrl);
+              resolvedBaseUrl = BYOK_FILE_PROVIDER_BASES[parsed.hostname];
+              if (!resolvedBaseUrl) {
+                throw new Error("No custom transcription endpoint configured. Set one in Settings.");
+              }
+            } catch (e) {
+              if (e.message.includes("No custom")) throw e;
+              throw new Error("Invalid transcription endpoint URL.");
+            }
+          } else {
+            throw new Error("No transcription endpoint configured.");
+          }
 
           const fileSize = fs.statSync(filePath).size;
           if (fileSize > BYOK_FILE_SIZE_LIMIT) {
@@ -3375,7 +3394,7 @@ class IPCHandlers {
     // ── Cloud transcription BYOK (OpenAI Whisper, Groq, custom STT) ──
     ipcMain.handle(
       "proxy-cloud-transcription-byok",
-      async (event, { audioBuffer, model, language, provider, endpoint, prompt }) => {
+      async (event, { audioBuffer, model, language, provider, prompt }) => {
         try {
           let apiKey = "";
           if (provider === "openai") {
@@ -3395,39 +3414,35 @@ class IPCHandlers {
           const fileBuffer = Buffer.from(audioBuffer);
           const { body, boundary } = buildMultipartBody(fileBuffer, `audio.${ext}`, contentType, fields);
 
-          // For custom provider, use persisted URL from main process config instead of renderer input
-          const isCustomProvider = provider === "custom";
-          let resolvedEndpoint = endpoint;
-          if (isCustomProvider) {
+          // Resolve endpoint from hardcoded map or persisted config — never from renderer input
+          const PROVIDER_ENDPOINTS = {
+            openai: "https://api.openai.com/v1/audio/transcriptions",
+            groq: "https://api.groq.com/openai/v1/audio/transcriptions",
+          };
+
+          let resolvedEndpoint;
+          if (PROVIDER_ENDPOINTS[provider]) {
+            resolvedEndpoint = PROVIDER_ENDPOINTS[provider];
+          } else if (provider === "custom") {
             const persistedBaseUrl = this.environmentManager.getCustomTranscriptionBaseUrl();
-            if (persistedBaseUrl) {
-              // Build transcription endpoint from persisted base URL
-              if (/\/audio\/(transcriptions|translations)$/i.test(persistedBaseUrl)) {
-                resolvedEndpoint = persistedBaseUrl;
-              } else {
-                const base = persistedBaseUrl.replace(/\/+$/, "");
-                resolvedEndpoint = `${base}/audio/transcriptions`;
-              }
+            if (!persistedBaseUrl) {
+              throw new Error("No custom transcription endpoint configured. Set one in Settings.");
             }
+            // Build transcription endpoint from persisted base URL
+            if (/\/audio\/(transcriptions|translations)$/i.test(persistedBaseUrl)) {
+              resolvedEndpoint = persistedBaseUrl;
+            } else {
+              const base = persistedBaseUrl.replace(/\/+$/, "");
+              resolvedEndpoint = `${base}/audio/transcriptions`;
+            }
+            if (!isSecureEndpoint(resolvedEndpoint)) {
+              throw new Error("Custom transcription endpoint must use HTTPS (HTTP allowed for local network only)");
+            }
+          } else {
+            throw new Error(`Unknown transcription provider: ${provider}`);
           }
 
           const parsedUrl = new URL(resolvedEndpoint);
-
-          // Validate endpoint against allowlist to prevent SSRF
-          const ALLOWED_TRANSCRIPTION_HOSTS = [
-            "api.openai.com",
-            "api.groq.com",
-            "api.mistral.ai",
-          ];
-          const isAllowedHost = ALLOWED_TRANSCRIPTION_HOSTS.includes(parsedUrl.hostname);
-          const isLocalhost = ["localhost", "127.0.0.1", "0.0.0.0"].includes(parsedUrl.hostname);
-
-          if (!isAllowedHost && !isLocalhost && !isCustomProvider) {
-            throw new Error(`Transcription endpoint host ${parsedUrl.hostname} is not allowed`);
-          }
-          if (isCustomProvider && !isSecureEndpoint(resolvedEndpoint)) {
-            throw new Error("Custom transcription endpoint must use HTTPS (HTTP allowed for local network only)");
-          }
           const headers = {};
           if (apiKey) {
             headers.Authorization = `Bearer ${apiKey}`;

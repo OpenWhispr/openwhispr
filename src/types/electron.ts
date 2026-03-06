@@ -924,7 +924,6 @@ declare global {
         model?: string;
         language?: string;
         provider?: string;
-        endpoint?: string;
         prompt?: string;
       }) => Promise<{ success: boolean; text?: string; error?: string }>;
 

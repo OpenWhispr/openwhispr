@@ -545,10 +545,17 @@ export default function ReasoningModelSelector({
     setCustomBaseInput(normalized);
     setCloudReasoningBaseUrl(normalized);
     // Persist to main process so IPC handlers use the trusted value
-    try { await window.electronAPI.saveCustomReasoningBaseUrl(normalized); } catch {}
+    try {
+      await window.electronAPI.saveCustomReasoningBaseUrl(normalized);
+    } catch (err) {
+      setCustomModelsError(
+        err instanceof Error ? err.message : t("reasoning.custom.urlSaveFailed")
+      );
+      return;
+    }
     lastLoadedBaseRef.current = null;
     loadRemoteModels(normalized, true);
-  }, [customBaseInput, setCloudReasoningBaseUrl, loadRemoteModels]);
+  }, [customBaseInput, setCloudReasoningBaseUrl, loadRemoteModels, t]);
 
   const handleBaseUrlBlur = useCallback(() => {
     const trimmedBase = customBaseInput.trim();
@@ -565,10 +572,17 @@ export default function ReasoningModelSelector({
     setCustomBaseInput(defaultBase);
     setCloudReasoningBaseUrl(defaultBase);
     // Clear persisted custom URL in main process
-    try { await window.electronAPI.saveCustomReasoningBaseUrl(""); } catch {}
+    try {
+      await window.electronAPI.saveCustomReasoningBaseUrl("");
+    } catch (err) {
+      setCustomModelsError(
+        err instanceof Error ? err.message : t("reasoning.custom.urlSaveFailed")
+      );
+      return;
+    }
     lastLoadedBaseRef.current = null;
     loadRemoteModels(defaultBase, true);
-  }, [setCloudReasoningBaseUrl, loadRemoteModels]);
+  }, [setCloudReasoningBaseUrl, loadRemoteModels, t]);
 
   const handleRefreshCustomModels = useCallback(() => {
     if (isCustomBaseDirty) {

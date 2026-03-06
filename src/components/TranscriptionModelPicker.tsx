@@ -293,6 +293,7 @@ export default function TranscriptionModelPicker({
     percentage: 0,
   });
   const [cudaDismissed, setCudaDismissed] = useState(false);
+  const [baseUrlError, setBaseUrlError] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedLocalProvider !== internalLocalProvider) {
@@ -583,7 +584,13 @@ export default function TranscriptionModelPicker({
     if (normalized && normalized !== cloudTranscriptionBaseUrl) {
       setCloudTranscriptionBaseUrl(normalized);
       // Persist to main process so IPC handlers use the trusted value
-      window.electronAPI.saveCustomTranscriptionBaseUrl(normalized).catch(() => {});
+      window.electronAPI.saveCustomTranscriptionBaseUrl(normalized)
+        .then(() => setBaseUrlError(null))
+        .catch((err: unknown) => {
+          setBaseUrlError(
+            err instanceof Error ? err.message : t("transcription.custom.urlSaveFailed")
+          );
+        });
     }
     if (normalized) {
       for (const provider of cloudProviders) {
@@ -602,6 +609,7 @@ export default function TranscriptionModelPicker({
     onCloudProviderSelect,
     onCloudModelSelect,
     cloudProviders,
+    t,
   ]);
 
   const handleDelete = useCallback(
@@ -844,6 +852,9 @@ export default function TranscriptionModelPicker({
                     placeholder="https://your-api.example.com/v1"
                     className="h-8 text-sm"
                   />
+                  {baseUrlError && (
+                    <p className="text-xs text-destructive mt-1">{baseUrlError}</p>
+                  )}
                 </div>
 
                 <ApiKeyInput

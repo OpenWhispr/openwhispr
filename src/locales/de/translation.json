@@ -268,7 +268,8 @@
       "noModels": "Keine Modelle zurückgegeben. Prüfen Sie die Endpoint-URL.",
       "providerName": "Benutzerdefiniert",
       "ownerLabel": "Anbieter: {{owner}}",
-      "unableToLoadModels": "Modelle konnten nicht vom Endpoint geladen werden."
+      "unableToLoadModels": "Modelle konnten nicht vom Endpoint geladen werden.",
+      "urlSaveFailed": "Endpoint-URL konnte nicht gespeichert werden. Stellen Sie sicher, dass HTTPS verwendet wird."
     },
     "getApiKey": "API-Schlüssel holen ->",
     "selectModel": "Modell auswählen",
@@ -291,7 +292,10 @@
       "whisperModelDescription": "Modell",
       "parakeetModelDescription": "NVIDIA-Parakeet-Modell"
     },
-    "whisperModels": "Whisper-Modelle"
+    "whisperModels": "Whisper-Modelle",
+    "custom": {
+      "urlSaveFailed": "Endpoint-URL konnte nicht gespeichert werden. Stellen Sie sicher, dass HTTPS verwendet wird."
+    }
   },
   "hooks": {
     "audioRecording": {

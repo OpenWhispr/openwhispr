@@ -268,7 +268,8 @@
       "noModels": "Nessun modello restituito. Controlla l'URL dell'endpoint.",
       "providerName": "Personalizzato",
       "ownerLabel": "Proprietario: {{owner}}",
-      "unableToLoadModels": "Impossibile caricare i modelli dall'endpoint."
+      "unableToLoadModels": "Impossibile caricare i modelli dall'endpoint.",
+      "urlSaveFailed": "Impossibile salvare l'URL dell'endpoint. Assicurarsi che utilizzi HTTPS."
     },
     "getApiKey": "Ottieni la chiave API ->",
     "selectModel": "Seleziona modello",
@@ -291,7 +292,10 @@
       "whisperModelDescription": "Modello",
       "parakeetModelDescription": "Modello NVIDIA Parakeet"
     },
-    "whisperModels": "Modelli Whisper"
+    "whisperModels": "Modelli Whisper",
+    "custom": {
+      "urlSaveFailed": "Impossibile salvare l'URL dell'endpoint. Assicurarsi che utilizzi HTTPS."
+    }
   },
   "hooks": {
     "audioRecording": {

@@ -268,7 +268,8 @@
       "noModels": "沒有取得任何模型。請檢查端點 URL。",
       "providerName": "自訂",
       "ownerLabel": "擁有者：{{owner}}",
-      "unableToLoadModels": "無法從端點載入模型。"
+      "unableToLoadModels": "無法從端點載入模型。",
+      "urlSaveFailed": "無法儲存端點URL。請確保使用HTTPS。"
     },
     "getApiKey": "取得 API Key ->",
     "selectModel": "選擇模型",
@@ -291,7 +292,10 @@
       "whisperModelDescription": "模型",
       "parakeetModelDescription": "NVIDIA Parakeet 模型"
     },
-    "whisperModels": "Whisper 模型"
+    "whisperModels": "Whisper 模型",
+    "custom": {
+      "urlSaveFailed": "無法儲存端點URL。請確保使用HTTPS。"
+    }
   },
   "hooks": {
     "audioRecording": {
