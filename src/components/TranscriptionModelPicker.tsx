@@ -582,6 +582,8 @@ export default function TranscriptionModelPicker({
 
     if (normalized && normalized !== cloudTranscriptionBaseUrl) {
       setCloudTranscriptionBaseUrl(normalized);
+      // Persist to main process so IPC handlers use the trusted value
+      window.electronAPI.saveCustomTranscriptionBaseUrl(normalized).catch(() => {});
     }
     if (normalized) {
       for (const provider of cloudProviders) {

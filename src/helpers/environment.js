@@ -24,6 +24,8 @@ const PERSISTED_KEYS = [
   "FLOATING_ICON_AUTO_HIDE",
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
+  "CUSTOM_REASONING_BASE_URL",
+  "CUSTOM_TRANSCRIPTION_BASE_URL",
 ];
 
 class EnvironmentManager {
@@ -119,6 +121,34 @@ class EnvironmentManager {
 
   saveCustomReasoningKey(key) {
     return this._saveKey("CUSTOM_REASONING_API_KEY", key);
+  }
+
+  getCustomReasoningBaseUrl() {
+    return this._getKey("CUSTOM_REASONING_BASE_URL");
+  }
+
+  saveCustomReasoningBaseUrl(url) {
+    const { isSecureEndpoint } = require("./urlValidation");
+    if (url && !isSecureEndpoint(url)) {
+      throw new Error("Custom reasoning base URL must use HTTPS (HTTP allowed for local network only)");
+    }
+    const result = this._saveKey("CUSTOM_REASONING_BASE_URL", url || "");
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getCustomTranscriptionBaseUrl() {
+    return this._getKey("CUSTOM_TRANSCRIPTION_BASE_URL");
+  }
+
+  saveCustomTranscriptionBaseUrl(url) {
+    const { isSecureEndpoint } = require("./urlValidation");
+    if (url && !isSecureEndpoint(url)) {
+      throw new Error("Custom transcription base URL must use HTTPS (HTTP allowed for local network only)");
+    }
+    const result = this._saveKey("CUSTOM_TRANSCRIPTION_BASE_URL", url || "");
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
   }
 
   getDictationKey() {

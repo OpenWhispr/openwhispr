@@ -410,9 +410,8 @@ export default function ReasoningModelSelector({
         }
 
         const modelsUrl = buildApiUrl(normalizedBase, "/models");
-        const result = await window.electronAPI.fetchCustomModels({
-          baseUrl: normalizedBase,
-        });
+        // Main process reads persisted base URL (saved via saveCustomReasoningBaseUrl)
+        const result = await window.electronAPI.fetchCustomModels();
 
         if (!result.success) {
           throw new Error(result.error || "Failed to fetch models");
@@ -540,11 +539,13 @@ export default function ReasoningModelSelector({
     }));
   }, [selectedCloudProvider, openaiModelOptions, displayedCustomModels, t]);
 
-  const handleApplyCustomBase = useCallback(() => {
+  const handleApplyCustomBase = useCallback(async () => {
     const trimmedBase = customBaseInput.trim();
     const normalized = trimmedBase ? normalizeBaseUrl(trimmedBase) : trimmedBase;
     setCustomBaseInput(normalized);
     setCloudReasoningBaseUrl(normalized);
+    // Persist to main process so IPC handlers use the trusted value
+    try { await window.electronAPI.saveCustomReasoningBaseUrl(normalized); } catch {}
     lastLoadedBaseRef.current = null;
     loadRemoteModels(normalized, true);
   }, [customBaseInput, setCloudReasoningBaseUrl, loadRemoteModels]);
@@ -559,10 +560,12 @@ export default function ReasoningModelSelector({
     }
   }, [customBaseInput, cloudReasoningBaseUrl, handleApplyCustomBase]);
 
-  const handleResetCustomBase = useCallback(() => {
+  const handleResetCustomBase = useCallback(async () => {
     const defaultBase = API_ENDPOINTS.OPENAI_BASE;
     setCustomBaseInput(defaultBase);
     setCloudReasoningBaseUrl(defaultBase);
+    // Clear persisted custom URL in main process
+    try { await window.electronAPI.saveCustomReasoningBaseUrl(""); } catch {}
     lastLoadedBaseRef.current = null;
     loadRemoteModels(defaultBase, true);
   }, [setCloudReasoningBaseUrl, loadRemoteModels]);

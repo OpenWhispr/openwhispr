@@ -266,7 +266,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   proxyCloudTranscriptionByok: (data) => ipcRenderer.invoke("proxy-cloud-transcription-byok", data),
 
   // Custom model discovery (proxied through main process)
-  fetchCustomModels: (options) => ipcRenderer.invoke("fetch-custom-models", options),
+  fetchCustomModels: () => ipcRenderer.invoke("fetch-custom-models"),
 
   // Generic fetch proxy for auth calls (uses electron.net.fetch for cookie jar)
   proxyFetch: (url, options) => ipcRenderer.invoke("proxy-fetch", url, options),
@@ -296,6 +296,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
   hasCustomReasoningKey: () => ipcRenderer.invoke("has-custom-reasoning-key"),
   saveCustomReasoningKey: (key) => ipcRenderer.invoke("save-custom-reasoning-key", key),
+  saveCustomReasoningBaseUrl: (url) => ipcRenderer.invoke("save-custom-reasoning-base-url", url),
+  saveCustomTranscriptionBaseUrl: (url) => ipcRenderer.invoke("save-custom-transcription-base-url", url),
 
   // Dictation key persistence (file-based for reliable startup)
   getDictationKey: () => ipcRenderer.invoke("get-dictation-key"),

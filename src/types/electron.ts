@@ -883,10 +883,12 @@ declare global {
         body: string;
       }>;
 
-      // Custom model fetching
-      fetchCustomModels: (options: {
-        baseUrl: string;
-      }) => Promise<{
+      // Custom base URL persistence (main process reads these, not renderer-provided URLs)
+      saveCustomReasoningBaseUrl: (url: string) => Promise<{ success: boolean }>;
+      saveCustomTranscriptionBaseUrl: (url: string) => Promise<{ success: boolean }>;
+
+      // Custom model fetching (uses persisted base URL from main process)
+      fetchCustomModels: () => Promise<{
         success: boolean;
         data?: any;
         error?: string;

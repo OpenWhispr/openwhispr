@@ -1323,6 +1323,14 @@ class IPCHandlers {
       return this.environmentManager.saveCustomReasoningKey(key);
     });
 
+    ipcMain.handle("save-custom-reasoning-base-url", async (event, url) => {
+      return this.environmentManager.saveCustomReasoningBaseUrl(url);
+    });
+
+    ipcMain.handle("save-custom-transcription-base-url", async (event, url) => {
+      return this.environmentManager.saveCustomTranscriptionBaseUrl(url);
+    });
+
     ipcMain.handle("get-dictation-key", async () => {
       return this.environmentManager.getDictationKey();
     });
@@ -2315,7 +2323,12 @@ class IPCHandlers {
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
-          if (!baseUrl) throw new Error("No transcription endpoint configured.");
+
+          // Use persisted custom transcription URL if available, otherwise fall back to renderer-provided baseUrl
+          // (for known providers like OpenAI/Groq the renderer provides the standard URL which is safe)
+          const persistedCustomUrl = this.environmentManager.getCustomTranscriptionBaseUrl();
+          const resolvedBaseUrl = persistedCustomUrl || baseUrl;
+          if (!resolvedBaseUrl) throw new Error("No transcription endpoint configured.");
 
           const fileSize = fs.statSync(filePath).size;
           if (fileSize > BYOK_FILE_SIZE_LIMIT) {
@@ -2330,7 +2343,7 @@ class IPCHandlers {
           const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
           const fileName = path.basename(filePath);
 
-          let transcriptionUrl = baseUrl.replace(/\/+$/, "");
+          let transcriptionUrl = resolvedBaseUrl.replace(/\/+$/, "");
           if (!transcriptionUrl.endsWith("/audio/transcriptions")) {
             transcriptionUrl += "/audio/transcriptions";
           }
@@ -3048,11 +3061,13 @@ class IPCHandlers {
           }
 
           const systemPrompt = config?.systemPrompt || "";
-          const customBaseUrl = config?.customBaseUrl || "";
           const defaultBase = "https://api.openai.com/v1";
-          const base = (isCustomProvider && customBaseUrl) ? customBaseUrl : defaultBase;
+          const persistedCustomUrl = isCustomProvider
+            ? this.environmentManager.getCustomReasoningBaseUrl()
+            : "";
+          const base = (isCustomProvider && persistedCustomUrl) ? persistedCustomUrl : defaultBase;
 
-          if (isCustomProvider && customBaseUrl && !isSecureEndpoint(base)) {
+          if (isCustomProvider && persistedCustomUrl && !isSecureEndpoint(base)) {
             throw new Error("Custom reasoning endpoint must use HTTPS (HTTP allowed for local network only)");
           }
 
@@ -3380,7 +3395,23 @@ class IPCHandlers {
           const fileBuffer = Buffer.from(audioBuffer);
           const { body, boundary } = buildMultipartBody(fileBuffer, `audio.${ext}`, contentType, fields);
 
-          const parsedUrl = new URL(endpoint);
+          // For custom provider, use persisted URL from main process config instead of renderer input
+          const isCustomProvider = provider === "custom";
+          let resolvedEndpoint = endpoint;
+          if (isCustomProvider) {
+            const persistedBaseUrl = this.environmentManager.getCustomTranscriptionBaseUrl();
+            if (persistedBaseUrl) {
+              // Build transcription endpoint from persisted base URL
+              if (/\/audio\/(transcriptions|translations)$/i.test(persistedBaseUrl)) {
+                resolvedEndpoint = persistedBaseUrl;
+              } else {
+                const base = persistedBaseUrl.replace(/\/+$/, "");
+                resolvedEndpoint = `${base}/audio/transcriptions`;
+              }
+            }
+          }
+
+          const parsedUrl = new URL(resolvedEndpoint);
 
           // Validate endpoint against allowlist to prevent SSRF
           const ALLOWED_TRANSCRIPTION_HOSTS = [
@@ -3390,13 +3421,12 @@ class IPCHandlers {
           ];
           const isAllowedHost = ALLOWED_TRANSCRIPTION_HOSTS.includes(parsedUrl.hostname);
           const isLocalhost = ["localhost", "127.0.0.1", "0.0.0.0"].includes(parsedUrl.hostname);
-          const isCustomProvider = provider === "custom";
 
           if (!isAllowedHost && !isLocalhost && !isCustomProvider) {
             throw new Error(`Transcription endpoint host ${parsedUrl.hostname} is not allowed`);
           }
-          if (isCustomProvider && !isLocalhost && parsedUrl.protocol !== "https:") {
-            throw new Error("Custom transcription endpoint must use HTTPS");
+          if (isCustomProvider && !isSecureEndpoint(resolvedEndpoint)) {
+            throw new Error("Custom transcription endpoint must use HTTPS (HTTP allowed for local network only)");
           }
           const headers = {};
           if (apiKey) {
@@ -3419,8 +3449,12 @@ class IPCHandlers {
     );
 
     // ── Custom model discovery ──
-    ipcMain.handle("fetch-custom-models", async (event, { baseUrl }) => {
+    ipcMain.handle("fetch-custom-models", async (event) => {
       try {
+        const baseUrl = this.environmentManager.getCustomReasoningBaseUrl();
+        if (!baseUrl) {
+          throw new Error("No custom reasoning base URL configured");
+        }
         if (!isSecureEndpoint(baseUrl)) {
           throw new Error("Custom model endpoint must use HTTPS (HTTP allowed for local network only)");
         }
