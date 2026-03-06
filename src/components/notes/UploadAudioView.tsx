@@ -243,21 +243,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     return `${name} · ${cloudTranscriptionModel}`;
   };
 
-  const getActiveApiKey = (): string => {
-    switch (cloudTranscriptionProvider) {
-      case "openai":
-        return openaiApiKey;
-      case "groq":
-        return groqApiKey;
-      case "mistral":
-        return mistralApiKey;
-      case "custom":
-        return customTranscriptionApiKey || "";
-      default:
-        return "";
-    }
-  };
-
   const generateTitle = async (text: string): Promise<string> => {
     if (!useReasoningModel) return "";
     const model = isCloudReasoning
@@ -375,7 +360,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       } else {
         res = await window.electronAPI.transcribeAudioFileByok!({
           filePath: file.path,
-          apiKey: getActiveApiKey(),
+          provider: cloudTranscriptionProvider,
           baseUrl: cloudTranscriptionBaseUrl || "",
           model: cloudTranscriptionModel,
         });

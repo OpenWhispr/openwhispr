@@ -2326,10 +2326,15 @@ class IPCHandlers {
 
     ipcMain.handle(
       "transcribe-audio-file-byok",
-      async (event, { filePath, apiKey, baseUrl, model }) => {
+      async (event, { filePath, provider, baseUrl, model }) => {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
+          let apiKey = "";
+          if (provider === "openai") apiKey = this.environmentManager.getOpenAIKey();
+          else if (provider === "groq") apiKey = this.environmentManager.getGroqKey();
+          else if (provider === "mistral") apiKey = this.environmentManager.getMistralKey();
+          else if (provider === "custom") apiKey = this.environmentManager.getCustomTranscriptionKey();
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
 
           // Resolve endpoint from hardcoded map or persisted config — never fall back to renderer input

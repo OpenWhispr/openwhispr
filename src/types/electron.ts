@@ -778,7 +778,7 @@ declare global {
       // BYOK audio file transcription
       transcribeAudioFileByok?: (options: {
         filePath: string;
-        apiKey: string;
+        provider: string;
         baseUrl: string;
         model: string;
       }) => Promise<{
