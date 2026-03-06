@@ -161,12 +161,12 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
   }
 
   try {
-    const isElectron = Boolean((window as any).electronAPI);
+    const isElectron = Boolean(window.electronAPI);
 
     if (isElectron) {
       const callbackURL = getElectronOAuthCallbackURL();
 
-      const response = await (window as any).electronAPI.proxyFetch(
+      const response = await window.electronAPI.proxyFetch(
         `${NEON_AUTH_URL}/sign-in/social`,
         {
           method: "POST",
@@ -216,7 +216,7 @@ export async function requestPasswordReset(email: string): Promise<{ error?: Err
 
   try {
     if (OPENWHISPR_API_URL) {
-      const res = await (window as any).electronAPI.proxyFetch(
+      const res = await window.electronAPI.proxyFetch(
         `${OPENWHISPR_API_URL}/api/auth/forgot-password`,
         {
           method: "POST",

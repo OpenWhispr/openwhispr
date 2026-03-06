@@ -100,7 +100,7 @@ export default function AuthenticationStep({
     const initAndComplete = async () => {
       if (OPENWHISPR_API_URL) {
         try {
-          const res = await (window as any).electronAPI.proxyFetch(
+          const res = await window.electronAPI.proxyFetch(
             `${OPENWHISPR_API_URL}/api/auth/init-user`,
             {
               method: "POST",
@@ -180,7 +180,7 @@ export default function AuthenticationStep({
         return;
       }
 
-      const response = await (window as any).electronAPI.proxyFetch(
+      const response = await window.electronAPI.proxyFetch(
         `${OPENWHISPR_API_URL}/api/check-user`,
         {
           method: "POST",
@@ -249,7 +249,7 @@ export default function AuthenticationStep({
 
             if (OPENWHISPR_API_URL) {
               try {
-                await (window as any).electronAPI.proxyFetch(
+                await window.electronAPI.proxyFetch(
                   `${OPENWHISPR_API_URL}/api/auth/init-user`,
                   {
                     method: "POST",

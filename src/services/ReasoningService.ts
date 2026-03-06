@@ -467,7 +467,7 @@ class ReasoningService extends BaseReasoningService {
       const locale = this.getUiLanguage();
 
       const result = await withSessionRefresh(async () => {
-        const res = await (window as any).electronAPI.cloudReason(text, {
+        const res = await window.electronAPI.cloudReason(text, {
           agentName,
           customDictionary,
           customPrompt: this.getCustomPrompt(),

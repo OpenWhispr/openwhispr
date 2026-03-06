@@ -867,6 +867,81 @@ declare global {
         }>;
       }>;
 
+      // Proxy fetch (secure IPC bridge for HTTP requests)
+      proxyFetch: (
+        url: string,
+        options?: {
+          method?: string;
+          headers?: Record<string, string>;
+          body?: string;
+        }
+      ) => Promise<{
+        ok: boolean;
+        status: number;
+        statusText: string;
+        headers: Record<string, string>;
+        body: string;
+      }>;
+
+      // Custom model fetching
+      fetchCustomModels: (options: {
+        baseUrl: string;
+      }) => Promise<{
+        success: boolean;
+        data?: any;
+        error?: string;
+      }>;
+
+      // OpenAI reasoning (IPC bridge)
+      processOpenAIReasoning: (
+        text: string,
+        modelId: string,
+        agentName: string | null,
+        config: Record<string, unknown>
+      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+
+      // Gemini reasoning (IPC bridge)
+      processGeminiReasoning: (
+        text: string,
+        modelId: string,
+        agentName: string | null,
+        config: Record<string, unknown>
+      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+
+      // Groq reasoning (IPC bridge)
+      processGroqReasoning: (
+        text: string,
+        modelId: string,
+        agentName: string | null,
+        config: Record<string, unknown>
+      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+
+      // Cloud transcription BYOK proxy
+      proxyCloudTranscriptionByok: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+        provider?: string;
+        endpoint?: string;
+        prompt?: string;
+      }) => Promise<{ success: boolean; text?: string; error?: string }>;
+
+      // Main window resize
+      resizeMainWindow?: (sizeKey: string) => Promise<void>;
+
+      // Whisper server management
+      whisperServerStart?: (modelName: string) => Promise<any>;
+      whisperServerStop?: () => Promise<any>;
+      whisperServerStatus?: () => Promise<any>;
+
+      // Parakeet server management
+      parakeetServerStart?: (modelName: string) => Promise<any>;
+      parakeetServerStop?: () => Promise<any>;
+      parakeetServerStatus?: () => Promise<any>;
+
+      // Windows Push-to-Talk unavailable notification
+      onWindowsPushToTalkUnavailable?: (callback: () => void) => () => void;
+
       // Deepgram Streaming
       deepgramStreamingWarmup?: (options?: { sampleRate?: number; language?: string }) => Promise<{
         success: boolean;

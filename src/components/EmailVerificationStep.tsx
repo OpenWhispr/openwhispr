@@ -31,7 +31,7 @@ export default function EmailVerificationStep({ email, onVerified }: EmailVerifi
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await (window as any).electronAPI.proxyFetch(url);
+        const res = await window.electronAPI.proxyFetch(url);
         if (res.ok) {
           let data: any = {};
           try { data = JSON.parse(res.body || "{}"); } catch {}
@@ -59,7 +59,7 @@ export default function EmailVerificationStep({ email, onVerified }: EmailVerifi
     setIsResending(true);
     setError(null);
     try {
-      const res = await (window as any).electronAPI.proxyFetch(
+      const res = await window.electronAPI.proxyFetch(
         `${OPENWHISPR_API_URL}/api/auth/send-verification-email`,
         { method: "POST" }
       );
