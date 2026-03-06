@@ -9,7 +9,7 @@ const GnomeShortcutManager = require("./gnomeShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
-const { isSecureEndpoint } = require("./urlValidation");
+const { isSecureEndpoint } = require("./urlValidation.mjs");
 const { withRetry, createApiRetryStrategy } = require("./retry");
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";

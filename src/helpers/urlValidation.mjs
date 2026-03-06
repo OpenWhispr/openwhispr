@@ -90,4 +90,4 @@ function isSecureEndpoint(url) {
   }
 }
 
-module.exports = { isPrivateHost, isSecureEndpoint };
+export { isPrivateHost, isSecureEndpoint };

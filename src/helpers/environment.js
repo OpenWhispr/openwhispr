@@ -128,7 +128,7 @@ class EnvironmentManager {
   }
 
   saveCustomReasoningBaseUrl(url) {
-    const { isSecureEndpoint } = require("./urlValidation");
+    const { isSecureEndpoint } = require("./urlValidation.mjs");
     if (url && !isSecureEndpoint(url)) {
       throw new Error("Custom reasoning base URL must use HTTPS (HTTP allowed for local network only)");
     }
@@ -142,7 +142,7 @@ class EnvironmentManager {
   }
 
   saveCustomTranscriptionBaseUrl(url) {
-    const { isSecureEndpoint } = require("./urlValidation");
+    const { isSecureEndpoint } = require("./urlValidation.mjs");
     if (url && !isSecureEndpoint(url)) {
       throw new Error("Custom transcription base URL must use HTTPS (HTTP allowed for local network only)");
     }
