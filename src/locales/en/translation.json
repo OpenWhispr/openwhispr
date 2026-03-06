@@ -131,7 +131,8 @@
     "private": "Private",
     "tap": "Tap",
     "close": "Close",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "urlSaveFailed": "Failed to save endpoint URL. Make sure it uses HTTPS."
   },
   "onboarding": {
     "steps": {
@@ -268,8 +269,7 @@
       "noModels": "No models returned. Check your endpoint URL.",
       "providerName": "Custom",
       "ownerLabel": "Owner: {{owner}}",
-      "unableToLoadModels": "Unable to load models from endpoint.",
-      "urlSaveFailed": "Failed to save endpoint URL. Make sure it uses HTTPS."
+      "unableToLoadModels": "Unable to load models from endpoint."
     },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
@@ -292,10 +292,7 @@
       "whisperModelDescription": "Model",
       "parakeetModelDescription": "NVIDIA Parakeet Model"
     },
-    "whisperModels": "Whisper Models",
-    "custom": {
-      "urlSaveFailed": "Failed to save endpoint URL. Make sure it uses HTTPS."
-    }
+    "whisperModels": "Whisper Models"
   },
   "hooks": {
     "audioRecording": {
@@ -924,7 +921,11 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "Custom",
-          "features": ["Cloud sync", "Team features (coming soon)", "SSO & compliance"],
+          "features": [
+            "Cloud sync",
+            "Team features (coming soon)",
+            "SSO & compliance"
+          ],
           "cta": "Contact Us"
         },
         "currentPlan": "Current plan"

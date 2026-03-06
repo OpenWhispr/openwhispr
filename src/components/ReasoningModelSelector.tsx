@@ -549,7 +549,7 @@ export default function ReasoningModelSelector({
       await window.electronAPI.saveCustomReasoningBaseUrl(normalized);
     } catch (err) {
       setCustomModelsError(
-        err instanceof Error ? err.message : t("reasoning.custom.urlSaveFailed")
+        err instanceof Error ? err.message : t("common.urlSaveFailed")
       );
       return;
     }
@@ -576,7 +576,7 @@ export default function ReasoningModelSelector({
       await window.electronAPI.saveCustomReasoningBaseUrl("");
     } catch (err) {
       setCustomModelsError(
-        err instanceof Error ? err.message : t("reasoning.custom.urlSaveFailed")
+        err instanceof Error ? err.message : t("common.urlSaveFailed")
       );
       return;
     }

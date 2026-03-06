@@ -588,7 +588,7 @@ export default function TranscriptionModelPicker({
         .then(() => setBaseUrlError(null))
         .catch((err: unknown) => {
           setBaseUrlError(
-            err instanceof Error ? err.message : t("transcription.custom.urlSaveFailed")
+            err instanceof Error ? err.message : t("common.urlSaveFailed")
           );
         });
     }

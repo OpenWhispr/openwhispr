@@ -131,7 +131,8 @@
     "private": "私密",
     "tap": "點按",
     "close": "關閉",
-    "dismiss": "忽略"
+    "dismiss": "忽略",
+    "urlSaveFailed": "無法儲存端點URL。請確保使用HTTPS。"
   },
   "onboarding": {
     "steps": {
@@ -268,8 +269,7 @@
       "noModels": "沒有取得任何模型。請檢查端點 URL。",
       "providerName": "自訂",
       "ownerLabel": "擁有者：{{owner}}",
-      "unableToLoadModels": "無法從端點載入模型。",
-      "urlSaveFailed": "無法儲存端點URL。請確保使用HTTPS。"
+      "unableToLoadModels": "無法從端點載入模型。"
     },
     "getApiKey": "取得 API Key ->",
     "selectModel": "選擇模型",
@@ -292,10 +292,7 @@
       "whisperModelDescription": "模型",
       "parakeetModelDescription": "NVIDIA Parakeet 模型"
     },
-    "whisperModels": "Whisper 模型",
-    "custom": {
-      "urlSaveFailed": "無法儲存端點URL。請確保使用HTTPS。"
-    }
+    "whisperModels": "Whisper 模型"
   },
   "hooks": {
     "audioRecording": {
@@ -944,7 +941,11 @@
         "enterprise": {
           "name": "企業版",
           "price": "自訂",
-          "features": ["雲端同步", "團隊功能（即將推出）", "SSO 與合規"],
+          "features": [
+            "雲端同步",
+            "團隊功能（即將推出）",
+            "SSO 與合規"
+          ],
           "cta": "聯絡我們"
         },
         "currentPlan": "目前方案"

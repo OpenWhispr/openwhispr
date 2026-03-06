@@ -131,7 +131,8 @@
     "private": "Приватный",
     "tap": "Нажатие",
     "close": "Закрыть",
-    "dismiss": "Скрыть"
+    "dismiss": "Скрыть",
+    "urlSaveFailed": "Не удалось сохранить URL конечной точки. Убедитесь, что используется HTTPS."
   },
   "onboarding": {
     "steps": {
@@ -268,8 +269,7 @@
       "noModels": "Модели не найдены. Проверьте URL конечной точки.",
       "providerName": "Пользовательский",
       "ownerLabel": "Автор: {{owner}}",
-      "unableToLoadModels": "Не удалось загрузить модели с конечной точки.",
-      "urlSaveFailed": "Не удалось сохранить URL конечной точки. Убедитесь, что используется HTTPS."
+      "unableToLoadModels": "Не удалось загрузить модели с конечной точки."
     },
     "getApiKey": "Получить API-ключ ->",
     "selectModel": "Выберите модель",
@@ -292,10 +292,7 @@
       "whisperModelDescription": "Модель",
       "parakeetModelDescription": "Модель NVIDIA Parakeet"
     },
-    "whisperModels": "Модели Whisper",
-    "custom": {
-      "urlSaveFailed": "Не удалось сохранить URL конечной точки. Убедитесь, что используется HTTPS."
-    }
+    "whisperModels": "Модели Whisper"
   },
   "hooks": {
     "audioRecording": {

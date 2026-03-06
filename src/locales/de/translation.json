@@ -131,7 +131,8 @@
     "private": "Privat",
     "tap": "Tippen",
     "close": "Schließen",
-    "dismiss": "Verwerfen"
+    "dismiss": "Verwerfen",
+    "urlSaveFailed": "Endpoint-URL konnte nicht gespeichert werden. Stellen Sie sicher, dass HTTPS verwendet wird."
   },
   "onboarding": {
     "steps": {
@@ -268,8 +269,7 @@
       "noModels": "Keine Modelle zurückgegeben. Prüfen Sie die Endpoint-URL.",
       "providerName": "Benutzerdefiniert",
       "ownerLabel": "Anbieter: {{owner}}",
-      "unableToLoadModels": "Modelle konnten nicht vom Endpoint geladen werden.",
-      "urlSaveFailed": "Endpoint-URL konnte nicht gespeichert werden. Stellen Sie sicher, dass HTTPS verwendet wird."
+      "unableToLoadModels": "Modelle konnten nicht vom Endpoint geladen werden."
     },
     "getApiKey": "API-Schlüssel holen ->",
     "selectModel": "Modell auswählen",
@@ -292,10 +292,7 @@
       "whisperModelDescription": "Modell",
       "parakeetModelDescription": "NVIDIA-Parakeet-Modell"
     },
-    "whisperModels": "Whisper-Modelle",
-    "custom": {
-      "urlSaveFailed": "Endpoint-URL konnte nicht gespeichert werden. Stellen Sie sicher, dass HTTPS verwendet wird."
-    }
+    "whisperModels": "Whisper-Modelle"
   },
   "hooks": {
     "audioRecording": {
@@ -924,7 +921,11 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "Individuell",
-          "features": ["Cloud-Synchronisation", "Team-Funktionen (demnächst)", "SSO & Compliance"],
+          "features": [
+            "Cloud-Synchronisation",
+            "Team-Funktionen (demnächst)",
+            "SSO & Compliance"
+          ],
           "cta": "Kontakt aufnehmen"
         },
         "currentPlan": "Aktueller Tarif"

@@ -103,7 +103,8 @@
     "private": "Privado",
     "tap": "Toque",
     "close": "Fechar",
-    "dismiss": "Dispensar"
+    "dismiss": "Dispensar",
+    "urlSaveFailed": "Falha ao salvar URL do endpoint. Certifique-se de que utiliza HTTPS."
   },
   "onboarding": {
     "steps": {
@@ -240,8 +241,7 @@
       "noModels": "Nenhum modelo retornado. Verifique a URL do endpoint.",
       "providerName": "Personalizado",
       "ownerLabel": "Proprietário: {{owner}}",
-      "unableToLoadModels": "Não foi possível carregar modelos do endpoint.",
-      "urlSaveFailed": "Falha ao salvar URL do endpoint. Certifique-se de que utiliza HTTPS."
+      "unableToLoadModels": "Não foi possível carregar modelos do endpoint."
     },
     "getApiKey": "Obter chave API ->",
     "selectModel": "Selecionar modelo",
@@ -264,10 +264,7 @@
       "whisperModelDescription": "Modelo",
       "parakeetModelDescription": "Modelo NVIDIA Parakeet"
     },
-    "whisperModels": "Modelos Whisper",
-    "custom": {
-      "urlSaveFailed": "Falha ao salvar URL do endpoint. Certifique-se de que utiliza HTTPS."
-    }
+    "whisperModels": "Modelos Whisper"
   },
   "hooks": {
     "audioRecording": {

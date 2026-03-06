@@ -131,7 +131,8 @@
     "private": "プライベート",
     "tap": "タップ",
     "close": "閉じる",
-    "dismiss": "閉じる"
+    "dismiss": "閉じる",
+    "urlSaveFailed": "エンドポイントURLの保存に失敗しました。HTTPSを使用していることを確認してください。"
   },
   "onboarding": {
     "steps": {
@@ -268,8 +269,7 @@
       "noModels": "モデルが見つかりません。エンドポイント URL を確認してください。",
       "providerName": "カスタム",
       "ownerLabel": "提供元: {{owner}}",
-      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。",
-      "urlSaveFailed": "エンドポイントURLの保存に失敗しました。HTTPSを使用していることを確認してください。"
+      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。"
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
@@ -292,10 +292,7 @@
       "whisperModelDescription": "モデル",
       "parakeetModelDescription": "NVIDIA Parakeet モデル"
     },
-    "whisperModels": "Whisper モデル",
-    "custom": {
-      "urlSaveFailed": "エンドポイントURLの保存に失敗しました。HTTPSを使用していることを確認してください。"
-    }
+    "whisperModels": "Whisper モデル"
   },
   "hooks": {
     "audioRecording": {
@@ -924,7 +921,11 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "カスタム",
-          "features": ["クラウド同期", "チーム機能（近日公開）", "SSO & コンプライアンス"],
+          "features": [
+            "クラウド同期",
+            "チーム機能（近日公開）",
+            "SSO & コンプライアンス"
+          ],
           "cta": "お問い合わせ"
         },
         "currentPlan": "現在のプラン"

@@ -959,20 +959,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return normalizedText;
   }
 
-  shouldStreamTranscription(model, provider) {
-    if (provider !== "openai") {
-      return false;
-    }
-    const normalized = typeof model === "string" ? model.trim() : "";
-    if (!normalized || normalized === "whisper-1") {
-      return false;
-    }
-    if (normalized === "gpt-4o-transcribe" || normalized === "gpt-4o-transcribe-diarize") {
-      return true;
-    }
-    return normalized.startsWith("gpt-4o-mini-transcribe");
-  }
-
   async processWithOpenWhisprCloud(audioBlob, metadata = {}) {
     if (!navigator.onLine) {
       const err = new Error("You're offline. Cloud transcription requires an internet connection.");
@@ -1181,11 +1167,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("prompt", dictionaryPrompt);
       }
 
-      const shouldStream = this.shouldStreamTranscription(model, provider);
-      if (shouldStream) {
-        formData.append("stream", "true");
-      }
-
       const endpoint = this.getTranscriptionEndpoint();
       const isCustomEndpoint =
         provider === "custom" ||
@@ -1231,7 +1212,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "Making transcription API request via IPC proxy",
         {
           endpoint,
-          shouldStream,
           model,
           provider,
           isCustomEndpoint,
