@@ -3488,10 +3488,24 @@ class IPCHandlers {
           throw new Error(`URL origin ${parsed.origin} not in allowlist`);
         }
 
-        const fetchOptions = {
-          method: options?.method || "GET",
-          headers: options?.headers || {},
-        };
+        // Allowlist methods and headers to limit renderer's reach
+        const ALLOWED_METHODS = new Set(["GET", "POST"]);
+        const ALLOWED_HEADERS = new Set(["content-type", "accept", "authorization"]);
+
+        const method = (options?.method || "GET").toUpperCase();
+        if (!ALLOWED_METHODS.has(method)) {
+          throw new Error(`HTTP method ${method} not allowed`);
+        }
+
+        const rawHeaders = options?.headers || {};
+        const headers = {};
+        for (const [key, value] of Object.entries(rawHeaders)) {
+          if (ALLOWED_HEADERS.has(key.toLowerCase())) {
+            headers[key] = value;
+          }
+        }
+
+        const fetchOptions = { method, headers };
 
         if (options?.body) {
           fetchOptions.body = options.body;
