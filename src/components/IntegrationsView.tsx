@@ -1,30 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Mail, Plus, Unlink } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
+import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
 import { ConfirmDialog } from "./ui/dialog";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useScreenRecordingPermission } from "../hooks/useScreenRecordingPermission";
 import googleCalendarIcon from "../assets/icons/google-calendar.svg";
-
-function SettingsPanel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 backdrop-blur-sm divide-y divide-border/30 dark:divide-border-subtle/50">
-      {children}
-    </div>
-  );
-}
-
-function SettingsPanelRow({ children }: { children: React.ReactNode }) {
-  return <div className="px-4 py-3">{children}</div>;
-}
 
 export default function IntegrationsView() {
   const { t } = useTranslation();
   const { gcalAccounts, setGcalAccounts } = useSettingsStore();
   const [isConnecting, setIsConnecting] = useState(false);
   const [disconnectingEmail, setDisconnectingEmail] = useState<string | null>(null);
+  const [confirmDisconnectEmail, setConfirmDisconnectEmail] = useState<string | null>(null);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const screenRecording = useScreenRecordingPermission();
   const hasAccounts = gcalAccounts.length > 0;
@@ -55,7 +45,6 @@ export default function IntegrationsView() {
 
   const handleDisconnect = useCallback(
     async (email: string) => {
-      if (!window.confirm(t("integrations.googleCalendar.disconnectConfirm", { email }))) return;
       setDisconnectingEmail(email);
       try {
         await window.electronAPI?.gcalDisconnect?.(email);
@@ -65,7 +54,7 @@ export default function IntegrationsView() {
         setDisconnectingEmail(null);
       }
     },
-    [setGcalAccounts, t]
+    [setGcalAccounts]
   );
 
   useEffect(() => {
@@ -136,11 +125,12 @@ export default function IntegrationsView() {
           gcalAccounts.map((account) => (
             <SettingsPanelRow key={account.email}>
               <div className="group flex items-center gap-3 pl-12">
+                <Mail className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
                 <span className="text-xs text-muted-foreground truncate flex-1">
                   {account.email}
                 </span>
                 <button
-                  onClick={() => handleDisconnect(account.email)}
+                  onClick={() => setConfirmDisconnectEmail(account.email)}
                   disabled={disconnectingEmail === account.email}
                   className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all disabled:opacity-50"
                   aria-label={t("integrations.googleCalendar.disconnect")}
@@ -148,7 +138,7 @@ export default function IntegrationsView() {
                   {disconnectingEmail === account.email ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <X className="h-3.5 w-3.5" />
+                    <Unlink className="h-3.5 w-3.5" />
                   )}
                 </button>
               </div>
@@ -172,6 +162,18 @@ export default function IntegrationsView() {
           </SettingsPanelRow>
         )}
       </SettingsPanel>
+
+      <ConfirmDialog
+        open={!!confirmDisconnectEmail}
+        onOpenChange={(open) => { if (!open) setConfirmDisconnectEmail(null); }}
+        title={t("integrations.googleCalendar.disconnectConfirm", { email: confirmDisconnectEmail })}
+        description={t("integrations.googleCalendar.disconnectDescription")}
+        confirmText={t("integrations.googleCalendar.disconnect")}
+        variant="destructive"
+        onConfirm={() => {
+          if (confirmDisconnectEmail) handleDisconnect(confirmDisconnectEmail);
+        }}
+      />
 
       <ConfirmDialog
         open={showPermissionDialog}

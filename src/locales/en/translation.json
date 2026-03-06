@@ -518,7 +518,7 @@
     "notConnectedDescription": "Connect to detect and record meetings",
     "connectCta": {
       "title": "Calendar Integration",
-      "description": "Auto-detect meetings and record with speaker diarization"
+      "description": "Auto-detect meetings and record transcriptions"
     },
     "connect": "Connect Google Calendar",
     "connecting": "Connecting...",
@@ -1529,7 +1529,7 @@
     },
     "meeting": {
       "title": "Meeting Notes",
-      "description": "Speaker identification & structured summaries",
+      "description": "Transcriptions & structured summaries",
       "comingSoon": "Coming Soon",
       "back": "Back"
     },
@@ -1729,7 +1729,7 @@
     "description": "Connect services to supercharge your workflow",
     "googleCalendar": {
       "title": "Google Calendar",
-      "description": "Connect your calendar to activate meeting notes. OpenWhispr detects meetings and records with speaker diarization — automatically.",
+      "description": "Connect your calendar to auto-detect meetings and record transcriptions.",
       "connect": "Connect Google Calendar",
       "connecting": "Connecting...",
       "connected": "Connected",

@@ -1395,7 +1395,7 @@
     },
     "meeting": {
       "title": "議事録",
-      "description": "話者識別と構造化されたサマリー",
+      "description": "文字起こしと構造化されたサマリー",
       "comingSoon": "近日公開",
       "back": "戻る"
     },
@@ -1653,7 +1653,7 @@
     "description": "サービスを接続してワークフローを強化",
     "googleCalendar": {
       "title": "Google カレンダー",
-      "description": "カレンダーを接続して会議メモを有効にします。OpenWhisprが会議を検出し、話者分離付きで自動的に録音します。",
+      "description": "カレンダーを接続して、会議を自動検出し文字起こしを録音します。",
       "connect": "Google カレンダーを接続",
       "connecting": "接続中...",
       "connected": "接続済み",

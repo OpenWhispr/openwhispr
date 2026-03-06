@@ -1416,7 +1416,7 @@
     },
     "meeting": {
       "title": "Besprechungsnotizen",
-      "description": "Sprechererkennung und strukturierte Zusammenfassungen",
+      "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "comingSoon": "Demnächst verfügbar",
       "back": "Zurück"
     },
@@ -1653,7 +1653,7 @@
     "description": "Verbinde Dienste, um deinen Workflow zu verbessern",
     "googleCalendar": {
       "title": "Google Calendar",
-      "description": "Verbinde deinen Kalender, um Besprechungsnotizen zu aktivieren. OpenWhispr erkennt Meetings und zeichnet mit Sprechererkennung auf — automatisch.",
+      "description": "Verbinde deinen Kalender, um Meetings automatisch zu erkennen und Transkriptionen aufzuzeichnen.",
       "connect": "Google Calendar verbinden",
       "connecting": "Verbinde...",
       "connected": "Verbunden",

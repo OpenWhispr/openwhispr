@@ -1416,7 +1416,7 @@
     },
     "meeting": {
       "title": "會議筆記",
-      "description": "說話者辨識與結構化摘要",
+      "description": "轉錄與結構化摘要",
       "comingSoon": "即將推出",
       "back": "返回"
     },
@@ -1653,7 +1653,7 @@
     "description": "連接服務以增強您的工作流程",
     "googleCalendar": {
       "title": "Google 日曆",
-      "description": "連接日曆以啟用會議筆記。OpenWhispr 會自動偵測會議並進行說話者分離錄音。",
+      "description": "連接日曆以自動偵測會議並錄製轉錄。",
       "connect": "連接 Google 日曆",
       "connecting": "連接中...",
       "connected": "已連接",

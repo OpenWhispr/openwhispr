@@ -1420,7 +1420,7 @@
     },
     "meeting": {
       "title": "Note delle riunioni",
-      "description": "Identificazione degli interlocutori e riassunti strutturati",
+      "description": "Trascrizioni e riassunti strutturati",
       "comingSoon": "Prossimamente",
       "back": "Indietro"
     },
@@ -1657,7 +1657,7 @@
     "description": "Collega servizi per potenziare il tuo flusso di lavoro",
     "googleCalendar": {
       "title": "Google Calendar",
-      "description": "Collega il tuo calendario per attivare le note delle riunioni. OpenWhispr rileva le riunioni e registra con diarizzazione dei parlanti — automaticamente.",
+      "description": "Collega il tuo calendario per rilevare automaticamente le riunioni e registrare le trascrizioni.",
       "connect": "Collega Google Calendar",
       "connecting": "Connessione...",
       "connected": "Connesso",
