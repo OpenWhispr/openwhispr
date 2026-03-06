@@ -15,9 +15,8 @@ interface ApiKeyInputProps {
   variant?: "default" | "purple";
 }
 
-function maskKey(key: string): string {
-  if (key.length <= 8) return "••••••••";
-  return key.slice(0, 3) + "..." + key.slice(-4);
+function maskKey(_key: string): string {
+  return "••••••••";
 }
 
 export default function ApiKeyInput({
@@ -50,7 +49,7 @@ export default function ApiKeyInput({
   }, [isEditing]);
 
   const enterEdit = () => {
-    setDraft(apiKey);
+    setDraft("");
     setIsEditing(true);
   };
 

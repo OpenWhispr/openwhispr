@@ -19,6 +19,9 @@ let _ReasoningService: typeof import("../services/ReasoningService").default | n
 
 const isBrowser = typeof window !== "undefined";
 
+/** Sentinel value stored in renderer state/localStorage to indicate a key exists without exposing it */
+const ENV_KEY_SENTINEL = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
+
 function readString(key: string, fallback: string): string {
   if (!isBrowser) return fallback;
   return localStorage.getItem(key) ?? fallback;
@@ -289,45 +292,52 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   setOpenaiApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("openaiApiKey", key);
-    set({ openaiApiKey: key });
     window.electronAPI?.saveOpenAIKey?.(key);
+    const sentinel = key ? ENV_KEY_SENTINEL : "";
+    if (isBrowser) localStorage.setItem("openaiApiKey", sentinel);
+    set({ openaiApiKey: sentinel });
     invalidateApiKeyCaches("openai");
   },
   setAnthropicApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("anthropicApiKey", key);
-    set({ anthropicApiKey: key });
     window.electronAPI?.saveAnthropicKey?.(key);
+    const sentinel = key ? ENV_KEY_SENTINEL : "";
+    if (isBrowser) localStorage.setItem("anthropicApiKey", sentinel);
+    set({ anthropicApiKey: sentinel });
     invalidateApiKeyCaches("anthropic");
   },
   setGeminiApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("geminiApiKey", key);
-    set({ geminiApiKey: key });
     window.electronAPI?.saveGeminiKey?.(key);
+    const sentinel = key ? ENV_KEY_SENTINEL : "";
+    if (isBrowser) localStorage.setItem("geminiApiKey", sentinel);
+    set({ geminiApiKey: sentinel });
     invalidateApiKeyCaches("gemini");
   },
   setGroqApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("groqApiKey", key);
-    set({ groqApiKey: key });
     window.electronAPI?.saveGroqKey?.(key);
+    const sentinel = key ? ENV_KEY_SENTINEL : "";
+    if (isBrowser) localStorage.setItem("groqApiKey", sentinel);
+    set({ groqApiKey: sentinel });
     invalidateApiKeyCaches("groq");
   },
   setMistralApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("mistralApiKey", key);
-    set({ mistralApiKey: key });
     window.electronAPI?.saveMistralKey?.(key);
+    const sentinel = key ? ENV_KEY_SENTINEL : "";
+    if (isBrowser) localStorage.setItem("mistralApiKey", sentinel);
+    set({ mistralApiKey: sentinel });
     invalidateApiKeyCaches("mistral");
   },
   setCustomTranscriptionApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("customTranscriptionApiKey", key);
-    set({ customTranscriptionApiKey: key });
     window.electronAPI?.saveCustomTranscriptionKey?.(key);
+    const sentinel = key ? ENV_KEY_SENTINEL : "";
+    if (isBrowser) localStorage.setItem("customTranscriptionApiKey", sentinel);
+    set({ customTranscriptionApiKey: sentinel });
     invalidateApiKeyCaches();
   },
   setCustomReasoningApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("customReasoningApiKey", key);
-    set({ customReasoningApiKey: key });
     window.electronAPI?.saveCustomReasoningKey?.(key);
+    const sentinel = key ? ENV_KEY_SENTINEL : "";
+    if (isBrowser) localStorage.setItem("customReasoningApiKey", sentinel);
+    set({ customReasoningApiKey: sentinel });
     invalidateApiKeyCaches("custom");
   },
 
@@ -471,7 +481,6 @@ export async function initializeSettings(): Promise<void> {
   // Sync API keys from main process (if localStorage is empty, check .env via IPC)
   // We use hasXKey (boolean) to avoid exposing raw keys to the renderer.
   // If the main process has a key and localStorage is empty, set a sentinel so UI shows key exists.
-  const ENV_KEY_SENTINEL = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
   if (window.electronAPI) {
     try {
       if (!state.openaiApiKey) {
