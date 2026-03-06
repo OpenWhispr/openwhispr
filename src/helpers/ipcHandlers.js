@@ -3082,6 +3082,10 @@ class IPCHandlers {
             );
           }
 
+          if (!modelId || !/^[a-zA-Z0-9._-]+$/.test(modelId)) {
+            throw new Error(`Invalid model ID: ${modelId}`);
+          }
+
           const systemPrompt = config?.systemPrompt || "";
           const defaultBase = "https://api.openai.com/v1";
           const persistedCustomUrl = isCustomProvider
@@ -3333,6 +3337,10 @@ class IPCHandlers {
           const apiKey = this.environmentManager.getGroqKey();
           if (!apiKey) {
             throw new Error("Groq API key not configured");
+          }
+
+          if (!modelId || !/^[a-zA-Z0-9._-]+$/.test(modelId)) {
+            throw new Error(`Invalid model ID: ${modelId}`);
           }
 
           const systemPrompt = config?.systemPrompt || "";
