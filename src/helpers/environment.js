@@ -215,7 +215,8 @@ OPENAI_API_KEY=${apiKey}
 
     for (const key of PERSISTED_KEYS) {
       if (process.env[key]) {
-        envContent += `${key}=${process.env[key]}\n`;
+        const escaped = process.env[key].replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r");
+        envContent += `${key}="${escaped}"\n`;
       }
     }
 
