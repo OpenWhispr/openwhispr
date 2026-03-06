@@ -1454,7 +1454,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         endpoint,
         prompt: dictionaryPrompt || undefined,
         stream: shouldStream,
-        apiKey: apiKey || undefined,
       });
 
       if (!proxyResult.success) {

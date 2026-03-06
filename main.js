@@ -477,8 +477,12 @@ async function startApp() {
     if (filePath === "/" || filePath === "") {
       filePath = "/index.html";
     }
-    // Resolve relative to the app's dist directory
-    const resolvedPath = path.join(app.getAppPath(), "src", "dist", filePath);
+    // Resolve relative to the app's dist directory, preventing path traversal
+    const baseDir = path.resolve(app.getAppPath(), "src", "dist");
+    const resolvedPath = path.resolve(baseDir, filePath.replace(/^\//, ""));
+    if (!resolvedPath.startsWith(baseDir + path.sep) && resolvedPath !== baseDir) {
+      return new Response("Forbidden", { status: 403 });
+    }
     return net.fetch(`file://${resolvedPath}`);
   });
 

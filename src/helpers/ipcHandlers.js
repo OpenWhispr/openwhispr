@@ -3329,17 +3329,15 @@ class IPCHandlers {
     // ── Cloud transcription BYOK (OpenAI Whisper, Groq, custom STT) ──
     ipcMain.handle(
       "proxy-cloud-transcription-byok",
-      async (event, { audioBuffer, model, language, provider, endpoint, prompt, stream, apiKey: providedKey }) => {
+      async (event, { audioBuffer, model, language, provider, endpoint, prompt, stream }) => {
         try {
-          let apiKey = providedKey || "";
-          if (!apiKey) {
-            if (provider === "openai") {
-              apiKey = this.environmentManager.getOpenAIKey();
-            } else if (provider === "groq") {
-              apiKey = this.environmentManager.getGroqKey();
-            } else if (provider === "custom") {
-              apiKey = this.environmentManager.getCustomTranscriptionKey();
-            }
+          let apiKey = "";
+          if (provider === "openai") {
+            apiKey = this.environmentManager.getOpenAIKey();
+          } else if (provider === "groq") {
+            apiKey = this.environmentManager.getGroqKey();
+          } else if (provider === "custom") {
+            apiKey = this.environmentManager.getCustomTranscriptionKey();
           }
 
           const ext = "webm";
@@ -3353,6 +3351,23 @@ class IPCHandlers {
           const { body, boundary } = buildMultipartBody(fileBuffer, `audio.${ext}`, contentType, fields);
 
           const parsedUrl = new URL(endpoint);
+
+          // Validate endpoint against allowlist to prevent SSRF
+          const ALLOWED_TRANSCRIPTION_HOSTS = [
+            "api.openai.com",
+            "api.groq.com",
+            "api.mistral.ai",
+          ];
+          const isAllowedHost = ALLOWED_TRANSCRIPTION_HOSTS.includes(parsedUrl.hostname);
+          const isLocalhost = ["localhost", "127.0.0.1", "0.0.0.0"].includes(parsedUrl.hostname);
+          const isCustomProvider = provider === "custom";
+
+          if (!isAllowedHost && !isLocalhost && !isCustomProvider) {
+            throw new Error(`Transcription endpoint host ${parsedUrl.hostname} is not allowed`);
+          }
+          if (isCustomProvider && !isLocalhost && parsedUrl.protocol !== "https:") {
+            throw new Error("Custom transcription endpoint must use HTTPS");
+          }
           const headers = {};
           if (apiKey) {
             headers.Authorization = `Bearer ${apiKey}`;
@@ -3434,7 +3449,7 @@ class IPCHandlers {
           } catch {}
         }
 
-        if (allowedOrigins.length > 0 && !allowedOrigins.includes(parsed.origin)) {
+        if (allowedOrigins.length === 0 || !allowedOrigins.includes(parsed.origin)) {
           throw new Error(`URL origin ${parsed.origin} not in allowlist`);
         }
 
