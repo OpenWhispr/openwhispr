@@ -1,14 +1,22 @@
 /**
- * CJS port of src/utils/urlUtils.ts — needed by ipcHandlers.js (CommonJS).
+ * Canonical URL validation helpers — used by both main process (CJS) and renderer (ESM via Vite).
  */
 
 function normalizeIP(hostname) {
   // Strip IPv6 brackets
   let h = hostname.replace(/^\[|\]$/g, "");
 
-  // Handle IPv4-mapped IPv6 (::ffff:1.2.3.4)
+  // Handle IPv4-mapped IPv6 dotted form (::ffff:1.2.3.4)
   const v4mapped = h.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
   if (v4mapped) h = v4mapped[1];
+
+  // Handle IPv4-mapped IPv6 hex-pair form (::ffff:7f00:0001)
+  const v4hex = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (v4hex) {
+    const high = parseInt(v4hex[1], 16);
+    const low = parseInt(v4hex[2], 16);
+    h = `${(high >> 8) & 0xff}.${high & 0xff}.${(low >> 8) & 0xff}.${low & 0xff}`;
+  }
 
   // Try parsing as a single decimal/hex integer (e.g., 2130706433, 0x7f000001)
   if (/^(0x[\da-f]+|\d+)$/i.test(h)) {
@@ -32,13 +40,32 @@ function normalizeIP(hostname) {
     }
   }
 
+  // Handle abbreviated dotted notation (e.g., 127.1 → 127.0.0.1)
+  if (parts.length >= 2 && parts.length <= 3) {
+    const nums = parts.map((p) => {
+      if (/^0x[\da-f]+$/i.test(p)) return parseInt(p, 16);
+      if (/^0\d+$/.test(p)) return parseInt(p, 8);
+      if (/^\d+$/.test(p)) return parseInt(p, 10);
+      return NaN;
+    });
+    if (nums.every((n) => !isNaN(n))) {
+      const last = nums[nums.length - 1];
+      if (parts.length === 2 && nums[0] >= 0 && nums[0] <= 255 && last >= 0 && last <= 0xffffff) {
+        return `${nums[0]}.${(last >> 16) & 0xff}.${(last >> 8) & 0xff}.${last & 0xff}`;
+      }
+      if (parts.length === 3 && nums[0] >= 0 && nums[0] <= 255 && nums[1] >= 0 && nums[1] <= 255 && last >= 0 && last <= 0xffff) {
+        return `${nums[0]}.${nums[1]}.${(last >> 8) & 0xff}.${last & 0xff}`;
+      }
+    }
+  }
+
   return h;
 }
 
 function isPrivateHost(hostname) {
   const h = normalizeIP(hostname.toLowerCase());
 
-  if (h === "localhost" || h === "0.0.0.0" || h.startsWith("127.")) return true;
+  if (h === "localhost" || h === "0.0.0.0" || h.startsWith("0.") || h.startsWith("127.")) return true;
   if (h === "::1") return true;
   if (h.startsWith("10.") || h.startsWith("192.168.")) return true;
   if (h.startsWith("172.")) {

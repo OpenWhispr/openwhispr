@@ -18,7 +18,7 @@ import logger from "../utils/logger";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { modelRegistry } from "../models/ModelRegistry";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
-import { isSecureEndpoint } from "../utils/urlUtils";
+import { isSecureEndpoint } from "../helpers/urlValidation.js";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
 
