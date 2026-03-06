@@ -1753,10 +1753,12 @@
       "proLimit": "Illimitato",
       "upgrade": "Aggiorna"
     },
-    "meetingGate": {
-      "title": "La registrazione delle riunioni richiede un piano a pagamento",
-      "description": "Aggiorna per registrare le riunioni, ottenere trascrizioni in tempo reale e generare note delle riunioni con AI.",
-      "upgrade": "Aggiorna piano"
+    "beta": {
+      "title": "La registrazione delle riunioni è in beta",
+      "description": "Stiamo ancora lavorando su come integrare al meglio questa funzionalità. Il tuo feedback è molto apprezzato!",
+      "freeTier": "Piano gratuito: 5 ore / mese",
+      "proTier": "Piano Pro: 20 ore / mese",
+      "feedback": "Hai bisogno di più di 20 ore? Contatta gabe@openwhispr.com"
     },
     "notABot": {
       "title": "OpenWhispr è un registratore di riunioni, non un bot",
@@ -1771,9 +1773,8 @@
     "now": "In corso",
     "join": "Partecipa",
     "untitledEvent": "Evento senza titolo",
-    "paidOnly": "La registrazione delle riunioni è una funzionalità a pagamento",
-    "paidOnlyDescription": "Aggiorna il tuo piano per registrare e trascrivere le riunioni in tempo reale.",
-    "upgrade": "Aggiorna piano",
+    "signInRequired": "Accedi per utilizzare la registrazione delle riunioni",
+    "signInDescription": "Crea un account o accedi per registrare e trascrivere le riunioni.",
     "connectCalendar": "Collega il tuo calendario",
     "connectCalendarDescription": "Collega il tuo Google Calendar per vedere le prossime riunioni e registrare note automaticamente.",
     "notABot": "OpenWhispr registra usando l'audio del tuo sistema — non entra mai nelle riunioni come bot.",

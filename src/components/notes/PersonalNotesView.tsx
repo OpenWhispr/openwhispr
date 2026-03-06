@@ -35,7 +35,6 @@ import {
 import { useMeetingTranscription } from "../../hooks/useMeetingTranscription";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import NotesOnboarding from "./NotesOnboarding";
-import RealtimeTranscriptionBanner from "./RealtimeTranscriptionBanner";
 
 const FOLDER_INPUT_CLASS =
   "w-full h-6 bg-foreground/5 dark:bg-white/5 rounded px-2 text-xs text-foreground outline-none border border-primary/30 focus:border-primary/50";
@@ -77,12 +76,7 @@ export default function PersonalNotesView({
   const { toast } = useToast();
   const isCloudMode = useSettingsStore(selectIsCloudReasoningMode);
   const effectiveModelId = useSettingsStore((s) => s.reasoningModel);
-  const {
-    isComplete: isOnboardingComplete,
-    isProUser,
-    isProLoading,
-    complete: completeOnboarding,
-  } = useNotesOnboarding();
+  const { isComplete: isOnboardingComplete, complete: completeOnboarding } = useNotesOnboarding();
 
   const {
     isRecording: isMeetingRecording,
@@ -370,24 +364,19 @@ export default function PersonalNotesView({
 
   // Pre-warm WebSocket when entering meeting mode (before user hits record)
   useEffect(() => {
-    if (isMeetingMode && isProUser) {
+    if (isMeetingMode) {
       prepareMeetingTranscription();
     }
-  }, [isMeetingMode, isProUser, prepareMeetingTranscription]);
+  }, [isMeetingMode, prepareMeetingTranscription]);
 
   useEffect(() => {
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
-    if (!isProUser) {
-      onMeetingRecordingRequestHandled?.();
-      return;
-    }
     meetingNoteIdRef.current = meetingRecordingRequest.noteId;
     startMeetingTranscription();
     onMeetingRecordingRequestHandled?.();
   }, [
     meetingRecordingRequest,
     activeNoteId,
-    isProUser,
     startMeetingTranscription,
     onMeetingRecordingRequestHandled,
   ]);
@@ -716,11 +705,6 @@ export default function PersonalNotesView({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
-        {!isProLoading && !isProUser && (
-          <RealtimeTranscriptionBanner
-            onUpgrade={onOpenSettings ? () => onOpenSettings("plansBilling") : undefined}
-          />
-        )}
         {editorNote ? (
           <>
             <NoteEditor

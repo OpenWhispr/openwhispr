@@ -1828,10 +1828,12 @@
       "proLimit": "Unlimited",
       "upgrade": "Upgrade"
     },
-    "meetingGate": {
-      "title": "Meeting recording requires a paid plan",
-      "description": "Upgrade to record meetings, get real-time transcriptions, and generate AI meeting notes.",
-      "upgrade": "Upgrade Plan"
+    "beta": {
+      "title": "Meeting recording is in beta",
+      "description": "We're still working on how best to build this into the product. Feedback is very welcome!",
+      "freeTier": "Free plan: 5 hours / month",
+      "proTier": "Pro plan: 20 hours / month",
+      "feedback": "Need more than 20 hours? Contact gabe@openwhispr.com"
     },
     "notABot": {
       "title": "OpenWhispr is a meeting recorder, not a bot",
@@ -1848,9 +1850,8 @@
     "untitledEvent": "Untitled Event",
     "screenRecordingRequired": "Screen Recording permission is needed to capture meeting audio.",
     "openSettings": "Open System Settings",
-    "paidOnly": "Meeting recording is a paid feature",
-    "paidOnlyDescription": "Upgrade your plan to record and transcribe meetings in real time.",
-    "upgrade": "Upgrade Plan",
+    "signInRequired": "Sign in to use meeting recording",
+    "signInDescription": "Create an account or sign in to record and transcribe meetings.",
     "connectCalendar": "Connect your calendar",
     "connectCalendarDescription": "Link your Google Calendar to see upcoming meetings and automatically record notes.",
     "notABot": "OpenWhispr records using your system audio — it never joins meetings as a bot.",

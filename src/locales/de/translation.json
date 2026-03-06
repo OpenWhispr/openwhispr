@@ -1749,10 +1749,12 @@
       "proLimit": "Unbegrenzt",
       "upgrade": "Upgrade"
     },
-    "meetingGate": {
-      "title": "Meeting-Aufzeichnung erfordert einen kostenpflichtigen Plan",
-      "description": "Upgraden Sie, um Meetings aufzuzeichnen, Echtzeit-Transkriptionen zu erhalten und AI-Meetingnotizen zu erstellen.",
-      "upgrade": "Plan upgraden"
+    "beta": {
+      "title": "Meeting-Aufnahme ist in der Beta-Phase",
+      "description": "Wir arbeiten noch daran, wie wir diese Funktion am besten ins Produkt integrieren. Feedback ist sehr willkommen!",
+      "freeTier": "Kostenloser Plan: 5 Stunden / Monat",
+      "proTier": "Pro-Plan: 20 Stunden / Monat",
+      "feedback": "Mehr als 20 Stunden benötigt? Kontaktieren Sie gabe@openwhispr.com"
     },
     "notABot": {
       "title": "OpenWhispr ist ein Meeting-Rekorder, kein Bot",
@@ -1767,9 +1769,8 @@
     "now": "Jetzt",
     "join": "Beitreten",
     "untitledEvent": "Unbenanntes Ereignis",
-    "paidOnly": "Meeting-Aufzeichnung ist eine kostenpflichtige Funktion",
-    "paidOnlyDescription": "Aktualisieren Sie Ihren Plan, um Meetings in Echtzeit aufzuzeichnen und zu transkribieren.",
-    "upgrade": "Plan upgraden",
+    "signInRequired": "Melden Sie sich an, um Meeting-Aufnahmen zu nutzen",
+    "signInDescription": "Erstellen Sie ein Konto oder melden Sie sich an, um Meetings aufzunehmen und zu transkribieren.",
     "connectCalendar": "Kalender verbinden",
     "connectCalendarDescription": "Verknüpfe deinen Google Kalender, um anstehende Meetings zu sehen und automatisch Notizen aufzuzeichnen.",
     "notABot": "OpenWhispr nimmt über dein Systemaudio auf — es tritt niemals als Bot deinen Meetings bei.",

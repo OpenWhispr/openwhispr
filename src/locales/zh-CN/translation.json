@@ -1749,10 +1749,12 @@
       "proLimit": "无限",
       "upgrade": "升级"
     },
-    "meetingGate": {
-      "title": "会议录制需要付费方案",
-      "description": "升级以录制会议、获取实时转录并生成 AI 会议笔记。",
-      "upgrade": "升级方案"
+    "beta": {
+      "title": "会议录制功能正在测试中",
+      "description": "我们仍在探索将此功能更好地融入产品的方式，非常欢迎您的反馈！",
+      "freeTier": "免费计划：每月 5 小时",
+      "proTier": "Pro 计划：每月 20 小时",
+      "feedback": "需要超过 20 小时？请联系 gabe@openwhispr.com"
     },
     "notABot": {
       "title": "OpenWhispr 是会议录制工具，不是机器人",
@@ -1767,9 +1769,8 @@
     "now": "进行中",
     "join": "加入",
     "untitledEvent": "无标题事件",
-    "paidOnly": "会议录制是付费功能",
-    "paidOnlyDescription": "升级您的方案以实时录制和转录会议。",
-    "upgrade": "升级方案",
+    "signInRequired": "登录以使用会议录制",
+    "signInDescription": "创建账户或登录以录制和转录会议。",
     "connectCalendar": "连接您的日历",
     "connectCalendarDescription": "关联 Google 日历以查看即将到来的会议并自动记录笔记。",
     "notABot": "OpenWhispr 通过系统音频录制 — 它不会以机器人身份加入您的会议。",
