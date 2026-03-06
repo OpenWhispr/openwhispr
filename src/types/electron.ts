@@ -412,7 +412,7 @@ declare global {
       onNoAudioDetected: (callback: (event: any, data?: any) => void) => () => void;
 
       // Whisper operations (whisper.cpp)
-      transcribeLocalWhisper: (audioBlob: Blob | ArrayBuffer, options?: any) => Promise<any>;
+      transcribeLocalWhisper: (audioBlob: Blob | ArrayBuffer, options?: { model?: string; language?: string; initialPrompt?: string }) => Promise<{ success: boolean; text?: string; error?: string }>;
       checkWhisperInstallation: () => Promise<WhisperCheckResult>;
       downloadWhisperModel: (modelName: string) => Promise<WhisperModelResult>;
       onWhisperDownloadProgress: (
@@ -512,7 +512,7 @@ declare global {
         text: string,
         modelId: string,
         agentName: string | null,
-        config: any
+        config: Record<string, unknown>
       ) => Promise<{ success: boolean; text?: string; error?: string }>;
       checkLocalReasoningAvailable: () => Promise<boolean>;
 
@@ -521,7 +521,7 @@ declare global {
         text: string,
         modelId: string,
         agentName: string | null,
-        config: any
+        config: Record<string, unknown>
       ) => Promise<{ success: boolean; text?: string; error?: string }>;
 
       // llama.cpp management
@@ -931,14 +931,14 @@ declare global {
       resizeMainWindow?: (sizeKey: string) => Promise<void>;
 
       // Whisper server management
-      whisperServerStart?: (modelName: string) => Promise<any>;
-      whisperServerStop?: () => Promise<any>;
-      whisperServerStatus?: () => Promise<any>;
+      whisperServerStart?: (modelName: string) => Promise<{ success: boolean; port?: number; reason?: string }>;
+      whisperServerStop?: () => Promise<void>;
+      whisperServerStatus?: () => Promise<{ available: boolean; running: boolean; port: number | null; modelPath: string | null; modelName: string | null }>;
 
       // Parakeet server management
-      parakeetServerStart?: (modelName: string) => Promise<any>;
-      parakeetServerStop?: () => Promise<any>;
-      parakeetServerStatus?: () => Promise<any>;
+      parakeetServerStart?: (modelName: string) => Promise<{ success: boolean; port?: number; reason?: string }>;
+      parakeetServerStop?: () => Promise<void>;
+      parakeetServerStatus?: () => Promise<{ available: boolean; running: boolean; port: number | null; modelName: string | null }>;
 
       // Windows Push-to-Talk unavailable notification
       onWindowsPushToTalkUnavailable?: (callback: () => void) => () => void;

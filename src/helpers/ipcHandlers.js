@@ -2333,14 +2333,17 @@ class IPCHandlers {
           let resolvedBaseUrl;
           if (persistedCustomUrl) {
             resolvedBaseUrl = persistedCustomUrl;
+            debugLogger.logReasoning("byok-file-url-resolve", { source: "persisted-custom", url: persistedCustomUrl });
           } else if (baseUrl) {
             // Only allow renderer-provided URL if it matches a known provider
             try {
               const parsed = new URL(baseUrl);
               resolvedBaseUrl = BYOK_FILE_PROVIDER_BASES[parsed.hostname];
               if (!resolvedBaseUrl) {
+                debugLogger.logReasoning("byok-file-url-reject", { reason: "renderer URL not in known provider map", hostname: parsed.hostname });
                 throw new Error("No custom transcription endpoint configured. Set one in Settings.");
               }
+              debugLogger.logReasoning("byok-file-url-resolve", { source: "known-provider-map", hostname: parsed.hostname, url: resolvedBaseUrl });
             } catch (e) {
               if (e.message.includes("No custom")) throw e;
               throw new Error("Invalid transcription endpoint URL.");
@@ -3086,7 +3089,14 @@ class IPCHandlers {
             : "";
           const base = (isCustomProvider && persistedCustomUrl) ? persistedCustomUrl : defaultBase;
 
+          debugLogger.logReasoning("openai-url-resolve", {
+            isCustomProvider,
+            hasPersistedUrl: !!persistedCustomUrl,
+            resolvedBase: base,
+          });
+
           if (isCustomProvider && persistedCustomUrl && !isSecureEndpoint(base)) {
+            debugLogger.logReasoning("openai-url-reject", { reason: "failed security validation", url: base });
             throw new Error("Custom reasoning endpoint must use HTTPS (HTTP allowed for local network only)");
           }
 
@@ -3107,6 +3117,10 @@ class IPCHandlers {
               { url: `${base}/chat/completions`, type: "chat" },
             ];
           }
+
+          debugLogger.logReasoning("openai-endpoint-candidates", {
+            candidates: endpointCandidates.map(c => ({ url: c.url, type: c.type })),
+          });
 
           const isOlderModel = modelId && (modelId.startsWith("gpt-4") || modelId.startsWith("gpt-3"));
 
@@ -3423,6 +3437,7 @@ class IPCHandlers {
           let resolvedEndpoint;
           if (PROVIDER_ENDPOINTS[provider]) {
             resolvedEndpoint = PROVIDER_ENDPOINTS[provider];
+            debugLogger.logReasoning("byok-streaming-url-resolve", { source: "known-provider", provider, url: resolvedEndpoint });
           } else if (provider === "custom") {
             const persistedBaseUrl = this.environmentManager.getCustomTranscriptionBaseUrl();
             if (!persistedBaseUrl) {
@@ -3435,7 +3450,9 @@ class IPCHandlers {
               const base = persistedBaseUrl.replace(/\/+$/, "");
               resolvedEndpoint = `${base}/audio/transcriptions`;
             }
+            debugLogger.logReasoning("byok-streaming-url-resolve", { source: "persisted-custom", url: resolvedEndpoint });
             if (!isSecureEndpoint(resolvedEndpoint)) {
+              debugLogger.logReasoning("byok-streaming-url-reject", { reason: "failed security validation", url: resolvedEndpoint });
               throw new Error("Custom transcription endpoint must use HTTPS (HTTP allowed for local network only)");
             }
           } else {
