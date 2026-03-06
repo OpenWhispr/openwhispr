@@ -213,17 +213,25 @@ class LlamaVulkanManager {
           err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
         });
       } else if (process.platform === "win32") {
-        execFile(
-          "powershell",
-          [
-            "-NoProfile",
-            "-Command",
-            `Expand-Archive -Force -Path '${archivePath}' -DestinationPath '${destDir}'`,
-          ],
-          (err) => {
-            err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
+        // Use Windows built-in tar.exe (available since Windows 10 1803)
+        execFile("tar", ["-xf", archivePath, "-C", destDir], (err) => {
+          if (err) {
+            debugLogger.info("Vulkan: tar extraction failed, trying PowerShell", { error: err.message });
+            execFile(
+              "powershell",
+              [
+                "-NoProfile",
+                "-Command",
+                `Expand-Archive -Force -Path '${archivePath}' -DestinationPath '${destDir}'`,
+              ],
+              (psErr) => {
+                psErr ? reject(new Error(`Extraction failed: ${psErr.message}`)) : resolve();
+              }
+            );
+          } else {
+            resolve();
           }
-        );
+        });
       } else {
         execFile("unzip", ["-o", archivePath, "-d", destDir], (err) => {
           err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
