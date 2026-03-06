@@ -468,36 +468,39 @@ export async function initializeSettings(): Promise<void> {
 
   const state = useSettingsStore.getState();
 
-  // Sync API keys from main process (if localStorage is empty, read from .env via IPC)
+  // Sync API keys from main process (if localStorage is empty, check .env via IPC)
+  // We use hasXKey (boolean) to avoid exposing raw keys to the renderer.
+  // If the main process has a key and localStorage is empty, set a sentinel so UI shows key exists.
+  const ENV_KEY_SENTINEL = "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022";
   if (window.electronAPI) {
     try {
       if (!state.openaiApiKey) {
-        const envKey = await window.electronAPI.getOpenAIKey?.();
-        if (envKey) createStringSetter("openaiApiKey")(envKey);
+        const hasKey = await window.electronAPI.hasOpenAIKey?.();
+        if (hasKey) createStringSetter("openaiApiKey")(ENV_KEY_SENTINEL);
       }
       if (!state.anthropicApiKey) {
-        const envKey = await window.electronAPI.getAnthropicKey?.();
-        if (envKey) createStringSetter("anthropicApiKey")(envKey);
+        const hasKey = await window.electronAPI.hasAnthropicKey?.();
+        if (hasKey) createStringSetter("anthropicApiKey")(ENV_KEY_SENTINEL);
       }
       if (!state.geminiApiKey) {
-        const envKey = await window.electronAPI.getGeminiKey?.();
-        if (envKey) createStringSetter("geminiApiKey")(envKey);
+        const hasKey = await window.electronAPI.hasGeminiKey?.();
+        if (hasKey) createStringSetter("geminiApiKey")(ENV_KEY_SENTINEL);
       }
       if (!state.groqApiKey) {
-        const envKey = await window.electronAPI.getGroqKey?.();
-        if (envKey) createStringSetter("groqApiKey")(envKey);
+        const hasKey = await window.electronAPI.hasGroqKey?.();
+        if (hasKey) createStringSetter("groqApiKey")(ENV_KEY_SENTINEL);
       }
       if (!state.mistralApiKey) {
-        const envKey = await window.electronAPI.getMistralKey?.();
-        if (envKey) createStringSetter("mistralApiKey")(envKey);
+        const hasKey = await window.electronAPI.hasMistralKey?.();
+        if (hasKey) createStringSetter("mistralApiKey")(ENV_KEY_SENTINEL);
       }
       if (!state.customTranscriptionApiKey) {
-        const envKey = await window.electronAPI.getCustomTranscriptionKey?.();
-        if (envKey) createStringSetter("customTranscriptionApiKey")(envKey);
+        const hasKey = await window.electronAPI.hasCustomTranscriptionKey?.();
+        if (hasKey) createStringSetter("customTranscriptionApiKey")(ENV_KEY_SENTINEL);
       }
       if (!state.customReasoningApiKey) {
-        const envKey = await window.electronAPI.getCustomReasoningKey?.();
-        if (envKey) createStringSetter("customReasoningApiKey")(envKey);
+        const hasKey = await window.electronAPI.hasCustomReasoningKey?.();
+        if (hasKey) createStringSetter("customReasoningApiKey")(ENV_KEY_SENTINEL);
       }
     } catch (err) {
       logger.warn(

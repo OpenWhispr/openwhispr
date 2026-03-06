@@ -140,7 +140,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // Environment variables
-  getOpenAIKey: () => ipcRenderer.invoke("get-openai-key"),
+  hasOpenAIKey: () => ipcRenderer.invoke("has-openai-key"),
   saveOpenAIKey: (key) => ipcRenderer.invoke("save-openai-key", key),
   createProductionEnvFile: (key) => ipcRenderer.invoke("create-production-env-file", key),
 
@@ -272,29 +272,29 @@ contextBridge.exposeInMainWorld("electronAPI", {
   proxyFetch: (url, options) => ipcRenderer.invoke("proxy-fetch", url, options),
 
   // Anthropic API
-  getAnthropicKey: () => ipcRenderer.invoke("get-anthropic-key"),
+  hasAnthropicKey: () => ipcRenderer.invoke("has-anthropic-key"),
   saveAnthropicKey: (key) => ipcRenderer.invoke("save-anthropic-key", key),
   getUiLanguage: () => ipcRenderer.invoke("get-ui-language"),
   saveUiLanguage: (language) => ipcRenderer.invoke("save-ui-language", language),
   setUiLanguage: (language) => ipcRenderer.invoke("set-ui-language", language),
 
   // Gemini API
-  getGeminiKey: () => ipcRenderer.invoke("get-gemini-key"),
+  hasGeminiKey: () => ipcRenderer.invoke("has-gemini-key"),
   saveGeminiKey: (key) => ipcRenderer.invoke("save-gemini-key", key),
 
   // Groq API
-  getGroqKey: () => ipcRenderer.invoke("get-groq-key"),
+  hasGroqKey: () => ipcRenderer.invoke("has-groq-key"),
   saveGroqKey: (key) => ipcRenderer.invoke("save-groq-key", key),
 
   // Mistral API
-  getMistralKey: () => ipcRenderer.invoke("get-mistral-key"),
+  hasMistralKey: () => ipcRenderer.invoke("has-mistral-key"),
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
 
   // Custom endpoint API keys
-  getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
+  hasCustomTranscriptionKey: () => ipcRenderer.invoke("has-custom-transcription-key"),
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
-  getCustomReasoningKey: () => ipcRenderer.invoke("get-custom-reasoning-key"),
+  hasCustomReasoningKey: () => ipcRenderer.invoke("has-custom-reasoning-key"),
   saveCustomReasoningKey: (key) => ipcRenderer.invoke("save-custom-reasoning-key", key),
 
   // Dictation key persistence (file-based for reliable startup)

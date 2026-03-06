@@ -63,14 +63,6 @@ class AudioManager {
     this.onError = null;
     this.onTranscriptionComplete = null;
     this.onPartialTranscript = null;
-    this.cachedApiKey = null;
-    this.cachedApiKeyProvider = null;
-
-    this._onApiKeyChanged = () => {
-      this.cachedApiKey = null;
-      this.cachedApiKeyProvider = null;
-    };
-    window.addEventListener("api-key-changed", this._onApiKeyChanged);
     this.cachedTranscriptionEndpoint = null;
     this.cachedEndpointProvider = null;
     this.cachedEndpointBaseUrl = null;
@@ -685,85 +677,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async getAPIKey() {
+  async hasAPIKey() {
     const s = getSettings();
     const provider = s.cloudTranscriptionProvider || "openai";
 
-    // Check cache (invalidate if provider changed)
-    if (this.cachedApiKey !== null && this.cachedApiKeyProvider === provider) {
-      return this.cachedApiKey;
-    }
-
-    let apiKey = null;
-
     if (provider === "custom") {
-      // Prefer store value (user-entered via UI) over main process (.env)
-      apiKey = s.customTranscriptionApiKey || "";
-      if (!apiKey.trim()) {
-        try {
-          apiKey = await window.electronAPI.getCustomTranscriptionKey?.();
-        } catch (err) {
-          logger.debug(
-            "Failed to get custom transcription key via IPC",
-            { error: err?.message },
-            "transcription"
-          );
-        }
-      }
-      apiKey = apiKey?.trim() || "";
-
-      logger.debug(
-        "Custom STT API key retrieval",
-        {
-          provider,
-          hasKey: !!apiKey,
-          keyLength: apiKey?.length || 0,
-          keyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : "(none)",
-        },
-        "transcription"
-      );
-
-      // For custom, we allow null/empty - the endpoint may not require auth
-      if (!apiKey) {
-        apiKey = null;
+      // Check store value first, then main process
+      const storeKey = s.customTranscriptionApiKey || "";
+      if (storeKey.trim()) return true;
+      try {
+        return !!(await window.electronAPI.hasCustomTranscriptionKey?.());
+      } catch {
+        return false;
       }
     } else if (provider === "mistral") {
-      // Prefer store value (user-entered via UI) over main process (.env)
-      // to avoid stale keys in process.env after auth mode transitions
-      apiKey = s.mistralApiKey;
-      if (!isValidApiKey(apiKey, "mistral")) {
-        apiKey = await window.electronAPI.getMistralKey?.();
-      }
-      if (!isValidApiKey(apiKey, "mistral")) {
-        throw new Error("Mistral API key not found. Please set your API key in the Control Panel.");
-      }
+      if (isValidApiKey(s.mistralApiKey, "mistral")) return true;
+      return !!(await window.electronAPI.hasMistralKey?.());
     } else if (provider === "groq") {
-      // Prefer store value (user-entered via UI) over main process (.env)
-      apiKey = s.groqApiKey;
-      if (!isValidApiKey(apiKey, "groq")) {
-        apiKey = await window.electronAPI.getGroqKey?.();
-      }
-      if (!isValidApiKey(apiKey, "groq")) {
-        throw new Error("Groq API key not found. Please set your API key in the Control Panel.");
-      }
+      if (isValidApiKey(s.groqApiKey, "groq")) return true;
+      return !!(await window.electronAPI.hasGroqKey?.());
     } else {
       // Default to OpenAI
-      // Prefer store value (user-entered via UI) over main process (.env)
-      // to avoid stale keys in process.env after auth mode transitions
-      apiKey = s.openaiApiKey;
-      if (!isValidApiKey(apiKey, "openai")) {
-        apiKey = await window.electronAPI.getOpenAIKey();
-      }
-      if (!isValidApiKey(apiKey, "openai")) {
-        throw new Error(
-          "OpenAI API key not found. Please set your API key in the .env file or Control Panel."
-        );
-      }
+      if (isValidApiKey(s.openaiApiKey, "openai")) return true;
+      return !!(await window.electronAPI.hasOpenAIKey?.());
     }
-
-    this.cachedApiKey = apiKey;
-    this.cachedApiKeyProvider = provider;
-    return apiKey;
   }
 
   async optimizeAudio(audioBlob) {
@@ -1036,147 +973,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return normalized.startsWith("gpt-4o-mini-transcribe");
   }
 
-  async readTranscriptionStream(response) {
-    const reader = response.body?.getReader();
-    if (!reader) {
-      logger.error("Streaming response body not available", {}, "transcription");
-      throw new Error("Streaming response body not available");
-    }
-
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
-    let collectedText = "";
-    let finalText = null;
-    let eventCount = 0;
-    const eventTypes = {};
-
-    const handleEvent = (payload) => {
-      if (!payload || typeof payload !== "object") {
-        return;
-      }
-      eventCount++;
-      const eventType = payload.type || "unknown";
-      eventTypes[eventType] = (eventTypes[eventType] || 0) + 1;
-
-      logger.debug(
-        "Stream event received",
-        {
-          type: eventType,
-          eventNumber: eventCount,
-          payloadKeys: Object.keys(payload),
-        },
-        "transcription"
-      );
-
-      if (payload.type === "transcript.text.delta" && typeof payload.delta === "string") {
-        collectedText += payload.delta;
-        return;
-      }
-      if (payload.type === "transcript.text.segment" && typeof payload.text === "string") {
-        collectedText += payload.text;
-        return;
-      }
-      if (payload.type === "transcript.text.done" && typeof payload.text === "string") {
-        finalText = payload.text;
-        logger.debug(
-          "Final transcript received",
-          {
-            textLength: payload.text.length,
-          },
-          "transcription"
-        );
-      }
-    };
-
-    logger.debug("Starting to read transcription stream", {}, "transcription");
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) {
-        logger.debug(
-          "Stream reading complete",
-          {
-            eventCount,
-            eventTypes,
-            collectedTextLength: collectedText.length,
-            hasFinalText: finalText !== null,
-          },
-          "transcription"
-        );
-        break;
-      }
-      const chunk = decoder.decode(value, { stream: true });
-      buffer += chunk;
-
-      // Log first chunk to see format
-      if (eventCount === 0 && chunk.length > 0) {
-        logger.debug(
-          "First stream chunk received",
-          {
-            chunkLength: chunk.length,
-            chunkPreview: chunk.substring(0, 500),
-          },
-          "transcription"
-        );
-      }
-
-      // Process complete lines from the buffer
-      // Each SSE event is "data: <json>\n" followed by empty line
-      const lines = buffer.split("\n");
-      buffer = "";
-
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-
-        // Skip empty lines
-        if (!trimmedLine) {
-          continue;
-        }
-
-        // Extract data from "data: " prefix
-        let data = "";
-        if (trimmedLine.startsWith("data: ")) {
-          data = trimmedLine.slice(6);
-        } else if (trimmedLine.startsWith("data:")) {
-          data = trimmedLine.slice(5).trim();
-        } else {
-          // Not a data line, could be leftover - keep in buffer
-          buffer += line + "\n";
-          continue;
-        }
-
-        // Handle [DONE] marker
-        if (data === "[DONE]") {
-          finalText = finalText ?? collectedText;
-          continue;
-        }
-
-        // Try to parse JSON
-        try {
-          const parsed = JSON.parse(data);
-          handleEvent(parsed);
-        } catch (error) {
-          // Incomplete JSON - put back in buffer for next iteration
-          buffer += line + "\n";
-        }
-      }
-    }
-
-    const result = finalText ?? collectedText;
-    logger.debug(
-      "Stream processing complete",
-      {
-        resultLength: result.length,
-        usedFinalText: finalText !== null,
-        eventCount,
-        eventTypes,
-      },
-      "transcription"
-    );
-
-    return result;
-  }
-
   async processWithOpenWhisprCloud(audioBlob, metadata = {}) {
     if (!navigator.onLine) {
       const err = new Error("You're offline. Cloud transcription requires an internet connection.");
@@ -1341,8 +1137,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "transcription"
       );
 
-      const [apiKey, optimizedAudio] = await Promise.all([
-        this.getAPIKey(),
+      const [hasKey, optimizedAudio] = await Promise.all([
+        this.hasAPIKey(),
         shouldOptimize ? this.optimizeAudio(audioBlob) : Promise.resolve(audioBlob),
       ]);
 
@@ -1367,7 +1163,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           mimeType,
           extension,
           optimizedSize: optimizedAudio.size,
-          hasApiKey: !!apiKey,
+          hasApiKey: hasKey,
         },
         "transcription"
       );
@@ -1439,7 +1235,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           model,
           provider,
           isCustomEndpoint,
-          hasApiKey: !!apiKey,
+          hasApiKey: hasKey,
         },
         "transcription"
       );
@@ -1453,7 +1249,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider,
         endpoint,
         prompt: dictionaryPrompt || undefined,
-        stream: shouldStream,
       });
 
       if (!proxyResult.success) {
@@ -2446,9 +2241,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.onTranscriptionComplete = null;
     this.onPartialTranscript = null;
     this.onStreamingCommit = null;
-    if (this._onApiKeyChanged) {
-      window.removeEventListener("api-key-changed", this._onApiKeyChanged);
-    }
   }
 }
 

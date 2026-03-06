@@ -412,7 +412,6 @@ export default function ReasoningModelSelector({
         const modelsUrl = buildApiUrl(normalizedBase, "/models");
         const result = await (window as any).electronAPI.fetchCustomModels({
           baseUrl: normalizedBase,
-          apiKey: apiKey || "",
         });
 
         if (!result.success) {

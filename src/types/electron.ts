@@ -385,10 +385,10 @@ declare global {
       onTranscriptionsCleared?: (callback: (payload: { cleared: number }) => void) => () => void;
 
       // API key management
-      getOpenAIKey: () => Promise<string>;
+      hasOpenAIKey: () => Promise<boolean>;
       saveOpenAIKey: (key: string) => Promise<{ success: boolean }>;
       createProductionEnvFile: (key: string) => Promise<void>;
-      getAnthropicKey: () => Promise<string | null>;
+      hasAnthropicKey: () => Promise<boolean>;
       saveAnthropicKey: (key: string) => Promise<void>;
       getUiLanguage: () => Promise<string>;
       saveUiLanguage: (language: string) => Promise<{ success: boolean; language: string }>;
@@ -605,15 +605,15 @@ declare global {
       ) => () => void;
 
       // Gemini API key management
-      getGeminiKey: () => Promise<string | null>;
+      hasGeminiKey: () => Promise<boolean>;
       saveGeminiKey: (key: string) => Promise<void>;
 
       // Groq API key management
-      getGroqKey: () => Promise<string | null>;
+      hasGroqKey: () => Promise<boolean>;
       saveGroqKey: (key: string) => Promise<void>;
 
       // Mistral API key management
-      getMistralKey: () => Promise<string | null>;
+      hasMistralKey: () => Promise<boolean>;
       saveMistralKey: (key: string) => Promise<void>;
       proxyMistralTranscription: (data: {
         audioBuffer: ArrayBuffer;
@@ -623,9 +623,9 @@ declare global {
       }) => Promise<{ text: string }>;
 
       // Custom endpoint API keys
-      getCustomTranscriptionKey?: () => Promise<string | null>;
+      hasCustomTranscriptionKey?: () => Promise<boolean>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;
-      getCustomReasoningKey?: () => Promise<string | null>;
+      hasCustomReasoningKey?: () => Promise<boolean>;
       saveCustomReasoningKey?: (key: string) => Promise<void>;
 
       // Dictation key persistence (file-based for reliable startup)

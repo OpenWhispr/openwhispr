@@ -9,6 +9,8 @@ const GnomeShortcutManager = require("./gnomeShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
+const { isSecureEndpoint } = require("./urlValidation");
+const { withRetry, createApiRetryStrategy } = require("./retry");
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
@@ -53,7 +55,7 @@ function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   return { body: Buffer.concat(bodyParts), boundary };
 }
 
-function postMultipart(url, body, boundary, headers = {}) {
+function postMultipart(url, body, boundary, headers = {}, timeoutMs = 120000) {
   const httpModule = url.protocol === "https:" ? https : http;
   return new Promise((resolve, reject) => {
     const req = httpModule.request(
@@ -80,6 +82,7 @@ function postMultipart(url, body, boundary, headers = {}) {
         });
       }
     );
+    req.setTimeout(timeoutMs, () => req.destroy(new Error(`Request timed out after ${timeoutMs}ms`)));
     req.on("error", reject);
     req.write(body);
     req.end();
@@ -299,8 +302,8 @@ class IPCHandlers {
       return this.windowManager.resizeMainWindow(sizeKey);
     });
 
-    ipcMain.handle("get-openai-key", async (event) => {
-      return this.environmentManager.getOpenAIKey();
+    ipcMain.handle("has-openai-key", async () => {
+      return !!this.environmentManager.getOpenAIKey();
     });
 
     ipcMain.handle("save-openai-key", async (event, key) => {
@@ -1238,28 +1241,28 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("get-anthropic-key", async (event) => {
-      return this.environmentManager.getAnthropicKey();
+    ipcMain.handle("has-anthropic-key", async () => {
+      return !!this.environmentManager.getAnthropicKey();
     });
 
-    ipcMain.handle("get-gemini-key", async (event) => {
-      return this.environmentManager.getGeminiKey();
+    ipcMain.handle("has-gemini-key", async () => {
+      return !!this.environmentManager.getGeminiKey();
     });
 
     ipcMain.handle("save-gemini-key", async (event, key) => {
       return this.environmentManager.saveGeminiKey(key);
     });
 
-    ipcMain.handle("get-groq-key", async (event) => {
-      return this.environmentManager.getGroqKey();
+    ipcMain.handle("has-groq-key", async () => {
+      return !!this.environmentManager.getGroqKey();
     });
 
     ipcMain.handle("save-groq-key", async (event, key) => {
       return this.environmentManager.saveGroqKey(key);
     });
 
-    ipcMain.handle("get-mistral-key", async () => {
-      return this.environmentManager.getMistralKey();
+    ipcMain.handle("has-mistral-key", async () => {
+      return !!this.environmentManager.getMistralKey();
     });
 
     ipcMain.handle("save-mistral-key", async (event, key) => {
@@ -1304,16 +1307,16 @@ class IPCHandlers {
       }
     );
 
-    ipcMain.handle("get-custom-transcription-key", async () => {
-      return this.environmentManager.getCustomTranscriptionKey();
+    ipcMain.handle("has-custom-transcription-key", async () => {
+      return !!this.environmentManager.getCustomTranscriptionKey();
     });
 
     ipcMain.handle("save-custom-transcription-key", async (event, key) => {
       return this.environmentManager.saveCustomTranscriptionKey(key);
     });
 
-    ipcMain.handle("get-custom-reasoning-key", async () => {
-      return this.environmentManager.getCustomReasoningKey();
+    ipcMain.handle("has-custom-reasoning-key", async () => {
+      return !!this.environmentManager.getCustomReasoningKey();
     });
 
     ipcMain.handle("save-custom-reasoning-key", async (event, key) => {
@@ -1454,33 +1457,38 @@ class IPCHandlers {
             temperature: config?.temperature || 0.3,
           };
 
-          const response = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-API-Key": apiKey,
-              "anthropic-version": "2023-06-01",
-            },
-            body: JSON.stringify(requestBody),
-          });
+          const retryStrategy = createApiRetryStrategy();
+          return await withRetry(async () => {
+            const response = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "X-API-Key": apiKey,
+                "anthropic-version": "2023-06-01",
+              },
+              body: JSON.stringify(requestBody),
+            });
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            let errorData = { error: response.statusText };
-            try {
-              errorData = JSON.parse(errorText);
-            } catch {
-              errorData = { error: errorText || response.statusText };
+            if (!response.ok) {
+              const errorText = await response.text();
+              let errorData = { error: response.statusText };
+              try {
+                errorData = JSON.parse(errorText);
+              } catch {
+                errorData = { error: errorText || response.statusText };
+              }
+              const err = new Error(
+                errorData.error?.message ||
+                  errorData.error ||
+                  `Anthropic API error: ${response.status}`
+              );
+              err.status = response.status;
+              throw err;
             }
-            throw new Error(
-              errorData.error?.message ||
-                errorData.error ||
-                `Anthropic API error: ${response.status}`
-            );
-          }
 
-          const data = await response.json();
-          return { success: true, text: data.content[0].text.trim() };
+            const data = await response.json();
+            return { success: true, text: data.content[0].text.trim() };
+          }, retryStrategy);
         } catch (error) {
           debugLogger.error("Anthropic reasoning error:", error);
           return { success: false, error: error.message };
@@ -3044,6 +3052,10 @@ class IPCHandlers {
           const defaultBase = "https://api.openai.com/v1";
           const base = (isCustomProvider && customBaseUrl) ? customBaseUrl : defaultBase;
 
+          if (isCustomProvider && customBaseUrl && !isSecureEndpoint(base)) {
+            throw new Error("Custom reasoning endpoint must use HTTPS (HTTP allowed for local network only)");
+          }
+
           const messages = [
             { role: "system", content: systemPrompt },
             { role: "user", content: text },
@@ -3064,107 +3076,112 @@ class IPCHandlers {
 
           const isOlderModel = modelId && (modelId.startsWith("gpt-4") || modelId.startsWith("gpt-3"));
 
-          let lastError = null;
-          for (const { url: endpoint, type } of endpointCandidates) {
-            try {
-              const requestBody = { model: modelId };
-              if (type === "responses") {
-                requestBody.input = messages;
-                requestBody.store = false;
-              } else {
-                requestBody.messages = messages;
-                if (isOlderModel) {
-                  requestBody.temperature = config?.temperature || 0.3;
-                }
-                if (config?.maxTokens) {
-                  requestBody.max_tokens = config.maxTokens;
-                }
-              }
-
-              if (config?.reasoningEffort) {
-                requestBody.reasoning_effort = config.reasoningEffort;
-              }
-
-              const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-              let response;
+          const retryStrategy = createApiRetryStrategy();
+          return await withRetry(async () => {
+            let lastError = null;
+            for (const { url: endpoint, type } of endpointCandidates) {
               try {
-                response = await fetch(endpoint, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${apiKey}`,
-                  },
-                  body: JSON.stringify(requestBody),
-                  signal: controller.signal,
-                });
-              } finally {
-                clearTimeout(timeoutId);
-              }
-
-              if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: response.statusText }));
-                const errorMessage =
-                  errorData.error?.message || errorData.message || `OpenAI API error: ${response.status}`;
-
-                // Fall back to chat completions if responses endpoint is not supported
-                const isUnsupportedEndpoint =
-                  (response.status === 404 || response.status === 405) && type === "responses";
-                if (isUnsupportedEndpoint) {
-                  lastError = new Error(errorMessage);
-                  continue;
+                const requestBody = { model: modelId };
+                if (type === "responses") {
+                  requestBody.input = messages;
+                  requestBody.store = false;
+                } else {
+                  requestBody.messages = messages;
+                  if (isOlderModel) {
+                    requestBody.temperature = config?.temperature || 0.3;
+                  }
+                  if (config?.maxTokens) {
+                    requestBody.max_tokens = config.maxTokens;
+                  }
                 }
-                throw new Error(errorMessage);
-              }
 
-              const data = await response.json();
+                if (config?.reasoningEffort) {
+                  requestBody.reasoning_effort = config.reasoningEffort;
+                }
 
-              // Extract text from either Responses or Chat Completions format
-              let responseText = "";
-              if (Array.isArray(data?.output)) {
-                for (const item of data.output) {
-                  if (item.type === "message" && item.content) {
-                    for (const content of item.content) {
-                      if (content.type === "output_text" && content.text) {
-                        responseText = content.text.trim();
-                        break;
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+                let response;
+                try {
+                  response = await fetch(endpoint, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${apiKey}`,
+                    },
+                    body: JSON.stringify(requestBody),
+                    signal: controller.signal,
+                  });
+                } finally {
+                  clearTimeout(timeoutId);
+                }
+
+                if (!response.ok) {
+                  const errorData = await response.json().catch(() => ({ error: response.statusText }));
+                  const errorMessage =
+                    errorData.error?.message || errorData.message || `OpenAI API error: ${response.status}`;
+
+                  // Fall back to chat completions if responses endpoint is not supported
+                  const isUnsupportedEndpoint =
+                    (response.status === 404 || response.status === 405) && type === "responses";
+                  if (isUnsupportedEndpoint) {
+                    lastError = new Error(errorMessage);
+                    continue;
+                  }
+                  const err = new Error(errorMessage);
+                  err.status = response.status;
+                  throw err;
+                }
+
+                const data = await response.json();
+
+                // Extract text from either Responses or Chat Completions format
+                let responseText = "";
+                if (Array.isArray(data?.output)) {
+                  for (const item of data.output) {
+                    if (item.type === "message" && item.content) {
+                      for (const content of item.content) {
+                        if (content.type === "output_text" && content.text) {
+                          responseText = content.text.trim();
+                          break;
+                        }
                       }
+                      if (responseText) break;
                     }
-                    if (responseText) break;
                   }
                 }
-              }
-              if (!responseText && typeof data?.output_text === "string") {
-                responseText = data.output_text.trim();
-              }
-              if (!responseText && Array.isArray(data?.choices)) {
-                for (const choice of data.choices) {
-                  const message = choice?.message ?? choice?.delta;
-                  const content = message?.content;
-                  if (typeof content === "string" && content.trim()) {
-                    responseText = content.trim();
-                    break;
+                if (!responseText && typeof data?.output_text === "string") {
+                  responseText = data.output_text.trim();
+                }
+                if (!responseText && Array.isArray(data?.choices)) {
+                  for (const choice of data.choices) {
+                    const message = choice?.message ?? choice?.delta;
+                    const content = message?.content;
+                    if (typeof content === "string" && content.trim()) {
+                      responseText = content.trim();
+                      break;
+                    }
                   }
                 }
-              }
 
-              if (!responseText) {
-                return { success: true, text: text }; // Fallback to original text
-              }
+                if (!responseText) {
+                  return { success: true, text: text }; // Fallback to original text
+                }
 
-              return { success: true, text: responseText };
-            } catch (error) {
-              if (error.name === "AbortError") {
-                throw new Error("Request timed out after 30s");
+                return { success: true, text: responseText };
+              } catch (error) {
+                if (error.name === "AbortError") {
+                  throw new Error("Request timed out after 30s");
+                }
+                lastError = error;
+                if (type === "responses") continue;
+                throw error;
               }
-              lastError = error;
-              if (type === "responses") continue;
-              throw error;
             }
-          }
 
-          throw lastError || new Error("No OpenAI endpoint responded");
+            throw lastError || new Error("No OpenAI endpoint responded");
+          }, retryStrategy);
         } catch (error) {
           debugLogger.error("OpenAI reasoning error:", error);
           return { success: false, error: error.message };
@@ -3197,50 +3214,59 @@ class IPCHandlers {
             },
           };
 
+          if (!modelId || !/^[a-zA-Z0-9._-]+$/.test(modelId)) {
+            throw new Error(`Invalid Gemini model ID: ${modelId}`);
+          }
+
           const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent`;
 
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000);
+          const retryStrategy = createApiRetryStrategy();
+          return await withRetry(async () => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-          let response;
-          try {
-            response = await fetch(endpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-goog-api-key": apiKey,
-              },
-              body: JSON.stringify(requestBody),
-              signal: controller.signal,
-            });
-          } finally {
-            clearTimeout(timeoutId);
-          }
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            let errorData = { error: response.statusText };
+            let response;
             try {
-              errorData = JSON.parse(errorText);
-            } catch {
-              errorData = { error: errorText || response.statusText };
+              response = await fetch(endpoint, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-goog-api-key": apiKey,
+                },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal,
+              });
+            } finally {
+              clearTimeout(timeoutId);
             }
-            throw new Error(
-              errorData.error?.message || errorData.message || errorData.error || `Gemini API error: ${response.status}`
-            );
-          }
 
-          const data = await response.json();
-
-          if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
-            const candidate = data.candidates?.[0];
-            if (candidate?.finishReason === "MAX_TOKENS") {
-              throw new Error("Gemini reached token limit before generating response.");
+            if (!response.ok) {
+              const errorText = await response.text();
+              let errorData = { error: response.statusText };
+              try {
+                errorData = JSON.parse(errorText);
+              } catch {
+                errorData = { error: errorText || response.statusText };
+              }
+              const err = new Error(
+                errorData.error?.message || errorData.message || errorData.error || `Gemini API error: ${response.status}`
+              );
+              err.status = response.status;
+              throw err;
             }
-            throw new Error("Gemini returned empty response");
-          }
 
-          return { success: true, text: data.candidates[0].content.parts[0].text.trim() };
+            const data = await response.json();
+
+            if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+              const candidate = data.candidates?.[0];
+              if (candidate?.finishReason === "MAX_TOKENS") {
+                throw new Error("Gemini reached token limit before generating response.");
+              }
+              throw new Error("Gemini returned empty response");
+            }
+
+            return { success: true, text: data.candidates[0].content.parts[0].text.trim() };
+          }, retryStrategy);
         } catch (error) {
           if (error.name === "AbortError") {
             return { success: false, error: "Request timed out after 30s" };
@@ -3278,44 +3304,49 @@ class IPCHandlers {
             requestBody.reasoning_effort = config.reasoningEffort;
           }
 
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000);
+          const retryStrategy = createApiRetryStrategy();
+          return await withRetry(async () => {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-          let response;
-          try {
-            response = await fetch(endpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify(requestBody),
-              signal: controller.signal,
-            });
-          } finally {
-            clearTimeout(timeoutId);
-          }
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            let errorData = { error: response.statusText };
+            let response;
             try {
-              errorData = JSON.parse(errorText);
-            } catch {
-              errorData = { error: errorText || response.statusText };
+              response = await fetch(endpoint, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${apiKey}`,
+                },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal,
+              });
+            } finally {
+              clearTimeout(timeoutId);
             }
-            throw new Error(
-              errorData.error?.message || errorData.message || errorData.error || `Groq API error: ${response.status}`
-            );
-          }
 
-          const data = await response.json();
+            if (!response.ok) {
+              const errorText = await response.text();
+              let errorData = { error: response.statusText };
+              try {
+                errorData = JSON.parse(errorText);
+              } catch {
+                errorData = { error: errorText || response.statusText };
+              }
+              const err = new Error(
+                errorData.error?.message || errorData.message || errorData.error || `Groq API error: ${response.status}`
+              );
+              err.status = response.status;
+              throw err;
+            }
 
-          if (!data.choices?.[0]?.message?.content) {
-            throw new Error("Invalid response structure from Groq API");
-          }
+            const data = await response.json();
 
-          return { success: true, text: data.choices[0].message.content.trim() };
+            if (!data.choices?.[0]?.message?.content) {
+              throw new Error("Invalid response structure from Groq API");
+            }
+
+            return { success: true, text: data.choices[0].message.content.trim() };
+          }, retryStrategy);
         } catch (error) {
           if (error.name === "AbortError") {
             return { success: false, error: "Request timed out after 30s" };
@@ -3329,7 +3360,7 @@ class IPCHandlers {
     // ── Cloud transcription BYOK (OpenAI Whisper, Groq, custom STT) ──
     ipcMain.handle(
       "proxy-cloud-transcription-byok",
-      async (event, { audioBuffer, model, language, provider, endpoint, prompt, stream }) => {
+      async (event, { audioBuffer, model, language, provider, endpoint, prompt }) => {
         try {
           let apiKey = "";
           if (provider === "openai") {
@@ -3345,7 +3376,6 @@ class IPCHandlers {
           const fields = { model };
           if (language && language !== "auto") fields.language = language;
           if (prompt) fields.prompt = prompt;
-          if (stream) fields.stream = "true";
 
           const fileBuffer = Buffer.from(audioBuffer);
           const { body, boundary } = buildMultipartBody(fileBuffer, `audio.${ext}`, contentType, fields);
@@ -3389,10 +3419,15 @@ class IPCHandlers {
     );
 
     // ── Custom model discovery ──
-    ipcMain.handle("fetch-custom-models", async (event, { baseUrl, apiKey }) => {
+    ipcMain.handle("fetch-custom-models", async (event, { baseUrl }) => {
       try {
+        if (!isSecureEndpoint(baseUrl)) {
+          throw new Error("Custom model endpoint must use HTTPS (HTTP allowed for local network only)");
+        }
+
         const modelsUrl = `${baseUrl}/models`;
 
+        const apiKey = this.environmentManager.getCustomReasoningKey();
         const headers = {};
         if (apiKey) {
           headers.Authorization = `Bearer ${apiKey}`;

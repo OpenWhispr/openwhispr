@@ -521,21 +521,21 @@ class ReasoningService extends BaseReasoningService {
         return true;
       }
 
-      const openaiKey = await window.electronAPI?.getOpenAIKey?.();
-      const anthropicKey = await window.electronAPI?.getAnthropicKey?.();
-      const geminiKey = await window.electronAPI?.getGeminiKey?.();
-      const groqKey = await window.electronAPI?.getGroqKey?.();
+      const hasOpenAI = await window.electronAPI?.hasOpenAIKey?.();
+      const hasAnthropic = await window.electronAPI?.hasAnthropicKey?.();
+      const hasGemini = await window.electronAPI?.hasGeminiKey?.();
+      const hasGroq = await window.electronAPI?.hasGroqKey?.();
       const localAvailable = await window.electronAPI?.checkLocalReasoningAvailable?.();
 
       logger.logReasoning("API_KEY_CHECK", {
-        hasOpenAI: !!openaiKey,
-        hasAnthropic: !!anthropicKey,
-        hasGemini: !!geminiKey,
-        hasGroq: !!groqKey,
+        hasOpenAI: !!hasOpenAI,
+        hasAnthropic: !!hasAnthropic,
+        hasGemini: !!hasGemini,
+        hasGroq: !!hasGroq,
         hasLocal: !!localAvailable,
       });
 
-      return !!(openaiKey || anthropicKey || geminiKey || groqKey || localAvailable);
+      return !!(hasOpenAI || hasAnthropic || hasGemini || hasGroq || localAvailable);
     } catch (error) {
       logger.logReasoning("API_KEY_CHECK_ERROR", {
         error: (error as Error).message,
