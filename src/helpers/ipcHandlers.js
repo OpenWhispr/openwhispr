@@ -3577,6 +3577,10 @@ class IPCHandlers {
           fetchOptions.body = options.body;
         }
 
+        // Prevent redirect-based allowlist bypass: don't follow redirects
+        // automatically, as a redirect could target an internal/private address.
+        fetchOptions.redirect = "manual";
+
         // Use electron.net.fetch to share cookie jar with renderer
         const response = await net.fetch(url, fetchOptions);
         const bodyText = await response.text();
