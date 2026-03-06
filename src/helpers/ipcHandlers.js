@@ -3416,7 +3416,7 @@ class IPCHandlers {
     // ── Cloud transcription BYOK (OpenAI Whisper, Groq, custom STT) ──
     ipcMain.handle(
       "proxy-cloud-transcription-byok",
-      async (event, { audioBuffer, model, language, provider, prompt }) => {
+      async (event, { audioBuffer, model, language, provider, prompt, mimeType, extension }) => {
         try {
           let apiKey = "";
           if (provider === "openai") {
@@ -3427,8 +3427,8 @@ class IPCHandlers {
             apiKey = this.environmentManager.getCustomTranscriptionKey();
           }
 
-          const ext = "webm";
-          const contentType = "audio/webm";
+          const ext = extension || "webm";
+          const contentType = mimeType || "audio/webm";
           const fields = { model };
           if (language && language !== "auto") fields.language = language;
           if (prompt) fields.prompt = prompt;

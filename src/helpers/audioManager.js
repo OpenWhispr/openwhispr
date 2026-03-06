@@ -1248,6 +1248,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         language,
         provider,
         prompt: dictionaryPrompt || undefined,
+        mimeType,
+        extension,
       });
 
       if (!proxyResult.success) {

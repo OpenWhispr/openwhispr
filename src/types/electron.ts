@@ -925,6 +925,8 @@ declare global {
         language?: string;
         provider?: string;
         prompt?: string;
+        mimeType?: string;
+        extension?: string;
       }) => Promise<{ success: boolean; text?: string; error?: string }>;
 
       // Main window resize
