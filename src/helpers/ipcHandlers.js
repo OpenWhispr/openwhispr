@@ -12,7 +12,18 @@ const DeepgramStreaming = require("./deepgramStreaming");
 const { isSecureEndpoint } = require("./urlValidation.mjs");
 const { withRetry, createApiRetryStrategy } = require("./retry");
 
+const os = require("os");
+
 const MODEL_ID_REGEX = /^[a-zA-Z0-9._\/-]+$/;
+
+function validateTempFilePath(filePath) {
+  const resolved = path.resolve(filePath);
+  const tmpDir = path.resolve(os.tmpdir());
+  if (!resolved.startsWith(tmpDir + path.sep) && resolved !== tmpDir) {
+    throw new Error("Access denied: file path outside temp directory");
+  }
+  return resolved;
+}
 
 function validateModelId(modelId, providerName = "") {
   if (!modelId || !MODEL_ID_REGEX.test(modelId)) {
@@ -2155,6 +2166,7 @@ class IPCHandlers {
       const FILE_SIZE_LIMIT = 25 * 1024 * 1024;
       const CONCURRENCY_LIMIT = 5;
       try {
+        filePath = validateTempFilePath(filePath);
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
@@ -2330,6 +2342,7 @@ class IPCHandlers {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
+          filePath = validateTempFilePath(filePath);
           let apiKey = "";
           if (provider === "openai") apiKey = this.environmentManager.getOpenAIKey();
           else if (provider === "groq") apiKey = this.environmentManager.getGroqKey();
