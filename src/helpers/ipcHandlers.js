@@ -3339,7 +3339,7 @@ class IPCHandlers {
             throw new Error("Groq API key not configured");
           }
 
-          if (!modelId || !/^[a-zA-Z0-9._-]+$/.test(modelId)) {
+          if (!modelId || !/^[a-zA-Z0-9._\/-]+$/.test(modelId)) {
             throw new Error(`Invalid model ID: ${modelId}`);
           }
 
