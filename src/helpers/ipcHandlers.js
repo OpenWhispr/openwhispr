@@ -52,6 +52,27 @@ const PROVIDER_ENDPOINTS = {
   mistral: MISTRAL_TRANSCRIPTION_URL,
 };
 
+// ── Shared provider transcription helpers ──
+
+function getTranscriptionApiKey(provider, environmentManager) {
+  if (provider === "openai") return environmentManager.getOpenAIKey();
+  if (provider === "groq") return environmentManager.getGroqKey();
+  if (provider === "mistral") return environmentManager.getMistralKey();
+  if (provider === "custom") return environmentManager.getCustomTranscriptionKey();
+  return "";
+}
+
+function buildTranscriptionAuthHeaders(provider, apiKey) {
+  if (!apiKey) return {};
+  if (provider === "mistral") return { "x-api-key": apiKey };
+  return { Authorization: `Bearer ${apiKey}` };
+}
+
+function getDefaultTranscriptionModel(provider) {
+  if (provider === "mistral") return "voxtral-mini-latest";
+  return "whisper-1";
+}
+
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
 
@@ -1353,11 +1374,9 @@ class IPCHandlers {
           }
         }
 
-        const response = await fetch(MISTRAL_TRANSCRIPTION_URL, {
+        const response = await fetch(PROVIDER_ENDPOINTS.mistral, {
           method: "POST",
-          headers: {
-            "x-api-key": apiKey,
-          },
+          headers: buildTranscriptionAuthHeaders("mistral", apiKey),
           body: formData,
         });
 
@@ -2362,11 +2381,7 @@ class IPCHandlers {
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
           filePath = validateUserFilePath(filePath);
-          let apiKey = "";
-          if (provider === "openai") apiKey = this.environmentManager.getOpenAIKey();
-          else if (provider === "groq") apiKey = this.environmentManager.getGroqKey();
-          else if (provider === "mistral") apiKey = this.environmentManager.getMistralKey();
-          else if (provider === "custom") apiKey = this.environmentManager.getCustomTranscriptionKey();
+          const apiKey = getTranscriptionApiKey(provider, this.environmentManager);
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
 
           // Resolve endpoint by provider name — never use persisted custom URL for known providers
@@ -2407,13 +2422,11 @@ class IPCHandlers {
           const fileName = path.basename(filePath);
 
           const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, {
-            model: model || "whisper-1",
+            model: model || getDefaultTranscriptionModel(provider),
           });
 
           const url = new URL(resolvedEndpoint);
-          const data = await postMultipart(url, body, boundary, {
-            Authorization: `Bearer ${apiKey}`,
-          });
+          const data = await postMultipart(url, body, boundary, buildTranscriptionAuthHeaders(provider, apiKey));
 
           if (data.statusCode === 401) {
             return { success: false, error: "Invalid API key. Check your key in Settings." };
@@ -3448,18 +3461,11 @@ class IPCHandlers {
       "proxy-cloud-transcription-byok",
       async (event, { audioBuffer, model, language, provider, prompt, mimeType, extension }) => {
         try {
-          let apiKey = "";
-          if (provider === "openai") {
-            apiKey = this.environmentManager.getOpenAIKey();
-          } else if (provider === "groq") {
-            apiKey = this.environmentManager.getGroqKey();
-          } else if (provider === "custom") {
-            apiKey = this.environmentManager.getCustomTranscriptionKey();
-          }
+          const apiKey = getTranscriptionApiKey(provider, this.environmentManager);
 
           const ext = extension || "webm";
           const contentType = mimeType || "audio/webm";
-          const fields = { model };
+          const fields = { model: model || getDefaultTranscriptionModel(provider) };
           if (language && language !== "auto") fields.language = language;
           if (prompt) fields.prompt = prompt;
 
@@ -3493,10 +3499,7 @@ class IPCHandlers {
           }
 
           const parsedUrl = new URL(resolvedEndpoint);
-          const headers = {};
-          if (apiKey) {
-            headers.Authorization = `Bearer ${apiKey}`;
-          }
+          const headers = buildTranscriptionAuthHeaders(provider, apiKey);
 
           const result = await postMultipart(parsedUrl, body, boundary, headers);
 
