@@ -46,6 +46,12 @@ function validateModelId(modelId, providerName = "") {
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
+const PROVIDER_ENDPOINTS = {
+  openai: "https://api.openai.com/v1/audio/transcriptions",
+  groq: "https://api.groq.com/openai/v1/audio/transcriptions",
+  mistral: MISTRAL_TRANSCRIPTION_URL,
+};
+
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
 
@@ -142,6 +148,7 @@ class IPCHandlers {
     this._autoLearnLatestData = null;
     this._textEditHandler = null;
     this._setupTextEditMonitor();
+    this._initRuntimeEnv();
     this.setupHandlers();
     this._setupProxyHandlers();
 
@@ -150,6 +157,30 @@ class IPCHandlers {
         this.broadcastToWindows("cuda-fallback-notification", {});
       });
     }
+  }
+
+  _initRuntimeEnv() {
+    // In production, VITE_* env vars aren't available in the main process because
+    // Vite only inlines them into the renderer bundle at build time. Load the
+    // runtime-env.json that the Vite build writes to src/dist/ as a fallback.
+    const fs = require("fs");
+    const envPath = path.join(__dirname, "..", "dist", "runtime-env.json");
+    let runtimeEnv = {};
+    try {
+      if (fs.existsSync(envPath)) runtimeEnv = JSON.parse(fs.readFileSync(envPath, "utf8"));
+    } catch {}
+
+    this._getApiUrl = () =>
+      process.env.OPENWHISPR_API_URL ||
+      process.env.VITE_OPENWHISPR_API_URL ||
+      runtimeEnv.VITE_OPENWHISPR_API_URL ||
+      "";
+
+    this._getAuthUrl = () =>
+      process.env.NEON_AUTH_URL ||
+      process.env.VITE_NEON_AUTH_URL ||
+      runtimeEnv.VITE_NEON_AUTH_URL ||
+      "";
   }
 
   _getDictionarySafe() {
@@ -1801,32 +1832,8 @@ class IPCHandlers {
       }
     });
 
-    // In production, VITE_* env vars aren't available in the main process because
-    // Vite only inlines them into the renderer bundle at build time. Load the
-    // runtime-env.json that the Vite build writes to src/dist/ as a fallback.
-    const runtimeEnv = (() => {
-      const fs = require("fs");
-      const envPath = path.join(__dirname, "..", "dist", "runtime-env.json");
-      try {
-        if (fs.existsSync(envPath)) return JSON.parse(fs.readFileSync(envPath, "utf8"));
-      } catch {}
-      return {};
-    })();
-
-    const getApiUrl = () =>
-      process.env.OPENWHISPR_API_URL ||
-      process.env.VITE_OPENWHISPR_API_URL ||
-      runtimeEnv.VITE_OPENWHISPR_API_URL ||
-      "";
-
-    const getAuthUrl = () =>
-      process.env.NEON_AUTH_URL ||
-      process.env.VITE_NEON_AUTH_URL ||
-      runtimeEnv.VITE_NEON_AUTH_URL ||
-      "";
-
     const getSessionCookiesFromWindow = async (win) => {
-      const scopedUrls = [getAuthUrl(), getApiUrl()].filter(Boolean);
+      const scopedUrls = [this._getAuthUrl(), this._getApiUrl()].filter(Boolean);
       const cookiesByName = new Map();
 
       for (const url of scopedUrls) {
@@ -1879,7 +1886,7 @@ class IPCHandlers {
 
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
         const cookieHeader = await getSessionCookies(event);
@@ -1949,7 +1956,7 @@ class IPCHandlers {
 
     ipcMain.handle("cloud-reason", async (event, text, opts = {}) => {
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
         const cookieHeader = await getSessionCookies(event);
@@ -2025,7 +2032,7 @@ class IPCHandlers {
       "cloud-streaming-usage",
       async (event, text, audioDurationSeconds, opts = {}) => {
         try {
-          const apiUrl = getApiUrl();
+          const apiUrl = this._getApiUrl();
           if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
           const cookieHeader = await getSessionCookies(event);
@@ -2073,7 +2080,7 @@ class IPCHandlers {
 
     ipcMain.handle("cloud-usage", async (event) => {
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
         const cookieHeader = await getSessionCookies(event);
@@ -2100,7 +2107,7 @@ class IPCHandlers {
 
     const fetchStripeUrl = async (event, endpoint, errorPrefix, body) => {
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
         const cookieHeader = await getSessionCookies(event);
@@ -2146,7 +2153,7 @@ class IPCHandlers {
 
     ipcMain.handle("get-stt-config", async (event) => {
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
         const cookieHeader = await getSessionCookies(event);
@@ -2179,7 +2186,7 @@ class IPCHandlers {
       const CONCURRENCY_LIMIT = 5;
       try {
         filePath = validateUserFilePath(filePath);
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
         const cookieHeader = await getSessionCookies(event);
@@ -2363,11 +2370,6 @@ class IPCHandlers {
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
 
           // Resolve endpoint by provider name — never use persisted custom URL for known providers
-          const PROVIDER_ENDPOINTS = {
-            openai: "https://api.openai.com/v1/audio/transcriptions",
-            groq: "https://api.groq.com/openai/v1/audio/transcriptions",
-          };
-
           let resolvedEndpoint;
           if (PROVIDER_ENDPOINTS[provider]) {
             resolvedEndpoint = PROVIDER_ENDPOINTS[provider];
@@ -2435,7 +2437,7 @@ class IPCHandlers {
 
     ipcMain.handle("get-referral-stats", async (event) => {
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) {
           throw new Error("OpenWhispr API URL not configured");
         }
@@ -2468,7 +2470,7 @@ class IPCHandlers {
 
     ipcMain.handle("send-referral-invite", async (event, email) => {
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) {
           throw new Error("OpenWhispr API URL not configured");
         }
@@ -2506,7 +2508,7 @@ class IPCHandlers {
 
     ipcMain.handle("get-referral-invites", async (event) => {
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) {
           throw new Error("OpenWhispr API URL not configured");
         }
@@ -2654,7 +2656,7 @@ class IPCHandlers {
     });
 
     const fetchStreamingToken = async (event) => {
-      const apiUrl = getApiUrl();
+      const apiUrl = this._getApiUrl();
       if (!apiUrl) {
         throw new Error("OpenWhispr API URL not configured");
       }
@@ -2693,7 +2695,7 @@ class IPCHandlers {
 
     ipcMain.handle("assemblyai-streaming-warmup", async (event, options = {}) => {
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
         }
@@ -2736,7 +2738,7 @@ class IPCHandlers {
 
       streamingStartInProgress = true;
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
         }
@@ -2856,7 +2858,7 @@ class IPCHandlers {
     let deepgramTokenWindowId = null;
 
     const fetchDeepgramStreamingTokenFromWindow = async (windowId) => {
-      const apiUrl = getApiUrl();
+      const apiUrl = this._getApiUrl();
       if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
       const win = BrowserWindow.fromId(windowId);
@@ -2885,7 +2887,7 @@ class IPCHandlers {
     };
 
     const fetchDeepgramStreamingToken = async (event) => {
-      const apiUrl = getApiUrl();
+      const apiUrl = this._getApiUrl();
       if (!apiUrl) {
         throw new Error("OpenWhispr API URL not configured");
       }
@@ -2924,7 +2926,7 @@ class IPCHandlers {
 
     ipcMain.handle("deepgram-streaming-warmup", async (event, options = {}) => {
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
         }
@@ -2981,7 +2983,7 @@ class IPCHandlers {
 
       deepgramStreamingStartInProgress = true;
       try {
-        const apiUrl = getApiUrl();
+        const apiUrl = this._getApiUrl();
         if (!apiUrl) {
           return { success: false, error: "API not configured", code: "NO_API" };
         }
@@ -3465,11 +3467,6 @@ class IPCHandlers {
           const { body, boundary } = buildMultipartBody(fileBuffer, `audio.${ext}`, contentType, fields);
 
           // Resolve endpoint from hardcoded map or persisted config — never from renderer input
-          const PROVIDER_ENDPOINTS = {
-            openai: "https://api.openai.com/v1/audio/transcriptions",
-            groq: "https://api.groq.com/openai/v1/audio/transcriptions",
-          };
-
           let resolvedEndpoint;
           if (PROVIDER_ENDPOINTS[provider]) {
             resolvedEndpoint = PROVIDER_ENDPOINTS[provider];
@@ -3572,8 +3569,8 @@ class IPCHandlers {
         const parsed = new URL(url);
         const allowedOrigins = [];
 
-        const neonAuthUrl = getAuthUrl();
-        const openwhisprApiUrl = getApiUrl();
+        const neonAuthUrl = this._getAuthUrl();
+        const openwhisprApiUrl = this._getApiUrl();
 
         if (neonAuthUrl) {
           try {
