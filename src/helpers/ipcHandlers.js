@@ -963,10 +963,11 @@ class IPCHandlers {
       const { detectNvidiaGpu } = require("../utils/gpuDetection");
       const gpuInfo = await detectNvidiaGpu();
       if (!this.whisperCudaManager) {
-        return { downloaded: false, path: null, gpuInfo };
+        return { downloaded: false, downloading: false, path: null, gpuInfo };
       }
       return {
         downloaded: this.whisperCudaManager.isDownloaded(),
+        downloading: this.whisperCudaManager._downloading,
         path: this.whisperCudaManager.getCudaBinaryPath(),
         gpuInfo,
       };
@@ -987,8 +988,11 @@ class IPCHandlers {
           }
         });
         this._syncStartupEnv({ WHISPER_CUDA_ENABLED: "true" });
+        // Restart whisper-server so it picks up the CUDA binary
+        await this.whisperManager.stopServer().catch(() => {});
         return { success: true };
       } catch (error) {
+        debugLogger.error("CUDA binary download failed", { error: error.message, stack: error.stack });
         return { success: false, error: error.message };
       }
     });
@@ -1003,6 +1007,8 @@ class IPCHandlers {
       const result = await this.whisperCudaManager.delete();
       if (result.success) {
         this._syncStartupEnv({}, ["WHISPER_CUDA_ENABLED"]);
+        // Restart whisper-server so it falls back to CPU binary
+        await this.whisperManager.stopServer().catch(() => {});
       }
       return result;
     });
@@ -1777,11 +1783,14 @@ class IPCHandlers {
           delete process.env.LLAMA_GPU_BACKEND;
           const modelManager = require("./modelManagerBridge").default;
           modelManager.serverManager.cachedServerBinaryPaths = null;
+          // Restart llama server so it picks up the Vulkan binary
+          await modelManager.stopServer().catch(() => {});
           this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
         }
 
         return result;
       } catch (error) {
+        debugLogger.error("Vulkan binary download failed", { error: error.message, stack: error.stack });
         return { success: false, error: error.message };
       }
     });
