@@ -2362,32 +2362,33 @@ class IPCHandlers {
           else if (provider === "custom") apiKey = this.environmentManager.getCustomTranscriptionKey();
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
 
-          // Resolve endpoint from hardcoded map or persisted config — never fall back to renderer input
-          const BYOK_FILE_PROVIDER_BASES = {
-            "api.openai.com": "https://api.openai.com/v1",
-            "api.groq.com": "https://api.groq.com/openai/v1",
+          // Resolve endpoint by provider name — never use persisted custom URL for known providers
+          const PROVIDER_ENDPOINTS = {
+            openai: "https://api.openai.com/v1/audio/transcriptions",
+            groq: "https://api.groq.com/openai/v1/audio/transcriptions",
           };
-          const persistedCustomUrl = this.environmentManager.getCustomTranscriptionBaseUrl();
-          let resolvedBaseUrl;
-          if (persistedCustomUrl) {
-            resolvedBaseUrl = persistedCustomUrl;
-            debugLogger.logReasoning("byok-file-url-resolve", { source: "persisted-custom", url: persistedCustomUrl });
-          } else if (baseUrl) {
-            // Only allow renderer-provided URL if it matches a known provider
-            try {
-              const parsed = new URL(baseUrl);
-              resolvedBaseUrl = BYOK_FILE_PROVIDER_BASES[parsed.hostname];
-              if (!resolvedBaseUrl) {
-                debugLogger.logReasoning("byok-file-url-reject", { reason: "renderer URL not in known provider map", hostname: parsed.hostname });
-                throw new Error("No custom transcription endpoint configured. Set one in Settings.");
-              }
-              debugLogger.logReasoning("byok-file-url-resolve", { source: "known-provider-map", hostname: parsed.hostname, url: resolvedBaseUrl });
-            } catch (e) {
-              if (e.message.includes("No custom")) throw e;
-              throw new Error("Invalid transcription endpoint URL.");
+
+          let resolvedEndpoint;
+          if (PROVIDER_ENDPOINTS[provider]) {
+            resolvedEndpoint = PROVIDER_ENDPOINTS[provider];
+            debugLogger.logReasoning("byok-file-url-resolve", { source: "known-provider", provider, url: resolvedEndpoint });
+          } else if (provider === "custom") {
+            const persistedBaseUrl = this.environmentManager.getCustomTranscriptionBaseUrl();
+            if (!persistedBaseUrl) {
+              throw new Error("No custom transcription endpoint configured. Set one in Settings.");
             }
+            if (/\/audio\/(transcriptions|translations)$/i.test(persistedBaseUrl)) {
+              resolvedEndpoint = persistedBaseUrl;
+            } else {
+              const base = persistedBaseUrl.replace(/\/+$/, "");
+              resolvedEndpoint = `${base}/audio/transcriptions`;
+            }
+            if (!isSecureEndpoint(resolvedEndpoint)) {
+              throw new Error("Custom transcription endpoint must use HTTPS (HTTP allowed for local network only)");
+            }
+            debugLogger.logReasoning("byok-file-url-resolve", { source: "persisted-custom", url: resolvedEndpoint });
           } else {
-            throw new Error("No transcription endpoint configured.");
+            throw new Error(`Unknown transcription provider: ${provider}`);
           }
 
           const fileSize = fs.statSync(filePath).size;
@@ -2403,16 +2404,11 @@ class IPCHandlers {
           const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
           const fileName = path.basename(filePath);
 
-          let transcriptionUrl = resolvedBaseUrl.replace(/\/+$/, "");
-          if (!transcriptionUrl.endsWith("/audio/transcriptions")) {
-            transcriptionUrl += "/audio/transcriptions";
-          }
-
           const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, {
             model: model || "whisper-1",
           });
 
-          const url = new URL(transcriptionUrl);
+          const url = new URL(resolvedEndpoint);
           const data = await postMultipart(url, body, boundary, {
             Authorization: `Bearer ${apiKey}`,
           });
