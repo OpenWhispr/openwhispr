@@ -11,6 +11,7 @@ const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
 const { isSecureEndpoint } = require("./urlValidation.mjs");
 const { withRetry, createApiRetryStrategy } = require("./retry");
+const { buildReasoningRequestHeaders, requiresReasoningApiKey } = require("./providerSecurity.mjs");
 
 const os = require("os");
 
@@ -1403,6 +1404,14 @@ class IPCHandlers {
 
     ipcMain.handle("save-custom-reasoning-key", async (event, key) => {
       return this.environmentManager.saveCustomReasoningKey(key);
+    });
+
+    ipcMain.handle("has-custom-reasoning-base-url", async () => {
+      return !!this.environmentManager.getCustomReasoningBaseUrl();
+    });
+
+    ipcMain.handle("has-custom-transcription-base-url", async () => {
+      return !!this.environmentManager.getCustomTranscriptionBaseUrl();
     });
 
     ipcMain.handle("save-custom-reasoning-base-url", async (event, url) => {
@@ -3123,12 +3132,8 @@ class IPCHandlers {
             ? this.environmentManager.getCustomReasoningKey()
             : this.environmentManager.getOpenAIKey();
 
-          if (!apiKey) {
-            throw new Error(
-              isCustomProvider
-                ? "Custom reasoning API key not configured"
-                : "OpenAI API key not configured"
-            );
+          if (requiresReasoningApiKey(isCustomProvider, apiKey)) {
+            throw new Error("OpenAI API key not configured");
           }
 
           validateModelId(modelId);
@@ -3138,7 +3143,10 @@ class IPCHandlers {
           const persistedCustomUrl = isCustomProvider
             ? this.environmentManager.getCustomReasoningBaseUrl()
             : "";
-          const base = (isCustomProvider && persistedCustomUrl) ? persistedCustomUrl : defaultBase;
+          if (isCustomProvider && !persistedCustomUrl) {
+            throw new Error("Custom reasoning endpoint not configured. Set one in Settings.");
+          }
+          const base = isCustomProvider ? persistedCustomUrl : defaultBase;
 
           debugLogger.logReasoning("openai-url-resolve", {
             isCustomProvider,
@@ -3201,14 +3209,13 @@ class IPCHandlers {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 30000);
 
+                const headers = buildReasoningRequestHeaders(apiKey);
+
                 let response;
                 try {
                   response = await fetch(endpoint, {
                     method: "POST",
-                    headers: {
-                      "Content-Type": "application/json",
-                      Authorization: `Bearer ${apiKey}`,
-                    },
+                    headers,
                     body: JSON.stringify(requestBody),
                     signal: controller.signal,
                   });

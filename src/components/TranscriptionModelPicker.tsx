@@ -24,6 +24,7 @@ import {
 } from "../utils/modelPickerStyles";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
+import { getPersistedCustomTranscriptionBaseUrl } from "../helpers/providerSecurity.mjs";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
 import type { CudaWhisperStatus } from "../types/electron";
@@ -577,14 +578,15 @@ export default function TranscriptionModelPicker({
     if (!setCloudTranscriptionBaseUrl || selectedCloudProvider !== "custom") return;
 
     const trimmed = (cloudTranscriptionBaseUrl || "").trim();
-    if (!trimmed) return;
+    const normalized = trimmed ? normalizeBaseUrl(trimmed) : "";
+    const persistedValue = getPersistedCustomTranscriptionBaseUrl(selectedCloudProvider, normalized);
 
-    const normalized = normalizeBaseUrl(trimmed);
-
-    if (normalized && normalized !== cloudTranscriptionBaseUrl) {
+    if (normalized !== cloudTranscriptionBaseUrl) {
       setCloudTranscriptionBaseUrl(normalized);
-      // Persist to main process so IPC handlers use the trusted value
-      window.electronAPI.saveCustomTranscriptionBaseUrl(normalized)
+    }
+
+    if (persistedValue !== null) {
+      window.electronAPI.saveCustomTranscriptionBaseUrl(persistedValue)
         .then(() => setBaseUrlError(null))
         .catch((err: unknown) => {
           setBaseUrlError(
@@ -592,6 +594,7 @@ export default function TranscriptionModelPicker({
           );
         });
     }
+
     if (normalized) {
       for (const provider of cloudProviders) {
         const providerNormalized = normalizeBaseUrl(provider.baseUrl);

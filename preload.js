@@ -296,6 +296,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
   hasCustomReasoningKey: () => ipcRenderer.invoke("has-custom-reasoning-key"),
   saveCustomReasoningKey: (key) => ipcRenderer.invoke("save-custom-reasoning-key", key),
+  hasCustomReasoningBaseUrl: () => ipcRenderer.invoke("has-custom-reasoning-base-url"),
+  hasCustomTranscriptionBaseUrl: () => ipcRenderer.invoke("has-custom-transcription-base-url"),
   saveCustomReasoningBaseUrl: (url) => ipcRenderer.invoke("save-custom-reasoning-base-url", url),
   saveCustomTranscriptionBaseUrl: (url) => ipcRenderer.invoke("save-custom-transcription-base-url", url),
 

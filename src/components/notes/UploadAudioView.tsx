@@ -33,6 +33,8 @@ import { withSessionRefresh } from "../../lib/neonAuth";
 import reasoningService from "../../services/ReasoningService";
 import { getAllReasoningModels } from "../../models/ModelRegistry";
 import { useSettingsStore, selectIsCloudReasoningMode } from "../../stores/settingsStore";
+import logger from "../../utils/logger";
+import { isTranscriptionProviderReady } from "../../helpers/providerSecurity.mjs";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
 
@@ -189,15 +191,26 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return;
       }
       if (!useLocalWhisper) {
-        const key =
-          cloudTranscriptionProvider === "openai"
-            ? openaiApiKey
-            : cloudTranscriptionProvider === "groq"
-              ? groqApiKey
-              : cloudTranscriptionProvider === "mistral"
-                ? mistralApiKey
-                : customTranscriptionApiKey;
-        if (!cancelled) setProviderReady(!!key);
+        let hasCustomBaseUrl = false;
+        if (cloudTranscriptionProvider === "custom") {
+          try {
+            hasCustomBaseUrl = !!(await window.electronAPI.hasCustomTranscriptionBaseUrl?.());
+          } catch (error) {
+            logger.error("Failed to check custom transcription endpoint", { error }, "notes");
+          }
+        }
+
+        if (!cancelled) {
+          setProviderReady(
+            isTranscriptionProviderReady({
+              provider: cloudTranscriptionProvider,
+              hasOpenAIKey: openaiApiKey.trim().length > 0,
+              hasGroqKey: groqApiKey.trim().length > 0,
+              hasMistralKey: mistralApiKey.trim().length > 0,
+              hasCustomBaseUrl,
+            })
+          );
+        }
         return;
       }
       if (localTranscriptionProvider === "nvidia") {
@@ -223,6 +236,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     useLocalWhisper,
     localTranscriptionProvider,
     cloudTranscriptionProvider,
+    cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
     mistralApiKey,

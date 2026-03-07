@@ -624,8 +624,10 @@ declare global {
 
       // Custom endpoint API keys
       hasCustomTranscriptionKey?: () => Promise<boolean>;
+      hasCustomTranscriptionBaseUrl?: () => Promise<boolean>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;
       hasCustomReasoningKey?: () => Promise<boolean>;
+      hasCustomReasoningBaseUrl?: () => Promise<boolean>;
       saveCustomReasoningKey?: (key: string) => Promise<void>;
 
       // Dictation key persistence (file-based for reliable startup)
@@ -884,6 +886,7 @@ declare global {
       }>;
 
       // Custom base URL persistence (main process reads these, not renderer-provided URLs)
+      hasCustomTranscriptionBaseUrl: () => Promise<boolean>;
       saveCustomReasoningBaseUrl: (url: string) => Promise<{ success: boolean }>;
       saveCustomTranscriptionBaseUrl: (url: string) => Promise<{ success: boolean }>;
 

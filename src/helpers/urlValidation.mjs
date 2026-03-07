@@ -97,7 +97,10 @@ function isCloudMetadataHost(hostname) {
 function isSecureEndpoint(url) {
   try {
     const parsed = new URL(url);
+    // Only allow http: and https: schemes — reject ftp:, file:, ws:, gopher:, etc.
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
     if (isCloudMetadataHost(parsed.hostname)) return false;
+    // HTTPS is always allowed; HTTP only for private/local hosts
     return parsed.protocol === "https:" || isPrivateHost(parsed.hostname);
   } catch {
     return false;

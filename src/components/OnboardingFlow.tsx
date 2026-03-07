@@ -37,6 +37,7 @@ import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { getPlatform } from "../utils/platform";
 import logger from "../utils/logger";
+import { isTranscriptionProviderReady } from "../helpers/providerSecurity.mjs";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
 
@@ -100,6 +101,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
   const [isUsingGnomeHotkeys, setIsUsingGnomeHotkeys] = useState(false);
+  const [hasCustomTranscriptionBaseUrl, setHasCustomTranscriptionBaseUrl] = useState(false);
   const readableHotkey = formatHotkeyLabel(hotkey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
     useDialogs();
@@ -179,6 +181,35 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
     checkStatus();
   }, [useLocalWhisper, whisperModel, parakeetModel, localTranscriptionProvider]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (useLocalWhisper || cloudTranscriptionProvider !== "custom") {
+      setHasCustomTranscriptionBaseUrl(false);
+      return;
+    }
+
+    const checkCustomBaseUrl = async () => {
+      try {
+        const hasBaseUrl = await window.electronAPI?.hasCustomTranscriptionBaseUrl?.();
+        if (!cancelled) {
+          setHasCustomTranscriptionBaseUrl(!!hasBaseUrl);
+        }
+      } catch (error) {
+        logger.error("Failed to check custom transcription endpoint", { error }, "onboarding");
+        if (!cancelled) {
+          setHasCustomTranscriptionBaseUrl(false);
+        }
+      }
+    };
+
+    void checkCustomBaseUrl();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [useLocalWhisper, cloudTranscriptionProvider, cloudTranscriptionBaseUrl]);
 
   // Auto-register default hotkey when entering the activation step
   // (step 3 for non-signed-in, step 2 for signed-in users)
@@ -669,18 +700,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel;
           return modelToCheck !== "" && isModelDownloaded;
         } else {
-          // For cloud mode, check if appropriate API key is set
-          if (cloudTranscriptionProvider === "openai") {
-            return openaiApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "groq") {
-            return groqApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "mistral") {
-            return mistralApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "custom") {
-            // Custom can work without API key for local endpoints
-            return true;
-          }
-          return openaiApiKey.trim().length > 0; // Default to OpenAI
+          return isTranscriptionProviderReady({
+            provider: cloudTranscriptionProvider,
+            hasOpenAIKey: openaiApiKey.trim().length > 0,
+            hasGroqKey: groqApiKey.trim().length > 0,
+            hasMistralKey: mistralApiKey.trim().length > 0,
+            hasCustomBaseUrl: hasCustomTranscriptionBaseUrl,
+          });
         }
       case 2: {
         // For signed-in users, this is activation step

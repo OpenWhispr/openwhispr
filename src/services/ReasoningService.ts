@@ -1,6 +1,7 @@
 import { getModelProvider, getCloudModel } from "../models/ModelRegistry";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../config/constants";
+import { isReasoningProviderAvailable } from "../helpers/providerSecurity.mjs";
 import logger from "../utils/logger";
 import { withSessionRefresh } from "../lib/neonAuth";
 import { getSettings, isCloudReasoningMode } from "../stores/settingsStore";
@@ -436,21 +437,35 @@ class ReasoningService extends BaseReasoningService {
         return true;
       }
 
+      const reasoningProvider = getSettings().reasoningProvider || "openai";
       const hasOpenAI = await window.electronAPI?.hasOpenAIKey?.();
       const hasAnthropic = await window.electronAPI?.hasAnthropicKey?.();
       const hasGemini = await window.electronAPI?.hasGeminiKey?.();
       const hasGroq = await window.electronAPI?.hasGroqKey?.();
       const localAvailable = await window.electronAPI?.checkLocalReasoningAvailable?.();
+      const hasCustom = await window.electronAPI?.hasCustomReasoningBaseUrl?.();
+      const isAvailable = isReasoningProviderAvailable({
+        reasoningProvider,
+        hasOpenAI,
+        hasAnthropic,
+        hasGemini,
+        hasGroq,
+        hasLocal: localAvailable,
+        hasCustomBaseUrl: hasCustom,
+      });
 
       logger.logReasoning("API_KEY_CHECK", {
+        reasoningProvider,
         hasOpenAI: !!hasOpenAI,
         hasAnthropic: !!hasAnthropic,
         hasGemini: !!hasGemini,
         hasGroq: !!hasGroq,
         hasLocal: !!localAvailable,
+        hasCustom: !!hasCustom,
+        isAvailable,
       });
 
-      return !!(hasOpenAI || hasAnthropic || hasGemini || hasGroq || localAvailable);
+      return isAvailable;
     } catch (error) {
       logger.logReasoning("API_KEY_CHECK_ERROR", {
         error: (error as Error).message,
