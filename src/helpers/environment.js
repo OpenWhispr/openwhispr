@@ -3,6 +3,7 @@ const fs = require("fs");
 const fsPromises = require("fs/promises");
 const { app } = require("electron");
 const { normalizeUiLanguage } = require("./i18nMain");
+const debugLogger = require("./debugLogger");
 
 const PERSISTED_KEYS = [
   "OPENAI_API_KEY",
@@ -133,7 +134,7 @@ class EnvironmentManager {
       throw new Error("Custom reasoning base URL must use HTTPS (HTTP allowed for local network only)");
     }
     const result = this._saveKey("CUSTOM_REASONING_BASE_URL", url || "");
-    this.saveAllKeysToEnvFile().catch(() => {});
+    this.saveAllKeysToEnvFile().catch((err) => debugLogger.error("[EnvFile] Failed to save .env file:", err));
     return result;
   }
 
@@ -147,7 +148,7 @@ class EnvironmentManager {
       throw new Error("Custom transcription base URL must use HTTPS (HTTP allowed for local network only)");
     }
     const result = this._saveKey("CUSTOM_TRANSCRIPTION_BASE_URL", url || "");
-    this.saveAllKeysToEnvFile().catch(() => {});
+    this.saveAllKeysToEnvFile().catch((err) => debugLogger.error("[EnvFile] Failed to save .env file:", err));
     return result;
   }
 
@@ -157,7 +158,7 @@ class EnvironmentManager {
 
   saveDictationKey(key) {
     const result = this._saveKey("DICTATION_KEY", key);
-    this.saveAllKeysToEnvFile().catch(() => {});
+    this.saveAllKeysToEnvFile().catch((err) => debugLogger.error("[EnvFile] Failed to save .env file:", err));
     return result;
   }
 
@@ -169,7 +170,7 @@ class EnvironmentManager {
   saveActivationMode(mode) {
     const validMode = mode === "push" ? "push" : "tap";
     const result = this._saveKey("ACTIVATION_MODE", validMode);
-    this.saveAllKeysToEnvFile().catch(() => {});
+    this.saveAllKeysToEnvFile().catch((err) => debugLogger.error("[EnvFile] Failed to save .env file:", err));
     return result;
   }
 
@@ -179,7 +180,7 @@ class EnvironmentManager {
 
   saveFloatingIconAutoHide(enabled) {
     const result = this._saveKey("FLOATING_ICON_AUTO_HIDE", String(enabled));
-    this.saveAllKeysToEnvFile().catch(() => {});
+    this.saveAllKeysToEnvFile().catch((err) => debugLogger.error("[EnvFile] Failed to save .env file:", err));
     return result;
   }
 
@@ -190,7 +191,7 @@ class EnvironmentManager {
   saveUiLanguage(language) {
     const normalized = normalizeUiLanguage(language);
     const result = this._saveKey("UI_LANGUAGE", normalized);
-    this.saveAllKeysToEnvFile().catch(() => {});
+    this.saveAllKeysToEnvFile().catch((err) => debugLogger.error("[EnvFile] Failed to save .env file:", err));
     return { ...result, language: normalized };
   }
 

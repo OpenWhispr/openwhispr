@@ -81,13 +81,27 @@ function isPrivateHost(hostname) {
   return false;
 }
 
+const METADATA_HOSTS = new Set([
+  "169.254.169.254",          // AWS, GCP, Azure metadata
+  "metadata.google.internal", // GCP metadata hostname
+]);
+
+function isCloudMetadataHost(hostname) {
+  const h = normalizeIP(hostname.toLowerCase().replace(/^\[|\]$/g, ""));
+  if (METADATA_HOSTS.has(h)) return true;
+  // Block fe80:: link-local (used for Azure metadata via fe80::1)
+  if (h.includes(":") && h.startsWith("fe80")) return true;
+  return false;
+}
+
 function isSecureEndpoint(url) {
   try {
     const parsed = new URL(url);
+    if (isCloudMetadataHost(parsed.hostname)) return false;
     return parsed.protocol === "https:" || isPrivateHost(parsed.hostname);
   } catch {
     return false;
   }
 }
 
-export { isPrivateHost, isSecureEndpoint };
+export { isPrivateHost, isCloudMetadataHost, isSecureEndpoint };

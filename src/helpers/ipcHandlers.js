@@ -255,7 +255,7 @@ class IPCHandlers {
         set: Object.keys(setVars),
         cleared: clearVars.filter((k) => !process.env[k]),
       });
-      this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+      this.environmentManager.saveAllKeysToEnvFile().catch((err) => debugLogger.error("[EnvFile] Failed to save .env file:", err));
     }
   }
 
@@ -1580,7 +1580,7 @@ class IPCHandlers {
         });
         modelManager.currentServerModelId = modelId;
 
-        this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+        this.environmentManager.saveAllKeysToEnvFile().catch((err) => debugLogger.error("[EnvFile] Failed to save .env file:", err));
         return { success: true, port: modelManager.serverManager.port };
       } catch (error) {
         return { success: false, error: error.message };
@@ -1667,7 +1667,7 @@ class IPCHandlers {
           delete process.env.LLAMA_GPU_BACKEND;
           const modelManager = require("./modelManagerBridge").default;
           modelManager.serverManager.cachedServerBinaryPaths = null;
-          this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+          this.environmentManager.saveAllKeysToEnvFile().catch((err) => debugLogger.error("[EnvFile] Failed to save .env file:", err));
         }
 
         return result;
@@ -1700,7 +1700,7 @@ class IPCHandlers {
         delete process.env.LLAMA_VULKAN_ENABLED;
         delete process.env.LLAMA_GPU_BACKEND;
         modelManager.serverManager.cachedServerBinaryPaths = null;
-        this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+        this.environmentManager.saveAllKeysToEnvFile().catch((err) => debugLogger.error("[EnvFile] Failed to save .env file:", err));
 
         return result;
       } catch (error) {
