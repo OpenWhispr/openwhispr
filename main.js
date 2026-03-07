@@ -502,7 +502,17 @@ async function startApp() {
   // Add Content-Security-Policy headers.
   // Most API calls are routed through IPC, but the Neon Auth SDK
   // (signUp/signIn/signOut) makes direct fetch calls that must be allowed.
-  const neonAuthOrigin = (process.env.VITE_NEON_AUTH_URL || "").trim();
+  // Load runtime-env.json for packaged builds where VITE_* vars aren't in process.env
+  const runtimeEnv = (() => {
+    const fs = require("fs");
+    const envPath = path.join(__dirname, "src", "dist", "runtime-env.json");
+    try {
+      if (fs.existsSync(envPath)) return JSON.parse(fs.readFileSync(envPath, "utf8"));
+    } catch {}
+    return {};
+  })();
+
+  const neonAuthOrigin = (process.env.VITE_NEON_AUTH_URL || runtimeEnv.VITE_NEON_AUTH_URL || "").trim();
   let neonAuthCspSource = "";
   if (neonAuthOrigin) {
     try {
