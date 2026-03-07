@@ -14,6 +14,41 @@
 
 <p align="center">Voice-to-text dictation app with local (Nvidia Parakeet/Whisper) and cloud models (BYOK).<br/>Privacy-first and available cross-platform.</p>
 
+# 1. Install Node Version Manager (NVM) for Windows
+#    Download the installer from: https://github.com/coreybutler/nvm-windows/releases
+#    Run nvm-setup.exe, then restart your terminal
+
+  # List all available Node versions
+  nvm list available
+
+  # Install a specific Node version (replace with desired version)
+  nvm install 22
+
+  # Switch to that version
+  nvm use 22
+
+  # Confirm active version
+  node --version
+
+# 2. Navigate to the build folder
+  cd C:\dev\openwhispr
+
+# 3. Install dependencies (Windows-native)
+  npm install
+
+# 4. Build for Windows (auto-downloads all required binaries)
+  npm run build:win
+
+Notes:
+  - NVM for Windows is a separate project from Unix NVM — install from nvm-windows, not nvm.sh
+  - Run `nvm use <version>` in each new terminal session if the version doesn't persist
+  - You may need to run the terminal as Administrator for nvm commands to work
+  - /MIR mirrors the source and deletes old files in the destination
+  - /XD excludes node_modules, .git, dist, out (not needed in copy)
+  - npm install must run on Windows so native modules compile for Windows
+  - prebuild:win runs automatically and downloads whisper-cpp, llama-server, sherpa-onnx, nircmd, windows-fast-paste, and windows-key-listener
+  - For an unsigned local build without installer, use npm run pack instead of build:win
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=OpenWhispr/openwhispr&type=date&legend=top-left)](https://www.star-history.com/#OpenWhispr/openwhispr&type=date&legend=top-left)
