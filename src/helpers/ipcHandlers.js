@@ -25,6 +25,18 @@ function validateTempFilePath(filePath) {
   return resolved;
 }
 
+function validateUserFilePath(filePath) {
+  const fs = require("fs");
+  const resolved = path.resolve(filePath);
+  const ALLOWED_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"];
+  const ext = path.extname(resolved).toLowerCase().replace(".", "");
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    throw new Error("Unsupported audio file type: " + ext);
+  }
+  fs.accessSync(resolved, fs.constants.R_OK);
+  return resolved;
+}
+
 function validateModelId(modelId, providerName = "") {
   if (!modelId || !MODEL_ID_REGEX.test(modelId)) {
     const prefix = providerName ? `Invalid ${providerName} model ID` : "Invalid model ID";
@@ -2166,7 +2178,7 @@ class IPCHandlers {
       const FILE_SIZE_LIMIT = 25 * 1024 * 1024;
       const CONCURRENCY_LIMIT = 5;
       try {
-        filePath = validateTempFilePath(filePath);
+        filePath = validateUserFilePath(filePath);
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
@@ -2342,7 +2354,7 @@ class IPCHandlers {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
-          filePath = validateTempFilePath(filePath);
+          filePath = validateUserFilePath(filePath);
           let apiKey = "";
           if (provider === "openai") apiKey = this.environmentManager.getOpenAIKey();
           else if (provider === "groq") apiKey = this.environmentManager.getGroqKey();
@@ -3564,8 +3576,8 @@ class IPCHandlers {
         const parsed = new URL(url);
         const allowedOrigins = [];
 
-        const neonAuthUrl = process.env.VITE_NEON_AUTH_URL || "";
-        const openwhisprApiUrl = process.env.VITE_OPENWHISPR_API_URL || "";
+        const neonAuthUrl = getAuthUrl();
+        const openwhisprApiUrl = getApiUrl();
 
         if (neonAuthUrl) {
           try {
