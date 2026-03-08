@@ -268,6 +268,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     localStorage.setItem("onboardingCompleted", "true");
     localStorage.setItem("skipAuth", skippedAuth.toString());
 
+    // Non-signed-in users using cloud mode need BYOK mode set,
+    // otherwise audioManager routes to OpenWhispr Cloud and demands sign-in.
+    // This covers users with their own API keys as well as users pointing at
+    // local inference appliances on another device (e.g. lemonade-server.ai)
+    // via a custom base URL — a future UI update should better surface this
+    // "local-but-remote" use case.
+    if (!isSignedIn && !useLocalWhisper) {
+      updateTranscriptionSettings({ cloudTranscriptionMode: "byok" });
+    }
+
     try {
       await window.electronAPI?.saveAllKeysToEnv?.();
     } catch (error) {
@@ -476,7 +486,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 })
               }
               useLocalWhisper={useLocalWhisper}
-              onModeChange={(isLocal) => updateTranscriptionSettings({ useLocalWhisper: isLocal })}
+              onModeChange={(isLocal) => {
+                updateTranscriptionSettings({ useLocalWhisper: isLocal });
+                if (!isLocal) {
+                  updateTranscriptionSettings({ cloudTranscriptionMode: "byok" });
+                }
+              }}
               openaiApiKey={openaiApiKey}
               setOpenaiApiKey={setOpenaiApiKey}
               groqApiKey={groqApiKey}
