@@ -260,7 +260,8 @@
           "id": "qwen/qwen3-32b",
           "name": "Qwen3 32B",
           "description": "Powerful reasoning model, 131K context",
-          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b"
+          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b",
+          "reasoningFormat": "hidden"
         },
         {
           "id": "openai/gpt-oss-120b",

@@ -38,6 +38,7 @@ export interface CloudModelDefinition {
   description: string;
   descriptionKey?: string;
   disableThinking?: boolean;
+  reasoningFormat?: string;
 }
 
 export interface CloudProviderData {

@@ -321,6 +321,7 @@ class ReasoningService extends BaseReasoningService {
       const modelDef = getCloudModel(model);
       const reasoningEffort =
         modelDef?.disableThinking ? "none" : undefined;
+      const reasoningFormat = modelDef?.reasoningFormat;
 
       const maxTokens =
         config.maxTokens ||
@@ -339,6 +340,7 @@ class ReasoningService extends BaseReasoningService {
         systemPrompt,
         maxTokens,
         reasoningEffort,
+        reasoningFormat,
       });
 
       if (result.success) {
