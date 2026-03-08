@@ -260,7 +260,6 @@
           "id": "qwen/qwen3-32b",
           "name": "Qwen3 32B",
           "description": "Powerful reasoning model, 131K context",
-          "disableThinking": true,
           "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b"
         },
         {

@@ -3410,6 +3410,9 @@ class IPCHandlers {
             requestBody.reasoning_effort = config.reasoningEffort;
           }
 
+          // Use hidden format so thinking tokens don't leak into output
+          requestBody.reasoning_format = "hidden";
+
           const retryStrategy = createApiRetryStrategy();
           return await withRetry(async () => {
             const controller = new AbortController();
