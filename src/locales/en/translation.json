@@ -1352,7 +1352,7 @@
       "dictationMode": {
         "title": "Dictation Mode",
         "normal": "Normal",
-        "normalDescription": "File-based transcription. Processes audio after recording.",
+        "normalDescription": "Best accuracy, but takes a moment to process after recording.",
         "fast": "Fast",
         "fastDescription": "WebSocket streaming via OpenAI Realtime API. Live transcription as you speak."
       }

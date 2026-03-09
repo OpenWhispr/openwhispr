@@ -1276,7 +1276,7 @@
       "dictationMode": {
         "title": "ディクテーションモード",
         "normal": "通常",
-        "normalDescription": "ファイルベースの文字起こし。録音後にオーディオを処理します。",
+        "normalDescription": "最高の精度ですが、録音後に処理に少し時間がかかります。",
         "fast": "高速",
         "fastDescription": "OpenAI Realtime API経由のWebSocketストリーミング。リアルタイム文字起こし。"
       }
