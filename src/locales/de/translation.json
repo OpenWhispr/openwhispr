@@ -1272,6 +1272,13 @@
           "description": "Konfigurieren Sie Ihren eigenen Anbieter und API-Schlüssel.",
           "title": "Zu benutzerdefinierter Einrichtung gewechselt"
         }
+      },
+      "dictationMode": {
+        "title": "Diktiermodus",
+        "normal": "Normal",
+        "normalDescription": "Beste Genauigkeit. Braucht einen Moment zur Verarbeitung nach der Aufnahme.",
+        "fast": "Schnell",
+        "fastDescription": "Schnellere Ergebnisse, aber möglicherweise weniger genau."
       }
     }
   },

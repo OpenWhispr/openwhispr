@@ -1276,6 +1276,13 @@
           "description": "Configura il tuo provider e la tua chiave API.",
           "title": "Passato a configurazione personalizzata"
         }
+      },
+      "dictationMode": {
+        "title": "Modalità dettatura",
+        "normal": "Normale",
+        "normalDescription": "Massima accuratezza. Richiede un momento per elaborare dopo la registrazione.",
+        "fast": "Veloce",
+        "fastDescription": "Risultati più rapidi, ma potrebbe essere meno accurata."
       }
     }
   },

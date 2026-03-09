@@ -121,6 +121,7 @@ export interface SettingsState
   setCloudReasoningBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
+  setDictationMode: (value: string) => void;
   setUseReasoningModel: (value: boolean) => void;
   setReasoningModel: (value: string) => void;
   setReasoningProvider: (value: string) => void;
@@ -242,6 +243,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cloudReasoningBaseUrl: readString("cloudReasoningBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   customDictionary: readStringArray("customDictionary", []),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
+  dictationMode: (readString("dictationMode", "normal") === "fast" ? "fast" : "normal") as
+    | "normal"
+    | "fast",
 
   useReasoningModel: readBoolean("useReasoningModel", true),
   reasoningModel: readString("reasoningModel", ""),
@@ -330,6 +334,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCloudReasoningMode: createStringSetter("cloudReasoningMode"),
   setCloudReasoningBaseUrl: createStringSetter("cloudReasoningBaseUrl"),
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
+  setDictationMode: createStringSetter("dictationMode"),
   setUseReasoningModel: createBooleanSetter("useReasoningModel"),
   setReasoningModel: createStringSetter("reasoningModel"),
   setReasoningProvider: createStringSetter("reasoningProvider"),
@@ -524,6 +529,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.customDictionary !== undefined) s.setCustomDictionary(settings.customDictionary);
     if (settings.assemblyAiStreaming !== undefined)
       s.setAssemblyAiStreaming(settings.assemblyAiStreaming);
+    if (settings.dictationMode !== undefined) s.setDictationMode(settings.dictationMode);
   },
 
   updateReasoningSettings: (settings: Partial<ReasoningSettings>) => {

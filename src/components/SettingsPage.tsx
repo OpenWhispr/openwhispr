@@ -26,6 +26,7 @@ import {
   RotateCw,
   BookOpen,
   Copy,
+  Zap,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { NEON_AUTH_URL, signOut } from "../lib/neonAuth";
@@ -172,6 +173,8 @@ interface TranscriptionSectionProps {
   setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl: (url: string) => void;
+  dictationMode: "normal" | "fast";
+  setDictationMode: (mode: string) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -207,6 +210,8 @@ function TranscriptionSection({
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
   setCloudTranscriptionBaseUrl,
+  dictationMode,
+  setDictationMode,
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
@@ -342,6 +347,51 @@ function TranscriptionSection({
                 )}
               </div>
             </button>
+          </SettingsPanelRow>
+        </SettingsPanel>
+      )}
+
+      {/* Dictation mode selector — visible for all cloud modes, signed in or not */}
+      {!useLocalWhisper && (
+        <SettingsPanel>
+          <SettingsPanelRow>
+            <p className="text-xs font-medium text-muted-foreground/80 mb-2">
+              {t("settingsPage.transcription.dictationMode.title")}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDictationMode("normal")}
+                className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-md border text-xs font-medium transition-colors cursor-pointer ${
+                  dictationMode === "normal"
+                    ? "border-primary bg-primary/10 dark:bg-primary/15 text-primary"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted/60"
+                }`}
+              >
+                <Mic className="w-3.5 h-3.5 shrink-0" />
+                <div className="text-left">
+                  <div>{t("settingsPage.transcription.dictationMode.normal")}</div>
+                  <div className="font-normal text-muted-foreground/70 mt-0.5">
+                    {t("settingsPage.transcription.dictationMode.normalDescription")}
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={() => setDictationMode("fast")}
+                className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-md border text-xs font-medium transition-colors cursor-pointer ${
+                  dictationMode === "fast"
+                    ? "border-primary bg-primary/10 dark:bg-primary/15 text-primary"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted/60"
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5 shrink-0" />
+                <div className="text-left">
+                  <div>{t("settingsPage.transcription.dictationMode.fast")}</div>
+                  <div className="font-normal text-muted-foreground/70 mt-0.5">
+                    {t("settingsPage.transcription.dictationMode.fastDescription")}
+                  </div>
+                </div>
+              </button>
+            </div>
           </SettingsPanelRow>
         </SettingsPanel>
       )}
@@ -705,6 +755,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setAudioRetentionDays,
     customDictionary,
     setCustomDictionary,
+    dictationMode,
+    setDictationMode,
   } = useSettings();
 
   const { t, i18n } = useTranslation();
@@ -2426,6 +2478,8 @@ EOF`,
             setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
             cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
             setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+            dictationMode={dictationMode}
+            setDictationMode={setDictationMode}
             toast={toast}
           />
         );

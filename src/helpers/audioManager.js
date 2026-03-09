@@ -2003,6 +2003,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   shouldUseStreaming(isSignedInOverride) {
     const s = getSettings();
+    if (s.dictationMode === "normal") return false;
     if (s.useLocalWhisper) return false;
 
     if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {

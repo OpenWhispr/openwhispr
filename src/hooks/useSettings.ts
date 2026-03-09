@@ -20,6 +20,7 @@ export interface TranscriptionSettings {
   cloudTranscriptionMode: string;
   customDictionary: string[];
   assemblyAiStreaming: boolean;
+  dictationMode: "normal" | "fast";
 }
 
 export interface ReasoningSettings {
@@ -179,6 +180,8 @@ function useSettingsInternal() {
     customDictionary: store.customDictionary,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
+    dictationMode: store.dictationMode,
+    setDictationMode: store.setDictationMode,
     useReasoningModel: store.useReasoningModel,
     reasoningModel: store.reasoningModel,
     reasoningProvider: store.reasoningProvider,

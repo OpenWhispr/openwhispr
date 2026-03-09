@@ -1276,6 +1276,13 @@
           "description": "Configura tu propio proveedor y clave API.",
           "title": "Cambiado a configuración personalizada"
         }
+      },
+      "dictationMode": {
+        "title": "Modo de dictado",
+        "normal": "Normal",
+        "normalDescription": "Máxima precisión. Tarda un momento en procesar tras la grabación.",
+        "fast": "Rápido",
+        "fastDescription": "Resultados más rápidos, pero puede ser menos preciso."
       }
     }
   },

@@ -1248,6 +1248,13 @@
           "description": "Configure seu próprio provedor e chave API.",
           "title": "Mudou para configuração personalizada"
         }
+      },
+      "dictationMode": {
+        "title": "Modo de ditado",
+        "normal": "Normal",
+        "normalDescription": "Melhor precisão. Leva um momento para processar após a gravação.",
+        "fast": "Rápido",
+        "fastDescription": "Resultados mais rápidos, mas pode ser menos preciso."
       }
     }
   },

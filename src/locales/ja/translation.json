@@ -1272,6 +1272,13 @@
           "description": "独自のプロバイダーと API キーを設定してください。",
           "title": "カスタム設定に切り替えました"
         }
+      },
+      "dictationMode": {
+        "title": "ディクテーションモード",
+        "normal": "通常",
+        "normalDescription": "最高の精度。録音後に処理するため少し時間がかかります。",
+        "fast": "高速",
+        "fastDescription": "より速い結果が得られますが、精度が低い場合があります。"
       }
     }
   },
