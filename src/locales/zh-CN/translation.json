@@ -1276,9 +1276,9 @@
       "dictationMode": {
         "title": "听写模式",
         "normal": "普通",
-        "normalDescription": "最佳准确度。录音后需要片刻处理。",
+        "normalDescription": "基于文件的转录。录音后处理音频。",
         "fast": "快速",
-        "fastDescription": "结果更快，但可能准确度较低。"
+        "fastDescription": "通过 OpenAI Realtime API 进行 WebSocket 流式传输。实时转录。"
       }
     }
   },

@@ -1280,9 +1280,9 @@
       "dictationMode": {
         "title": "Режим диктовки",
         "normal": "Обычный",
-        "normalDescription": "Лучшая точность. Требуется момент на обработку после записи.",
+        "normalDescription": "File-based транскрипция. Обрабатывает аудио после записи.",
         "fast": "Быстрый",
-        "fastDescription": "Результаты быстрее, но может быть менее точным."
+        "fastDescription": "WebSocket-стриминг через OpenAI Realtime API. Транскрипция в реальном времени."
       }
     }
   },

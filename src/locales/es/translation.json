@@ -1280,9 +1280,9 @@
       "dictationMode": {
         "title": "Modo de dictado",
         "normal": "Normal",
-        "normalDescription": "Máxima precisión. Tarda un momento en procesar tras la grabación.",
+        "normalDescription": "Transcripción file-based. Procesa el audio después de grabar.",
         "fast": "Rápido",
-        "fastDescription": "Resultados más rápidos, pero puede ser menos preciso."
+        "fastDescription": "Streaming WebSocket a través de OpenAI Realtime API. Transcripción en tiempo real."
       }
     }
   },
