@@ -131,7 +131,9 @@
     "private": "隐私",
     "tap": "点按",
     "close": "关闭",
-    "dismiss": "忽略"
+    "dismiss": "忽略",
+    "none": "无",
+    "secondaryLanguage": "辅助语言"
   },
   "onboarding": {
     "steps": {

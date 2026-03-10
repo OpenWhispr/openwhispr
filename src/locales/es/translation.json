@@ -131,7 +131,9 @@
     "private": "Privado",
     "tap": "Pulsar",
     "close": "Cerrar",
-    "dismiss": "Descartar"
+    "dismiss": "Descartar",
+    "none": "Ninguno",
+    "secondaryLanguage": "Idioma secundario"
   },
   "onboarding": {
     "steps": {

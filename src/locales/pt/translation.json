@@ -103,7 +103,9 @@
     "private": "Privado",
     "tap": "Toque",
     "close": "Fechar",
-    "dismiss": "Dispensar"
+    "dismiss": "Dispensar",
+    "none": "Nenhum",
+    "secondaryLanguage": "Idioma secundário"
   },
   "onboarding": {
     "steps": {

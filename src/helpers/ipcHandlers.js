@@ -2461,6 +2461,7 @@ class IPCHandlers {
             apiKey,
             model: options.model || "stt-rt-v4",
             language: options.language,
+            secondaryLanguage: options.secondaryLanguage,
           });
         }
         return { success: true };
