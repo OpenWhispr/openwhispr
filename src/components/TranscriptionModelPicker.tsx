@@ -199,6 +199,8 @@ interface TranscriptionModelPickerProps {
   setMistralApiKey: (key: string) => void;
   customTranscriptionApiKey?: string;
   setCustomTranscriptionApiKey?: (key: string) => void;
+  sonioxApiKey?: string;
+  setSonioxApiKey?: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl?: (url: string) => void;
   className?: string;
@@ -209,6 +211,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq", recommended: true },
   { id: "mistral", name: "Mistral" },
+  { id: "soniox", name: "Soniox" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -274,6 +277,8 @@ export default function TranscriptionModelPicker({
   setMistralApiKey,
   customTranscriptionApiKey = "",
   setCustomTranscriptionApiKey,
+  sonioxApiKey = "",
+  setSonioxApiKey,
   cloudTranscriptionBaseUrl = "",
   setCloudTranscriptionBaseUrl,
   className = "",
@@ -393,11 +398,22 @@ export default function TranscriptionModelPicker({
           }
         }
       }
-    } else if (selectedCloudProvider !== "custom" && !selectedCloudModel) {
-      const provider = cloudProviders.find((p) => p.id === selectedCloudProvider);
+    } else if (
+      selectedCloudProvider !== "custom" &&
+      selectedCloudProvider !== "soniox" &&
+      !selectedCloudModel
+    ) {
+      const provider = cloudProviders.find(
+        (p) => p.id === selectedCloudProvider
+      );
       if (provider?.models?.length) {
         onCloudModelSelect(provider.models[0].id);
       }
+    } else if (
+      selectedCloudProvider === "soniox" &&
+      selectedCloudModel !== "stt-rt-v4"
+    ) {
+      onCloudModelSelect("stt-rt-v4");
     }
   }, [
     cloudProviders,
@@ -527,10 +543,17 @@ export default function TranscriptionModelPicker({
   const handleCloudProviderChange = useCallback(
     (providerId: string) => {
       onCloudProviderSelect(providerId);
-      const provider = cloudProviders.find((p) => p.id === providerId);
+      const provider = cloudProviders.find(
+        (p) => p.id === providerId
+      );
 
       if (providerId === "custom") {
         onCloudModelSelect("whisper-1");
+        return;
+      }
+
+      if (providerId === "soniox") {
+        onCloudModelSelect("stt-rt-v4");
         return;
       }
 
@@ -541,7 +564,12 @@ export default function TranscriptionModelPicker({
         }
       }
     },
-    [cloudProviders, onCloudProviderSelect, onCloudModelSelect, setCloudTranscriptionBaseUrl]
+    [
+      cloudProviders,
+      onCloudProviderSelect,
+      onCloudModelSelect,
+      setCloudTranscriptionBaseUrl,
+    ]
   );
 
   const handleLocalProviderChange = useCallback(
@@ -837,7 +865,11 @@ export default function TranscriptionModelPicker({
                   </label>
                   <Input
                     value={cloudTranscriptionBaseUrl}
-                    onChange={(e) => setCloudTranscriptionBaseUrl?.(e.target.value)}
+                    onChange={(e) =>
+                      setCloudTranscriptionBaseUrl?.(
+                        e.target.value
+                      )
+                    }
                     onBlur={handleBaseUrlBlur}
                     placeholder="https://your-api.example.com/v1"
                     className="h-8 text-sm"
@@ -846,7 +878,10 @@ export default function TranscriptionModelPicker({
 
                 <ApiKeyInput
                   apiKey={customTranscriptionApiKey}
-                  setApiKey={setCustomTranscriptionApiKey || (() => {})}
+                  setApiKey={
+                    setCustomTranscriptionApiKey ||
+                    (() => {})
+                  }
                   label={t("transcription.apiKeyOptional")}
                   helpText=""
                 />
@@ -857,10 +892,72 @@ export default function TranscriptionModelPicker({
                   </label>
                   <Input
                     value={selectedCloudModel}
-                    onChange={(e) => onCloudModelSelect(e.target.value)}
+                    onChange={(e) =>
+                      onCloudModelSelect(e.target.value)
+                    }
                     placeholder="whisper-1"
                     className="h-8 text-sm"
                   />
+                </div>
+              </div>
+            ) : selectedCloudProvider === "soniox" ? (
+              <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-foreground">
+                      {t("transcription.sonioxApiKey",
+                        { defaultValue: "Soniox API Key" }
+                      )}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={createExternalLinkHandler(
+                        "https://console.soniox.com/"
+                      )}
+                      className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                    >
+                      {t("transcription.getKey")}
+                    </button>
+                  </div>
+                  <ApiKeyInput
+                    apiKey={sonioxApiKey}
+                    setApiKey={setSonioxApiKey || (() => {})}
+                    placeholder={t(
+                      "transcription.sonioxApiKeyPlaceholder",
+                      {
+                        defaultValue:
+                          "Enter your Soniox API key",
+                      }
+                    )}
+                    label=""
+                    helpText=""
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground">
+                    {t("common.model")}
+                  </label>
+                  <div
+                    className="flex items-center gap-2 h-8 px-3 rounded border border-border/70 bg-input text-sm text-foreground/70"
+                  >
+                    <ProviderIcon
+                      provider="soniox"
+                      className="w-3.5 h-3.5 shrink-0"
+                    />
+                    <span className="font-medium">
+                      stt-rt-v4
+                    </span>
+                    <span className="text-xs text-muted-foreground/50 ml-auto">
+                      {t(
+                        "transcription.sonioxModelDesc",
+                        {
+                          defaultValue:
+                            "Real-time streaming STT",
+                        }
+                      )}
+                    </span>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -877,7 +974,8 @@ export default function TranscriptionModelPicker({
                           groq: "https://console.groq.com/keys",
                           mistral: "https://console.mistral.ai/api-keys",
                           openai: "https://platform.openai.com/api-keys",
-                        }[selectedCloudProvider] || "https://platform.openai.com/api-keys"
+                        }[selectedCloudProvider] ||
+                          "https://platform.openai.com/api-keys"
                       )}
                       className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
                     >
@@ -886,14 +984,20 @@ export default function TranscriptionModelPicker({
                   </div>
                   <ApiKeyInput
                     apiKey={
-                      { groq: groqApiKey, mistral: mistralApiKey, openai: openaiApiKey }[
-                        selectedCloudProvider
-                      ] || openaiApiKey
+                      {
+                        groq: groqApiKey,
+                        mistral: mistralApiKey,
+                        openai: openaiApiKey,
+                      }[selectedCloudProvider] ||
+                      openaiApiKey
                     }
                     setApiKey={
-                      { groq: setGroqApiKey, mistral: setMistralApiKey, openai: setOpenaiApiKey }[
-                        selectedCloudProvider
-                      ] || setOpenaiApiKey
+                      {
+                        groq: setGroqApiKey,
+                        mistral: setMistralApiKey,
+                        openai: setOpenaiApiKey,
+                      }[selectedCloudProvider] ||
+                      setOpenaiApiKey
                     }
                     label=""
                     helpText=""
@@ -901,7 +1005,9 @@ export default function TranscriptionModelPicker({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">{t("common.model")}</label>
+                  <label className="text-xs font-medium text-foreground">
+                    {t("common.model")}
+                  </label>
                   <ModelCardList
                     models={cloudModelOptions}
                     selectedModel={selectedCloudModel}

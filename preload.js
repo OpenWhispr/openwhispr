@@ -299,6 +299,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
 
+  // Soniox API
+  getSonioxKey: () => ipcRenderer.invoke("get-soniox-key"),
+  saveSonioxKey: (key) => ipcRenderer.invoke("save-soniox-key", key),
+
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
@@ -490,6 +494,30 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onDictationRealtimeSessionEnd: registerListener(
     "dictation-realtime-session-end",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Soniox streaming
+  sonioxStreamingWarmup: (options) => ipcRenderer.invoke("soniox-streaming-warmup", options),
+  sonioxStreamingStart: (options) => ipcRenderer.invoke("soniox-streaming-start", options),
+  sonioxStreamingSend: (audioBuffer) => ipcRenderer.send("soniox-streaming-send", audioBuffer),
+  sonioxStreamingFinalize: () => ipcRenderer.send("soniox-streaming-finalize"),
+  sonioxStreamingStop: () => ipcRenderer.invoke("soniox-streaming-stop"),
+  sonioxStreamingStatus: () => ipcRenderer.invoke("soniox-streaming-status"),
+  onSonioxPartialTranscript: registerListener(
+    "soniox-streaming-partial",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onSonioxFinalTranscript: registerListener(
+    "soniox-streaming-final",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onSonioxError: registerListener(
+    "soniox-streaming-error",
+    (callback) => (_event, error) => callback(error)
+  ),
+  onSonioxSessionEnd: registerListener(
+    "soniox-streaming-session-end",
     (callback) => (_event, data) => callback(data)
   ),
 

@@ -677,6 +677,10 @@ declare global {
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;
+
+      // Soniox API key management
+      getSonioxKey?: () => Promise<string | null>;
+      saveSonioxKey?: (key: string) => Promise<void>;
       proxyMistralTranscription: (data: {
         audioBuffer: ArrayBuffer;
         model?: string;
@@ -1145,6 +1149,28 @@ declare global {
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeError?: (callback: (error: string) => void) => () => void;
       onDictationRealtimeSessionEnd?: (callback: (data: { text: string }) => void) => () => void;
+
+      // Soniox streaming
+      sonioxStreamingWarmup?: (options?: {
+        apiKey?: string;
+        model?: string;
+        language?: string;
+      }) => Promise<{ success: boolean; error?: string }>;
+      sonioxStreamingStart?: (options?: {
+        apiKey?: string;
+        model?: string;
+        language?: string;
+      }) => Promise<{ success: boolean; error?: string }>;
+      sonioxStreamingSend?: (audioBuffer: ArrayBuffer) => void;
+      sonioxStreamingFinalize?: () => void;
+      sonioxStreamingStop?: () => Promise<{ success: boolean; text?: string }>;
+      sonioxStreamingStatus?: () => Promise<{ connected: boolean }>;
+      onSonioxPartialTranscript?: (callback: (text: string) => void) => () => void;
+      onSonioxFinalTranscript?: (callback: (text: string) => void) => () => void;
+      onSonioxError?: (callback: (error: string) => void) => () => void;
+      onSonioxSessionEnd?: (
+        callback: (data: { text?: string }) => void
+      ) => () => void;
 
       // Desktop audio capture
       getDesktopSources?: (types: string[]) => Promise<Array<{ id: string; name: string }>>;

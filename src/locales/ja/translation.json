@@ -1341,7 +1341,8 @@
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
-        "mistral_voxtral_mini_latest": "高速多言語文字起こし"
+        "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "soniox_stt_rt_v4": "Real-time streaming speech-to-text with high accuracy"
       },
       "cloud": {
         "openai_gpt_5_2": "最新のフラッグシップ推論モデル",
