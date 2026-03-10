@@ -150,6 +150,7 @@ class SonioxStreaming {
       let newFinalTokens = false;
       for (const token of res.tokens || []) {
         if (token.text === "<fin>") continue;
+        if (!token.text || !token.text.trim() || token.text === "\ufffd") continue;
         if (token.is_final) {
           this.finalTokens.push(token);
           newFinalTokens = true;
