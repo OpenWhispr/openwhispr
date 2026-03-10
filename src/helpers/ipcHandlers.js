@@ -148,6 +148,34 @@ class IPCHandlers {
     }
   }
 
+  cleanupAllStreaming() {
+    const backends = [
+      { name: "deepgram", instance: this.deepgramStreaming },
+      { name: "openai-realtime", instance: this.openaiRealtimeStreaming },
+      { name: "soniox", instance: this._sonioxStreaming },
+      { name: "dictation", instance: this._dictationStreaming },
+      { name: "assemblyai", instance: this.assemblyAiStreaming },
+    ];
+    for (const { name, instance } of backends) {
+      if (!instance) continue;
+      try {
+        if (typeof instance.cleanupAll === "function") {
+          instance.cleanupAll();
+        } else {
+          instance.cleanup();
+        }
+        debugLogger.debug(`Cleaned up ${name} streaming`);
+      } catch (err) {
+        debugLogger.debug(`Error cleaning up ${name} streaming`, { error: err.message });
+      }
+    }
+    this.deepgramStreaming = null;
+    this.openaiRealtimeStreaming = null;
+    this._sonioxStreaming = null;
+    this._dictationStreaming = null;
+    this.assemblyAiStreaming = null;
+  }
+
   _setupAudioCleanup() {
     const DEFAULT_RETENTION_DAYS = 30;
     const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
@@ -2415,12 +2443,18 @@ class IPCHandlers {
     };
 
     const setupDictationCallbacks = (streaming, event) => {
-      streaming.onPartialTranscript = (text) =>
-        event.sender.send("dictation-realtime-partial", text);
-      streaming.onFinalTranscript = (text) => event.sender.send("dictation-realtime-final", text);
-      streaming.onError = (err) => event.sender.send("dictation-realtime-error", err.message);
-      streaming.onSessionEnd = (data) =>
-        event.sender.send("dictation-realtime-session-end", data || {});
+      streaming.onPartialTranscript = (text) => {
+        if (!event.sender.isDestroyed()) event.sender.send("dictation-realtime-partial", text);
+      };
+      streaming.onFinalTranscript = (text) => {
+        if (!event.sender.isDestroyed()) event.sender.send("dictation-realtime-final", text);
+      };
+      streaming.onError = (err) => {
+        if (!event.sender.isDestroyed()) event.sender.send("dictation-realtime-error", err.message);
+      };
+      streaming.onSessionEnd = (data) => {
+        if (!event.sender.isDestroyed()) event.sender.send("dictation-realtime-session-end", data || {});
+      };
     };
 
     const connectDictationStreaming = async (event, options) => {
@@ -2576,14 +2610,18 @@ class IPCHandlers {
 
           // Cold start: create new connection
           this._sonioxStreaming = new SonioxStreaming();
-          this._sonioxStreaming.onPartialTranscript = (text) =>
-            event.sender.send("soniox-streaming-partial", text);
-          this._sonioxStreaming.onFinalTranscript = (text) =>
-            event.sender.send("soniox-streaming-final", text);
-          this._sonioxStreaming.onError = (err) =>
-            event.sender.send("soniox-streaming-error", err.message);
-          this._sonioxStreaming.onSessionEnd = (data) =>
-            event.sender.send("soniox-streaming-session-end", data || {});
+          this._sonioxStreaming.onPartialTranscript = (text) => {
+            if (!event.sender.isDestroyed()) event.sender.send("soniox-streaming-partial", text);
+          };
+          this._sonioxStreaming.onFinalTranscript = (text) => {
+            if (!event.sender.isDestroyed()) event.sender.send("soniox-streaming-final", text);
+          };
+          this._sonioxStreaming.onError = (err) => {
+            if (!event.sender.isDestroyed()) event.sender.send("soniox-streaming-error", err.message);
+          };
+          this._sonioxStreaming.onSessionEnd = (data) => {
+            if (!event.sender.isDestroyed()) event.sender.send("soniox-streaming-session-end", data || {});
+          };
 
           await this._sonioxStreaming.connect({
             apiKey,
