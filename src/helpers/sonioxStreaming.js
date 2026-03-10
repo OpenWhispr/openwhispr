@@ -4,6 +4,7 @@ const debugLogger = require("./debugLogger");
 const WEBSOCKET_TIMEOUT_MS = 15000;
 const DISCONNECT_TIMEOUT_MS = 3000;
 const KEEPALIVE_INTERVAL_MS = 5000;
+const KEEPALIVE_IDLE_LIMIT_MS = 30000; // Stop keepalive if no audio sent for 30s
 const COLD_START_BUFFER_MAX = 3 * 16000 * 2; // 3 seconds of 16-bit PCM at 16kHz
 const SONIOX_WS_URL = "wss://stt-rt.soniox.com/transcribe-websocket";
 
@@ -26,6 +27,7 @@ class SonioxStreaming {
     this.isDisconnecting = false;
     this.audioBytesSent = 0;
     this._finalizeSent = false;
+    this._lastAudioSentAt = 0;
   }
 
   getFullTranscript() {
@@ -202,6 +204,7 @@ class SonioxStreaming {
     this.flushColdStartBuffer();
     this.ws.send(pcmBuffer);
     this.audioBytesSent += pcmBuffer.length;
+    this._lastAudioSentAt = Date.now();
     return true;
   }
 
@@ -216,15 +219,22 @@ class SonioxStreaming {
 
   startKeepAlive() {
     this.stopKeepAlive();
+    this._lastAudioSentAt = Date.now();
     this.keepAliveInterval = setInterval(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        try {
-          this.ws.send(JSON.stringify({ type: "keepalive" }));
-        } catch (err) {
-          debugLogger.debug("Soniox keep-alive failed", { error: err.message });
-          this.stopKeepAlive();
-        }
-      } else {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        this.stopKeepAlive();
+        return;
+      }
+      if (Date.now() - this._lastAudioSentAt > KEEPALIVE_IDLE_LIMIT_MS) {
+        debugLogger.debug("Soniox idle timeout, closing connection");
+        this.cleanup();
+        this.onSessionEnd?.({ text: this.getFullTranscript() });
+        return;
+      }
+      try {
+        this.ws.send(JSON.stringify({ type: "keepalive" }));
+      } catch (err) {
+        debugLogger.debug("Soniox keep-alive failed", { error: err.message });
         this.stopKeepAlive();
       }
     }, KEEPALIVE_INTERVAL_MS);
