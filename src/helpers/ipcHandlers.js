@@ -2561,35 +2561,9 @@ class IPCHandlers {
     });
 
     // --- Soniox streaming ---
-    ipcMain.handle("soniox-streaming-warmup", async (event, options = {}) => {
-      try {
-        const apiKey = options.apiKey || this.environmentManager.getSonioxKey();
-        if (!apiKey) {
-          return { success: false, error: "Soniox API key not configured", code: "NO_API" };
-        }
-
-        if (this._sonioxStreaming?.isConnected) {
-          await this._sonioxStreaming.disconnect();
-        }
-        this._sonioxStreaming = new SonioxStreaming();
-        this._sonioxStreaming.onPartialTranscript = (text) =>
-          event.sender.send("soniox-streaming-partial", text);
-        this._sonioxStreaming.onFinalTranscript = (text) =>
-          event.sender.send("soniox-streaming-final", text);
-        this._sonioxStreaming.onError = (err) =>
-          event.sender.send("soniox-streaming-error", err.message);
-        this._sonioxStreaming.onSessionEnd = (data) =>
-          event.sender.send("soniox-streaming-session-end", data || {});
-
-        await this._sonioxStreaming.connect({
-          apiKey,
-          model: options.model || "stt-rt-v4",
-          language: options.language,
-        });
-        return { success: true };
-      } catch (err) {
-        return { success: false, error: err.message };
-      }
+    // Soniox cold-starts fast (~250ms), no warmup needed.
+    ipcMain.handle("soniox-streaming-warmup", async () => {
+      return { success: true };
     });
 
     ipcMain.handle("soniox-streaming-start", async (event, options = {}) => {
