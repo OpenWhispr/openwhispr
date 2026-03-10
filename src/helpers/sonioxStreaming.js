@@ -25,7 +25,6 @@ class SonioxStreaming {
     this.keepAliveInterval = null;
     this.isDisconnecting = false;
     this.audioBytesSent = 0;
-    this.closeResolve = null;
     this._finalizeSent = false;
   }
 
@@ -114,9 +113,6 @@ class SonioxStreaming {
           this.pendingReject = null;
           this.pendingResolve = null;
         }
-        if (this.closeResolve) {
-          this.closeResolve({ text: this.getFullTranscript() });
-        }
         this.cleanup();
         if (wasActive && !this.isDisconnecting) {
           this.onSessionEnd?.({ text: this.getFullTranscript() });
@@ -159,7 +155,7 @@ class SonioxStreaming {
         }
       }
 
-      const finalText = this.finalTokens.map((t) => t.text).join("");
+      const finalText = this.getFullTranscript();
       this.currentNonFinalText = nonFinalTexts.join("");
 
       this.onPartialTranscript?.(finalText + this.currentNonFinalText);
@@ -337,7 +333,6 @@ class SonioxStreaming {
     }
 
     this.isConnected = false;
-    this.closeResolve = null;
   }
 }
 

@@ -546,16 +546,6 @@ export default function TranscriptionModelPicker({
         return;
       }
 
-      if (providerId === "soniox") {
-        const sonioxProvider = cloudProviders.find(
-          (p) => p.id === "soniox"
-        );
-        if (sonioxProvider?.models?.length) {
-          onCloudModelSelect(sonioxProvider.models[0].id);
-        }
-        return;
-      }
-
       if (provider) {
         setCloudTranscriptionBaseUrl?.(provider.baseUrl);
         if (provider.models?.length) {
