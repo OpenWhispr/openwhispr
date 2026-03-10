@@ -1370,7 +1370,7 @@
         "groq_whisper_large_v3_turbo": "216 倍实时速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
         "mistral_voxtral_mini_latest": "快速多语言转录",
-        "soniox_stt_rt_v4": "Real-time streaming speech-to-text with high accuracy"
+        "soniox_stt_rt_v4": "高精度实时流式语音转文字"
       },
       "cloud": {
         "openai_gpt_5_4": "复杂推理前沿模型",

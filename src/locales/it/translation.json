@@ -1370,7 +1370,7 @@
         "groq_whisper_large_v3_turbo": "Velocità 216x in tempo reale",
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
-        "soniox_stt_rt_v4": "Real-time streaming speech-to-text with high accuracy"
+        "soniox_stt_rt_v4": "Trascrizione vocale in tempo reale con elevata precisione"
       },
       "cloud": {
         "openai_gpt_5_4": "Modello frontier per ragionamento complesso",

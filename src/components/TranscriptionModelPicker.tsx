@@ -400,7 +400,6 @@ export default function TranscriptionModelPicker({
       }
     } else if (
       selectedCloudProvider !== "custom" &&
-      selectedCloudProvider !== "soniox" &&
       !selectedCloudModel
     ) {
       const provider = cloudProviders.find(
@@ -409,11 +408,6 @@ export default function TranscriptionModelPicker({
       if (provider?.models?.length) {
         onCloudModelSelect(provider.models[0].id);
       }
-    } else if (
-      selectedCloudProvider === "soniox" &&
-      selectedCloudModel !== "stt-rt-v4"
-    ) {
-      onCloudModelSelect("stt-rt-v4");
     }
   }, [
     cloudProviders,
@@ -553,7 +547,12 @@ export default function TranscriptionModelPicker({
       }
 
       if (providerId === "soniox") {
-        onCloudModelSelect("stt-rt-v4");
+        const sonioxProvider = cloudProviders.find(
+          (p) => p.id === "soniox"
+        );
+        if (sonioxProvider?.models?.length) {
+          onCloudModelSelect(sonioxProvider.models[0].id);
+        }
         return;
       }
 
@@ -900,66 +899,6 @@ export default function TranscriptionModelPicker({
                   />
                 </div>
               </div>
-            ) : selectedCloudProvider === "soniox" ? (
-              <div className="space-y-2">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-foreground">
-                      {t("transcription.sonioxApiKey",
-                        { defaultValue: "Soniox API Key" }
-                      )}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={createExternalLinkHandler(
-                        "https://console.soniox.com/"
-                      )}
-                      className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
-                    >
-                      {t("transcription.getKey")}
-                    </button>
-                  </div>
-                  <ApiKeyInput
-                    apiKey={sonioxApiKey}
-                    setApiKey={setSonioxApiKey || (() => {})}
-                    placeholder={t(
-                      "transcription.sonioxApiKeyPlaceholder",
-                      {
-                        defaultValue:
-                          "Enter your Soniox API key",
-                      }
-                    )}
-                    label=""
-                    helpText=""
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">
-                    {t("common.model")}
-                  </label>
-                  <div
-                    className="flex items-center gap-2 h-8 px-3 rounded border border-border/70 bg-input text-sm text-foreground/70"
-                  >
-                    <ProviderIcon
-                      provider="soniox"
-                      className="w-3.5 h-3.5 shrink-0"
-                    />
-                    <span className="font-medium">
-                      stt-rt-v4
-                    </span>
-                    <span className="text-xs text-muted-foreground/50 ml-auto">
-                      {t(
-                        "transcription.sonioxModelDesc",
-                        {
-                          defaultValue:
-                            "Real-time streaming STT",
-                        }
-                      )}
-                    </span>
-                  </div>
-                </div>
-              </div>
             ) : (
               <div className="space-y-2">
                 <div className="space-y-1.5">
@@ -974,6 +913,7 @@ export default function TranscriptionModelPicker({
                           groq: "https://console.groq.com/keys",
                           mistral: "https://console.mistral.ai/api-keys",
                           openai: "https://platform.openai.com/api-keys",
+                          soniox: "https://console.soniox.com/",
                         }[selectedCloudProvider] ||
                           "https://platform.openai.com/api-keys"
                       )}
@@ -988,6 +928,7 @@ export default function TranscriptionModelPicker({
                         groq: groqApiKey,
                         mistral: mistralApiKey,
                         openai: openaiApiKey,
+                        soniox: sonioxApiKey,
                       }[selectedCloudProvider] ||
                       openaiApiKey
                     }
@@ -996,6 +937,7 @@ export default function TranscriptionModelPicker({
                         groq: setGroqApiKey,
                         mistral: setMistralApiKey,
                         openai: setOpenaiApiKey,
+                        soniox: setSonioxApiKey,
                       }[selectedCloudProvider] ||
                       setOpenaiApiKey
                     }
