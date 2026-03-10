@@ -133,7 +133,9 @@
     "private": "私密",
     "tap": "點按",
     "close": "關閉",
-    "dismiss": "忽略"
+    "dismiss": "忽略",
+    "none": "無",
+    "secondaryLanguage": "輔助語言"
   },
   "onboarding": {
     "steps": {

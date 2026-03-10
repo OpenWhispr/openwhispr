@@ -133,7 +133,9 @@
     "private": "Private",
     "tap": "Tap",
     "close": "Close",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "none": "None",
+    "secondaryLanguage": "Secondary language"
   },
   "onboarding": {
     "steps": {

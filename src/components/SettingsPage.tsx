@@ -176,6 +176,8 @@ interface TranscriptionSectionProps {
   setMistralApiKey: (key: string) => void;
   sonioxApiKey: string;
   setSonioxApiKey: (key: string) => void;
+  sonioxSecondaryLanguage: string;
+  setSonioxSecondaryLanguage: (lang: string) => void;
   customTranscriptionApiKey: string;
   setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
@@ -213,6 +215,8 @@ function TranscriptionSection({
   setMistralApiKey,
   sonioxApiKey,
   setSonioxApiKey,
+  sonioxSecondaryLanguage,
+  setSonioxSecondaryLanguage,
   customTranscriptionApiKey,
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
@@ -391,6 +395,8 @@ function TranscriptionSection({
           setMistralApiKey={setMistralApiKey}
           sonioxApiKey={sonioxApiKey}
           setSonioxApiKey={setSonioxApiKey}
+          sonioxSecondaryLanguage={sonioxSecondaryLanguage}
+          setSonioxSecondaryLanguage={setSonioxSecondaryLanguage}
           customTranscriptionApiKey={customTranscriptionApiKey}
           setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
           cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
@@ -686,6 +692,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setMistralApiKey,
     sonioxApiKey,
     setSonioxApiKey,
+    sonioxSecondaryLanguage,
+    setSonioxSecondaryLanguage,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
     customReasoningApiKey,
@@ -2838,6 +2846,8 @@ EOF`,
             setMistralApiKey={setMistralApiKey}
             sonioxApiKey={sonioxApiKey}
             setSonioxApiKey={setSonioxApiKey}
+            sonioxSecondaryLanguage={sonioxSecondaryLanguage}
+            setSonioxSecondaryLanguage={setSonioxSecondaryLanguage}
             customTranscriptionApiKey={customTranscriptionApiKey}
             setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
             cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}

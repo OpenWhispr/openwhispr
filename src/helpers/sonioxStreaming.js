@@ -33,7 +33,7 @@ class SonioxStreaming {
   }
 
   async connect(options = {}) {
-    const { apiKey, model, language } = options;
+    const { apiKey, model, language, secondaryLanguage } = options;
     if (!apiKey) throw new Error("Soniox API key is required");
 
     if (this.isConnected) {
@@ -48,10 +48,11 @@ class SonioxStreaming {
     this.coldStartBufferSize = 0;
     this._finalizeSent = false;
 
-    debugLogger.debug("Soniox connecting", { model: model || "stt-rt-v4", language });
-
+    const toBase = (l) => l && l !== "auto" ? l.split("-")[0] : null;
     const languageHints =
-      !language || language === "auto" ? [] : [language];
+      [toBase(language), toBase(secondaryLanguage)].filter(Boolean);
+
+    debugLogger.debug("Soniox connecting", { model: model || "stt-rt-v4", languageHints });
 
     const configMessage = {
       api_key: apiKey,

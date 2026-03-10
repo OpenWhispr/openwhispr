@@ -8,6 +8,8 @@ import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
 import { DownloadProgressBar } from "./ui/DownloadProgressBar";
 import ApiKeyInput from "./ui/ApiKeyInput";
+import LanguageSelector, { type LanguageOption } from "./ui/LanguageSelector";
+import languageRegistry from "../config/languageRegistry.json";
 import { ConfirmDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
@@ -26,6 +28,7 @@ import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
+import { useSettingsStore } from "../stores/settingsStore";
 import type { CudaWhisperStatus } from "../types/electron";
 import logger from "../utils/logger";
 
@@ -201,11 +204,17 @@ interface TranscriptionModelPickerProps {
   setCustomTranscriptionApiKey?: (key: string) => void;
   sonioxApiKey?: string;
   setSonioxApiKey?: (key: string) => void;
+  sonioxSecondaryLanguage?: string;
+  setSonioxSecondaryLanguage?: (lang: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl?: (url: string) => void;
   className?: string;
   variant?: "onboarding" | "settings";
 }
+
+const SECONDARY_LANGUAGE_OPTIONS: LanguageOption[] = languageRegistry.languages
+  .filter((l) => l.code !== "auto")
+  .map(({ code, label, flag }) => ({ value: code, label, flag }));
 
 const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
@@ -279,12 +288,16 @@ export default function TranscriptionModelPicker({
   setCustomTranscriptionApiKey,
   sonioxApiKey = "",
   setSonioxApiKey,
+  sonioxSecondaryLanguage = "",
+  setSonioxSecondaryLanguage,
   cloudTranscriptionBaseUrl = "",
   setCloudTranscriptionBaseUrl,
   className = "",
   variant = "settings",
 }: TranscriptionModelPickerProps) {
   const { t } = useTranslation();
+  const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
+  const isAutoLanguage = !preferredLanguage || preferredLanguage === "auto";
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
   const [internalLocalProvider, setInternalLocalProvider] = useState(selectedLocalProvider);
@@ -935,6 +948,23 @@ export default function TranscriptionModelPicker({
                     helpText=""
                   />
                 </div>
+
+                {selectedCloudProvider === "soniox" && setSonioxSecondaryLanguage && (
+                  <div className={`flex items-center justify-between gap-3 ${isAutoLanguage ? "opacity-50 pointer-events-none" : ""}`}>
+                    <label className="text-xs font-medium text-foreground whitespace-nowrap">
+                      {t("common.secondaryLanguage")}
+                    </label>
+                    <LanguageSelector
+                      value={isAutoLanguage ? "none" : (sonioxSecondaryLanguage || "none")}
+                      onChange={(value) => setSonioxSecondaryLanguage(value === "none" ? "" : value)}
+                      options={[
+                        { value: "none", label: t("common.none"), flag: "" },
+                        ...SECONDARY_LANGUAGE_OPTIONS,
+                      ]}
+                      className="min-w-32"
+                    />
+                  </div>
+                )}
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-foreground">

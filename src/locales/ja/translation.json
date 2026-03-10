@@ -133,7 +133,9 @@
     "private": "プライベート",
     "tap": "タップ",
     "close": "閉じる",
-    "dismiss": "閉じる"
+    "dismiss": "閉じる",
+    "none": "なし",
+    "secondaryLanguage": "補助言語"
   },
   "onboarding": {
     "steps": {

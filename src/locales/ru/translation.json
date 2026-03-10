@@ -133,7 +133,9 @@
     "private": "Приватный",
     "tap": "Нажатие",
     "close": "Закрыть",
-    "dismiss": "Скрыть"
+    "dismiss": "Скрыть",
+    "none": "Нет",
+    "secondaryLanguage": "Второй язык"
   },
   "onboarding": {
     "steps": {
