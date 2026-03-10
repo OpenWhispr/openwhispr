@@ -26,6 +26,7 @@ class SonioxStreaming {
     this.isDisconnecting = false;
     this.audioBytesSent = 0;
     this.closeResolve = null;
+    this._finalizeSent = false;
   }
 
   getFullTranscript() {
@@ -46,6 +47,7 @@ class SonioxStreaming {
     this.audioBytesSent = 0;
     this.coldStartBuffer = [];
     this.coldStartBufferSize = 0;
+    this._finalizeSent = false;
 
     debugLogger.debug("Soniox connecting", { model: model || "stt-rt-v4", language });
 
@@ -209,6 +211,7 @@ class SonioxStreaming {
   finalize() {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return false;
 
+    this._finalizeSent = true;
     this.ws.send(JSON.stringify({ type: "finalize" }));
     debugLogger.debug("Soniox finalize sent");
     return true;
@@ -249,7 +252,9 @@ class SonioxStreaming {
     this.isDisconnecting = true;
 
     if (this.ws.readyState === WebSocket.OPEN && this.audioBytesSent > 0) {
-      await this.drainFinalTokens();
+      if (!this._finalizeSent) {
+        await this.drainFinalTokens();
+      }
       await this.drainSessionEnd();
     }
 
