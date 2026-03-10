@@ -34,6 +34,7 @@ const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
 const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
 const CommandSearch = React.lazy(() => import("./CommandSearch"));
+const CommandHistory = React.lazy(() => import("./CommandHistory"));
 
 export default function ControlPanel() {
   const { t } = useTranslation();
@@ -734,6 +735,11 @@ export default function ControlPanel() {
             {activeView === "integrations" && (
               <Suspense fallback={null}>
                 <IntegrationsView />
+              </Suspense>
+            )}
+            {activeView === "command-history" && (
+              <Suspense fallback={null}>
+                <CommandHistory />
               </Suspense>
             )}
           </div>

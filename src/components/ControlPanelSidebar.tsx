@@ -11,6 +11,7 @@ import {
   UserCircle,
   X,
   Search,
+  History,
 } from "lucide-react";
 import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
@@ -20,7 +21,7 @@ import { getCachedPlatform } from "../utils/platform";
 
 const platform = getCachedPlatform();
 
-export type ControlPanelView = "home" | "personal-notes" | "dictionary" | "upload" | "integrations";
+export type ControlPanelView = "home" | "personal-notes" | "dictionary" | "upload" | "integrations" | "command-history";
 
 interface ControlPanelSidebarProps {
   activeView: ControlPanelView;
@@ -82,6 +83,7 @@ export default function ControlPanelSidebar({
     { id: "upload", label: t("sidebar.upload"), icon: Upload },
     { id: "dictionary", label: t("sidebar.dictionary"), icon: BookOpen },
     { id: "integrations", label: t("sidebar.integrations"), icon: Blocks },
+    { id: "command-history", label: t("sidebar.commandHistory"), icon: History },
   ];
 
   return (

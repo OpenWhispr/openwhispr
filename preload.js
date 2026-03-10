@@ -102,6 +102,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   updateAction: (id, updates) => ipcRenderer.invoke("db-update-action", id, updates),
   deleteAction: (id) => ipcRenderer.invoke("db-delete-action", id),
 
+  // Command History
+  saveCommandLog: (commandText, originalTranscript, options) =>
+    ipcRenderer.invoke("db-save-command-log", commandText, originalTranscript, options),
+  getCommandHistory: (options) => ipcRenderer.invoke("db-get-command-history", options),
+  searchCommandHistory: (query, limit) =>
+    ipcRenderer.invoke("db-search-command-history", query, limit),
+  getCommandStats: () => ipcRenderer.invoke("db-get-command-stats"),
+  deleteCommandLog: (id) => ipcRenderer.invoke("db-delete-command-log", id),
+  clearCommandHistory: () => ipcRenderer.invoke("db-clear-command-history"),
+  exportCommandHistory: (options) => ipcRenderer.invoke("db-export-command-history", options),
+
   // Audio file operations
   selectAudioFile: () => ipcRenderer.invoke("select-audio-file"),
   getFileSize: (filePath) => ipcRenderer.invoke("get-file-size", filePath),

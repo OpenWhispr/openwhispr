@@ -176,6 +176,7 @@ const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
+const MCPBridge = require("./src/helpers/mcpBridge");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
 
@@ -199,6 +200,7 @@ let meetingDetectionEngine = null;
 let ipcHandlers = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
+let mcpBridge = null;
 
 function parseAuthBridgePort() {
   const raw = (process.env.OPENWHISPR_AUTH_BRIDGE_PORT || "").trim();
@@ -333,6 +335,18 @@ function initializeDeferredManagers() {
 
   googleCalendarManager.start();
   meetingDetectionEngine.start();
+
+  // Start the MCP bridge so external MCP clients can interact with the app
+  mcpBridge = new MCPBridge({
+    databaseManager,
+    windowManager,
+    whisperManager,
+    parakeetManager,
+    environmentManager,
+  });
+  mcpBridge.start().catch((err) => {
+    debugLogger.warn("MCPBridge startup error (non-fatal)", { error: err?.message });
+  });
 }
 
 app.on("open-url", (event, url) => {
@@ -1028,6 +1042,10 @@ if (gotSingleInstanceLock) {
   });
 
   app.on("will-quit", () => {
+    if (mcpBridge) {
+      mcpBridge.stop();
+      mcpBridge = null;
+    }
     if (authBridgeServer) {
       authBridgeServer.close();
       authBridgeServer = null;

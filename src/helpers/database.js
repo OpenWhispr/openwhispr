@@ -332,6 +332,39 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
 
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS command_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+          command_text TEXT NOT NULL,
+          original_transcript TEXT,
+          duration_ms INTEGER,
+          model TEXT,
+          provider TEXT,
+          status TEXT NOT NULL DEFAULT 'completed',
+          error_message TEXT,
+          metadata TEXT,
+          source TEXT NOT NULL DEFAULT 'dictation',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      try {
+        this.db.exec("ALTER TABLE command_log ADD COLUMN error_message TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_command_log_timestamp ON command_log(timestamp)"
+      );
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_command_log_status ON command_log(status)"
+      );
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_command_log_provider ON command_log(provider)"
+      );
+
       return true;
     } catch (error) {
       debugLogger.error("Database initialization failed", { error: error.message }, "database");
@@ -1230,6 +1263,195 @@ class DatabaseManager {
       return this.db.prepare("SELECT * FROM notes WHERE id = ?").get(id);
     } catch (error) {
       debugLogger.error("Error updating note cloud_id", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  saveCommandLog(commandText, originalTranscript = null, options = {}) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const {
+        durationMs = null,
+        model = null,
+        provider = null,
+        status = "completed",
+        errorMessage = null,
+        metadata = null,
+        source = "dictation",
+      } = options;
+      const metadataStr = metadata ? JSON.stringify(metadata) : null;
+      const stmt = this.db.prepare(
+        "INSERT INTO command_log (command_text, original_transcript, duration_ms, model, provider, status, error_message, metadata, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      );
+      const result = stmt.run(
+        commandText,
+        originalTranscript,
+        durationMs,
+        model,
+        provider,
+        status,
+        errorMessage,
+        metadataStr,
+        source
+      );
+      const entry = this.db
+        .prepare("SELECT * FROM command_log WHERE id = ?")
+        .get(result.lastInsertRowid);
+      return { success: true, entry };
+    } catch (error) {
+      debugLogger.error("Error saving command log", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getCommandHistory({
+    limit = 50,
+    offset = 0,
+    status = null,
+    provider = null,
+    source = null,
+    startDate = null,
+    endDate = null,
+  } = {}) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const conditions = [];
+      const params = [];
+      if (status) {
+        conditions.push("status = ?");
+        params.push(status);
+      }
+      if (provider) {
+        conditions.push("provider = ?");
+        params.push(provider);
+      }
+      if (source) {
+        conditions.push("source = ?");
+        params.push(source);
+      }
+      if (startDate) {
+        conditions.push("timestamp >= ?");
+        params.push(startDate);
+      }
+      if (endDate) {
+        conditions.push("timestamp <= ?");
+        params.push(endDate);
+      }
+      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+      const stmt = this.db.prepare(
+        `SELECT * FROM command_log ${where} ORDER BY timestamp DESC LIMIT ? OFFSET ?`
+      );
+      params.push(limit, offset);
+      return stmt.all(...params);
+    } catch (error) {
+      debugLogger.error("Error getting command history", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  searchCommandHistory(query, limit = 50) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const term = (query || "").trim();
+      if (!term) return [];
+      const likeTerm = `%${term}%`;
+      const stmt = this.db.prepare(
+        "SELECT * FROM command_log WHERE command_text LIKE ? OR original_transcript LIKE ? ORDER BY timestamp DESC LIMIT ?"
+      );
+      return stmt.all(likeTerm, likeTerm, limit);
+    } catch (error) {
+      debugLogger.error("Error searching command history", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getCommandStats() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const total = this.db
+        .prepare("SELECT COUNT(*) as count FROM command_log")
+        .get().count;
+      const avgDuration = this.db
+        .prepare(
+          "SELECT AVG(duration_ms) as avg_duration FROM command_log WHERE duration_ms IS NOT NULL"
+        )
+        .get().avg_duration;
+      const byStatus = this.db
+        .prepare(
+          "SELECT status, COUNT(*) as count FROM command_log GROUP BY status"
+        )
+        .all();
+      const byProvider = this.db
+        .prepare(
+          "SELECT provider, COUNT(*) as count FROM command_log GROUP BY provider ORDER BY count DESC"
+        )
+        .all();
+
+      const completed = byStatus.find((s) => s.status === "completed")?.count || 0;
+      const failed = byStatus.find((s) => s.status === "failed")?.count || 0;
+
+      // Find the most-used provider (excluding null entries)
+      const topProvider = byProvider.find((p) => p.provider != null);
+      const mostUsedProvider = topProvider ? topProvider.provider : null;
+
+      return {
+        total,
+        completed,
+        failed,
+        avgDurationMs: avgDuration !== null && avgDuration !== undefined ? Math.round(avgDuration) : null,
+        mostUsedProvider,
+      };
+    } catch (error) {
+      debugLogger.error("Error getting command stats", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  deleteCommandLog(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const stmt = this.db.prepare("DELETE FROM command_log WHERE id = ?");
+      const result = stmt.run(id);
+      return { success: result.changes > 0, id };
+    } catch (error) {
+      debugLogger.error("Error deleting command log", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  clearCommandHistory() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const stmt = this.db.prepare("DELETE FROM command_log");
+      const result = stmt.run();
+      return { cleared: result.changes, success: true };
+    } catch (error) {
+      debugLogger.error("Error clearing command history", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  exportCommandHistory({ startDate = null, endDate = null } = {}) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const conditions = [];
+      const params = [];
+      if (startDate) {
+        conditions.push("timestamp >= ?");
+        params.push(startDate);
+      }
+      if (endDate) {
+        conditions.push("timestamp <= ?");
+        params.push(endDate);
+      }
+      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+      const stmt = this.db.prepare(
+        `SELECT * FROM command_log ${where} ORDER BY timestamp DESC`
+      );
+      const entries = stmt.all(...params);
+      return { success: true, data: entries };
+    } catch (error) {
+      debugLogger.error("Error exporting command history", { error: error.message }, "database");
       throw error;
     }
   }
