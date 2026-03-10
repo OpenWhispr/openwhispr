@@ -1341,7 +1341,8 @@
         "openai_whisper_1": "Modelo Whisper original",
         "groq_whisper_large_v3_turbo": "Velocidade 216x em tempo real",
         "groq_whisper_large_v3": "Modelo Large v3, rápido e preciso",
-        "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida"
+        "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida",
+        "soniox_stt_rt_v4": "Real-time streaming speech-to-text with high accuracy"
       },
       "cloud": {
         "openai_gpt_5_4": "Modelo frontier para raciocínio complexo",

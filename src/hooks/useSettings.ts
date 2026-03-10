@@ -49,6 +49,7 @@ export interface ApiKeySettings {
   mistralApiKey: string;
   customTranscriptionApiKey: string;
   customReasoningApiKey: string;
+  sonioxApiKey: string;
 }
 
 export interface PrivacySettings {
@@ -216,6 +217,8 @@ function useSettingsInternal() {
     setGeminiApiKey: store.setGeminiApiKey,
     setGroqApiKey: store.setGroqApiKey,
     setMistralApiKey: store.setMistralApiKey,
+    sonioxApiKey: store.sonioxApiKey,
+    setSonioxApiKey: store.setSonioxApiKey,
     customTranscriptionApiKey: store.customTranscriptionApiKey,
     setCustomTranscriptionApiKey: store.setCustomTranscriptionApiKey,
     customReasoningApiKey: store.customReasoningApiKey,
