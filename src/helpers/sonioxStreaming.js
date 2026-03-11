@@ -8,6 +8,27 @@ const KEEPALIVE_IDLE_LIMIT_MS = 30000; // Stop keepalive if no audio sent for 30
 const COLD_START_BUFFER_MAX = 3 * 16000 * 2; // 3 seconds of 16-bit PCM at 16kHz
 const SONIOX_WS_URL = "wss://stt-rt.soniox.com/transcribe-websocket";
 
+// Filler words / hesitations to strip from assembled text.
+// Soniox uses sub-word (BPE) tokenization, so fillers must be removed from the
+// joined text rather than individual tokens.
+const FILLER_WORD = "(?:uh+|um+|yyy+|eee+|mmm+|hmm+)";
+const FILLER_RE = new RegExp(`\\s*,?\\s*\\b${FILLER_WORD}\\b[,.]?\\s*`, "gi");
+const LEADING_FILLER_RE = new RegExp(`^\\s*,?\\s*\\b${FILLER_WORD}\\b`, "i");
+const POST_SENTENCE_CAP_RE = /([.!?]\s+)(\p{Ll})/gu;
+
+function removeFillers(text) {
+  const hadLeadingFiller = LEADING_FILLER_RE.test(text);
+  let result = text.replace(FILLER_RE, " ");
+  result = result.replace(/  +/g, " ").trim();
+  result = result.replace(POST_SENTENCE_CAP_RE, (_, punct, letter) =>
+    punct + letter.toUpperCase()
+  );
+  if (hadLeadingFiller) {
+    result = result.replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+  }
+  return result;
+}
+
 class SonioxStreaming {
   constructor() {
     this.ws = null;
@@ -31,7 +52,7 @@ class SonioxStreaming {
   }
 
   getFullTranscript() {
-    return this.finalTokens.map((t) => t.text).join("");
+    return removeFillers(this.finalTokens.map((t) => t.text).join(""));
   }
 
   async connect(options = {}) {
@@ -159,13 +180,15 @@ class SonioxStreaming {
         }
       }
 
-      const finalText = this.getFullTranscript();
+      const rawFinal = this.finalTokens.map((t) => t.text).join("");
       this.currentNonFinalText = nonFinalTexts.join("");
 
-      this.onPartialTranscript?.(finalText + this.currentNonFinalText);
+      this.onPartialTranscript?.(
+        removeFillers(rawFinal + this.currentNonFinalText)
+      );
 
       if (newFinalTokens) {
-        this.onFinalTranscript?.(finalText);
+        this.onFinalTranscript?.(removeFillers(rawFinal));
       }
     } catch (err) {
       debugLogger.error("Soniox message parse error", { error: err.message });
@@ -349,3 +372,4 @@ class SonioxStreaming {
 }
 
 module.exports = SonioxStreaming;
+module.exports.removeFillers = removeFillers;
