@@ -9,11 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.6.2] - 2026-03-11
 
+### Added
+
+- **System Audio for Notes**: Mix system audio (via getDisplayMedia loopback) with microphone input for note recordings, enabling capture of meeting audio, YouTube lectures, and other system sounds
+- **Event-Driven Meeting Detection**: Replaced polling-based meeting detection with native OS event APIs (CoreAudio on macOS, WASAPI on Windows, pactl on Linux) — reduces background CPU from 5–9% to near-zero (#404)
+- **Notes Onboarding**: Added screen recording permission step to the notes onboarding wizard (macOS) so users can grant permission before their first recording
+
 ### Changed
 
 - **Auto-Enable System Audio**: System audio is now automatically enabled when screen recording permission is granted — removed the separate toggle button for a simpler recording experience
 - **Deferred Transcript Display**: Recording transcript is no longer shown live during notes dictation; it appears after recording stops, matching the meeting notes flow for a cleaner experience
-- **Notes Onboarding**: Added screen recording permission step to the notes onboarding wizard (macOS) so users can grant permission before their first recording
+
+### Fixed
+
+- **Windows Hotkey Stability**: Track modifier state in native keyboard hook so modifier-only shortcuts (e.g. Control+Super) are detected reliably on Windows 11; keep floating recorder interactive; prefer compiling current key-listener source over downloaded binaries
+- **macOS Accessibility Permission Prompt**: Detect missing accessibility trust after startup and notify users with auto-opened Privacy settings and toast guidance — fixes silent Globe key failures on fresh installs
+- **Realtime Streaming Warmup**: Fix warmup gating so initial audio is no longer silently dropped; skip redundant session config in cloud mode; handle empty-buffer commit on disconnect gracefully
+- **Custom Dictionary Prompt Truncation**: Truncate custom dictionary to respect Groq's 896-char limit, preventing 400 errors on large dictionaries (#405)
+- **Parakeet bzip2 on Windows 10**: Add JS fallback for bzip2 extraction when native tar fails (#406)
+- **Business Plan Past-Due Check**: Include business plan in past-due subscription check
 
 ### Removed
 
