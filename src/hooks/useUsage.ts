@@ -175,7 +175,7 @@ export function useUsage(): UseUsageResult | null {
   const limit = data?.limit ?? 2000;
   const isSubscribed = data?.isSubscribed ?? false;
   const status = data?.status ?? "active";
-  const isPastDue = data?.plan === "pro" && status === "past_due";
+  const isPastDue = (data?.plan === "pro" || data?.plan === "business") && status === "past_due";
   const isOverLimit = !isSubscribed && limit > 0 && wordsUsed >= limit;
   const isApproachingLimit = !isSubscribed && limit > 0 && wordsUsed >= limit * 0.8 && !isOverLimit;
 
