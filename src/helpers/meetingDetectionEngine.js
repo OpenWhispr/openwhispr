@@ -18,6 +18,9 @@ class MeetingDetectionEngine {
     this.databaseManager = databaseManager;
     this.activeDetections = new Map();
     this.preferences = { processDetection: true, audioDetection: true };
+    this._userRecording = false;
+    this._notificationQueue = [];
+    this._postRecordingCooldown = null;
     this._bindListeners();
   }
 
@@ -62,6 +65,13 @@ class MeetingDetectionEngine {
         );
         return;
       }
+    }
+
+    if (this._userRecording || this._postRecordingCooldown) {
+      debugLogger.info("Detection queued — user is recording", { detectionId, source }, "meeting");
+      this._notificationQueue.push({ source, key, data });
+      this.activeDetections.set(detectionId, { source, key, data, dismissed: false });
+      return;
     }
 
     let imminentEvent = null;
@@ -183,6 +193,41 @@ class MeetingDetectionEngine {
     }
   }
 
+  _flushNotificationQueue() {
+    if (this._notificationQueue.length === 0) return;
+
+    debugLogger.info("Flushing notification queue", { count: this._notificationQueue.length }, "meeting");
+
+    const prioritized = this._notificationQueue.sort((a, b) => {
+      const priority = { process: 1, audio: 2 };
+      return (priority[a.source] || 0) - (priority[b.source] || 0);
+    });
+
+    const best = prioritized[0];
+    const detectionId = `${best.source}:${best.key}`;
+
+    const detection = this.activeDetections.get(detectionId);
+    if (detection && !detection.dismissed) {
+      const calendarState = this.googleCalendarManager?.getActiveMeetingState?.();
+      let imminentEvent = null;
+      if (calendarState?.upcomingEvents?.length > 0) {
+        const now = Date.now();
+        imminentEvent = calendarState.upcomingEvents.find((evt) => {
+          const start = new Date(evt.start_time).getTime();
+          return start - now <= 5 * 60 * 1000 && start > now;
+        });
+      }
+
+      if (imminentEvent) {
+        this._showPrompt(detectionId, best.source, best.key, best.data, imminentEvent);
+      } else {
+        this._showPrompt(detectionId, best.source, best.key, best.data, null);
+      }
+    }
+
+    this._notificationQueue = [];
+  }
+
   _dismiss(source, key) {
     if (source === "process") {
       this.meetingProcessDetector.dismiss(key);
@@ -192,7 +237,20 @@ class MeetingDetectionEngine {
   }
 
   setUserRecording(active) {
+    this._userRecording = active;
     this.audioActivityDetector.setUserRecording(active);
+
+    if (active) {
+      if (this._postRecordingCooldown) {
+        clearTimeout(this._postRecordingCooldown);
+        this._postRecordingCooldown = null;
+      }
+    } else {
+      this._postRecordingCooldown = setTimeout(() => {
+        this._postRecordingCooldown = null;
+        this._flushNotificationQueue();
+      }, 2500);
+    }
   }
 
   setPreferences(prefs) {
@@ -227,6 +285,11 @@ class MeetingDetectionEngine {
     this.meetingProcessDetector.stop();
     this.audioActivityDetector.stop();
     this.activeDetections.clear();
+    if (this._postRecordingCooldown) {
+      clearTimeout(this._postRecordingCooldown);
+      this._postRecordingCooldown = null;
+    }
+    this._notificationQueue = [];
   }
 
   broadcastToWindows(channel, data) {

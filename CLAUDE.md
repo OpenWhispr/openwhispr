@@ -15,6 +15,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **UI Components**: shadcn/ui with Radix primitives
 - **Speech Processing**: whisper.cpp + NVIDIA Parakeet (via sherpa-onnx) + OpenAI API
 - **Audio Processing**: FFmpeg (bundled via ffmpeg-static)
+- **Node.js**: 22 LTS (pinned in `.nvmrc` — CI uses Node 22, do NOT regenerate `package-lock.json` with a different major version)
 
 ### Key Architectural Decisions
 
@@ -42,8 +43,10 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 ### Native Resources (resources/)
 
 - **windows-key-listener.c**: C source for Windows low-level keyboard hook (Push-to-Talk)
+- **windows-mic-listener.c**: C source for WASAPI mic session monitor (event-driven mic detection)
+- **macos-mic-listener.swift**: Swift source for CoreAudio mic property listener (event-driven mic detection)
 - **globe-listener.swift**: Swift source for macOS Globe/Fn key detection
-- **bin/**: Directory for compiled native binaries (whisper-cpp, nircmd, key listeners)
+- **bin/**: Directory for compiled native binaries (whisper-cpp, nircmd, key/mic listeners)
 
 ### Helper Modules (src/helpers/)
 
@@ -73,6 +76,23 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Supports compound hotkeys (e.g., `Ctrl+Shift+F11`, `CommandOrControl+Space`)
   - Emits `key-down` and `key-up` events for push-to-talk functionality
   - Graceful fallback if binary unavailable
+- **meetingDetectionEngine.js**: Orchestrates meeting detection from all sources
+  - Gates notifications during recording (tap-to-talk and push-to-talk)
+  - Post-recording cooldown (2.5s) before showing queued notifications
+  - Priority-based coalescing (process > audio) — one notification, not three
+- **meetingProcessDetector.js**: Detects running meeting apps
+  - macOS: Event-driven via `systemPreferences.subscribeWorkspaceNotification` (zero CPU)
+  - Windows/Linux: Shared `processListCache` polling (30s interval)
+- **audioActivityDetector.js**: Detects microphone usage for unscheduled meetings
+  - macOS: Event-driven via `macos-mic-listener` binary (CoreAudio property listeners)
+  - Windows: Event-driven via `windows-mic-listener.exe` (WASAPI sessions, self-PID exclusion)
+  - Linux: Event-driven via `pactl subscribe` (PulseAudio source-output events)
+  - All platforms: Graceful fallback to polling if native approach fails
+- **processListCache.js**: Shared singleton process list cache (5s TTL, `ps-list` npm)
+- **googleCalendarManager.js**: Google Calendar sync with exponential backoff
+  - 10s socket timeout on API requests
+  - Backoff: 2min → 4min → 8min → cap 30min on consecutive failures
+  - Reset to normal interval on success
 - **menuManager.js**: Application menu management
 - **tray.js**: System tray icon and menu
 - **whisper.js**: Local whisper.cpp integration and model management
@@ -141,8 +161,10 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **download-llama-server.js**: Downloads llama.cpp server for local LLM inference
 - **download-nircmd.js**: Downloads nircmd.exe for Windows clipboard operations
 - **download-windows-key-listener.js**: Downloads prebuilt Windows key listener binary
+- **download-windows-mic-listener.js**: Downloads prebuilt Windows mic listener binary
 - **download-sherpa-onnx.js**: Downloads sherpa-onnx binaries for Parakeet support
 - **build-globe-listener.js**: Compiles macOS Globe key listener from Swift source
+- **build-macos-mic-listener.js**: Compiles macOS mic listener from Swift source
 - **build-windows-key-listener.js**: Compiles Windows key listener (for local development)
 - **run-electron.js**: Development script to launch Electron with proper environment
 - **lib/download-utils.js**: Shared utilities for downloading and extracting files
@@ -396,6 +418,42 @@ On GNOME Wayland, Electron's `globalShortcut` API doesn't work due to Wayland's 
 - GNOME format: `<Alt>r`, `<Control><Shift>space`
 - Backtick (`) → `grave` in GNOME keysym format
 
+### 15. Meeting Detection (Event-Driven)
+
+Detects meetings via three independent sources, orchestrated by `MeetingDetectionEngine`:
+
+**Architecture**:
+- `MeetingDetectionEngine` listens to events from `MeetingProcessDetector` and `AudioActivityDetector`
+- `GoogleCalendarManager` provides calendar context (imminent events, active meetings)
+- All three sources feed into a unified notification pipeline
+
+**Process Detection** (known meeting apps — Zoom, Teams, Webex, FaceTime):
+- macOS: `systemPreferences.subscribeWorkspaceNotification` — zero CPU, instant detection
+- Windows/Linux: `processListCache` shared polling (30s interval, `ps-list` npm)
+
+**Microphone Detection** (unscheduled/browser meetings like Google Meet):
+- macOS: `macos-mic-listener` binary — CoreAudio `kAudioDevicePropertyDeviceIsRunningSomewhere` property listeners with hot-plug support
+- Windows: `windows-mic-listener.exe` — WASAPI `IAudioSessionManager2` session monitoring, `--exclude-pid` for self-mic exclusion
+- Linux: `pactl subscribe` — PulseAudio source-output events
+- All platforms: Graceful fallback to polling if native binary/command unavailable
+
+**UX Rules**:
+- During recording (tap-to-talk or push-to-talk): ALL notifications suppressed
+- After recording: 2.5s cooldown before showing queued notifications
+- Multiple signals coalesced: process > audio priority, one notification shown
+- Calendar-aware: if imminent calendar event exists, notification shows event name
+- Active calendar meeting recording: all detections suppressed
+
+**Binary Distribution**:
+- macOS: Compiled from Swift source via `scripts/build-macos-mic-listener.js` during `compile:native`
+- Windows: Prebuilt binary downloaded via `scripts/download-windows-mic-listener.js` during `prebuild:win`
+- CI workflow: `.github/workflows/build-windows-mic-listener.yml` auto-builds on push to main
+
+**Calendar Sync Resilience**:
+- 10s socket timeout on all Google Calendar API requests
+- Exponential backoff on consecutive failures: 2min → 4min → 8min → cap 30min
+- Reset to normal 2min interval on any successful sync
+
 ## Development Guidelines
 
 ### Internationalization (i18n) — REQUIRED
@@ -443,6 +501,9 @@ const { t } = useTranslation();
 - [ ] Verify Windows Push-to-Talk with compound hotkeys
 - [ ] Test GNOME Wayland hotkeys (if on GNOME + Wayland)
 - [ ] Verify activation mode selector is hidden on GNOME Wayland
+- [ ] Verify meeting detection works with event-driven mode (check debug logs for "event-driven")
+- [ ] Test meeting notification suppression during recording
+- [ ] Test post-recording cooldown (notifications shouldn't flash immediately)
 
 ### Common Issues and Solutions
 
@@ -472,12 +533,20 @@ const { t } = useTranslation();
    - Run `npm run download:whisper-cpp` before packaging (current platform)
    - Use `npm run download:whisper-cpp:all` for multi-platform packaging
    - afterSign.js automatically skips signing when CSC_IDENTITY_AUTO_DISCOVERY=false
+   - **Lockfile**: Always use Node 22 when running `npm install` (matches CI). If your local Node version differs, use `nvm exec 22 npm install`. Running `npm install` with a different major version (e.g. Node 24) will produce an incompatible `package-lock.json` that breaks `npm ci` in CI.
 
 5. **Windows Push-to-Talk Binary**:
    - Prebuilt binary downloaded automatically on Windows during build
    - If download fails, push-to-talk falls back to tap mode
    - To compile locally: install Visual Studio Build Tools or MinGW-w64
    - CI workflow (`.github/workflows/build-windows-key-listener.yml`) auto-builds on push to main
+
+6. **Meeting Detection Not Working**:
+   - Check debug logs for "event-driven" vs "polling" mode
+   - macOS: Verify `macos-mic-listener` binary exists in `resources/bin/` (compiled during `npm run compile:native`)
+   - Windows: Verify `windows-mic-listener.exe` exists in `resources/bin/` (downloaded during `prebuild:win`)
+   - Linux: Verify `pactl` is installed (`pulseaudio-utils` or `pipewire-pulse` package)
+   - If event-driven binary is missing, detection falls back to polling automatically
 
 ### Platform-Specific Notes
 
@@ -540,6 +609,9 @@ const { t } = useTranslation();
 - Temporary file cleanup
 - Memory usage with large models
 - Process timeout protection (5 minutes)
+- Meeting detection uses event-driven OS APIs (near-zero CPU) with polling fallback
+- Process list cache shared between detectors to avoid duplicate `tasklist`/`pgrep` calls
+- Google Calendar sync uses exponential backoff to avoid hammering API on network failures
 
 ## Security Considerations
 

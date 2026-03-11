@@ -17,6 +17,7 @@ class GoogleCalendarManager {
     this.activeMeeting = null;
     this.notifiedMeetings = new Set();
     this.SYNC_INTERVAL_MS = 2 * 60 * 1000;
+    this._consecutiveFailures = 0;
     this._lastFocusSync = 0;
   }
 
@@ -25,7 +26,10 @@ class GoogleCalendarManager {
     if (this.accounts.size === 0) return;
 
     this.syncEvents()
-      .then(() => this.scheduleNextMeeting())
+      .then(() => {
+        this.scheduleNextMeeting();
+        this._consecutiveFailures = 0;
+      })
       .catch((err) =>
         debugLogger.error("Initial calendar sync failed", { error: err.message }, "gcal")
       );
@@ -74,6 +78,7 @@ class GoogleCalendarManager {
 
     await this.fetchCalendars(result.email);
     await this.syncEvents();
+    this._consecutiveFailures = 0;
     this.scheduleNextMeeting();
     this._startSyncInterval();
     this._broadcastAccountsChanged();
@@ -297,9 +302,14 @@ class GoogleCalendarManager {
     }
     this.scheduleNextMeeting();
 
-    this.syncEvents().catch((err) =>
-      debugLogger.error("Post-wake sync failed", { error: err.message }, "gcal")
-    );
+    this.syncEvents()
+      .then(() => {
+        this._consecutiveFailures = 0;
+        this._restartSyncInterval();
+      })
+      .catch((err) =>
+        debugLogger.error("Post-wake sync failed", { error: err.message }, "gcal")
+      );
   }
 
   syncOnFocus() {
@@ -309,7 +319,13 @@ class GoogleCalendarManager {
     this._lastFocusSync = now;
 
     this.syncEvents()
-      .then(() => this.scheduleNextMeeting())
+      .then(() => {
+        this.scheduleNextMeeting();
+        if (this._consecutiveFailures > 0) {
+          this._consecutiveFailures = 0;
+          this._restartSyncInterval();
+        }
+      })
       .catch((err) =>
         debugLogger.error("Focus-triggered sync failed", { error: err.message }, "gcal")
       );
@@ -330,6 +346,7 @@ class GoogleCalendarManager {
   async setCalendarSelection(calendarId, isSelected) {
     this.databaseManager.updateCalendarSelection(calendarId, isSelected);
     await this.syncEvents();
+    this._consecutiveFailures = 0;
     this.scheduleNextMeeting();
   }
 
@@ -360,11 +377,41 @@ class GoogleCalendarManager {
 
   _startSyncInterval() {
     if (this.syncInterval) clearInterval(this.syncInterval);
+
+    const interval = this._getSyncInterval();
+    debugLogger.info("Calendar sync scheduled", { intervalMs: interval, consecutiveFailures: this._consecutiveFailures }, "gcal");
+
     this.syncInterval = setInterval(() => {
       this.syncEvents()
-        .then(() => this.scheduleNextMeeting())
-        .catch((err) => debugLogger.error("Calendar sync failed", { error: err.message }, "gcal"));
-    }, this.SYNC_INTERVAL_MS);
+        .then(() => {
+          this.scheduleNextMeeting();
+          if (this._consecutiveFailures > 0) {
+            this._consecutiveFailures = 0;
+            this._restartSyncInterval();
+          }
+        })
+        .catch((err) => {
+          this._consecutiveFailures++;
+          debugLogger.error("Calendar sync failed", {
+            error: err.message,
+            consecutiveFailures: this._consecutiveFailures,
+            nextIntervalMs: this._getSyncInterval()
+          }, "gcal");
+          this._restartSyncInterval();
+        });
+    }, interval);
+  }
+
+  _getSyncInterval() {
+    if (this._consecutiveFailures === 0) return this.SYNC_INTERVAL_MS;
+    return Math.min(
+      this.SYNC_INTERVAL_MS * Math.pow(2, this._consecutiveFailures),
+      30 * 60 * 1000
+    );
+  }
+
+  _restartSyncInterval() {
+    this._startSyncInterval();
   }
 
   _broadcastAccountsChanged() {
@@ -408,6 +455,9 @@ class GoogleCalendarManager {
         }
       );
       req.on("error", reject);
+      req.setTimeout(10000, () => {
+        req.destroy(new Error("Request timed out after 10s"));
+      });
       req.end();
     });
   }

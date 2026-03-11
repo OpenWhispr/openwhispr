@@ -27,7 +27,6 @@ class WindowManager {
     this.hotkeyManager = new HotkeyManager();
     this.dragManager = new DragManager();
     this.isQuitting = false;
-    this.isMainWindowInteractive = false;
     this.loadErrorShown = false;
     this.macCompoundPushState = null;
     this.winPushState = null;
@@ -98,12 +97,18 @@ class WindowManager {
       return;
     }
 
+    if (process.platform === "win32") {
+      // Windows click-through forwarding is unreliable for this floating panel.
+      // Keep the panel interactive so the mic button and cancel button are always clickable.
+      this.mainWindow.setIgnoreMouseEvents(false);
+      return;
+    }
+
     if (shouldCapture) {
       this.mainWindow.setIgnoreMouseEvents(false);
     } else {
       this.mainWindow.setIgnoreMouseEvents(true, { forward: true });
     }
-    this.isMainWindowInteractive = shouldCapture;
   }
 
   resizeMainWindow(sizeKey) {
@@ -908,7 +913,6 @@ class WindowManager {
     this.mainWindow.on("closed", () => {
       this.dragManager.cleanup();
       this.mainWindow = null;
-      this.isMainWindowInteractive = false;
     });
   }
 
