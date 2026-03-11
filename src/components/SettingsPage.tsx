@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -6,7 +6,6 @@ import { Badge } from "./ui/badge";
 import {
   RefreshCw,
   Download,
-  Command,
   Mic,
   Shield,
   FolderOpen,
@@ -17,7 +16,6 @@ import {
   Monitor,
   Cloud,
   Key,
-  ChevronDown,
   Sparkles,
   AlertTriangle,
   Loader2,
@@ -58,7 +56,6 @@ import { useUpdater } from "../hooks/useUpdater";
 import PromptStudio from "./ui/PromptStudio";
 import ReasoningModelSelector from "./ReasoningModelSelector";
 import { HotkeyInput } from "./ui/HotkeyInput";
-import HotkeyGuidanceAccordion from "./ui/HotkeyGuidanceAccordion";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
@@ -415,7 +412,6 @@ interface AiModelsSectionProps {
   setGroqApiKey: (key: string) => void;
   customReasoningApiKey: string;
   setCustomReasoningApiKey: (key: string) => void;
-  showAlertDialog: (dialog: { title: string; description: string }) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -446,7 +442,6 @@ function AiModelsSection({
   setGroqApiKey,
   customReasoningApiKey,
   setCustomReasoningApiKey,
-  showAlertDialog,
   toast,
 }: AiModelsSectionProps) {
   const { t } = useTranslation();
@@ -747,7 +742,6 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
   useClipboard(showAlertDialog);
   const { agentName, setAgentName } = useAgentName();
   const [agentNameInput, setAgentNameInput] = useState(agentName);
-  const [newDictionaryWord, setNewDictionaryWord] = useState("");
   const [audioStorageUsage, setAudioStorageUsage] = useState<{
     fileCount: number;
     totalBytes: number;
@@ -799,31 +793,6 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
   useEffect(() => {
     refreshYdotoolStatus();
   }, [refreshYdotoolStatus]);
-
-  const handleAddDictionaryWord = useCallback(() => {
-    const existingWords = new Set(customDictionary.map((w) => w.toLowerCase()));
-    const words = newDictionaryWord
-      .split(",")
-      .map((w) => w.trim())
-      .filter((w) => {
-        const normalized = w.toLowerCase();
-        if (!w || existingWords.has(normalized)) return false;
-        existingWords.add(normalized);
-        return true;
-      });
-    if (words.length > 0) {
-      setCustomDictionary([...customDictionary, ...words]);
-      setNewDictionaryWord("");
-    }
-  }, [newDictionaryWord, customDictionary, setCustomDictionary]);
-
-  const handleRemoveDictionaryWord = useCallback(
-    (word: string) => {
-      if (word === agentName) return;
-      setCustomDictionary(customDictionary.filter((w) => w !== word));
-    },
-    [customDictionary, setCustomDictionary, agentName]
-  );
 
   const handleSaveAgentName = useCallback(() => {
     const trimmed = agentNameInput.trim();
@@ -2488,7 +2457,6 @@ EOF`,
             setGroqApiKey={setGroqApiKey}
             customReasoningApiKey={customReasoningApiKey}
             setCustomReasoningApiKey={setCustomReasoningApiKey}
-            showAlertDialog={showAlertDialog}
             toast={toast}
           />
         );
@@ -2630,7 +2598,6 @@ EOF`,
               setGroqApiKey={setGroqApiKey}
               customReasoningApiKey={customReasoningApiKey}
               setCustomReasoningApiKey={setCustomReasoningApiKey}
-              showAlertDialog={showAlertDialog}
               toast={toast}
             />
 
@@ -3011,35 +2978,9 @@ EOF`,
                     <Button
                       onClick={async () => {
                         try {
-                          const result = await checkForUpdates();
-                          if (result?.updateAvailable) {
-                            showAlertDialog({
-                              title: t(
-                                "settingsPage.general.updates.dialogs.updateAvailable.title"
-                              ),
-                              description: t(
-                                "settingsPage.general.updates.dialogs.updateAvailable.description",
-                                {
-                                  version:
-                                    result.version || t("settingsPage.general.updates.newVersion"),
-                                }
-                              ),
-                            });
-                          } else {
-                            showAlertDialog({
-                              title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
-                              description:
-                                result?.message ||
-                                t("settingsPage.general.updates.dialogs.noUpdates.description"),
-                            });
-                          }
+                          await checkForUpdates();
                         } catch {
-                          showAlertDialog({
-                            title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
-                            description: t(
-                              "settingsPage.general.updates.dialogs.checkFailed.description"
-                            ),
-                          });
+                          // Silent failure — update status reflected in UI badges
                         }
                       }}
                       disabled={checkingForUpdates || updateStatus.isDevelopment}
