@@ -488,6 +488,14 @@ class WindowManager {
     return this.hotkeyManager.isUsingGnome();
   }
 
+  isUsingHyprlandHotkeys() {
+    return this.hotkeyManager.isUsingHyprland();
+  }
+
+  isUsingNativeShortcutHotkeys() {
+    return this.hotkeyManager.isUsingNativeShortcut();
+  }
+
   async startWindowDrag() {
     return await this.dragManager.startWindowDrag();
   }

@@ -101,7 +101,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [skipAuth, setSkipAuth] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
-  const [isUsingGnomeHotkeys, setIsUsingGnomeHotkeys] = useState(false);
+  const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
   const readableHotkey = formatHotkeyLabel(hotkey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
     useDialogs();
@@ -150,8 +150,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     const checkHotkeyMode = async () => {
       try {
         const info = await window.electronAPI?.getHotkeyModeInfo();
-        if (info?.isUsingGnome) {
-          setIsUsingGnomeHotkeys(true);
+        if (info?.isUsingNativeShortcut) {
+          setIsUsingNativeShortcut(true);
           setActivationMode("tap");
         }
       } catch (error) {
@@ -652,7 +652,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         </div>
 
         {/* Mode section - inline with hotkey */}
-        {getPlatform() !== "linux" && !isUsingGnomeHotkeys && (
+        {!isUsingNativeShortcut && (
           <div className="p-4 flex items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -680,7 +680,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             {t("onboarding.activation.test")}
           </span>
           <span className="text-xs text-muted-foreground/60">
-            {activationMode === "tap" || isUsingGnomeHotkeys
+            {activationMode === "tap" || isUsingNativeShortcut
               ? t("onboarding.activation.hotkeyToStartStop", { hotkey: readableHotkey })
               : t("onboarding.activation.holdHotkey", { hotkey: readableHotkey })}
           </span>

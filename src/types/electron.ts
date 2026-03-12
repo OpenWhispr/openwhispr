@@ -634,7 +634,11 @@ declare global {
         enabled: boolean,
         newHotkey?: string | null
       ) => Promise<{ success: boolean }>;
-      getHotkeyModeInfo?: () => Promise<{ isUsingGnome: boolean }>;
+      getHotkeyModeInfo?: () => Promise<{
+        isUsingGnome: boolean;
+        isUsingHyprland: boolean;
+        isUsingNativeShortcut: boolean;
+      }>;
 
       // Wayland paste diagnostics
       getYdotoolStatus?: () => Promise<{

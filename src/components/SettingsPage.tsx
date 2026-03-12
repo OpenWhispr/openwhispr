@@ -863,7 +863,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     []
   );
 
-  const [isUsingGnomeHotkeys, setIsUsingGnomeHotkeys] = useState(false);
+  const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
 
   const platform = getCachedPlatform();
 
@@ -929,8 +929,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     const checkHotkeyMode = async () => {
       try {
         const info = await window.electronAPI?.getHotkeyModeInfo();
-        if (info?.isUsingGnome) {
-          setIsUsingGnomeHotkeys(true);
+        if (info?.isUsingNativeShortcut) {
+          setIsUsingNativeShortcut(true);
           setActivationMode("tap");
         }
       } catch (error) {
@@ -2632,7 +2632,7 @@ EOF`,
                   )}
                 </SettingsPanelRow>
 
-                {platform !== "linux" && !isUsingGnomeHotkeys && (
+                {!isUsingNativeShortcut && (
                   <SettingsPanelRow>
                     <p className="text-xs font-medium text-muted-foreground/80 mb-2">
                       {t("settingsPage.general.hotkey.activationMode")}

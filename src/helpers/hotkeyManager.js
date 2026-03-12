@@ -1,6 +1,7 @@
 const { globalShortcut } = require("electron");
 const debugLogger = require("./debugLogger");
 const GnomeShortcutManager = require("./gnomeShortcut");
+const HyprlandShortcutManager = require("./hyprlandShortcut");
 const { i18nMain } = require("./i18nMain");
 
 // Delay to ensure localStorage is accessible after window load
@@ -65,6 +66,8 @@ class HotkeyManager {
     this.isListeningMode = false;
     this.gnomeManager = null;
     this.useGnome = false;
+    this.hyprlandManager = null;
+    this.useHyprland = false;
   }
 
   // Backward-compatible property accessors
@@ -349,6 +352,36 @@ class HotkeyManager {
     return false;
   }
 
+  async initializeHyprlandShortcuts(callback) {
+    if (process.platform !== "linux" || !HyprlandShortcutManager.isWayland()) {
+      return false;
+    }
+
+    if (HyprlandShortcutManager.isHyprland()) {
+      if (!HyprlandShortcutManager.isHyprctlAvailable()) {
+        debugLogger.log("[HotkeyManager] Hyprland detected but hyprctl not available");
+        return false;
+      }
+
+      try {
+        this.hyprlandManager = new HyprlandShortcutManager();
+
+        const dbusOk = await this.hyprlandManager.initDBusService(callback);
+        if (dbusOk) {
+          this.useHyprland = true;
+          this.hotkeyCallback = callback;
+          return true;
+        }
+      } catch (err) {
+        debugLogger.log("[HotkeyManager] Hyprland shortcut init failed:", err.message);
+        this.hyprlandManager = null;
+        this.useHyprland = false;
+      }
+    }
+
+    return false;
+  }
+
   async initializeHotkey(mainWindow, callback) {
     if (!mainWindow || !callback) {
       throw new Error("mainWindow and callback are required");
@@ -389,6 +422,45 @@ class HotkeyManager {
         };
 
         setTimeout(registerGnomeHotkey, HOTKEY_REGISTRATION_DELAY_MS);
+        this.isInitialized = true;
+        return;
+      }
+
+      // Try Hyprland native shortcuts if GNOME path was not applicable
+      const hyprlandOk = await this.initializeHyprlandShortcuts(callback);
+
+      if (hyprlandOk) {
+        const registerHyprlandHotkey = async () => {
+          try {
+            const savedHotkey = await mainWindow.webContents.executeJavaScript(`
+              localStorage.getItem("dictationKey") || ""
+            `);
+            const hotkey = savedHotkey && savedHotkey.trim() !== "" ? savedHotkey : "Control+Super";
+
+            const success = await this.hyprlandManager.registerKeybinding(hotkey);
+            if (success) {
+              this.currentHotkey = hotkey;
+              debugLogger.log(
+                `[HotkeyManager] Hyprland hotkey "${hotkey}" registered successfully`
+              );
+            } else {
+              debugLogger.log(
+                "[HotkeyManager] Hyprland keybinding failed, falling back to globalShortcut"
+              );
+              this.useHyprland = false;
+              this.loadSavedHotkeyOrDefault(mainWindow, callback);
+            }
+          } catch (err) {
+            debugLogger.log(
+              "[HotkeyManager] Hyprland keybinding failed, falling back to globalShortcut:",
+              err.message
+            );
+            this.useHyprland = false;
+            this.loadSavedHotkeyOrDefault(mainWindow, callback);
+          }
+        };
+
+        setTimeout(registerHyprlandHotkey, HOTKEY_REGISTRATION_DELAY_MS);
         this.isInitialized = true;
         return;
       }
@@ -560,6 +632,28 @@ class HotkeyManager {
         };
       }
 
+      if (this.useHyprland && this.hyprlandManager) {
+        debugLogger.log(`[HotkeyManager] Updating Hyprland hotkey to "${hotkey}"`);
+        const success = await this.hyprlandManager.updateKeybinding(hotkey);
+        if (!success) {
+          return {
+            success: false,
+            message: `Failed to update Hyprland hotkey to "${hotkey}". Check the format is valid.`,
+          };
+        }
+        this.currentHotkey = hotkey;
+        const saved = await this.saveHotkeyToRenderer(hotkey);
+        if (!saved) {
+          debugLogger.warn(
+            "[HotkeyManager] Hyprland hotkey registered but failed to persist to localStorage"
+          );
+        }
+        return {
+          success: true,
+          message: `Hotkey updated to: ${hotkey} (via Hyprland native shortcut)`,
+        };
+      }
+
       const result = this.setupShortcuts(hotkey, callback);
       if (result.success) {
         const saved = await this.saveHotkeyToRenderer(hotkey);
@@ -598,6 +692,14 @@ class HotkeyManager {
       this.gnomeManager = null;
       this.useGnome = false;
     }
+    if (this.hyprlandManager) {
+      this.hyprlandManager.unregisterKeybinding().catch((err) => {
+        debugLogger.warn("[HotkeyManager] Error unregistering Hyprland keybinding:", err.message);
+      });
+      this.hyprlandManager.close();
+      this.hyprlandManager = null;
+      this.useHyprland = false;
+    }
     for (const slotName of this.slots.keys()) {
       const slot = this.slots.get(slotName);
       if (slot) {
@@ -610,6 +712,14 @@ class HotkeyManager {
 
   isUsingGnome() {
     return this.useGnome;
+  }
+
+  isUsingHyprland() {
+    return this.useHyprland;
+  }
+
+  isUsingNativeShortcut() {
+    return this.useGnome || this.useHyprland;
   }
 
   isHotkeyRegistered(hotkey) {
