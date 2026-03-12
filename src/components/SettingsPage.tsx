@@ -360,7 +360,10 @@ function TranscriptionSection({
             </p>
             <div className="flex gap-2">
               <button
-                onClick={() => setDictationMode("normal")}
+                onClick={() => {
+                  setDictationMode("normal");
+                  logger.info("Dictation mode changed", { mode: "batch" }, "audio");
+                }}
                 className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-md border text-xs font-medium transition-colors cursor-pointer ${
                   dictationMode === "normal"
                     ? "border-primary bg-primary/10 dark:bg-primary/15 text-primary"
@@ -376,7 +379,10 @@ function TranscriptionSection({
                 </div>
               </button>
               <button
-                onClick={() => setDictationMode("fast")}
+                onClick={() => {
+                  setDictationMode("fast");
+                  logger.info("Dictation mode changed", { mode: "streaming" }, "streaming");
+                }}
                 className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-md border text-xs font-medium transition-colors cursor-pointer ${
                   dictationMode === "fast"
                     ? "border-primary bg-primary/10 dark:bg-primary/15 text-primary"

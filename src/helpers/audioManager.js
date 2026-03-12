@@ -324,6 +324,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
 
+      const useStreaming = this.shouldUseStreaming();
+      logger.info(
+        "Transcription mode",
+        { mode: useStreaming ? "streaming" : "batch" },
+        useStreaming ? "streaming" : "audio"
+      );
+
       // Mix in system audio if enabled
       let recordingStream = micStream;
       if (this.systemAudioEnabled) {
