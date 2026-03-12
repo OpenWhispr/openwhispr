@@ -6,6 +6,7 @@ const crypto = require("crypto");
 const AppUtils = require("../utils");
 const debugLogger = require("./debugLogger");
 const GnomeShortcutManager = require("./gnomeShortcut");
+const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
@@ -993,7 +994,10 @@ class IPCHandlers {
         await this.whisperManager.stopServer().catch(() => {});
         return { success: true };
       } catch (error) {
-        debugLogger.error("CUDA binary download failed", { error: error.message, stack: error.stack });
+        debugLogger.error("CUDA binary download failed", {
+          error: error.message,
+          stack: error.stack,
+        });
         return { success: false, error: error.message };
       }
     });
@@ -1191,6 +1195,14 @@ class IPCHandlers {
             debugLogger.warn("[IPC] Failed to unregister GNOME keybinding:", err.message);
           });
         }
+
+        // On Hyprland Wayland, unregister the keybinding during capture
+        if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager) {
+          debugLogger.log("[IPC] Unregistering Hyprland keybinding for hotkey capture mode");
+          await hotkeyManager.hyprlandManager.unregisterKeybinding().catch((err) => {
+            debugLogger.warn("[IPC] Failed to unregister Hyprland keybinding:", err.message);
+          });
+        }
       } else {
         // Exiting capture mode - re-register globalShortcut if not already registered
         if (effectiveHotkey && !usesNativeListener(effectiveHotkey)) {
@@ -1238,6 +1250,17 @@ class IPCHandlers {
             hotkeyManager.currentHotkey = effectiveHotkey;
           }
         }
+
+        // On Hyprland Wayland, re-register the keybinding with the effective hotkey
+        if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager && effectiveHotkey) {
+          debugLogger.log(
+            `[IPC] Re-registering Hyprland keybinding "${effectiveHotkey}" after capture mode`
+          );
+          const success = await hotkeyManager.hyprlandManager.registerKeybinding(effectiveHotkey);
+          if (success) {
+            hotkeyManager.currentHotkey = effectiveHotkey;
+          }
+        }
       }
 
       return { success: true };
@@ -1246,6 +1269,8 @@ class IPCHandlers {
     ipcMain.handle("get-hotkey-mode-info", async () => {
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
+        isUsingHyprland: this.windowManager.isUsingHyprlandHotkeys(),
+        isUsingNativeShortcut: this.windowManager.isUsingNativeShortcutHotkeys(),
       };
     });
 
@@ -1791,7 +1816,10 @@ class IPCHandlers {
 
         return result;
       } catch (error) {
-        debugLogger.error("Vulkan binary download failed", { error: error.message, stack: error.stack });
+        debugLogger.error("Vulkan binary download failed", {
+          error: error.message,
+          stack: error.stack,
+        });
         return { success: false, error: error.message };
       }
     });
