@@ -353,11 +353,24 @@ class HotkeyManager {
   }
 
   async initializeHyprlandShortcuts(callback) {
-    if (process.platform !== "linux" || !HyprlandShortcutManager.isWayland()) {
+    const isLinux = process.platform === "linux";
+    const isWayland = HyprlandShortcutManager.isWayland();
+    const isHyprland = HyprlandShortcutManager.isHyprland();
+
+    debugLogger.log("[HotkeyManager] Hyprland detection", {
+      isLinux,
+      isWayland,
+      isHyprland,
+      XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE || "(unset)",
+      HYPRLAND_INSTANCE_SIGNATURE: process.env.HYPRLAND_INSTANCE_SIGNATURE ? "present" : "(unset)",
+      XDG_CURRENT_DESKTOP: process.env.XDG_CURRENT_DESKTOP || "(unset)",
+    });
+
+    if (!isLinux || !isWayland) {
       return false;
     }
 
-    if (HyprlandShortcutManager.isHyprland()) {
+    if (isHyprland) {
       if (!HyprlandShortcutManager.isHyprctlAvailable()) {
         debugLogger.log("[HotkeyManager] Hyprland detected but hyprctl not available");
         return false;
@@ -367,6 +380,7 @@ class HotkeyManager {
         this.hyprlandManager = new HyprlandShortcutManager();
 
         const dbusOk = await this.hyprlandManager.initDBusService(callback);
+        debugLogger.log("[HotkeyManager] Hyprland D-Bus init result:", dbusOk);
         if (dbusOk) {
           this.useHyprland = true;
           this.hotkeyCallback = callback;
