@@ -653,6 +653,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     groqApiKey,
     mistralApiKey,
     dictationKey,
+    cancelKey,
     activationMode,
     setActivationMode,
     preferBuiltInMic,
@@ -681,6 +682,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     customReasoningApiKey,
     setCustomReasoningApiKey,
     setDictationKey,
+    setCancelKey,
     autoLearnCorrections,
     setAutoLearnCorrections,
     updateTranscriptionSettings,
@@ -2628,6 +2630,29 @@ EOF`,
                       {t("settingsPage.general.hotkey.resetToDefault", {
                         hotkey: formatHotkeyLabel(getDefaultHotkey()),
                       })}
+                    </button>
+                  )}
+                </SettingsPanelRow>
+
+                {/* Cancel Hotkey */}
+                <SettingsPanelRow>
+                  <p className="text-xs font-medium text-muted-foreground/80 mb-2">
+                    {t("settingsPage.general.hotkey.cancelTitle")}
+                  </p>
+                  <p className="text-xs text-muted-foreground/60 mb-2">
+                    {t("settingsPage.general.hotkey.cancelDescription")}
+                  </p>
+                  <HotkeyInput
+                    value={cancelKey}
+                    onChange={(newKey) => setCancelKey(newKey)}
+                    skipListeningMode
+                  />
+                  {cancelKey && cancelKey !== "Escape" && (
+                    <button
+                      onClick={() => setCancelKey("Escape")}
+                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+                    >
+                      {t("settingsPage.general.hotkey.resetToDefault", { hotkey: "Escape" })}
                     </button>
                   )}
                 </SettingsPanelRow>

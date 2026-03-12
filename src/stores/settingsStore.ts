@@ -135,6 +135,7 @@ export interface SettingsState
   setCustomReasoningApiKey: (key: string) => void;
 
   setDictationKey: (key: string) => void;
+  setCancelKey: (key: string) => void;
   setActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
@@ -256,6 +257,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   customReasoningApiKey: readString("customReasoningApiKey", ""),
 
   dictationKey: readString("dictationKey", ""),
+  cancelKey: readString("cancelKey", "Escape"),
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     | "tap"
     | "push",
@@ -412,6 +414,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.notifyHotkeyChanged?.(key);
       window.electronAPI?.saveDictationKey?.(key);
     }
+  },
+
+  setCancelKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("cancelKey", key);
+    set({ cancelKey: key });
   },
 
   setActivationMode: (mode: "tap" | "push") => {

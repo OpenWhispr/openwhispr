@@ -147,6 +147,7 @@ export interface HotkeyInputProps {
   disabled?: boolean;
   autoFocus?: boolean;
   validate?: (hotkey: string) => string | null | undefined;
+  skipListeningMode?: boolean;
 }
 
 export function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
@@ -188,6 +189,7 @@ export function HotkeyInput({
   autoFocus = false,
   variant = "default",
   validate,
+  skipListeningMode = false,
 }: HotkeyInputProps & HotkeyInputVariant) {
   const { t } = useTranslation();
   const [isCapturing, setIsCapturing] = useState(false);
@@ -401,19 +403,20 @@ export function HotkeyInput({
       setIsCapturing(true);
       setValidationWarning(null);
       clearFnHeld();
-      window.electronAPI?.setHotkeyListeningMode?.(true);
+      if (!skipListeningMode) window.electronAPI?.setHotkeyListeningMode?.(true);
     }
-  }, [disabled, clearFnHeld]);
+  }, [disabled, clearFnHeld, skipListeningMode]);
 
   const handleBlur = useCallback(() => {
     setIsCapturing(false);
     setActiveModifiers(new Set());
     setValidationWarning(null);
     clearFnHeld();
-    window.electronAPI?.setHotkeyListeningMode?.(false, lastCapturedHotkeyRef.current);
+    if (!skipListeningMode)
+      window.electronAPI?.setHotkeyListeningMode?.(false, lastCapturedHotkeyRef.current);
     lastCapturedHotkeyRef.current = null;
     onBlur?.();
-  }, [onBlur, clearFnHeld]);
+  }, [onBlur, clearFnHeld, skipListeningMode]);
 
   useEffect(() => {
     if (autoFocus && containerRef.current) {
@@ -423,10 +426,10 @@ export function HotkeyInput({
 
   useEffect(() => {
     return () => {
-      window.electronAPI?.setHotkeyListeningMode?.(false, null);
+      if (!skipListeningMode) window.electronAPI?.setHotkeyListeningMode?.(false, null);
       if (warningTimeoutRef.current) clearTimeout(warningTimeoutRef.current);
     };
-  }, []);
+  }, [skipListeningMode]);
 
   useEffect(() => {
     if (!isCapturing || !isMac) return;
@@ -466,6 +469,7 @@ export function HotkeyInput({
         tabIndex={disabled ? -1 : 0}
         role="button"
         aria-label={t("hotkeyInput.ariaLabel")}
+        data-capturing={isCapturing || undefined}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onFocus={handleFocus}
@@ -569,6 +573,7 @@ export function HotkeyInput({
       tabIndex={disabled ? -1 : 0}
       role="button"
       aria-label={t("hotkeyInput.ariaLabel")}
+      data-capturing={isCapturing || undefined}
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
       onFocus={handleFocus}

@@ -1128,7 +1128,9 @@
         "activationMode": "Aktivierungsmodus",
         "description": "Die Tastenkombination, die das Sprachdiktat startet und stoppt",
         "resetToDefault": "Auf {{hotkey}} zurücksetzen",
-        "title": "Diktat-Hotkey"
+        "title": "Diktat-Hotkey",
+        "cancelTitle": "Abbrechen-Taste",
+        "cancelDescription": "Taste zum Abbrechen einer laufenden Aufnahme"
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",

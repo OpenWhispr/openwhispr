@@ -1128,7 +1128,9 @@
         "activationMode": "Modalità di attivazione",
         "description": "La combinazione di tasti che avvia e ferma la dettatura vocale",
         "resetToDefault": "Ripristina a {{hotkey}}",
-        "title": "Scorciatoia di dettatura"
+        "title": "Scorciatoia di dettatura",
+        "cancelTitle": "Tasto di annullamento",
+        "cancelDescription": "Tasto per annullare una registrazione in corso"
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",

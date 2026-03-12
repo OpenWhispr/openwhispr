@@ -1128,7 +1128,9 @@
         "activationMode": "Mode d'activation",
         "description": "La combinaison de touches qui démarre et arrête la dictée vocale",
         "resetToDefault": "Réinitialiser à {{hotkey}}",
-        "title": "Raccourci de dictée"
+        "title": "Raccourci de dictée",
+        "cancelTitle": "Raccourci d'annulation",
+        "cancelDescription": "Touche pour annuler un enregistrement en cours"
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",

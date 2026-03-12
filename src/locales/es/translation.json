@@ -1128,7 +1128,9 @@
         "activationMode": "Modo de activación",
         "description": "La combinación de teclas que inicia y detiene el dictado por voz",
         "resetToDefault": "Restablecer a {{hotkey}}",
-        "title": "Atajo de dictado"
+        "title": "Atajo de dictado",
+        "cancelTitle": "Atajo de cancelación",
+        "cancelDescription": "Tecla para cancelar una grabación en curso"
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",

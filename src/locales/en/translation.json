@@ -1188,7 +1188,9 @@
         "activationMode": "Activation Mode",
         "description": "The key combination that starts and stops voice dictation",
         "resetToDefault": "Reset to {{hotkey}}",
-        "title": "Dictation Hotkey"
+        "title": "Dictation Hotkey",
+        "cancelTitle": "Cancel Hotkey",
+        "cancelDescription": "Key to cancel an in-progress recording"
       },
       "microphone": {
         "description": "Select which input device to use for dictation",

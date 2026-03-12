@@ -1128,7 +1128,9 @@
         "activationMode": "起動モード",
         "description": "音声ディクテーションの開始/停止に使用するキーの組み合わせ",
         "resetToDefault": "{{hotkey}}にリセット",
-        "title": "ディクテーションホットキー"
+        "title": "ディクテーションホットキー",
+        "cancelTitle": "キャンセルキー",
+        "cancelDescription": "録音中の記録をキャンセルするキー"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",

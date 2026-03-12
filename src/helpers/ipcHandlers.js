@@ -1252,6 +1252,19 @@ class IPCHandlers {
       };
     });
 
+    ipcMain.handle("register-cancel-hotkey", async (event, key) => {
+      const hotkeyManager = this.windowManager.hotkeyManager;
+      const mainWindow = this.windowManager.mainWindow;
+      return hotkeyManager.registerSlot("cancel", key, () => {
+        mainWindow?.webContents?.send("cancel-hotkey-pressed");
+      });
+    });
+
+    ipcMain.handle("unregister-cancel-hotkey", async () => {
+      this.windowManager.hotkeyManager.unregisterSlot("cancel");
+      return { success: true };
+    });
+
     ipcMain.handle("start-window-drag", async (event) => {
       return await this.windowManager.startWindowDrag();
     });

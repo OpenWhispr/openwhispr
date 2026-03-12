@@ -204,6 +204,13 @@ export default function App() {
     return () => unsubscribe?.();
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onCancelHotkeyPressed?.(() => {
+      if (isRecording) cancelRecording();
+    });
+    return () => unsubscribe?.();
+  }, [isRecording, cancelRecording]);
+
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
   useEffect(() => {
     let hideTimeout;
