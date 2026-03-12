@@ -562,6 +562,12 @@ try {
         // GSMTC worked but nothing was playing
         return false;
       }
+      // Empty output: GSMTC is available and confirmed nothing is playing — don't fall
+      if (!output) {
+        debugLogger.debug("GSMTC found no playing sessions, skipping media key", {}, "media");
+        return false;
+      }
+      // output === "GSMTC_FAIL": GSMTC unavailable, fall through to media key fallback
     }
 
     // Fallback: check if audio is actually playing before sending toggle key
