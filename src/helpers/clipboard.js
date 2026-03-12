@@ -91,7 +91,7 @@ class ClipboardManager {
   _writeClipboardWayland(text, webContents) {
     if (this.commandExists("wl-copy")) {
       try {
-        const result = spawnSync("wl-copy", ["--", text], { timeout: 1 });
+        const result = spawnSync("wl-copy", ["--", text], { timeout: 50 });
         if (result.status === 0) {
           clipboard.writeText(text);
           return;
