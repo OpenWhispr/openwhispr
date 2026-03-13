@@ -169,9 +169,10 @@ class SonioxStreaming {
 
       let nonFinalTexts = [];
       let newFinalTokens = false;
+      const isValidToken = (t) =>
+        t.text && t.text.trim() && t.text !== "<fin>" && t.text !== "\ufffd";
       for (const token of res.tokens || []) {
-        if (token.text === "<fin>") continue;
-        if (!token.text || !token.text.trim() || token.text === "\ufffd") continue;
+        if (!isValidToken(token)) continue;
         if (token.is_final) {
           this.finalTokens.push(token);
           newFinalTokens = true;
@@ -299,58 +300,41 @@ class SonioxStreaming {
     return result;
   }
 
-  drainFinalTokens() {
+  _drainCallback(callbackName, sendFn) {
     return new Promise((resolve) => {
-      const prevOnFinal = this.onFinalTranscript;
+      const prev = this[callbackName];
 
       const tid = setTimeout(() => {
-        debugLogger.debug("Soniox finalize timeout, using accumulated text");
-        this.onFinalTranscript = prevOnFinal;
+        debugLogger.debug(`Soniox ${callbackName} drain timeout`);
+        this[callbackName] = prev;
         resolve();
       }, DISCONNECT_TIMEOUT_MS);
 
-      this.onFinalTranscript = (text) => {
+      this[callbackName] = (...args) => {
         clearTimeout(tid);
-        this.onFinalTranscript = prevOnFinal;
-        prevOnFinal?.(text);
+        this[callbackName] = prev;
+        prev?.(...args);
         resolve();
       };
 
       try {
-        this.ws.send(JSON.stringify({ type: "finalize" }));
+        sendFn();
       } catch {
         clearTimeout(tid);
-        this.onFinalTranscript = prevOnFinal;
+        this[callbackName] = prev;
         resolve();
       }
     });
   }
 
+  drainFinalTokens() {
+    return this._drainCallback("onFinalTranscript", () =>
+      this.ws.send(JSON.stringify({ type: "finalize" }))
+    );
+  }
+
   drainSessionEnd() {
-    return new Promise((resolve) => {
-      const prevOnSessionEnd = this.onSessionEnd;
-
-      const tid = setTimeout(() => {
-        debugLogger.debug("Soniox session end timeout, closing");
-        this.onSessionEnd = prevOnSessionEnd;
-        resolve();
-      }, DISCONNECT_TIMEOUT_MS);
-
-      this.onSessionEnd = (result) => {
-        clearTimeout(tid);
-        this.onSessionEnd = prevOnSessionEnd;
-        prevOnSessionEnd?.(result);
-        resolve();
-      };
-
-      try {
-        this.ws.send("");
-      } catch {
-        clearTimeout(tid);
-        this.onSessionEnd = prevOnSessionEnd;
-        resolve();
-      }
-    });
+    return this._drainCallback("onSessionEnd", () => this.ws.send(""));
   }
 
   cleanup() {

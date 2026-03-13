@@ -219,14 +219,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this._systemAudioSource) {
       try {
         this._systemAudioSource.disconnect();
-      } catch {}
+      } catch (err) {
+        logger.debug("System audio source disconnect failed", { error: err.message }, "audio");
+      }
       this._systemAudioSource = null;
     }
 
     if (this._mixingContext) {
       try {
         this._mixingContext.close();
-      } catch {}
+      } catch (err) {
+        logger.debug("Mixing context close failed", { error: err.message }, "audio");
+      }
       this._mixingContext = null;
     }
     this._mixingDestination = null;
@@ -2310,10 +2314,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           cloudTranscriptionModel,
           cloudTranscriptionMode,
         } = getSettings();
+        const isExplicitLang = preferredLang && preferredLang !== "auto";
         const res = await provider.start({
           sampleRate: 16000,
-          language: preferredLang && preferredLang !== "auto" ? preferredLang : undefined,
-          secondaryLanguage: preferredLang && preferredLang !== "auto" ? (sonioxSecondaryLanguage || undefined) : undefined,
+          language: isExplicitLang ? preferredLang : undefined,
+          secondaryLanguage: isExplicitLang ? (sonioxSecondaryLanguage || undefined) : undefined,
           keyterms: this.getKeyterms(),
           model: cloudTranscriptionModel,
           mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
