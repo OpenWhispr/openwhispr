@@ -157,7 +157,7 @@
       "accessibilityTitle": "Accessibility",
       "accessibilityDescription": "Enable in System Settings by toggling it on",
       "testAndGrant": "Test & Grant",
-      "requiredForApp": "Required for OpenWhispr to work",
+      "requiredForApp": "Microphone required. Accessibility enables auto-paste.",
       "microphoneRequired": "Microphone access required",
       "openSystemSettings": "Open System Settings",
       "screenRecordingTitle": "System Audio",

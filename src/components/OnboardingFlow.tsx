@@ -71,6 +71,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       },
     }
   );
+  const [accessibilitySkipped, setAccessibilitySkipped] = useLocalStorage(
+    "accessibilitySkipped",
+    false,
+    {
+      serialize: String,
+      deserialize: (value) => value === "true",
+    }
+  );
 
   const {
     useLocalWhisper,
@@ -127,6 +135,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   useClipboard(showAlertDialog); // Initialize clipboard hook for permission checks
 
   const screenRecording = useScreenRecordingPermission();
+
+  useEffect(() => {
+    if (permissionsHook.accessibilityPermissionGranted && accessibilitySkipped) {
+      setAccessibilitySkipped(false);
+    }
+  }, [
+    permissionsHook.accessibilityPermissionGranted,
+    accessibilitySkipped,
+    setAccessibilitySkipped,
+  ]);
 
   // For signed-in users, merge setup and permissions into one step
   const steps =
@@ -296,6 +314,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       return;
     }
 
+    const isMacOS = getPlatform() === "darwin";
+    const isPermissionsStep =
+      isSignedIn && !skipAuth ? currentStep === 1 : currentStep === 2;
+    if (isMacOS && isPermissionsStep && !permissionsHook.accessibilityPermissionGranted) {
+      setAccessibilitySkipped(true);
+    }
+
     const newStep = currentStep + 1;
     setCurrentStep(newStep);
 
@@ -305,7 +330,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         window.electronAPI.showDictationPanel();
       }
     }
-  }, [currentStep, setCurrentStep, steps.length, activationStepIndex]);
+  }, [
+    currentStep,
+    setCurrentStep,
+    steps.length,
+    activationStepIndex,
+    isSignedIn,
+    skipAuth,
+    permissionsHook.accessibilityPermissionGranted,
+    setAccessibilitySkipped,
+  ]);
 
   const prevStep = useCallback(() => {
     if (currentStep > 0) {
@@ -409,9 +443,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                         description={t("onboarding.permissions.accessibilityDescription")}
                         granted={permissionsHook.accessibilityPermissionGranted}
                         onRequest={permissionsHook.testAccessibilityPermission}
-                        buttonText={t("onboarding.permissions.testAndGrant")}
+                        buttonText={t("onboarding.permissions.grant")}
                         onOpenSettings={permissionsHook.openAccessibilitySettings}
-                        openSettingsText={t("onboarding.permissions.openSystemSettings")}
+                        badge={t("onboarding.permissions.optional")}
                       />
                       <PermissionCard
                         icon={Monitor}
@@ -570,9 +604,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                     description={t("onboarding.permissions.accessibilityDescription")}
                     granted={permissionsHook.accessibilityPermissionGranted}
                     onRequest={permissionsHook.testAccessibilityPermission}
-                    buttonText={t("onboarding.permissions.testAndGrant")}
+                    buttonText={t("onboarding.permissions.grant")}
                     onOpenSettings={permissionsHook.openAccessibilitySettings}
-                    openSettingsText={t("onboarding.permissions.openSystemSettings")}
+                    badge={t("onboarding.permissions.optional")}
                   />
                   <PermissionCard
                     icon={Monitor}
@@ -705,10 +739,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           if (!permissionsHook.micPermissionGranted) {
             return false;
           }
-          const currentPlatform = permissionsHook.pasteToolsInfo?.platform;
-          if (currentPlatform === "darwin") {
-            return permissionsHook.accessibilityPermissionGranted;
-          }
           return true;
         }
 
@@ -740,10 +770,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         // For non-signed-in users, this is permissions step
         if (!permissionsHook.micPermissionGranted) {
           return false;
-        }
-        const currentPlatform = permissionsHook.pasteToolsInfo?.platform;
-        if (currentPlatform === "darwin") {
-          return permissionsHook.accessibilityPermissionGranted;
         }
         return true;
       }
