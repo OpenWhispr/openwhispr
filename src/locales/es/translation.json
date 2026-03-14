@@ -1319,6 +1319,13 @@
           "description": "Configura tu propio proveedor y clave API.",
           "title": "Cambiado a configuración personalizada"
         }
+      },
+      "dictationMode": {
+        "title": "Modo de dictado",
+        "normal": "Normal",
+        "normalDescription": "Máxima precisión, pero tarda un momento en procesar tras la grabación.",
+        "fast": "Rápido",
+        "fastDescription": "Streaming WebSocket a través de OpenAI Realtime API. Transcripción en tiempo real."
       }
     }
   },

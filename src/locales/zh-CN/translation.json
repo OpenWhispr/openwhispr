@@ -1319,6 +1319,13 @@
           "description": "请配置你的服务商和 API Key。",
           "title": "已切换到自定义设置"
         }
+      },
+      "dictationMode": {
+        "title": "听写模式",
+        "normal": "普通",
+        "normalDescription": "最佳准确度，但录音后需要片刻处理。",
+        "fast": "快速",
+        "fastDescription": "通过 OpenAI Realtime API 进行 WebSocket 流式传输。实时转录。"
       }
     }
   },

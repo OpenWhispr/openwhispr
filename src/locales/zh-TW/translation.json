@@ -1319,6 +1319,13 @@
           "description": "設定你自己的供應商和 API Key。",
           "title": "已切換至自訂設定"
         }
+      },
+      "dictationMode": {
+        "title": "聽寫模式",
+        "normal": "一般",
+        "normalDescription": "最佳準確度，但錄音後需要片刻處理。",
+        "fast": "快速",
+        "fastDescription": "透過 OpenAI Realtime API 進行 WebSocket 串流。即時轉錄。"
       }
     }
   },
