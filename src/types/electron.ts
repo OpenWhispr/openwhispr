@@ -271,6 +271,29 @@ export interface ReferralItem {
   first_payment_at: string | null;
 }
 
+export type CommandSource = "dictation" | "mcp" | "file_upload";
+
+export interface CommandLogItem {
+  id: number;
+  command_text: string;
+  original_transcript: string | null;
+  provider: string | null;
+  model: string | null;
+  status: "completed" | "failed";
+  source: CommandSource | string | null;
+  duration_ms: number | null;
+  error_message: string | null;
+  created_at: string;
+}
+
+export interface CommandStats {
+  total: number;
+  completed: number;
+  failed: number;
+  avgDurationMs: number | null;
+  mostUsedProvider: string | null;
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -1180,6 +1203,23 @@ declare global {
       onNavigateToMeetingNote?: (
         callback: (data: { noteId: number; folderId: number; event: any }) => void
       ) => () => void;
+
+      // Command History
+      getCommandHistory?: (options?: {
+        limit?: number;
+        offset?: number;
+        status?: string;
+        provider?: string;
+        source?: string;
+      }) => Promise<CommandLogItem[]>;
+      searchCommandHistory?: (query: string, limit?: number) => Promise<CommandLogItem[]>;
+      getCommandStats?: () => Promise<CommandStats>;
+      deleteCommandLog?: (id: number) => Promise<{ success: boolean }>;
+      clearCommandHistory?: () => Promise<{ success: boolean }>;
+      exportCommandHistory?: (options?: {
+        startDate?: string;
+        endDate?: string;
+      }) => Promise<{ success: boolean; data?: CommandLogItem[]; error?: string }>;
     };
 
     api?: {

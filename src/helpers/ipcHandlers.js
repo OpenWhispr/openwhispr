@@ -356,6 +356,24 @@ class IPCHandlers {
         setImmediate(() => {
           this.broadcastToWindows("transcription-added", result.transcription);
         });
+        // Auto-log to command history
+        try {
+          const transcription = result.transcription;
+          this.databaseManager.saveCommandLog(text, rawText, {
+            durationMs: transcription.audio_duration_ms || null,
+            model: transcription.model || null,
+            provider: transcription.provider || null,
+            status: transcription.status || "completed",
+            source: "dictation",
+            metadata: { transcriptionId: transcription.id },
+          });
+        } catch (err) {
+          debugLogger.error(
+            "Auto-logging command failed",
+            { error: err.message },
+            "database"
+          );
+        }
       }
       return result;
     });
@@ -671,6 +689,38 @@ class IPCHandlers {
 
     ipcMain.handle("db-get-agent-messages", async (event, conversationId) => {
       return this.databaseManager.getAgentMessages(conversationId);
+    });
+
+    // Command log handlers
+    ipcMain.handle(
+      "db-save-command-log",
+      async (event, commandText, originalTranscript, options) => {
+        return this.databaseManager.saveCommandLog(commandText, originalTranscript, options);
+      }
+    );
+
+    ipcMain.handle("db-get-command-history", async (event, options) => {
+      return this.databaseManager.getCommandHistory(options);
+    });
+
+    ipcMain.handle("db-search-command-history", async (event, query, limit) => {
+      return this.databaseManager.searchCommandHistory(query, limit);
+    });
+
+    ipcMain.handle("db-get-command-stats", async () => {
+      return this.databaseManager.getCommandStats();
+    });
+
+    ipcMain.handle("db-delete-command-log", async (event, id) => {
+      return this.databaseManager.deleteCommandLog(id);
+    });
+
+    ipcMain.handle("db-clear-command-history", async () => {
+      return this.databaseManager.clearCommandHistory();
+    });
+
+    ipcMain.handle("db-export-command-history", async (event, options) => {
+      return this.databaseManager.exportCommandHistory(options);
     });
 
     ipcMain.handle("export-note", async (event, noteId, format) => {

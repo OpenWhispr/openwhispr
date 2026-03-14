@@ -63,7 +63,8 @@
     "quality-check": "npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",
     "preview": "cd src && vite preview",
-    "clean": "node cleanup.js"
+    "clean": "node cleanup.js",
+    "mcp": "node src/mcp/server.js"
   },
   "keywords": [
     "dictation",
@@ -102,6 +103,7 @@
     "vite": "^6.3.5"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "@neondatabase/auth": "^0.1.0-beta.21",
     "@neondatabase/neon-js": "^0.1.0-beta.22",
     "@radix-ui/react-accordion": "^1.1.2",
@@ -135,6 +137,7 @@
     "unbzip2-stream": "^1.4.3",
     "unzipper": "^0.12.3",
     "ws": "^8.19.0",
+    "zod": "^3.24.0",
     "zustand": "^5.0.11"
   }
 }
