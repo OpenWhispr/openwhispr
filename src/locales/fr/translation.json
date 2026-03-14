@@ -132,7 +132,9 @@
     "private": "Privé",
     "tap": "Appui",
     "close": "Fermer",
-    "dismiss": "Ignorer"
+    "dismiss": "Ignorer",
+    "none": "Aucun",
+    "secondaryLanguage": "Langue secondaire"
   },
   "onboarding": {
     "steps": {
@@ -1342,7 +1344,8 @@
         "openai_whisper_1": "Modèle Whisper original",
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
-        "mistral_voxtral_mini_latest": "Transcription multilingue rapide"
+        "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
+        "soniox_stt_rt_v4": "Transcription vocale en temps réel avec une grande précision"
       },
       "cloud": {
         "openai_gpt_5_2": "Dernier modèle phare pour le raisonnement",

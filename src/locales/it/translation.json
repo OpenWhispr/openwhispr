@@ -132,7 +132,9 @@
     "private": "Privato",
     "tap": "Tocca",
     "close": "Chiudi",
-    "dismiss": "Ignora"
+    "dismiss": "Ignora",
+    "none": "Nessuno",
+    "secondaryLanguage": "Lingua secondaria"
   },
   "onboarding": {
     "steps": {
@@ -1342,7 +1344,8 @@
         "openai_whisper_1": "Modello Whisper originale",
         "groq_whisper_large_v3_turbo": "Velocità 216x in tempo reale",
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
-        "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce"
+        "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
+        "soniox_stt_rt_v4": "Trascrizione vocale in tempo reale con elevata precisione"
       },
       "cloud": {
         "openai_gpt_5_2": "Ultimo modello di punta per il ragionamento",

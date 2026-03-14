@@ -14,6 +14,7 @@ export interface TranscriptionSettings {
   allowLocalFallback: boolean;
   fallbackWhisperModel: string;
   preferredLanguage: string;
+  sonioxSecondaryLanguage: string;
   cloudTranscriptionProvider: string;
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl?: string;
@@ -48,6 +49,7 @@ export interface ApiKeySettings {
   mistralApiKey: string;
   customTranscriptionApiKey: string;
   customReasoningApiKey: string;
+  sonioxApiKey: string;
 }
 
 export interface PrivacySettings {
@@ -170,6 +172,8 @@ function useSettingsInternal() {
     allowLocalFallback: store.allowLocalFallback,
     fallbackWhisperModel: store.fallbackWhisperModel,
     preferredLanguage: store.preferredLanguage,
+    sonioxSecondaryLanguage: store.sonioxSecondaryLanguage,
+    setSonioxSecondaryLanguage: store.setSonioxSecondaryLanguage,
     cloudTranscriptionProvider: store.cloudTranscriptionProvider,
     cloudTranscriptionModel: store.cloudTranscriptionModel,
     cloudTranscriptionBaseUrl: store.cloudTranscriptionBaseUrl,
@@ -213,6 +217,8 @@ function useSettingsInternal() {
     setGeminiApiKey: store.setGeminiApiKey,
     setGroqApiKey: store.setGroqApiKey,
     setMistralApiKey: store.setMistralApiKey,
+    sonioxApiKey: store.sonioxApiKey,
+    setSonioxApiKey: store.setSonioxApiKey,
     customTranscriptionApiKey: store.customTranscriptionApiKey,
     setCustomTranscriptionApiKey: store.setCustomTranscriptionApiKey,
     customReasoningApiKey: store.customReasoningApiKey,

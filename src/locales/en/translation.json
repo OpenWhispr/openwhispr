@@ -132,7 +132,9 @@
     "private": "Private",
     "tap": "Tap",
     "close": "Close",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "none": "None",
+    "secondaryLanguage": "Secondary language"
   },
   "onboarding": {
     "steps": {
@@ -1412,7 +1414,8 @@
         "openai_whisper_1": "Original Whisper model",
         "groq_whisper_large_v3": "High accuracy speech recognition",
         "groq_whisper_large_v3_turbo": "216x real-time speed",
-        "mistral_voxtral_mini_latest": "Fast multilingual transcription"
+        "mistral_voxtral_mini_latest": "Fast multilingual transcription",
+        "soniox_stt_rt_v4": "Real-time streaming speech-to-text with high accuracy"
       },
       "cloud": {
         "openai_gpt_5_2": "Latest flagship reasoning model",
