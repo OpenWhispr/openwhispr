@@ -4,7 +4,6 @@ import {
   NotebookPen,
   BookOpen,
   Upload,
-  Blocks,
   Gift,
   Settings,
   HelpCircle,
@@ -81,7 +80,6 @@ export default function ControlPanelSidebar({
     { id: "personal-notes", label: t("sidebar.notes"), icon: NotebookPen },
     { id: "upload", label: t("sidebar.upload"), icon: Upload },
     { id: "dictionary", label: t("sidebar.dictionary"), icon: BookOpen },
-    { id: "integrations", label: t("sidebar.integrations"), icon: Blocks },
   ];
 
   return (
@@ -197,16 +195,16 @@ export default function ControlPanelSidebar({
             <div className="flex flex-col items-center text-center pt-1">
               <img src={logoIcon} alt="" className="w-7 h-7 rounded-md mb-2" />
               <p className="text-xs font-medium text-foreground mb-0.5">
-                {t("sidebar.upgradeTitle")}
+                Want full features?
               </p>
               <p className="text-[11px] leading-snug text-muted-foreground mb-2.5">
-                {t("sidebar.upgradeDescription")}
+                This is a privacy-hardened fork. For cloud sync, integrations, and Pro features, try the official app.
               </p>
               <button
-                onClick={onUpgrade}
+                onClick={() => window.electronAPI?.openExternal("https://openwhispr.com")}
                 className="w-full h-7 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
               >
-                {t("sidebar.learnMore")}
+                Visit OpenWhispr
               </button>
             </div>
           </div>
@@ -267,33 +265,7 @@ export default function ControlPanelSidebar({
           }
         />
 
-        <div className="mx-1 h-px bg-border/10 dark:bg-white/6 my-1.5!" />
-
-        <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md">
-          {userImage ? (
-            <img src={userImage} alt="" className="w-6 h-6 rounded-full shrink-0 object-cover" />
-          ) : (
-            <UserCircle size={18} className="shrink-0 text-foreground/50 dark:text-foreground/45" />
-          )}
-          <div className="flex-1 min-w-0">
-            {isSignedIn && (userName || userEmail) ? (
-              <>
-                <p className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight">
-                  {userName || t("sidebar.defaultUser")}
-                </p>
-                {userEmail && (
-                  <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
-                    {userEmail}
-                  </p>
-                )}
-              </>
-            ) : authLoaded && !isSignedIn ? (
-              <p className="text-xs text-foreground/45 dark:text-foreground/55">
-                {t("sidebar.notSignedIn")}
-              </p>
-            ) : null}
-          </div>
-        </div>
+        {/* CloudFree: hide account section — no upstream auth */}
       </div>
     </div>
   );

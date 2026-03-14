@@ -167,6 +167,9 @@ process.on("unhandledRejection", (reason, promise) => {
   console.error("Unhandled Rejection at:", promise, "reason:", reason);
 });
 
+// CloudFree hooks — pluggable integration points for the fork
+const cloudfree = require("./src/cloudfree/hooks");
+
 // Import helper module classes (but don't instantiate yet - wait for app.whenReady())
 const EnvironmentManager = require("./src/helpers/environment");
 const WindowManager = require("./src/helpers/windowManager");
@@ -504,6 +507,9 @@ function startAuthBridgeServer() {
 
 // Main application startup
 async function startApp() {
+  // CloudFree: Run main process hooks before any other network activity
+  cloudfree.onBeforeReady({ session: session.defaultSession, debugLogger });
+
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
   startAuthBridgeServer();

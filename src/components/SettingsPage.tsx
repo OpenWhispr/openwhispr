@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
+import { CloudFreeNetworkPanel } from "../cloudfree/ui-hooks";
 import {
   RefreshCw,
   Download,
@@ -93,7 +94,8 @@ export type SettingsSectionType =
   | "aiModels"
   | "agentConfig"
   | "prompts"
-  | "agentMode";
+  | "agentMode"
+  | "cloudfree";
 
 interface SettingsPageProps {
   activeSection?: SettingsSectionType;
@@ -3448,6 +3450,9 @@ EOF`,
 
       case "agentMode":
         return <AgentModeSettings />;
+
+      case "cloudfree":
+        return <CloudFreeNetworkPanel />;
 
       default:
         return null;

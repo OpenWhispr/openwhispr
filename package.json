@@ -63,7 +63,9 @@
     "quality-check": "npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",
     "preview": "cd src && vite preview",
-    "clean": "node cleanup.js"
+    "clean": "node cleanup.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "dictation",
@@ -99,7 +101,8 @@
     "tailwindcss": "^4.1.10",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.20.0",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "vitest": "^4.1.0"
   },
   "dependencies": {
     "@neondatabase/auth": "^0.1.0-beta.21",

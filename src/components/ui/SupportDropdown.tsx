@@ -10,6 +10,7 @@ import {
 } from "./dropdown-menu";
 import { cn } from "../lib/utils";
 import logger from "../../utils/logger";
+import CloudFreeSupportDropdown from "../../cloudfree/CloudFreeSupportDropdown";
 
 function DiscordIcon({ className }: { className?: string }) {
   return (
@@ -35,7 +36,7 @@ const openExternal = async (url: string) => {
   }
 };
 
-export default function SupportDropdown({ className, trigger }: SupportDropdownProps) {
+function SupportDropdown({ className, trigger }: SupportDropdownProps) {
   const { t } = useTranslation();
   return (
     <DropdownMenu>
@@ -79,3 +80,6 @@ export default function SupportDropdown({ className, trigger }: SupportDropdownP
     </DropdownMenu>
   );
 }
+
+// CloudFree: export fork-specific support dropdown
+export default CloudFreeSupportDropdown;

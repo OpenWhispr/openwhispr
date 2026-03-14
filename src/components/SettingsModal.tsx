@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import SidebarModal, { SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
+import * as cloudfree from "../cloudfree/ui-hooks";
 
 export type { SettingsSectionType };
 
@@ -100,11 +101,11 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         description: t("settingsModal.sections.system.description"),
         group: t("settingsModal.groups.system"),
       },
-    ],
+    ].flatMap(cloudfree.settingsMap),
     [t]
   );
 
-  const [activeSection, setActiveSection] = React.useState<SettingsSectionType>("account");
+  const [activeSection, setActiveSection] = React.useState<SettingsSectionType>(cloudfree.defaultSettingsSection);
 
   // Navigate to initial section when modal opens, resolving legacy aliases
   useEffect(() => {

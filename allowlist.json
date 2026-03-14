@@ -1,0 +1,46 @@
+{
+  "$schema": "./allowlist.schema.json",
+  "_comment": "CloudFree network allowlist. Only matching domain+path combinations are allowed. Everything else is implicitly blocked.",
+  "version": 2,
+  "rules": {
+    "ai_providers": {
+      "_comment": "BYOK AI provider APIs — users supply their own keys",
+      "entries": [
+        { "domain": "api.openai.com", "paths": ["/v1/responses", "/v1/models", "/v1/audio/*", "/v1/chat/completions", "/v1/realtime*"] },
+        { "domain": "api.anthropic.com", "paths": ["/v1/messages"] },
+        { "domain": "generativelanguage.googleapis.com", "paths": ["/v1beta/models/*/generateContent", "/v1beta/models/*/streamGenerateContent"] },
+        { "domain": "api.groq.com", "paths": ["/openai/v1/audio/*", "/openai/v1/chat/completions"] },
+        { "domain": "api.mistral.ai", "paths": ["/v1/audio/*", "/v1/chat/completions"] },
+        { "domain": "api.deepgram.com", "paths": ["/v1/listen*"] },
+        { "domain": "streaming.assemblyai.com", "paths": ["/v3/ws*"] }
+      ]
+    },
+    "model_downloads": {
+      "_comment": "Model weights and binary downloads",
+      "entries": [
+        { "domain": "huggingface.co", "paths": ["/*/resolve/main/*"] },
+        { "domain": "github.com", "paths": ["/*/releases/download/*"] },
+        { "domain": "api.github.com", "paths": ["/repos/*/releases*"] },
+        { "domain": "objects.githubusercontent.com", "paths": ["/*"] }
+      ]
+    },
+    "api_consoles": {
+      "_comment": "Links to provider key management pages (opened in external browser)",
+      "entries": [
+        { "domain": "platform.openai.com", "paths": ["/*"] },
+        { "domain": "console.anthropic.com", "paths": ["/*"] },
+        { "domain": "aistudio.google.com", "paths": ["/*"] },
+        { "domain": "console.groq.com", "paths": ["/*"] },
+        { "domain": "console.mistral.ai", "paths": ["/*"] }
+      ]
+    },
+    "local": {
+      "_comment": "Local development and self-hosted services",
+      "entries": [
+        { "domain": "localhost", "paths": ["/*"] },
+        { "domain": "127.0.0.1", "paths": ["/*"] },
+        { "domain": "0.0.0.0", "paths": ["/*"] }
+      ]
+    }
+  }
+}

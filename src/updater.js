@@ -1,5 +1,14 @@
 const { autoUpdater } = require("electron-updater");
 
+// CloudFree: disable auto-updater when the fork flag is set
+let cloudfreeDisabled = false;
+try {
+  const cloudfree = require("./cloudfree/hooks");
+  cloudfreeDisabled = !!cloudfree.disableAutoUpdater;
+} catch {
+  // Not a CloudFree build — continue normally
+}
+
 class UpdateManager {
   constructor() {
     this.mainWindow = null;
@@ -11,8 +20,11 @@ class UpdateManager {
     this.isDownloading = false;
     this.eventListeners = [];
     this.updateCheckInterval = null;
+    this.disabled = cloudfreeDisabled;
 
-    this.setupAutoUpdater();
+    if (!this.disabled) {
+      this.setupAutoUpdater();
+    }
   }
 
   setWindows(mainWindow, controlPanelWindow) {
@@ -286,7 +298,7 @@ class UpdateManager {
       return {
         updateAvailable: this.updateAvailable,
         updateDownloaded: this.updateDownloaded,
-        isDevelopment: process.env.NODE_ENV === "development",
+        isDevelopment: process.env.NODE_ENV === "development" || this.disabled,
       };
     } catch (error) {
       console.error("❌ Error getting update status:", error);
@@ -304,7 +316,7 @@ class UpdateManager {
   }
 
   checkForUpdatesOnStartup() {
-    if (process.env.NODE_ENV !== "development") {
+    if (process.env.NODE_ENV !== "development" && !this.disabled) {
       setTimeout(() => {
         console.log("🔄 Checking for updates on startup...");
         autoUpdater.checkForUpdates().catch((err) => {

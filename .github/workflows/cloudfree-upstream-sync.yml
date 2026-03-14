@@ -1,0 +1,165 @@
+name: CloudFree Upstream Sync
+
+on:
+  schedule:
+    # Check upstream daily at 6am UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      upstream_branch:
+        description: "Upstream branch to sync from"
+        default: "main"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cloudfree fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "CloudFree Bot"
+          git config user.email "cloudfree-bot@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/OpenWhispr/openwhispr.git || true
+          git fetch upstream
+
+      - name: Check for new upstream commits
+        id: check
+        run: |
+          UPSTREAM_BRANCH="${{ inputs.upstream_branch || 'main' }}"
+          LOCAL_SHA=$(git rev-parse HEAD)
+          UPSTREAM_SHA=$(git rev-parse "upstream/${UPSTREAM_BRANCH}")
+
+          if [ "$LOCAL_SHA" = "$UPSTREAM_SHA" ]; then
+            echo "No new upstream commits"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            COMMIT_COUNT=$(git rev-list HEAD.."upstream/${UPSTREAM_BRANCH}" --count)
+            echo "Found ${COMMIT_COUNT} new upstream commits"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "commit_count=${COMMIT_COUNT}" >> $GITHUB_OUTPUT
+            echo "upstream_branch=${UPSTREAM_BRANCH}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create sync branch
+        if: steps.check.outputs.has_changes == 'true'
+        id: branch
+        run: |
+          BRANCH="cloudfree/upstream-sync-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+          echo "branch_name=${BRANCH}" >> $GITHUB_OUTPUT
+
+      - name: Merge upstream
+        if: steps.check.outputs.has_changes == 'true'
+        id: merge
+        run: |
+          UPSTREAM_BRANCH="${{ steps.check.outputs.upstream_branch }}"
+          if git merge "upstream/${UPSTREAM_BRANCH}" --no-edit; then
+            echo "merge_status=clean" >> $GITHUB_OUTPUT
+          else
+            echo "merge_status=conflict" >> $GITHUB_OUTPUT
+            git merge --abort
+          fi
+
+      - name: Setup Node.js
+        if: steps.check.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'clean'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Scan for new network calls
+        if: steps.check.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'clean'
+        id: scan
+        run: |
+          # Scan the diff for new network endpoints
+          node scripts/cloudfree/scan-network-calls.js --diff main 2>&1 | tee scan-report.txt
+
+          # Check if there are issues (unknown or blocked domains)
+          if node scripts/cloudfree/scan-network-calls.js --diff main --ci 2>/dev/null; then
+            echo "scan_clean=true" >> $GITHUB_OUTPUT
+          else
+            echo "scan_clean=false" >> $GITHUB_OUTPUT
+          fi
+        continue-on-error: true
+
+      - name: Push sync branch
+        if: steps.check.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'clean'
+        run: |
+          git push origin "${{ steps.branch.outputs.branch_name }}"
+
+      - name: Create PR
+        if: steps.check.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'clean'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SCAN_STATUS=""
+          if [ "${{ steps.scan.outputs.scan_clean }}" = "true" ]; then
+            SCAN_STATUS="✅ No new network endpoints detected"
+          else
+            SCAN_STATUS="⚠️ New network endpoints detected — review required"
+          fi
+
+          SCAN_REPORT=$(cat scan-report.txt 2>/dev/null || echo "No scan report available")
+
+          gh pr create \
+            --title "CloudFree: Sync ${{ steps.check.outputs.commit_count }} upstream commits" \
+            --body "$(cat <<EOF
+          ## Upstream Sync
+
+          Merging **${{ steps.check.outputs.commit_count }}** new commits from \`upstream/${{ steps.check.outputs.upstream_branch }}\`.
+
+          ## Network Scan Result
+
+          ${SCAN_STATUS}
+
+          <details>
+          <summary>Full scan report</summary>
+
+          \`\`\`
+          ${SCAN_REPORT}
+          \`\`\`
+
+          </details>
+
+          ## Review Checklist
+
+          - [ ] No new cloud-only endpoints introduced
+          - [ ] No new analytics/telemetry code
+          - [ ] No new auth/billing dependencies
+          - [ ] allowlist.json updated if new legitimate endpoints added
+          EOF
+          )" \
+            --label "upstream-sync"
+
+      - name: Create conflict issue
+        if: steps.check.outputs.has_changes == 'true' && steps.merge.outputs.merge_status == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "CloudFree: Upstream sync has merge conflicts" \
+            --body "$(cat <<EOF
+          Automated upstream sync from \`upstream/${{ steps.check.outputs.upstream_branch }}\` has merge conflicts.
+
+          **${{ steps.check.outputs.commit_count }}** new upstream commits need to be merged manually.
+
+          \`\`\`bash
+          git fetch upstream
+          git merge upstream/${{ steps.check.outputs.upstream_branch }}
+          # resolve conflicts
+          git commit
+          \`\`\`
+          EOF
+          )" \
+            --label "upstream-sync"
