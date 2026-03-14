@@ -574,16 +574,31 @@ async function startApp() {
 
   const savedAgentKey = environmentManager.getAgentKey?.() || "";
   if (savedAgentKey) {
-    hotkeyManager.registerSlot("agent", savedAgentKey, agentHotkeyCallback);
+    const result = await hotkeyManager.registerSlot("agent", savedAgentKey, agentHotkeyCallback);
+    if (!result.success) {
+      debugLogger.warn("Failed to restore agent hotkey", { hotkey: savedAgentKey }, "hotkey");
+    }
   }
 
-  ipcMain.on("agent-hotkey-changed", (_event, hotkey) => {
-    if (hotkey) {
-      hotkeyManager.registerSlot("agent", hotkey, agentHotkeyCallback);
-      environmentManager.saveAgentKey(hotkey);
-    } else {
-      hotkeyManager.unregisterSlot("agent");
-      environmentManager.saveAgentKey("");
+  ipcMain.on("agent-hotkey-changed", async (_event, hotkey) => {
+    try {
+      if (hotkey) {
+        const result = await hotkeyManager.registerSlot("agent", hotkey, agentHotkeyCallback);
+        if (result.success) {
+          environmentManager.saveAgentKey(hotkey);
+        } else {
+          debugLogger.warn("Failed to update agent hotkey", { hotkey }, "hotkey");
+        }
+      } else {
+        hotkeyManager.unregisterSlot("agent");
+        environmentManager.saveAgentKey("");
+      }
+    } catch (error) {
+      debugLogger.warn(
+        "Failed to update agent hotkey",
+        { error: error instanceof Error ? error.message : String(error), hotkey },
+        "hotkey"
+      );
     }
   });
 

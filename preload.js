@@ -544,6 +544,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setAutoStartEnabled: (enabled) => ipcRenderer.invoke("set-auto-start-enabled", enabled),
 
   // Agent mode
+  updateAgentHotkey: (hotkey) => ipcRenderer.invoke("update-agent-hotkey", hotkey),
   notifyAgentHotkeyChanged: (hotkey) => ipcRenderer.send("agent-hotkey-changed", hotkey),
   getAgentKey: () => ipcRenderer.invoke("get-agent-key"),
   saveAgentKey: (key) => ipcRenderer.invoke("save-agent-key", key),

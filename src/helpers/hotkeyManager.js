@@ -139,8 +139,49 @@ class HotkeyManager {
     return suggestions.filter((s) => s !== failedHotkey).slice(0, 3);
   }
 
-  registerSlot(slotName, hotkey, callback) {
+  async registerSlot(slotName, hotkey, callback) {
     this.unregisterSlot(slotName);
+
+    // On GNOME Wayland, route non-dictation slots (e.g. "agent") through the
+    // native GNOME keybinding system instead of Electron's globalShortcut,
+    // which does not work under the Wayland security model.
+    if (this.useGnome && this.gnomeManager && slotName !== "dictation") {
+      const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
+      if (!gnomeHotkey) {
+        debugLogger.log(
+          `[HotkeyManager] Could not convert hotkey "${hotkey}" to GNOME format for slot "${slotName}"`
+        );
+        return { success: false, error: `Invalid hotkey format for GNOME: "${hotkey}"` };
+      }
+
+      // Register (or update) the agent callback on the shared D-Bus interface
+      if (slotName === "agent") {
+        this.gnomeManager.setAgentCallback(callback);
+      }
+
+      const success = await this.gnomeManager.registerKeybinding(gnomeHotkey, slotName);
+      if (!success) {
+        debugLogger.log(
+          `[HotkeyManager] GNOME keybinding registration failed for slot "${slotName}" ("${hotkey}")`
+        );
+        return {
+          success: false,
+          error: `Failed to register GNOME hotkey "${hotkey}" for ${slotName}`,
+        };
+      }
+
+      const slot = this.slots.get(slotName) || { hotkey: null, callback: null, accelerator: null };
+      slot.hotkey = hotkey;
+      slot.callback = callback;
+      slot.accelerator = null;
+      this.slots.set(slotName, slot);
+
+      debugLogger.log(
+        `[HotkeyManager] GNOME slot "${slotName}" set to "${hotkey}" (GNOME format: "${gnomeHotkey}")`
+      );
+      return { success: true, hotkey };
+    }
+
     const result = this.setupShortcuts(hotkey, callback, slotName);
     if (result.success) {
       const slot = this.slots.get(slotName) || {};
@@ -153,6 +194,19 @@ class HotkeyManager {
   unregisterSlot(slotName) {
     const slot = this.slots.get(slotName);
     if (!slot || !slot.hotkey) return;
+
+    // On GNOME Wayland, non-dictation slots are managed via gsettings, not globalShortcut
+    if (this.useGnome && this.gnomeManager && slotName !== "dictation") {
+      this.gnomeManager.unregisterKeybinding(slotName).catch((err) => {
+        debugLogger.warn(
+          `[HotkeyManager] Error unregistering GNOME keybinding for slot "${slotName}":`,
+          err.message
+        );
+      });
+      slot.hotkey = null;
+      slot.accelerator = null;
+      return;
+    }
 
     const hk = slot.hotkey;
     if (!isGlobeLikeHotkey(hk) && !isRightSideModifier(hk) && !isModifierOnlyHotkey(hk)) {
@@ -591,9 +645,16 @@ class HotkeyManager {
 
   unregisterAll() {
     if (this.gnomeManager) {
-      this.gnomeManager.unregisterKeybinding().catch((err) => {
-        debugLogger.warn("[HotkeyManager] Error unregistering GNOME keybinding:", err.message);
-      });
+      // Unregister every slot that was registered via GNOME
+      const gnomeSlots = [...this.gnomeManager.registeredSlots];
+      for (const slotName of gnomeSlots) {
+        this.gnomeManager.unregisterKeybinding(slotName).catch((err) => {
+          debugLogger.warn(
+            `[HotkeyManager] Error unregistering GNOME keybinding for slot "${slotName}":`,
+            err.message
+          );
+        });
+      }
       this.gnomeManager.close();
       this.gnomeManager = null;
       this.useGnome = false;

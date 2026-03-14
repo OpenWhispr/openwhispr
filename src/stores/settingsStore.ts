@@ -486,12 +486,43 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAgentModel: createStringSetter("agentModel"),
   setAgentProvider: createStringSetter("agentProvider"),
   setAgentKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("agentKey", key);
-    useSettingsStore.setState({ agentKey: key });
-    if (isBrowser) {
+    if (!isBrowser) {
+      useSettingsStore.setState({ agentKey: key });
+      return;
+    }
+
+    const updateAgentHotkey = window.electronAPI?.updateAgentHotkey;
+    if (!updateAgentHotkey) {
+      localStorage.setItem("agentKey", key);
+      useSettingsStore.setState({ agentKey: key });
       window.electronAPI?.notifyAgentHotkeyChanged?.(key);
       window.electronAPI?.saveAgentKey?.(key);
+      return;
     }
+
+    void updateAgentHotkey(key)
+      .then((result) => {
+        if (!result?.success) {
+          localStorage.setItem("agentKey", "");
+          useSettingsStore.setState({ agentKey: "" });
+          logger.warn(
+            "Failed to update agent hotkey",
+            { hotkey: key, message: result?.message },
+            "settings"
+          );
+          return;
+        }
+
+        localStorage.setItem("agentKey", key);
+        useSettingsStore.setState({ agentKey: key });
+      })
+      .catch((error) => {
+        logger.warn(
+          "Failed to update agent hotkey",
+          { hotkey: key, error: error instanceof Error ? error.message : String(error) },
+          "settings"
+        );
+      });
   },
   setAgentSystemPrompt: createStringSetter("agentSystemPrompt"),
   setAgentEnabled: createBooleanSetter("agentEnabled"),

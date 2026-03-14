@@ -3663,7 +3663,23 @@ class IPCHandlers {
       if (!agentCallback) {
         return { success: false, message: "Agent hotkey callback not initialized" };
       }
-      return hotkeyManager.registerSlot("agent", hotkey, agentCallback);
+
+      if (!hotkey) {
+        hotkeyManager.unregisterSlot("agent");
+        this.environmentManager.saveAgentKey?.("");
+        return { success: true, message: "Agent hotkey cleared" };
+      }
+
+      const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback);
+      if (result.success) {
+        this.environmentManager.saveAgentKey?.(hotkey);
+        return { success: true, message: `Agent hotkey updated to: ${hotkey}` };
+      }
+
+      return {
+        success: false,
+        message: result.error || `Failed to update agent hotkey to: ${hotkey}`,
+      };
     });
 
     ipcMain.handle("get-agent-key", async () => {
