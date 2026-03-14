@@ -859,6 +859,7 @@ export default function ReasoningModelSelector({
                       models={selectedCloudModels}
                       selectedModel={reasoningModel}
                       onModelSelect={setReasoningModel}
+                      allowCustomModel
                     />
                   </div>
                 </>
@@ -970,6 +971,7 @@ export default function ReasoningModelSelector({
                       models={selectedCloudModels}
                       selectedModel={reasoningModel}
                       onModelSelect={setReasoningModel}
+                      allowCustomModel
                     />
                   </div>
                 </>
