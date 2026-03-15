@@ -206,6 +206,8 @@ interface TranscriptionModelPickerProps {
   setSonioxApiKey?: (key: string) => void;
   sonioxSecondaryLanguage?: string;
   setSonioxSecondaryLanguage?: (lang: string) => void;
+  sonioxKeepAliveTimeout?: number;
+  setSonioxKeepAliveTimeout?: (val: number) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl?: (url: string) => void;
   className?: string;
@@ -290,6 +292,8 @@ export default function TranscriptionModelPicker({
   setSonioxApiKey,
   sonioxSecondaryLanguage = "",
   setSonioxSecondaryLanguage,
+  sonioxKeepAliveTimeout = 0,
+  setSonioxKeepAliveTimeout,
   cloudTranscriptionBaseUrl = "",
   setCloudTranscriptionBaseUrl,
   className = "",
@@ -963,6 +967,32 @@ export default function TranscriptionModelPicker({
                       ]}
                       className="min-w-32"
                     />
+                  </div>
+                )}
+
+                {selectedCloudProvider === "soniox" && setSonioxKeepAliveTimeout && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-xs font-medium text-foreground whitespace-nowrap">
+                        {t("transcriptionModelPicker.keepAlive.label")}
+                      </label>
+                      <select
+                        className="min-w-32 rounded-md border border-input bg-background px-2 py-1 text-xs"
+                        value={String(sonioxKeepAliveTimeout)}
+                        onChange={(e) => setSonioxKeepAliveTimeout(parseInt(e.target.value, 10))}
+                      >
+                        <option value="0">{t("common.off")}</option>
+                        <option value="30">30s (+50-100% {t("transcriptionModelPicker.keepAlive.cost")})</option>
+                        <option value="60">1 min (+100-150% {t("transcriptionModelPicker.keepAlive.cost")})</option>
+                        <option value="120">2 min (+100-200% {t("transcriptionModelPicker.keepAlive.cost")})</option>
+                        <option value="300">5 min (+200-300% {t("transcriptionModelPicker.keepAlive.cost")})</option>
+                      </select>
+                    </div>
+                    {sonioxKeepAliveTimeout > 0 && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {t("transcriptionModelPicker.keepAlive.description")}
+                      </p>
+                    )}
                   </div>
                 )}
 

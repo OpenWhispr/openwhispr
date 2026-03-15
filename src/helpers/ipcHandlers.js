@@ -2595,21 +2595,50 @@ class IPCHandlers {
     });
 
     // --- Soniox streaming ---
-    // Soniox cold-starts fast (~250ms), no warmup needed.
-    ipcMain.handle("soniox-streaming-warmup", async () => {
-      return { success: true };
+    const ensureSonioxInstance = (options = {}) => {
+      const apiKey = options.apiKey || this.environmentManager.getSonioxKey();
+      if (!apiKey) return null;
+      if (!this._sonioxStreaming) {
+        this._sonioxStreaming = new SonioxStreaming();
+      }
+      return apiKey;
+    };
+
+    ipcMain.handle("soniox-streaming-warmup", async (event, options = {}) => {
+      try {
+        const timeoutSeconds = options.keepAliveTimeout || 0;
+        if (timeoutSeconds <= 0) return { success: true };
+
+        const apiKey = ensureSonioxInstance(options);
+        if (!apiKey) return { success: true, code: "NO_API" };
+
+        const alreadyWarm = this._sonioxStreaming.hasWarmConnection();
+        if (!alreadyWarm) {
+          await this._sonioxStreaming.warmup({
+            apiKey,
+            model: options.model || "stt-rt-v4",
+            language: options.language,
+            secondaryLanguage: options.secondaryLanguage,
+            idleTimeoutMs: timeoutSeconds * 1000,
+          });
+        }
+
+        return { success: true, alreadyWarm };
+      } catch (err) {
+        debugLogger.error("Soniox warmup error", { error: err.message });
+        return { success: false, error: err.message };
+      }
     });
 
     ipcMain.handle("soniox-streaming-start", async (event, options = {}) => {
       try {
+        const hadWarm = this._sonioxStreaming?.hasWarmConnection() || false;
         if (!this._sonioxStreaming?.isConnected) {
-          const apiKey = options.apiKey || this.environmentManager.getSonioxKey();
+          const apiKey = ensureSonioxInstance(options);
           if (!apiKey) {
             return { success: false, error: "Soniox API key not configured", code: "NO_API" };
           }
 
-          // Cold start: create new connection
-          this._sonioxStreaming = new SonioxStreaming();
           this._sonioxStreaming.onPartialTranscript = (text) => {
             if (!event.sender.isDestroyed()) event.sender.send("soniox-streaming-partial", text);
           };
@@ -2630,7 +2659,7 @@ class IPCHandlers {
             secondaryLanguage: options.secondaryLanguage,
           });
         }
-        return { success: true };
+        return { success: true, usedWarmConnection: hadWarm };
       } catch (err) {
         return { success: false, error: err.message };
       }

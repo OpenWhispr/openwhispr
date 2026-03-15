@@ -107,7 +107,15 @@
     "close": "Fechar",
     "dismiss": "Dispensar",
     "none": "Nenhum",
+    "off": "Desligado",
     "secondaryLanguage": "Idioma secundário"
+  },
+  "transcriptionModelPicker": {
+    "keepAlive": {
+      "label": "Manter conexão por",
+      "cost": "custo",
+      "description": "Após cada gravação, mantém a conexão para que a próxima comece instantaneamente. O Soniox cobra pelo tempo de conexão ociosa."
+    }
   },
   "onboarding": {
     "steps": {

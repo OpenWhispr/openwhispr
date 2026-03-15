@@ -135,7 +135,15 @@
     "close": "閉じる",
     "dismiss": "閉じる",
     "none": "なし",
+    "off": "オフ",
     "secondaryLanguage": "補助言語"
+  },
+  "transcriptionModelPicker": {
+    "keepAlive": {
+      "label": "接続を維持する時間",
+      "cost": "コスト",
+      "description": "録音のたびに接続を維持し、次の録音がすぐに開始できるようにします。Sonioxはアイドル接続時間に対して課金します。"
+    }
   },
   "onboarding": {
     "steps": {

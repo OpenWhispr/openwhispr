@@ -8,6 +8,19 @@ const KEEPALIVE_IDLE_LIMIT_MS = 30000; // Stop keepalive if no audio sent for 30
 const COLD_START_BUFFER_MAX = 3 * 16000 * 2; // 3 seconds of 16-bit PCM at 16kHz
 const SONIOX_WS_URL = "wss://stt-rt.soniox.com/transcribe-websocket";
 
+const toBaseLanguage = (l) => l && l !== "auto" ? l.split("-")[0] : null;
+
+function buildConfigMessage({ apiKey, model, language, secondaryLanguage }) {
+  return {
+    api_key: apiKey,
+    model: model || "stt-rt-v4",
+    audio_format: "pcm_s16le",
+    sample_rate: 16000,
+    num_channels: 1,
+    language_hints: [toBaseLanguage(language), toBaseLanguage(secondaryLanguage)].filter(Boolean),
+  };
+}
+
 // Filler words / hesitations to strip from assembled text.
 // Soniox uses sub-word (BPE) tokenization, so fillers must be removed from the
 // joined text rather than individual tokens.
@@ -49,6 +62,13 @@ class SonioxStreaming {
     this.audioBytesSent = 0;
     this._finalizeSent = false;
     this._lastAudioSentAt = 0;
+
+    // Warm connection state
+    this.warmConnection = null;
+    this.warmConnectionReady = false;
+    this.warmConnectionOptions = null;
+    this.warmKeepAliveInterval = null;
+    this.warmIdleTimeout = null;
   }
 
   getFullTranscript() {
@@ -64,6 +84,20 @@ class SonioxStreaming {
       return;
     }
 
+    // Try to use pre-warmed connection for instant start
+    if (this.hasWarmConnection()) {
+      const warm = this.warmConnectionOptions;
+      const configMatch =
+        warm?.model === (model || "stt-rt-v4") &&
+        warm?.language === language &&
+        warm?.secondaryLanguage === secondaryLanguage;
+      if (configMatch && this.useWarmConnection()) {
+        debugLogger.debug("Soniox using warm connection - instant start");
+        return;
+      }
+      this.cleanupWarmConnection();
+    }
+
     this.finalTokens = [];
     this.currentNonFinalText = "";
     this.audioBytesSent = 0;
@@ -71,20 +105,12 @@ class SonioxStreaming {
     this.coldStartBufferSize = 0;
     this._finalizeSent = false;
 
-    const toBase = (l) => l && l !== "auto" ? l.split("-")[0] : null;
-    const languageHints =
-      [toBase(language), toBase(secondaryLanguage)].filter(Boolean);
+    const configMessage = buildConfigMessage(options);
 
-    debugLogger.debug("Soniox connecting", { model: model || "stt-rt-v4", languageHints });
-
-    const configMessage = {
-      api_key: apiKey,
-      model: model || "stt-rt-v4",
-      audio_format: "pcm_s16le",
-      sample_rate: 16000,
-      num_channels: 1,
-      language_hints: languageHints,
-    };
+    debugLogger.debug("Soniox connecting", {
+      model: configMessage.model,
+      languageHints: configMessage.language_hints,
+    });
 
     return new Promise((resolve, reject) => {
       this.pendingResolve = resolve;
@@ -110,38 +136,7 @@ class SonioxStreaming {
         this.pendingReject = null;
       });
 
-      this.ws.on("message", (data) => {
-        this.handleMessage(data);
-      });
-
-      this.ws.on("error", (error) => {
-        debugLogger.error("Soniox WebSocket error", { error: error.message });
-        this.cleanup();
-        if (this.pendingReject) {
-          this.pendingReject(error);
-          this.pendingReject = null;
-          this.pendingResolve = null;
-        }
-        this.onError?.(error);
-      });
-
-      this.ws.on("close", (code, reason) => {
-        const wasActive = this.isConnected;
-        debugLogger.debug("Soniox WebSocket closed", {
-          code,
-          reason: reason?.toString(),
-          wasActive,
-        });
-        if (this.pendingReject) {
-          this.pendingReject(new Error(`WebSocket closed before ready (code: ${code})`));
-          this.pendingReject = null;
-          this.pendingResolve = null;
-        }
-        this.cleanup();
-        if (wasActive && !this.isDisconnecting) {
-          this.onSessionEnd?.({ text: this.getFullTranscript() });
-        }
-      });
+      this.attachSessionHandlers();
     });
   }
 
@@ -194,6 +189,43 @@ class SonioxStreaming {
     } catch (err) {
       debugLogger.error("Soniox message parse error", { error: err.message });
     }
+  }
+
+  attachSessionHandlers() {
+    this.ws.removeAllListeners("message");
+    this.ws.removeAllListeners("error");
+    this.ws.removeAllListeners("close");
+
+    this.ws.on("message", (data) => this.handleMessage(data));
+
+    this.ws.on("error", (error) => {
+      debugLogger.error("Soniox WebSocket error", { error: error.message });
+      this.cleanup();
+      if (this.pendingReject) {
+        this.pendingReject(error);
+        this.pendingReject = null;
+        this.pendingResolve = null;
+      }
+      this.onError?.(error);
+    });
+
+    this.ws.on("close", (code, reason) => {
+      const wasActive = this.isConnected;
+      debugLogger.debug("Soniox WebSocket closed", {
+        code,
+        reason: reason?.toString(),
+        wasActive,
+      });
+      if (this.pendingReject) {
+        this.pendingReject(new Error(`WebSocket closed before ready (code: ${code})`));
+        this.pendingReject = null;
+        this.pendingResolve = null;
+      }
+      this.cleanup();
+      if (wasActive && !this.isDisconnecting) {
+        this.onSessionEnd?.({ text: this.getFullTranscript() });
+      }
+    });
   }
 
   flushColdStartBuffer() {
@@ -352,6 +384,171 @@ class SonioxStreaming {
     }
 
     this.isConnected = false;
+    this.cleanupWarmConnection();
+  }
+
+  // --- Warm connection (keep-alive between recordings) ---
+
+  async warmup(options = {}) {
+    const { apiKey, model, language, secondaryLanguage, idleTimeoutMs } = options;
+    if (!apiKey) throw new Error("Soniox API key is required for warmup");
+
+    if (this.warmConnection) {
+      debugLogger.debug(
+        this.warmConnectionReady
+          ? "Soniox connection already warm"
+          : "Soniox warmup already in progress, skipping"
+      );
+      return;
+    }
+
+    this.warmConnectionReady = false;
+    this.warmConnectionOptions = { apiKey, model, language, secondaryLanguage };
+
+    const configMessage = buildConfigMessage(options);
+
+    debugLogger.debug("Soniox warming up connection", {
+      model: configMessage.model,
+      languageHints: configMessage.language_hints,
+      idleTimeoutMs,
+    });
+
+    return new Promise((resolve, reject) => {
+      const warmupTimeout = setTimeout(() => {
+        this.cleanupWarmConnection();
+        reject(new Error("Soniox warmup connection timeout"));
+      }, WEBSOCKET_TIMEOUT_MS);
+
+      this.warmConnection = new WebSocket(SONIOX_WS_URL);
+
+      this.warmConnection.on("open", () => {
+        debugLogger.debug("Soniox warm connection opened, sending config");
+        this.warmConnection.send(JSON.stringify(configMessage));
+        clearTimeout(warmupTimeout);
+        this.warmConnectionReady = true;
+        this.startWarmKeepAlive(idleTimeoutMs);
+        debugLogger.debug("Soniox connection warmed up");
+        resolve();
+      });
+
+      this.warmConnection.on("message", () => {
+        // Discard messages on warm connection (no audio sent yet)
+      });
+
+      this.warmConnection.on("error", (error) => {
+        clearTimeout(warmupTimeout);
+        debugLogger.error("Soniox warmup connection error", { error: error.message });
+        this.cleanupWarmConnection();
+        reject(error);
+      });
+
+      this.warmConnection.on("close", (code, reason) => {
+        clearTimeout(warmupTimeout);
+        const wasReady = this.warmConnectionReady;
+        debugLogger.debug("Soniox warm connection closed", {
+          wasReady,
+          code,
+          reason: reason?.toString(),
+        });
+        this.cleanupWarmConnection();
+        if (!wasReady) {
+          reject(new Error(`Soniox warmup closed before ready (code: ${code})`));
+        }
+      });
+    });
+  }
+
+  useWarmConnection() {
+    if (!this.warmConnection || !this.warmConnectionReady) {
+      return false;
+    }
+
+    if (this.warmConnection.readyState !== WebSocket.OPEN) {
+      debugLogger.debug("Soniox warm connection readyState not OPEN, discarding", {
+        readyState: this.warmConnection.readyState,
+      });
+      this.cleanupWarmConnection();
+      return false;
+    }
+
+    this.stopWarmKeepAlive();
+
+    this.ws = this.warmConnection;
+    this.isConnected = true;
+    this.warmConnection = null;
+    this.warmConnectionReady = false;
+
+    this.attachSessionHandlers();
+
+    // Reset session state for fresh dictation
+    this.finalTokens = [];
+    this.currentNonFinalText = "";
+    this.audioBytesSent = 0;
+    this.coldStartBuffer = [];
+    this.coldStartBufferSize = 0;
+    this._finalizeSent = false;
+
+    this.startKeepAlive();
+
+    debugLogger.debug("Soniox using pre-warmed connection");
+    return true;
+  }
+
+  startWarmKeepAlive(idleTimeoutMs) {
+    this.stopWarmKeepAlive();
+
+    if (idleTimeoutMs > 0) {
+      this.warmIdleTimeout = setTimeout(() => {
+        debugLogger.debug("Soniox warm connection idle timeout, closing");
+        this.cleanupWarmConnection();
+      }, idleTimeoutMs);
+    }
+
+    this.warmKeepAliveInterval = setInterval(() => {
+      if (!this.warmConnection || this.warmConnection.readyState !== WebSocket.OPEN) {
+        this.stopWarmKeepAlive();
+        return;
+      }
+      try {
+        this.warmConnection.send(JSON.stringify({ type: "keepalive" }));
+      } catch (err) {
+        debugLogger.debug("Soniox warm keep-alive failed", { error: err.message });
+        this.cleanupWarmConnection();
+      }
+    }, KEEPALIVE_INTERVAL_MS);
+  }
+
+  stopWarmKeepAlive() {
+    if (this.warmKeepAliveInterval) {
+      clearInterval(this.warmKeepAliveInterval);
+      this.warmKeepAliveInterval = null;
+    }
+    if (this.warmIdleTimeout) {
+      clearTimeout(this.warmIdleTimeout);
+      this.warmIdleTimeout = null;
+    }
+  }
+
+  cleanupWarmConnection() {
+    this.stopWarmKeepAlive();
+    if (this.warmConnection) {
+      try {
+        this.warmConnection.close();
+      } catch (err) {
+        // ignore
+      }
+      this.warmConnection = null;
+    }
+    this.warmConnectionReady = false;
+    this.warmConnectionOptions = null;
+  }
+
+  hasWarmConnection() {
+    return (
+      this.warmConnection !== null &&
+      this.warmConnectionReady &&
+      this.warmConnection.readyState === WebSocket.OPEN
+    );
   }
 }
 

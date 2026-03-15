@@ -135,7 +135,15 @@
     "close": "關閉",
     "dismiss": "忽略",
     "none": "無",
+    "off": "關閉",
     "secondaryLanguage": "輔助語言"
+  },
+  "transcriptionModelPicker": {
+    "keepAlive": {
+      "label": "保持連線時長",
+      "cost": "費用",
+      "description": "每次錄音後保持連線，以便下次錄音立即開始。Soniox 會對閒置連線時間收費。"
+    }
   },
   "onboarding": {
     "steps": {

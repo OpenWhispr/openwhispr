@@ -135,7 +135,15 @@
     "close": "Chiudi",
     "dismiss": "Ignora",
     "none": "Nessuno",
+    "off": "Disattivato",
     "secondaryLanguage": "Lingua secondaria"
+  },
+  "transcriptionModelPicker": {
+    "keepAlive": {
+      "label": "Resta connesso per",
+      "cost": "costo",
+      "description": "Dopo ogni registrazione, mantiene la connessione in modo che la successiva parta istantaneamente. Soniox addebita il tempo di connessione inattiva."
+    }
   },
   "onboarding": {
     "steps": {
