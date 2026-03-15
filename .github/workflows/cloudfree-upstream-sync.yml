@@ -137,7 +137,7 @@ jobs:
           - [ ] No new cloud-only endpoints introduced
           - [ ] No new analytics/telemetry code
           - [ ] No new auth/billing dependencies
-          - [ ] allowlist.json updated if new legitimate endpoints added
+          - [ ] cloudfree-allowlist.json updated if new legitimate endpoints added
           EOF
           )" \
             --label "upstream-sync"

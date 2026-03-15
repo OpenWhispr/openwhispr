@@ -16,7 +16,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "../..");
-const ALLOWLIST_PATH = path.join(ROOT, "allowlist.json");
+const ALLOWLIST_PATH = path.join(ROOT, "cloudfree-allowlist.json");
 
 // Patterns that indicate outbound network activity
 const NETWORK_PATTERNS = [

@@ -22,7 +22,7 @@ const fs = require("fs");
 
 // Load allowlist from JSON
 function loadAllowlist() {
-  const allowlistPath = path.join(__dirname, "../../allowlist.json");
+  const allowlistPath = path.join(__dirname, "../../cloudfree-allowlist.json");
   const raw = fs.readFileSync(allowlistPath, "utf-8");
   return JSON.parse(raw);
 }

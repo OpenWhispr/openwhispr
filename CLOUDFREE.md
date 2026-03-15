@@ -8,7 +8,7 @@ CloudFree has three layers:
 
 1. **`src/cloudfree/hooks.js`** — Main/preload process hooks (network guard, IPC bindings)
 2. **`src/cloudfree/ui-hooks.tsx`** — Renderer-side exports (settings map, network panel, shield icon)
-3. **`allowlist.json`** — Domain+path allowlist enforced at the Electron session level
+3. **`cloudfree-allowlist.json`** — Domain+path allowlist enforced at the Electron session level
 
 All upstream UI components remain intact. CloudFree injects behavior through imports and small patches at file boundaries (top-of-file imports, end-of-array callbacks, export swaps).
 
@@ -16,7 +16,7 @@ All upstream UI components remain intact. CloudFree injects behavior through imp
 
 | File | Purpose |
 |------|---------|
-| `allowlist.json` | Network allowlist — domain+path rules with wildcard support |
+| `cloudfree-allowlist.json` | Network allowlist — domain+path rules with wildcard support |
 | `src/cloudfree/hooks.js` | Main/preload process hooks (`onBeforeReady`, `preload`) |
 | `src/cloudfree/networkGuard.js` | Electron `session.webRequest.onBeforeRequest` filter + IPC handlers |
 | `src/cloudfree/ui-hooks.tsx` | Settings sidebar map, hidden sections set, CloudFree pane item, re-exports |
@@ -153,7 +153,7 @@ autoUpdater.setFeedURL({
 **Add to the `files` array (before the `!node_modules` exclusions):**
 ```json
 "src/cloudfree/**/*",
-"allowlist.json",
+"cloudfree-allowlist.json",
 ```
 
 ### `src/index.html` (-3 lines, +1 line)
@@ -165,7 +165,7 @@ autoUpdater.setFeedURL({
 
 ## Allowlist Format
 
-`allowlist.json` uses v2 format with per-domain path wildcards:
+`cloudfree-allowlist.json` uses v2 format with per-domain path wildcards:
 
 ```json
 {
@@ -189,4 +189,4 @@ Paths use `*` as wildcard (converted to `.*` regex). Everything not in the allow
 2. If `SettingsSectionType` changed, ensure `"cloudfree"` is still in the union
 3. If new settings sections were added upstream, they'll pass through `cloudfree.settingsMap` automatically
 4. Run `node scripts/cloudfree/scan-network-calls.js --diff main` to check for new network URLs
-5. Update `allowlist.json` if legitimate new endpoints were added upstream
+5. Update `cloudfree-allowlist.json` if legitimate new endpoints were added upstream

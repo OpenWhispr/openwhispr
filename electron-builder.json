@@ -28,7 +28,7 @@
     "src/updater.js",
     "src/components.json",
     "src/cloudfree/**/*",
-    "allowlist.json",
+    "cloudfree-allowlist.json",
     "!node_modules/.cache/**/*",
     "!src/node_modules/**/*",
 
