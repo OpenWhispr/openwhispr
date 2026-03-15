@@ -157,7 +157,7 @@ jobs:
           \`\`\`bash
           git fetch upstream
           git merge upstream/${{ steps.check.outputs.upstream_branch }}
-          # resolve conflicts
+          # resolve conflicts per CLOUDFREE.md
           git commit
           \`\`\`
           EOF
