@@ -1390,6 +1390,13 @@
           "description": "Configure your own provider and API key.",
           "title": "Switched to Custom Setup"
         }
+      },
+      "dictationMode": {
+        "title": "Dictation Mode",
+        "normal": "Normal",
+        "normalDescription": "Best accuracy, but takes a moment to process after recording.",
+        "fast": "Fast",
+        "fastDescription": "WebSocket streaming via OpenAI Realtime API. Live transcription as you speak."
       }
     }
   },

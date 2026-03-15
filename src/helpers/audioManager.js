@@ -325,6 +325,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
 
+      const useStreaming = this.shouldUseStreaming();
+      logger.info(
+        "Transcription mode",
+        { mode: useStreaming ? "streaming" : "batch" },
+        useStreaming ? "streaming" : "audio"
+      );
+
       // Mix in system audio if enabled
       let recordingStream = micStream;
       if (this.systemAudioEnabled) {
@@ -2004,6 +2011,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   shouldUseStreaming(isSignedInOverride) {
     const s = getSettings();
+    if (s.dictationMode === "normal") return false;
     if (s.useLocalWhisper) return false;
 
     if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {

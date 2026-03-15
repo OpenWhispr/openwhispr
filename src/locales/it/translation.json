@@ -1320,6 +1320,13 @@
           "description": "Configura il tuo provider e la tua chiave API.",
           "title": "Passato a configurazione personalizzata"
         }
+      },
+      "dictationMode": {
+        "title": "Modalità dettatura",
+        "normal": "Normale",
+        "normalDescription": "Massima accuratezza, ma richiede un momento per elaborare dopo la registrazione.",
+        "fast": "Veloce",
+        "fastDescription": "Streaming WebSocket tramite OpenAI Realtime API. Trascrizione in tempo reale."
       }
     }
   },

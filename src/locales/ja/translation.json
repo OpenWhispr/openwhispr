@@ -1320,6 +1320,13 @@
           "description": "独自のプロバイダーと API キーを設定してください。",
           "title": "カスタム設定に切り替えました"
         }
+      },
+      "dictationMode": {
+        "title": "ディクテーションモード",
+        "normal": "通常",
+        "normalDescription": "最高の精度ですが、録音後に処理に少し時間がかかります。",
+        "fast": "高速",
+        "fastDescription": "OpenAI Realtime API経由のWebSocketストリーミング。リアルタイム文字起こし。"
       }
     }
   },
