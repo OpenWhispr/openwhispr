@@ -237,19 +237,26 @@ class DatabaseManager {
             "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key) VALUES (?, ?, ?, ?, 1, 0, ?)"
           )
           .run(
-            "Clean Up Notes",
-            "Fix grammar, structure, and formatting",
-            "Clean up grammar, improve structure, and format these notes for readability while preserving all original meaning.",
+            "Generate Notes",
+            "Clean up, structure, and enhance your notes",
+            "You are given the user's notes and/or a meeting transcript. If a meeting transcript is present, combine all inputs into clean, well-structured meeting notes in markdown — include key discussion points, decisions made, action items, and follow-ups. If only personal notes are provided, clean up grammar, improve structure, and format for readability. Preserve the user's intent and meaning. Do not include filler, small talk, or redundant information.",
             "sparkles",
-            "notes.actions.builtin.cleanupNotes"
+            "notes.actions.builtin.generateNotes"
           );
       }
 
+      // Migrate built-in action to "Generate Notes"
       this.db
         .prepare(
-          "UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND name = ? AND translation_key IS NULL"
+          "UPDATE actions SET name = ?, description = ?, prompt = ?, translation_key = ? WHERE is_builtin = 1 AND translation_key != ?"
         )
-        .run("notes.actions.builtin.cleanupNotes", "Clean Up Notes");
+        .run(
+          "Generate Notes",
+          "Clean up, structure, and enhance your notes",
+          "You are given the user's notes and/or a meeting transcript. If a meeting transcript is present, combine all inputs into clean, well-structured meeting notes in markdown — include key discussion points, decisions made, action items, and follow-ups. If only personal notes are provided, clean up grammar, improve structure, and format for readability. Preserve the user's intent and meaning. Do not include filler, small talk, or redundant information.",
+          "notes.actions.builtin.generateNotes",
+          "notes.actions.builtin.generateNotes"
+        );
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS google_calendar_tokens (

@@ -214,6 +214,20 @@ export default function ControlPanel() {
     return () => cleanup?.();
   }, []);
 
+  // When accessibility is missing on macOS, open the permissions settings page
+  useEffect(() => {
+    const cleanup = window.electronAPI?.onAccessibilityMissing?.(() => {
+      setSettingsSection("privacyData");
+      setShowSettings(true);
+      toast({
+        title: t("controlPanel.accessibilityMissing.title"),
+        description: t("controlPanel.accessibilityMissing.description"),
+        duration: 10000,
+      });
+    });
+    return () => cleanup?.();
+  }, [toast, t]);
+
   const handleMeetingRecordingRequestHandled = useCallback(
     () => setMeetingRecordingRequest(null),
     []

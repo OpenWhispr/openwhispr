@@ -216,6 +216,15 @@ class GoogleCalendarOAuth {
     return tokens.access_token;
   }
 
+  async revokeToken(token) {
+    const body = new URLSearchParams({ token }).toString();
+    try {
+      await this._httpsPost("https://oauth2.googleapis.com/revoke", body);
+    } catch {
+      // Best-effort — token may already be revoked or network unavailable
+    }
+  }
+
   _httpsPost(urlString, body) {
     const url = new URL(urlString);
     return new Promise((resolve, reject) => {

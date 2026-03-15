@@ -7,7 +7,9 @@ import { getRecordingErrorTitle } from "../utils/recordingErrors";
 interface UseNoteRecordingOptions {
   onTranscriptionComplete: (text: string) => void;
   onPartialTranscript?: (text: string) => void;
+  onStreamingCommit?: (text: string) => void;
   onError?: (error: { title: string; description: string }) => void;
+  systemAudioEnabled?: boolean;
 }
 
 interface UseNoteRecordingReturn {
@@ -25,7 +27,9 @@ interface UseNoteRecordingReturn {
 export function useNoteRecording({
   onTranscriptionComplete,
   onPartialTranscript,
+  onStreamingCommit: onStreamingCommitCb,
   onError,
+  systemAudioEnabled = false,
 }: UseNoteRecordingOptions): UseNoteRecordingReturn {
   const { t } = useTranslation();
   const [isRecording, setIsRecording] = useState(false);
@@ -35,13 +39,24 @@ export function useNoteRecording({
   const [streamingCommits, setStreamingCommits] = useState<string[]>([]);
   const audioManagerRef = useRef<InstanceType<typeof AudioManager> | null>(null);
 
-  const callbacksRef = useRef({ onTranscriptionComplete, onPartialTranscript, onError });
-  callbacksRef.current = { onTranscriptionComplete, onPartialTranscript, onError };
+  const callbacksRef = useRef({
+    onTranscriptionComplete,
+    onPartialTranscript,
+    onStreamingCommitCb,
+    onError,
+  });
+  callbacksRef.current = {
+    onTranscriptionComplete,
+    onPartialTranscript,
+    onStreamingCommitCb,
+    onError,
+  };
 
   useEffect(() => {
     const manager = new AudioManager();
     audioManagerRef.current = manager;
     manager.setSkipReasoning(true);
+    manager.setSystemAudioEnabled(systemAudioEnabled);
 
     manager.setCallbacks({
       onStateChange: ({
@@ -71,6 +86,7 @@ export function useNoteRecording({
       },
       onStreamingCommit: (text: string) => {
         setStreamingCommits((pending) => [...pending, text]);
+        callbacksRef.current.onStreamingCommitCb?.(text);
       },
       onTranscriptionComplete: (result: {
         success: boolean;
@@ -104,6 +120,10 @@ export function useNoteRecording({
       audioManagerRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    audioManagerRef.current?.setSystemAudioEnabled(systemAudioEnabled);
+  }, [systemAudioEnabled]);
 
   const startRecording = useCallback(async () => {
     const manager = audioManagerRef.current;

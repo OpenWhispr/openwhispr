@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getSettings } from "../stores/settingsStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
+import { getSystemAudioStream } from "../utils/systemAudio";
 import logger from "../utils/logger";
 
 interface UseMeetingTranscriptionReturn {
@@ -185,45 +186,7 @@ const flushAndDisconnectProcessor = async (processor: AudioWorkletNode | null) =
   processor.disconnect();
 };
 
-const getSystemAudioStream = async (): Promise<MediaStream | null> => {
-  try {
-    // Use getDisplayMedia (handled by setDisplayMediaRequestHandler in main process)
-    // which properly captures system audio via macOS ScreenCaptureKit loopback.
-    const stream = await navigator.mediaDevices.getDisplayMedia({
-      audio: true,
-      video: true,
-    });
-
-    const audioTracks = stream.getAudioTracks();
-    const videoTracks = stream.getVideoTracks();
-    logger.debug(
-      "Display media stream obtained",
-      {
-        audioTracks: audioTracks.length,
-        videoTracks: videoTracks.length,
-        audioSettings: audioTracks[0]?.getSettings(),
-      },
-      "meeting"
-    );
-
-    if (!audioTracks.length) {
-      logger.error("No audio track in display media stream", {}, "meeting");
-      videoTracks.forEach((t) => t.stop());
-      return null;
-    }
-
-    // Video tracks must stay alive — stopping them kills the ScreenCaptureKit loopback audio
-
-    audioTracks[0].addEventListener("ended", () => {
-      logger.error("Audio track ended unexpectedly", {}, "meeting");
-    });
-
-    return stream;
-  } catch (err) {
-    logger.error("Failed to capture system audio", { error: (err as Error).message }, "meeting");
-    return null;
-  }
-};
+// getSystemAudioStream imported from ../utils/systemAudio
 
 export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const [isRecording, setIsRecording] = useState(false);

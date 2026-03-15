@@ -66,7 +66,7 @@ interface NoteEditorProps {
   isMeetingRecording?: boolean;
   meetingTranscript?: string;
   onStopMeetingRecording?: () => void;
-  onGenerateNotes?: () => void;
+  liveTranscript?: string;
 }
 
 interface DictationRange {
@@ -162,7 +162,7 @@ export default function NoteEditor({
   isMeetingRecording,
   meetingTranscript,
   onStopMeetingRecording,
-  onGenerateNotes,
+  liveTranscript,
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<MeetingViewMode>("raw");
@@ -365,7 +365,7 @@ export default function NoteEditor({
   const segmentContainerRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ opacity: 0 });
 
-  const effectiveTranscript = meetingTranscript || note.transcript || "";
+  const effectiveTranscript = liveTranscript || meetingTranscript || note.transcript || "";
   const hasMeetingTranscript = !isMeetingRecording && !!effectiveTranscript;
 
   const updateSegmentIndicator = useCallback(() => {
@@ -455,6 +455,8 @@ export default function NoteEditor({
     onStartRecording();
   }, [onStartRecording, syncSelectionRefs]);
 
+  const pendingTranscriptSwitchRef = useRef(false);
+
   useEffect(() => {
     if (isRecording && !prevRecordingRef.current) {
       const selStart = cursorPosRef.current;
@@ -466,6 +468,8 @@ export default function NoteEditor({
         committedChars: 0,
       };
       if (viewMode === "enhanced") setViewMode("raw");
+      // Mark that we should switch to transcript view once transcript arrives
+      pendingTranscriptSwitchRef.current = true;
     }
     if (!isRecording && prevRecordingRef.current) {
       // Only clear if no progressive text was inserted (non-streaming case).
@@ -478,6 +482,14 @@ export default function NoteEditor({
     }
     prevRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  // Auto-switch to transcript view after recording stops and transcript is ready
+  useEffect(() => {
+    if (!isRecording && !isProcessing && pendingTranscriptSwitchRef.current && liveTranscript) {
+      pendingTranscriptSwitchRef.current = false;
+      setViewMode("transcript");
+    }
+  }, [isRecording, isProcessing, liveTranscript]);
 
   // Partial effect: only replace the active partial zone [partialStart, end].
   // Committed text before partialStart is untouched — users can edit it freely.
@@ -633,30 +645,6 @@ export default function NoteEditor({
   }, [note.content]);
 
   const noteDate = formatNoteDate(note.created_at);
-
-  const generateNotesButton = onGenerateNotes ? (
-    <button
-      onClick={onGenerateNotes}
-      disabled={actionProcessingState === "processing"}
-      className={cn(
-        "flex items-center gap-2 h-11 px-5 rounded-xl",
-        "bg-accent/8 dark:bg-accent/12",
-        "backdrop-blur-xl",
-        "border border-accent/15 dark:border-accent/20",
-        "shadow-sm hover:shadow-md",
-        "text-accent/70 hover:text-accent",
-        "transition-[background-color,color,transform] duration-200",
-        "hover:bg-accent/12 dark:hover:bg-accent/18",
-        "active:scale-[0.98]",
-        "disabled:opacity-40 disabled:pointer-events-none"
-      )}
-    >
-      <Sparkles size={14} />
-      <span className="text-xs font-semibold tracking-tight">
-        {t("notes.editor.generateNotes")}
-      </span>
-    </button>
-  ) : null;
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -822,13 +810,7 @@ export default function NoteEditor({
           isProcessing={isProcessing}
           onStart={handleStartRecording}
           onStop={isMeetingRecording ? onStopMeetingRecording! : onStopRecording}
-          actionPicker={
-            isMeetingRecording
-              ? undefined
-              : hasMeetingTranscript && !enhancement
-                ? generateNotesButton
-                : actionPicker
-          }
+          actionPicker={isMeetingRecording ? undefined : actionPicker}
         />
       </div>
     </div>

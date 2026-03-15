@@ -19,9 +19,7 @@ const agentOverlayImport = () => import("./components/AgentOverlay.tsx");
 const ControlPanel = React.lazy(controlPanelImport);
 const OnboardingFlow = React.lazy(onboardingFlowImport);
 const AgentOverlay = React.lazy(agentOverlayImport);
-const MeetingNotificationOverlay = React.lazy(
-  () => import("./components/MeetingNotificationOverlay.tsx")
-);
+import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
 
 let root = null;
 
@@ -278,11 +276,7 @@ function AppRouter() {
   const isMeetingNotification = window.location.search.includes("meeting-notification=true");
 
   if (isMeetingNotification) {
-    return (
-      <Suspense fallback={<div />}>
-        <MeetingNotificationOverlay />
-      </Suspense>
-    );
+    return <MeetingNotificationOverlay />;
   }
 
   return <MainApp />;
@@ -322,7 +316,8 @@ function MainApp() {
       localStorage.getItem("skipAuth") === "true";
 
     // Valid session proves prior onboarding — restore flag if localStorage was wiped
-    if (!onboardingCompleted && isSignedIn) {
+    const isReturningUser = !onboardingCompleted && isSignedIn;
+    if (isReturningUser) {
       localStorage.setItem("onboardingCompleted", "true");
     }
 
@@ -333,6 +328,12 @@ function MainApp() {
         setShowOnboarding(true);
       } else if (!isSignedIn && !authSkipped) {
         setNeedsReauth(true);
+      }
+
+      // Returning users who skipped onboarding may lack accessibility permissions.
+      // Trigger an immediate check so the main process sends accessibility-missing.
+      if (isReturningUser) {
+        window.electronAPI?.checkAccessibilityTrusted?.();
       }
     }
 

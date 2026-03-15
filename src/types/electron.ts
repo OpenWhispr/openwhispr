@@ -609,7 +609,7 @@ declare global {
 
       // App management
       appQuit: () => Promise<void>;
-      cleanupApp: () => Promise<{ success: boolean; message: string }>;
+      cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
 
       // Update operations
       checkForUpdates: () => Promise<UpdateCheckResult>;
@@ -634,7 +634,11 @@ declare global {
         enabled: boolean,
         newHotkey?: string | null
       ) => Promise<{ success: boolean }>;
-      getHotkeyModeInfo?: () => Promise<{ isUsingGnome: boolean }>;
+      getHotkeyModeInfo?: () => Promise<{
+        isUsingGnome: boolean;
+        isUsingHyprland: boolean;
+        isUsingNativeShortcut: boolean;
+      }>;
 
       // Wayland paste diagnostics
       getYdotoolStatus?: () => Promise<{
@@ -661,6 +665,11 @@ declare global {
       onHotkeyRegistrationFailed?: (
         callback: (data: { hotkey: string; error: string; suggestions: string[] }) => void
       ) => () => void;
+      onSettingUpdated?: (callback: (data: { key: string; value: unknown }) => void) => () => void;
+
+      // Accessibility permission events (macOS)
+      onAccessibilityMissing?: (callback: () => void) => () => void;
+      checkAccessibilityTrusted?: () => Promise<boolean>;
 
       // Gemini API key management
       getGeminiKey: () => Promise<string | null>;
@@ -735,6 +744,7 @@ declare global {
       // Windows Push-to-Talk notifications
       notifyActivationModeChanged?: (mode: "tap" | "push") => void;
       notifyHotkeyChanged?: (hotkey: string) => void;
+      registerMeetingHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
       notifyFloatingIconAutoHideChanged?: (enabled: boolean) => void;
       onFloatingIconAutoHideChanged?: (callback: (enabled: boolean) => void) => () => void;
       notifyStartMinimizedChanged?: (enabled: boolean) => void;
@@ -815,7 +825,10 @@ declare global {
         error?: string;
         code?: string;
       }>;
-      cloudCheckout?: (plan?: "monthly" | "annual") => Promise<{
+      cloudCheckout?: (opts?: {
+        plan?: "monthly" | "annual";
+        tier?: "pro" | "business";
+      }) => Promise<{
         success: boolean;
         url?: string;
         error?: string;
@@ -826,6 +839,29 @@ declare global {
         url?: string;
         error?: string;
         code?: string;
+      }>;
+      cloudSwitchPlan?: (opts: {
+        plan: "monthly" | "annual";
+        tier: "pro" | "business";
+      }) => Promise<{
+        success: boolean;
+        alreadyOnPlan?: boolean;
+        error?: string;
+      }>;
+      cloudPreviewSwitch?: (opts: {
+        plan: "monthly" | "annual";
+        tier: "pro" | "business";
+      }) => Promise<{
+        success: boolean;
+        immediateAmount?: number;
+        currency?: string;
+        currentPriceAmount?: number;
+        currentInterval?: string;
+        newPriceAmount?: number;
+        newInterval?: string;
+        nextBillingDate?: string;
+        alreadyOnPlan?: boolean;
+        error?: string;
       }>;
 
       // Cloud audio file transcription
@@ -1138,6 +1174,7 @@ declare global {
       onMeetingDetectedStartRecording?: (callback: (data: any) => void) => () => void;
       onMeetingNotificationData?: (callback: (data: any) => void) => () => void;
       getMeetingNotificationData?: () => Promise<any>;
+      meetingNotificationReady?: () => Promise<void>;
       meetingNotificationRespond?: (
         detectionId: string,
         action: string

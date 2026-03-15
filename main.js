@@ -1,4 +1,12 @@
-const { app, globalShortcut, BrowserWindow, dialog, ipcMain, session } = require("electron");
+const {
+  app,
+  globalShortcut,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  session,
+  systemPreferences,
+} = require("electron");
 const path = require("path");
 const http = require("http");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
@@ -67,13 +75,15 @@ if (process.platform === "win32") {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
-// Enable native Wayland support: Ozone platform for native rendering,
-// and GlobalShortcutsPortal for global shortcuts via xdg-desktop-portal
+// Enable native Wayland support: Ozone platform for native rendering.
+// GlobalShortcutsPortal is intentionally omitted — GNOME uses its own
+// D-Bus shortcut manager, and on KDE the portal causes unwanted permission
+// dialogs while XWayland globalShortcut works fine without it.
 if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") {
   app.commandLine.appendSwitch("ozone-platform-hint", "auto");
   app.commandLine.appendSwitch(
     "enable-features",
-    "UseOzonePlatform,WaylandWindowDecorations,GlobalShortcutsPortal"
+    "UseOzonePlatform,WaylandWindowDecorations"
   );
 }
 
@@ -339,6 +349,11 @@ app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
 
+  if (url.includes("upgrade-success")) {
+    handleUpgradeDeepLink();
+    return;
+  }
+
   handleOAuthDeepLink(url);
 
   if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
@@ -385,6 +400,16 @@ function handleOAuthDeepLink(deepLinkUrl) {
     navigateControlPanelWithVerifier(verifier);
   } catch (err) {
     if (debugLogger) debugLogger.error("Failed to handle OAuth deep link:", err);
+  }
+}
+
+function handleUpgradeDeepLink() {
+  if (isLiveWindow(windowManager?.controlPanelWindow)) {
+    windowManager.controlPanelWindow.webContents.executeJavaScript(
+      'window.dispatchEvent(new Event("upgrade-success"))'
+    );
+    windowManager.controlPanelWindow.show();
+    windowManager.controlPanelWindow.focus();
   }
 }
 
@@ -522,6 +547,7 @@ async function startApp() {
 
   windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
+  windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 
   ipcMain.on("activation-mode-changed", (_event, mode) => {
     windowManager.setActivationModeCache(mode);
@@ -544,6 +570,7 @@ async function startApp() {
 
   ipcMain.on("panel-start-position-changed", (_event, position) => {
     windowManager.setPanelStartPosition(position);
+    environmentManager.savePanelStartPosition(position);
   });
 
   if (process.platform === "darwin") {
@@ -584,6 +611,34 @@ async function startApp() {
     } else {
       hotkeyManager.unregisterSlot("agent");
       environmentManager.saveAgentKey("");
+    }
+  });
+
+  // Set up meeting mode hotkey
+  const meetingHotkeyCallback = () => {
+    if (hotkeyManager.isInListeningMode()) return;
+    debugLogger.info("Meeting hotkey triggered", {}, "meeting");
+    meetingDetectionEngine?.startManualMeeting();
+  };
+
+  const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
+  if (savedMeetingKey) {
+    const result = hotkeyManager.registerSlot("meeting", savedMeetingKey, meetingHotkeyCallback);
+    debugLogger.info("Meeting hotkey startup registration", { savedMeetingKey, ...result }, "meeting");
+  }
+
+  ipcMain.handle("register-meeting-hotkey", (_event, hotkey) => {
+    if (hotkey) {
+      const result = hotkeyManager.registerSlot("meeting", hotkey, meetingHotkeyCallback);
+      if (result.success) {
+        environmentManager.saveMeetingKey(hotkey);
+        return { success: true };
+      }
+      return { success: false, message: result.error };
+    } else {
+      hotkeyManager.unregisterSlot("meeting");
+      environmentManager.saveMeetingKey("");
+      return { success: true };
     }
   });
 
@@ -802,6 +857,33 @@ async function startApp() {
 
     globeKeyManager.start();
 
+    // After starting globe-listener, check if accessibility is granted.
+    // If not, notify both windows so they can prompt the user.
+    const checkAndNotifyAccessibility = () => {
+      if (!systemPreferences.isTrustedAccessibilityClient(false)) {
+        debugLogger.info("[Accessibility] macOS accessibility not trusted — notifying renderers");
+        if (isLiveWindow(windowManager.controlPanelWindow)) {
+          windowManager.controlPanelWindow.webContents.send("accessibility-missing");
+        }
+        if (isLiveWindow(windowManager.mainWindow)) {
+          windowManager.mainWindow.webContents.send("accessibility-missing");
+        }
+      }
+    };
+
+    // Check shortly after startup (give windows time to load)
+    setTimeout(checkAndNotifyAccessibility, 3000);
+
+    // Allow renderer to request an accessibility check (e.g. on sign-in).
+    // Also sends accessibility-missing events if untrusted.
+    ipcMain.handle("check-accessibility-trusted", () => {
+      const trusted = systemPreferences.isTrustedAccessibilityClient(false);
+      if (!trusted) {
+        checkAndNotifyAccessibility();
+      }
+      return trusted;
+    });
+
     // Reset native key state when hotkey changes
     ipcMain.on("hotkey-changed", (_event, _newHotkey) => {
       globeKeyDownTime = 0;
@@ -950,7 +1032,11 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
-      handleOAuthDeepLink(url);
+      if (url.includes("upgrade-success")) {
+        handleUpgradeDeepLink();
+      } else {
+        handleOAuthDeepLink(url);
+      }
     }
   });
 

@@ -3,9 +3,9 @@ const path = require("path");
 const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
-const AppUtils = require("../utils");
 const debugLogger = require("./debugLogger");
 const GnomeShortcutManager = require("./gnomeShortcut");
+const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
@@ -964,10 +964,11 @@ class IPCHandlers {
       const { detectNvidiaGpu } = require("../utils/gpuDetection");
       const gpuInfo = await detectNvidiaGpu();
       if (!this.whisperCudaManager) {
-        return { downloaded: false, path: null, gpuInfo };
+        return { downloaded: false, downloading: false, path: null, gpuInfo };
       }
       return {
         downloaded: this.whisperCudaManager.isDownloaded(),
+        downloading: this.whisperCudaManager.isDownloading(),
         path: this.whisperCudaManager.getCudaBinaryPath(),
         gpuInfo,
       };
@@ -988,8 +989,14 @@ class IPCHandlers {
           }
         });
         this._syncStartupEnv({ WHISPER_CUDA_ENABLED: "true" });
+        // Restart whisper-server so it picks up the CUDA binary
+        await this.whisperManager.stopServer().catch(() => {});
         return { success: true };
       } catch (error) {
+        debugLogger.error("CUDA binary download failed", {
+          error: error.message,
+          stack: error.stack,
+        });
         return { success: false, error: error.message };
       }
     });
@@ -1004,6 +1011,8 @@ class IPCHandlers {
       const result = await this.whisperCudaManager.delete();
       if (result.success) {
         this._syncStartupEnv({}, ["WHISPER_CUDA_ENABLED"]);
+        // Restart whisper-server so it falls back to CPU binary
+        await this.whisperManager.stopServer().catch(() => {});
       }
       return result;
     });
@@ -1135,8 +1144,111 @@ class IPCHandlers {
     });
 
     ipcMain.handle("cleanup-app", async (event) => {
-      AppUtils.cleanup(this.windowManager.mainWindow);
-      return { success: true, message: "Cleanup completed successfully" };
+      const fs = require("fs");
+      const os = require("os");
+      const errors = [];
+      const mainWindow = this.windowManager.mainWindow;
+
+      // Stop services before deleting files they hold open
+      try {
+        await this.parakeetManager?.stopServer();
+      } catch (e) {
+        errors.push(`Parakeet stop: ${e.message}`);
+      }
+      try {
+        this.whisperManager?.stopServer();
+      } catch (e) {
+        errors.push(`Whisper stop: ${e.message}`);
+      }
+      try {
+        this.googleCalendarManager?.stop();
+      } catch (e) {
+        errors.push(`GCal stop: ${e.message}`);
+      }
+
+      // Revoke Google OAuth tokens before DB is closed
+      try {
+        await this.googleCalendarManager?.revokeAllTokens();
+      } catch (e) {
+        errors.push(`GCal revoke: ${e.message}`);
+      }
+
+      // Close DB connection before deleting the file
+      try {
+        this.databaseManager?.db?.close();
+      } catch (e) {
+        errors.push(`DB close: ${e.message}`);
+      }
+
+      // Delete audio files
+      try {
+        this.audioStorageManager.deleteAllAudio();
+      } catch (e) {
+        errors.push(`Audio delete: ${e.message}`);
+      }
+
+      // Delete downloaded models
+      try {
+        const whisperDir = path.join(os.homedir(), ".cache", "openwhispr", "whisper-models");
+        if (fs.existsSync(whisperDir)) fs.rmSync(whisperDir, { recursive: true, force: true });
+      } catch (e) {
+        errors.push(`Whisper models: ${e.message}`);
+      }
+      try {
+        await this.parakeetManager?.deleteAllParakeetModels();
+      } catch (e) {
+        errors.push(`Parakeet models: ${e.message}`);
+      }
+      try {
+        const modelManager = require("./modelManagerBridge").default;
+        await modelManager.deleteAllModels();
+      } catch (e) {
+        errors.push(`LLM models: ${e.message}`);
+      }
+
+      // Delete database file + WAL/SHM
+      try {
+        const dbPath = path.join(
+          app.getPath("userData"),
+          process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db"
+        );
+        if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+        if (fs.existsSync(dbPath + "-wal")) fs.unlinkSync(dbPath + "-wal");
+        if (fs.existsSync(dbPath + "-shm")) fs.unlinkSync(dbPath + "-shm");
+      } catch (e) {
+        errors.push(`DB file: ${e.message}`);
+      }
+
+      // Delete .env file
+      try {
+        const envPath = path.join(app.getPath("userData"), ".env");
+        if (fs.existsSync(envPath)) fs.unlinkSync(envPath);
+      } catch (e) {
+        errors.push(`Env file: ${e.message}`);
+      }
+
+      // Clear session cookies
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+      } catch (e) {
+        errors.push(`Cookies: ${e.message}`);
+      }
+
+      // Clear localStorage
+      if (mainWindow?.webContents) {
+        try {
+          await mainWindow.webContents.executeJavaScript("localStorage.clear()");
+        } catch (e) {
+          errors.push(`localStorage: ${e.message}`);
+        }
+      }
+
+      if (errors.length > 0) {
+        debugLogger.warn("Cleanup completed with errors", { errors }, "cleanup");
+      }
+
+      return { success: errors.length === 0, message: "Cleanup completed", errors };
     });
 
     ipcMain.handle("update-hotkey", async (event, hotkey) => {
@@ -1183,6 +1295,14 @@ class IPCHandlers {
           debugLogger.log("[IPC] Unregistering GNOME keybinding for hotkey capture mode");
           await hotkeyManager.gnomeManager.unregisterKeybinding().catch((err) => {
             debugLogger.warn("[IPC] Failed to unregister GNOME keybinding:", err.message);
+          });
+        }
+
+        // On Hyprland Wayland, unregister the keybinding during capture
+        if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager) {
+          debugLogger.log("[IPC] Unregistering Hyprland keybinding for hotkey capture mode");
+          await hotkeyManager.hyprlandManager.unregisterKeybinding().catch((err) => {
+            debugLogger.warn("[IPC] Failed to unregister Hyprland keybinding:", err.message);
           });
         }
       } else {
@@ -1232,6 +1352,17 @@ class IPCHandlers {
             hotkeyManager.currentHotkey = effectiveHotkey;
           }
         }
+
+        // On Hyprland Wayland, re-register the keybinding with the effective hotkey
+        if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager && effectiveHotkey) {
+          debugLogger.log(
+            `[IPC] Re-registering Hyprland keybinding "${effectiveHotkey}" after capture mode`
+          );
+          const success = await hotkeyManager.hyprlandManager.registerKeybinding(effectiveHotkey);
+          if (success) {
+            hotkeyManager.currentHotkey = effectiveHotkey;
+          }
+        }
       }
 
       return { success: true };
@@ -1240,6 +1371,8 @@ class IPCHandlers {
     ipcMain.handle("get-hotkey-mode-info", async () => {
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
+        isUsingHyprland: this.windowManager.isUsingHyprlandHotkeys(),
+        isUsingNativeShortcut: this.windowManager.isUsingNativeShortcutHotkeys(),
       };
     });
 
@@ -1778,11 +1911,17 @@ class IPCHandlers {
           delete process.env.LLAMA_GPU_BACKEND;
           const modelManager = require("./modelManagerBridge").default;
           modelManager.serverManager.cachedServerBinaryPaths = null;
-          this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+          await this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+          // Restart llama server so it picks up the Vulkan binary
+          await modelManager.stopServer().catch(() => {});
         }
 
         return result;
       } catch (error) {
+        debugLogger.error("Vulkan binary download failed", {
+          error: error.message,
+          stack: error.stack,
+        });
         return { success: false, error: error.message };
       }
     });
@@ -2679,18 +2818,71 @@ class IPCHandlers {
       }
     };
 
-    ipcMain.handle("cloud-checkout", (event, plan) =>
-      fetchStripeUrl(
-        event,
-        "/api/stripe/checkout",
-        "Cloud checkout error",
-        plan ? { plan } : undefined
-      )
+    ipcMain.handle("cloud-checkout", (event, opts) =>
+      fetchStripeUrl(event, "/api/stripe/checkout", "Cloud checkout error", opts || undefined)
     );
 
     ipcMain.handle("cloud-billing-portal", (event) =>
       fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
     );
+
+    ipcMain.handle("cloud-switch-plan", async (event, opts) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        const response = await fetch(`${apiUrl}/api/stripe/switch-plan`, {
+          method: "POST",
+          headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
+          body: JSON.stringify(opts),
+        });
+
+        if (response.status === 401) {
+          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+          return { success: false, error: data.error || "Failed to switch plan" };
+        }
+        return data;
+      } catch (error) {
+        debugLogger.error(`Cloud switch plan error: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("cloud-preview-switch", async (event, opts) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        const response = await fetch(`${apiUrl}/api/stripe/preview-switch`, {
+          method: "POST",
+          headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
+          body: JSON.stringify(opts),
+        });
+
+        if (response.status === 401) {
+          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+          return { success: false, error: data.error || "Failed to preview plan change" };
+        }
+        return { success: true, ...data };
+      } catch (error) {
+        debugLogger.error(`Cloud preview switch error: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+    });
 
     ipcMain.handle("get-stt-config", async (event) => {
       try {
@@ -3819,6 +4011,10 @@ class IPCHandlers {
 
     ipcMain.handle("get-meeting-notification-data", async () => {
       return this.windowManager?._pendingNotificationData ?? null;
+    });
+
+    ipcMain.handle("meeting-notification-ready", async () => {
+      this.windowManager?.showNotificationWindow();
     });
 
     ipcMain.handle("get-desktop-sources", async (_event, types) => {

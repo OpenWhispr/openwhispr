@@ -8,6 +8,7 @@ function isPrivateHost(hostname: string): boolean {
     const octet = parseInt(h.split(".")[1], 10);
     if (octet >= 16 && octet <= 31) return true;
   }
+  if (/^100\.(6[4-9]|[7-9]\d|1[0-1]\d|12[0-7])\./.test(h)) return true;
   if (h.startsWith("169.254.")) return true;
 
   const isIPv6 = h.includes(":");

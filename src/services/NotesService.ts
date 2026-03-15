@@ -85,6 +85,28 @@ async function list(limit?: number, before?: string): Promise<{ notes: CloudNote
   return res.json() as Promise<{ notes: CloudNote[] }>;
 }
 
+async function deleteAll(): Promise<{ deleted: number; errors: number }> {
+  // Try bulk endpoint first; fall back to per-note deletion
+  try {
+    const res = await fetch(`${OPENWHISPR_API_URL}/api/notes/delete-all`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { deleted?: number };
+      return { deleted: data.deleted ?? 0, errors: 0 };
+    }
+  } catch {
+    // bulk endpoint doesn't exist — fall through
+  }
+
+  // Fallback: list all and delete one-by-one
+  const { notes } = await list(9999);
+  const results = await Promise.allSettled(notes.map((n) => deleteNote(n.id)));
+  const errors = results.filter((r) => r.status === "rejected").length;
+  return { deleted: results.length - errors, errors };
+}
+
 async function search(query: string, limit?: number): Promise<{ notes: SearchResult[] }> {
   const res = await fetch(`${OPENWHISPR_API_URL}/api/notes/search`, {
     method: "POST",
@@ -96,6 +118,14 @@ async function search(query: string, limit?: number): Promise<{ notes: SearchRes
   return res.json() as Promise<{ notes: SearchResult[] }>;
 }
 
-export { create, batchCreate, update, deleteNote, list, search };
+export { create, batchCreate, update, deleteNote, deleteAll, list, search };
 
-export const NotesService = { create, batchCreate, update, delete: deleteNote, list, search };
+export const NotesService = {
+  create,
+  batchCreate,
+  update,
+  delete: deleteNote,
+  deleteAll,
+  list,
+  search,
+};

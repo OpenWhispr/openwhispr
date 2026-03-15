@@ -29,7 +29,8 @@
   },
   "window": {
     "voiceRecorderTitle": "ボイスレコーダー",
-    "controlPanelTitle": "コントロールパネル"
+    "controlPanelTitle": "コントロールパネル",
+    "agentChatTitle": "エージェントチャット"
   },
   "dialog": {
     "openLink": {
@@ -70,7 +71,8 @@
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
-      "trySuggestions": "お試しください: {{suggestions}}"
+      "trySuggestions": "お試しください: {{suggestions}}",
+      "slotConflict": "このホットキーは既に{{slot}}で使用されています。"
     }
   },
   "systemSettings": {
@@ -152,14 +154,17 @@
     "permissions": {
       "title": "権限",
       "microphoneTitle": "マイク",
-      "microphoneDescription": "音声のキャプチャに使用",
+      "microphoneDescription": "文字起こしのためにあなたの声を録音します",
       "grant": "許可",
       "accessibilityTitle": "アクセシビリティ",
       "accessibilityDescription": "システム設定でオンに切り替えてください",
       "testAndGrant": "テストして許可",
       "requiredForApp": "OpenWhispr の動作に必要です",
       "microphoneRequired": "マイクへのアクセスが必要です",
-      "openSystemSettings": "システム設定を開く"
+      "openSystemSettings": "システム設定を開く",
+      "screenRecordingTitle": "システムオーディオ",
+      "screenRecordingDescription": "通話や会議で他の参加者の音声を録音します。画面を録画することはありません。",
+      "optional": "任意"
     },
     "transcription": {
       "title": "文字起こし設定",
@@ -198,6 +203,10 @@
     "limit": {
       "weeklyTitle": "週間の利用上限に達しました",
       "weeklyDescription": "利用上限はローリング方式でリセットされます。Pro にアップグレードするか、自分の API キーを使用して無制限にご利用ください。"
+    },
+    "accessibilityMissing": {
+      "title": "アクセシビリティの許可が必要です",
+      "description": "OpenWhispr が正しく動作するにはアクセシビリティの許可が必要です。以下で有効にしてください。"
     },
     "billing": {
       "pastDueTitle": "お支払いを処理できませんでした",
@@ -857,6 +866,7 @@
         "limitReached": "上限到達",
         "pastDue": "支払い遅延",
         "pro": "Pro",
+        "business": "Business",
         "trial": "トライアル"
       },
       "billing": {
@@ -893,25 +903,24 @@
       "planLabels": {
         "free": "無料",
         "pro": "Pro",
+        "business": "Business",
         "trial": "トライアル"
       },
       "planTitle": "プラン",
       "pricing": {
         "title": "プラン",
-        "monthly": "月払い",
-        "annual": "年払い",
-        "annualBadge": "17% お得",
+        "billedYearly": "年払い",
         "free": {
-          "name": "無料",
+          "name": "Free",
           "price": "$0",
           "period": "永久",
           "features": [
-            "週 2,000 ワード",
-            "ローカル AI モデル",
-            "自分の API キーを使用",
-            "辞書とスニペット",
-            "100 以上の言語に対応",
-            "データ保持なし"
+            "Up to 2,000 words/week",
+            "5 hours of meetings per month",
+            "Local AI models included",
+            "Bring your own API keys",
+            "Zero data retention",
+            "Community support"
           ]
         },
         "pro": {
@@ -920,14 +929,31 @@
           "monthlyPeriod": "/月",
           "annualPrice": "$80",
           "annualPeriod": "/年",
+          "annualEquivalent": "$6.67",
+          "includesPrefix": "Free の全機能 +",
           "features": [
-            "無料プランのすべて",
-            "無制限の使用",
-            "リアルタイム文字起こし",
-            "最新の音声 & AI モデル",
-            "iOS/Android（近日公開）",
-            "データ保持なし",
-            "優先サポート"
+            "Unlimited words per week",
+            "20 hours of meetings per month",
+            "Email support",
+            "Zero data retention"
+          ],
+          "cta": "始める",
+          "switchToAnnual": "年払いに切り替え"
+        },
+        "business": {
+          "name": "Business",
+          "monthlyPrice": "$20",
+          "monthlyPeriod": "/月",
+          "annualPrice": "$200",
+          "annualPeriod": "/年",
+          "annualEquivalent": "$16.67",
+          "includesPrefix": "Pro の全機能 +",
+          "badge": "一番人気",
+          "features": [
+            "Unlimited usage",
+            "Unlimited meeting recordings",
+            "Priority support",
+            "Zero data retention"
           ],
           "cta": "始める",
           "switchToAnnual": "年払いに切り替え"
@@ -935,10 +961,34 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "カスタム",
-          "features": ["クラウド同期", "チーム機能（近日公開）", "SSO & コンプライアンス"],
+          "subtitle": "年払いのみ",
+          "includesPrefix": "Business の全機能 +",
+          "features": [
+            "Managed API credits",
+            "Cloud sync across devices",
+            "Team features & admin",
+            "SSO & compliance"
+          ],
           "cta": "お問い合わせ"
         },
-        "currentPlan": "現在のプラン"
+        "currentPlan": "現在のプラン",
+        "upgrade": "アップグレード",
+        "downgrade": "ダウングレード",
+        "planSwitched": "プランが正常に更新されました",
+        "confirmSwitch": {
+          "title": "プラン変更の確認",
+          "description": "{{plan}}（{{interval}}）に変更",
+          "monthly": "月額",
+          "yearly": "年額",
+          "chargeToday": "本日のご請求",
+          "accountCredit": "アカウントクレジット",
+          "newPrice": "新しい料金",
+          "nextBilling": "次回請求日",
+          "mo": "mo",
+          "yr": "yr",
+          "cancel": "キャンセル",
+          "confirm": "確認"
+        }
       },
       "rollingWeeklyLimit": "週間利用上限（ローリング）",
       "signOut": {
@@ -964,7 +1014,20 @@
         "title": "Pro を 7 日間無料でお試し"
       },
       "user": "ユーザー",
-      "wordsRemaining": "残り {{remaining}}"
+      "wordsRemaining": "残り {{remaining}}",
+      "deleteAccount": {
+        "label": "アカウントを削除",
+        "labelDescription": "アカウント、すべてのクラウドデータ、ローカルデータを完全に削除します。この操作は元に戻せません。",
+        "button": "アカウントを削除",
+        "deleting": "削除中...",
+        "title": "アカウントを削除しますか？",
+        "description": "OpenWhispr アカウント、すべてのクラウド同期ノート、すべてのローカルデータ（文字起こし、音声録音、ダウンロード済みモデル、カレンダー接続、設定を含む）が完全に削除されます。この操作は元に戻せません。",
+        "confirmText": "すべて削除",
+        "successTitle": "アカウントが削除されました",
+        "successDescription": "アカウントとすべてのデータが削除されました。アプリが再読み込みされます。",
+        "failedTitle": "削除に失敗しました",
+        "failedDescription": "アカウントの削除中にエラーが発生しました。ローカルデータが部分的に削除された可能性があります。もう一度お試しください。"
+      }
     },
     "agentConfig": {
       "agentName": "エージェント名",
@@ -1028,7 +1091,7 @@
       "removing": "削除中...",
       "resetAll": {
         "confirmText": "すべて削除",
-        "description": "すべての設定、文字起こし履歴、キャッシュデータが完全に削除されます。リセット後にアプリが再読み込みされます。",
+        "description": "すべてのローカル設定、文字起こし、音声録音、ダウンロード済みAIモデル、カレンダー接続、キャッシュデータが完全に削除されます。クラウドデータとアカウントは影響を受けません。リセット後にアプリが再読み込みされます。",
         "failedDescription": "問題が発生しました。もう一度試すか、アプリを再インストールしてください。",
         "failedTitle": "リセットできませんでした",
         "successDescription": "すべてリセットされました。アプリを再読み込みします。",
@@ -1036,7 +1099,7 @@
         "title": "すべてのアプリデータをリセット"
       },
       "resetAppData": "アプリデータをリセット",
-      "resetAppDataDescription": "すべての設定、文字起こし履歴、キャッシュデータを完全に削除"
+      "resetAppDataDescription": "すべてのローカル設定、文字起こし、音声録音、ダウンロード済みモデル、キャッシュデータを完全に削除"
     },
     "dictionary": {
       "title": "カスタム辞書",
@@ -1081,6 +1144,11 @@
         "description": "音声ディクテーションの開始/停止に使用するキーの組み合わせ",
         "resetToDefault": "{{hotkey}}にリセット",
         "title": "ディクテーションホットキー"
+      },
+      "meetingHotkey": {
+        "title": "ミーティングモードホットキー",
+        "description": "ミーティングモードを開始し、パネルを画面の横に配置する",
+        "clear": "ホットキーを削除"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -1224,7 +1292,7 @@
       "accessibilityDescription": "文字起こし後の自動貼り付けに必要",
       "accessibilityTitle": "アクセシビリティ",
       "description": "OpenWhispr の正常動作に必要なシステム権限をテスト・管理",
-      "microphoneDescription": "音声録音とディクテーションに必要",
+      "microphoneDescription": "ディクテーションと文字起こしのためにあなたの声を録音します",
       "microphoneTitle": "マイク",
       "resetAccessibility": {
         "description": "OpenWhispr をアクセシビリティの権限から削除します。システム設定 > プライバシーとセキュリティ > アクセシビリティ で再度許可する必要があります。",
@@ -1232,6 +1300,9 @@
         "rowDescription": "アプリの再インストールや再ビルド後の問題を修正するために、システム設定で OpenWhispr を削除してから再追加",
         "title": "アクセシビリティの権限をリセット"
       },
+      "optional": "任意",
+      "screenRecordingTitle": "システムオーディオ",
+      "screenRecordingDescription": "通話や会議で他の参加者の音声を録音します",
       "test": "テスト",
       "testAndGrant": "テストして許可",
       "title": "権限",
@@ -1317,13 +1388,14 @@
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト"
       },
       "local": {
+        "qwen_qwen3_5_9b_q4_k_m": "強力なハイブリッドモデル",
+        "qwen_qwen3_5_4b_q4_k_m": "汎用向けバランス型 Qwen3.5",
+        "qwen_qwen3_5_2b_q4_k_m": "軽量タスク向けコンパクト Qwen3.5",
         "qwen_qwen3_8b_q4_k_m": "思考モード対応の最新 Qwen3",
         "qwen_qwen3_8b_q5_k_m": "思考モード対応の高品質 Qwen3",
         "qwen_qwen3_4b_q4_k_m": "推論機能を持つコンパクトな Qwen3",
         "qwen_qwen3_1_7b_q8_0": "小型ながら高性能な Qwen3 モデル",
-        "qwen_qwen3_0_6b_q8_0": "エッジデバイス向け超小型 Qwen3",
         "qwen_qwen3_32b_q4_k_m": "深い推論を備えた最も強力なローカル Qwen3",
-        "qwen_qwen2_5_0_5b_instruct_q5_k_m": "最小モデル、高速だが機能は限定的",
         "qwen_qwen2_5_1_5b_instruct_q5_k_m": "小型モデル、基本的なタスクに最適",
         "qwen_qwen2_5_3b_instruct_q5_k_m": "汎用のバランスモデル",
         "qwen_qwen2_5_7b_instruct_q4_k_m": "高品質な大型モデル（Q4_K_M）",
@@ -1346,7 +1418,6 @@
       "live": "ライブ",
       "transcript": "文字起こし",
       "notes": "ノート",
-      "generateNotes": "ノートを生成",
       "untitled": "無題",
       "noteTitle": "ノートのタイトル",
       "stop": "停止",
@@ -1385,9 +1456,9 @@
       "selectAction": "アクションを選択",
       "done": "完了",
       "builtin": {
-        "cleanupNotes": {
-          "name": "ノートを整理",
-          "description": "文法、構成、書式を修正する"
+        "generateNotes": {
+          "name": "ノートを生成",
+          "description": "ノートを整理、構成、強化する"
         }
       },
       "errors": {
@@ -1493,7 +1564,13 @@
         "createDescription": "独自の AI プロンプトでカスタムアクションを定義できます。設定からいつでも編集・追加できます。",
         "created": "作成しました！"
       },
-      "getStarted": "始める"
+      "getStarted": "始める",
+      "systemAudio": {
+        "title": "システム音声",
+        "description": "マイクと一緒にミーティングや他のアプリの音声をキャプチャします。",
+        "grant": "権限を許可",
+        "enabled": "有効"
+      }
     },
     "realtimeBanner": {
       "message": "Pro でリアルタイム文字起こしが利用可能",
@@ -1614,6 +1691,7 @@
     "trial": "トライアル（残り{{days}}日）",
     "trial_other": "トライアル（残り{{days}}日）",
     "pro": "Pro",
+    "business": "Business",
     "unlimitedTrial": "トライアル期間中は無制限で文字起こし可能",
     "unlimited": "無制限の文字起こし",
     "manageSubscription": "サブスクリプションを管理",
@@ -1664,10 +1742,14 @@
         "description": "選択したホットキーを登録できませんでした。設定から別のホットキーを選択してください。"
       },
       "addedToDict": "{{words}} を辞書に追加しました",
-      "undo": "元に戻す"
+      "undo": "元に戻す",
+      "accessibilityMissing": {
+        "title": "アクセシビリティの許可が必要です",
+        "description": "OpenWhispr がホットキーの検出とテキストの貼り付けを行うには、アクセシビリティの許可が必要です。コントロールパネルで有効にしてください。"
+      }
     },
     "mic": {
-      "hotkeyToSpeak": "{{hotkey}} を押して話す",
+      "hotkeyToSpeak": "{{hotkey}} で話す",
       "recording": "録音中...",
       "processing": "処理中...",
       "clickToSpeak": "クリックして話す"
@@ -1740,7 +1822,10 @@
       "addAnother": "別のカレンダーを追加",
       "disconnect": "切断",
       "disconnectConfirm": "{{email}} を切断しますか？",
-      "disconnectDescription": "このカレンダーからの会議メモは記録されなくなります。"
+      "disconnectDescription": "このカレンダーからの会議メモは記録されなくなります。",
+      "screenRecordingRequired": "システムオーディオの権限が必要です",
+      "screenRecordingDescription": "会議を文字起こしするには、OpenWhispr に他の参加者の音声を録音するためのシステムオーディオの権限が必要です。画面を録画することはありません。システム設定に移動して有効にします。",
+      "openSettings": "システム設定を開く"
     },
     "plan": {
       "title": "プラン",
@@ -1765,6 +1850,37 @@
       "description": "OpenWhispr はシステムから直接オーディオをキャプチャします — 参加者としてミーティングに参加することはありません。カレンダーを接続して、通常通りノートを取るだけです。"
     }
   },
+  "calendar": {
+    "title": "Google カレンダー",
+    "status": "ステータス",
+    "connected": "接続済み",
+    "disconnected": "未接続",
+    "notConnectedDescription": "接続してミーティングを検出・録音する",
+    "connectCta": {
+      "title": "カレンダー連携",
+      "description": "ミーティングを自動検出し、文字起こしを記録する"
+    },
+    "connect": "Google カレンダーを接続",
+    "connecting": "接続中...",
+    "disconnect": "切断",
+    "disconnecting": "切断中...",
+    "sync": "同期",
+    "syncing": "同期中...",
+    "calendarsTitle": "カレンダー",
+    "upcomingTitle": "今後の予定",
+    "noUpcoming": "今後の予定はありません",
+    "meetingStarting": "ミーティングが開始されます",
+    "today": "今日",
+    "tomorrow": "明日",
+    "detection": {
+      "title": "ミーティング検出",
+      "description": "ミーティング中であることを自動的に検出する",
+      "processDetection": "アプリ検出",
+      "processDescription": "ミーティングが検出されたときに使用中のアプリを特定する",
+      "audioDetection": "オーディオ検出",
+      "audioDescription": "持続的なマイク使用が検出されたときに通知する"
+    }
+  },
   "upcoming": {
     "title": "今後の会議",
     "transcriptions": "文字起こし",
@@ -1773,6 +1889,8 @@
     "now": "進行中",
     "join": "参加",
     "untitledEvent": "無題のイベント",
+    "screenRecordingRequired": "他の参加者の音声を録音するには、システムオーディオの権限が必要です。",
+    "openSettings": "システム設定を開く",
     "signInRequired": "会議録音を使用するにはログインしてください",
     "signInDescription": "アカウントを作成またはログインして、会議を録音・文字起こしできます。",
     "connectCalendar": "カレンダーを接続",

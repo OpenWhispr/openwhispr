@@ -135,6 +135,7 @@ export interface SettingsState
   setCustomReasoningApiKey: (key: string) => void;
 
   setDictationKey: (key: string) => void;
+  setMeetingKey: (key: string) => void;
   setActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
@@ -256,6 +257,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   customReasoningApiKey: readString("customReasoningApiKey", ""),
 
   dictationKey: readString("dictationKey", ""),
+  meetingKey: readString("meetingKey", ""),
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     | "tap"
     | "push",
@@ -413,12 +415,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.saveDictationKey?.(key);
     }
   },
+  setMeetingKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("meetingKey", key);
+    set({ meetingKey: key });
+  },
 
   setActivationMode: (mode: "tap" | "push") => {
-    if (isBrowser) localStorage.setItem("activationMode", mode);
-    set({ activationMode: mode });
+    // Linux has no native key listener for push-to-talk — force tap
+    const effective = isBrowser && window.electronAPI?.getPlatform?.() === "linux" ? "tap" : mode;
+    if (isBrowser) localStorage.setItem("activationMode", effective);
+    set({ activationMode: effective });
     if (isBrowser) {
-      window.electronAPI?.notifyActivationModeChanged?.(mode);
+      window.electronAPI?.notifyActivationModeChanged?.(effective);
     }
   },
 
@@ -676,9 +684,10 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Sync activation mode from main process
+    // Sync activation mode from main process (Linux forces tap — no native key listener)
     try {
-      const envMode = await window.electronAPI.getActivationMode?.();
+      let envMode = await window.electronAPI.getActivationMode?.();
+      if (window.electronAPI?.getPlatform?.() === "linux") envMode = "tap";
       if (envMode && envMode !== state.activationMode) {
         if (isBrowser) localStorage.setItem("activationMode", envMode);
         useSettingsStore.setState({ activationMode: envMode });
@@ -734,6 +743,21 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
+    // Sync meeting detection preferences to main process
+    try {
+      const currentState = useSettingsStore.getState();
+      await window.electronAPI.meetingDetectionSetPreferences?.({
+        processDetection: currentState.meetingProcessDetection,
+        audioDetection: currentState.meetingAudioDetection,
+      });
+    } catch (err) {
+      logger.warn(
+        "Failed to sync meeting detection preferences on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
     ensureAgentNameInDictionary();
   }
 
@@ -775,6 +799,21 @@ export async function initializeSettings(): Promise<void> {
 
     if (key === "uiLanguage" && typeof value === "string") {
       void i18n.changeLanguage(value);
+    }
+  });
+
+  // Sync settings pushed from main process (e.g., hotkey changed in control panel)
+  window.electronAPI?.onSettingUpdated?.((data: { key: string; value: unknown }) => {
+    const state = useSettingsStore.getState();
+    if (
+      data.key in state &&
+      typeof (state as unknown as Record<string, unknown>)[data.key] !== "function"
+    ) {
+      localStorage.setItem(
+        data.key,
+        typeof data.value === "string" ? data.value : JSON.stringify(data.value)
+      );
+      useSettingsStore.setState({ [data.key]: data.value });
     }
   });
 }
