@@ -95,10 +95,10 @@ static int SendPasteNormal(void) {
     INPUT inputs[4];
     ZeroMemory(inputs, sizeof(inputs));
 
-    SetKey(&inputs[0], VK_CONTROL, 0);
+    SetKey(&inputs[0], VK_LCONTROL, 0);
     SetKey(&inputs[1], 'V', 0);
     SetKey(&inputs[2], 'V', KEYEVENTF_KEYUP);
-    SetKey(&inputs[3], VK_CONTROL, KEYEVENTF_KEYUP);
+    SetKey(&inputs[3], VK_LCONTROL, KEYEVENTF_KEYUP);
 
     UINT sent = SendInput(4, inputs, sizeof(INPUT));
     return (sent == 4) ? 0 : 1;
