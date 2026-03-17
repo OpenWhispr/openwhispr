@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2](https://github.com/jrschumacher/cloudfree-openwhispr/compare/v1.0.1...v1.0.2) (2026-03-17)
+
+
+### Bug Fixes
+
+* set APPLE_CERTIFICATE_BASE64 as job-level env for signing check ([57269f9](https://github.com/jrschumacher/cloudfree-openwhispr/commit/57269f94a26d342736c1a3f4bec97e2d2ac07c81))
+* use secrets context for code signing conditional check ([dd3260f](https://github.com/jrschumacher/cloudfree-openwhispr/commit/dd3260fabf291cd879ca47a70631beaac60ceb9f))
+
 ## [1.0.1](https://github.com/jrschumacher/cloudfree-openwhispr/compare/v1.0.0...v1.0.1) (2026-03-17)
 
 
