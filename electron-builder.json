@@ -120,7 +120,7 @@
     "hardenedRuntime": true,
     "entitlements": "resources/mac/entitlements.mac.plist",
     "entitlementsInherit": "resources/mac/entitlements.mac.plist",
-    "identity": "HeroTools Inc. (9R85XFMH59)",
+    "identity": "James Schumacher (PSS5BN5T55)",
     "notarize": true,
     "extendInfo": {
       "LSUIElement": false,
