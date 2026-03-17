@@ -199,6 +199,8 @@ jobs:
   build-macos:
     needs: prepare
     runs-on: macos-latest
+    env:
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
     strategy:
       fail-fast: false
       matrix:
@@ -252,7 +254,7 @@ jobs:
           restore-keys: macos-${{ matrix.arch }}-electron-
 
       - name: Setup macOS Code Signing
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' }}
+        if: env.APPLE_CERTIFICATE_BASE64 != ''
         env:
           APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
