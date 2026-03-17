@@ -46,6 +46,7 @@ jobs:
 
   build-linux:
     needs: prepare
+    if: always() && needs.prepare.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -116,6 +117,7 @@ jobs:
 
   build-windows:
     needs: prepare
+    if: always() && needs.prepare.result == 'success'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -198,6 +200,7 @@ jobs:
 
   build-macos:
     needs: prepare
+    if: always() && needs.prepare.result == 'success'
     runs-on: macos-latest
     env:
       APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
