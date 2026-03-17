@@ -230,6 +230,62 @@ export function MarkdownTextarea({
       const fullLineEnd = lineEndIdx === -1 ? val.length : lineEndIdx;
       const hasContentAfter = fullLineEnd > start;
 
+      // Cmd+B → toggle bold
+      if (e.key === "b" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        const sel = val.slice(start, end);
+        if (start === end) {
+          applyChange(ta, start, end, "****");
+          ta.setSelectionRange(start + 2, start + 2);
+        } else if (val.slice(start - 2, start) === "**" && val.slice(end, end + 2) === "**") {
+          applyChange(ta, start - 2, end + 2, sel);
+          ta.setSelectionRange(start - 2, start - 2 + sel.length);
+        } else {
+          applyChange(ta, start, end, `**${sel}**`);
+          ta.setSelectionRange(start + 2, end + 2);
+        }
+        return;
+      }
+
+      // Cmd+I → toggle italic
+      if (e.key === "i" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        const sel = val.slice(start, end);
+        if (start === end) {
+          applyChange(ta, start, end, "**");
+          ta.setSelectionRange(start + 1, start + 1);
+        } else if (
+          val[start - 1] === "*" &&
+          val[start - 2] !== "*" &&
+          val[end] === "*" &&
+          val[end + 1] !== "*"
+        ) {
+          applyChange(ta, start - 1, end + 1, sel);
+          ta.setSelectionRange(start - 1, start - 1 + sel.length);
+        } else {
+          applyChange(ta, start, end, `*${sel}*`);
+          ta.setSelectionRange(start + 1, end + 1);
+        }
+        return;
+      }
+
+      // Cmd+E → toggle inline code
+      if (e.key === "e" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        const sel = val.slice(start, end);
+        if (start === end) {
+          applyChange(ta, start, end, "``");
+          ta.setSelectionRange(start + 1, start + 1);
+        } else if (val[start - 1] === "`" && val[end] === "`") {
+          applyChange(ta, start - 1, end + 1, sel);
+          ta.setSelectionRange(start - 1, start - 1 + sel.length);
+        } else {
+          applyChange(ta, start, end, `\`${sel}\``);
+          ta.setSelectionRange(start + 1, end + 1);
+        }
+        return;
+      }
+
       if (e.key === "Enter" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
         // Empty bullet line → remove prefix, exit list
         const emptyBullet = currentLine.match(BULLET_RE);

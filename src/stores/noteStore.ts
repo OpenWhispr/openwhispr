@@ -5,12 +5,14 @@ interface NoteState {
   notes: NoteItem[];
   activeNoteId: number | null;
   activeFolderId: number | null;
+  migration: { total: number; done: number } | null;
 }
 
 const useNoteStore = create<NoteState>()(() => ({
   notes: [],
   activeNoteId: null,
   activeFolderId: null,
+  migration: null,
 }));
 
 let hasBoundIpcListeners = false;
@@ -126,4 +128,91 @@ export function useActiveNoteId(): number | null {
 
 export function useActiveFolderId(): number | null {
   return useNoteStore((state) => state.activeFolderId);
+}
+
+export function useMigration(): { total: number; done: number } | null {
+  return useNoteStore((state) => state.migration);
+}
+
+export async function syncNoteToCloud(note: NoteItem): Promise<void> {
+  const { NotesService } = await import("../services/NotesService.js");
+  const cloudNote = await NotesService.create({
+    client_note_id: String(note.id),
+    title: note.title,
+    content: note.content,
+    enhanced_content: note.enhanced_content,
+    enhancement_prompt: note.enhancement_prompt,
+    note_type: note.note_type,
+    source_file: note.source_file,
+    audio_duration_seconds: note.audio_duration_seconds,
+    created_at: note.created_at,
+    updated_at: note.updated_at,
+  });
+  await window.electronAPI.updateNoteCloudId(note.id, cloudNote.id);
+  updateNoteInStore({ ...note, cloud_id: cloudNote.id });
+}
+
+export async function syncNoteUpdateToCloud(
+  note: NoteItem,
+  updates: Partial<NoteItem>
+): Promise<void> {
+  const { NotesService } = await import("../services/NotesService.js");
+  if (note.cloud_id) {
+    await NotesService.update(note.cloud_id, updates);
+  } else {
+    await syncNoteToCloud(note);
+  }
+}
+
+export async function syncNoteDeleteToCloud(cloudId: string): Promise<void> {
+  const { NotesService } = await import("../services/NotesService.js");
+  await NotesService.delete(cloudId);
+}
+
+export async function startMigration(): Promise<void> {
+  const allNotes = (await window.electronAPI?.getNotes(null, 9999, null)) ?? [];
+  const unsynced = allNotes.filter((n) => !n.cloud_id);
+  if (unsynced.length === 0) return;
+
+  useNoteStore.setState({ migration: { total: unsynced.length, done: 0 } });
+
+  const { NotesService } = await import("../services/NotesService.js");
+  const CHUNK_SIZE = 50;
+
+  for (let i = 0; i < unsynced.length; i += CHUNK_SIZE) {
+    const chunk = unsynced.slice(i, i + CHUNK_SIZE);
+    try {
+      const { created } = await NotesService.batchCreate(
+        chunk.map((n) => ({
+          client_note_id: String(n.id),
+          title: n.title,
+          content: n.content,
+          enhanced_content: n.enhanced_content,
+          enhancement_prompt: n.enhancement_prompt,
+          note_type: n.note_type,
+          source_file: n.source_file,
+          audio_duration_seconds: n.audio_duration_seconds,
+          created_at: n.created_at,
+          updated_at: n.updated_at,
+        }))
+      );
+      await Promise.all(
+        created.map(({ client_note_id, id: cloudId }) =>
+          window.electronAPI.updateNoteCloudId(parseInt(client_note_id, 10), cloudId)
+        )
+      );
+      useNoteStore.setState((s) => ({
+        migration: s.migration
+          ? {
+              total: s.migration.total,
+              done: Math.min(s.migration.done + chunk.length, s.migration.total),
+            }
+          : null,
+      }));
+    } catch (err) {
+      console.error("Migration chunk failed:", err);
+    }
+  }
+
+  useNoteStore.setState({ migration: null });
 }

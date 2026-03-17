@@ -99,6 +99,32 @@
 
 OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → renderer `navigator.clipboard` → X11 fallback.
 
+### Meeting Transcription Issues
+
+**Symptoms:** Meeting detection not working, no transcription, audio not captured
+
+**macOS:**
+1. Grant Screen Recording permission: System Settings → Privacy & Security → Screen Recording → enable OpenWhispr
+2. Restart the app after granting permission
+3. Ensure Google Calendar is connected in Integrations
+
+**All Platforms:**
+1. Check that meeting detection is enabled in settings
+2. Verify your OpenAI API key is valid (required for Realtime API transcription)
+3. Ensure your meeting app (Zoom, Teams, FaceTime) is running — process detection looks for known meeting applications
+4. If auto-detection fails, you can manually start recording from the meeting notification
+
+### Agent Mode Issues
+
+**Symptoms:** Agent overlay not appearing, no AI responses, streaming errors
+
+**Fix:**
+1. Ensure Agent Mode is enabled in Settings → Agent Mode
+2. Check that you have a valid API key for your selected provider
+3. Verify the agent hotkey doesn't conflict with other global shortcuts
+4. For local models: ensure the model is downloaded and llama-server is running
+5. For Metal OOM on macOS: try a smaller local model
+
 ### Windows-Specific Issues
 
 See [WINDOWS_TROUBLESHOOTING.md](WINDOWS_TROUBLESHOOTING.md) for:

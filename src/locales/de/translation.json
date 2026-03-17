@@ -29,7 +29,8 @@
   },
   "window": {
     "voiceRecorderTitle": "Sprachrekorder",
-    "controlPanelTitle": "Kontrollzentrum"
+    "controlPanelTitle": "Kontrollzentrum",
+    "agentChatTitle": "Agenten-Chat"
   },
   "dialog": {
     "openLink": {
@@ -70,7 +71,8 @@
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
-      "trySuggestions": "Versuchen Sie: {{suggestions}}"
+      "trySuggestions": "Versuchen Sie: {{suggestions}}",
+      "slotConflict": "Diese Tastenkombination wird bereits für {{slot}} verwendet."
     }
   },
   "systemSettings": {
@@ -93,7 +95,7 @@
     "updatePayment": "Zahlungsmethode aktualisieren",
     "updatePaymentDescription": "Zurück zu unbegrenzten Pro-Transkriptionen.",
     "upgradeToPro": "Auf Pro upgraden",
-    "upgradeDescription": "Unbegrenzte Transkriptionen. 9 $/Monat.",
+    "upgradeDescription": "Unbegrenzte Transkriptionen ab $8/Monat.",
     "useApiKey": "Eigenen API-Schlüssel verwenden",
     "useApiKeyDescription": "Verwenden Sie Ihren eigenen Schlüssel für unbegrenzte Nutzung.",
     "switchToLocal": "Zu lokal wechseln",
@@ -152,13 +154,17 @@
     "permissions": {
       "title": "Berechtigungen",
       "microphoneTitle": "Mikrofon",
-      "microphoneDescription": "Zum Erfassen Ihrer Stimme",
+      "microphoneDescription": "Nimmt Ihre Stimme für die Transkription auf",
       "grant": "Erteilen",
       "accessibilityTitle": "Bedienungshilfen",
-      "accessibilityDescription": "Zum Einfügen von Text in Apps",
+      "accessibilityDescription": "In Systemeinstellungen aktivieren",
       "testAndGrant": "Testen & erteilen",
       "requiredForApp": "Erforderlich, damit OpenWhispr funktioniert",
-      "microphoneRequired": "Mikrofonzugriff erforderlich"
+      "microphoneRequired": "Mikrofonzugriff erforderlich",
+      "openSystemSettings": "Systemeinstellungen öffnen",
+      "screenRecordingTitle": "Systemaudio",
+      "screenRecordingDescription": "Nimmt den Ton anderer Teilnehmer aus Anrufen und Meetings auf. Wir nehmen Ihren Bildschirm nie auf.",
+      "optional": "Optional"
     },
     "transcription": {
       "title": "Transkriptions-Einrichtung",
@@ -198,6 +204,10 @@
       "weeklyTitle": "Wochenlimit erreicht",
       "weeklyDescription": "Ihr Limit setzt sich rollierend zurück. Upgraden Sie auf Pro oder nutzen Sie Ihren eigenen API-Schlüssel für unbegrenzte Nutzung."
     },
+    "accessibilityMissing": {
+      "title": "Bedienungshilfen-Berechtigungen benötigt",
+      "description": "Wir haben festgestellt, dass OpenWhispr Bedienungshilfen-Berechtigungen benötigt, um korrekt zu funktionieren. Bitte aktivieren Sie diese unten."
+    },
     "billing": {
       "pastDueTitle": "Ihre Zahlung konnte nicht verarbeitet werden",
       "pastDueDescription": "Keine Sorge – Sie sind vorerst im kostenlosen Tarif. Aktualisieren Sie Ihre Zahlungsdaten in den Einstellungen, um wieder Pro zu erhalten.",
@@ -217,12 +227,23 @@
       "couldNotDeleteDescription": "Diese Transkription wurde möglicherweise bereits entfernt.",
       "couldNotDeleteDescriptionGeneric": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "empty": "Noch keine Transkriptionen",
+      "dataRetentionDisabled": "Datenaufbewahrung ist deaktiviert. Transkriptionen und Audio werden nicht im Verlauf gespeichert.",
       "press": "Drücken Sie",
       "toStart": "zum Starten",
       "dateGroups": {
         "today": "Heute",
         "yesterday": "Gestern"
-      }
+      },
+      "transcriptionFailed": "Transkription fehlgeschlagen",
+      "failedCtaSettings": "Richten Sie Ihren Transkriptionsanbieter ein",
+      "failedCtaAndRetry": "und klicken Sie dann auf Wiederholen",
+      "failedCtaSettingsOnly": "Richten Sie Ihren Transkriptionsanbieter in den Einstellungen ein",
+      "clearAll": "Alle löschen",
+      "clearAllTitle": "Alle Transkriptionen löschen",
+      "clearAllDescription": "Alle Transkriptionen und Audiodateien werden dauerhaft entfernt.",
+      "clearAllSuccess": "Verlauf gelöscht",
+      "clearAllErrorTitle": "Verlauf konnte nicht gelöscht werden",
+      "clearAllErrorDescription": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
     },
     "cloudMigration": {
       "title": "Willkommen bei OpenWhispr Pro",
@@ -596,7 +617,7 @@
     },
     "title": "Passwort zurücksetzen"
   },
-  "fullPrompt": "Vollständiger Prompt",
+  "actionPrompt": "Aktions-Prompt",
   "hotkeyGuidance": {
     "blockedDescription": "Diese Tastenkombinationen sind blockiert, da sie häufig vom System verwendet werden.",
     "blockedTitle": "Blockierte Tastenkombinationen",
@@ -677,7 +698,7 @@
     "selectPlaceholder": "Mikrofon auswählen",
     "systemDefault": "Systemstandard",
     "unknownDevice": "Unbekanntes Gerät",
-    "using": "Verwendet:"
+    "using": "Verwendet: {{device}}"
   },
   "pasteToolsInfo": {
     "checking": "Systemfähigkeiten werden geprüft...",
@@ -831,6 +852,10 @@
       "system": {
         "description": "Updates, Speicher & Entwicklertools",
         "label": "System"
+      },
+      "agentMode": {
+        "label": "Agent-Modus",
+        "description": "Sprach-Chat-Assistent"
       }
     },
     "title": "Einstellungen"
@@ -842,6 +867,7 @@
         "limitReached": "Limit erreicht",
         "pastDue": "Überfällig",
         "pro": "Pro",
+        "business": "Business",
         "trial": "Testversion"
       },
       "billing": {
@@ -878,26 +904,28 @@
       "planLabels": {
         "free": "Kostenlos",
         "pro": "Pro",
+        "business": "Business",
         "trial": "Testversion"
       },
       "planTitle": "Tarif",
       "pricing": {
         "title": "Tarife",
-        "monthly": "Monatlich",
-        "annual": "Jährlich",
-        "annualBadge": "17 % sparen",
+        "billedYearly": "Jährliche Abrechnung",
         "free": {
-          "name": "Kostenlos",
+          "name": "Free",
           "price": "$0",
           "period": "für immer",
-          "trialNote": "Enthält 7 Tage OpenWhispr Pro gratis",
           "features": [
-            "2.000 Wörter/Woche",
-            "Lokale KI-Modelle",
-            "Eigene Schlüssel verwenden",
-            "Wörterbuch und Snippets",
-            "Unterstützung für 100+ Sprachen",
-            "Keine Datenspeicherung"
+            "## OpenWhispr Cloud",
+            "2,000 words/week transcription",
+            "5 hours of meeting recordings/month",
+            "## Always free",
+            "Unlimited local AI models",
+            "Unlimited cloud transcription with your own API keys",
+            "100+ languages supported",
+            "Custom dictionary",
+            "Zero data retention",
+            "Community support"
           ]
         },
         "pro": {
@@ -906,29 +934,67 @@
           "monthlyPeriod": "/Monat",
           "annualPrice": "$80",
           "annualPeriod": "/Jahr",
+          "annualEquivalent": "$6.67",
+          "includesPrefix": "Alle Free-Funktionen +",
           "features": [
-            "Alles aus Kostenlos",
-            "Unbegrenzte Nutzung",
-            "Echtzeit-Transkription",
-            "Neueste Audio- & KI-Modelle",
-            "iOS/Android (demnächst)",
-            "Keine Datenspeicherung",
-            "Vorrangiger Support"
+            "Unlimited cloud transcription",
+            "20 hours of meeting recordings/month",
+            "Mobile app (iOS Coming Soon)",
+            "Email support"
           ],
           "cta": "Jetzt starten",
-          "switchToAnnual": "Zu Jährlich wechseln"
+          "switchToAnnual": "Zum Jahresabo wechseln"
+        },
+        "business": {
+          "name": "Business",
+          "monthlyPrice": "$20",
+          "monthlyPeriod": "/Monat",
+          "annualPrice": "$200",
+          "annualPeriod": "/Jahr",
+          "annualEquivalent": "$16.67",
+          "includesPrefix": "Alle Pro-Funktionen +",
+          "badge": "Beliebteste Wahl",
+          "features": [
+            "Unlimited meeting recordings",
+            "Agent mode",
+            "Chat over your data (Coming Soon)",
+            "Priority support"
+          ],
+          "cta": "Jetzt starten",
+          "switchToAnnual": "Zum Jahresabo wechseln"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "Individuell",
+          "subtitle": "For advanced security & support",
+          "includesPrefix": "Alle Business-Funktionen +",
           "features": [
-            "Cloud-Synchronisation",
-            "Team-Funktionen (demnächst)",
-            "SSO & Compliance"
+            "Managed API credits",
+            "Cloud sync across devices",
+            "Team features & admin",
+            "SSO & compliance",
+            "Dedicated support"
           ],
-          "cta": "Kontakt aufnehmen"
+          "cta": "Contact Sales"
         },
-        "currentPlan": "Aktueller Tarif"
+        "currentPlan": "Aktueller Tarif",
+        "upgrade": "Upgrade",
+        "downgrade": "Downgrade",
+        "planSwitched": "Plan erfolgreich aktualisiert",
+        "confirmSwitch": {
+          "title": "Planwechsel bestätigen",
+          "description": "Zu {{plan}} ({{interval}}) wechseln",
+          "monthly": "monatlich",
+          "yearly": "jährlich",
+          "chargeToday": "Heutige Belastung",
+          "accountCredit": "Kontoguthaben",
+          "newPrice": "Neuer Preis",
+          "nextBilling": "Nächste Abrechnung",
+          "mo": "mo",
+          "yr": "yr",
+          "cancel": "Abbrechen",
+          "confirm": "Bestätigen"
+        }
       },
       "rollingWeeklyLimit": "Rollierendes Wochenlimit",
       "signOut": {
@@ -954,7 +1020,20 @@
         "title": "Pro 7 Tage kostenlos testen"
       },
       "user": "Benutzer",
-      "wordsRemaining": "{{remaining}} verbleibend"
+      "wordsRemaining": "{{remaining}} verbleibend",
+      "deleteAccount": {
+        "label": "Konto löschen",
+        "labelDescription": "Konto, alle Cloud-Daten und lokale Daten dauerhaft löschen. Diese Aktion kann nicht rückgängig gemacht werden.",
+        "button": "Mein Konto löschen",
+        "deleting": "Wird gelöscht...",
+        "title": "Konto löschen?",
+        "description": "Dies löscht dauerhaft Ihr OpenWhispr-Konto, alle in der Cloud synchronisierten Notizen und alle lokalen Daten, einschließlich Transkriptionen, Audioaufnahmen, heruntergeladene Modelle, Kalenderverbindungen und Einstellungen. Diese Aktion kann nicht rückgängig gemacht werden.",
+        "confirmText": "Alles löschen",
+        "successTitle": "Konto gelöscht",
+        "successDescription": "Ihr Konto und alle Daten wurden gelöscht. Die App wird jetzt neu geladen.",
+        "failedTitle": "Löschung fehlgeschlagen",
+        "failedDescription": "Beim Löschen Ihres Kontos ist ein Fehler aufgetreten. Ihre lokalen Daten wurden möglicherweise teilweise entfernt. Bitte versuchen Sie es erneut."
+      }
     },
     "agentConfig": {
       "agentName": "Agent-Name",
@@ -1018,7 +1097,7 @@
       "removing": "Wird entfernt...",
       "resetAll": {
         "confirmText": "Alles löschen",
-        "description": "Dadurch werden alle Einstellungen, Transkriptionen und zwischengespeicherten Daten dauerhaft gelöscht. Die App wird nach dem Zurücksetzen neu geladen.",
+        "description": "Dies löscht dauerhaft alle lokalen Einstellungen, Transkriptionen, Audioaufnahmen, heruntergeladene KI-Modelle, Kalenderverbindungen und zwischengespeicherte Daten. Cloud-Daten und Ihr Konto werden nicht beeinträchtigt. Die App wird nach dem Zurücksetzen neu geladen.",
         "failedDescription": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut oder installieren Sie die App neu.",
         "failedTitle": "Zurücksetzen fehlgeschlagen",
         "successDescription": "Alles wurde zurückgesetzt. Die App wird jetzt neu geladen.",
@@ -1026,7 +1105,7 @@
         "title": "Alle App-Daten zurücksetzen"
       },
       "resetAppData": "App-Daten zurücksetzen",
-      "resetAppDataDescription": "Alle Einstellungen, Transkriptionen und zwischengespeicherten Daten dauerhaft löschen"
+      "resetAppDataDescription": "Alle lokalen Einstellungen, Transkriptionen, Audioaufnahmen, heruntergeladene Modelle und zwischengespeicherte Daten dauerhaft löschen"
     },
     "dictionary": {
       "title": "Benutzerwörterbuch",
@@ -1072,6 +1151,11 @@
         "resetToDefault": "Auf {{hotkey}} zurücksetzen",
         "title": "Diktat-Hotkey"
       },
+      "meetingHotkey": {
+        "title": "Meeting-Modus-Hotkey",
+        "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben",
+        "clear": "Hotkey entfernen"
+      },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
         "title": "Mikrofon"
@@ -1079,12 +1163,79 @@
       "soundEffects": {
         "dictationSounds": "Diktat-Signaltöne",
         "dictationSoundsDescription": "Ton abspielen, wenn die Aufnahme startet und stoppt",
+        "pauseMedia": "Medien pausieren",
+        "pauseMediaDescription": "Musik beim Starten der Diktat automatisch pausieren",
         "title": "Soundeffekte"
+      },
+      "clipboard": {
+        "title": "Zwischenablage",
+        "keepInClipboard": "Transkription in der Zwischenablage behalten",
+        "keepInClipboardDescription": "Diktierten Text in der Zwischenablage behalten, damit Sie ihn bei Bedarf manuell einfügen können"
       },
       "startup": {
         "launchAtLogin": "Beim Anmelden starten",
         "launchAtLoginDescription": "OpenWhispr automatisch starten, wenn Sie sich anmelden",
-        "title": "Autostart"
+        "title": "Autostart",
+        "description": "Steuern Sie das Verhalten von OpenWhispr beim Start",
+        "startMinimized": "Minimiert starten",
+        "startMinimizedDescription": "Starten, ohne das Einstellungsfenster anzuzeigen"
+      },
+      "waylandPaste": {
+        "title": "Wayland-Einfügen einrichten",
+        "description": "Das automatische Einfügen unter Wayland erfordert ydotool. Prüfen Sie den Status der einzelnen Komponenten.",
+        "allGoodDesc": "Das automatische Einfügen ist einsatzbereit.",
+        "recheck": "Erneut prüfen",
+        "copy": "Kopieren",
+        "ydotoolDesc": "Eingabeautomatisierung für Wayland",
+        "ydotooldDesc": "Daemon für ydotool (separates Paket unter Ubuntu/Pop!_OS)",
+        "uinputDesc": "Zugriff auf das Kernel-Eingabegerät",
+        "uinputRuleFound": "Regel vorhanden, aber nicht aktiv. Ein Neustart sollte das beheben.",
+        "uinputRuleMissing": "Keine udev-Regel gefunden",
+        "inputGroup": "input-Gruppe",
+        "inputGroupDesc": "Der Benutzer muss Mitglied der Gruppe input sein (erneute Anmeldung erforderlich)",
+        "service": "systemd-Dienst",
+        "serviceDesc": "Benutzer-Dienstdatei für den automatischen Start von ydotoold",
+        "daemon": "ydotoold-Daemon",
+        "daemonDesc": "Der Hintergrunddienst muss laufen",
+        "guide": {
+          "open": "Anleitung",
+          "ydotool": {
+            "step1Title": "ydotool installieren",
+            "step1Desc": "Verwenden Sie den Paketmanager Ihrer Distribution, um ydotool zu installieren.",
+            "step2Title": "Installation überprüfen",
+            "step2Desc": "Prüfen Sie, ob ydotool in Ihrem PATH verfügbar ist."
+          },
+          "ydotoold": {
+            "step1Title": "ydotoold installieren",
+            "step1Desc": "Unter Ubuntu und Pop!_OS ist ydotoold ein separates Paket. Unter Fedora ist es in ydotool enthalten."
+          },
+          "uinput": {
+            "ruleFoundTitle": "udev-Regel bereits konfiguriert",
+            "ruleFoundDesc": "Die udev-Regel für /dev/uinput ist bereits auf Ihrem System vorhanden, aber noch nicht aktiv. Versuchen Sie, sie neu zu laden:",
+            "rebootTitle": "Falls das Neuladen nicht geholfen hat, starten Sie neu",
+            "rebootDesc": "Bei einigen Distributionen werden udev-Änderungen erst nach einem vollständigen Neustart wirksam. Starten Sie Ihren Computer neu und prüfen Sie erneut.",
+            "step1Title": "Eine udev-Regel erstellen",
+            "step1Desc": "Diese Regel gewährt Benutzern der Gruppe input Zugriff auf /dev/uinput.",
+            "step2Title": "udev-Regeln neu laden",
+            "step2Desc": "Die neue Regel ohne Neustart anwenden."
+          },
+          "group": {
+            "step1Title": "Ihren Benutzer zur Gruppe input hinzufügen",
+            "step2Title": "Abmelden und wieder anmelden",
+            "step2Desc": "Gruppenänderungen werden erst nach einer neuen Sitzung wirksam. Melden Sie sich ab, wieder an und öffnen Sie OpenWhispr erneut."
+          },
+          "service": {
+            "step1Title": "Dienstverzeichnis erstellen",
+            "step2Title": "Dienstdatei erstellen",
+            "step2Desc": "Erstellt einen systemd-Dienst auf Benutzerebene, der ydotoold automatisch bei der Anmeldung startet.",
+            "step3Title": "Neu laden und aktivieren"
+          },
+          "daemon": {
+            "step1Title": "Daemon starten",
+            "step1Desc": "Starten Sie ydotoold und aktivieren Sie es für jeden Anmeldevorgang.",
+            "step2Title": "Prüfen, ob er läuft"
+          }
+        }
       },
       "updates": {
         "badges": {
@@ -1147,7 +1298,7 @@
       "accessibilityDescription": "Erforderlich, damit automatisches Einfügen nach der Transkription funktioniert",
       "accessibilityTitle": "Bedienungshilfen",
       "description": "Systemberechtigungen testen und verwalten, die OpenWhispr für den ordnungsgemäßen Betrieb benötigt",
-      "microphoneDescription": "Erforderlich für Sprachaufnahme und Diktat",
+      "microphoneDescription": "Nimmt Ihre Stimme für Diktat und Transkription auf",
       "microphoneTitle": "Mikrofon",
       "resetAccessibility": {
         "description": "Dadurch wird OpenWhispr aus den Bedienungshilfen-Berechtigungen entfernt. Sie müssen den Zugriff unter Systemeinstellungen > Datenschutz & Sicherheit > Bedienungshilfen erneut gewähren.",
@@ -1155,6 +1306,9 @@
         "rowDescription": "Probleme nach Neuinstallation oder Neuerstellung der App beheben, indem OpenWhispr in den Systemeinstellungen entfernt und erneut hinzugefügt wird",
         "title": "Bedienungshilfen-Berechtigungen zurücksetzen"
       },
+      "optional": "Optional",
+      "screenRecordingTitle": "Systemaudio",
+      "screenRecordingDescription": "Nimmt den Ton anderer Teilnehmer aus Anrufen und Meetings auf",
       "test": "Testen",
       "testAndGrant": "Testen & erteilen",
       "title": "Berechtigungen",
@@ -1163,11 +1317,15 @@
     },
     "privacy": {
       "cloudBackup": "Cloud-Backup",
-      "cloudBackupDescription": "Speichern Sie Ihre Transkriptionen in der Cloud, damit sie nicht verloren gehen.",
+      "cloudBackupDescription": "Sichern Sie Ihre Transkriptionen und Notizen in der Cloud für nahtlosen Zugriff auf allen Geräten.",
+      "cloudNotesMigration": "Notizen werden gesichert… {{done}} / {{total}}",
+      "cloudNotesMigrationDone": "Alle Notizen gesichert",
       "description": "Steuern Sie, welche Daten Ihr Gerät verlassen. Standardmäßig ist alles deaktiviert.",
       "title": "Datenschutz",
       "usageAnalytics": "Nutzungsanalysen",
-      "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten."
+      "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten.",
+      "dataRetention": "Datenaufbewahrung",
+      "dataRetentionDescription": "Transkriptionen und Audio lokal im Verlauf speichern. Wenn deaktiviert, werden Transkriptionen eingefügt, aber nicht gespeichert."
     },
     "prompts": {
       "description": "Den einheitlichen System-Prompt anzeigen, anpassen und testen, der Textbereinigung und Anweisungserkennung steuert",
@@ -1214,7 +1372,8 @@
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription"
       },
       "cloud": {
-        "openai_gpt_5_2": "Neuestes Flaggschiff-Modell für Reasoning",
+        "openai_gpt_5_4": "Frontier-Modell für komplexes Reasoning",
+        "openai_gpt_5_2": "Starkes Reasoning-Modell",
         "openai_gpt_5_mini": "Schnell und kosteneffizient",
         "openai_gpt_5_nano": "Ultraschnell, niedrige Latenz",
         "openai_gpt_4_1": "Starke Basis, 1M Kontext",
@@ -1237,13 +1396,14 @@
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, 256K Kontext"
       },
       "local": {
+        "qwen_qwen3_5_9b_q4_k_m": "Leistungsstarkes Hybridmodell",
+        "qwen_qwen3_5_4b_q4_k_m": "Ausgewogenes Qwen3.5 für allgemeine Nutzung",
+        "qwen_qwen3_5_2b_q4_k_m": "Kompaktes Qwen3.5 für schnelle Aufgaben",
         "qwen_qwen3_8b_q4_k_m": "Neuestes Qwen3 mit Thinking-Mode-Unterstützung",
         "qwen_qwen3_8b_q5_k_m": "Qwen3 mit höherer Qualität und Thinking-Mode",
         "qwen_qwen3_4b_q4_k_m": "Kompaktes Qwen3 mit Reasoning-Fähigkeiten",
         "qwen_qwen3_1_7b_q8_0": "Kleines, aber fähiges Qwen3-Modell",
-        "qwen_qwen3_0_6b_q8_0": "Winziges Qwen3 für Edge-Geräte",
         "qwen_qwen3_32b_q4_k_m": "Leistungsstärkstes lokales Qwen3 mit tiefem Reasoning",
-        "qwen_qwen2_5_0_5b_instruct_q5_k_m": "Kleinstes Modell, schnell aber mit begrenzten Fähigkeiten",
         "qwen_qwen2_5_1_5b_instruct_q5_k_m": "Kleines Modell, gut für grundlegende Aufgaben",
         "qwen_qwen2_5_3b_instruct_q5_k_m": "Ausgewogenes Modell für den allgemeinen Einsatz",
         "qwen_qwen2_5_7b_instruct_q4_k_m": "Großes Modell mit hoher Qualität (Q4_K_M)",
@@ -1253,7 +1413,9 @@
         "llama_llama_3_2_1b_instruct_q4_k_m": "Winziges Modell für Edge-Geräte",
         "llama_llama_3_2_3b_instruct_q4_k_m": "Kleines, aber fähiges mehrsprachiges Modell",
         "llama_llama_3_1_8b_instruct_q4_k_m": "Leistungsstarkes Modell mit hoher Performance",
-        "openai_oss_gpt_oss_20b_mxfp4": "Open-Weight-Modell von OpenAI für Consumer-Hardware"
+        "openai_oss_gpt_oss_20b_mxfp4": "Open-Weight-Modell von OpenAI für Consumer-Hardware",
+        "gemma_gemma_3_4b_it_q4_k_m": "Googles Open-Weight-Modell, gutes Gleichgewicht aus Geschwindigkeit und Qualität",
+        "gemma_gemma_3_1b_it_q4_k_m": "Ultraschnelles Google-Modell, ideal für kurze Diktat-Bereinigung"
       }
     }
   },
@@ -1363,7 +1525,9 @@
       "wordsCount": "{{count}} Wörter",
       "startWriting": "Schreibe los...",
       "staleIndicator": "Der Inhalt hat sich seit der Verbesserung geändert",
-      "live": "Live"
+      "live": "Live",
+      "transcript": "Transkript",
+      "notes": "Notizen"
     },
     "upload": {
       "title": "Audio hochladen",
@@ -1395,12 +1559,25 @@
       "errorOccurred": "Ein Fehler ist aufgetreten",
       "noProviderTitle": "Kein Transkriptionsanbieter eingerichtet",
       "noProviderDescription": "Fügen Sie einen API-Schlüssel hinzu oder laden Sie ein lokales Modell herunter, um mit der Transkription zu beginnen.",
-      "noProviderAction": "Transkriptionseinstellungen öffnen"
+      "noProviderAction": "Transkriptionseinstellungen öffnen",
+      "fileTooLarge": "Diese Datei überschreitet das Limit von 500 MB.",
+      "largeFileNote": "Große Dateien werden aufgeteilt und parallel transkribiert.",
+      "chunkProgress": "Transkribiere Teil {{completed}} von {{total}}...",
+      "paidPlanRequired": "Cloud-Transkription für Dateien über 25 MB erfordert einen kostenpflichtigen Plan. Große Dateien werden mit OpenWhispr Cloud für zuverlässige, hochwertige Ergebnisse verarbeitet.",
+      "byokTooLarge": "API-Schlüssel von Drittanbietern unterstützen nur Dateien bis 25 MB.",
+      "byokTooLargeDetail": "Für Dateien über 25 MB übernimmt OpenWhispr Cloud das Aufteilen, die parallele Verarbeitung und das Zusammenführen — so erhältst du zuverlässige Ergebnisse ohne die Einschränkungen von Drittanbietern.",
+      "byokTooLargeNeedsAccount": "Erstelle ein Konto und wechsle zu einem kostenpflichtigen Plan, um größere Dateien mit OpenWhispr Cloud zu transkribieren.",
+      "byokTooLargeNeedsUpgrade": "Wechsle zu einem kostenpflichtigen Plan, um größere Dateien mit OpenWhispr Cloud zu transkribieren.",
+      "switchToCloudForLargeFiles": "Wechsle zu OpenWhispr Cloud, um diese Datei zu transkribieren.",
+      "createAccount": "Konto erstellen",
+      "upgrade": "Upgraden",
+      "switchToCloud": "OpenWhispr Cloud"
     },
     "meeting": {
       "title": "Besprechungsnotizen",
-      "description": "Sprechererkennung und strukturierte Zusammenfassungen",
-      "comingSoon": "Demnächst verfügbar"
+      "description": "Transkriptionen und strukturierte Zusammenfassungen",
+      "comingSoon": "Demnächst verfügbar",
+      "back": "Zurück"
     },
     "context": {
       "moveToFolder": "In Ordner verschieben",
@@ -1427,9 +1604,9 @@
       "selectAction": "Aktion auswählen",
       "done": "Fertig",
       "builtin": {
-        "cleanupNotes": {
-          "name": "Notizen bereinigen",
-          "description": "Grammatik, Struktur und Formatierung verbessern"
+        "generateNotes": {
+          "name": "Notizen generieren",
+          "description": "Notizen bereinigen, strukturieren und verbessern"
         }
       },
       "errors": {
@@ -1467,7 +1644,13 @@
         "createDescription": "Definieren Sie eine benutzerdefinierte Aktion mit Ihrem eigenen KI-Prompt. Sie können später jederzeit weitere hinzufügen oder bearbeiten.",
         "created": "Erstellt!"
       },
-      "getStarted": "Loslegen"
+      "getStarted": "Loslegen",
+      "systemAudio": {
+        "title": "Systemaudio",
+        "description": "Erfassen Sie Audio aus Meetings und anderen Apps zusätzlich zu Ihrem Mikrofon.",
+        "grant": "Berechtigung erteilen",
+        "enabled": "Aktiviert"
+      }
     },
     "realtimeBanner": {
       "message": "Echtzeit-Transkription mit Pro verfügbar",
@@ -1505,6 +1688,7 @@
     "upgradeTitle": "Auf Pro upgraden",
     "upgradeDescription": "Unbegrenzte Transkriptionen und mehr.",
     "learnMore": "Mehr erfahren",
+    "integrations": "Integrationen",
     "defaultUser": "Benutzer",
     "notSignedIn": "Nicht angemeldet"
   },
@@ -1515,6 +1699,7 @@
     "trial": "Testphase (noch {{days}} Tag)",
     "trial_other": "Testphase (noch {{days}} Tage)",
     "pro": "Pro",
+    "business": "Business",
     "unlimitedTrial": "Unbegrenzte Transkriptionen während deiner Testphase",
     "unlimited": "Unbegrenzte Transkriptionen",
     "manageSubscription": "Abonnement verwalten",
@@ -1547,6 +1732,7 @@
     "reasoningBanner": "KI-Verarbeitung mit GPU beschleunigen",
     "enableButton": "GPU aktivieren",
     "active": "GPU-Beschleunigung aktiv",
+    "ready": "GPU-Beschleunigung bereit",
     "activating": "GPU wird aktiviert...",
     "activationFailed": "GPU konnte nicht aktiviert werden",
     "retry": "Erneut versuchen",
@@ -1564,10 +1750,14 @@
         "description": "Die ausgewählte Tastenkombination konnte nicht registriert werden. Bitte wähle eine andere in den Einstellungen."
       },
       "addedToDict": "{{words}} zu deinem Wörterbuch hinzugefügt",
-      "undo": "Rückgängig"
+      "undo": "Rückgängig",
+      "accessibilityMissing": {
+        "title": "Bedienungshilfen-Berechtigungen erforderlich",
+        "description": "OpenWhispr benötigt Bedienungshilfen-Berechtigungen, um Ihren Hotkey zu erkennen und Text einzufügen. Bitte aktivieren Sie diese in der Systemsteuerung."
+      }
     },
     "mic": {
-      "hotkeyToSpeak": "{{hotkey}} drücken zum Sprechen",
+      "hotkeyToSpeak": "{{hotkey}} zum Sprechen",
       "recording": "Aufnahme...",
       "processing": "Verarbeitung...",
       "clickToSpeak": "Klicken zum Sprechen"
@@ -1585,5 +1775,181 @@
       "redirectTitle": "Weiterleitung zur App...",
       "closeTab": "Du kannst diesen Tab schließen."
     }
+  },
+  "agentMode": {
+    "settings": {
+      "title": "Agent-Modus",
+      "description": "Sprach-Chat-Assistent mit separatem KI-Modell",
+      "enabled": "Agent-Modus aktivieren",
+      "enabledDescription": "Verwende eine separate Tastenkombination, um ein Sprach-Chat-Overlay zu öffnen",
+      "hotkey": "Agent-Tastenkombination",
+      "hotkeyDescription": "Tastenkombination zum Umschalten des Agent-Overlays",
+      "model": "Agent-Modell",
+      "modelDescription": "KI-Modell für Agent-Unterhaltungen",
+      "systemPrompt": "System-Prompt",
+      "systemPromptDescription": "Benutzerdefinierte Anweisungen für den Agenten",
+      "systemPromptPlaceholder": "Benutzerdefinierten System-Prompt eingeben...",
+      "openwhisprCloud": "OpenWhispr Cloud",
+      "openwhisprCloudDescription": "OpenWhisprs Cloud-KI für Agent-Unterhaltungen verwenden",
+      "customSetup": "Eigene Konfiguration (BYOK)",
+      "customSetupDescription": "Eigene API-Schlüssel verwenden und bevorzugtes Modell auswählen"
+    },
+    "chat": {
+      "placeholder": "Drücke {{hotkey}} zum Sprechen",
+      "thinking": "Denkt nach...",
+      "transcribing": "Transkribiert...",
+      "listening": "Hört zu...",
+      "newConversation": "Neu",
+      "copyToClipboard": "In Zwischenablage kopieren",
+      "copied": "Kopiert!",
+      "emptyState": "{{hotkey}} gedrückt halten, um eine Unterhaltung zu starten",
+      "errorPrefix": "Fehler"
+    },
+    "titleBar": {
+      "label": "Agent",
+      "newChat": "Neues Gespräch",
+      "close": "Schließen"
+    },
+    "input": {
+      "holdToSpeak": "Gedrückt halten zum Sprechen",
+      "toClose": "schließen",
+      "listening": "Hört zu...",
+      "transcribing": "Transkribiert...",
+      "thinking": "Denkt nach..."
+    }
+  },
+  "integrations": {
+    "title": "Integrationen",
+    "description": "Verbinde Dienste, um deinen Workflow zu verbessern",
+    "googleCalendar": {
+      "title": "Google Calendar",
+      "description": "Verbinde deinen Kalender, um Meetings automatisch zu erkennen und Transkriptionen aufzuzeichnen.",
+      "connect": "Google Calendar verbinden",
+      "connecting": "Verbinde...",
+      "connected": "Verbunden",
+      "addAnother": "Weiteren Kalender hinzufügen",
+      "disconnect": "Trennen",
+      "disconnectConfirm": "{{email}} trennen?",
+      "disconnectDescription": "Besprechungsnotizen werden von diesem Kalender nicht mehr aufgezeichnet.",
+      "screenRecordingRequired": "Systemaudio-Berechtigung erforderlich",
+      "screenRecordingDescription": "Zum Transkribieren von Meetings benötigt OpenWhispr die Systemaudio-Berechtigung, um den Ton anderer Teilnehmer aufzunehmen. Wir nehmen Ihren Bildschirm nie auf. Sie werden zu den Systemeinstellungen weitergeleitet, um diese zu aktivieren.",
+      "openSettings": "Systemeinstellungen öffnen"
+    },
+    "plan": {
+      "title": "Dein Plan",
+      "current": "Aktuell",
+      "free": "Kostenlos",
+      "freeLimit": "5 Meetings / Monat",
+      "essential": "Essential",
+      "essentialLimit": "20 Meetings / Monat",
+      "pro": "Pro",
+      "proLimit": "Unbegrenzt",
+      "upgrade": "Upgrade"
+    },
+    "beta": {
+      "title": "Meeting-Aufnahme ist in der Beta-Phase",
+      "description": "Wir arbeiten noch daran, wie wir diese Funktion am besten ins Produkt integrieren. Feedback ist sehr willkommen!",
+      "freeTier": "Kostenloser Plan: 5 Stunden / Monat",
+      "proTier": "Pro-Plan: 20 Stunden / Monat",
+      "feedback": "Mehr als 20 Stunden benötigt? Kontaktieren Sie gabe@openwhispr.com"
+    },
+    "notABot": {
+      "title": "OpenWhispr ist ein Meeting-Rekorder, kein Bot",
+      "description": "OpenWhispr erfasst Audio direkt von deinem System — es nimmt niemals als Teilnehmer an deinen Meetings teil. Verbinde einfach deinen Kalender und mach Notizen wie gewohnt."
+    }
+  },
+  "calendar": {
+    "title": "Google Kalender",
+    "status": "Status",
+    "connected": "Verbunden",
+    "disconnected": "Getrennt",
+    "notConnectedDescription": "Verbinden, um Meetings zu erkennen und aufzuzeichnen",
+    "connectCta": {
+      "title": "Kalender-Integration",
+      "description": "Meetings automatisch erkennen und Transkriptionen aufzeichnen"
+    },
+    "connect": "Google Kalender verbinden",
+    "connecting": "Verbinde...",
+    "disconnect": "Trennen",
+    "disconnecting": "Trennen...",
+    "sync": "Synchronisieren",
+    "syncing": "Synchronisiere...",
+    "calendarsTitle": "Kalender",
+    "upcomingTitle": "Anstehend",
+    "noUpcoming": "Keine anstehenden Ereignisse",
+    "meetingStarting": "Meeting beginnt jetzt",
+    "today": "Heute",
+    "tomorrow": "Morgen",
+    "detection": {
+      "title": "Meeting-Erkennung",
+      "description": "Automatisch erkennen, wenn du in einem Meeting bist",
+      "processDetection": "App-Erkennung",
+      "processDescription": "Erkennen, welche App du verwendest, wenn ein Meeting erkannt wird",
+      "audioDetection": "Audio-Erkennung",
+      "audioDescription": "Benachrichtigung bei anhaltender Mikrofonaktivität"
+    }
+  },
+  "upcoming": {
+    "title": "Anstehende Meetings",
+    "transcriptions": "Transkriptionen",
+    "tomorrow": "Morgen",
+    "noMoreMeetings": "Keine weiteren Meetings heute",
+    "now": "Jetzt",
+    "join": "Beitreten",
+    "untitledEvent": "Unbenanntes Ereignis",
+    "screenRecordingRequired": "Die Systemaudio-Berechtigung wird benötigt, um den Ton anderer Teilnehmer aufzunehmen.",
+    "openSettings": "Systemeinstellungen öffnen",
+    "signInRequired": "Melden Sie sich an, um Meeting-Aufnahmen zu nutzen",
+    "signInDescription": "Erstellen Sie ein Konto oder melden Sie sich an, um Meetings aufzunehmen und zu transkribieren.",
+    "connectCalendar": "Kalender verbinden",
+    "connectCalendarDescription": "Verknüpfe deinen Google Kalender, um anstehende Meetings zu sehen und automatisch Notizen aufzuzeichnen.",
+    "notABot": "OpenWhispr nimmt über dein Systemaudio auf — es tritt niemals als Bot deinen Meetings bei.",
+    "connectCalendarButton": "Kalender verbinden"
+  },
+  "notesView": {
+    "searchPlaceholder": "Notizen durchsuchen…",
+    "newNote": "Neue Notiz",
+    "empty": {
+      "title": "Noch keine Notizen",
+      "description": "Erstellen Sie Ihre erste Notiz, um zu beginnen."
+    },
+    "searchEmpty": {
+      "title": "Keine Ergebnisse",
+      "description": "Keine Notizen für „{{query}}“ gefunden."
+    },
+    "noteType": {
+      "personal": "persönlich",
+      "meeting": "Meeting",
+      "upload": "Upload"
+    }
+  },
+  "noteEditor": {
+    "saved": "Gespeichert",
+    "deleteNote": "Notiz löschen",
+    "deleteConfirmTitle": "Notiz löschen?",
+    "deleteConfirmDescription": "Diese Notiz wird dauerhaft gelöscht und kann nicht wiederhergestellt werden.",
+    "deleteConfirm": "Löschen"
+  },
+  "commandSearch": {
+    "title": "Suche",
+    "description": "In Notizen und Transkripten suchen",
+    "shortPlaceholder": "Suche",
+    "placeholder": "Notizen und Transkripte durchsuchen…",
+    "sections": {
+      "notes": "Notizen",
+      "transcripts": "Transkripte"
+    },
+    "noResults": "Keine Ergebnisse",
+    "emptyState": "Tippen, um zu suchen",
+    "footer": {
+      "navigate": "Navigieren",
+      "open": "Öffnen",
+      "dismiss": "Schließen"
+    }
+  },
+  "updateNotification": {
+    "title": "Update verfügbar",
+    "body": "Version {{version}} ist bereit",
+    "cta": "Jetzt aktualisieren"
   }
 }

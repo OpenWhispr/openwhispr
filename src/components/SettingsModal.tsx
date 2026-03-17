@@ -9,6 +9,7 @@ import {
   Keyboard,
   CreditCard,
   Shield,
+  MessageSquare,
 } from "lucide-react";
 import SidebarModal, { SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
@@ -76,6 +77,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         label: t("settingsModal.sections.intelligence.label"),
         icon: Brain,
         description: t("settingsModal.sections.intelligence.description"),
+        group: t("settingsModal.groups.speechAi"),
+      },
+      {
+        id: "agentMode",
+        label: t("settingsModal.sections.agentMode.label"),
+        icon: MessageSquare,
+        description: t("settingsModal.sections.agentMode.description"),
         group: t("settingsModal.groups.speechAi"),
       },
       {

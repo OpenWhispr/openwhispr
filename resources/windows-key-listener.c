@@ -25,17 +25,68 @@ static BOOL g_requireAlt = FALSE;
 static BOOL g_requireShift = FALSE;
 static BOOL g_requireWin = FALSE;
 static BOOL g_useModifiersOnly = FALSE;
+static BOOL g_ctrlDown = FALSE;
+static BOOL g_altDown = FALSE;
+static BOOL g_shiftDown = FALSE;
+static BOOL g_leftWinDown = FALSE;
+static BOOL g_rightWinDown = FALSE;
 
-// Check if required modifiers are currently pressed
-BOOL AreModifiersPressed(void) {
-    if (g_requireCtrl && !(GetAsyncKeyState(VK_CONTROL) & 0x8000)) return FALSE;
-    if (g_requireAlt && !(GetAsyncKeyState(VK_MENU) & 0x8000)) return FALSE;
-    if (g_requireShift && !(GetAsyncKeyState(VK_SHIFT) & 0x8000)) return FALSE;
-    if (g_requireWin &&
-        !(GetAsyncKeyState(VK_LWIN) & 0x8000) &&
-        !(GetAsyncKeyState(VK_RWIN) & 0x8000)) {
-        return FALSE;
+static BOOL IsCtrlVk(DWORD vkCode) {
+    return vkCode == VK_CONTROL || vkCode == VK_LCONTROL || vkCode == VK_RCONTROL;
+}
+
+static BOOL IsAltVk(DWORD vkCode) {
+    return vkCode == VK_MENU || vkCode == VK_LMENU || vkCode == VK_RMENU;
+}
+
+static BOOL IsShiftVk(DWORD vkCode) {
+    return vkCode == VK_SHIFT || vkCode == VK_LSHIFT || vkCode == VK_RSHIFT;
+}
+
+static BOOL IsWinVk(DWORD vkCode) {
+    return vkCode == VK_LWIN || vkCode == VK_RWIN;
+}
+
+static void UpdateModifierState(DWORD vkCode, BOOL isKeyDown) {
+    if (IsCtrlVk(vkCode)) {
+        g_ctrlDown = isKeyDown;
+        return;
     }
+
+    if (IsAltVk(vkCode)) {
+        g_altDown = isKeyDown;
+        return;
+    }
+
+    if (IsShiftVk(vkCode)) {
+        g_shiftDown = isKeyDown;
+        return;
+    }
+
+    if (vkCode == VK_LWIN) {
+        g_leftWinDown = isKeyDown;
+        return;
+    }
+
+    if (vkCode == VK_RWIN) {
+        g_rightWinDown = isKeyDown;
+    }
+}
+
+static BOOL IsRequiredModifierEvent(DWORD vkCode) {
+    return (g_requireCtrl && IsCtrlVk(vkCode)) ||
+           (g_requireAlt && IsAltVk(vkCode)) ||
+           (g_requireShift && IsShiftVk(vkCode)) ||
+           (g_requireWin && IsWinVk(vkCode));
+}
+
+// Track modifier state inside the hook instead of using GetAsyncKeyState().
+// For low-level hooks, async state is not yet updated for the current event.
+static BOOL AreRequiredModifiersPressed(void) {
+    if (g_requireCtrl && !g_ctrlDown) return FALSE;
+    if (g_requireAlt && !g_altDown) return FALSE;
+    if (g_requireShift && !g_shiftDown) return FALSE;
+    if (g_requireWin && !(g_leftWinDown || g_rightWinDown)) return FALSE;
     return TRUE;
 }
 
@@ -129,38 +180,30 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         KBDLLHOOKSTRUCT* kbd = (KBDLLHOOKSTRUCT*)lParam;
         BOOL isKeyDown = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
         BOOL isKeyUp = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
+        BOOL isModifierEvent = IsCtrlVk(kbd->vkCode) || IsAltVk(kbd->vkCode) ||
+                               IsShiftVk(kbd->vkCode) || IsWinVk(kbd->vkCode);
 
-        // Check if a required modifier was released while we're in key-down state
-        if (g_isKeyDown && isKeyUp) {
-            BOOL modifierReleased = FALSE;
-            if (g_requireCtrl && (kbd->vkCode == VK_CONTROL || kbd->vkCode == VK_LCONTROL || kbd->vkCode == VK_RCONTROL)) {
-                modifierReleased = TRUE;
-            }
-            if (g_requireAlt && (kbd->vkCode == VK_MENU || kbd->vkCode == VK_LMENU || kbd->vkCode == VK_RMENU)) {
-                modifierReleased = TRUE;
-            }
-            if (g_requireShift && (kbd->vkCode == VK_SHIFT || kbd->vkCode == VK_LSHIFT || kbd->vkCode == VK_RSHIFT)) {
-                modifierReleased = TRUE;
-            }
-            if (g_requireWin && (kbd->vkCode == VK_LWIN || kbd->vkCode == VK_RWIN)) {
-                modifierReleased = TRUE;
-            }
-            if (modifierReleased) {
-                g_isKeyDown = FALSE;
-                printf("KEY_UP\n");
-                fflush(stdout);
-            }
+        if ((isKeyDown || isKeyUp) && isModifierEvent) {
+            UpdateModifierState(kbd->vkCode, isKeyDown);
+        }
+
+        // Stop an active press as soon as one of its required modifiers is released.
+        if (g_isKeyDown && isKeyUp && IsRequiredModifierEvent(kbd->vkCode) &&
+            !AreRequiredModifiersPressed()) {
+            g_isKeyDown = FALSE;
+            printf("KEY_UP\n");
+            fflush(stdout);
         }
 
         if (g_useModifiersOnly) {
             if (isKeyDown) {
-                if (!g_isKeyDown && AreModifiersPressed()) {
+                if (!g_isKeyDown && AreRequiredModifiersPressed()) {
                     g_isKeyDown = TRUE;
                     printf("KEY_DOWN\n");
                     fflush(stdout);
                 }
             } else if (isKeyUp) {
-                if (g_isKeyDown && !AreModifiersPressed()) {
+                if (g_isKeyDown && !AreRequiredModifiersPressed()) {
                     g_isKeyDown = FALSE;
                     printf("KEY_UP\n");
                     fflush(stdout);
@@ -173,7 +216,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
         if (kbd->vkCode == g_targetVk) {
             if (isKeyDown) {
                 // Only trigger if modifiers are satisfied
-                if (AreModifiersPressed()) {
+                if (AreRequiredModifiersPressed()) {
                     if (!g_isKeyDown) {
                         g_isKeyDown = TRUE;
                         printf("KEY_DOWN\n");

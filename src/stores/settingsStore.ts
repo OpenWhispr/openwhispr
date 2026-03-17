@@ -5,6 +5,7 @@ import { hasStoredByokKey } from "../utils/byokDetection";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import logger from "../utils/logger";
 import type { LocalTranscriptionProvider } from "../types/electron";
+import type { GoogleCalendarAccount } from "../types/calendar";
 import type {
   TranscriptionSettings,
   ReasoningSettings,
@@ -13,6 +14,7 @@ import type {
   ApiKeySettings,
   PrivacySettings,
   ThemeSettings,
+  AgentModeSettings,
 } from "../hooks/useSettings";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
@@ -54,11 +56,20 @@ const BOOLEAN_SETTINGS = new Set([
   "cloudBackupEnabled",
   "telemetryEnabled",
   "audioCuesEnabled",
+  "pauseMediaOnDictation",
   "floatingIconAutoHide",
+  "startMinimized",
+  "meetingProcessDetection",
+  "meetingAudioDetection",
   "isSignedIn",
+  "agentEnabled",
+  "keepTranscriptionInClipboard",
+  "dataRetentionEnabled",
 ]);
 
-const ARRAY_SETTINGS = new Set(["customDictionary"]);
+const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
+
+const NUMERIC_SETTINGS = new Set(["audioRetentionDays"]);
 
 const LANGUAGE_MIGRATIONS: Record<string, string> = { zh: "zh-CN" };
 
@@ -80,10 +91,20 @@ export interface SettingsState
     MicrophoneSettings,
     ApiKeySettings,
     PrivacySettings,
-    ThemeSettings {
+    ThemeSettings,
+    AgentModeSettings {
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
+  pauseMediaOnDictation: boolean;
   floatingIconAutoHide: boolean;
+  startMinimized: boolean;
+  gcalAccounts: GoogleCalendarAccount[];
+  gcalConnected: boolean;
+  gcalEmail: string;
+  meetingProcessDetection: boolean;
+  meetingAudioDetection: boolean;
+  panelStartPosition: "bottom-right" | "center" | "bottom-left";
+  keepTranscriptionInClipboard: boolean;
 
   setUseLocalWhisper: (value: boolean) => void;
   setWhisperModel: (value: string) => void;
@@ -115,6 +136,7 @@ export interface SettingsState
   setCustomReasoningApiKey: (key: string) => void;
 
   setDictationKey: (key: string) => void;
+  setMeetingKey: (key: string) => void;
   setActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
@@ -123,13 +145,30 @@ export interface SettingsState
   setTheme: (value: "light" | "dark" | "auto") => void;
   setCloudBackupEnabled: (value: boolean) => void;
   setTelemetryEnabled: (value: boolean) => void;
+  setAudioRetentionDays: (days: number) => void;
+  setDataRetentionEnabled: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
+  setPauseMediaOnDictation: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
+  setStartMinimized: (enabled: boolean) => void;
+  setGcalAccounts: (accounts: GoogleCalendarAccount[]) => void;
+  setMeetingProcessDetection: (value: boolean) => void;
+  setMeetingAudioDetection: (value: boolean) => void;
+  setPanelStartPosition: (position: "bottom-right" | "center" | "bottom-left") => void;
+  setKeepTranscriptionInClipboard: (value: boolean) => void;
   setIsSignedIn: (value: boolean) => void;
+
+  setAgentModel: (value: string) => void;
+  setAgentProvider: (value: string) => void;
+  setAgentKey: (key: string) => void;
+  setAgentSystemPrompt: (value: string) => void;
+  setAgentEnabled: (value: boolean) => void;
+  setCloudAgentMode: (value: string) => void;
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
   updateReasoningSettings: (settings: Partial<ReasoningSettings>) => void;
   updateApiKeys: (keys: Partial<ApiKeySettings>) => void;
+  updateAgentModeSettings: (settings: Partial<AgentModeSettings>) => void;
 }
 
 function createStringSetter(key: string) {
@@ -220,6 +259,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   customReasoningApiKey: readString("customReasoningApiKey", ""),
 
   dictationKey: readString("dictationKey", ""),
+  meetingKey: readString("meetingKey", ""),
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     | "tap"
     | "push",
@@ -234,9 +274,48 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   cloudBackupEnabled: readBoolean("cloudBackupEnabled", false),
   telemetryEnabled: readBoolean("telemetryEnabled", false),
+  audioRetentionDays: (() => {
+    if (!isBrowser) return 30;
+    const stored = localStorage.getItem("audioRetentionDays");
+    if (stored === null) return 30;
+    const parsed = parseInt(stored, 10);
+    return isNaN(parsed) ? 30 : parsed;
+  })(),
+  dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
+  pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
+  startMinimized: readBoolean("startMinimized", false),
+  ...(() => {
+    let accounts: GoogleCalendarAccount[] = [];
+    try {
+      const parsed = JSON.parse(readString("gcalAccounts", "[]"));
+      if (Array.isArray(parsed)) accounts = parsed;
+    } catch {
+      /* use empty default */
+    }
+    return {
+      gcalAccounts: accounts,
+      gcalConnected: accounts.length > 0,
+      gcalEmail: accounts[0]?.email ?? "",
+    };
+  })(),
+  meetingProcessDetection: readBoolean("meetingProcessDetection", true),
+  meetingAudioDetection: readBoolean("meetingAudioDetection", true),
+  panelStartPosition: (() => {
+    const v = readString("panelStartPosition", "bottom-right");
+    if (v === "bottom-right" || v === "center" || v === "bottom-left") return v;
+    return "bottom-right" as const;
+  })(),
+  keepTranscriptionInClipboard: readBoolean("keepTranscriptionInClipboard", true),
   isSignedIn: readBoolean("isSignedIn", false),
+
+  agentModel: readString("agentModel", "openai/gpt-oss-120b"),
+  agentProvider: readString("agentProvider", "groq"),
+  agentKey: readString("agentKey", ""),
+  agentSystemPrompt: readString("agentSystemPrompt", ""),
+  agentEnabled: readBoolean("agentEnabled", true),
+  cloudAgentMode: readString("cloudAgentMode", "openwhispr"),
 
   setUseLocalWhisper: createBooleanSetter("useLocalWhisper"),
   setWhisperModel: createStringSetter("whisperModel"),
@@ -339,12 +418,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.saveDictationKey?.(key);
     }
   },
+  setMeetingKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("meetingKey", key);
+    set({ meetingKey: key });
+  },
 
   setActivationMode: (mode: "tap" | "push") => {
-    if (isBrowser) localStorage.setItem("activationMode", mode);
-    set({ activationMode: mode });
+    // Linux has no native key listener for push-to-talk — force tap
+    const effective = isBrowser && window.electronAPI?.getPlatform?.() === "linux" ? "tap" : mode;
+    if (isBrowser) localStorage.setItem("activationMode", effective);
+    set({ activationMode: effective });
     if (isBrowser) {
-      window.electronAPI?.notifyActivationModeChanged?.(mode);
+      window.electronAPI?.notifyActivationModeChanged?.(effective);
     }
   },
 
@@ -358,7 +443,23 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setCloudBackupEnabled: createBooleanSetter("cloudBackupEnabled"),
   setTelemetryEnabled: createBooleanSetter("telemetryEnabled"),
+  setAudioRetentionDays: (days: number) => {
+    if (isBrowser) localStorage.setItem("audioRetentionDays", String(days));
+    set({ audioRetentionDays: days });
+  },
+  setDataRetentionEnabled: (value: boolean) => {
+    if (isBrowser) localStorage.setItem("dataRetentionEnabled", String(value));
+    set({ dataRetentionEnabled: value });
+    logger.info(
+      value
+        ? "Data retention enabled — transcriptions and audio will be saved"
+        : "Data retention disabled — transcriptions and audio will not be saved",
+      {},
+      "settings"
+    );
+  },
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
+  setPauseMediaOnDictation: createBooleanSetter("pauseMediaOnDictation"),
 
   setFloatingIconAutoHide: (enabled: boolean) => {
     if (get().floatingIconAutoHide === enabled) return;
@@ -369,10 +470,54 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
   },
 
+  setStartMinimized: (enabled: boolean) => {
+    if (get().startMinimized === enabled) return;
+    if (isBrowser) localStorage.setItem("startMinimized", String(enabled));
+    set({ startMinimized: enabled });
+    if (isBrowser) {
+      window.electronAPI?.notifyStartMinimizedChanged?.(enabled);
+    }
+  },
+
+  setGcalAccounts: (accounts: GoogleCalendarAccount[]) => {
+    if (isBrowser) localStorage.setItem("gcalAccounts", JSON.stringify(accounts));
+    useSettingsStore.setState({
+      gcalAccounts: accounts,
+      gcalConnected: accounts.length > 0,
+      gcalEmail: accounts[0]?.email ?? "",
+    });
+  },
+  setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
+  setMeetingAudioDetection: createBooleanSetter("meetingAudioDetection"),
+  setPanelStartPosition: (position: "bottom-right" | "center" | "bottom-left") => {
+    if (get().panelStartPosition === position) return;
+    if (isBrowser) localStorage.setItem("panelStartPosition", position);
+    set({ panelStartPosition: position });
+    if (isBrowser) {
+      window.electronAPI?.notifyPanelStartPositionChanged?.(position);
+    }
+  },
+
+  setKeepTranscriptionInClipboard: createBooleanSetter("keepTranscriptionInClipboard"),
+
   setIsSignedIn: (value: boolean) => {
     if (isBrowser) localStorage.setItem("isSignedIn", String(value));
     set({ isSignedIn: value });
   },
+
+  setAgentModel: createStringSetter("agentModel"),
+  setAgentProvider: createStringSetter("agentProvider"),
+  setAgentKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("agentKey", key);
+    useSettingsStore.setState({ agentKey: key });
+    if (isBrowser) {
+      window.electronAPI?.notifyAgentHotkeyChanged?.(key);
+      window.electronAPI?.saveAgentKey?.(key);
+    }
+  },
+  setAgentSystemPrompt: createStringSetter("agentSystemPrompt"),
+  setAgentEnabled: createBooleanSetter("agentEnabled"),
+  setCloudAgentMode: createStringSetter("cloudAgentMode"),
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => {
     const s = useSettingsStore.getState();
@@ -428,6 +573,17 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.customReasoningApiKey !== undefined)
       s.setCustomReasoningApiKey(keys.customReasoningApiKey);
   },
+
+  updateAgentModeSettings: (settings: Partial<AgentModeSettings>) => {
+    const s = useSettingsStore.getState();
+    if (settings.agentModel !== undefined) s.setAgentModel(settings.agentModel);
+    if (settings.agentProvider !== undefined) s.setAgentProvider(settings.agentProvider);
+    if (settings.agentKey !== undefined) s.setAgentKey(settings.agentKey);
+    if (settings.agentSystemPrompt !== undefined)
+      s.setAgentSystemPrompt(settings.agentSystemPrompt);
+    if (settings.agentEnabled !== undefined) s.setAgentEnabled(settings.agentEnabled);
+    if (settings.cloudAgentMode !== undefined) s.setCloudAgentMode(settings.cloudAgentMode);
+  },
 }));
 
 // --- Selectors (derived state, not stored) ---
@@ -437,6 +593,13 @@ export const selectIsCloudReasoningMode = (state: SettingsState) =>
 
 export const selectEffectiveReasoningProvider = (state: SettingsState) =>
   selectIsCloudReasoningMode(state) ? "openwhispr" : state.reasoningProvider;
+
+export const selectIsCloudAgentMode = (state: SettingsState) =>
+  state.isSignedIn && state.cloudAgentMode === "openwhispr";
+
+export function isCloudAgentMode() {
+  return selectIsCloudAgentMode(useSettingsStore.getState());
+}
 
 // --- Convenience getters for non-React code ---
 
@@ -521,9 +684,24 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Sync activation mode from main process
+    // Sync agent key from main process
     try {
-      const envMode = await window.electronAPI.getActivationMode?.();
+      const envKey = await window.electronAPI.getAgentKey?.();
+      if (envKey && envKey !== state.agentKey) {
+        createStringSetter("agentKey")(envKey);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync agent key on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync activation mode from main process (Linux forces tap — no native key listener)
+    try {
+      let envMode = await window.electronAPI.getActivationMode?.();
+      if (window.electronAPI?.getPlatform?.() === "linux") envMode = "tap";
       if (envMode && envMode !== state.activationMode) {
         if (isBrowser) localStorage.setItem("activationMode", envMode);
         useSettingsStore.setState({ activationMode: envMode });
@@ -579,6 +757,21 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
+    // Sync meeting detection preferences to main process
+    try {
+      const currentState = useSettingsStore.getState();
+      await window.electronAPI.meetingDetectionSetPreferences?.({
+        processDetection: currentState.meetingProcessDetection,
+        audioDetection: currentState.meetingAudioDetection,
+      });
+    } catch (err) {
+      logger.warn(
+        "Failed to sync meeting detection preferences on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
     ensureAgentNameInDictionary();
   }
 
@@ -601,14 +794,40 @@ export async function initializeSettings(): Promise<void> {
       } catch {
         value = [];
       }
+    } else if (NUMERIC_SETTINGS.has(key)) {
+      const parsed = parseInt(newValue, 10);
+      value = isNaN(parsed) ? 30 : parsed;
     } else {
       value = newValue;
     }
 
     useSettingsStore.setState({ [key]: value });
 
+    if (key === "gcalAccounts" && Array.isArray(value)) {
+      const accounts = value as GoogleCalendarAccount[];
+      useSettingsStore.setState({
+        gcalConnected: accounts.length > 0,
+        gcalEmail: accounts[0]?.email ?? "",
+      });
+    }
+
     if (key === "uiLanguage" && typeof value === "string") {
       void i18n.changeLanguage(value);
+    }
+  });
+
+  // Sync settings pushed from main process (e.g., hotkey changed in control panel)
+  window.electronAPI?.onSettingUpdated?.((data: { key: string; value: unknown }) => {
+    const state = useSettingsStore.getState();
+    if (
+      data.key in state &&
+      typeof (state as unknown as Record<string, unknown>)[data.key] !== "function"
+    ) {
+      localStorage.setItem(
+        data.key,
+        typeof data.value === "string" ? data.value : JSON.stringify(data.value)
+      );
+      useSettingsStore.setState({ [data.key]: data.value });
     }
   });
 }

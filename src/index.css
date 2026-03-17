@@ -167,11 +167,13 @@
   }
 
   /* Make dictation window (App) transparent, but keep control panel solid */
-  body:has(.dictation-window) {
+  body:has(.dictation-window),
+  body:has(.meeting-notification-window) {
     background: transparent;
   }
 
-  body:has(.dictation-window) #root {
+  body:has(.dictation-window) #root,
+  body:has(.meeting-notification-window) #root {
     background: transparent;
   }
 }
@@ -792,4 +794,85 @@ a:hover {
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ---- Agent Overlay ---- */
+
+body:has(.agent-overlay-window) {
+  background: transparent;
+}
+
+body:has(.agent-overlay-window) #root {
+  background: transparent;
+}
+
+@keyframes agent-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes agent-cursor-blink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes agent-mic-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes agent-loading-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.agent-chat-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.agent-chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-chat-scroll::-webkit-scrollbar-thumb {
+  background: oklch(0.5 0 0 / 0.2);
+  border-radius: 2px;
+}
+
+.agent-chat-scroll::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.5 0 0 / 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-overlay-window * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

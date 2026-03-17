@@ -1,5 +1,5 @@
 import { Button } from "./button";
-import { Check, LucideIcon, Settings } from "lucide-react";
+import { Check, ExternalLink, LucideIcon, Settings } from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface PermissionCardProps {
@@ -10,6 +10,8 @@ interface PermissionCardProps {
   onRequest: () => void;
   buttonText?: string;
   onOpenSettings?: () => void;
+  badge?: string;
+  openSettingsText?: string;
 }
 
 export default function PermissionCard({
@@ -20,6 +22,8 @@ export default function PermissionCard({
   onRequest,
   buttonText = "Grant Access",
   onOpenSettings,
+  badge,
+  openSettingsText,
 }: PermissionCardProps) {
   return (
     <div
@@ -50,20 +54,41 @@ export default function PermissionCard({
 
         {/* Content */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-xs font-medium text-foreground">{title}</h3>
+          <h3 className="text-xs font-medium text-foreground">
+            {title}
+            {badge && (
+              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-muted text-muted-foreground">
+                {badge}
+              </span>
+            )}
+          </h3>
           <p className="text-xs text-muted-foreground leading-snug mt-0.5">{description}</p>
         </div>
 
         {/* Actions - only when not granted */}
         {!granted && (
           <div className="flex items-center gap-1.5 shrink-0">
-            <Button onClick={onRequest} size="sm" className="h-7 px-3 text-xs">
-              {buttonText}
-            </Button>
-            {onOpenSettings && (
-              <Button onClick={onOpenSettings} size="sm" variant="ghost" className="h-7 w-7 p-0">
-                <Settings className="w-3.5 h-3.5" />
+            {onOpenSettings && openSettingsText ? (
+              <Button onClick={onOpenSettings} size="sm" className="h-7 px-3 text-xs">
+                <ExternalLink className="w-3 h-3" />
+                {openSettingsText}
               </Button>
+            ) : (
+              <>
+                <Button onClick={onRequest} size="sm" className="h-7 px-3 text-xs">
+                  {buttonText}
+                </Button>
+                {onOpenSettings && (
+                  <Button
+                    onClick={onOpenSettings}
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 w-7 p-0"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                  </Button>
+                )}
+              </>
             )}
           </div>
         )}

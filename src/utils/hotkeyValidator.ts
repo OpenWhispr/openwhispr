@@ -1,4 +1,4 @@
-import { formatHotkeyLabelForPlatform } from "./hotkeys";
+import { formatHotkeyLabelForPlatform, isGlobeLikeHotkey } from "./hotkeys";
 
 export type Platform = "darwin" | "win32" | "linux";
 
@@ -517,7 +517,7 @@ export function validateHotkey(
     return { valid: false, error: "Please enter a valid shortcut." };
   }
 
-  if (hotkey === "GLOBE" || hotkey === "Fn") {
+  if (isGlobeLikeHotkey(hotkey)) {
     if (platform !== "darwin") {
       return {
         valid: false,

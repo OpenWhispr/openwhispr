@@ -121,7 +121,10 @@ export function useFolderManagement(): UseFolderManagementReturn {
     prevFolderIdRef.current = activeFolderId;
     const loadForFolder = async () => {
       const notes = await initializeNotes(null, 50, activeFolderId);
-      setActiveNoteId(notes.length > 0 ? notes[0].id : null);
+      const presetNoteId = getActiveNoteIdValue();
+      if (!presetNoteId || !notes.some((n) => n.id === presetNoteId)) {
+        setActiveNoteId(notes.length > 0 ? notes[0].id : null);
+      }
     };
     loadForFolder();
   }, [activeFolderId, isLoading]);

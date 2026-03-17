@@ -20,8 +20,11 @@ const PERSISTED_KEYS = [
   "LLAMA_GPU_BACKEND",
   "LLAMA_VULKAN_ENABLED",
   "DICTATION_KEY",
+  "AGENT_KEY",
+  "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
+  "START_MINIMIZED",
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
 ];
@@ -32,11 +35,12 @@ class EnvironmentManager {
   }
 
   loadEnvironmentVariables() {
-    // Loaded in priority order - dotenv won't override, so first file wins per variable.
+    // App config (.env in userData) takes precedence over system env vars,
+    // so keys saved by the user in Settings always win.
     const userDataEnv = path.join(app.getPath("userData"), ".env");
     try {
       if (fs.existsSync(userDataEnv)) {
-        require("dotenv").config({ path: userDataEnv });
+        require("dotenv").config({ path: userDataEnv, override: true });
       }
     } catch {}
 
@@ -131,6 +135,26 @@ class EnvironmentManager {
     return result;
   }
 
+  getAgentKey() {
+    return this._getKey("AGENT_KEY");
+  }
+
+  saveAgentKey(key) {
+    const result = this._saveKey("AGENT_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getMeetingKey() {
+    return this._getKey("MEETING_KEY");
+  }
+
+  saveMeetingKey(key) {
+    const result = this._saveKey("MEETING_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
   getActivationMode() {
     const mode = this._getKey("ACTIVATION_MODE");
     return mode === "push" ? "push" : "tap";
@@ -149,6 +173,28 @@ class EnvironmentManager {
 
   saveFloatingIconAutoHide(enabled) {
     const result = this._saveKey("FLOATING_ICON_AUTO_HIDE", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getStartMinimized() {
+    return this._getKey("START_MINIMIZED") === "true";
+  }
+
+  saveStartMinimized(enabled) {
+    const result = this._saveKey("START_MINIMIZED", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getPanelStartPosition() {
+    const v = this._getKey("PANEL_START_POSITION");
+    if (v === "bottom-right" || v === "center" || v === "bottom-left") return v;
+    return "bottom-right";
+  }
+
+  savePanelStartPosition(position) {
+    const result = this._saveKey("PANEL_START_POSITION", position);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

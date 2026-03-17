@@ -60,11 +60,43 @@ function hasUinputHeaders() {
   return false;
 }
 
+function hasGio() {
+  try {
+    const result = spawnSync("pkg-config", ["--exists", "gio-2.0"], {
+      stdio: "pipe",
+    });
+    return result.status === 0;
+  } catch {}
+  return false;
+}
+
+function getGioFlags() {
+  try {
+    const cflags = spawnSync("pkg-config", ["--cflags", "gio-2.0"], {
+      stdio: "pipe",
+    });
+    const libs = spawnSync("pkg-config", ["--libs", "gio-2.0"], {
+      stdio: "pipe",
+    });
+    if (cflags.status === 0 && libs.status === 0) {
+      return [
+        ...cflags.stdout.toString().trim().split(/\s+/),
+        ...libs.stdout.toString().trim().split(/\s+/),
+      ].filter(Boolean);
+    }
+  } catch {}
+  return [];
+}
+
 const uinputAvailable = hasUinputHeaders();
+const gioAvailable = hasGio();
 
 function computeBuildHash() {
   const sourceContent = fs.readFileSync(cSource, "utf8");
-  const flags = uinputAvailable ? "uinput" : "nouinput";
+  const flags = [
+    uinputAvailable ? "uinput" : "nouinput",
+    gioAvailable ? "gio" : "nogio",
+  ].join("+");
   return crypto
     .createHash("sha256")
     .update(sourceContent + flags)
@@ -109,6 +141,13 @@ if (uinputAvailable) {
   compileArgs.push("-DHAVE_UINPUT");
 } else {
   log("uinput headers not found, building without uinput support");
+}
+
+if (gioAvailable) {
+  log("gio-2.0 found, enabling portal support");
+  compileArgs.push("-DHAVE_GIO", ...getGioFlags());
+} else {
+  log("gio-2.0 not found, building without portal support");
 }
 
 let result = attemptCompile("gcc", compileArgs);

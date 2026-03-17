@@ -98,19 +98,24 @@ class WindowsKeyManager extends EventEmitter {
       }
     });
 
-    this.process.on("error", (error) => {
+    const proc = this.process;
+
+    proc.on("error", (error) => {
+      if (this.process === proc) this.process = null;
       this.reportError(error);
-      this.process = null;
     });
 
-    this.process.on("exit", (code, signal) => {
-      this.process = null;
-      this.isReady = false;
+    proc.on("exit", (code, signal) => {
+      if (this.process === proc) {
+        this.process = null;
+        this.isReady = false;
+      }
       if (code !== 0) {
-        const error = new Error(
-          `Windows key listener exited with code ${code ?? "null"} signal ${signal ?? "null"}`
+        this.reportError(
+          new Error(
+            `Windows key listener exited with code ${code ?? "null"} signal ${signal ?? "null"}`
+          )
         );
-        this.reportError(error);
       }
     });
   }

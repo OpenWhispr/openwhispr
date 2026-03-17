@@ -32,6 +32,7 @@ export interface ReasoningSettings {
 
 export interface HotkeySettings {
   dictationKey: string;
+  meetingKey: string;
   activationMode: "tap" | "push";
 }
 
@@ -53,10 +54,21 @@ export interface ApiKeySettings {
 export interface PrivacySettings {
   cloudBackupEnabled: boolean;
   telemetryEnabled: boolean;
+  audioRetentionDays: number;
+  dataRetentionEnabled: boolean;
 }
 
 export interface ThemeSettings {
   theme: "light" | "dark" | "auto";
+}
+
+export interface AgentModeSettings {
+  agentModel: string;
+  agentProvider: string;
+  agentKey: string;
+  agentSystemPrompt: string;
+  agentEnabled: boolean;
+  cloudAgentMode: string;
 }
 
 function useSettingsInternal() {
@@ -178,6 +190,7 @@ function useSettingsInternal() {
     groqApiKey: store.groqApiKey,
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
+    meetingKey: store.meetingKey,
     theme: store.theme,
     setUseLocalWhisper: store.setUseLocalWhisper,
     setWhisperModel: store.setWhisperModel,
@@ -208,23 +221,36 @@ function useSettingsInternal() {
     customReasoningApiKey: store.customReasoningApiKey,
     setCustomReasoningApiKey: store.setCustomReasoningApiKey,
     setDictationKey: store.setDictationKey,
+    setMeetingKey: store.setMeetingKey,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
     audioCuesEnabled: store.audioCuesEnabled,
     setAudioCuesEnabled: store.setAudioCuesEnabled,
+    pauseMediaOnDictation: store.pauseMediaOnDictation,
+    setPauseMediaOnDictation: store.setPauseMediaOnDictation,
     floatingIconAutoHide: store.floatingIconAutoHide,
     setFloatingIconAutoHide: store.setFloatingIconAutoHide,
+    startMinimized: store.startMinimized,
+    setStartMinimized: store.setStartMinimized,
+    panelStartPosition: store.panelStartPosition,
+    setPanelStartPosition: store.setPanelStartPosition,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
     setPreferBuiltInMic: store.setPreferBuiltInMic,
     setSelectedMicDeviceId: store.setSelectedMicDeviceId,
     autoLearnCorrections,
     setAutoLearnCorrections,
+    keepTranscriptionInClipboard: store.keepTranscriptionInClipboard,
+    setKeepTranscriptionInClipboard: store.setKeepTranscriptionInClipboard,
     cloudBackupEnabled: store.cloudBackupEnabled,
     setCloudBackupEnabled: store.setCloudBackupEnabled,
     telemetryEnabled: store.telemetryEnabled,
     setTelemetryEnabled: store.setTelemetryEnabled,
+    audioRetentionDays: store.audioRetentionDays,
+    setAudioRetentionDays: store.setAudioRetentionDays,
+    dataRetentionEnabled: store.dataRetentionEnabled,
+    setDataRetentionEnabled: store.setDataRetentionEnabled,
     updateTranscriptionSettings: store.updateTranscriptionSettings,
     updateReasoningSettings: store.updateReasoningSettings,
     updateApiKeys: store.updateApiKeys,

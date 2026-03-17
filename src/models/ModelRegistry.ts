@@ -38,6 +38,8 @@ export interface CloudModelDefinition {
   description: string;
   descriptionKey?: string;
   disableThinking?: boolean;
+  tokenParam?: "max_tokens" | "max_completion_tokens";
+  supportsTemperature?: boolean;
 }
 
 export interface CloudProviderData {
@@ -325,6 +327,40 @@ export function getCloudModel(modelId: string): CloudModelDefinition | undefined
     if (model) return model;
   }
   return undefined;
+}
+
+export interface OpenAiApiConfig {
+  tokenParam: "max_tokens" | "max_completion_tokens";
+  supportsTemperature: boolean;
+}
+
+export function getOpenAiApiConfig(modelId: string): OpenAiApiConfig {
+  const model = getCloudModel(modelId);
+  if (model?.tokenParam) {
+    return {
+      tokenParam: model.tokenParam,
+      supportsTemperature: model.supportsTemperature ?? true,
+    };
+  }
+
+  // Fallback for models not in the registry (custom model IDs, etc.)
+  const isLegacy =
+    modelId.startsWith("gpt-3") ||
+    modelId.startsWith("gpt-4o") ||
+    modelId.startsWith("gpt-4-") ||
+    modelId === "gpt-4";
+
+  if (isLegacy) {
+    return { tokenParam: "max_tokens", supportsTemperature: true };
+  }
+
+  // gpt-4.1* supports temperature but uses max_completion_tokens
+  if (modelId.startsWith("gpt-4.1")) {
+    return { tokenParam: "max_completion_tokens", supportsTemperature: true };
+  }
+
+  // gpt-5* reasoning models: no temperature
+  return { tokenParam: "max_completion_tokens", supportsTemperature: false };
 }
 
 export function getParakeetModels(): ParakeetModelsMap {

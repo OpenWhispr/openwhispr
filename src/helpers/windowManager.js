@@ -1,6 +1,7 @@
 const { app, screen, BrowserWindow, shell, dialog } = require("electron");
 const debugLogger = require("./debugLogger");
 const HotkeyManager = require("./hotkeyManager");
+const { isGlobeLikeHotkey } = HotkeyManager;
 const DragManager = require("./dragManager");
 const MenuManager = require("./menuManager");
 const DevServerManager = require("./devServerManager");
@@ -9,6 +10,8 @@ const { DEV_SERVER_PORT } = DevServerManager;
 const {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
+  AGENT_OVERLAY_CONFIG,
+  NOTIFICATION_WINDOW_CONFIG,
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
@@ -17,16 +20,23 @@ class WindowManager {
   constructor() {
     this.mainWindow = null;
     this.controlPanelWindow = null;
+    this.agentWindow = null;
+    this.notificationWindow = null;
+    this._notificationTimeout = null;
+    this.updateNotificationWindow = null;
+    this._updateNotificationDismissed = false;
     this.tray = null;
     this.hotkeyManager = new HotkeyManager();
     this.dragManager = new DragManager();
     this.isQuitting = false;
-    this.isMainWindowInteractive = false;
     this.loadErrorShown = false;
     this.macCompoundPushState = null;
     this.winPushState = null;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
+    this._agentAnimationState = null;
+    this._panelStartPosition = "bottom-right";
+    this._isDictatingToggle = false;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -34,8 +44,13 @@ class WindowManager {
   }
 
   async createMainWindow() {
-    const display = screen.getPrimaryDisplay();
-    const position = WindowPositionUtil.getMainWindowPosition(display);
+    const cursorPos = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(cursorPos);
+    const position = WindowPositionUtil.getMainWindowPosition(
+      display,
+      null,
+      this._panelStartPosition
+    );
 
     this.mainWindow = new BrowserWindow({
       ...MAIN_WINDOW_CONFIG,
@@ -85,12 +100,18 @@ class WindowManager {
       return;
     }
 
+    if (process.platform === "win32") {
+      // Windows click-through forwarding is unreliable for this floating panel.
+      // Keep the panel interactive so the mic button and cancel button are always clickable.
+      this.mainWindow.setIgnoreMouseEvents(false);
+      return;
+    }
+
     if (shouldCapture) {
       this.mainWindow.setIgnoreMouseEvents(false);
     } else {
       this.mainWindow.setIgnoreMouseEvents(true, { forward: true });
     }
-    this.isMainWindowInteractive = shouldCapture;
   }
 
   resizeMainWindow(sizeKey) {
@@ -100,16 +121,33 @@ class WindowManager {
 
     const newSize = WINDOW_SIZES[sizeKey] || WINDOW_SIZES.BASE;
     const currentBounds = this.mainWindow.getBounds();
+    const position = this._panelStartPosition;
 
-    const bottomRightX = currentBounds.x + currentBounds.width;
-    const bottomRightY = currentBounds.y + currentBounds.height;
-
-    const display = screen.getDisplayNearestPoint({ x: bottomRightX, y: bottomRightY });
+    const display = screen.getDisplayNearestPoint({
+      x: currentBounds.x + currentBounds.width / 2,
+      y: currentBounds.y + currentBounds.height,
+    });
     const workArea = display.workArea || display.bounds;
 
-    let newX = bottomRightX - newSize.width;
-    let newY = bottomRightY - newSize.height;
+    let newX, newY;
 
+    if (position === "bottom-left") {
+      // Anchor bottom-left corner: keep x, expand rightward and upward
+      newX = currentBounds.x;
+      newY = currentBounds.y + currentBounds.height - newSize.height;
+    } else if (position === "center") {
+      // Anchor bottom-center: expand symmetrically and upward
+      const centerX = currentBounds.x + currentBounds.width / 2;
+      newX = centerX - newSize.width / 2;
+      newY = currentBounds.y + currentBounds.height - newSize.height;
+    } else {
+      // bottom-right (default): anchor bottom-right corner, expand leftward and upward
+      const bottomRightX = currentBounds.x + currentBounds.width;
+      newX = bottomRightX - newSize.width;
+      newY = currentBounds.y + currentBounds.height - newSize.height;
+    }
+
+    // Clamp to work area
     newX = Math.max(workArea.x, Math.min(newX, workArea.x + workArea.width - newSize.width));
     newY = Math.max(workArea.y, Math.min(newY, workArea.y + workArea.height - newSize.height));
 
@@ -123,16 +161,22 @@ class WindowManager {
     return { success: true, bounds: { x: newX, y: newY, ...newSize } };
   }
 
-  async loadWindowContent(window, isControlPanel = false) {
+  async loadWindowContent(window, isControlPanel = false, isAgent = false) {
     if (process.env.NODE_ENV === "development") {
-      const appUrl = DevServerManager.getAppUrl(isControlPanel);
+      let appUrl = DevServerManager.getAppUrl(isControlPanel);
+      if (isAgent) {
+        appUrl = `${DevServerManager.getAppUrl(false)}?agent=true`;
+      }
       await DevServerManager.waitForDevServer();
       await window.loadURL(appUrl);
     } else {
-      // Production: use loadFile() for better compatibility with Electron 36+
       const fileInfo = DevServerManager.getAppFilePath(isControlPanel);
       if (!fileInfo) {
         throw new Error("Failed to get app file path");
+      }
+
+      if (isAgent) {
+        fileInfo.query = { agent: "true" };
       }
 
       const fs = require("fs");
@@ -164,7 +208,7 @@ class WindowManager {
         process.platform === "darwin" &&
         activationMode === "push" &&
         currentHotkey &&
-        currentHotkey !== "GLOBE" &&
+        !isGlobeLikeHotkey(currentHotkey) &&
         currentHotkey.includes("+")
       ) {
         this.startMacCompoundPushToTalk(currentHotkey);
@@ -185,8 +229,7 @@ class WindowManager {
       // Capture target app PID before the window might steal focus
       if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
 
-      this.showDictationPanel();
-      this.mainWindow.webContents.send("toggle-dictation");
+      this.sendToggleDictation();
     };
   }
 
@@ -368,6 +411,18 @@ class WindowManager {
     this.winPushState = null;
   }
 
+  sendToggleDictation() {
+    if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.showDictationPanel();
+      this.mainWindow.webContents.send("toggle-dictation");
+      this._isDictatingToggle = !this._isDictatingToggle;
+      this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
+    }
+  }
+
   sendStartDictation() {
     if (this.hotkeyManager.isInListeningMode()) {
       return;
@@ -375,6 +430,7 @@ class WindowManager {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.showDictationPanel();
       this.mainWindow.webContents.send("start-dictation");
+      this.meetingDetectionEngine?.setUserRecording(true);
     }
   }
 
@@ -384,6 +440,8 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send("stop-dictation");
+      this._isDictatingToggle = false;
+      this.meetingDetectionEngine?.setUserRecording(false);
     }
   }
 
@@ -397,6 +455,24 @@ class WindowManager {
 
   setFloatingIconAutoHide(enabled) {
     this._floatingIconAutoHide = Boolean(enabled);
+  }
+
+  setPanelStartPosition(position) {
+    this._panelStartPosition = position || "bottom-right";
+    // Reposition the window immediately
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const currentBounds = this.mainWindow.getBounds();
+      const display = screen.getDisplayNearestPoint({
+        x: currentBounds.x + currentBounds.width / 2,
+        y: currentBounds.y + currentBounds.height / 2,
+      });
+      const newPos = WindowPositionUtil.getMainWindowPosition(
+        display,
+        { width: currentBounds.width, height: currentBounds.height },
+        this._panelStartPosition
+      );
+      this.mainWindow.setBounds(newPos);
+    }
   }
 
   setHotkeyListeningMode(enabled) {
@@ -413,6 +489,14 @@ class WindowManager {
 
   isUsingGnomeHotkeys() {
     return this.hotkeyManager.isUsingGnome();
+  }
+
+  isUsingHyprlandHotkeys() {
+    return this.hotkeyManager.isUsingHyprland();
+  }
+
+  isUsingNativeShortcutHotkeys() {
+    return this.hotkeyManager.isUsingNativeShortcut();
   }
 
   async startWindowDrag() {
@@ -560,9 +644,232 @@ class WindowManager {
     await this.loadWindowContent(this.controlPanelWindow, true);
   }
 
+  async createAgentWindow() {
+    if (this.agentWindow && !this.agentWindow.isDestroyed()) {
+      return;
+    }
+
+    this.agentWindow = new BrowserWindow(AGENT_OVERLAY_CONFIG);
+
+    this.agentWindow.once("ready-to-show", () => {
+      WindowPositionUtil.setupAlwaysOnTop(this.agentWindow);
+    });
+
+    this.agentWindow.webContents.on("did-finish-load", () => {
+      this.agentWindow.setTitle(i18nMain.t("window.agentChatTitle"));
+    });
+
+    this.agentWindow.on("closed", () => {
+      this.agentWindow = null;
+    });
+
+    await this.loadWindowContent(this.agentWindow, false, true);
+  }
+
+  toggleAgentOverlay() {
+    if (!this.agentWindow || this.agentWindow.isDestroyed()) return;
+
+    if (this.agentWindow.isVisible()) {
+      this.agentWindow.webContents.send("agent-toggle-recording");
+    } else {
+      this.showAgentOverlay();
+    }
+  }
+
+  showAgentOverlay() {
+    if (!this.agentWindow || this.agentWindow.isDestroyed()) return;
+
+    this._clearAgentAnimation();
+
+    // Get work area to fill full screen height
+    const mainBounds =
+      this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : null;
+    const refPoint = mainBounds || { x: 0, y: 0 };
+    const display = screen.getDisplayNearestPoint({ x: refPoint.x, y: refPoint.y });
+    const workArea = display.workArea || display.bounds;
+
+    const width = AGENT_OVERLAY_CONFIG.width;
+    const height = workArea.height;
+
+    // Center horizontally relative to main window, fill work area height
+    let x = workArea.x;
+    if (mainBounds) {
+      x = mainBounds.x + Math.round((mainBounds.width - width) / 2);
+      x = Math.max(workArea.x, Math.min(x, workArea.x + workArea.width - width));
+    }
+
+    this.agentWindow.setBounds({
+      x,
+      y: workArea.y,
+      width,
+      height,
+    });
+
+    WindowPositionUtil.setupAlwaysOnTop(this.agentWindow);
+
+    if (typeof this.agentWindow.showInactive === "function") {
+      this.agentWindow.showInactive();
+    } else {
+      this.agentWindow.show();
+    }
+
+    this.agentWindow.webContents.send("agent-start-recording");
+  }
+
+  hideAgentOverlay() {
+    if (!this.agentWindow || this.agentWindow.isDestroyed()) return;
+
+    this._clearAgentAnimation();
+    this.agentWindow.webContents.send("agent-stop-recording");
+    this.agentWindow.hide();
+  }
+
+  resizeAgentWindow(width, height) {
+    if (!this.agentWindow || this.agentWindow.isDestroyed()) return;
+
+    const ANIMATION_DURATION_MS = 250;
+    const TICK_MS = 16;
+
+    const targetWidth = Math.max(
+      AGENT_OVERLAY_CONFIG.minWidth,
+      Math.min(width, AGENT_OVERLAY_CONFIG.maxWidth)
+    );
+    const targetHeight = Math.max(
+      AGENT_OVERLAY_CONFIG.minHeight,
+      Math.min(height, AGENT_OVERLAY_CONFIG.maxHeight)
+    );
+
+    const currentBounds = this.agentWindow.getBounds();
+
+    if (currentBounds.height === targetHeight && currentBounds.width === targetWidth) {
+      this._clearAgentAnimation();
+      return;
+    }
+
+    // If animation already running, retarget from current position
+    if (this._agentAnimationState) {
+      this._agentAnimationState.targetHeight = targetHeight;
+      this._agentAnimationState.targetWidth = targetWidth;
+      this._agentAnimationState.startHeight = currentBounds.height;
+      this._agentAnimationState.startWidth = currentBounds.width;
+      this._agentAnimationState.startTime = Date.now();
+      return;
+    }
+
+    this._agentAnimationState = {
+      startHeight: currentBounds.height,
+      startWidth: currentBounds.width,
+      targetHeight,
+      targetWidth,
+      startTime: Date.now(),
+      intervalId: null,
+    };
+
+    this._agentAnimationState.intervalId = setInterval(() => {
+      if (!this.agentWindow || this.agentWindow.isDestroyed()) {
+        this._clearAgentAnimation();
+        return;
+      }
+
+      const state = this._agentAnimationState;
+      if (!state) return;
+
+      const elapsed = Date.now() - state.startTime;
+      const rawT = Math.min(elapsed / ANIMATION_DURATION_MS, 1);
+      // Ease-out quadratic
+      const t = 1 - (1 - rawT) * (1 - rawT);
+
+      const newHeight = Math.round(
+        state.startHeight + (state.targetHeight - state.startHeight) * t
+      );
+      const newWidth = Math.round(state.startWidth + (state.targetWidth - state.startWidth) * t);
+
+      const bounds = this.agentWindow.getBounds();
+
+      // Clamp to screen work area
+      const display = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y });
+      const workArea = display.workArea || display.bounds;
+      const clampedHeight = Math.min(newHeight, workArea.y + workArea.height - bounds.y);
+
+      this.agentWindow.setBounds({
+        x: bounds.x,
+        y: bounds.y,
+        width: newWidth,
+        height: Math.max(AGENT_OVERLAY_CONFIG.minHeight, clampedHeight),
+      });
+
+      if (rawT >= 1) {
+        this._clearAgentAnimation();
+      }
+    }, TICK_MS);
+  }
+
+  _clearAgentAnimation() {
+    if (this._agentAnimationState?.intervalId) {
+      clearInterval(this._agentAnimationState.intervalId);
+    }
+    this._agentAnimationState = null;
+  }
+
+  getAgentWindowBounds() {
+    if (!this.agentWindow || this.agentWindow.isDestroyed()) return null;
+    return this.agentWindow.getBounds();
+  }
+
+  setAgentWindowBounds(x, y, width, height) {
+    if (!this.agentWindow || this.agentWindow.isDestroyed()) return;
+
+    const bounds = {
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(width),
+      height: Math.round(height),
+    };
+
+    // Enforce minimums
+    bounds.width = Math.max(AGENT_OVERLAY_CONFIG.minWidth, bounds.width);
+    bounds.height = Math.max(AGENT_OVERLAY_CONFIG.minHeight, bounds.height);
+
+    // Clamp to screen work area
+    const display = screen.getDisplayNearestPoint({ x: bounds.x, y: bounds.y });
+    const workArea = display.workArea || display.bounds;
+    bounds.width = Math.min(bounds.width, workArea.width);
+    bounds.height = Math.min(bounds.height, workArea.y + workArea.height - bounds.y);
+
+    this.agentWindow.setBounds(bounds);
+  }
+
+  _repositionToCursorDisplay() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+
+    const cursorPos = screen.getCursorScreenPoint();
+    const cursorDisplay = screen.getDisplayNearestPoint(cursorPos);
+
+    const currentBounds = this.mainWindow.getBounds();
+    const currentDisplay = screen.getDisplayNearestPoint({
+      x: currentBounds.x + currentBounds.width / 2,
+      y: currentBounds.y + currentBounds.height / 2,
+    });
+
+    if (currentDisplay.id === cursorDisplay.id) return;
+
+    const newPos = WindowPositionUtil.getMainWindowPosition(
+      cursorDisplay,
+      { width: currentBounds.width, height: currentBounds.height },
+      this._panelStartPosition
+    );
+    this.mainWindow.setBounds(newPos);
+  }
+
   showDictationPanel(options = {}) {
     const { focus = false } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const wasHidden = !this.mainWindow.isVisible() || this.mainWindow.isMinimized();
+
+      if (wasHidden) {
+        this._repositionToCursorDisplay();
+      }
+
       if (this.mainWindow.isMinimized()) {
         this.mainWindow.restore();
       }
@@ -649,13 +956,215 @@ class WindowManager {
     this.mainWindow.on("closed", () => {
       this.dragManager.cleanup();
       this.mainWindow = null;
-      this.isMainWindowInteractive = false;
     });
   }
 
   enforceMainWindowOnTop() {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       WindowPositionUtil.setupAlwaysOnTop(this.mainWindow);
+    }
+  }
+
+  async showMeetingNotification(promptData) {
+    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      this.notificationWindow.close();
+      this.notificationWindow = null;
+    }
+    if (this._notificationTimeout) {
+      clearTimeout(this._notificationTimeout);
+      this._notificationTimeout = null;
+    }
+
+    const display = screen.getPrimaryDisplay();
+    const position = WindowPositionUtil.getNotificationPosition(display);
+
+    this.notificationWindow = new BrowserWindow({
+      ...NOTIFICATION_WINDOW_CONFIG,
+      ...position,
+    });
+
+    WindowPositionUtil.setupAlwaysOnTop(this.notificationWindow);
+
+    if (process.env.NODE_ENV === "development") {
+      await DevServerManager.waitForDevServer();
+      await this.notificationWindow.loadURL(
+        `${DevServerManager.DEV_SERVER_URL}?meeting-notification=true`
+      );
+    } else {
+      const fileInfo = DevServerManager.getAppFilePath(false);
+      await this.notificationWindow.loadFile(fileInfo.path, {
+        query: { ...fileInfo.query, "meeting-notification": "true" },
+      });
+    }
+
+    this._pendingNotificationData = promptData;
+
+    this._notificationReadyFallback = setTimeout(() => {
+      this._notificationReadyFallback = null;
+      if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+        debugLogger.warn(
+          "Notification renderer did not signal ready, force-showing",
+          {},
+          "meeting"
+        );
+        this.notificationWindow.webContents.send("meeting-notification-data", promptData);
+        this.notificationWindow.showInactive();
+      }
+    }, 3000);
+
+    this._notificationTimeout = setTimeout(() => {
+      if (this.meetingDetectionEngine) {
+        this.meetingDetectionEngine.handleNotificationTimeout();
+      }
+      this.dismissMeetingNotification();
+    }, 30000);
+
+    this.notificationWindow.on("closed", () => {
+      this.notificationWindow = null;
+      if (this._notificationTimeout) {
+        clearTimeout(this._notificationTimeout);
+        this._notificationTimeout = null;
+      }
+    });
+  }
+
+  showNotificationWindow() {
+    if (this._notificationReadyFallback) {
+      clearTimeout(this._notificationReadyFallback);
+      this._notificationReadyFallback = null;
+    }
+    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      this.notificationWindow.showInactive();
+    }
+  }
+
+  dismissMeetingNotification() {
+    this._pendingNotificationData = null;
+    if (this._notificationReadyFallback) {
+      clearTimeout(this._notificationReadyFallback);
+      this._notificationReadyFallback = null;
+    }
+    if (this._notificationTimeout) {
+      clearTimeout(this._notificationTimeout);
+      this._notificationTimeout = null;
+    }
+    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      this.notificationWindow.close();
+    }
+    this.notificationWindow = null;
+  }
+
+  async showUpdateNotification(info) {
+    if (this._updateNotificationDismissed) return;
+    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
+      this.updateNotificationWindow.close();
+      this.updateNotificationWindow = null;
+    }
+
+    const display = screen.getPrimaryDisplay();
+    const position = WindowPositionUtil.getNotificationPosition(display);
+
+    this.updateNotificationWindow = new BrowserWindow({
+      ...NOTIFICATION_WINDOW_CONFIG,
+      ...position,
+    });
+
+    WindowPositionUtil.setupAlwaysOnTop(this.updateNotificationWindow);
+
+    if (process.env.NODE_ENV === "development") {
+      await DevServerManager.waitForDevServer();
+      await this.updateNotificationWindow.loadURL(
+        `${DevServerManager.DEV_SERVER_URL}?update-notification=true`
+      );
+    } else {
+      const fileInfo = DevServerManager.getAppFilePath(false);
+      await this.updateNotificationWindow.loadFile(fileInfo.path, {
+        query: { ...fileInfo.query, "update-notification": "true" },
+      });
+    }
+
+    this._pendingUpdateNotificationData = {
+      version: info?.version,
+      releaseDate: info?.releaseDate,
+    };
+
+    this._updateNotificationReadyFallback = setTimeout(() => {
+      this._updateNotificationReadyFallback = null;
+      if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
+        this.updateNotificationWindow.webContents.send(
+          "update-notification-data",
+          this._pendingUpdateNotificationData
+        );
+        this.updateNotificationWindow.showInactive();
+      }
+    }, 3000);
+
+    this.updateNotificationWindow.on("closed", () => {
+      this.updateNotificationWindow = null;
+    });
+  }
+
+  showUpdateNotificationWindow() {
+    if (this._updateNotificationReadyFallback) {
+      clearTimeout(this._updateNotificationReadyFallback);
+      this._updateNotificationReadyFallback = null;
+    }
+    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
+      this.updateNotificationWindow.showInactive();
+    }
+  }
+
+  dismissUpdateNotification() {
+    this._pendingUpdateNotificationData = null;
+    this._updateNotificationDismissed = true;
+    if (this._updateNotificationReadyFallback) {
+      clearTimeout(this._updateNotificationReadyFallback);
+      this._updateNotificationReadyFallback = null;
+    }
+    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
+      this.updateNotificationWindow.close();
+    }
+    this.updateNotificationWindow = null;
+  }
+
+  sendToControlPanel(channel, data) {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return;
+    if (win.webContents.isLoading()) {
+      win.webContents.once("did-finish-load", () => {
+        if (!win.isDestroyed()) win.webContents.send(channel, data);
+      });
+    } else {
+      win.webContents.send(channel, data);
+    }
+  }
+
+  snapControlPanelToMeetingMode() {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return;
+    this._preMeetingBounds = win.getBounds();
+    const display = screen.getPrimaryDisplay();
+    const workArea = display.workArea;
+    const width = Math.round(workArea.width / 3);
+    win.setBounds({
+      x: workArea.x + workArea.width - width,
+      y: workArea.y,
+      width,
+      height: workArea.height,
+    });
+    win.focus();
+  }
+
+  restoreControlPanelFromMeetingMode() {
+    const win = this.controlPanelWindow;
+    if (!win || win.isDestroyed()) return;
+    if (this._preMeetingBounds) {
+      win.setBounds(this._preMeetingBounds);
+      this._preMeetingBounds = null;
+    } else {
+      const { width, height } = CONTROL_PANEL_CONFIG;
+      win.setSize(width, height);
+      win.center();
     }
   }
 
@@ -669,6 +1178,10 @@ class WindowManager {
 
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.setTitle(i18nMain.t("window.voiceRecorderTitle"));
+    }
+
+    if (this.agentWindow && !this.agentWindow.isDestroyed()) {
+      this.agentWindow.setTitle(i18nMain.t("window.agentChatTitle"));
     }
   }
 

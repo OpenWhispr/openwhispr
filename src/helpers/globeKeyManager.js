@@ -123,7 +123,7 @@ class GlobeKeyManager extends EventEmitter {
     this.process.stderr.on("data", (data) => {
       const message = data.toString().trim();
       if (message.length > 0) {
-        if (message.includes("Failed to create event tap")) {
+        if (message.includes("Failed to create event monitor")) {
           this.reportError(new Error(message));
         } else {
           debugLogger.warn("[GlobeKeyManager] Non-fatal stderr output", { message });

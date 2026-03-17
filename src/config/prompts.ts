@@ -5,9 +5,8 @@ import { getLanguageInstruction } from "../utils/languageSupport";
 
 export const CLEANUP_PROMPT = promptData.CLEANUP_PROMPT;
 export const FULL_PROMPT = promptData.FULL_PROMPT;
-/** @deprecated Use FULL_PROMPT instead — kept for PromptStudio backwards compat */
+/** @deprecated Use FULL_PROMPT — kept for PromptStudio compat */
 export const UNIFIED_SYSTEM_PROMPT = promptData.FULL_PROMPT;
-export const LEGACY_PROMPTS = promptData.LEGACY_PROMPTS;
 
 function getPromptBundle(uiLanguage?: string): PromptBundle {
   const locale = normalizeUiLanguage(uiLanguage || "en");
@@ -20,15 +19,76 @@ function getPromptBundle(uiLanguage?: string): PromptBundle {
   };
 }
 
+function levenshteinDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  let curr = new Array<number>(n + 1);
+
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      curr[j] =
+        a[i - 1] === b[j - 1] ? prev[j - 1] : 1 + Math.min(prev[j - 1], prev[j], curr[j - 1]);
+    }
+    [prev, curr] = [curr, prev];
+  }
+
+  return prev[n];
+}
+
+function maxEditsForLength(len: number): number {
+  if (len <= 4) return 0;
+  if (len <= 6) return 1;
+  return 2;
+}
+
 function detectAgentName(transcript: string, agentName: string): boolean {
-  const lower = transcript.toLowerCase();
-  const name = agentName.toLowerCase();
+  const name = agentName.trim();
+  if (!name || name.length < 2) return false;
 
-  if (lower.includes(name)) return true;
+  // Layer 1: Exact word-boundary match
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (new RegExp(`\\b${escaped}\\b`, "i").test(transcript)) return true;
 
-  const variants: string[] = [];
+  // Layer 2: Space-normalized exact match (STT splitting compound names)
+  const nameLower = name.toLowerCase().replace(/\s+/g, "");
+  const words = transcript
+    .split(/\s+/)
+    .map((w) => w.replace(/[.,!?;:'"()]/g, "").toLowerCase())
+    .filter(Boolean);
 
-  return variants.some((v) => lower.includes(v));
+  for (let i = 0; i < words.length - 1; i++) {
+    if (words[i] + words[i + 1] === nameLower) return true;
+  }
+
+  // Layer 3: Fuzzy Levenshtein match (STT mishearings)
+  const maxEdits = maxEditsForLength(nameLower.length);
+  if (maxEdits === 0) return false;
+
+  for (const word of words) {
+    if (
+      Math.abs(word.length - nameLower.length) <= maxEdits &&
+      levenshteinDistance(word, nameLower) <= maxEdits
+    ) {
+      return true;
+    }
+  }
+
+  for (let i = 0; i < words.length - 1; i++) {
+    const combined = words[i] + words[i + 1];
+    if (
+      Math.abs(combined.length - nameLower.length) <= maxEdits &&
+      levenshteinDistance(combined, nameLower) <= maxEdits
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function getSystemPrompt(
@@ -47,9 +107,7 @@ export function getSystemPrompt(
     if (customPrompt) {
       try {
         promptTemplate = JSON.parse(customPrompt);
-      } catch {
-        // Use default if parsing fails
-      }
+      } catch {}
     }
   }
 
@@ -57,7 +115,7 @@ export function getSystemPrompt(
   if (promptTemplate) {
     prompt = promptTemplate.replace(/\{\{agentName\}\}/g, name);
   } else {
-    const useFullPrompt = !transcript || detectAgentName(transcript, name);
+    const useFullPrompt = transcript ? detectAgentName(transcript, name) : false;
     prompt = (useFullPrompt ? prompts.fullPrompt : prompts.cleanupPrompt).replace(
       /\{\{agentName\}\}/g,
       name
@@ -81,11 +139,15 @@ export function getWordBoost(customDictionary?: string[]): string[] {
   return customDictionary.filter((w) => w.trim());
 }
 
-export default {
-  CLEANUP_PROMPT,
-  FULL_PROMPT,
-  UNIFIED_SYSTEM_PROMPT,
-  getSystemPrompt,
-  getWordBoost,
-  LEGACY_PROMPTS,
-};
+const DEFAULT_AGENT_SYSTEM_PROMPT =
+  "You are a helpful voice assistant. Respond concisely and conversationally. " +
+  "Keep answers brief unless the user asks for detail. " +
+  "You may be given a transcription of spoken input, so handle informal phrasing gracefully.";
+
+export function getAgentSystemPrompt(): string {
+  if (typeof window !== "undefined" && window.localStorage) {
+    const custom = window.localStorage.getItem("agentSystemPrompt");
+    if (custom) return custom;
+  }
+  return DEFAULT_AGENT_SYSTEM_PROMPT;
+}

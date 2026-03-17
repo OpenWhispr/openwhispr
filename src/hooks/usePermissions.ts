@@ -250,12 +250,26 @@ export const usePermissions = (
   // localStorage values (e.g. after app update changes the code signature).
   useEffect(() => {
     if (getPlatform() !== "darwin") return;
-    window.electronAPI?.checkAccessibilityPermission?.().then((granted) => {
-      if (!granted) {
-        setAccessibilityPermissionGranted(false);
-      }
+    window.electronAPI?.checkAccessibilityPermission?.(true).then((granted) => {
+      setAccessibilityPermissionGranted(granted);
     });
   }, [setAccessibilityPermissionGranted]);
+
+  // Poll for accessibility permission changes on macOS (e.g. user grants in System Settings)
+  useEffect(() => {
+    if (getPlatform() !== "darwin") return;
+    if (accessibilityPermissionGranted) return;
+
+    const interval = setInterval(() => {
+      window.electronAPI?.checkAccessibilityPermission?.(true).then((granted) => {
+        if (granted) {
+          setAccessibilityPermissionGranted(true);
+        }
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [accessibilityPermissionGranted, setAccessibilityPermissionGranted]);
 
   const testAccessibilityPermission = useCallback(async () => {
     const platform = getPlatform();

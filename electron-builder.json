@@ -84,9 +84,11 @@
   ],
   "asarUnpack": ["**/node_modules/ffmpeg-static/**/*", "**/node_modules/better-sqlite3/**/*"],
   "extraResources": [
+    ".env",
     "src/assets/**/*",
     "resources/bin/macos-globe-listener",
     "resources/bin/macos-fast-paste",
+    "resources/bin/macos-mic-listener",
     "resources/bin/macos-text-monitor",
     "resources/bin/linux-fast-paste",
     "resources/bin/linux-text-monitor",
@@ -99,6 +101,7 @@
         "llama-server-*",
         "sherpa-onnx-*",
         "windows-key-listener*",
+        "windows-mic-listener*",
         "windows-text-monitor*",
         "windows-fast-paste*",
         "*.dylib",
@@ -119,7 +122,8 @@
     "notarize": true,
     "extendInfo": {
       "LSUIElement": false,
-      "NSMicrophoneUsageDescription": "OpenWhispr needs microphone access for speech-to-text transcription.",
+      "NSMicrophoneUsageDescription": "OpenWhispr uses the microphone to capture your voice for transcription.",
+      "NSAudioCaptureUsageDescription": "OpenWhispr uses system audio to capture other participants' audio from calls and meetings. Your screen is never recorded.",
       "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications."
     }
   },
@@ -159,8 +163,12 @@
     ]
   },
   "deb": {
+    "afterInstall": "resources/linux/after-install.sh",
     "afterRemove": "resources/linux/after-remove.sh",
+    "depends": ["ydotool"],
     "fpm": [
+      "--deb-recommends",
+      "ydotoold",
       "--deb-suggests",
       "xdotool",
       "--deb-suggests",
@@ -171,6 +179,12 @@
   },
   "rpm": {
     "fpm": [
+      "--after-install",
+      "resources/linux/after-install.sh",
+      "--rpm-rpmbuild-define",
+      "_build_id_links none",
+      "--rpm-tag",
+      "Requires: ydotool",
       "--rpm-tag",
       "Suggests: xdotool",
       "--rpm-tag",

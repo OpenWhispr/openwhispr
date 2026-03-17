@@ -1,4 +1,4 @@
-import { getModelProvider, getCloudModel } from "../models/ModelRegistry";
+import { getModelProvider, getCloudModel, getOpenAiApiConfig } from "../models/ModelRegistry";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy } from "../utils/retry";
@@ -508,8 +508,6 @@ class ReasoningService extends BaseReasoningService {
         { role: "user", content: userPrompt },
       ];
 
-      const isOlderModel = model && (model.startsWith("gpt-4") || model.startsWith("gpt-3"));
-
       const openAiBase = this.getConfiguredOpenAIBase();
       const endpointCandidates = this.getOpenAIEndpointCandidates(openAiBase);
       const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
@@ -538,16 +536,32 @@ class ReasoningService extends BaseReasoningService {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 30000);
           try {
+            const maxTokens =
+              config.maxTokens ||
+              Math.max(
+                4096,
+                this.calculateMaxTokens(
+                  text.length,
+                  TOKEN_LIMITS.MIN_TOKENS,
+                  TOKEN_LIMITS.MAX_TOKENS,
+                  TOKEN_LIMITS.TOKEN_MULTIPLIER
+                )
+              );
+
+            const apiConfig = getOpenAiApiConfig(model);
             const requestBody: any = { model };
 
             if (type === "responses") {
               requestBody.input = messages;
               requestBody.store = false;
+              requestBody.max_output_tokens = maxTokens;
             } else {
               requestBody.messages = messages;
-              if (isOlderModel) {
-                requestBody.temperature = config.temperature || 0.3;
-              }
+              requestBody[apiConfig.tokenParam] = maxTokens;
+            }
+
+            if (apiConfig.supportsTemperature) {
+              requestBody.temperature = config.temperature || 0.3;
             }
 
             const res = await fetch(endpoint, {
@@ -1060,6 +1074,8 @@ class ReasoningService extends BaseReasoningService {
         model: result.model,
         provider: result.provider,
         resultLength: result.text.length,
+        promptMode: result.promptMode,
+        matchType: result.matchType,
       });
 
       return result.text;
@@ -1085,10 +1101,222 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
+  async *processTextStreaming(
+    messages: Array<{ role: string; content: string }>,
+    model: string,
+    provider: string,
+    config: ReasoningConfig & { systemPrompt: string }
+  ): AsyncGenerator<string, void, unknown> {
+    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "custom"];
+    const isLocalProvider = !cloudProviders.includes(provider);
+
+    let endpoint: string;
+    let apiKey = "";
+
+    if (isLocalProvider) {
+      // Local model via llama.cpp server
+      const serverResult = await window.electronAPI.llamaServerStart(model);
+      if (!serverResult.success || !serverResult.port) {
+        throw new Error(serverResult.error || "Failed to start local model server");
+      }
+      endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
+    } else {
+      const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom";
+      apiKey = await this.getApiKey(providerKey);
+
+      switch (providerKey) {
+        case "groq":
+          endpoint = buildApiUrl(API_ENDPOINTS.GROQ_BASE, "/chat/completions");
+          break;
+        case "openai":
+        case "custom":
+          endpoint = buildApiUrl(this.getConfiguredOpenAIBase(), "/chat/completions");
+          break;
+        default:
+          endpoint = buildApiUrl(API_ENDPOINTS.OPENAI_BASE, "/chat/completions");
+          break;
+      }
+    }
+
+    const apiConfig = getOpenAiApiConfig(model);
+    const useOldTokenParam = isLocalProvider || provider === "groq";
+
+    const requestBody: Record<string, unknown> = {
+      model,
+      messages,
+      stream: true,
+    };
+
+    const maxTokens = config.maxTokens || Math.max(4096, TOKEN_LIMITS.MAX_TOKENS);
+
+    if (useOldTokenParam) {
+      requestBody.temperature = config.temperature ?? 0.3;
+      requestBody.max_tokens = maxTokens;
+    } else {
+      requestBody[apiConfig.tokenParam] = maxTokens;
+      if (apiConfig.supportsTemperature) {
+        requestBody.temperature = config.temperature ?? 0.3;
+      }
+    }
+
+    logger.logReasoning("AGENT_STREAM_REQUEST", {
+      endpoint,
+      model,
+      provider,
+      isLocal: isLocalProvider,
+      messageCount: messages.length,
+    });
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage: string;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage =
+          errorData.error?.message ||
+          errorData.message ||
+          errorData.error ||
+          `API error: ${response.status}`;
+      } catch {
+        errorMessage = errorText || `API error: ${response.status}`;
+      }
+      logger.logReasoning("AGENT_STREAM_ERROR", { status: response.status, errorMessage });
+      throw new Error(errorMessage);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let insideThinkBlock = false;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") return;
+
+          try {
+            const parsed = JSON.parse(data);
+            let content = parsed.choices?.[0]?.delta?.content;
+            if (!content) continue;
+
+            // Strip Qwen3 <think> blocks from streamed output
+            if (isLocalProvider) {
+              if (insideThinkBlock) {
+                const endIdx = content.indexOf("</think>");
+                if (endIdx !== -1) {
+                  insideThinkBlock = false;
+                  content = content.slice(endIdx + 8);
+                } else {
+                  continue;
+                }
+              }
+              const startIdx = content.indexOf("<think>");
+              if (startIdx !== -1) {
+                const before = content.slice(0, startIdx);
+                const after = content.slice(startIdx + 7);
+                const endIdx = after.indexOf("</think>");
+                if (endIdx !== -1) {
+                  content = before + after.slice(endIdx + 8);
+                } else {
+                  insideThinkBlock = true;
+                  content = before;
+                }
+              }
+              if (!content) continue;
+            }
+
+            yield content;
+          } catch {
+            // skip malformed SSE chunks
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  async *processTextStreamingCloud(
+    messages: Array<{ role: string; content: string }>,
+    config: { systemPrompt: string }
+  ): AsyncGenerator<string, void, unknown> {
+    const chunks: string[] = [];
+    let done = false;
+    let waiting: (() => void) | null = null;
+
+    const unsubChunk = window.electronAPI?.onAgentStreamChunk?.((chunk: string) => {
+      chunks.push(chunk);
+      waiting?.();
+    });
+    const unsubDone = window.electronAPI?.onAgentStreamDone?.(() => {
+      done = true;
+      waiting?.();
+    });
+
+    try {
+      const result = await window.electronAPI?.cloudAgentStream?.(messages, {
+        systemPrompt: config.systemPrompt,
+      });
+
+      if (result && !result.success) {
+        throw new Error(result.error || "Cloud agent streaming failed");
+      }
+
+      while (!done || chunks.length > 0) {
+        if (chunks.length > 0) {
+          yield chunks.shift()!;
+        } else if (!done) {
+          await new Promise<void>((r) => {
+            waiting = r;
+          });
+          waiting = null;
+        }
+      }
+    } finally {
+      unsubChunk?.();
+      unsubDone?.();
+    }
+  }
+
   async isAvailable(): Promise<boolean> {
     try {
       if (isCloudReasoningMode()) {
         logger.logReasoning("API_KEY_CHECK", { cloudReasoningMode: true });
+        return true;
+      }
+
+      const settings = getSettings();
+      if (settings.reasoningProvider === "custom" && settings.cloudReasoningBaseUrl?.trim()) {
+        logger.logReasoning("API_KEY_CHECK", {
+          customProvider: true,
+          hasCustomEndpoint: true,
+        });
         return true;
       }
 

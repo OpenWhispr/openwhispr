@@ -29,6 +29,8 @@ export interface UseHotkeyRegistrationOptions {
    * Custom toast/alert function for showing messages
    */
   showAlert?: (options: { title: string; description: string }) => void;
+
+  registerFn?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 export interface UseHotkeyRegistrationResult {
@@ -70,7 +72,14 @@ export function useHotkeyRegistration(
   options: UseHotkeyRegistrationOptions = {}
 ): UseHotkeyRegistrationResult {
   const { t } = useTranslation();
-  const { onSuccess, onError, showSuccessToast = true, showErrorToast = true, showAlert } = options;
+  const {
+    onSuccess,
+    onError,
+    showSuccessToast = true,
+    showErrorToast = true,
+    showAlert,
+    registerFn,
+  } = options;
 
   const [isRegistering, setIsRegistering] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -120,7 +129,8 @@ export function useHotkeyRegistration(
       }
 
       // Check if Electron API is available
-      if (!window.electronAPI?.updateHotkey) {
+      const effectiveRegisterFn = registerFn ?? window.electronAPI?.updateHotkey;
+      if (!effectiveRegisterFn) {
         // In non-Electron environment, just succeed silently
         onSuccess?.(hotkey);
         return true;
@@ -131,7 +141,7 @@ export function useHotkeyRegistration(
         setIsRegistering(true);
         setLastError(null);
 
-        const result = await window.electronAPI.updateHotkey(hotkey);
+        const result = await effectiveRegisterFn(hotkey);
 
         if (!result?.success) {
           // Use the detailed error message from the manager, which includes suggestions
@@ -181,7 +191,7 @@ export function useHotkeyRegistration(
         registrationInFlightRef.current = false;
       }
     },
-    [onSuccess, onError, showSuccessToast, showErrorToast, showAlert, t]
+    [onSuccess, onError, showSuccessToast, showErrorToast, showAlert, registerFn, t]
   );
 
   return {

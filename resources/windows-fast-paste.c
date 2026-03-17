@@ -84,23 +84,21 @@ static BOOL IsTerminalExe(const char* exeName) {
     return FALSE;
 }
 
+static void SetKey(INPUT* input, WORD vk, DWORD flags) {
+    input->type = INPUT_KEYBOARD;
+    input->ki.wVk = vk;
+    input->ki.wScan = (WORD)MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
+    input->ki.dwFlags = flags;
+}
+
 static int SendPasteNormal(void) {
     INPUT inputs[4];
     ZeroMemory(inputs, sizeof(inputs));
 
-    inputs[0].type = INPUT_KEYBOARD;
-    inputs[0].ki.wVk = VK_CONTROL;
-
-    inputs[1].type = INPUT_KEYBOARD;
-    inputs[1].ki.wVk = 'V';
-
-    inputs[2].type = INPUT_KEYBOARD;
-    inputs[2].ki.wVk = 'V';
-    inputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
-
-    inputs[3].type = INPUT_KEYBOARD;
-    inputs[3].ki.wVk = VK_CONTROL;
-    inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
+    SetKey(&inputs[0], VK_CONTROL, 0);
+    SetKey(&inputs[1], 'V', 0);
+    SetKey(&inputs[2], 'V', KEYEVENTF_KEYUP);
+    SetKey(&inputs[3], VK_CONTROL, KEYEVENTF_KEYUP);
 
     UINT sent = SendInput(4, inputs, sizeof(INPUT));
     return (sent == 4) ? 0 : 1;
@@ -110,26 +108,12 @@ static int SendPasteTerminal(void) {
     INPUT inputs[6];
     ZeroMemory(inputs, sizeof(inputs));
 
-    inputs[0].type = INPUT_KEYBOARD;
-    inputs[0].ki.wVk = VK_CONTROL;
-
-    inputs[1].type = INPUT_KEYBOARD;
-    inputs[1].ki.wVk = VK_SHIFT;
-
-    inputs[2].type = INPUT_KEYBOARD;
-    inputs[2].ki.wVk = 'V';
-
-    inputs[3].type = INPUT_KEYBOARD;
-    inputs[3].ki.wVk = 'V';
-    inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
-
-    inputs[4].type = INPUT_KEYBOARD;
-    inputs[4].ki.wVk = VK_SHIFT;
-    inputs[4].ki.dwFlags = KEYEVENTF_KEYUP;
-
-    inputs[5].type = INPUT_KEYBOARD;
-    inputs[5].ki.wVk = VK_CONTROL;
-    inputs[5].ki.dwFlags = KEYEVENTF_KEYUP;
+    SetKey(&inputs[0], VK_CONTROL, 0);
+    SetKey(&inputs[1], VK_SHIFT, 0);
+    SetKey(&inputs[2], 'V', 0);
+    SetKey(&inputs[3], 'V', KEYEVENTF_KEYUP);
+    SetKey(&inputs[4], VK_SHIFT, KEYEVENTF_KEYUP);
+    SetKey(&inputs[5], VK_CONTROL, KEYEVENTF_KEYUP);
 
     UINT sent = SendInput(6, inputs, sizeof(INPUT));
     return (sent == 6) ? 0 : 1;
