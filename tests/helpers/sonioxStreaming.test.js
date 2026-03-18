@@ -24,7 +24,7 @@ describe("removeFillers", () => {
 
   it("removes filler after question mark and capitalizes", () => {
     assert.equal(
-      removeFillers("right? Mmm, or maybe not"),
+      removeFillers("right? Eee, or maybe not"),
       "right? Or maybe not"
     );
   });
@@ -36,16 +36,16 @@ describe("removeFillers", () => {
     );
   });
 
-  it("removes standalone filler sentence (Hmm.)", () => {
+  it("preserves 'Hmm' as intentional expression", () => {
     assert.equal(
       removeFillers("really? Hmm. Maybe so."),
-      "really? Maybe so."
+      "really? Hmm. Maybe so."
     );
   });
 
   it("removes multiple fillers in one text", () => {
     assert.equal(
-      removeFillers("OK so let's try. Yyy, does it work? Mmm, or not? Eee, let me check again."),
+      removeFillers("OK so let's try. Yyy, does it work? Um, or not? Eee, let me check again."),
       "OK so let's try. Does it work? Or not? Let me check again."
     );
   });
@@ -79,7 +79,7 @@ describe("removeFillers", () => {
   it("handles filler variations with repeated letters", () => {
     assert.equal(removeFillers("So uhhh yeah"), "So yeah");
     assert.equal(removeFillers("So ummm yeah"), "So yeah");
-    assert.equal(removeFillers("So hmmm yeah"), "So yeah");
+    assert.equal(removeFillers("So hmmm yeah"), "So hmmm yeah");
     assert.equal(removeFillers("So eeeee yeah"), "So yeah");
     assert.equal(removeFillers("So yyyy yeah"), "So yeah");
   });
@@ -115,8 +115,8 @@ describe("removeFillers", () => {
 
   it("capitalizes Unicode letters after filler at sentence boundary", () => {
     assert.equal(
-      removeFillers("tak. Yyy, ćwiczenie drugie. Eee, ósmy punkt. Mmm, świetnie"),
-      "tak. Ćwiczenie drugie. Ósmy punkt. Świetnie"
+      removeFillers("done. Yyy, ćwiczenie. Eee, ósmy. Um, świetnie"),
+      "done. Ćwiczenie. Ósmy. Świetnie"
     );
   });
 
@@ -145,10 +145,37 @@ describe("removeFillers", () => {
 
   // Realistic Soniox output
 
-  it("handles realistic Soniox output with sub-word assembled fillers", () => {
+  it("handles realistic Soniox output with multiple fillers", () => {
     assert.equal(
-      removeFillers("No dobra, to robimy test. Yyy, w takim razie: czy to będzie działać? Hmm. A może jednak nie będzie działać? Hmm. Ciekawe, czy to zadziała."),
-      "No dobra, to robimy test. W takim razie: czy to będzie działać? A może jednak nie będzie działać? Ciekawe, czy to zadziała."
+      removeFillers("OK so let me think. Yyy, does this work? Hmm. Maybe it does. Eee, let me check one more time."),
+      "OK so let me think. Does this work? Hmm. Maybe it does. Let me check one more time."
     );
+  });
+
+  // Sentence boundary preservation
+
+  it("preserves period when filler is mid-sentence with comma before", () => {
+    assert.equal(
+      removeFillers("I think, uh. Let me check."),
+      "I think. Let me check."
+    );
+  });
+
+  it("preserves period with lowercase next word and capitalizes", () => {
+    assert.equal(
+      removeFillers("it works, um. but not always."),
+      "it works. But not always."
+    );
+  });
+
+  it("removes period when filler is standalone sentence", () => {
+    assert.equal(
+      removeFillers("really? Uh. Maybe so."),
+      "really? Maybe so."
+    );
+  });
+
+  it("removes period when filler is at end of text", () => {
+    assert.equal(removeFillers("that is all uh."), "that is all");
   });
 });

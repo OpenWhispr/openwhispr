@@ -24,14 +24,27 @@ function buildConfigMessage({ apiKey, model, language, secondaryLanguage }) {
 // Filler words / hesitations to strip from assembled text.
 // Soniox uses sub-word (BPE) tokenization, so fillers must be removed from the
 // joined text rather than individual tokens.
-const FILLER_WORD = "(?:uh+|um+|yyy+|eee+|mmm+|hmm+)";
+const FILLER_WORD = "(?:uh+|um+|yyy+|eee+|mmm+)";
 const FILLER_RE = new RegExp(`\\s*,?\\s*\\b${FILLER_WORD}\\b[,.]?\\s*`, "gi");
 const LEADING_FILLER_RE = new RegExp(`^\\s*,?\\s*\\b${FILLER_WORD}\\b`, "i");
 const POST_SENTENCE_CAP_RE = /([.!?]\s+)(\p{Ll})/gu;
 
 function removeFillers(text) {
   const hadLeadingFiller = LEADING_FILLER_RE.test(text);
-  let result = text.replace(FILLER_RE, " ");
+  let result = text.replace(FILLER_RE, (match, offset, fullText) => {
+    // Preserve sentence-ending periods consumed by [,.]? in the regex.
+    // "word, uh. Next" → ". " (period is sentence boundary)
+    // "OK. Uh. Next"   → " "  (filler is standalone sentence)
+    if (match.includes(".")) {
+      const moreTextAfter = offset + match.length < fullText.length;
+      if (moreTextAfter) {
+        const textBeforeMatch = fullText.slice(0, offset).trimEnd();
+        const isStandaloneFiller = textBeforeMatch === "" || /[.!?]$/.test(textBeforeMatch);
+        if (!isStandaloneFiller) return ". ";
+      }
+    }
+    return " ";
+  });
   result = result.replace(/  +/g, " ").trim();
   result = result.replace(POST_SENTENCE_CAP_RE, (_, punct, letter) =>
     punct + letter.toUpperCase()
