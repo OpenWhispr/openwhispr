@@ -178,7 +178,7 @@ class SonioxStreaming {
       let nonFinalTexts = [];
       let newFinalTokens = false;
       const isValidToken = (t) =>
-        t.text && t.text.trim() && t.text !== "<fin>" && t.text !== "\ufffd";
+        t.text && t.text !== "<fin>" && t.text !== "\ufffd";
       for (const token of res.tokens || []) {
         if (!isValidToken(token)) continue;
         if (token.is_final) {
