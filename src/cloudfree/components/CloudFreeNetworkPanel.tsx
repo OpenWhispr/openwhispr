@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Badge } from "../../components/ui/badge";
+import { Toggle } from "../../components/ui/toggle";
+import { Input } from "../../components/ui/input";
 import {
   SettingsSection,
   SettingsGroup,
@@ -24,10 +26,12 @@ interface AllowlistRule {
 interface AllowlistRuleGroup {
   comment: string;
   entries: AllowlistRule[];
+  enabled?: boolean;
 }
 
 interface AllowlistSummary {
   rules: Record<string, AllowlistRuleGroup>;
+  disabledGroups: string[];
 }
 
 interface NetworkData {
@@ -37,14 +41,20 @@ interface NetworkData {
   allowlist: AllowlistSummary;
 }
 
+function getApi() {
+  return (window as any).electronAPI;
+}
+
 export const CloudFreeNetworkPanel: React.FC = () => {
   const [data, setData] = useState<NetworkData | null>(null);
   const [activeTab, setActiveTab] = useState<"live" | "allowlist">("live");
   const [filter, setFilter] = useState<"all" | "blocked" | "allowed" | "internal">("all");
+  const [newUrl, setNewUrl] = useState("");
+  const [addError, setAddError] = useState("");
 
   const refresh = useCallback(async () => {
     try {
-      const result = await (window as any).electronAPI.cloudfreeGetNetworkLog();
+      const result = await getApi().cloudfreeGetNetworkLog();
       setData(result);
     } catch {
       // IPC not available yet
@@ -55,6 +65,48 @@ export const CloudFreeNetworkPanel: React.FC = () => {
     refresh();
     const interval = setInterval(refresh, 2000);
     return () => clearInterval(interval);
+  }, [refresh]);
+
+  const handleAddRule = useCallback(async () => {
+    setAddError("");
+    const trimmed = newUrl.trim();
+    if (!trimmed) return;
+
+    // Parse the input: accept full URLs or bare domains
+    let domain: string;
+    let paths: string[] = ["/*"];
+    try {
+      // If it looks like a URL with a path, parse it
+      const urlLike = trimmed.includes("://") ? trimmed : `https://${trimmed}`;
+      const parsed = new URL(urlLike);
+      domain = parsed.hostname;
+      if (parsed.pathname && parsed.pathname !== "/") {
+        // Use the provided path with a wildcard at the end if it doesn't have one
+        const p = parsed.pathname + parsed.search;
+        paths = [p.endsWith("*") ? p : p.endsWith("/") ? p + "*" : p + "/*"];
+      }
+    } catch {
+      setAddError("Invalid URL or domain");
+      return;
+    }
+
+    const result = await getApi().cloudfreeAddUserRule({ domain, paths });
+    if (result.ok) {
+      setNewUrl("");
+      refresh();
+    } else {
+      setAddError(result.error || "Failed to add rule");
+    }
+  }, [newUrl, refresh]);
+
+  const handleRemoveUserRule = useCallback(async (domain: string) => {
+    await getApi().cloudfreeRemoveUserRule({ domain });
+    refresh();
+  }, [refresh]);
+
+  const handleToggleGroup = useCallback(async (group: string, enabled: boolean) => {
+    await getApi().cloudfreeToggleGroup({ group, enabled });
+    refresh();
   }, [refresh]);
 
   if (!data) {
@@ -73,6 +125,10 @@ export const CloudFreeNetworkPanel: React.FC = () => {
     filter === "all" ? log :
     filter === "internal" ? internalLog :
     log.filter((e) => e.status === filter);
+
+  // Separate default groups from user group
+  const defaultGroups = Object.entries(allowlist.rules).filter(([k]) => k !== "user");
+  const userGroup = allowlist.rules.user;
 
   return (
     <div className="space-y-4">
@@ -186,10 +242,77 @@ export const CloudFreeNetworkPanel: React.FC = () => {
       )}
 
       {activeTab === "allowlist" && (
-        <div className="space-y-3">
-          {Object.entries(allowlist.rules).map(([groupKey, group]) => (
-            <SettingsGroup key={groupKey} title={group.comment || groupKey}>
-              <div className="space-y-2">
+        <div className="space-y-4">
+          {/* Add custom URL */}
+          <SettingsGroup title="Custom Rules" variant="highlighted">
+            <p className="text-[11px] text-muted-foreground/70 -mt-1">
+              Add a domain or URL to allow. Enter a full URL to allow a specific path, or just a domain to allow all paths.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                value={newUrl}
+                onChange={(e) => { setNewUrl(e.target.value); setAddError(""); }}
+                onKeyDown={(e) => e.key === "Enter" && handleAddRule()}
+                placeholder="e.g. gateway.ai.cloudflare.com or https://api.example.com/v1/*"
+                className="flex-1 h-8 text-xs font-mono"
+              />
+              <button
+                onClick={handleAddRule}
+                disabled={!newUrl.trim()}
+                className="px-3 h-8 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+              >
+                Add
+              </button>
+            </div>
+            {addError && (
+              <p className="text-[11px] text-destructive">{addError}</p>
+            )}
+
+            {/* User rules list */}
+            {userGroup && userGroup.entries.length > 0 && (
+              <div className="space-y-1.5 mt-1">
+                {userGroup.entries.map((rule) => (
+                  <div key={rule.domain} className="flex items-center gap-2 group">
+                    <Badge variant="outline" className="text-[10px] font-mono shrink-0">
+                      {rule.domain}
+                    </Badge>
+                    <div className="flex flex-wrap gap-1 flex-1 min-w-0">
+                      {rule.paths.map((p) => (
+                        <span
+                          key={p}
+                          className="text-[10px] font-mono text-muted-foreground/70 bg-muted/40 px-1.5 py-0.5 rounded"
+                        >
+                          {p}
+                        </span>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => handleRemoveUserRule(rule.domain)}
+                      className="opacity-0 group-hover:opacity-100 text-destructive/70 hover:text-destructive transition-opacity p-1 shrink-0"
+                      title="Remove rule"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SettingsGroup>
+
+          {/* Default groups with toggles */}
+          {defaultGroups.map(([groupKey, group]) => (
+            <SettingsGroup key={groupKey} title="">
+              <div className="flex items-center justify-between -mt-1">
+                <h4 className="text-xs font-medium text-foreground">{group.comment || groupKey}</h4>
+                <Toggle
+                  checked={group.enabled !== false}
+                  onChange={(enabled) => handleToggleGroup(groupKey, enabled)}
+                />
+              </div>
+              <div className={`space-y-2 transition-opacity ${group.enabled === false ? "opacity-30 pointer-events-none" : ""}`}>
                 {group.entries.map((rule) => (
                   <div key={rule.domain} className="flex items-start gap-2">
                     <Badge variant="success" className="text-[10px] font-mono shrink-0 mt-0.5">

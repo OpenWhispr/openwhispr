@@ -16,7 +16,7 @@
  *   installNetworkGuard(session.defaultSession);
  */
 
-const { ipcMain } = require("electron");
+const { ipcMain, app } = require("electron");
 const path = require("path");
 const fs = require("fs");
 
@@ -28,6 +28,27 @@ function loadAllowlist() {
 }
 
 let allowlist = loadAllowlist();
+
+// --- User-managed rules (persisted to userData) ---
+
+function getUserConfigPath() {
+  return path.join(app.getPath("userData"), "cloudfree-user-rules.json");
+}
+
+function loadUserConfig() {
+  try {
+    const raw = fs.readFileSync(getUserConfigPath(), "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return { userRules: [], disabledGroups: [] };
+  }
+}
+
+function saveUserConfig(config) {
+  fs.writeFileSync(getUserConfigPath(), JSON.stringify(config, null, 2), "utf-8");
+}
+
+let userConfig = loadUserConfig();
 
 // In-memory log of recent blocked/allowed requests for the UI
 const MAX_LOG_ENTRIES = 200;
@@ -43,15 +64,25 @@ function resetStats() {
 }
 
 /**
- * Build a flat list of { domain, paths, group } from the allowlist rules.
+ * Build a flat list of { domain, paths, group } from the allowlist rules,
+ * respecting disabled groups and including user-added rules.
  */
 function getRules() {
   const rules = [];
+  const disabled = new Set(userConfig.disabledGroups || []);
+
   for (const [group, config] of Object.entries(allowlist.rules || {})) {
+    if (disabled.has(group)) continue;
     for (const entry of config.entries || []) {
       rules.push({ domain: entry.domain, paths: entry.paths || ["/*"], group });
     }
   }
+
+  // Append user-defined rules
+  for (const entry of userConfig.userRules || []) {
+    rules.push({ domain: entry.domain, paths: entry.paths || ["/*"], group: "user" });
+  }
+
   return rules;
 }
 
@@ -193,6 +224,46 @@ function installNetworkGuard(electronSession, debugLogger) {
     return { ok: true };
   });
 
+  ipcMain.handle("cloudfree:add-user-rule", (_event, { domain, paths }) => {
+    if (!domain || typeof domain !== "string") return { ok: false, error: "domain required" };
+    const cleanDomain = domain.toLowerCase().replace(/^https?:\/\//, "").split("/")[0].split(":")[0];
+    if (!cleanDomain) return { ok: false, error: "invalid domain" };
+    const cleanPaths = Array.isArray(paths) && paths.length > 0 ? paths : ["/*"];
+    // Avoid duplicates
+    const existing = userConfig.userRules.find((r) => r.domain === cleanDomain);
+    if (existing) {
+      // Merge paths
+      const pathSet = new Set([...existing.paths, ...cleanPaths]);
+      existing.paths = [...pathSet];
+    } else {
+      userConfig.userRules.push({ domain: cleanDomain, paths: cleanPaths });
+    }
+    saveUserConfig(userConfig);
+    return { ok: true };
+  });
+
+  ipcMain.handle("cloudfree:remove-user-rule", (_event, { domain }) => {
+    userConfig.userRules = userConfig.userRules.filter((r) => r.domain !== domain);
+    saveUserConfig(userConfig);
+    return { ok: true };
+  });
+
+  ipcMain.handle("cloudfree:toggle-group", (_event, { group, enabled }) => {
+    const disabled = new Set(userConfig.disabledGroups || []);
+    if (enabled) {
+      disabled.delete(group);
+    } else {
+      disabled.add(group);
+    }
+    userConfig.disabledGroups = [...disabled];
+    saveUserConfig(userConfig);
+    return { ok: true };
+  });
+
+  ipcMain.handle("cloudfree:get-user-config", () => {
+    return { userRules: userConfig.userRules || [], disabledGroups: userConfig.disabledGroups || [] };
+  });
+
   log.info?.("[CloudFree] Network guard installed") ||
     log.log?.("[CloudFree] Network guard installed");
 
@@ -200,7 +271,8 @@ function installNetworkGuard(electronSession, debugLogger) {
 }
 
 function getAllowlistSummary() {
-  const summary = { rules: {} };
+  const disabled = new Set(userConfig.disabledGroups || []);
+  const summary = { rules: {}, disabledGroups: [...disabled] };
   for (const [group, config] of Object.entries(allowlist.rules || {})) {
     summary.rules[group] = {
       comment: config._comment || "",
@@ -208,6 +280,18 @@ function getAllowlistSummary() {
         domain: e.domain,
         paths: e.paths || ["/*"],
       })),
+      enabled: !disabled.has(group),
+    };
+  }
+  // Include user rules as their own group
+  if (userConfig.userRules && userConfig.userRules.length > 0) {
+    summary.rules.user = {
+      comment: "User-added custom rules",
+      entries: userConfig.userRules.map((e) => ({
+        domain: e.domain,
+        paths: e.paths || ["/*"],
+      })),
+      enabled: true,
     };
   }
   return summary;

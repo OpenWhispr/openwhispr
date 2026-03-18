@@ -361,6 +361,9 @@ function MainApp() {
     );
   }
 
+  // Dictation panel never needs onboarding/reauth gates
+  if (isDictationPanel) return <App />;
+
   if (isLoading) {
     return <LoadingFallback />;
   }

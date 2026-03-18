@@ -11,7 +11,7 @@ export { CloudFreeNetworkPanel } from "./components/CloudFreeNetworkPanel";
 
 export const defaultSettingsSection = "general";
 
-const HIDDEN_SECTIONS = new Set(["account", "plansBilling"]);
+const HIDDEN_SECTIONS = new Set(["account", "plansBilling", "agentMode"]);
 
 const CloudFreeSettingsItem = {
   id: "cloudfree" as const,

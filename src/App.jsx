@@ -230,7 +230,7 @@ export default function App() {
   }, [isRecording, isProcessing, floatingIconAutoHide, toastCount]);
 
   const handleClose = () => {
-    window.electronAPI.hideWindow();
+    window.electronAPI?.hideWindow();
   };
 
   useEffect(() => {

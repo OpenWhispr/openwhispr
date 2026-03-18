@@ -36,6 +36,10 @@ module.exports = {
       cloudfreeGetNetworkLog: () => ipcRenderer.invoke("cloudfree:get-network-log"),
       cloudfreeGetAllowlist: () => ipcRenderer.invoke("cloudfree:get-allowlist"),
       cloudfreeResetStats: () => ipcRenderer.invoke("cloudfree:reset-stats"),
+      cloudfreeAddUserRule: (rule) => ipcRenderer.invoke("cloudfree:add-user-rule", rule),
+      cloudfreeRemoveUserRule: (rule) => ipcRenderer.invoke("cloudfree:remove-user-rule", rule),
+      cloudfreeToggleGroup: (opts) => ipcRenderer.invoke("cloudfree:toggle-group", opts),
+      cloudfreeGetUserConfig: () => ipcRenderer.invoke("cloudfree:get-user-config"),
     };
   },
 };
