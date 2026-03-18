@@ -7,7 +7,7 @@ export const useWindowDrag = () => {
     if (e.button === 0) {
       // Left mouse button
       setIsDragging(true);
-      window.electronAPI.startWindowDrag?.();
+      window.electronAPI?.startWindowDrag?.();
       e.preventDefault();
     }
   };
@@ -15,7 +15,7 @@ export const useWindowDrag = () => {
   const handleMouseUp = () => {
     if (isDragging) {
       setIsDragging(false);
-      window.electronAPI.stopWindowDrag?.();
+      window.electronAPI?.stopWindowDrag?.();
     }
   };
 
@@ -29,7 +29,7 @@ export const useWindowDrag = () => {
     if (isDragging) {
       const handleGlobalMouseUp = () => {
         setIsDragging(false);
-        window.electronAPI.stopWindowDrag?.();
+        window.electronAPI?.stopWindowDrag?.();
       };
 
       document.addEventListener("mouseup", handleGlobalMouseUp);

@@ -95,6 +95,7 @@ class AudioManager {
     this.streamingProcessor = null;
     this.streamingStream = null;
     this.streamingCleanupFns = [];
+    this.streamingKeepAliveGain = null;
     this.streamingFinalText = "";
     this.streamingPartialText = "";
     this.streamingTextResolve = null;
@@ -112,6 +113,10 @@ class AudioManager {
     this.sttConfig = null;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
+
+    // Live waveform visualizer
+    this._visualAnalyser = null;
+    this._visualCtx = null;
 
     // System audio capture
     this.systemAudioEnabled = false;
@@ -344,13 +349,32 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       }
 
-      // Silence detection: observe audio energy via AnalyserNode
+      // Silence detection + visual analyser: share a single AudioContext to avoid
+      // interfering with the MediaRecorder (multiple createMediaStreamSource calls
+      // on the same stream can starve the recorder in Chromium).
       try {
+        // Use a cloned stream for analysis so the AudioContext doesn't interfere
+        // with the MediaRecorder consuming the original stream.
+        // NOTE: Do NOT connect analysers to ctx.destination — even with a cloned
+        // stream, routing to destination starves the MediaRecorder in Chromium.
+        this._analysisStream = recordingStream.clone();
         this._silenceCtx = new AudioContext();
+        if (this._silenceCtx.state === "suspended") {
+          await this._silenceCtx.resume();
+        }
+        const sourceNode = this._silenceCtx.createMediaStreamSource(this._analysisStream);
+
+        // Silence detection analyser
         this._silenceAnalyser = this._silenceCtx.createAnalyser();
         this._silenceAnalyser.fftSize = 2048;
-        const sourceNode = this._silenceCtx.createMediaStreamSource(recordingStream);
         sourceNode.connect(this._silenceAnalyser);
+
+        // Visual analyser for live waveform UI (shares same source node)
+        this._visualAnalyser = this._silenceCtx.createAnalyser();
+        this._visualAnalyser.fftSize = 256;
+        this._visualAnalyser.smoothingTimeConstant = 0.6;
+        sourceNode.connect(this._visualAnalyser);
+
         this._peakRms = 0;
         const dataArray = new Uint8Array(this._silenceAnalyser.fftSize);
         this._silenceInterval = setInterval(() => {
@@ -386,6 +410,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._silenceCtx?.close().catch(() => {});
         this._silenceCtx = null;
         this._silenceAnalyser = null;
+        this._visualAnalyser = null;
+        this._analysisStream?.getTracks().forEach((t) => t.stop());
+        this._analysisStream = null;
 
         this.isRecording = false;
         this.isProcessing = true;
@@ -468,6 +495,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
       }
       this.cleanupSystemAudio();
+      // Clean up shared silence/visual AudioContext
+      if (this._silenceInterval) {
+        clearInterval(this._silenceInterval);
+        this._silenceInterval = null;
+      }
+      this._silenceCtx?.close().catch(() => {});
+      this._silenceCtx = null;
+      this._silenceAnalyser = null;
+      this._visualAnalyser = null;
+      this._analysisStream?.getTracks().forEach((t) => t.stop());
+      this._analysisStream = null;
+      this._teardownVisualAnalyser();
 
       return true;
     }
@@ -2002,6 +2041,37 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     };
   }
 
+  /**
+   * Returns the AnalyserNode for live waveform visualization, if active.
+   */
+  getAnalyser() {
+    return this._visualAnalyser || null;
+  }
+
+  /** Set up an AnalyserNode on a media stream for UI visualization. */
+  async _setupVisualAnalyser(stream) {
+    try {
+      this._visualCtx = new AudioContext();
+      if (this._visualCtx.state === "suspended") {
+        await this._visualCtx.resume();
+      }
+      this._visualAnalyser = this._visualCtx.createAnalyser();
+      this._visualAnalyser.fftSize = 256;
+      this._visualAnalyser.smoothingTimeConstant = 0.6;
+      const source = this._visualCtx.createMediaStreamSource(stream);
+      source.connect(this._visualAnalyser);
+    } catch (e) {
+      logger.warn("Visual analyser setup failed", { error: e.message }, "audio");
+    }
+  }
+
+  /** Tear down the visual analyser. */
+  _teardownVisualAnalyser() {
+    this._visualCtx?.close().catch(() => {});
+    this._visualCtx = null;
+    this._visualAnalyser = null;
+  }
+
   shouldUseStreaming(isSignedInOverride) {
     const s = getSettings();
     if (s.useLocalWhisper) return false;
@@ -2187,6 +2257,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
+      this.streamingKeepAliveGain = audioContext.createGain();
+      this.streamingKeepAliveGain.gain.value = 0;
       const provider = this.getStreamingProvider();
 
       this.streamingProcessor.port.onmessage = (event) => {
@@ -2196,6 +2268,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       this.isStreaming = true;
       this.streamingSource.connect(this.streamingProcessor);
+      // Keep the AudioWorklet graph alive without emitting audible output.
+      this.streamingProcessor.connect(this.streamingKeepAliveGain);
+      this.streamingKeepAliveGain.connect(audioContext.destination);
+
+      // Visual analyser for live waveform UI — reuse streaming AudioContext
+      // to avoid a second createMediaStreamSource on the same stream
+      try {
+        this._visualAnalyser = audioContext.createAnalyser();
+        this._visualAnalyser.fftSize = 256;
+        this._visualAnalyser.smoothingTimeConstant = 0.6;
+        this.streamingSource.connect(this._visualAnalyser);
+      } catch (e) {
+        logger.warn("Visual analyser setup failed", { error: e.message }, "audio");
+      }
 
       // Mix in system audio if enabled — connecting a second source to the same
       // AudioWorkletNode sums the signals automatically via Web Audio API.
@@ -2383,6 +2469,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.recordingStartTime = null;
     this.onStateChange?.({ isRecording: false, isProcessing: true, isStreaming: false });
 
+    this._visualAnalyser = null;
+
     // 2. Stop the processor — it flushes its remaining buffer on "stop".
     //    Keep isStreaming TRUE so the port.onmessage handler forwards the flush to WebSocket.
     if (this.streamingProcessor) {
@@ -2393,6 +2481,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         // Ignore
       }
       this.streamingProcessor = null;
+    }
+    if (this.streamingKeepAliveGain) {
+      try {
+        this.streamingKeepAliveGain.disconnect();
+      } catch (e) {
+        // Ignore
+      }
+      this.streamingKeepAliveGain = null;
     }
     if (this.streamingSource) {
       try {
@@ -2672,6 +2768,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.streamingProcessor = null;
     }
 
+    if (this.streamingKeepAliveGain) {
+      try {
+        this.streamingKeepAliveGain.disconnect();
+      } catch (e) {
+        // Ignore
+      }
+      this.streamingKeepAliveGain = null;
+    }
+
     if (this.streamingSource) {
       try {
         this.streamingSource.disconnect();
@@ -2717,6 +2822,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   cleanup() {
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
+    this._teardownVisualAnalyser();
     if (this.isStreaming) {
       this.cleanupStreaming();
     }

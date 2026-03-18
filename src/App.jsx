@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import "./index.css";
 import { X } from "lucide-react";
 import { useToast } from "./components/ui/Toast";
-import { LoadingDots } from "./components/ui/LoadingDots";
+import { LiveWaveform } from "./components/ui/LiveWaveform";
 import { useHotkey } from "./hooks/useHotkey";
 import { formatHotkeyLabel } from "./utils/hotkeys";
 import { useWindowDrag } from "./hooks/useWindowDrag";
@@ -92,6 +92,7 @@ export default function App() {
 
   // Floating icon auto-hide setting (read from store, synced via IPC)
   const floatingIconAutoHide = useSettingsStore((s) => s.floatingIconAutoHide);
+  const dictationStatusPill = useSettingsStore((s) => s.dictationStatusPill);
   const panelStartPosition = useSettingsStore((s) => s.panelStartPosition);
   const prevAutoHideRef = useRef(floatingIconAutoHide);
 
@@ -178,6 +179,22 @@ export default function App() {
     }
   }, [isCommandMenuOpen, isHovered, toastCount, setWindowInteractivity]);
 
+  const handleDictationToggle = React.useCallback(() => {
+    setIsCommandMenuOpen(false);
+    setWindowInteractivity(false);
+  }, [setWindowInteractivity]);
+
+  const {
+    isRecording,
+    isProcessing,
+    toggleListening,
+    cancelRecording,
+    cancelProcessing,
+    getAnalyser,
+  } = useAudioRecording(toast, {
+    onToggle: handleDictationToggle,
+  });
+
   useEffect(() => {
     const resizeWindow = () => {
       if (isCommandMenuOpen && toastCount > 0) {
@@ -186,22 +203,14 @@ export default function App() {
         window.electronAPI?.resizeMainWindow?.("WITH_MENU");
       } else if (toastCount > 0) {
         window.electronAPI?.resizeMainWindow?.("WITH_TOAST");
+      } else if (dictationStatusPill && (isRecording || isProcessing)) {
+        window.electronAPI?.resizeMainWindow?.("ACTIVE_STATUS");
       } else {
         window.electronAPI?.resizeMainWindow?.("BASE");
       }
     };
     resizeWindow();
-  }, [isCommandMenuOpen, toastCount]);
-
-  const handleDictationToggle = React.useCallback(() => {
-    setIsCommandMenuOpen(false);
-    setWindowInteractivity(false);
-  }, [setWindowInteractivity]);
-
-  const { isRecording, isProcessing, toggleListening, cancelRecording, cancelProcessing } =
-    useAudioRecording(toast, {
-      onToggle: handleDictationToggle,
-    });
+  }, [dictationStatusPill, isCommandMenuOpen, isProcessing, isRecording, toastCount]);
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -230,7 +239,7 @@ export default function App() {
   }, [isRecording, isProcessing, floatingIconAutoHide, toastCount]);
 
   const handleClose = () => {
-    window.electronAPI.hideWindow();
+    window.electronAPI?.hideWindow();
   };
 
   useEffect(() => {
@@ -277,31 +286,35 @@ export default function App() {
   };
 
   const micState = getMicState();
+  const useStatusPill =
+    dictationStatusPill && (micState === "recording" || micState === "processing");
 
   const getMicButtonProps = () => {
     const baseClasses =
-      "rounded-full w-10 h-10 flex items-center justify-center relative overflow-hidden border-2 border-white/70 cursor-pointer";
+      "flex items-center justify-center relative overflow-hidden border-2 border-white/70 cursor-pointer";
+    const circleClasses = `${baseClasses} rounded-full w-10 h-10`;
+    const pillClasses = `${baseClasses} rounded-full h-10 min-w-[164px] px-3.5 gap-2.5 justify-start`;
 
     switch (micState) {
       case "idle":
       case "hover":
         return {
-          className: `${baseClasses} bg-black/50 cursor-pointer`,
+          className: `${circleClasses} bg-black/50 cursor-pointer`,
           tooltip: formatHotkeyLabel(hotkey),
         };
       case "recording":
         return {
-          className: `${baseClasses} bg-primary cursor-pointer`,
+          className: `${useStatusPill ? pillClasses : circleClasses} bg-primary cursor-pointer`,
           tooltip: t("app.mic.recording"),
         };
       case "processing":
         return {
-          className: `${baseClasses} bg-accent cursor-not-allowed`,
+          className: `${useStatusPill ? pillClasses : circleClasses} bg-accent cursor-not-allowed`,
           tooltip: t("app.mic.processing"),
         };
       default:
         return {
-          className: `${baseClasses} bg-black/50 cursor-pointer`,
+          className: `${circleClasses} bg-black/50 cursor-pointer`,
           style: { transform: "scale(0.8)" },
           tooltip: t("app.mic.clickToSpeak"),
         };
@@ -432,14 +445,36 @@ export default function App() {
               {micState === "idle" || micState === "hover" ? (
                 <SoundWaveIcon size={micState === "idle" ? 12 : 14} />
               ) : micState === "recording" ? (
-                <LoadingDots />
+                useStatusPill ? (
+                  <>
+                    <LiveWaveform getAnalyser={getAnalyser} size={20} barCount={5} color="white" />
+                    <span className="text-xs font-semibold tracking-[0.02em] text-white whitespace-nowrap">
+                      {t("app.mic.recordingLabel", { defaultValue: "Recording" })}
+                    </span>
+                  </>
+                ) : (
+                  <LiveWaveform getAnalyser={getAnalyser} size={24} barCount={5} color="white" />
+                )
               ) : micState === "processing" ? (
-                <VoiceWaveIndicator isListening={true} />
+                useStatusPill ? (
+                  <>
+                    <VoiceWaveIndicator isListening={true} />
+                    <span className="text-xs font-semibold tracking-[0.02em] text-white whitespace-nowrap">
+                      {t("app.mic.transcribingLabel", { defaultValue: "Transcribing" })}
+                    </span>
+                  </>
+                ) : (
+                  <VoiceWaveIndicator isListening={true} />
+                )
               ) : null}
 
               {/* State indicator ring for recording */}
               {micState === "recording" && (
-                <div className="absolute inset-0 rounded-full border-2 border-primary/50 animate-pulse"></div>
+                <div
+                  className={`absolute inset-0 border-2 border-primary/50 animate-pulse ${
+                    useStatusPill ? "rounded-full" : "rounded-full"
+                  }`}
+                ></div>
               )}
 
               {/* State indicator ring for processing */}
