@@ -181,6 +181,20 @@ const createAudioPipeline = async ({
   return { source, processor };
 };
 
+/**
+ * Detach an AudioContext from hardware output to avoid Bluetooth routing issues.
+ * When BT headphones become the default output, the AudioContext can stall due to
+ * HFP sample-rate mismatches. Using a "none" sink keeps processing running without
+ * coupling to any physical device.
+ */
+const detachFromOutputDevice = async (ctx: AudioContext) => {
+  if ("setSinkId" in ctx) {
+    try {
+      await (ctx as any).setSinkId({ type: "none" });
+    } catch {}
+  }
+};
+
 const flushAndDisconnectProcessor = async (processor: AudioWorkletNode | null) => {
   if (!processor) return;
 
@@ -427,6 +441,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
       let socketReady = false;
 
       const audioContext = new AudioContext({ sampleRate: 24000 });
+      await detachFromOutputDevice(audioContext);
       audioContextRef.current = audioContext;
 
       const systemPipelinePromise = createAudioPipeline({
@@ -456,6 +471,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
       if (micResult) {
         micStreamRef.current = micResult;
         const micContext = new AudioContext({ sampleRate: 24000 });
+        await detachFromOutputDevice(micContext);
         micContextRef.current = micContext;
 
         micPipelinePromise = createAudioPipeline({
