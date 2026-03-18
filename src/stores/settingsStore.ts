@@ -69,7 +69,7 @@ const BOOLEAN_SETTINGS = new Set([
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
 
-const NUMERIC_SETTINGS = new Set(["audioRetentionDays"]);
+const NUMERIC_SETTINGS = new Set(["audioRetentionDays", "sonioxKeepAliveTimeout"]);
 
 const LANGUAGE_MIGRATIONS: Record<string, string> = { zh: "zh-CN" };
 
@@ -115,6 +115,7 @@ export interface SettingsState
   setFallbackWhisperModel: (value: string) => void;
   setPreferredLanguage: (value: string) => void;
   setSonioxSecondaryLanguage: (value: string) => void;
+  setSonioxKeepAliveTimeout: (value: number) => void;
   setCloudTranscriptionProvider: (value: string) => void;
   setCloudTranscriptionModel: (value: string) => void;
   setCloudTranscriptionBaseUrl: (value: string) => void;
