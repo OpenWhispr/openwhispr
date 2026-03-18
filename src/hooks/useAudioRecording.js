@@ -158,7 +158,7 @@ export const useAudioRecording = (toast, options = {}) => {
     });
 
     audioManagerRef.current.setContext("dictation");
-    window.electronAPI.getSttConfig?.().then((config) => {
+    window.electronAPI?.getSttConfig?.().then((config) => {
       if (config && audioManagerRef.current) {
         audioManagerRef.current.setSttConfig(config);
         if (audioManagerRef.current.shouldUseStreaming()) {
@@ -186,17 +186,17 @@ export const useAudioRecording = (toast, options = {}) => {
       await performStopRecording();
     };
 
-    const disposeToggle = window.electronAPI.onToggleDictation(() => {
+    const disposeToggle = window.electronAPI?.onToggleDictation(() => {
       handleToggle();
       onToggle?.();
     });
 
-    const disposeStart = window.electronAPI.onStartDictation?.(() => {
+    const disposeStart = window.electronAPI?.onStartDictation?.(() => {
       handleStart();
       onToggle?.();
     });
 
-    const disposeStop = window.electronAPI.onStopDictation?.(() => {
+    const disposeStop = window.electronAPI?.onStopDictation?.(() => {
       handleStop();
       onToggle?.();
     });
@@ -209,7 +209,7 @@ export const useAudioRecording = (toast, options = {}) => {
       });
     };
 
-    const disposeNoAudio = window.electronAPI.onNoAudioDetected?.(handleNoAudioDetected);
+    const disposeNoAudio = window.electronAPI?.onNoAudioDetected?.(handleNoAudioDetected);
 
     // Cleanup
     return () => {
@@ -271,5 +271,6 @@ export const useAudioRecording = (toast, options = {}) => {
     cancelRecording,
     cancelProcessing,
     toggleListening,
+    getAnalyser: () => audioManagerRef.current?.getAnalyser() || null,
   };
 };

@@ -1197,6 +1197,8 @@
       "floatingIcon": {
         "autoHide": "Auto-hide when idle",
         "autoHideDescription": "Keep the icon hidden until you start dictating",
+        "statusPill": "Expand into status pill",
+        "statusPillDescription": "Show an oval icon-and-text pill while recording or transcribing",
         "startPosition": "Start position",
         "startPositionDescription": "Where the voice recorder panel appears on screen",
         "bottomRight": "Bottom Right",
@@ -1829,7 +1831,9 @@
     "mic": {
       "hotkeyToSpeak": "{{hotkey}} to talk",
       "recording": "Recording...",
+      "recordingLabel": "Recording",
       "processing": "Processing...",
+      "transcribingLabel": "Transcribing",
       "clickToSpeak": "Click to speak"
     },
     "buttons": {

@@ -701,6 +701,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
     setFloatingIconAutoHide,
+    dictationStatusPill,
+    setDictationStatusPill,
     startMinimized,
     setStartMinimized,
     panelStartPosition,
@@ -2147,6 +2149,19 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                     description={t("settingsPage.general.floatingIcon.autoHideDescription")}
                   >
                     <Toggle checked={floatingIconAutoHide} onChange={setFloatingIconAutoHide} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.floatingIcon.statusPill", {
+                      defaultValue: "Expanded status pill",
+                    })}
+                    description={t("settingsPage.general.floatingIcon.statusPillDescription", {
+                      defaultValue:
+                        "Show recording and transcribing states as a pill with icon and text.",
+                    })}
+                  >
+                    <Toggle checked={dictationStatusPill} onChange={setDictationStatusPill} />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>

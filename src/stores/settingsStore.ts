@@ -58,6 +58,7 @@ const BOOLEAN_SETTINGS = new Set([
   "audioCuesEnabled",
   "pauseMediaOnDictation",
   "floatingIconAutoHide",
+  "dictationStatusPill",
   "startMinimized",
   "meetingProcessDetection",
   "meetingAudioDetection",
@@ -97,6 +98,7 @@ export interface SettingsState
   audioCuesEnabled: boolean;
   pauseMediaOnDictation: boolean;
   floatingIconAutoHide: boolean;
+  dictationStatusPill: boolean;
   startMinimized: boolean;
   gcalAccounts: GoogleCalendarAccount[];
   gcalConnected: boolean;
@@ -150,6 +152,7 @@ export interface SettingsState
   setAudioCuesEnabled: (value: boolean) => void;
   setPauseMediaOnDictation: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
+  setDictationStatusPill: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
   setGcalAccounts: (accounts: GoogleCalendarAccount[]) => void;
   setMeetingProcessDetection: (value: boolean) => void;
@@ -285,6 +288,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
+  dictationStatusPill: readBoolean("dictationStatusPill", false),
   startMinimized: readBoolean("startMinimized", false),
   ...(() => {
     let accounts: GoogleCalendarAccount[] = [];
@@ -469,6 +473,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.notifyFloatingIconAutoHideChanged?.(enabled);
     }
   },
+
+  setDictationStatusPill: createBooleanSetter("dictationStatusPill"),
 
   setStartMinimized: (enabled: boolean) => {
     if (get().startMinimized === enabled) return;
