@@ -52,10 +52,18 @@ export async function getSystemAudioStream(): Promise<MediaStream | null> {
       return null;
     }
 
-    // Video tracks must stay alive — stopping them kills the ScreenCaptureKit loopback audio
+    // ScreenCaptureKit requires active video frame consumption to pump the capture
+    // session. Without a consumer, the loopback audio track produces silence even
+    // though the track is "live". Attach the stream to a hidden <video> element so
+    // Chromium pulls frames and keeps the session active.
+    const videoSink = document.createElement("video");
+    videoSink.srcObject = new MediaStream(videoTracks);
+    videoSink.muted = true;
+    videoSink.play().catch(() => {});
 
     audioTracks[0].addEventListener("ended", () => {
       logger.error("System audio track ended unexpectedly", {}, "audio");
+      videoSink.srcObject = null;
     });
 
     return stream;

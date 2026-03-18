@@ -81,9 +81,16 @@ if (process.platform === "win32") {
 // dialogs while XWayland globalShortcut works fine without it.
 if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") {
   app.commandLine.appendSwitch("ozone-platform-hint", "auto");
+  app.commandLine.appendSwitch("enable-features", "UseOzonePlatform,WaylandWindowDecorations");
+}
+
+// Enable system audio loopback capture on macOS via ScreenCaptureKit / CoreAudio Taps.
+// Without these flags, getDisplayMedia({ audio: "loopback" }) returns a live audio track
+// that produces only silence (all-zero samples).
+if (process.platform === "darwin") {
   app.commandLine.appendSwitch(
     "enable-features",
-    "UseOzonePlatform,WaylandWindowDecorations"
+    "MacLoopbackAudioForScreenShare,MacSckSystemAudioLoopbackOverride,MacCatapSystemAudioLoopbackCapture"
   );
 }
 
@@ -625,7 +632,11 @@ async function startApp() {
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
   if (savedMeetingKey) {
     const result = hotkeyManager.registerSlot("meeting", savedMeetingKey, meetingHotkeyCallback);
-    debugLogger.info("Meeting hotkey startup registration", { savedMeetingKey, ...result }, "meeting");
+    debugLogger.info(
+      "Meeting hotkey startup registration",
+      { savedMeetingKey, ...result },
+      "meeting"
+    );
   }
 
   ipcMain.handle("register-meeting-hotkey", (_event, hotkey) => {

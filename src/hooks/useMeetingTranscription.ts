@@ -233,7 +233,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const isPreparedRef = useRef(false);
   const preparePromiseRef = useRef<Promise<void> | null>(null);
   const ipcCleanupsRef = useRef<Array<() => void>>([]);
-  const mountGenRef = useRef(0);
+  const pendingCleanupRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cleanup = useCallback(async () => {
     const processors = [processorRef, micProcessorRef];
@@ -338,9 +338,8 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const startTranscription = useCallback(async () => {
     if (isRecordingRef.current || isStartingRef.current) return;
     isStartingRef.current = true;
-    const gen = mountGenRef.current;
 
-    logger.info("Meeting transcription starting...", { gen }, "meeting");
+    logger.info("Meeting transcription starting...", {}, "meeting");
     setTranscript("");
     setPartialTranscript("");
     setSegments([]);
@@ -356,15 +355,6 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
     if (preparePromiseRef.current) {
       logger.debug("Waiting for in-flight prepare to finish...", {}, "meeting");
       await preparePromiseRef.current;
-    }
-
-    // Abort if component was remounted (StrictMode) during prepare wait
-    if (mountGenRef.current !== gen) {
-      logger.info("startTranscription aborted — stale mount (after prepare)", { gen }, "meeting");
-      isRecordingRef.current = false;
-      isStartingRef.current = false;
-      setIsRecording(false);
-      return;
     }
 
     try {
@@ -387,13 +377,9 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
 
       const streamsMs = performance.now() - startTime;
 
-      // Abort if stop was called during setup or component remounted (StrictMode)
-      if (!isRecordingRef.current || mountGenRef.current !== gen) {
-        logger.info(
-          "Meeting transcription aborted during setup",
-          { gen, stale: mountGenRef.current !== gen },
-          "meeting"
-        );
+      // Abort if stop was called during setup
+      if (!isRecordingRef.current) {
+        logger.info("Meeting transcription aborted during setup (stop called)", {}, "meeting");
         stream?.getTracks().forEach((t) => t.stop());
         micResult?.getTracks().forEach((t) => t.stop());
         isStartingRef.current = false;
@@ -466,9 +452,21 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
       const pendingMicChunks: ArrayBuffer[] = [];
       let socketReady = false;
 
-      const audioContext = new AudioContext({ sampleRate: 24000 });
+      // Use the loopback stream's native sample rate for the system AudioContext.
+      // ScreenCaptureKit loopback produces silence when forced through a 24kHz
+      // AudioContext — the resampling path differs from getUserMedia and doesn't
+      // work correctly for loopback sources.
+      const loopbackRate = stream.getAudioTracks()[0]?.getSettings()?.sampleRate || 48000;
+      const systemNeedsResample = loopbackRate !== 24000;
+      const audioContext = new AudioContext({ sampleRate: loopbackRate });
       await detachFromOutputDevice(audioContext);
       audioContextRef.current = audioContext;
+
+      logger.debug(
+        "System audio context created",
+        { loopbackRate, needsResample: systemNeedsResample },
+        "meeting"
+      );
 
       const systemPipelinePromise = createAudioPipeline({
         stream,
@@ -476,7 +474,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
         label: "Meeting system",
         onChunk: (chunk) => {
           if (!isRecordingRef.current) return;
-          const samples = new Int16Array(chunk);
+          let samples = new Int16Array(chunk);
           let hasSignal = false;
           for (let i = 0; i < samples.length; i++) {
             if (samples[i] !== 0) {
@@ -485,11 +483,24 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
             }
           }
           if (!hasSignal) return;
+
+          // Downsample to 24kHz for the OpenAI Realtime API
+          if (systemNeedsResample) {
+            const ratio = loopbackRate / 24000;
+            const outLen = Math.floor(samples.length / ratio);
+            const out = new Int16Array(outLen);
+            for (let i = 0; i < outLen; i++) {
+              out[i] = samples[Math.round(i * ratio)];
+            }
+            samples = out;
+          }
+
+          const buf = samples.buffer;
           if (socketReady) {
-            window.electronAPI?.meetingTranscriptionSend?.(chunk, "system");
+            window.electronAPI?.meetingTranscriptionSend?.(buf, "system");
             return;
           }
-          pendingSystemChunks.push(chunk.slice(0));
+          pendingSystemChunks.push(buf.slice(0) as ArrayBuffer);
         },
       });
 
@@ -537,11 +548,11 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
         processorRef.current = systemPipeline.processor;
       }
 
-      // Abort if stop was called during pipeline setup or component remounted
-      if (!isRecordingRef.current || mountGenRef.current !== gen) {
+      // Abort if stop was called during pipeline setup
+      if (!isRecordingRef.current) {
         logger.info(
-          "Meeting transcription aborted during pipeline setup",
-          { gen, stale: mountGenRef.current !== gen },
+          "Meeting transcription aborted during pipeline setup (stop called)",
+          {},
           "meeting"
         );
         isStartingRef.current = false;
@@ -588,9 +599,20 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   }, []);
 
   useEffect(() => {
-    mountGenRef.current++;
+    // Cancel any pending cleanup from a previous StrictMode unmount — the component remounted,
+    // so the in-flight startTranscription from the prior mount should keep running.
+    if (pendingCleanupRef.current) {
+      clearTimeout(pendingCleanupRef.current);
+      pendingCleanupRef.current = null;
+    }
+
     return () => {
-      void cleanup();
+      // Defer cleanup to next tick so StrictMode remount can cancel it.
+      // On real unmount, the timeout fires and tears everything down.
+      pendingCleanupRef.current = setTimeout(() => {
+        pendingCleanupRef.current = null;
+        void cleanup();
+      }, 0);
     };
   }, [cleanup]);
 
