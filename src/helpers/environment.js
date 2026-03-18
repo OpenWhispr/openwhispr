@@ -10,6 +10,7 @@ const PERSISTED_KEYS = [
   "GEMINI_API_KEY",
   "GROQ_API_KEY",
   "MISTRAL_API_KEY",
+  "SONIOX_API_KEY",
   "CUSTOM_TRANSCRIPTION_API_KEY",
   "CUSTOM_REASONING_API_KEY",
   "LOCAL_TRANSCRIPTION_PROVIDER",
@@ -107,6 +108,14 @@ class EnvironmentManager {
 
   saveMistralKey(key) {
     return this._saveKey("MISTRAL_API_KEY", key);
+  }
+
+  getSonioxKey() {
+    return this._getKey("SONIOX_API_KEY");
+  }
+
+  saveSonioxKey(key) {
+    return this._saveKey("SONIOX_API_KEY", key);
   }
 
   getCustomTranscriptionKey() {

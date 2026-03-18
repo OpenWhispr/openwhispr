@@ -8,6 +8,8 @@ import { ProviderTabs } from "./ui/ProviderTabs";
 import ModelCardList from "./ui/ModelCardList";
 import { DownloadProgressBar } from "./ui/DownloadProgressBar";
 import ApiKeyInput from "./ui/ApiKeyInput";
+import LanguageSelector, { type LanguageOption } from "./ui/LanguageSelector";
+import languageRegistry from "../config/languageRegistry.json";
 import { ConfirmDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
@@ -26,6 +28,7 @@ import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
+import { useSettingsStore } from "../stores/settingsStore";
 import type { CudaWhisperStatus } from "../types/electron";
 import logger from "../utils/logger";
 
@@ -199,16 +202,27 @@ interface TranscriptionModelPickerProps {
   setMistralApiKey: (key: string) => void;
   customTranscriptionApiKey?: string;
   setCustomTranscriptionApiKey?: (key: string) => void;
+  sonioxApiKey?: string;
+  setSonioxApiKey?: (key: string) => void;
+  sonioxSecondaryLanguage?: string;
+  setSonioxSecondaryLanguage?: (lang: string) => void;
+  sonioxKeepAliveTimeout?: number;
+  setSonioxKeepAliveTimeout?: (val: number) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl?: (url: string) => void;
   className?: string;
   variant?: "onboarding" | "settings";
 }
 
+const SECONDARY_LANGUAGE_OPTIONS: LanguageOption[] = languageRegistry.languages
+  .filter((l) => l.code !== "auto")
+  .map(({ code, label, flag }) => ({ value: code, label, flag }));
+
 const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq", recommended: true },
   { id: "mistral", name: "Mistral" },
+  { id: "soniox", name: "Soniox" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -274,12 +288,20 @@ export default function TranscriptionModelPicker({
   setMistralApiKey,
   customTranscriptionApiKey = "",
   setCustomTranscriptionApiKey,
+  sonioxApiKey = "",
+  setSonioxApiKey,
+  sonioxSecondaryLanguage = "",
+  setSonioxSecondaryLanguage,
+  sonioxKeepAliveTimeout = 0,
+  setSonioxKeepAliveTimeout,
   cloudTranscriptionBaseUrl = "",
   setCloudTranscriptionBaseUrl,
   className = "",
   variant = "settings",
 }: TranscriptionModelPickerProps) {
   const { t } = useTranslation();
+  const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
+  const isAutoLanguage = !preferredLanguage || preferredLanguage === "auto";
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
   const [internalLocalProvider, setInternalLocalProvider] = useState(selectedLocalProvider);
@@ -393,8 +415,13 @@ export default function TranscriptionModelPicker({
           }
         }
       }
-    } else if (selectedCloudProvider !== "custom" && !selectedCloudModel) {
-      const provider = cloudProviders.find((p) => p.id === selectedCloudProvider);
+    } else if (
+      selectedCloudProvider !== "custom" &&
+      !selectedCloudModel
+    ) {
+      const provider = cloudProviders.find(
+        (p) => p.id === selectedCloudProvider
+      );
       if (provider?.models?.length) {
         onCloudModelSelect(provider.models[0].id);
       }
@@ -527,7 +554,9 @@ export default function TranscriptionModelPicker({
   const handleCloudProviderChange = useCallback(
     (providerId: string) => {
       onCloudProviderSelect(providerId);
-      const provider = cloudProviders.find((p) => p.id === providerId);
+      const provider = cloudProviders.find(
+        (p) => p.id === providerId
+      );
 
       if (providerId === "custom") {
         onCloudModelSelect("whisper-1");
@@ -541,7 +570,12 @@ export default function TranscriptionModelPicker({
         }
       }
     },
-    [cloudProviders, onCloudProviderSelect, onCloudModelSelect, setCloudTranscriptionBaseUrl]
+    [
+      cloudProviders,
+      onCloudProviderSelect,
+      onCloudModelSelect,
+      setCloudTranscriptionBaseUrl,
+    ]
   );
 
   const handleLocalProviderChange = useCallback(
@@ -837,7 +871,11 @@ export default function TranscriptionModelPicker({
                   </label>
                   <Input
                     value={cloudTranscriptionBaseUrl}
-                    onChange={(e) => setCloudTranscriptionBaseUrl?.(e.target.value)}
+                    onChange={(e) =>
+                      setCloudTranscriptionBaseUrl?.(
+                        e.target.value
+                      )
+                    }
                     onBlur={handleBaseUrlBlur}
                     placeholder="https://your-api.example.com/v1"
                     className="h-8 text-sm"
@@ -846,7 +884,10 @@ export default function TranscriptionModelPicker({
 
                 <ApiKeyInput
                   apiKey={customTranscriptionApiKey}
-                  setApiKey={setCustomTranscriptionApiKey || (() => {})}
+                  setApiKey={
+                    setCustomTranscriptionApiKey ||
+                    (() => {})
+                  }
                   label={t("transcription.apiKeyOptional")}
                   helpText=""
                 />
@@ -857,7 +898,9 @@ export default function TranscriptionModelPicker({
                   </label>
                   <Input
                     value={selectedCloudModel}
-                    onChange={(e) => onCloudModelSelect(e.target.value)}
+                    onChange={(e) =>
+                      onCloudModelSelect(e.target.value)
+                    }
                     placeholder="whisper-1"
                     className="h-8 text-sm"
                   />
@@ -877,7 +920,9 @@ export default function TranscriptionModelPicker({
                           groq: "https://console.groq.com/keys",
                           mistral: "https://console.mistral.ai/api-keys",
                           openai: "https://platform.openai.com/api-keys",
-                        }[selectedCloudProvider] || "https://platform.openai.com/api-keys"
+                          soniox: "https://console.soniox.com/",
+                        }[selectedCloudProvider] ||
+                          "https://platform.openai.com/api-keys"
                       )}
                       className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
                     >
@@ -886,22 +931,75 @@ export default function TranscriptionModelPicker({
                   </div>
                   <ApiKeyInput
                     apiKey={
-                      { groq: groqApiKey, mistral: mistralApiKey, openai: openaiApiKey }[
-                        selectedCloudProvider
-                      ] || openaiApiKey
+                      {
+                        groq: groqApiKey,
+                        mistral: mistralApiKey,
+                        openai: openaiApiKey,
+                        soniox: sonioxApiKey,
+                      }[selectedCloudProvider] ||
+                      openaiApiKey
                     }
                     setApiKey={
-                      { groq: setGroqApiKey, mistral: setMistralApiKey, openai: setOpenaiApiKey }[
-                        selectedCloudProvider
-                      ] || setOpenaiApiKey
+                      {
+                        groq: setGroqApiKey,
+                        mistral: setMistralApiKey,
+                        openai: setOpenaiApiKey,
+                        soniox: setSonioxApiKey,
+                      }[selectedCloudProvider] ||
+                      setOpenaiApiKey
                     }
                     label=""
                     helpText=""
                   />
                 </div>
 
+                {selectedCloudProvider === "soniox" && setSonioxSecondaryLanguage && (
+                  <div className={`flex items-center justify-between gap-3 ${isAutoLanguage ? "opacity-50 pointer-events-none" : ""}`}>
+                    <label className="text-xs font-medium text-foreground whitespace-nowrap">
+                      {t("common.secondaryLanguage")}
+                    </label>
+                    <LanguageSelector
+                      value={isAutoLanguage ? "none" : (sonioxSecondaryLanguage || "none")}
+                      onChange={(value) => setSonioxSecondaryLanguage(value === "none" ? "" : value)}
+                      options={[
+                        { value: "none", label: t("common.none"), flag: "" },
+                        ...SECONDARY_LANGUAGE_OPTIONS,
+                      ]}
+                      className="min-w-32"
+                    />
+                  </div>
+                )}
+
+                {selectedCloudProvider === "soniox" && setSonioxKeepAliveTimeout && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <label className="text-xs font-medium text-foreground whitespace-nowrap">
+                        {t("transcriptionModelPicker.keepAlive.label")}
+                      </label>
+                      <select
+                        className="min-w-32 rounded-md border border-input bg-background px-2 py-1 text-xs"
+                        value={String(sonioxKeepAliveTimeout)}
+                        onChange={(e) => setSonioxKeepAliveTimeout(parseInt(e.target.value, 10))}
+                      >
+                        <option value="0">{t("common.off")}</option>
+                        <option value="30">30s (+50-100% {t("transcriptionModelPicker.keepAlive.cost")})</option>
+                        <option value="60">1 min (+100-150% {t("transcriptionModelPicker.keepAlive.cost")})</option>
+                        <option value="120">2 min (+100-200% {t("transcriptionModelPicker.keepAlive.cost")})</option>
+                        <option value="300">5 min (+200-300% {t("transcriptionModelPicker.keepAlive.cost")})</option>
+                      </select>
+                    </div>
+                    {sonioxKeepAliveTimeout > 0 && (
+                      <p className="text-[10px] text-muted-foreground">
+                        {t("transcriptionModelPicker.keepAlive.description")}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
-                  <label className="text-xs font-medium text-foreground">{t("common.model")}</label>
+                  <label className="text-xs font-medium text-foreground">
+                    {t("common.model")}
+                  </label>
                   <ModelCardList
                     models={cloudModelOptions}
                     selectedModel={selectedCloudModel}

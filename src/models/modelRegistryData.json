@@ -159,6 +159,19 @@
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
         }
       ]
+    },
+    {
+      "id": "soniox",
+      "name": "Soniox",
+      "baseUrl": "wss://stt-rt.soniox.com",
+      "models": [
+        {
+          "id": "stt-rt-v4",
+          "name": "Soniox STT RT v4",
+          "description": "Real-time streaming speech-to-text with high accuracy",
+          "descriptionKey": "models.descriptions.transcription.soniox_stt_rt_v4"
+        }
+      ]
     }
   ],
   "cloudProviders": [

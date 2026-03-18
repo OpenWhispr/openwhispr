@@ -8,6 +8,7 @@ import groqIcon from "@/assets/icons/providers/groq.svg";
 import nvidiaIcon from "@/assets/icons/providers/nvidia.svg";
 import openaiOssIcon from "@/assets/icons/providers/openai-oss.svg";
 import gemmaIcon from "@/assets/icons/providers/gemma.svg";
+import sonioxIcon from "@/assets/icons/providers/soniox.svg";
 
 export const PROVIDER_ICONS: Record<string, string> = {
   openai: openaiIcon,
@@ -21,6 +22,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   nvidia: nvidiaIcon,
   "openai-oss": openaiOssIcon,
   gemma: gemmaIcon,
+  soniox: sonioxIcon,
 };
 
 export function getProviderIcon(provider: string): string | undefined {

@@ -133,7 +133,17 @@
     "private": "Privat",
     "tap": "Tippen",
     "close": "Schließen",
-    "dismiss": "Verwerfen"
+    "dismiss": "Verwerfen",
+    "none": "Keine",
+    "off": "Aus",
+    "secondaryLanguage": "Zweitsprache"
+  },
+  "transcriptionModelPicker": {
+    "keepAlive": {
+      "label": "Verbunden bleiben für",
+      "cost": "Kosten",
+      "description": "Bleibt nach jeder Aufnahme verbunden, damit die nächste sofort startet. Soniox berechnet die Leerlauf-Verbindungszeit."
+    }
   },
   "onboarding": {
     "steps": {
@@ -1369,7 +1379,8 @@
         "openai_whisper_1": "Originales Whisper-Modell",
         "groq_whisper_large_v3": "Hochpräzise Spracherkennung",
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
-        "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription"
+        "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
+        "soniox_stt_rt_v4": "Echtzeit-Spracherkennung mit hoher Genauigkeit"
       },
       "cloud": {
         "openai_gpt_5_4": "Frontier-Modell für komplexes Reasoning",

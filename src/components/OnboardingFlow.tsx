@@ -83,6 +83,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     openaiApiKey,
     groqApiKey,
     mistralApiKey,
+    sonioxApiKey,
+    setSonioxApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
     dictationKey,
@@ -502,6 +504,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               setGroqApiKey={setGroqApiKey}
               mistralApiKey={mistralApiKey}
               setMistralApiKey={setMistralApiKey}
+              sonioxApiKey={sonioxApiKey}
+              setSonioxApiKey={setSonioxApiKey}
               customTranscriptionApiKey={customTranscriptionApiKey}
               setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
               cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
@@ -725,6 +729,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             return groqApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "mistral") {
             return mistralApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "soniox") {
+            return sonioxApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "custom") {
             // Custom can work without API key for local endpoints
             return true;

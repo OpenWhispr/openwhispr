@@ -133,7 +133,17 @@
     "private": "プライベート",
     "tap": "タップ",
     "close": "閉じる",
-    "dismiss": "閉じる"
+    "dismiss": "閉じる",
+    "none": "なし",
+    "off": "オフ",
+    "secondaryLanguage": "補助言語"
+  },
+  "transcriptionModelPicker": {
+    "keepAlive": {
+      "label": "接続を維持する時間",
+      "cost": "コスト",
+      "description": "録音のたびに接続を維持し、次の録音がすぐに開始できるようにします。Sonioxはアイドル接続時間に対して課金します。"
+    }
   },
   "onboarding": {
     "steps": {
@@ -1369,7 +1379,8 @@
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
-        "mistral_voxtral_mini_latest": "高速多言語文字起こし"
+        "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "soniox_stt_rt_v4": "高精度リアルタイムストリーミング音声認識"
       },
       "cloud": {
         "openai_gpt_5_4": "複雑な推論のためのフロンティアモデル",

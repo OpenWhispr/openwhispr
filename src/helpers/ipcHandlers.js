@@ -10,6 +10,7 @@ const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
+const SonioxStreaming = require("./sonioxStreaming");
 const AudioStorageManager = require("./audioStorage");
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
@@ -108,6 +109,7 @@ class IPCHandlers {
     this.deepgramStreaming = null;
     this.openaiRealtimeStreaming = null;
     this._dictationStreaming = null;
+    this._sonioxStreaming = null;
     this._autoLearnEnabled = true; // Default on, synced from renderer
     this._autoLearnDebounceTimer = null;
     this._autoLearnLatestData = null;
@@ -144,6 +146,34 @@ class IPCHandlers {
       this.textEditMonitor.removeListener("text-edited", this._textEditHandler);
       this._textEditHandler = null;
     }
+  }
+
+  cleanupAllStreaming() {
+    const backends = [
+      { name: "deepgram", instance: this.deepgramStreaming },
+      { name: "openai-realtime", instance: this.openaiRealtimeStreaming },
+      { name: "soniox", instance: this._sonioxStreaming },
+      { name: "dictation", instance: this._dictationStreaming },
+      { name: "assemblyai", instance: this.assemblyAiStreaming },
+    ];
+    for (const { name, instance } of backends) {
+      if (!instance) continue;
+      try {
+        if (typeof instance.cleanupAll === "function") {
+          instance.cleanupAll();
+        } else {
+          instance.cleanup();
+        }
+        debugLogger.debug(`Cleaned up ${name} streaming`);
+      } catch (err) {
+        debugLogger.debug(`Error cleaning up ${name} streaming`, { error: err.message });
+      }
+    }
+    this.deepgramStreaming = null;
+    this.openaiRealtimeStreaming = null;
+    this._sonioxStreaming = null;
+    this._dictationStreaming = null;
+    this.assemblyAiStreaming = null;
   }
 
   _setupAudioCleanup() {
@@ -1552,6 +1582,14 @@ class IPCHandlers {
       return this.environmentManager.saveMistralKey(key);
     });
 
+    ipcMain.handle("get-soniox-key", async () => {
+      return this.environmentManager.getSonioxKey();
+    });
+
+    ipcMain.handle("save-soniox-key", async (event, key) => {
+      return this.environmentManager.saveSonioxKey(key);
+    });
+
     ipcMain.handle(
       "proxy-mistral-transcription",
       async (event, { audioBuffer, model, language, contextBias }) => {
@@ -2405,12 +2443,18 @@ class IPCHandlers {
     };
 
     const setupDictationCallbacks = (streaming, event) => {
-      streaming.onPartialTranscript = (text) =>
-        event.sender.send("dictation-realtime-partial", text);
-      streaming.onFinalTranscript = (text) => event.sender.send("dictation-realtime-final", text);
-      streaming.onError = (err) => event.sender.send("dictation-realtime-error", err.message);
-      streaming.onSessionEnd = (data) =>
-        event.sender.send("dictation-realtime-session-end", data || {});
+      streaming.onPartialTranscript = (text) => {
+        if (!event.sender.isDestroyed()) event.sender.send("dictation-realtime-partial", text);
+      };
+      streaming.onFinalTranscript = (text) => {
+        if (!event.sender.isDestroyed()) event.sender.send("dictation-realtime-final", text);
+      };
+      streaming.onError = (err) => {
+        if (!event.sender.isDestroyed()) event.sender.send("dictation-realtime-error", err.message);
+      };
+      streaming.onSessionEnd = (data) => {
+        if (!event.sender.isDestroyed()) event.sender.send("dictation-realtime-session-end", data || {});
+      };
     };
 
     const connectDictationStreaming = async (event, options) => {
@@ -2548,6 +2592,98 @@ class IPCHandlers {
       const result = await this._dictationStreaming.disconnect().catch(() => ({ text: "" }));
       this._dictationStreaming = null;
       return { success: true, text: result.text || "" };
+    });
+
+    // --- Soniox streaming ---
+    const ensureSonioxInstance = (options = {}) => {
+      const apiKey = options.apiKey || this.environmentManager.getSonioxKey();
+      if (!apiKey) return null;
+      if (!this._sonioxStreaming) {
+        this._sonioxStreaming = new SonioxStreaming();
+      }
+      return apiKey;
+    };
+
+    ipcMain.handle("soniox-streaming-warmup", async (event, options = {}) => {
+      try {
+        const timeoutSeconds = options.keepAliveTimeout || 0;
+        if (timeoutSeconds <= 0) return { success: true };
+
+        const apiKey = ensureSonioxInstance(options);
+        if (!apiKey) return { success: true, code: "NO_API" };
+
+        const alreadyWarm = this._sonioxStreaming.hasWarmConnection();
+        if (!alreadyWarm) {
+          await this._sonioxStreaming.warmup({
+            apiKey,
+            model: options.model || "stt-rt-v4",
+            language: options.language,
+            secondaryLanguage: options.secondaryLanguage,
+            idleTimeoutMs: timeoutSeconds * 1000,
+          });
+        }
+
+        return { success: true, alreadyWarm };
+      } catch (err) {
+        debugLogger.error("Soniox warmup error", { error: err.message });
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.handle("soniox-streaming-start", async (event, options = {}) => {
+      try {
+        const hadWarm = this._sonioxStreaming?.hasWarmConnection() || false;
+        if (!this._sonioxStreaming?.isConnected) {
+          const apiKey = ensureSonioxInstance(options);
+          if (!apiKey) {
+            return { success: false, error: "Soniox API key not configured", code: "NO_API" };
+          }
+
+          this._sonioxStreaming.onPartialTranscript = (text) => {
+            if (!event.sender.isDestroyed()) event.sender.send("soniox-streaming-partial", text);
+          };
+          this._sonioxStreaming.onFinalTranscript = (text) => {
+            if (!event.sender.isDestroyed()) event.sender.send("soniox-streaming-final", text);
+          };
+          this._sonioxStreaming.onError = (err) => {
+            if (!event.sender.isDestroyed()) event.sender.send("soniox-streaming-error", err.message);
+          };
+          this._sonioxStreaming.onSessionEnd = (data) => {
+            if (!event.sender.isDestroyed()) event.sender.send("soniox-streaming-session-end", data || {});
+          };
+
+          await this._sonioxStreaming.connect({
+            apiKey,
+            model: options.model || "stt-rt-v4",
+            language: options.language,
+            secondaryLanguage: options.secondaryLanguage,
+          });
+        }
+        return { success: true, usedWarmConnection: hadWarm };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.on("soniox-streaming-send", (_event, audioBuffer) => {
+      this._sonioxStreaming?.sendAudio(Buffer.from(audioBuffer));
+    });
+
+    ipcMain.on("soniox-streaming-finalize", () => {
+      this._sonioxStreaming?.finalize();
+    });
+
+    ipcMain.handle("soniox-streaming-stop", async () => {
+      if (!this._sonioxStreaming) {
+        return { success: true, text: "" };
+      }
+      const result = await this._sonioxStreaming.disconnect().catch(() => ({ text: "" }));
+      this._sonioxStreaming = null;
+      return { success: true, text: result.text || "" };
+    });
+
+    ipcMain.handle("soniox-streaming-status", async () => {
+      return { connected: !!this._sonioxStreaming?.isConnected };
     });
 
     ipcMain.handle("update-transcription-text", async (_event, id, text, rawText) => {

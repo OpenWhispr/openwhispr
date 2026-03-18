@@ -63,6 +63,18 @@ const STREAMING_PROVIDERS = {
     onError: (cb) => window.electronAPI.onDictationRealtimeError(cb),
     onSessionEnd: (cb) => window.electronAPI.onDictationRealtimeSessionEnd(cb),
   },
+  soniox: {
+    warmup: (opts) => window.electronAPI.sonioxStreamingWarmup(opts),
+    start: (opts) => window.electronAPI.sonioxStreamingStart(opts),
+    send: (buf) => window.electronAPI.sonioxStreamingSend(buf),
+    finalize: () => window.electronAPI.sonioxStreamingFinalize(),
+    stop: () => window.electronAPI.sonioxStreamingStop(),
+    status: () => window.electronAPI.sonioxStreamingStatus(),
+    onPartial: (cb) => window.electronAPI.onSonioxPartialTranscript(cb),
+    onFinal: (cb) => window.electronAPI.onSonioxFinalTranscript(cb),
+    onError: (cb) => window.electronAPI.onSonioxError(cb),
+    onSessionEnd: (cb) => window.electronAPI.onSonioxSessionEnd(cb),
+  },
 };
 
 class AudioManager {
@@ -207,21 +219,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this._systemAudioSource) {
       try {
         this._systemAudioSource.disconnect();
-      } catch {}
+      } catch (err) {
+        logger.debug("System audio source disconnect failed", { error: err.message }, "audio");
+      }
       this._systemAudioSource = null;
     }
 
     if (this._mixingContext) {
       try {
         this._mixingContext.close();
-      } catch {}
+      } catch (err) {
+        logger.debug("Mixing context close failed", { error: err.message }, "audio");
+      }
       this._mixingContext = null;
     }
     this._mixingDestination = null;
   }
 
   getStreamingProvider() {
-    const { cloudTranscriptionModel } = getSettings();
+    const { cloudTranscriptionProvider, cloudTranscriptionModel } = getSettings();
+    if (cloudTranscriptionProvider === "soniox") {
+      return STREAMING_PROVIDERS.soniox;
+    }
     if (REALTIME_MODELS.has(cloudTranscriptionModel)) {
       return STREAMING_PROVIDERS["openai-realtime"];
     }
@@ -2020,6 +2039,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const s = getSettings();
     if (s.useLocalWhisper) return false;
 
+    // Soniox is always streaming (BYOK only)
+    if (s.cloudTranscriptionProvider === "soniox" && s.sonioxApiKey) {
+      return true;
+    }
+
     if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
       if (s.cloudTranscriptionMode === "byok") return !!s.openaiApiKey;
       if (s.cloudTranscriptionMode === "openwhispr") return !!(isSignedInOverride ?? s.isSignedIn);
@@ -2051,15 +2075,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         withSessionRefresh(async () => {
           const {
             preferredLanguage: warmupLang,
+            sonioxSecondaryLanguage,
             cloudTranscriptionModel,
             cloudTranscriptionMode,
+            sonioxKeepAliveTimeout,
           } = getSettings();
+          const isExplicitLang = warmupLang && warmupLang !== "auto";
           const res = await provider.warmup({
             sampleRate: 16000,
-            language: warmupLang && warmupLang !== "auto" ? warmupLang : undefined,
+            language: isExplicitLang ? warmupLang : undefined,
+            secondaryLanguage: isExplicitLang ? (sonioxSecondaryLanguage || undefined) : undefined,
             keyterms: this.getKeyterms(),
             model: cloudTranscriptionModel,
             mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
+            keepAliveTimeout: sonioxKeepAliveTimeout || 0,
           });
           // Throw error to trigger retry if AUTH_EXPIRED
           if (!res.success && res.code) {
@@ -2286,12 +2315,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const result = await withSessionRefresh(async () => {
         const {
           preferredLanguage: preferredLang,
+          sonioxSecondaryLanguage,
           cloudTranscriptionModel,
           cloudTranscriptionMode,
         } = getSettings();
+        const isExplicitLang = preferredLang && preferredLang !== "auto";
         const res = await provider.start({
           sampleRate: 16000,
-          language: preferredLang && preferredLang !== "auto" ? preferredLang : undefined,
+          language: isExplicitLang ? preferredLang : undefined,
+          secondaryLanguage: isExplicitLang ? (sonioxSecondaryLanguage || undefined) : undefined,
           keyterms: this.getKeyterms(),
           model: cloudTranscriptionModel,
           mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
@@ -2592,6 +2624,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     }
 
+    finalText = finalText.trim();
     if (finalText) {
       const tBeforePaste = performance.now();
       const clientTotalMs = Math.round(tBeforePaste - t0);

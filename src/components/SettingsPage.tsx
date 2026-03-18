@@ -174,6 +174,12 @@ interface TranscriptionSectionProps {
   setGroqApiKey: (key: string) => void;
   mistralApiKey: string;
   setMistralApiKey: (key: string) => void;
+  sonioxApiKey: string;
+  setSonioxApiKey: (key: string) => void;
+  sonioxSecondaryLanguage: string;
+  setSonioxSecondaryLanguage: (lang: string) => void;
+  sonioxKeepAliveTimeout: number;
+  setSonioxKeepAliveTimeout: (val: number) => void;
   customTranscriptionApiKey: string;
   setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
@@ -209,6 +215,12 @@ function TranscriptionSection({
   setGroqApiKey,
   mistralApiKey,
   setMistralApiKey,
+  sonioxApiKey,
+  setSonioxApiKey,
+  sonioxSecondaryLanguage,
+  setSonioxSecondaryLanguage,
+  sonioxKeepAliveTimeout,
+  setSonioxKeepAliveTimeout,
   customTranscriptionApiKey,
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
@@ -385,6 +397,12 @@ function TranscriptionSection({
           setGroqApiKey={setGroqApiKey}
           mistralApiKey={mistralApiKey}
           setMistralApiKey={setMistralApiKey}
+          sonioxApiKey={sonioxApiKey}
+          setSonioxApiKey={setSonioxApiKey}
+          sonioxSecondaryLanguage={sonioxSecondaryLanguage}
+          setSonioxSecondaryLanguage={setSonioxSecondaryLanguage}
+          sonioxKeepAliveTimeout={sonioxKeepAliveTimeout}
+          setSonioxKeepAliveTimeout={setSonioxKeepAliveTimeout}
           customTranscriptionApiKey={customTranscriptionApiKey}
           setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
           cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
@@ -678,6 +696,12 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setGeminiApiKey,
     setGroqApiKey,
     setMistralApiKey,
+    sonioxApiKey,
+    setSonioxApiKey,
+    sonioxSecondaryLanguage,
+    setSonioxSecondaryLanguage,
+    sonioxKeepAliveTimeout,
+    setSonioxKeepAliveTimeout,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
     customReasoningApiKey,
@@ -2828,6 +2852,12 @@ EOF`,
             setGroqApiKey={setGroqApiKey}
             mistralApiKey={mistralApiKey}
             setMistralApiKey={setMistralApiKey}
+            sonioxApiKey={sonioxApiKey}
+            setSonioxApiKey={setSonioxApiKey}
+            sonioxSecondaryLanguage={sonioxSecondaryLanguage}
+            setSonioxSecondaryLanguage={setSonioxSecondaryLanguage}
+            sonioxKeepAliveTimeout={sonioxKeepAliveTimeout}
+            setSonioxKeepAliveTimeout={setSonioxKeepAliveTimeout}
             customTranscriptionApiKey={customTranscriptionApiKey}
             setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
             cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}

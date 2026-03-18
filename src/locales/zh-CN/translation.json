@@ -133,7 +133,17 @@
     "private": "隐私",
     "tap": "点按",
     "close": "关闭",
-    "dismiss": "忽略"
+    "dismiss": "忽略",
+    "none": "无",
+    "off": "关闭",
+    "secondaryLanguage": "辅助语言"
+  },
+  "transcriptionModelPicker": {
+    "keepAlive": {
+      "label": "保持连接时长",
+      "cost": "费用",
+      "description": "每次录音后保持连接，以便下次录音立即开始。Soniox 会对空闲连接时间收费。"
+    }
   },
   "onboarding": {
     "steps": {
@@ -1369,7 +1379,8 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍实时速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
-        "mistral_voxtral_mini_latest": "快速多语言转录"
+        "mistral_voxtral_mini_latest": "快速多语言转录",
+        "soniox_stt_rt_v4": "高精度实时流式语音转文字"
       },
       "cloud": {
         "openai_gpt_5_4": "复杂推理前沿模型",

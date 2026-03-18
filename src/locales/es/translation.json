@@ -133,7 +133,17 @@
     "private": "Privado",
     "tap": "Pulsar",
     "close": "Cerrar",
-    "dismiss": "Descartar"
+    "dismiss": "Descartar",
+    "none": "Ninguno",
+    "off": "Desactivado",
+    "secondaryLanguage": "Idioma secundario"
+  },
+  "transcriptionModelPicker": {
+    "keepAlive": {
+      "label": "Mantener conexión durante",
+      "cost": "coste",
+      "description": "Después de cada grabación, mantiene la conexión para que la siguiente comience al instante. Soniox cobra por el tiempo de conexión inactiva."
+    }
   },
   "onboarding": {
     "steps": {
@@ -1369,7 +1379,8 @@
         "openai_whisper_1": "Modelo Whisper original",
         "groq_whisper_large_v3": "Reconocimiento de voz de alta precisión",
         "groq_whisper_large_v3_turbo": "Velocidad 216x en tiempo real",
-        "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida"
+        "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
+        "soniox_stt_rt_v4": "Transcripción de voz en tiempo real con alta precisión"
       },
       "cloud": {
         "openai_gpt_5_4": "Modelo frontier para razonamiento complejo",

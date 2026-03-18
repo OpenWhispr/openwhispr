@@ -1140,6 +1140,7 @@ if (gotSingleInstanceLock) {
       googleCalendarManager.stop();
     }
     if (ipcHandlers) {
+      ipcHandlers.cleanupAllStreaming();
       ipcHandlers._cleanupTextEditMonitor();
     }
     if (textEditMonitor) {
