@@ -30,9 +30,9 @@ import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
 import { withSessionRefresh } from "../../lib/neonAuth";
-import reasoningService from "../../services/ReasoningService";
 import { getAllReasoningModels } from "../../models/ModelRegistry";
 import { useSettingsStore, selectIsCloudReasoningMode } from "../../stores/settingsStore";
+import { generateNoteTitle } from "../../utils/generateTitle";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
 
@@ -43,9 +43,6 @@ const SUPPORTED_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"]
 const BYOK_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB — hard limit for bring-your-own-key
 const CLOUD_FREE_MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB — free plan cloud limit
 const CLOUD_PRO_MAX_FILE_SIZE = 500 * 1024 * 1024; // 500 MB — pro plan cloud limit
-
-const TITLE_SYSTEM_PROMPT =
-  "Generate a concise 3-8 word title for these transcribed notes. Return ONLY the title text, nothing else — no quotes, no prefix, no explanation.";
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -272,16 +269,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       ? ""
       : effectiveReasoningModel || getAllReasoningModels()[0]?.value;
     if (!model && !isCloudReasoning) return "";
-    try {
-      const title = await reasoningService.processText(text.slice(0, 2000), model, null, {
-        systemPrompt: TITLE_SYSTEM_PROMPT,
-        temperature: 0.3,
-      });
-      const cleaned = title.trim().replace(/^["']|["']$/g, "");
-      return cleaned.length > 0 && cleaned.length < 100 ? cleaned : "";
-    } catch {
-      return "";
-    }
+    return generateNoteTitle(text, model);
   };
 
   const handleBrowse = async () => {

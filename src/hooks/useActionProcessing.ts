@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import reasoningService from "../services/ReasoningService";
 import type { ActionItem } from "../types/electron";
 import { getEffectiveReasoningModel } from "../stores/settingsStore";
+import { generateNoteTitle } from "../utils/generateTitle";
 
 export type ActionProcessingState = "idle" | "processing" | "success";
 
@@ -29,9 +30,6 @@ CONTENT RULES:
 - Keep the tone professional and concise. Bias toward brevity.
 
 Instructions: `;
-
-const TITLE_SYSTEM_PROMPT =
-  "Generate a concise 3-8 word title for these meeting notes. Return ONLY the title text, nothing else — no quotes, no prefix, no explanation.";
 
 interface UseActionProcessingOptions {
   onSuccess: (enhancedContent: string, prompt: string, title?: string) => void;
@@ -84,14 +82,8 @@ export function useActionProcessing({ onSuccess, onError }: UseActionProcessingO
 
         let title: string | undefined;
         if (options.isMeetingNote) {
-          try {
-            const raw = await reasoningService.processText(enhanced.slice(0, 2000), modelId, null, {
-              systemPrompt: TITLE_SYSTEM_PROMPT,
-              temperature: 0.3,
-            });
-            const cleaned = raw.trim().replace(/^["']|["']$/g, "");
-            if (cleaned.length > 0 && cleaned.length < 100) title = cleaned;
-          } catch {}
+          const generated = await generateNoteTitle(enhanced, modelId);
+          if (generated) title = generated;
         }
 
         if (cancelledRef.current) return;
