@@ -228,6 +228,9 @@ export default function ControlPanel() {
   // When accessibility is missing on macOS, open the permissions settings page
   useEffect(() => {
     const cleanup = window.electronAPI?.onAccessibilityMissing?.(() => {
+      if (localStorage.getItem("accessibilitySkipped") === "true") {
+        return;
+      }
       setSettingsSection("privacyData");
       setShowSettings(true);
       toast({

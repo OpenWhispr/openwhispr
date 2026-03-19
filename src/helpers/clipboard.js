@@ -509,6 +509,7 @@ class ClipboardManager {
     const platform = process.platform;
     let method = "unknown";
     const webContents = options.webContents;
+    const allowClipboardFallback = options.allowClipboardFallback === true;
 
     try {
       const shouldRestore = options.restoreClipboard !== false;
@@ -530,10 +531,14 @@ class ClipboardManager {
       if (platform === "darwin") {
         method = this.resolveFastPasteBinary() ? "cgevent" : "applescript";
         this.safeLog("🔍 Checking accessibility permissions for paste operation...");
-        const hasPermissions = await this.checkAccessibilityPermissions();
+        const hasPermissions = await this.checkAccessibilityPermissions(allowClipboardFallback);
 
         if (!hasPermissions) {
           this.safeLog("⚠️ No accessibility permissions - text copied to clipboard only");
+          if (allowClipboardFallback) {
+            this.safeLog("✅ Clipboard fallback used (manual paste required)");
+            return;
+          }
           const errorMsg =
             "Accessibility permissions required for automatic pasting. Text has been copied to clipboard - please paste manually with Cmd+V.";
           throw new Error(errorMsg);
@@ -1656,7 +1661,7 @@ Would you like to open System Settings now?`;
       return;
     }
     if (process.platform !== "darwin") return;
-    this.checkAccessibilityPermissions().catch(() => {});
+    this.checkAccessibilityPermissions(true).catch(() => {});
     this.resolveFastPasteBinary();
   }
 

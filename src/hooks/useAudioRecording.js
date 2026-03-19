@@ -121,10 +121,14 @@ export const useAudioRecording = (toast, options = {}) => {
 
           const isStreaming = result.source?.includes("streaming");
           const { keepTranscriptionInClipboard } = getSettings();
+          const accessibilitySkipped =
+            typeof window !== "undefined" &&
+            window.localStorage.getItem("accessibilitySkipped") === "true";
           const pasteStart = performance.now();
           await audioManagerRef.current.safePaste(result.text, {
             ...(isStreaming ? { fromStreaming: true } : {}),
             restoreClipboard: !keepTranscriptionInClipboard,
+            allowClipboardFallback: accessibilitySkipped,
           });
           logger.info(
             "Paste timing",

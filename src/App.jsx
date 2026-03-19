@@ -122,6 +122,9 @@ export default function App() {
     });
 
     const unsubscribeAccessibility = window.electronAPI?.onAccessibilityMissing?.(() => {
+      if (localStorage.getItem("accessibilitySkipped") === "true") {
+        return;
+      }
       toast({
         title: t("app.toasts.accessibilityMissing.title"),
         description: t("app.toasts.accessibilityMissing.description"),

@@ -319,6 +319,7 @@ function MainApp() {
     const authSkipped =
       localStorage.getItem("authenticationSkipped") === "true" ||
       localStorage.getItem("skipAuth") === "true";
+    const accessibilitySkipped = localStorage.getItem("accessibilitySkipped") === "true";
 
     // Actual session (not OAuth grace period) proves prior onboarding — restore flag if localStorage was wiped
     const isReturningUser = !onboardingCompleted && isSignedIn && !isGracePeriodOnly;
@@ -337,7 +338,7 @@ function MainApp() {
 
       // Returning users who skipped onboarding may lack accessibility permissions.
       // Trigger an immediate check so the main process sends accessibility-missing.
-      if (isReturningUser) {
+      if (isReturningUser && !accessibilitySkipped) {
         window.electronAPI?.checkAccessibilityTrusted?.();
       }
     }
