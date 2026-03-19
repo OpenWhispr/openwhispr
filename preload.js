@@ -578,13 +578,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   acquireRecordingLock: (pipeline) => ipcRenderer.invoke("acquire-recording-lock", pipeline),
   releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
 
-  // Agent cloud streaming
-  cloudAgentStream: (messages, opts) => ipcRenderer.invoke("cloud-agent-stream", messages, opts),
-  onAgentStreamChunk: registerListener(
-    "agent-stream-chunk",
-    (callback) => (_event, chunk) => callback(chunk)
-  ),
-  onAgentStreamDone: registerListener("agent-stream-done", (callback) => () => callback()),
+  // Agent cloud streaming (event-based for real-time chunks)
+  startAgentStream: (messages, opts) => ipcRenderer.send("cloud-agent-stream-start", messages, opts),
+  onAgentStreamChunk: registerListener("cloud-agent-stream-chunk", (callback) => (_event, chunk) => callback(chunk)),
+  onAgentStreamError: registerListener("cloud-agent-stream-error", (callback) => (_event, error) => callback(error)),
+  onAgentStreamEnd: registerListener("cloud-agent-stream-end", (callback) => () => callback()),
+
+  // Agent cloud tools
+  agentWebSearch: (query, numResults) => ipcRenderer.invoke("agent-web-search", query, numResults),
+  agentOpenNote: (noteId) => ipcRenderer.invoke("agent-open-note", noteId),
 
   // Agent conversation persistence
   createAgentConversation: (title) => ipcRenderer.invoke("db-create-agent-conversation", title),

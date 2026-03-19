@@ -1803,6 +1803,7 @@
       "copyToClipboard": "In Zwischenablage kopieren",
       "copied": "Kopiert!",
       "emptyState": "{{hotkey}} gedrückt halten, um eine Unterhaltung zu starten",
+      "orType": "oder eine Nachricht eingeben",
       "errorPrefix": "Fehler"
     },
     "titleBar": {
@@ -1815,7 +1816,28 @@
       "toClose": "schließen",
       "listening": "Hört zu...",
       "transcribing": "Transkribiert...",
-      "thinking": "Denkt nach..."
+      "thinking": "Denkt nach...",
+      "typeMessage": "Nachricht eingeben...",
+      "send": "Senden"
+    },
+    "tools": {
+      "search_notesStatus": "Notizen werden durchsucht...",
+      "web_searchStatus": "Websuche...",
+      "copy_to_clipboardStatus": "In Zwischenablage kopieren...",
+      "get_calendar_eventsStatus": "Kalender wird geprüft...",
+      "get_noteStatus": "Notiz wird gelesen...",
+      "create_noteStatus": "Notiz wird erstellt...",
+      "update_noteStatus": "Notiz wird aktualisiert...",
+      "copiedToClipboard": "In die Zwischenablage kopiert",
+      "foundNotes": "{{count}} Notiz gefunden",
+      "foundNotes_plural": "{{count}} Notizen gefunden",
+      "searchResults": "{{count}} Ergebnis gefunden",
+      "searchResults_plural": "{{count}} Ergebnisse gefunden",
+      "openNote": "Notiz öffnen",
+      "calendarEvents": "{{count}} Termin gefunden",
+      "calendarEvents_plural": "{{count}} Termine gefunden",
+      "noResults": "Keine Ergebnisse",
+      "error": "Werkzeugfehler"
     }
   },
   "integrations": {

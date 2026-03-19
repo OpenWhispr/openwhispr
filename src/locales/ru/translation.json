@@ -1803,6 +1803,7 @@
       "copyToClipboard": "Копировать в буфер обмена",
       "copied": "Скопировано!",
       "emptyState": "Удерживайте {{hotkey}}, чтобы начать разговор",
+      "orType": "или введите сообщение",
       "errorPrefix": "Ошибка"
     },
     "titleBar": {
@@ -1815,7 +1816,28 @@
       "toClose": "закрыть",
       "listening": "Слушаю...",
       "transcribing": "Транскрибирую...",
-      "thinking": "Думаю..."
+      "thinking": "Думаю...",
+      "typeMessage": "Введите сообщение...",
+      "send": "Отправить"
+    },
+    "tools": {
+      "search_notesStatus": "Поиск в заметках...",
+      "web_searchStatus": "Поиск в интернете...",
+      "copy_to_clipboardStatus": "Копирование в буфер обмена...",
+      "get_calendar_eventsStatus": "Проверка календаря...",
+      "get_noteStatus": "Чтение заметки...",
+      "create_noteStatus": "Создание заметки...",
+      "update_noteStatus": "Обновление заметки...",
+      "copiedToClipboard": "Скопировано в буфер обмена",
+      "foundNotes": "Найдена {{count}} заметка",
+      "foundNotes_plural": "Найдено {{count}} заметок",
+      "searchResults": "Найден {{count}} результат",
+      "searchResults_plural": "Найдено {{count}} результатов",
+      "openNote": "Открыть заметку",
+      "calendarEvents": "Найдено {{count}} событие",
+      "calendarEvents_plural": "Найдено {{count}} событий",
+      "noResults": "Ничего не найдено",
+      "error": "Ошибка инструмента"
     }
   },
   "integrations": {

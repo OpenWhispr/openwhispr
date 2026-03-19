@@ -7,11 +7,26 @@ import logger from "../utils/logger";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/neonAuth";
 import { getSettings, isCloudReasoningMode } from "../stores/settingsStore";
+import { streamText, stepCountIs } from "ai";
+import { getAIModel } from "./ai/providers";
+
+export type AgentStreamChunk =
+  | { type: "content"; text: string }
+  | { type: "tool_calls"; calls: Array<{ id: string; name: string; arguments: string }> }
+  | {
+      type: "tool_result";
+      callId: string;
+      toolName: string;
+      displayText: string;
+      metadata?: Record<string, unknown>;
+    }
+  | { type: "done"; finishReason?: string };
 
 class ReasoningService extends BaseReasoningService {
   private apiKeyCache: SecureCache<string>;
   private openAiEndpointPreference = new Map<string, "responses" | "chat">();
   private static readonly OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
+  private static readonly MAX_TOOL_STEPS = 20;
   private cacheCleanupStop: (() => void) | undefined;
 
   constructor() {
@@ -1262,46 +1277,251 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
-  async *processTextStreamingCloud(
+  async *processTextStreamingAI(
     messages: Array<{ role: string; content: string }>,
-    config: { systemPrompt: string }
-  ): AsyncGenerator<string, void, unknown> {
-    const chunks: string[] = [];
-    let done = false;
-    let waiting: (() => void) | null = null;
+    model: string,
+    provider: string,
+    config: ReasoningConfig & { systemPrompt: string },
+    tools?: Record<string, import("ai").Tool>
+  ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "custom"];
+    const isLocalProvider = !cloudProviders.includes(provider);
 
-    const unsubChunk = window.electronAPI?.onAgentStreamChunk?.((chunk: string) => {
-      chunks.push(chunk);
-      waiting?.();
-    });
-    const unsubDone = window.electronAPI?.onAgentStreamDone?.(() => {
-      done = true;
-      waiting?.();
+    if (isLocalProvider) {
+      const contentGen = this.processTextStreaming(messages, model, provider, config);
+      for await (const text of contentGen) {
+        yield { type: "content", text };
+      }
+      yield { type: "done", finishReason: "stop" };
+      return;
+    }
+
+    const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom";
+    const apiKey = await this.getApiKey(providerKey);
+    const baseURL = provider === "custom" ? this.getConfiguredOpenAIBase() : undefined;
+    const apiConfig = getOpenAiApiConfig(model);
+
+    const aiModel = getAIModel(provider, model, apiKey, baseURL);
+
+    const modelDef = getCloudModel(model);
+    const needsDisableThinking = provider === "groq" && modelDef?.disableThinking;
+
+    logger.logReasoning("AGENT_AI_SDK_STREAM_REQUEST", {
+      model,
+      provider,
+      hasTools: !!tools,
+      toolCount: tools ? Object.keys(tools).length : 0,
+      messageCount: messages.length,
     });
 
-    try {
-      const result = await window.electronAPI?.cloudAgentStream?.(messages, {
+    const result = streamText({
+      model: aiModel,
+      messages: messages.map((m) => ({
+        role: m.role as "system" | "user" | "assistant",
+        content: m.content,
+      })),
+      tools: tools || undefined,
+      stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
+      ...(apiConfig.supportsTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
+      maxOutputTokens: config.maxTokens || 4096,
+      ...(needsDisableThinking ? { providerOptions: { groq: { reasoningEffort: "none" } } } : {}),
+    });
+
+    for await (const chunk of result.fullStream) {
+      if (chunk.type === "text-delta") {
+        yield { type: "content", text: chunk.text };
+      } else if (chunk.type === "tool-call") {
+        yield {
+          type: "tool_calls",
+          calls: [
+            {
+              id: chunk.toolCallId,
+              name: chunk.toolName,
+              arguments: JSON.stringify(chunk.input),
+            },
+          ],
+        };
+      } else if (chunk.type === "tool-result") {
+        const output = chunk.output;
+        const displayText =
+          typeof output === "string" ? output : output?.error ? String(output.error) : "Done";
+        yield {
+          type: "tool_result",
+          callId: chunk.toolCallId,
+          toolName: chunk.toolName,
+          displayText,
+        };
+      } else if (chunk.type === "finish") {
+        yield { type: "done", finishReason: chunk.finishReason };
+      }
+    }
+  }
+
+  cancelActiveStream(): void {
+    // No-op — event-based stream cleanup is handled by listener removal
+  }
+
+  private streamFromIPC(
+    messages: Array<{ role: string; content: string | Array<unknown> }>,
+    opts: {
+      systemPrompt?: string;
+      tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+    }
+  ): AsyncGenerator<
+    {
+      type: string;
+      text?: string;
+      id?: string;
+      name?: string;
+      arguments?: string;
+      finishReason?: string;
+    },
+    void,
+    unknown
+  > {
+    type StreamEvent = {
+      type: string;
+      text?: string;
+      id?: string;
+      name?: string;
+      arguments?: string;
+      finishReason?: string;
+    };
+    const queue: Array<StreamEvent | { type: "__error"; error: string } | { type: "__end" }> = [];
+    let resolve: (() => void) | null = null;
+
+    const cleanupChunk = window.electronAPI?.onAgentStreamChunk?.((chunk) => {
+      queue.push(chunk);
+      resolve?.();
+    });
+    const cleanupError = window.electronAPI?.onAgentStreamError?.((err) => {
+      queue.push({ type: "__error", error: err.error });
+      resolve?.();
+    });
+    const cleanupEnd = window.electronAPI?.onAgentStreamEnd?.(() => {
+      queue.push({ type: "__end" });
+      resolve?.();
+    });
+
+    const cleanup = () => {
+      cleanupChunk?.();
+      cleanupError?.();
+      cleanupEnd?.();
+    };
+
+    window.electronAPI?.startAgentStream?.(messages, opts);
+
+    const generator = async function* () {
+      try {
+        while (true) {
+          if (queue.length === 0) {
+            await new Promise<void>((r) => {
+              resolve = r;
+            });
+            resolve = null;
+          }
+
+          while (queue.length > 0) {
+            const item = queue.shift()!;
+            if (item.type === "__end") return;
+            if (item.type === "__error") throw new Error((item as { error: string }).error);
+            yield item as StreamEvent;
+          }
+        }
+      } finally {
+        cleanup();
+      }
+    };
+
+    return generator();
+  }
+
+  async *processTextStreamingCloud(
+    messages: Array<{ role: string; content: string | Array<unknown> }>,
+    config: {
+      systemPrompt: string;
+      tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+      executeToolCall?: (
+        name: string,
+        args: string
+      ) => Promise<{ data: string; displayText: string; metadata?: Record<string, unknown> }>;
+    }
+  ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
+    let currentMessages = [...messages];
+
+    for (let step = 0; step < maxSteps; step++) {
+      const stream = this.streamFromIPC(currentMessages, {
         systemPrompt: config.systemPrompt,
+        tools: config.tools,
       });
 
-      if (result && !result.success) {
-        throw new Error(result.error || "Cloud agent streaming failed");
-      }
+      const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
 
-      while (!done || chunks.length > 0) {
-        if (chunks.length > 0) {
-          yield chunks.shift()!;
-        } else if (!done) {
-          await new Promise<void>((r) => {
-            waiting = r;
-          });
-          waiting = null;
+      for await (const ev of stream) {
+        if (ev.type === "content") {
+          yield { type: "content", text: ev.text as string };
+        } else if (ev.type === "tool_call") {
+          const call = {
+            id: ev.id as string,
+            name: ev.name as string,
+            arguments: ev.arguments as string,
+          };
+          pendingToolCalls.push(call);
+          yield { type: "tool_calls", calls: [call] };
         }
       }
-    } finally {
-      unsubChunk?.();
-      unsubDone?.();
+
+      if (pendingToolCalls.length === 0 || !config.executeToolCall) {
+        yield { type: "done", finishReason: "stop" };
+        return;
+      }
+
+      for (const call of pendingToolCalls) {
+        let toolResult: { data: string; displayText: string; metadata?: Record<string, unknown> };
+        try {
+          toolResult = await config.executeToolCall(call.name, call.arguments);
+        } catch (error) {
+          const errMsg = `Error: ${(error as Error).message}`;
+          toolResult = { data: errMsg, displayText: errMsg };
+        }
+        yield {
+          type: "tool_result",
+          callId: call.id,
+          toolName: call.name,
+          displayText: toolResult.displayText,
+          ...(toolResult.metadata ? { metadata: toolResult.metadata } : {}),
+        };
+
+        currentMessages = [
+          ...currentMessages,
+          {
+            role: "assistant",
+            content: [
+              {
+                type: "tool-call",
+                toolCallId: call.id,
+                toolName: call.name,
+                input: JSON.parse(call.arguments),
+              },
+            ],
+          },
+          {
+            role: "tool",
+            content: [
+              {
+                type: "tool-result",
+                toolCallId: call.id,
+                toolName: call.name,
+                output: { type: "text", value: toolResult.data },
+              },
+            ],
+          },
+        ];
+      }
     }
+
+    yield { type: "done", finishReason: "stop" };
   }
 
   async isAvailable(): Promise<boolean> {
@@ -1360,6 +1580,7 @@ class ReasoningService extends BaseReasoningService {
   }
 
   destroy(): void {
+    this.cancelActiveStream();
     if (this.cacheCleanupStop) {
       this.cacheCleanupStop();
     }

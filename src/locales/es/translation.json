@@ -1803,6 +1803,7 @@
       "copyToClipboard": "Copiar al portapapeles",
       "copied": "¡Copiado!",
       "emptyState": "Mantén {{hotkey}} para iniciar una conversación",
+      "orType": "o escribe un mensaje",
       "errorPrefix": "Error"
     },
     "titleBar": {
@@ -1815,7 +1816,28 @@
       "toClose": "cerrar",
       "listening": "Escuchando...",
       "transcribing": "Transcribiendo...",
-      "thinking": "Pensando..."
+      "thinking": "Pensando...",
+      "typeMessage": "Escribe un mensaje...",
+      "send": "Enviar"
+    },
+    "tools": {
+      "search_notesStatus": "Buscando notas...",
+      "web_searchStatus": "Buscando en la web...",
+      "copy_to_clipboardStatus": "Copiando al portapapeles...",
+      "get_calendar_eventsStatus": "Consultando calendario...",
+      "get_noteStatus": "Leyendo nota...",
+      "create_noteStatus": "Creando nota...",
+      "update_noteStatus": "Actualizando nota...",
+      "copiedToClipboard": "Copiado al portapapeles",
+      "foundNotes": "{{count}} nota encontrada",
+      "foundNotes_plural": "{{count}} notas encontradas",
+      "searchResults": "{{count}} resultado encontrado",
+      "searchResults_plural": "{{count}} resultados encontrados",
+      "openNote": "Abrir nota",
+      "calendarEvents": "{{count}} evento encontrado",
+      "calendarEvents_plural": "{{count}} eventos encontrados",
+      "noResults": "Sin resultados",
+      "error": "Error de herramienta"
     }
   },
   "integrations": {

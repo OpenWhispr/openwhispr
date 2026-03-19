@@ -102,6 +102,10 @@
     "vite": "^6.3.5"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.58",
+    "@ai-sdk/google": "^3.0.43",
+    "@ai-sdk/groq": "^3.0.29",
+    "@ai-sdk/openai": "^3.0.41",
     "@neondatabase/auth": "^0.1.0-beta.21",
     "@neondatabase/neon-js": "^0.1.0-beta.22",
     "@radix-ui/react-accordion": "^1.1.2",
@@ -113,6 +117,7 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tabs": "^1.1.12",
     "@vercel/blob": "^2.3.0",
+    "ai": "^6.0.116",
     "better-sqlite3": "^12.4.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

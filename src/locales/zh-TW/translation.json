@@ -1803,6 +1803,7 @@
       "copyToClipboard": "複製到剪貼簿",
       "copied": "已複製！",
       "emptyState": "按住 {{hotkey}} 開始對話",
+      "orType": "或輸入訊息",
       "errorPrefix": "錯誤"
     },
     "titleBar": {
@@ -1815,7 +1816,28 @@
       "toClose": "關閉",
       "listening": "正在聆聽...",
       "transcribing": "正在轉錄...",
-      "thinking": "正在思考..."
+      "thinking": "正在思考...",
+      "typeMessage": "輸入訊息...",
+      "send": "傳送"
+    },
+    "tools": {
+      "search_notesStatus": "正在搜尋筆記...",
+      "web_searchStatus": "正在搜尋網頁...",
+      "copy_to_clipboardStatus": "正在複製到剪貼簿...",
+      "get_calendar_eventsStatus": "正在查看行事曆...",
+      "get_noteStatus": "正在讀取筆記...",
+      "create_noteStatus": "正在建立筆記...",
+      "update_noteStatus": "正在更新筆記...",
+      "copiedToClipboard": "已複製到剪貼簿",
+      "foundNotes": "找到 {{count}} 則筆記",
+      "foundNotes_plural": "找到 {{count}} 則筆記",
+      "searchResults": "找到 {{count}} 項結果",
+      "searchResults_plural": "找到 {{count}} 項結果",
+      "openNote": "開啟筆記",
+      "calendarEvents": "找到 {{count}} 個行程",
+      "calendarEvents_plural": "找到 {{count}} 個行程",
+      "noResults": "未找到結果",
+      "error": "工具錯誤"
     }
   },
   "integrations": {

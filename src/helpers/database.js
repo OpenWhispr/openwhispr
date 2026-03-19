@@ -230,6 +230,12 @@ class DatabaseManager {
         "CREATE INDEX IF NOT EXISTS idx_agent_messages_conversation ON agent_messages(conversation_id)"
       );
 
+      try {
+        this.db.exec("ALTER TABLE agent_messages ADD COLUMN metadata TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
       const actionCount = this.db.prepare("SELECT COUNT(*) as count FROM actions").get();
       if (actionCount.count === 0) {
         this.db

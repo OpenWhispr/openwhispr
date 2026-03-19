@@ -2648,19 +2648,13 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("cloud-agent-stream", async (event, messages, opts = {}) => {
+    ipcMain.on("cloud-agent-stream-start", async (event, messages, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
-
-        debugLogger.debug(
-          "Cloud agent stream request",
-          { messageCount: messages?.length || 0 },
-          "cloud-api"
-        );
 
         const response = await fetch(`${apiUrl}/api/agent/stream`, {
           method: "POST",
@@ -2671,10 +2665,93 @@ class IPCHandlers {
           body: JSON.stringify({
             messages,
             systemPrompt: opts.systemPrompt,
+            tools: opts.tools,
             sessionId: this.sessionId,
             clientType: "desktop",
             appVersion: app.getVersion(),
           }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          event.sender.send("cloud-agent-stream-error", {
+            error: errorData.error || `API error: ${response.status}`,
+            code: response.status === 401 ? "AUTH_EXPIRED" : undefined,
+          });
+          return;
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                event.sender.send("cloud-agent-stream-chunk", JSON.parse(line));
+              } catch {
+                // skip malformed NDJSON line
+              }
+            }
+          }
+          if (buffer.trim()) {
+            try {
+              event.sender.send("cloud-agent-stream-chunk", JSON.parse(buffer));
+            } catch {
+              // skip malformed remainder
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+
+        event.sender.send("cloud-agent-stream-end");
+      } catch (error) {
+        debugLogger.error("Cloud agent stream error:", error);
+        event.sender.send("cloud-agent-stream-error", { error: error.message });
+      }
+    });
+
+    ipcMain.handle("agent-open-note", async (_event, noteId) => {
+      try {
+        await this.windowManager.createControlPanelWindow();
+        this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
+          noteId,
+          folderId: null,
+        });
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Failed to open note from agent:", error);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("agent-web-search", async (event, query, numResults = 5) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        debugLogger.debug("Agent web search request", { query, numResults }, "cloud-api");
+
+        const response = await fetch(`${apiUrl}/api/agent/web-search`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: cookieHeader,
+          },
+          body: JSON.stringify({ query, numResults }),
         });
 
         if (!response.ok) {
@@ -2688,26 +2765,10 @@ class IPCHandlers {
           };
         }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const text = decoder.decode(value, { stream: true });
-            if (text) event.sender.send("agent-stream-chunk", text);
-          }
-        } finally {
-          reader.releaseLock();
-        }
-
-        event.sender.send("agent-stream-done");
-        return { success: true };
+        const data = await response.json();
+        return { success: true, ...data };
       } catch (error) {
-        debugLogger.error("Cloud agent stream error:", error);
-        event.sender.send("agent-stream-done");
+        debugLogger.error("Agent web search error:", error);
         return { success: false, error: error.message };
       }
     });

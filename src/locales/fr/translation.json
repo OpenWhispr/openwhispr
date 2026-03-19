@@ -1803,6 +1803,7 @@
       "copyToClipboard": "Copier dans le presse-papiers",
       "copied": "Copié !",
       "emptyState": "Maintenez {{hotkey}} pour démarrer une conversation",
+      "orType": "ou tapez un message",
       "errorPrefix": "Erreur"
     },
     "titleBar": {
@@ -1815,7 +1816,28 @@
       "toClose": "fermer",
       "listening": "Écoute...",
       "transcribing": "Transcription...",
-      "thinking": "Réflexion..."
+      "thinking": "Réflexion...",
+      "typeMessage": "Écrivez un message...",
+      "send": "Envoyer"
+    },
+    "tools": {
+      "search_notesStatus": "Recherche de notes...",
+      "web_searchStatus": "Recherche sur le web...",
+      "copy_to_clipboardStatus": "Copie dans le presse-papiers...",
+      "get_calendar_eventsStatus": "Vérification du calendrier...",
+      "get_noteStatus": "Lecture de la note...",
+      "create_noteStatus": "Création de la note...",
+      "update_noteStatus": "Mise à jour de la note...",
+      "copiedToClipboard": "Copié dans le presse-papiers",
+      "foundNotes": "{{count}} note trouvée",
+      "foundNotes_plural": "{{count}} notes trouvées",
+      "searchResults": "{{count}} résultat trouvé",
+      "searchResults_plural": "{{count}} résultats trouvés",
+      "openNote": "Ouvrir la note",
+      "calendarEvents": "{{count}} événement trouvé",
+      "calendarEvents_plural": "{{count}} événements trouvés",
+      "noResults": "Aucun résultat",
+      "error": "Erreur d'outil"
     }
   },
   "integrations": {

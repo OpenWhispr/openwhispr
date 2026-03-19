@@ -1,6 +1,7 @@
 import { Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
+import { getAgentName } from "../../utils/agentName";
 
 interface AgentTitleBarProps {
   onNewChat: () => void;
@@ -9,18 +10,21 @@ interface AgentTitleBarProps {
 
 export function AgentTitleBar({ onNewChat, onClose }: AgentTitleBarProps) {
   const { t } = useTranslation();
+  const agentName = getAgentName();
 
   return (
     <div
       className={cn(
         "flex items-center justify-between h-8 px-3",
-        "bg-surface-1 border-b border-border/30",
+        "bg-surface-1",
+        "border-b border-border/20",
+        "shadow-[0_1px_2px_0_oklch(0_0_0/0.04)]",
         "select-none"
       )}
       style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
     >
       <span className="text-[11px] text-muted-foreground font-medium tracking-wide uppercase">
-        {t("agentMode.titleBar.label")}
+        {agentName}
       </span>
 
       <div

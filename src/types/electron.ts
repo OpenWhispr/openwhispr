@@ -1071,13 +1071,44 @@ declare global {
       onAgentStopRecording?: (callback: () => void) => () => void;
       onAgentToggleRecording?: (callback: () => void) => () => void;
 
-      // Agent cloud streaming
-      cloudAgentStream?: (
-        messages: Array<{ role: string; content: string }>,
-        opts?: { systemPrompt?: string }
-      ) => Promise<{ success: boolean; error?: string; code?: string }>;
-      onAgentStreamChunk?: (callback: (chunk: string) => void) => () => void;
-      onAgentStreamDone?: (callback: () => void) => () => void;
+      // Agent cloud streaming (event-based)
+      startAgentStream?: (
+        messages: Array<{ role: string; content: string | Array<unknown> }>,
+        opts?: {
+          systemPrompt?: string;
+          tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+        }
+      ) => void;
+      onAgentStreamChunk?: (
+        callback: (chunk: {
+          type: "content" | "tool_call" | "done";
+          text?: string;
+          id?: string;
+          name?: string;
+          arguments?: string;
+          finishReason?: string;
+        }) => void
+      ) => () => void;
+      onAgentStreamError?: (
+        callback: (error: { error: string; code?: string }) => void
+      ) => () => void;
+      onAgentStreamEnd?: (callback: () => void) => () => void;
+
+      // Agent cloud tools
+      agentOpenNote?: (noteId: number) => Promise<{ success: boolean; error?: string }>;
+      agentWebSearch?: (
+        query: string,
+        numResults?: number
+      ) => Promise<{
+        success: boolean;
+        results?: Array<{
+          title: string;
+          url: string;
+          text: string;
+          publishedDate?: string;
+        }>;
+        error?: string;
+      }>;
 
       // Google Calendar
       gcalStartOAuth?: () => Promise<{ success: boolean; email?: string; error?: string }>;
