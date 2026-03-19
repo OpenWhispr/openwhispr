@@ -26,7 +26,18 @@ export const webSearchTool: ToolDefinition = {
     const numResults = typeof args.numResults === "number" ? args.numResults : 5;
 
     try {
-      const results = await window.electronAPI.agentWebSearch!(query, numResults);
+      const raw = await window.electronAPI.agentWebSearch!(query, numResults);
+
+      const results = Array.isArray(raw?.results)
+        ? raw.results.map(
+            (r: { title?: string; url?: string; text?: string; publishedDate?: string }) => ({
+              title: r.title || "",
+              url: r.url || "",
+              text: r.text ? r.text.slice(0, 500) : "",
+              publishedDate: r.publishedDate || null,
+            })
+          )
+        : raw;
 
       return {
         success: true,

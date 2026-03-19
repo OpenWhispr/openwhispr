@@ -142,11 +142,16 @@ export default function AgentOverlay() {
           const executeToolCall = registry
             ? async (name: string, argsJson: string) => {
                 const tool = registry.get(name);
-                if (!tool) return `Unknown tool: ${name}`;
+                if (!tool)
+                  return { data: `Unknown tool: ${name}`, displayText: `Unknown tool: ${name}` };
                 const args = JSON.parse(argsJson);
                 const result = await tool.execute(args);
-                if (!result.success) return result.displayText;
-                return typeof result.data === "string" ? result.data : JSON.stringify(result.data);
+                const data = result.success
+                  ? typeof result.data === "string"
+                    ? result.data
+                    : JSON.stringify(result.data)
+                  : result.displayText;
+                return { data, displayText: result.displayText };
               }
             : undefined;
 

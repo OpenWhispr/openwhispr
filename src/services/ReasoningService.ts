@@ -1435,7 +1435,10 @@ class ReasoningService extends BaseReasoningService {
     config: {
       systemPrompt: string;
       tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
-      executeToolCall?: (name: string, args: string) => Promise<string>;
+      executeToolCall?: (
+        name: string,
+        args: string
+      ) => Promise<{ data: string; displayText: string }>;
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
@@ -1469,17 +1472,18 @@ class ReasoningService extends BaseReasoningService {
       }
 
       for (const call of pendingToolCalls) {
-        let toolResult: string;
+        let toolResult: { data: string; displayText: string };
         try {
           toolResult = await config.executeToolCall(call.name, call.arguments);
         } catch (error) {
-          toolResult = `Error: ${(error as Error).message}`;
+          const errMsg = `Error: ${(error as Error).message}`;
+          toolResult = { data: errMsg, displayText: errMsg };
         }
         yield {
           type: "tool_result",
           callId: call.id,
           toolName: call.name,
-          displayText: toolResult,
+          displayText: toolResult.displayText,
         };
 
         currentMessages = [
@@ -1502,7 +1506,7 @@ class ReasoningService extends BaseReasoningService {
                 type: "tool-result",
                 toolCallId: call.id,
                 toolName: call.name,
-                output: { type: "text", value: toolResult },
+                output: { type: "text", value: toolResult.data },
               },
             ],
           },
