@@ -1071,8 +1071,28 @@ declare global {
       onAgentStopRecording?: (callback: () => void) => () => void;
       onAgentToggleRecording?: (callback: () => void) => () => void;
 
-      // Auth cookies for direct renderer-to-API fetch
-      getSessionCookies?: () => Promise<string>;
+      // Agent cloud streaming (event-based)
+      startAgentStream?: (
+        messages: Array<{ role: string; content: string | Array<unknown> }>,
+        opts?: {
+          systemPrompt?: string;
+          tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+        }
+      ) => void;
+      onAgentStreamChunk?: (
+        callback: (chunk: {
+          type: "content" | "tool_call" | "done";
+          text?: string;
+          id?: string;
+          name?: string;
+          arguments?: string;
+          finishReason?: string;
+        }) => void
+      ) => () => void;
+      onAgentStreamError?: (
+        callback: (error: { error: string; code?: string }) => void
+      ) => () => void;
+      onAgentStreamEnd?: (callback: () => void) => () => void;
 
       // Agent cloud tools
       agentWebSearch?: (

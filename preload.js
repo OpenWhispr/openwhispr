@@ -578,8 +578,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   acquireRecordingLock: (pipeline) => ipcRenderer.invoke("acquire-recording-lock", pipeline),
   releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
 
-  // Auth cookies for direct renderer-to-API fetch
-  getSessionCookies: () => ipcRenderer.invoke("get-session-cookies"),
+  // Agent cloud streaming (event-based for real-time chunks)
+  startAgentStream: (messages, opts) => ipcRenderer.send("cloud-agent-stream-start", messages, opts),
+  onAgentStreamChunk: registerListener("cloud-agent-stream-chunk", (callback) => (_event, chunk) => callback(chunk)),
+  onAgentStreamError: registerListener("cloud-agent-stream-error", (callback) => (_event, error) => callback(error)),
+  onAgentStreamEnd: registerListener("cloud-agent-stream-end", (callback) => () => callback()),
 
   // Agent cloud tools
   agentWebSearch: (query, numResults) => ipcRenderer.invoke("agent-web-search", query, numResults),

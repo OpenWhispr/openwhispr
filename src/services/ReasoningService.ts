@@ -2,13 +2,7 @@ import { getModelProvider, getCloudModel, getOpenAiApiConfig } from "../models/M
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy } from "../utils/retry";
-import {
-  API_ENDPOINTS,
-  TOKEN_LIMITS,
-  buildApiUrl,
-  normalizeBaseUrl,
-  OPENWHISPR_API_URL,
-} from "../config/constants";
+import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
 import logger from "../utils/logger";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/neonAuth";
@@ -28,7 +22,6 @@ class ReasoningService extends BaseReasoningService {
   private static readonly OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
   private static readonly MAX_TOOL_STEPS = 5;
   private cacheCleanupStop: (() => void) | undefined;
-  private activeAbortController: AbortController | null = null;
 
   constructor() {
     super();
@@ -1359,8 +1352,82 @@ class ReasoningService extends BaseReasoningService {
   }
 
   cancelActiveStream(): void {
-    this.activeAbortController?.abort();
-    this.activeAbortController = null;
+    // No-op — event-based stream cleanup is handled by listener removal
+  }
+
+  private streamFromIPC(
+    messages: Array<{ role: string; content: string | Array<unknown> }>,
+    opts: {
+      systemPrompt?: string;
+      tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+    }
+  ): AsyncGenerator<
+    {
+      type: string;
+      text?: string;
+      id?: string;
+      name?: string;
+      arguments?: string;
+      finishReason?: string;
+    },
+    void,
+    unknown
+  > {
+    type StreamEvent = {
+      type: string;
+      text?: string;
+      id?: string;
+      name?: string;
+      arguments?: string;
+      finishReason?: string;
+    };
+    const queue: Array<StreamEvent | { type: "__error"; error: string } | { type: "__end" }> = [];
+    let resolve: (() => void) | null = null;
+
+    const cleanupChunk = window.electronAPI?.onAgentStreamChunk?.((chunk) => {
+      queue.push(chunk);
+      resolve?.();
+    });
+    const cleanupError = window.electronAPI?.onAgentStreamError?.((err) => {
+      queue.push({ type: "__error", error: err.error });
+      resolve?.();
+    });
+    const cleanupEnd = window.electronAPI?.onAgentStreamEnd?.(() => {
+      queue.push({ type: "__end" });
+      resolve?.();
+    });
+
+    const cleanup = () => {
+      cleanupChunk?.();
+      cleanupError?.();
+      cleanupEnd?.();
+    };
+
+    window.electronAPI?.startAgentStream?.(messages, opts);
+
+    const generator = async function* () {
+      try {
+        while (true) {
+          if (queue.length === 0) {
+            await new Promise<void>((r) => {
+              resolve = r;
+            });
+            resolve = null;
+          }
+
+          while (queue.length > 0) {
+            const item = queue.shift()!;
+            if (item.type === "__end") return;
+            if (item.type === "__error") throw new Error((item as { error: string }).error);
+            yield item as StreamEvent;
+          }
+        }
+      } finally {
+        cleanup();
+      }
+    };
+
+    return generator();
   }
 
   async *processTextStreamingCloud(
@@ -1371,77 +1438,29 @@ class ReasoningService extends BaseReasoningService {
       executeToolCall?: (name: string, args: string) => Promise<string>;
     }
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-    const cookieHeader = await window.electronAPI?.getSessionCookies?.();
-    if (!cookieHeader) {
-      throw new Error("No session cookies available");
-    }
-
     const maxSteps = config.tools?.length ? ReasoningService.MAX_TOOL_STEPS : 1;
     let currentMessages = [...messages];
 
     for (let step = 0; step < maxSteps; step++) {
-      const controller = new AbortController();
-      this.activeAbortController = controller;
-
-      const response = await fetch(`${OPENWHISPR_API_URL}/api/agent/stream`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Cookie: cookieHeader,
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          messages: currentMessages,
-          systemPrompt: config.systemPrompt,
-          tools: config.tools,
-          clientType: "desktop",
-        }),
+      const stream = this.streamFromIPC(currentMessages, {
+        systemPrompt: config.systemPrompt,
+        tools: config.tools,
       });
 
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error("Session expired");
-        }
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || `API error: ${response.status}`);
-      }
-
-      const reader = response.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
       const pendingToolCalls: Array<{ id: string; name: string; arguments: string }> = [];
 
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const ev = JSON.parse(line);
-              if (ev.type === "content") {
-                yield { type: "content", text: ev.text };
-              } else if (ev.type === "tool_call") {
-                const call = {
-                  id: ev.id as string,
-                  name: ev.name as string,
-                  arguments: ev.arguments as string,
-                };
-                pendingToolCalls.push(call);
-                yield { type: "tool_calls", calls: [call] };
-              }
-            } catch {
-              // skip malformed NDJSON line
-            }
-          }
+      for await (const ev of stream) {
+        if (ev.type === "content") {
+          yield { type: "content", text: ev.text as string };
+        } else if (ev.type === "tool_call") {
+          const call = {
+            id: ev.id as string,
+            name: ev.name as string,
+            arguments: ev.arguments as string,
+          };
+          pendingToolCalls.push(call);
+          yield { type: "tool_calls", calls: [call] };
         }
-      } finally {
-        reader.releaseLock();
       }
 
       if (pendingToolCalls.length === 0 || !config.executeToolCall) {
