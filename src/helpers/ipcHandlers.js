@@ -1266,12 +1266,14 @@ class IPCHandlers {
         isGlobeLikeHotkey,
         isModifierOnlyHotkey,
         isRightSideModifier,
+        hasNonStandardKey,
       } = require("./hotkeyManager");
       const usesNativeListener = (hotkey) =>
         !hotkey ||
         isGlobeLikeHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
-        isRightSideModifier(hotkey);
+        isRightSideModifier(hotkey) ||
+        hasNonStandardKey(hotkey);
 
       if (enabled) {
         // Entering capture mode - unregister globalShortcut so it doesn't consume key events
