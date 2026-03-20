@@ -162,8 +162,8 @@
       "requiredForApp": "OpenWhispr の動作に必要です",
       "microphoneRequired": "マイクへのアクセスが必要です",
       "openSystemSettings": "システム設定を開く",
-      "screenRecordingTitle": "システムオーディオ",
-      "screenRecordingDescription": "通話や会議で他の参加者の音声を録音します。画面を録画することはありません。",
+      "systemAudioTitle": "システムオーディオ",
+      "systemAudioDescription": "通話や会議で他の参加者の音声を録音します。画面を録画することはありません。",
       "optional": "任意"
     },
     "transcription": {
@@ -1307,8 +1307,8 @@
         "title": "アクセシビリティの権限をリセット"
       },
       "optional": "任意",
-      "screenRecordingTitle": "システムオーディオ",
-      "screenRecordingDescription": "通話や会議で他の参加者の音声を録音します",
+      "systemAudioTitle": "システムオーディオ",
+      "systemAudioDescription": "通話や会議で他の参加者の音声を録音します",
       "test": "テスト",
       "testAndGrant": "テストして許可",
       "title": "権限",
@@ -1832,8 +1832,8 @@
       "disconnect": "切断",
       "disconnectConfirm": "{{email}} を切断しますか？",
       "disconnectDescription": "このカレンダーからの会議メモは記録されなくなります。",
-      "screenRecordingRequired": "システムオーディオの権限が必要です",
-      "screenRecordingDescription": "会議を文字起こしするには、OpenWhispr に他の参加者の音声を録音するためのシステムオーディオの権限が必要です。画面を録画することはありません。システム設定に移動して有効にします。",
+      "systemAudioRequired": "システムオーディオの権限が必要です",
+      "systemAudioDescription": "会議を文字起こしするには、OpenWhispr に他の参加者の音声を録音するためのシステムオーディオの権限が必要です。画面を録画することはありません。システム設定に移動して有効にします。",
       "openSettings": "システム設定を開く"
     },
     "plan": {
@@ -1898,7 +1898,7 @@
     "now": "進行中",
     "join": "参加",
     "untitledEvent": "無題のイベント",
-    "screenRecordingRequired": "他の参加者の音声を録音するには、システムオーディオの権限が必要です。",
+    "systemAudioRequired": "他の参加者の音声を録音するには、システムオーディオの権限が必要です。",
     "openSettings": "システム設定を開く",
     "signInRequired": "会議録音を使用するにはログインしてください",
     "signInDescription": "アカウントを作成またはログインして、会議を録音・文字起こしできます。",

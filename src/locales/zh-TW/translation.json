@@ -162,8 +162,8 @@
       "requiredForApp": "OpenWhispr 運作所需",
       "microphoneRequired": "需要麥克風存取權限",
       "openSystemSettings": "打開系統設定",
-      "screenRecordingTitle": "系統音訊",
-      "screenRecordingDescription": "錄製通話和會議中其他參與者的音訊。我們絕不會錄製您的螢幕。",
+      "systemAudioTitle": "系統音訊",
+      "systemAudioDescription": "錄製通話和會議中其他參與者的音訊。我們絕不會錄製您的螢幕。",
       "optional": "可選"
     },
     "transcription": {
@@ -1307,8 +1307,8 @@
         "title": "重設輔助使用權限"
       },
       "optional": "可選",
-      "screenRecordingTitle": "系統音訊",
-      "screenRecordingDescription": "錄製通話和會議中其他參與者的音訊",
+      "systemAudioTitle": "系統音訊",
+      "systemAudioDescription": "錄製通話和會議中其他參與者的音訊",
       "test": "測試",
       "testAndGrant": "測試並授權",
       "title": "權限",
@@ -1832,8 +1832,8 @@
       "disconnect": "中斷連接",
       "disconnectConfirm": "中斷 {{email}} 的連接？",
       "disconnectDescription": "將不再從此日曆記錄會議筆記。",
-      "screenRecordingRequired": "需要系統音訊權限",
-      "screenRecordingDescription": "要轉錄會議，OpenWhispr 需要系統音訊權限來錄製其他參與者的音訊。我們絕不會錄製您的螢幕。您將被引導至系統設定以啟用此權限。",
+      "systemAudioRequired": "需要系統音訊權限",
+      "systemAudioDescription": "要轉錄會議，OpenWhispr 需要系統音訊權限來錄製其他參與者的音訊。我們絕不會錄製您的螢幕。您將被引導至系統設定以啟用此權限。",
       "openSettings": "打開系統設定"
     },
     "plan": {
@@ -1898,7 +1898,7 @@
     "now": "進行中",
     "join": "加入",
     "untitledEvent": "無標題事件",
-    "screenRecordingRequired": "需要系統音訊權限來錄製其他參與者的音訊。",
+    "systemAudioRequired": "需要系統音訊權限來錄製其他參與者的音訊。",
     "openSettings": "打開系統設定",
     "signInRequired": "登入以使用會議錄製",
     "signInDescription": "建立帳戶或登入以錄製和轉錄會議。",

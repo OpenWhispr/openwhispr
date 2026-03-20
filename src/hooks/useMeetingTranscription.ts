@@ -470,7 +470,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
       let socketReady = false;
 
       // Use the loopback stream's native sample rate for the system AudioContext.
-      // ScreenCaptureKit loopback produces silence when forced through a 24kHz
+      // System audio loopback produces silence when forced through a 24kHz
       // AudioContext — the resampling path differs from getUserMedia and doesn't
       // work correctly for loopback sources.
       const loopbackRate = stream.getAudioTracks()[0]?.getSettings()?.sampleRate || 48000;

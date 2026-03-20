@@ -162,8 +162,8 @@
       "requiredForApp": "Erforderlich, damit OpenWhispr funktioniert",
       "microphoneRequired": "Mikrofonzugriff erforderlich",
       "openSystemSettings": "Systemeinstellungen öffnen",
-      "screenRecordingTitle": "Systemaudio",
-      "screenRecordingDescription": "Nimmt den Ton anderer Teilnehmer aus Anrufen und Meetings auf. Wir nehmen Ihren Bildschirm nie auf.",
+      "systemAudioTitle": "Systemaudio",
+      "systemAudioDescription": "Nimmt den Ton anderer Teilnehmer aus Anrufen und Meetings auf. Wir nehmen Ihren Bildschirm nie auf.",
       "optional": "Optional"
     },
     "transcription": {
@@ -1307,8 +1307,8 @@
         "title": "Bedienungshilfen-Berechtigungen zurücksetzen"
       },
       "optional": "Optional",
-      "screenRecordingTitle": "Systemaudio",
-      "screenRecordingDescription": "Nimmt den Ton anderer Teilnehmer aus Anrufen und Meetings auf",
+      "systemAudioTitle": "Systemaudio",
+      "systemAudioDescription": "Nimmt den Ton anderer Teilnehmer aus Anrufen und Meetings auf",
       "test": "Testen",
       "testAndGrant": "Testen & erteilen",
       "title": "Berechtigungen",
@@ -1832,8 +1832,8 @@
       "disconnect": "Trennen",
       "disconnectConfirm": "{{email}} trennen?",
       "disconnectDescription": "Besprechungsnotizen werden von diesem Kalender nicht mehr aufgezeichnet.",
-      "screenRecordingRequired": "Systemaudio-Berechtigung erforderlich",
-      "screenRecordingDescription": "Zum Transkribieren von Meetings benötigt OpenWhispr die Systemaudio-Berechtigung, um den Ton anderer Teilnehmer aufzunehmen. Wir nehmen Ihren Bildschirm nie auf. Sie werden zu den Systemeinstellungen weitergeleitet, um diese zu aktivieren.",
+      "systemAudioRequired": "Systemaudio-Berechtigung erforderlich",
+      "systemAudioDescription": "Zum Transkribieren von Meetings benötigt OpenWhispr die Systemaudio-Berechtigung, um den Ton anderer Teilnehmer aufzunehmen. Wir nehmen Ihren Bildschirm nie auf. Sie werden zu den Systemeinstellungen weitergeleitet, um diese zu aktivieren.",
       "openSettings": "Systemeinstellungen öffnen"
     },
     "plan": {
@@ -1898,7 +1898,7 @@
     "now": "Jetzt",
     "join": "Beitreten",
     "untitledEvent": "Unbenanntes Ereignis",
-    "screenRecordingRequired": "Die Systemaudio-Berechtigung wird benötigt, um den Ton anderer Teilnehmer aufzunehmen.",
+    "systemAudioRequired": "Die Systemaudio-Berechtigung wird benötigt, um den Ton anderer Teilnehmer aufzunehmen.",
     "openSettings": "Systemeinstellungen öffnen",
     "signInRequired": "Melden Sie sich an, um Meeting-Aufnahmen zu nutzen",
     "signInDescription": "Erstellen Sie ein Konto oder melden Sie sich an, um Meetings aufzunehmen und zu transkribieren.",

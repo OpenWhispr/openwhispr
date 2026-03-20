@@ -162,8 +162,8 @@
       "requiredForApp": "Necesario para que OpenWhispr funcione",
       "microphoneRequired": "Se requiere acceso al micrófono",
       "openSystemSettings": "Abrir Ajustes del Sistema",
-      "screenRecordingTitle": "Audio del Sistema",
-      "screenRecordingDescription": "Captura el audio de otros participantes en llamadas y reuniones. Nunca grabamos tu pantalla.",
+      "systemAudioTitle": "Audio del Sistema",
+      "systemAudioDescription": "Captura el audio de otros participantes en llamadas y reuniones. Nunca grabamos tu pantalla.",
       "optional": "Opcional"
     },
     "transcription": {
@@ -1307,8 +1307,8 @@
         "title": "Restablecer permisos de accesibilidad"
       },
       "optional": "Opcional",
-      "screenRecordingTitle": "Audio del Sistema",
-      "screenRecordingDescription": "Captura el audio de otros participantes en llamadas y reuniones",
+      "systemAudioTitle": "Audio del Sistema",
+      "systemAudioDescription": "Captura el audio de otros participantes en llamadas y reuniones",
       "test": "Probar",
       "testAndGrant": "Probar y conceder",
       "title": "Permisos",
@@ -1832,8 +1832,8 @@
       "disconnect": "Desconectar",
       "disconnectConfirm": "¿Desconectar {{email}}?",
       "disconnectDescription": "Ya no se grabarán notas de reuniones de este calendario.",
-      "screenRecordingRequired": "Se requiere permiso de Audio del Sistema",
-      "screenRecordingDescription": "Para transcribir reuniones, OpenWhispr necesita el permiso de Audio del Sistema para capturar el audio de otros participantes. Nunca grabamos tu pantalla. Serás dirigido a Ajustes del Sistema para activarlo.",
+      "systemAudioRequired": "Se requiere permiso de Audio del Sistema",
+      "systemAudioDescription": "Para transcribir reuniones, OpenWhispr necesita el permiso de Audio del Sistema para capturar el audio de otros participantes. Nunca grabamos tu pantalla. Serás dirigido a Ajustes del Sistema para activarlo.",
       "openSettings": "Abrir Ajustes del Sistema"
     },
     "plan": {
@@ -1898,7 +1898,7 @@
     "now": "Ahora",
     "join": "Unirse",
     "untitledEvent": "Evento sin título",
-    "screenRecordingRequired": "Se necesita el permiso de Audio del Sistema para capturar el audio de otros participantes.",
+    "systemAudioRequired": "Se necesita el permiso de Audio del Sistema para capturar el audio de otros participantes.",
     "openSettings": "Abrir Ajustes del Sistema",
     "signInRequired": "Inicia sesión para usar la grabación de reuniones",
     "signInDescription": "Crea una cuenta o inicia sesión para grabar y transcribir reuniones.",

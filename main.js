@@ -87,13 +87,10 @@ if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") 
   } else {
     app.commandLine.appendSwitch("ozone-platform-hint", "auto");
   }
-  app.commandLine.appendSwitch(
-    "enable-features",
-    "UseOzonePlatform,WaylandWindowDecorations"
-  );
+  app.commandLine.appendSwitch("enable-features", "UseOzonePlatform,WaylandWindowDecorations");
 }
 
-// Enable system audio loopback capture on macOS via ScreenCaptureKit / CoreAudio Taps.
+// Enable system audio loopback capture on macOS via CoreAudio Taps (Electron 39+).
 // Without these flags, getDisplayMedia({ audio: "loopback" }) returns a live audio track
 // that produces only silence (all-zero samples).
 if (process.platform === "darwin") {
@@ -549,9 +546,7 @@ async function startApp() {
         names: sources.map((s) => s.name),
       });
       if (!sources.length) {
-        debugLogger.error(
-          "No screen sources available — Screen Recording permission may be denied"
-        );
+        debugLogger.error("No screen sources available — System Audio permission may be denied");
         callback({});
         return;
       }
@@ -624,7 +619,6 @@ async function startApp() {
     }
   }
 
-
   // Set up meeting mode hotkey
   const meetingHotkeyCallback = () => {
     if (hotkeyManager.isInListeningMode()) return;
@@ -634,7 +628,11 @@ async function startApp() {
 
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
   if (savedMeetingKey) {
-    const result = await hotkeyManager.registerSlot("meeting", savedMeetingKey, meetingHotkeyCallback);
+    const result = await hotkeyManager.registerSlot(
+      "meeting",
+      savedMeetingKey,
+      meetingHotkeyCallback
+    );
     debugLogger.info(
       "Meeting hotkey startup registration",
       { savedMeetingKey, ...result },

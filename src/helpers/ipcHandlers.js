@@ -1978,7 +1978,7 @@ class IPCHandlers {
         sound: "x-apple.systempreferences:com.apple.preference.sound?input",
         accessibility:
           "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-        screenRecording:
+        systemAudio:
           "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
       },
       win32: {
@@ -2018,7 +2018,7 @@ class IPCHandlers {
     ipcMain.handle("open-microphone-settings", () => openSystemSettings("microphone"));
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
-    ipcMain.handle("open-screen-recording-settings", () => openSystemSettings("screenRecording"));
+    ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
 
     ipcMain.handle("toggle-media-playback", () => {
       const mediaPlayer = require("./mediaPlayer");
@@ -2044,7 +2044,7 @@ class IPCHandlers {
       return { granted };
     });
 
-    ipcMain.handle("check-screen-recording-access", () => {
+    ipcMain.handle("check-system-audio-access", () => {
       if (process.platform !== "darwin") {
         return { granted: true };
       }

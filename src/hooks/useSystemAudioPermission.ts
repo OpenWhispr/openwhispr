@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { getCachedPlatform } from "../utils/platform";
 
-export function useScreenRecordingPermission() {
+export function useSystemAudioPermission() {
   const isMacOS = getCachedPlatform() === "darwin";
   const [granted, setGranted] = useState(!isMacOS);
   const checkingRef = useRef(false);
@@ -10,7 +10,7 @@ export function useScreenRecordingPermission() {
     if (!isMacOS || checkingRef.current) return;
     checkingRef.current = true;
     try {
-      const result = await window.electronAPI?.checkScreenRecordingAccess?.();
+      const result = await window.electronAPI?.checkSystemAudioAccess?.();
       setGranted(result?.granted ?? false);
     } finally {
       checkingRef.current = false;
@@ -31,7 +31,7 @@ export function useScreenRecordingPermission() {
   }, [isMacOS, check]);
 
   const openSettings = useCallback(async () => {
-    await window.electronAPI?.openScreenRecordingSettings?.();
+    await window.electronAPI?.openSystemAudioSettings?.();
   }, []);
 
   // Trigger the native macOS permission prompt via getDisplayMedia (used in onboarding)

@@ -162,8 +162,8 @@
       "requiredForApp": "Necessario per usare OpenWhispr",
       "microphoneRequired": "Accesso al microfono richiesto",
       "openSystemSettings": "Apri Impostazioni di Sistema",
-      "screenRecordingTitle": "Audio di Sistema",
-      "screenRecordingDescription": "Cattura l'audio degli altri partecipanti durante chiamate e riunioni. Non registriamo mai il tuo schermo.",
+      "systemAudioTitle": "Audio di Sistema",
+      "systemAudioDescription": "Cattura l'audio degli altri partecipanti durante chiamate e riunioni. Non registriamo mai il tuo schermo.",
       "optional": "Facoltativo"
     },
     "transcription": {
@@ -1307,8 +1307,8 @@
         "title": "Reimposta permessi di accessibilità"
       },
       "optional": "Facoltativo",
-      "screenRecordingTitle": "Audio di Sistema",
-      "screenRecordingDescription": "Cattura l'audio degli altri partecipanti durante chiamate e riunioni",
+      "systemAudioTitle": "Audio di Sistema",
+      "systemAudioDescription": "Cattura l'audio degli altri partecipanti durante chiamate e riunioni",
       "test": "Test",
       "testAndGrant": "Testa e concedi",
       "title": "Permessi",
@@ -1832,8 +1832,8 @@
       "disconnect": "Disconnetti",
       "disconnectConfirm": "Disconnettere {{email}}?",
       "disconnectDescription": "Le note delle riunioni non saranno più registrate da questo calendario.",
-      "screenRecordingRequired": "Autorizzazione Audio di Sistema richiesta",
-      "screenRecordingDescription": "Per trascrivere le riunioni, OpenWhispr necessita dell'autorizzazione Audio di Sistema per catturare l'audio degli altri partecipanti. Non registriamo mai il tuo schermo. Verrai reindirizzato alle Impostazioni di Sistema per attivarla.",
+      "systemAudioRequired": "Autorizzazione Audio di Sistema richiesta",
+      "systemAudioDescription": "Per trascrivere le riunioni, OpenWhispr necessita dell'autorizzazione Audio di Sistema per catturare l'audio degli altri partecipanti. Non registriamo mai il tuo schermo. Verrai reindirizzato alle Impostazioni di Sistema per attivarla.",
       "openSettings": "Apri Impostazioni di Sistema"
     },
     "plan": {
@@ -1898,7 +1898,7 @@
     "now": "In corso",
     "join": "Partecipa",
     "untitledEvent": "Evento senza titolo",
-    "screenRecordingRequired": "L'autorizzazione Audio di Sistema è necessaria per catturare l'audio degli altri partecipanti.",
+    "systemAudioRequired": "L'autorizzazione Audio di Sistema è necessaria per catturare l'audio degli altri partecipanti.",
     "openSettings": "Apri Impostazioni di Sistema",
     "signInRequired": "Accedi per utilizzare la registrazione delle riunioni",
     "signInDescription": "Crea un account o accedi per registrare e trascrivere le riunioni.",

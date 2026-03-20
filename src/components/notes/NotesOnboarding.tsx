@@ -15,7 +15,7 @@ import { notesInputClass, notesTextareaClass } from "./shared";
 import { useDialogs } from "../../hooks/useDialogs";
 import { AlertDialog } from "../ui/dialog";
 import ReasoningModelSelector from "../ReasoningModelSelector";
-import { useScreenRecordingPermission } from "../../hooks/useScreenRecordingPermission";
+import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
 
 interface NotesOnboardingProps {
   onComplete: () => void;
@@ -52,20 +52,20 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
 
   const { alertDialog, hideAlertDialog } = useDialogs();
   const {
-    granted: screenRecordingGranted,
-    request: requestScreenRecording,
+    granted: systemAudioGranted,
+    request: requestSystemAudio,
     isMacOS,
-  } = useScreenRecordingPermission();
-  const [isRequestingScreenPermission, setIsRequestingScreenPermission] = useState(false);
+  } = useSystemAudioPermission();
+  const [isRequestingSystemAudio, setIsRequestingSystemAudio] = useState(false);
 
-  const handleGrantScreenRecording = useCallback(async () => {
-    setIsRequestingScreenPermission(true);
+  const handleGrantSystemAudio = useCallback(async () => {
+    setIsRequestingSystemAudio(true);
     try {
-      await requestScreenRecording();
+      await requestSystemAudio();
     } finally {
-      setIsRequestingScreenPermission(false);
+      setIsRequestingSystemAudio(false);
     }
-  }, [requestScreenRecording]);
+  }, [requestSystemAudio]);
 
   useEffect(() => {
     initializeActions();
@@ -189,7 +189,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
           <div
             className={cn(
               "rounded-lg border transition-colors duration-200",
-              screenRecordingGranted
+              systemAudioGranted
                 ? "border-success/20 bg-success/[0.03]"
                 : "border-foreground/8 dark:border-white/6 bg-surface-1/30 dark:bg-white/[0.02]"
             )}
@@ -198,7 +198,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
               <div className="flex items-center gap-2.5">
                 <Monitor
                   size={13}
-                  className={cn(screenRecordingGranted ? "text-success/60" : "text-foreground/30")}
+                  className={cn(systemAudioGranted ? "text-success/60" : "text-foreground/30")}
                 />
                 <div>
                   <span className="text-xs font-medium text-foreground/70">
@@ -209,7 +209,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                   </p>
                 </div>
               </div>
-              {screenRecordingGranted ? (
+              {systemAudioGranted ? (
                 <span className="text-xs text-success/60 font-medium shrink-0">
                   {t("notes.onboarding.systemAudio.enabled")}
                 </span>
@@ -217,11 +217,11 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleGrantScreenRecording}
-                  disabled={isRequestingScreenPermission}
+                  onClick={handleGrantSystemAudio}
+                  disabled={isRequestingSystemAudio}
                   className="h-7 text-xs shrink-0"
                 >
-                  {isRequestingScreenPermission ? (
+                  {isRequestingSystemAudio ? (
                     <Loader2 size={12} className="animate-spin" />
                   ) : (
                     t("notes.onboarding.systemAudio.grant")

@@ -26,7 +26,7 @@ import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useDialogs } from "../hooks/useDialogs";
 import { usePermissions } from "../hooks/usePermissions";
 import { useClipboard } from "../hooks/useClipboard";
-import { useScreenRecordingPermission } from "../hooks/useScreenRecordingPermission";
+import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import AuthenticationStep from "./AuthenticationStep";
@@ -126,7 +126,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const permissionsHook = usePermissions(showAlertDialog);
   useClipboard(showAlertDialog); // Initialize clipboard hook for permission checks
 
-  const screenRecording = useScreenRecordingPermission();
+  const systemAudio = useSystemAudioPermission();
 
   // For signed-in users, merge setup and permissions into one step
   const steps =
@@ -415,12 +415,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                       />
                       <PermissionCard
                         icon={Monitor}
-                        title={t("onboarding.permissions.screenRecordingTitle")}
-                        description={t("onboarding.permissions.screenRecordingDescription")}
-                        granted={screenRecording.granted}
-                        onRequest={screenRecording.request}
+                        title={t("onboarding.permissions.systemAudioTitle")}
+                        description={t("onboarding.permissions.systemAudioDescription")}
+                        granted={systemAudio.granted}
+                        onRequest={systemAudio.request}
                         buttonText={t("onboarding.permissions.grant")}
-                        onOpenSettings={screenRecording.openSettings}
+                        onOpenSettings={systemAudio.openSettings}
                         badge={t("onboarding.permissions.optional")}
                       />
                     </>
@@ -576,12 +576,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   />
                   <PermissionCard
                     icon={Monitor}
-                    title={t("onboarding.permissions.screenRecordingTitle")}
-                    description={t("onboarding.permissions.screenRecordingDescription")}
-                    granted={screenRecording.granted}
-                    onRequest={screenRecording.request}
+                    title={t("onboarding.permissions.systemAudioTitle")}
+                    description={t("onboarding.permissions.systemAudioDescription")}
+                    granted={systemAudio.granted}
+                    onRequest={systemAudio.request}
                     buttonText={t("onboarding.permissions.grant")}
-                    onOpenSettings={screenRecording.openSettings}
+                    onOpenSettings={systemAudio.openSettings}
                     badge={t("onboarding.permissions.optional")}
                   />
                 </>

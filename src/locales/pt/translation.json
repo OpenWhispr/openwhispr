@@ -134,8 +134,8 @@
       "requiredForApp": "Necessário para o OpenWhispr funcionar",
       "microphoneRequired": "Acesso ao microfone necessário",
       "openSystemSettings": "Abrir Configurações do Sistema",
-      "screenRecordingTitle": "Áudio do Sistema",
-      "screenRecordingDescription": "Captura o áudio dos outros participantes em chamadas e reuniões. Nunca gravamos a sua tela.",
+      "systemAudioTitle": "Áudio do Sistema",
+      "systemAudioDescription": "Captura o áudio dos outros participantes em chamadas e reuniões. Nunca gravamos a sua tela.",
       "optional": "Opcional"
     },
     "transcription": {
@@ -1279,8 +1279,8 @@
         "title": "Redefinir permissões de acessibilidade"
       },
       "optional": "Opcional",
-      "screenRecordingTitle": "Áudio do Sistema",
-      "screenRecordingDescription": "Captura o áudio dos outros participantes em chamadas e reuniões",
+      "systemAudioTitle": "Áudio do Sistema",
+      "systemAudioDescription": "Captura o áudio dos outros participantes em chamadas e reuniões",
       "test": "Testar",
       "testAndGrant": "Testar e conceder",
       "title": "Permissões",
@@ -1832,8 +1832,8 @@
       "disconnect": "Desconectar",
       "disconnectConfirm": "Desconectar {{email}}?",
       "disconnectDescription": "As notas de reunião não serão mais gravadas deste calendário.",
-      "screenRecordingRequired": "Permissão de Áudio do Sistema Necessária",
-      "screenRecordingDescription": "Para transcrever reuniões, o OpenWhispr precisa da permissão de Áudio do Sistema para capturar o áudio dos outros participantes. Nunca gravamos a sua tela. Você será levado às Configurações do Sistema para ativá-la.",
+      "systemAudioRequired": "Permissão de Áudio do Sistema Necessária",
+      "systemAudioDescription": "Para transcrever reuniões, o OpenWhispr precisa da permissão de Áudio do Sistema para capturar o áudio dos outros participantes. Nunca gravamos a sua tela. Você será levado às Configurações do Sistema para ativá-la.",
       "openSettings": "Abrir Configurações do Sistema"
     },
     "plan": {
@@ -1898,7 +1898,7 @@
     "now": "Agora",
     "join": "Entrar",
     "untitledEvent": "Evento sem título",
-    "screenRecordingRequired": "A permissão de Áudio do Sistema é necessária para capturar o áudio dos outros participantes.",
+    "systemAudioRequired": "A permissão de Áudio do Sistema é necessária para capturar o áudio dos outros participantes.",
     "openSettings": "Abrir Configurações do Sistema",
     "signInRequired": "Entre na sua conta para gravar reuniões",
     "signInDescription": "Crie uma conta ou entre para gravar e transcrever reuniões.",

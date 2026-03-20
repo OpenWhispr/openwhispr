@@ -162,8 +162,8 @@
       "requiredForApp": "Required for OpenWhispr to work",
       "microphoneRequired": "Microphone access required",
       "openSystemSettings": "Open System Settings",
-      "screenRecordingTitle": "System Audio",
-      "screenRecordingDescription": "Captures other participants' audio from calls and meetings. We never record your screen.",
+      "systemAudioTitle": "System Audio",
+      "systemAudioDescription": "Captures other participants' audio from calls and meetings. We never record your screen.",
       "optional": "Optional"
     },
     "transcription": {
@@ -567,7 +567,7 @@
     "now": "Now",
     "join": "Join",
     "untitledEvent": "Untitled event",
-    "screenRecordingRequired": "System Audio permission is needed to capture other participants' audio.",
+    "systemAudioRequired": "System Audio permission is needed to capture other participants' audio.",
     "openSettings": "Open System Settings"
   },
   "cleanupPrompt": "Cleanup",
@@ -1367,8 +1367,8 @@
         "title": "Reset Accessibility Permissions"
       },
       "optional": "Optional",
-      "screenRecordingTitle": "System Audio",
-      "screenRecordingDescription": "Captures other participants' audio from calls and meetings",
+      "systemAudioTitle": "System Audio",
+      "systemAudioDescription": "Captures other participants' audio from calls and meetings",
       "test": "Test",
       "testAndGrant": "Test & Grant",
       "title": "Permissions",
@@ -1902,8 +1902,8 @@
       "disconnect": "Disconnect",
       "disconnectConfirm": "Disconnect {{email}}?",
       "disconnectDescription": "Meeting notes will no longer be recorded from this calendar.",
-      "screenRecordingRequired": "System Audio Permission Required",
-      "screenRecordingDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
+      "systemAudioRequired": "System Audio Permission Required",
+      "systemAudioDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
       "openSettings": "Open System Settings"
     },
     "plan": {
@@ -1937,7 +1937,7 @@
     "now": "Now",
     "join": "Join",
     "untitledEvent": "Untitled Event",
-    "screenRecordingRequired": "System Audio permission is needed to capture other participants' audio.",
+    "systemAudioRequired": "System Audio permission is needed to capture other participants' audio.",
     "openSettings": "Open System Settings",
     "signInRequired": "Sign in to use meeting recording",
     "signInDescription": "Create an account or sign in to record and transcribe meetings.",

@@ -5,7 +5,7 @@ import { Button } from "./ui/button";
 import { cn } from "./lib/utils";
 import type { CalendarEvent } from "../types/calendar";
 import { formatUpcomingDateGroup } from "../utils/dateFormatting";
-import { useScreenRecordingPermission } from "../hooks/useScreenRecordingPermission";
+import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettingsStore } from "../stores/settingsStore";
 
 interface UpcomingMeetingsProps {
@@ -39,7 +39,7 @@ const openJoinUrl = (url: string) => {
 export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetingsProps) {
   const { t, i18n } = useTranslation();
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
-  const screenRecording = useScreenRecordingPermission();
+  const systemAudio = useSystemAudioPermission();
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
 
   const now = useMemo(() => new Date(), []);
@@ -104,16 +104,16 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
       {/* Empty state */}
       {!isLoading && events.length === 0 && (
         <div className="flex flex-col items-center justify-center py-8 px-3">
-          {screenRecording.isMacOS && !screenRecording.granted ? (
+          {systemAudio.isMacOS && !systemAudio.granted ? (
             <>
               <Monitor size={24} className="text-muted-foreground/30 mb-2.5" />
               <p className="text-xs text-muted-foreground/60 text-center mb-3">
-                {t("upcoming.screenRecordingRequired")}
+                {t("upcoming.systemAudioRequired")}
               </p>
               <Button
                 size="sm"
                 variant="outline"
-                onClick={screenRecording.openSettings}
+                onClick={systemAudio.openSettings}
                 className="text-xs h-7"
               >
                 {t("upcoming.openSettings")}

@@ -360,11 +360,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // System settings helpers for microphone/audio permissions
   requestMicrophoneAccess: () => ipcRenderer.invoke("request-microphone-access"),
-  checkScreenRecordingAccess: () => ipcRenderer.invoke("check-screen-recording-access"),
+  checkSystemAudioAccess: () => ipcRenderer.invoke("check-system-audio-access"),
   openMicrophoneSettings: () => ipcRenderer.invoke("open-microphone-settings"),
   openSoundInputSettings: () => ipcRenderer.invoke("open-sound-input-settings"),
   openAccessibilitySettings: () => ipcRenderer.invoke("open-accessibility-settings"),
-  openScreenRecordingSettings: () => ipcRenderer.invoke("open-screen-recording-settings"),
+  openSystemAudioSettings: () => ipcRenderer.invoke("open-system-audio-settings"),
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
   pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
   resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
@@ -663,6 +663,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   getUpdateNotificationData: () => ipcRenderer.invoke("get-update-notification-data"),
   updateNotificationReady: () => ipcRenderer.invoke("update-notification-ready"),
-  updateNotificationRespond: (action) =>
-    ipcRenderer.invoke("update-notification-respond", action),
+  updateNotificationRespond: (action) => ipcRenderer.invoke("update-notification-respond", action),
 });
