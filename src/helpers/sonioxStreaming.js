@@ -10,8 +10,8 @@ const SONIOX_WS_URL = "wss://stt-rt.soniox.com/transcribe-websocket";
 
 const toBaseLanguage = (l) => l && l !== "auto" ? l.split("-")[0] : null;
 
-function buildConfigMessage({ apiKey, model, language, secondaryLanguage }) {
-  return {
+function buildConfigMessage({ apiKey, model, language, secondaryLanguage, customDictionary }) {
+  const config = {
     api_key: apiKey,
     model: model || "stt-rt-v4",
     audio_format: "pcm_s16le",
@@ -19,6 +19,10 @@ function buildConfigMessage({ apiKey, model, language, secondaryLanguage }) {
     num_channels: 1,
     language_hints: [toBaseLanguage(language), toBaseLanguage(secondaryLanguage)].filter(Boolean),
   };
+  if (customDictionary?.length) {
+    config.context = { terms: customDictionary };
+  }
+  return config;
 }
 
 // Filler words / hesitations to strip from assembled text.
@@ -123,6 +127,7 @@ class SonioxStreaming {
     debugLogger.debug("Soniox connecting", {
       model: configMessage.model,
       languageHints: configMessage.language_hints,
+      contextTerms: configMessage.context?.terms?.length || 0,
     });
 
     return new Promise((resolve, reject) => {
