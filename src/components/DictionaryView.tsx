@@ -1,10 +1,28 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, X, CornerDownLeft, Info } from "lucide-react";
+import { BookOpen, X, CornerDownLeft, Info, Upload } from "lucide-react";
 import { Input } from "./ui/input";
+import { Textarea } from "./ui/textarea";
+import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "./ui/dialog";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
+
+/** Split text on newlines, commas, or tabs — handles all common bulk formats */
+function parseWords(text: string): string[] {
+  return text
+    .split(/[\n,\t]+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length > 0);
+}
 
 export default function DictionaryView() {
   const { t } = useTranslation();
@@ -14,7 +32,18 @@ export default function DictionaryView() {
   const [confirmClear, setConfirmClear] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
 
+  // Bulk import state
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const isEmpty = customDictionary.length === 0;
+
+  // Compute preview stats for bulk import
+  const parsedImportWords = parseWords(importText);
+  const existingSet = new Set(customDictionary);
+  const newImportWords = parsedImportWords.filter((w) => !existingSet.has(w));
+  const duplicateCount = parsedImportWords.length - newImportWords.length;
 
   const handleAdd = useCallback(() => {
     const words = newWord
@@ -35,6 +64,55 @@ export default function DictionaryView() {
     [customDictionary, setCustomDictionary, agentName]
   );
 
+  const handleBulkImport = useCallback(() => {
+    if (newImportWords.length > 0) {
+      setCustomDictionary([...customDictionary, ...newImportWords]);
+    }
+    setImportText("");
+    setImportOpen(false);
+  }, [newImportWords, customDictionary, setCustomDictionary]);
+
+  const handleFileUpload = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = event.target?.result as string;
+        if (file.name.endsWith(".json")) {
+          try {
+            const parsed = JSON.parse(content);
+            if (Array.isArray(parsed)) {
+              setImportText(parsed.join("\n"));
+            } else {
+              setImportText(content);
+            }
+          } catch {
+            setImportText(content);
+          }
+        } else {
+          setImportText(content);
+        }
+      };
+      reader.readAsText(file);
+
+      // Reset file input so the same file can be re-selected
+      e.target.value = "";
+    },
+    []
+  );
+
+  const importButton = (
+    <button
+      onClick={() => setImportOpen(true)}
+      className="flex items-center gap-1 text-xs text-foreground/30 hover:text-foreground/60 transition-colors"
+    >
+      <Upload size={10} />
+      {t("dictionary.import", "Import")}
+    </button>
+  );
+
   return (
     <div className="flex flex-col h-full">
       <ConfirmDialog
@@ -45,6 +123,73 @@ export default function DictionaryView() {
         onConfirm={() => setCustomDictionary(customDictionary.filter((w) => w === agentName))}
         variant="destructive"
       />
+
+      {/* Bulk import dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>{t("dictionary.importTitle", "Import Words")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "dictionary.importDescription",
+                "Paste words below (one per line, or comma/tab separated), or upload a .txt, .csv, or .json file."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Textarea
+              placeholder={t("dictionary.importPlaceholder", "scRNA-seq\nGWAS\nHepG2\nTIP-seq")}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              className="min-h-[160px] text-sm font-mono"
+            />
+
+            <div className="flex items-center justify-between">
+              <Button
+                variant="outline-flat"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload size={12} />
+                {t("dictionary.uploadFile", "Upload file")}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.csv,.json"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+
+              {parsedImportWords.length > 0 && (
+                <span className="text-xs text-foreground/40">
+                  {t("dictionary.importPreview", "{{newCount}} new, {{dupeCount}} duplicates skipped", {
+                    newCount: newImportWords.length,
+                    dupeCount: duplicateCount,
+                  })}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImportOpen(false)}>
+              {t("dictionary.importCancel", "Cancel")}
+            </Button>
+            <Button
+              onClick={handleBulkImport}
+              disabled={newImportWords.length === 0}
+            >
+              {newImportWords.length > 0
+                ? t("dictionary.importConfirm", "Import {{count}} words", {
+                    count: newImportWords.length,
+                  })
+                : t("dictionary.import", "Import")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isEmpty ? (
         /* ─── Empty state ─── */
@@ -98,6 +243,8 @@ export default function DictionaryView() {
             ))}
           </div>
 
+          <div className="mt-4">{importButton}</div>
+
           <div className="mt-8 w-full max-w-[260px]">
             <button
               onClick={() => setShowInfo(!showInfo)}
@@ -127,13 +274,16 @@ export default function DictionaryView() {
                 {customDictionary.length}
               </span>
             </div>
-            <button
-              onClick={() => setConfirmClear(true)}
-              aria-label={t("dictionary.clearAll")}
-              className="text-xs text-foreground/15 hover:text-destructive/70 transition-colors"
-            >
-              {t("dictionary.clearAll")}
-            </button>
+            <div className="flex items-baseline gap-3">
+              {importButton}
+              <button
+                onClick={() => setConfirmClear(true)}
+                aria-label={t("dictionary.clearAll")}
+                className="text-xs text-foreground/15 hover:text-destructive/70 transition-colors"
+              >
+                {t("dictionary.clearAll")}
+              </button>
+            </div>
           </div>
 
           <div className="px-5 pb-3">
