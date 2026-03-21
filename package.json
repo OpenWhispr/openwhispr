@@ -91,7 +91,7 @@
     "electron": "^39.0.0",
     "electron-builder": "^26.4.0",
     "eslint": "^9.25.0",
-    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
     "postcss": "^8.5.6",
