@@ -32,6 +32,16 @@ const MODIFIER_NAMES = new Set([
   "cmdorctrl",
 ]);
 
+// Non-standard keys that globalShortcut cannot handle (dead keys, OEM keys)
+// These must be routed through the native Windows keyboard hook.
+const NON_STANDARD_KEYS = new Set(["^", "caret"]);
+
+function hasNonStandardKey(hotkey) {
+  if (!hotkey) return false;
+  const parts = hotkey.split("+").map((p) => p.trim().toLowerCase());
+  return parts.some((p) => NON_STANDARD_KEYS.has(p));
+}
+
 function isModifierOnlyHotkey(hotkey) {
   if (!hotkey || !hotkey.includes("+")) return false;
   return hotkey.split("+").every((part) => MODIFIER_NAMES.has(part.toLowerCase()));
@@ -246,6 +256,7 @@ class HotkeyManager {
       !isGlobeLikeHotkey(hotkey) &&
       !isRightSideModifier(hotkey) &&
       !isModifierOnlyHotkey(hotkey) &&
+      !hasNonStandardKey(hotkey) &&
       globalShortcut.isRegistered(checkAccelerator)
     ) {
       debugLogger.log(
@@ -261,7 +272,8 @@ class HotkeyManager {
       previousHotkey &&
       !isGlobeLikeHotkey(previousHotkey) &&
       !isRightSideModifier(previousHotkey) &&
-      !isModifierOnlyHotkey(previousHotkey)
+      !isModifierOnlyHotkey(previousHotkey) &&
+      !hasNonStandardKey(previousHotkey)
     ) {
       const prevAccelerator = normalizeToAccelerator(previousHotkey);
       try {
@@ -306,6 +318,15 @@ class HotkeyManager {
         slot.accelerator = null;
         debugLogger.log(
           `[HotkeyManager] Modifier-only "${hotkey}" set - using Windows native listener`
+        );
+        return { success: true, hotkey };
+      }
+
+      // Non-standard keys (e.g. ^ dead key) use the native keyboard hook on Windows
+      if (hasNonStandardKey(hotkey) && process.platform === "win32") {
+        this.currentHotkey = hotkey;
+        debugLogger.log(
+          `[HotkeyManager] Non-standard key "${hotkey}" set - using Windows native listener`
         );
         return { success: true, hotkey };
       }
@@ -391,7 +412,8 @@ class HotkeyManager {
       !previousHotkey ||
       isGlobeLikeHotkey(previousHotkey) ||
       isRightSideModifier(previousHotkey) ||
-      isModifierOnlyHotkey(previousHotkey)
+      isModifierOnlyHotkey(previousHotkey) ||
+      hasNonStandardKey(previousHotkey)
     ) {
       return;
     }
@@ -835,3 +857,4 @@ module.exports = HotkeyManager;
 module.exports.isGlobeLikeHotkey = isGlobeLikeHotkey;
 module.exports.isModifierOnlyHotkey = isModifierOnlyHotkey;
 module.exports.isRightSideModifier = isRightSideModifier;
+module.exports.hasNonStandardKey = hasNonStandardKey;
