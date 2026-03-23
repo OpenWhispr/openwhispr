@@ -198,7 +198,12 @@
           "description": "Fast and cost-efficient",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_mini",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "reasoningEffort": {
+            "provider": "openai",
+            "options": ["medium"],
+            "defaultValue": "medium"
+          }
         },
         {
           "id": "gpt-5-nano",
