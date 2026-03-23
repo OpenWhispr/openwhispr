@@ -70,8 +70,14 @@ const OPENAI_REASONING_PATTERNS: SnapshotCapabilityPattern[] = [
     pattern: /^gpt-5-mini(?:-\d{4}-\d{2}-\d{2})?$/,
     capability: {
       provider: "openai",
-      options: ["medium"],
-      defaultValue: "medium",
+      options: ["minimal", "low", "medium", "high"],
+    },
+  },
+  {
+    pattern: /^gpt-5-nano(?:-\d{4}-\d{2}-\d{2})?$/,
+    capability: {
+      provider: "openai",
+      options: ["minimal", "low", "medium", "high"],
     },
   },
 ];

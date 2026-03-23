@@ -201,8 +201,7 @@
           "supportsTemperature": false,
           "reasoningEffort": {
             "provider": "openai",
-            "options": ["medium"],
-            "defaultValue": "medium"
+            "options": ["minimal", "low", "medium", "high"]
           }
         },
         {
@@ -211,7 +210,11 @@
           "description": "Ultra-fast, low latency",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_nano",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "reasoningEffort": {
+            "provider": "openai",
+            "options": ["minimal", "low", "medium", "high"]
+          }
         },
         {
           "id": "gpt-4.1",
