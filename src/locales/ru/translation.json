@@ -955,15 +955,15 @@
           "period": "навсегда",
           "features": [
             "## OpenWhispr Cloud",
-            "2,000 words/week transcription",
-            "5 hours of meeting recordings/month",
-            "## Always free",
-            "Unlimited local AI models",
-            "Unlimited cloud transcription with your own API keys",
-            "100+ languages supported",
-            "Custom dictionary",
-            "Zero data retention",
-            "Community support"
+            "2 000 слов/неделю транскрипции",
+            "5 часов записи встреч/месяц",
+            "## Всегда бесплатно",
+            "Безлимитные локальные модели ИИ",
+            "Безлимитная облачная транскрипция с вашими ключами API",
+            "Поддержка более 100 языков",
+            "Пользовательский словарь",
+            "Нулевое хранение данных",
+            "Поддержка сообщества"
           ]
         },
         "pro": {
@@ -975,10 +975,10 @@
           "annualEquivalent": "$6.67",
           "includesPrefix": "Все функции Free +",
           "features": [
-            "Unlimited cloud transcription",
-            "20 hours of meeting recordings/month",
-            "Mobile app (iOS Coming Soon)",
-            "Email support"
+            "Безлимитная облачная транскрипция",
+            "20 часов записи встреч/месяц",
+            "Мобильное приложение (iOS скоро)",
+            "Поддержка по электронной почте"
           ],
           "cta": "Начать",
           "switchToAnnual": "Перейти на годовой"
@@ -993,10 +993,10 @@
           "includesPrefix": "Все функции Pro +",
           "badge": "Самый популярный",
           "features": [
-            "Unlimited meeting recordings",
-            "Agent mode",
-            "Chat over your data (Coming Soon)",
-            "Priority support"
+            "Безлимитные записи встреч",
+            "Режим агента",
+            "Чат с вашими данными (скоро)",
+            "Приоритетная поддержка"
           ],
           "cta": "Начать",
           "switchToAnnual": "Перейти на годовой"
@@ -1004,16 +1004,16 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "Индивидуально",
-          "subtitle": "For advanced security & support",
+          "subtitle": "Для расширенной безопасности и поддержки",
           "includesPrefix": "Все функции Business +",
           "features": [
-            "Managed API credits",
-            "Cloud sync across devices",
-            "Team features & admin",
-            "SSO & compliance",
-            "Dedicated support"
+            "Управляемые кредиты API",
+            "Облачная синхронизация между устройствами",
+            "Командные функции и администрирование",
+            "SSO и соответствие требованиям",
+            "Выделенная поддержка"
           ],
-          "cta": "Contact Sales"
+          "cta": "Связаться с отделом продаж"
         },
         "currentPlan": "Текущий тариф",
         "upgrade": "Улучшить план",
@@ -1848,6 +1848,7 @@
       "copyToClipboard": "Копировать в буфер обмена",
       "copied": "Скопировано!",
       "emptyState": "Удерживайте {{hotkey}}, чтобы начать разговор",
+      "orType": "или введите сообщение",
       "errorPrefix": "Ошибка"
     },
     "titleBar": {
@@ -1860,7 +1861,30 @@
       "toClose": "закрыть",
       "listening": "Слушаю...",
       "transcribing": "Транскрибирую...",
-      "thinking": "Думаю..."
+      "thinking": "Думаю...",
+      "typeMessage": "Введите сообщение...",
+      "send": "Отправить"
+    },
+    "tools": {
+      "search_notesStatus": "Поиск в заметках...",
+      "web_searchStatus": "Поиск в интернете...",
+      "copy_to_clipboardStatus": "Копирование в буфер обмена...",
+      "get_calendar_eventsStatus": "Проверка календаря...",
+      "get_noteStatus": "Чтение заметки...",
+      "create_noteStatus": "Создание заметки...",
+      "update_noteStatus": "Обновление заметки...",
+      "copiedToClipboard": "Скопировано в буфер обмена",
+      "foundNotes": "Найдена {{count}} заметка",
+      "foundNotes_plural": "Найдено {{count}} заметок",
+      "searchResults": "Найден {{count}} результат",
+      "searchResults_plural": "Найдено {{count}} результатов",
+      "openNote": "Открыть заметку",
+      "calendarEvents": "Найдено {{count}} событие",
+      "calendarEvents_plural": "Найдено {{count}} событий",
+      "noResults": "Ничего не найдено",
+      "error": "Ошибка инструмента",
+      "unknownTool": "Неизвестный инструмент: {{name}}",
+      "invalidArgs": "Недопустимые аргументы инструмента для {{name}}"
     }
   },
   "integrations": {

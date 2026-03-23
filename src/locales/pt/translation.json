@@ -927,15 +927,15 @@
           "period": "para sempre",
           "features": [
             "## OpenWhispr Cloud",
-            "2,000 words/week transcription",
-            "5 hours of meeting recordings/month",
-            "## Always free",
-            "Unlimited local AI models",
-            "Unlimited cloud transcription with your own API keys",
-            "100+ languages supported",
-            "Custom dictionary",
-            "Zero data retention",
-            "Community support"
+            "2.000 palavras/semana de transcrição",
+            "5 horas de gravação de reuniões/mês",
+            "## Sempre gratuito",
+            "Modelos de IA locais ilimitados",
+            "Transcrição na nuvem ilimitada com suas próprias chaves de API",
+            "Mais de 100 idiomas suportados",
+            "Dicionário personalizado",
+            "Zero retenção de dados",
+            "Suporte da comunidade"
           ]
         },
         "pro": {
@@ -947,10 +947,10 @@
           "annualEquivalent": "$6.67",
           "includesPrefix": "Todos os recursos do Free +",
           "features": [
-            "Unlimited cloud transcription",
-            "20 hours of meeting recordings/month",
-            "Mobile app (iOS Coming Soon)",
-            "Email support"
+            "Transcrição na nuvem ilimitada",
+            "20 horas de gravação de reuniões/mês",
+            "Aplicativo móvel (iOS em breve)",
+            "Suporte por e-mail"
           ],
           "cta": "Começar",
           "switchToAnnual": "Mudar para anual"
@@ -965,10 +965,10 @@
           "includesPrefix": "Todos os recursos do Pro +",
           "badge": "Mais popular",
           "features": [
-            "Unlimited meeting recordings",
-            "Agent mode",
-            "Chat over your data (Coming Soon)",
-            "Priority support"
+            "Gravações de reuniões ilimitadas",
+            "Modo agente",
+            "Converse com seus dados (em breve)",
+            "Suporte prioritário"
           ],
           "cta": "Começar",
           "switchToAnnual": "Mudar para anual"
@@ -976,16 +976,16 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "Personalizado",
-          "subtitle": "For advanced security & support",
+          "subtitle": "Para segurança avançada e suporte",
           "includesPrefix": "Todos os recursos do Business +",
           "features": [
-            "Managed API credits",
-            "Cloud sync across devices",
-            "Team features & admin",
-            "SSO & compliance",
-            "Dedicated support"
+            "Créditos de API gerenciados",
+            "Sincronização na nuvem entre dispositivos",
+            "Recursos de equipe e administração",
+            "SSO e conformidade",
+            "Suporte dedicado"
           ],
-          "cta": "Contact Sales"
+          "cta": "Falar com Vendas"
         },
         "currentPlan": "Plano atual",
         "upgrade": "Fazer upgrade",
@@ -1848,6 +1848,7 @@
       "copyToClipboard": "Copiar para área de transferência",
       "copied": "Copiado!",
       "emptyState": "Segure {{hotkey}} para iniciar uma conversa",
+      "orType": "ou digite uma mensagem",
       "errorPrefix": "Erro"
     },
     "titleBar": {
@@ -1860,7 +1861,30 @@
       "toClose": "fechar",
       "listening": "Ouvindo...",
       "transcribing": "Transcrevendo...",
-      "thinking": "Pensando..."
+      "thinking": "Pensando...",
+      "typeMessage": "Digite uma mensagem...",
+      "send": "Enviar"
+    },
+    "tools": {
+      "search_notesStatus": "Pesquisando notas...",
+      "web_searchStatus": "Pesquisando na web...",
+      "copy_to_clipboardStatus": "Copiando para a área de transferência...",
+      "get_calendar_eventsStatus": "Verificando calendário...",
+      "get_noteStatus": "Lendo nota...",
+      "create_noteStatus": "Criando nota...",
+      "update_noteStatus": "Atualizando nota...",
+      "copiedToClipboard": "Copiado para a área de transferência",
+      "foundNotes": "{{count}} nota encontrada",
+      "foundNotes_plural": "{{count}} notas encontradas",
+      "searchResults": "{{count}} resultado encontrado",
+      "searchResults_plural": "{{count}} resultados encontrados",
+      "openNote": "Abrir nota",
+      "calendarEvents": "{{count}} evento encontrado",
+      "calendarEvents_plural": "{{count}} eventos encontrados",
+      "noResults": "Nenhum resultado",
+      "error": "Erro de ferramenta",
+      "unknownTool": "Ferramenta desconhecida: {{name}}",
+      "invalidArgs": "Argumentos de ferramenta inválidos para {{name}}"
     }
   },
   "integrations": {

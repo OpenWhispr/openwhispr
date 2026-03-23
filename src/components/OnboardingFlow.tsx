@@ -351,8 +351,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           return (
             <div className="space-y-6">
               <div className="text-center">
-                <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Check className="w-7 h-7 text-emerald-600" />
+                <div className="w-14 h-14 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Check className="w-7 h-7 text-green-500" />
                 </div>
                 <h2 className="text-2xl font-semibold text-foreground mb-2">
                   {t("onboarding.setup.title")}

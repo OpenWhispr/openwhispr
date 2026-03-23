@@ -935,15 +935,15 @@
           "period": "pour toujours",
           "features": [
             "## OpenWhispr Cloud",
-            "2,000 words/week transcription",
-            "5 hours of meeting recordings/month",
-            "## Always free",
-            "Unlimited local AI models",
-            "Unlimited cloud transcription with your own API keys",
-            "100+ languages supported",
-            "Custom dictionary",
-            "Zero data retention",
-            "Community support"
+            "2 000 mots/semaine de transcription",
+            "5 heures d'enregistrements de réunions/mois",
+            "## Toujours gratuit",
+            "Modèles d'IA locaux illimités",
+            "Transcription cloud illimitée avec vos propres clés API",
+            "Plus de 100 langues prises en charge",
+            "Dictionnaire personnalisé",
+            "Aucune conservation de données",
+            "Support communautaire"
           ]
         },
         "pro": {
@@ -955,10 +955,10 @@
           "annualEquivalent": "$6.67",
           "includesPrefix": "Toutes les fonctionnalités Free +",
           "features": [
-            "Unlimited cloud transcription",
-            "20 hours of meeting recordings/month",
-            "Mobile app (iOS Coming Soon)",
-            "Email support"
+            "Transcription cloud illimitée",
+            "20 heures d'enregistrements de réunions/mois",
+            "Application mobile (iOS bientôt disponible)",
+            "Support par e-mail"
           ],
           "cta": "Commencer",
           "switchToAnnual": "Passer à l'annuel"
@@ -973,10 +973,10 @@
           "includesPrefix": "Toutes les fonctionnalités Pro +",
           "badge": "Le plus populaire",
           "features": [
-            "Unlimited meeting recordings",
-            "Agent mode",
-            "Chat over your data (Coming Soon)",
-            "Priority support"
+            "Enregistrements de réunions illimités",
+            "Mode agent",
+            "Discutez avec vos données (bientôt disponible)",
+            "Support prioritaire"
           ],
           "cta": "Commencer",
           "switchToAnnual": "Passer à l'annuel"
@@ -984,16 +984,16 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "Sur devis",
-          "subtitle": "For advanced security & support",
+          "subtitle": "Pour une sécurité avancée et un support dédié",
           "includesPrefix": "Toutes les fonctionnalités Business +",
           "features": [
-            "Managed API credits",
-            "Cloud sync across devices",
-            "Team features & admin",
-            "SSO & compliance",
-            "Dedicated support"
+            "Crédits API gérés",
+            "Synchronisation cloud entre appareils",
+            "Fonctionnalités d'équipe et administration",
+            "SSO et conformité",
+            "Support dédié"
           ],
-          "cta": "Contact Sales"
+          "cta": "Contacter les ventes"
         },
         "currentPlan": "Forfait actuel",
         "upgrade": "Passer au supérieur",
@@ -1848,6 +1848,7 @@
       "copyToClipboard": "Copier dans le presse-papiers",
       "copied": "Copié !",
       "emptyState": "Maintenez {{hotkey}} pour démarrer une conversation",
+      "orType": "ou tapez un message",
       "errorPrefix": "Erreur"
     },
     "titleBar": {
@@ -1860,7 +1861,30 @@
       "toClose": "fermer",
       "listening": "Écoute...",
       "transcribing": "Transcription...",
-      "thinking": "Réflexion..."
+      "thinking": "Réflexion...",
+      "typeMessage": "Écrivez un message...",
+      "send": "Envoyer"
+    },
+    "tools": {
+      "search_notesStatus": "Recherche de notes...",
+      "web_searchStatus": "Recherche sur le web...",
+      "copy_to_clipboardStatus": "Copie dans le presse-papiers...",
+      "get_calendar_eventsStatus": "Vérification du calendrier...",
+      "get_noteStatus": "Lecture de la note...",
+      "create_noteStatus": "Création de la note...",
+      "update_noteStatus": "Mise à jour de la note...",
+      "copiedToClipboard": "Copié dans le presse-papiers",
+      "foundNotes": "{{count}} note trouvée",
+      "foundNotes_plural": "{{count}} notes trouvées",
+      "searchResults": "{{count}} résultat trouvé",
+      "searchResults_plural": "{{count}} résultats trouvés",
+      "openNote": "Ouvrir la note",
+      "calendarEvents": "{{count}} événement trouvé",
+      "calendarEvents_plural": "{{count}} événements trouvés",
+      "noResults": "Aucun résultat",
+      "error": "Erreur d'outil",
+      "unknownTool": "Outil inconnu : {{name}}",
+      "invalidArgs": "Arguments d'outil invalides pour {{name}}"
     }
   },
   "integrations": {

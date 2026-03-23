@@ -955,15 +955,15 @@
           "period": "永久",
           "features": [
             "## OpenWhispr Cloud",
-            "2,000 words/week transcription",
-            "5 hours of meeting recordings/month",
-            "## Always free",
-            "Unlimited local AI models",
-            "Unlimited cloud transcription with your own API keys",
-            "100+ languages supported",
-            "Custom dictionary",
-            "Zero data retention",
-            "Community support"
+            "每週 2,000 字轉錄",
+            "每月 5 小時會議錄製",
+            "## 永久免費",
+            "無限本地 AI 模型",
+            "使用自己的 API 金鑰無限雲端轉錄",
+            "支援 100+ 種語言",
+            "自訂詞典",
+            "零資料留存",
+            "社群支援"
           ]
         },
         "pro": {
@@ -975,10 +975,10 @@
           "annualEquivalent": "$6.67",
           "includesPrefix": "所有 Free 功能 +",
           "features": [
-            "Unlimited cloud transcription",
-            "20 hours of meeting recordings/month",
-            "Mobile app (iOS Coming Soon)",
-            "Email support"
+            "無限雲端轉錄",
+            "每月 20 小時會議錄製",
+            "行動應用程式（iOS 即將推出）",
+            "電子郵件支援"
           ],
           "cta": "開始使用",
           "switchToAnnual": "切換為年付"
@@ -992,28 +992,23 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最熱門",
-          "features": [
-            "Unlimited meeting recordings",
-            "Agent mode",
-            "Chat over your data (Coming Soon)",
-            "Priority support"
-          ],
+          "features": ["無限會議錄製", "代理模式", "與您的資料對話（即將推出）", "優先支援"],
           "cta": "開始使用",
           "switchToAnnual": "切換為年付"
         },
         "enterprise": {
           "name": "Enterprise",
           "price": "自訂",
-          "subtitle": "For advanced security & support",
+          "subtitle": "提供進階安全保障與支援",
           "includesPrefix": "所有 Business 功能 +",
           "features": [
-            "Managed API credits",
-            "Cloud sync across devices",
-            "Team features & admin",
-            "SSO & compliance",
-            "Dedicated support"
+            "託管 API 額度",
+            "跨裝置雲端同步",
+            "團隊功能與管理",
+            "SSO 與合規",
+            "專屬支援"
           ],
-          "cta": "Contact Sales"
+          "cta": "聯繫銷售"
         },
         "currentPlan": "目前方案",
         "upgrade": "升級",
@@ -1848,6 +1843,7 @@
       "copyToClipboard": "複製到剪貼簿",
       "copied": "已複製！",
       "emptyState": "按住 {{hotkey}} 開始對話",
+      "orType": "或輸入訊息",
       "errorPrefix": "錯誤"
     },
     "titleBar": {
@@ -1860,7 +1856,30 @@
       "toClose": "關閉",
       "listening": "正在聆聽...",
       "transcribing": "正在轉錄...",
-      "thinking": "正在思考..."
+      "thinking": "正在思考...",
+      "typeMessage": "輸入訊息...",
+      "send": "傳送"
+    },
+    "tools": {
+      "search_notesStatus": "正在搜尋筆記...",
+      "web_searchStatus": "正在搜尋網頁...",
+      "copy_to_clipboardStatus": "正在複製到剪貼簿...",
+      "get_calendar_eventsStatus": "正在查看行事曆...",
+      "get_noteStatus": "正在讀取筆記...",
+      "create_noteStatus": "正在建立筆記...",
+      "update_noteStatus": "正在更新筆記...",
+      "copiedToClipboard": "已複製到剪貼簿",
+      "foundNotes": "找到 {{count}} 則筆記",
+      "foundNotes_plural": "找到 {{count}} 則筆記",
+      "searchResults": "找到 {{count}} 項結果",
+      "searchResults_plural": "找到 {{count}} 項結果",
+      "openNote": "開啟筆記",
+      "calendarEvents": "找到 {{count}} 個行程",
+      "calendarEvents_plural": "找到 {{count}} 個行程",
+      "noResults": "未找到結果",
+      "error": "工具錯誤",
+      "unknownTool": "未知工具：{{name}}",
+      "invalidArgs": "{{name}} 的工具參數無效"
     }
   },
   "integrations": {

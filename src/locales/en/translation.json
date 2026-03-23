@@ -1896,6 +1896,7 @@
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied!",
       "emptyState": "Hold {{hotkey}} to start a conversation",
+      "orType": "or type a message",
       "errorPrefix": "Error"
     },
     "titleBar": {
@@ -1908,7 +1909,30 @@
       "toClose": "close",
       "listening": "Listening...",
       "transcribing": "Transcribing...",
-      "thinking": "Thinking..."
+      "thinking": "Thinking...",
+      "typeMessage": "Type a message...",
+      "send": "Send"
+    },
+    "tools": {
+      "search_notesStatus": "Searching notes...",
+      "web_searchStatus": "Searching the web...",
+      "copy_to_clipboardStatus": "Copying to clipboard...",
+      "get_calendar_eventsStatus": "Checking calendar...",
+      "get_noteStatus": "Reading note...",
+      "create_noteStatus": "Creating note...",
+      "update_noteStatus": "Updating note...",
+      "copiedToClipboard": "Copied to your clipboard",
+      "foundNotes": "Found {{count}} note",
+      "foundNotes_plural": "Found {{count}} notes",
+      "searchResults": "Found {{count}} result",
+      "searchResults_plural": "Found {{count}} results",
+      "openNote": "Open note",
+      "calendarEvents": "Found {{count}} event",
+      "calendarEvents_plural": "Found {{count}} events",
+      "noResults": "No results found",
+      "error": "Tool error",
+      "unknownTool": "Unknown tool: {{name}}",
+      "invalidArgs": "Invalid tool arguments for {{name}}"
     }
   },
   "integrations": {

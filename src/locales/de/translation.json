@@ -935,15 +935,15 @@
           "period": "für immer",
           "features": [
             "## OpenWhispr Cloud",
-            "2,000 words/week transcription",
-            "5 hours of meeting recordings/month",
-            "## Always free",
-            "Unlimited local AI models",
-            "Unlimited cloud transcription with your own API keys",
-            "100+ languages supported",
-            "Custom dictionary",
-            "Zero data retention",
-            "Community support"
+            "2.000 Wörter/Woche Transkription",
+            "5 Stunden Meeting-Aufnahmen/Monat",
+            "## Immer kostenlos",
+            "Unbegrenzte lokale KI-Modelle",
+            "Unbegrenzte Cloud-Transkription mit eigenen API-Schlüsseln",
+            "Über 100 Sprachen unterstützt",
+            "Benutzerdefiniertes Wörterbuch",
+            "Keine Datenspeicherung",
+            "Community-Support"
           ]
         },
         "pro": {
@@ -955,10 +955,10 @@
           "annualEquivalent": "$6.67",
           "includesPrefix": "Alle Free-Funktionen +",
           "features": [
-            "Unlimited cloud transcription",
-            "20 hours of meeting recordings/month",
-            "Mobile app (iOS Coming Soon)",
-            "Email support"
+            "Unbegrenzte Cloud-Transkription",
+            "20 Stunden Meeting-Aufnahmen/Monat",
+            "Mobile App (iOS demnächst verfügbar)",
+            "E-Mail-Support"
           ],
           "cta": "Jetzt starten",
           "switchToAnnual": "Zum Jahresabo wechseln"
@@ -973,10 +973,10 @@
           "includesPrefix": "Alle Pro-Funktionen +",
           "badge": "Beliebteste Wahl",
           "features": [
-            "Unlimited meeting recordings",
-            "Agent mode",
-            "Chat over your data (Coming Soon)",
-            "Priority support"
+            "Unbegrenzte Meeting-Aufnahmen",
+            "Agentenmodus",
+            "Chat über Ihre Daten (demnächst verfügbar)",
+            "Prioritäts-Support"
           ],
           "cta": "Jetzt starten",
           "switchToAnnual": "Zum Jahresabo wechseln"
@@ -984,16 +984,16 @@
         "enterprise": {
           "name": "Enterprise",
           "price": "Individuell",
-          "subtitle": "For advanced security & support",
+          "subtitle": "Für erweiterte Sicherheit & Support",
           "includesPrefix": "Alle Business-Funktionen +",
           "features": [
-            "Managed API credits",
-            "Cloud sync across devices",
-            "Team features & admin",
-            "SSO & compliance",
-            "Dedicated support"
+            "Verwaltete API-Guthaben",
+            "Cloud-Synchronisierung über Geräte hinweg",
+            "Team-Funktionen & Verwaltung",
+            "SSO & Compliance",
+            "Dedizierter Support"
           ],
-          "cta": "Contact Sales"
+          "cta": "Vertrieb kontaktieren"
         },
         "currentPlan": "Aktueller Tarif",
         "upgrade": "Upgrade",
@@ -1848,6 +1848,7 @@
       "copyToClipboard": "In Zwischenablage kopieren",
       "copied": "Kopiert!",
       "emptyState": "{{hotkey}} gedrückt halten, um eine Unterhaltung zu starten",
+      "orType": "oder eine Nachricht eingeben",
       "errorPrefix": "Fehler"
     },
     "titleBar": {
@@ -1860,7 +1861,30 @@
       "toClose": "schließen",
       "listening": "Hört zu...",
       "transcribing": "Transkribiert...",
-      "thinking": "Denkt nach..."
+      "thinking": "Denkt nach...",
+      "typeMessage": "Nachricht eingeben...",
+      "send": "Senden"
+    },
+    "tools": {
+      "search_notesStatus": "Notizen werden durchsucht...",
+      "web_searchStatus": "Websuche...",
+      "copy_to_clipboardStatus": "In Zwischenablage kopieren...",
+      "get_calendar_eventsStatus": "Kalender wird geprüft...",
+      "get_noteStatus": "Notiz wird gelesen...",
+      "create_noteStatus": "Notiz wird erstellt...",
+      "update_noteStatus": "Notiz wird aktualisiert...",
+      "copiedToClipboard": "In die Zwischenablage kopiert",
+      "foundNotes": "{{count}} Notiz gefunden",
+      "foundNotes_plural": "{{count}} Notizen gefunden",
+      "searchResults": "{{count}} Ergebnis gefunden",
+      "searchResults_plural": "{{count}} Ergebnisse gefunden",
+      "openNote": "Notiz öffnen",
+      "calendarEvents": "{{count}} Termin gefunden",
+      "calendarEvents_plural": "{{count}} Termine gefunden",
+      "noResults": "Keine Ergebnisse",
+      "error": "Werkzeugfehler",
+      "unknownTool": "Unbekanntes Werkzeug: {{name}}",
+      "invalidArgs": "Ungültige Tool-Argumente für {{name}}"
     }
   },
   "integrations": {
