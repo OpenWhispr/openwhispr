@@ -120,7 +120,7 @@
     "@tiptap/react": "^3.20.4",
     "@tiptap/starter-kit": "^3.20.4",
     "@vercel/blob": "^2.3.0",
-    "better-sqlite3": "^12.4.2",
+    "better-sqlite3": "^12.8.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "dbus-next": "^0.10.2",
