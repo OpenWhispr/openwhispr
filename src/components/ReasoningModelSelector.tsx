@@ -772,6 +772,7 @@ export default function ReasoningModelSelector({
 
   useEffect(() => {
     if (!setReasoningEffort || !reasoningEffort) return;
+    if (selectedMode !== "cloud") return;
     if (!canResolveCurrentCapability) return;
     if (
       !hasSelectableReasoningEffort(currentReasoningEffortCapability) ||
@@ -783,6 +784,7 @@ export default function ReasoningModelSelector({
     canResolveCurrentCapability,
     currentReasoningEffortCapability,
     reasoningEffort,
+    selectedMode,
     setReasoningEffort,
   ]);
 

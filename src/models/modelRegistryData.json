@@ -310,8 +310,8 @@
           "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b",
           "reasoningEffort": {
             "provider": "openai",
-            "options": ["none", "default"],
-            "defaultValue": "default"
+            "options": ["none"],
+            "defaultValue": "none"
           }
         },
         {

@@ -1,4 +1,4 @@
-import { getModelProvider, getOpenAiApiConfig } from "../models/ModelRegistry";
+import { getCloudModel, getModelProvider, getOpenAiApiConfig } from "../models/ModelRegistry";
 import {
   getModelReasoningEffortCapability,
   isReasoningEffortSupported,
@@ -6,7 +6,13 @@ import {
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy } from "../utils/retry";
-import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
+import {
+  API_ENDPOINTS,
+  API_VERSIONS,
+  TOKEN_LIMITS,
+  buildApiUrl,
+  normalizeBaseUrl,
+} from "../config/constants";
 import logger from "../utils/logger";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/neonAuth";
@@ -71,18 +77,25 @@ class ReasoningService extends BaseReasoningService {
   }
 
   private applyOpenAiReasoningEffort(
+    model: string,
     requestBody: Record<string, unknown>,
     reasoningEffort: ResolvedReasoningEffort | null,
     apiType: "chat" | "responses"
   ) {
-    if (!reasoningEffort || reasoningEffort.provider !== "openai") return;
+    const modelDef = getCloudModel(model);
+    const effectiveReasoningEffort =
+      modelDef?.disableThinking && (!reasoningEffort || reasoningEffort.provider === "openai")
+        ? { provider: "openai" as const, value: "none" }
+        : reasoningEffort;
+
+    if (!effectiveReasoningEffort || effectiveReasoningEffort.provider !== "openai") return;
 
     if (apiType === "responses") {
-      requestBody.reasoning = { effort: reasoningEffort.value };
+      requestBody.reasoning = { effort: effectiveReasoningEffort.value };
       return;
     }
 
-    requestBody.reasoning_effort = reasoningEffort.value;
+    requestBody.reasoning_effort = effectiveReasoningEffort.value;
   }
 
   private getConfiguredOpenAIBase(isCustomProviderOverride?: boolean): string {
@@ -346,7 +359,7 @@ class ReasoningService extends BaseReasoningService {
         ),
     };
 
-    this.applyOpenAiReasoningEffort(requestBody, reasoningEffort, "chat");
+    this.applyOpenAiReasoningEffort(model, requestBody, reasoningEffort, "chat");
 
     logger.logReasoning(`${providerName.toUpperCase()}_REQUEST`, {
       endpoint,
@@ -629,6 +642,7 @@ class ReasoningService extends BaseReasoningService {
             }
 
             this.applyOpenAiReasoningEffort(
+              model,
               requestBody,
               resolvedReasoningEffort,
               type === "responses" ? "responses" : "chat"
@@ -1201,12 +1215,12 @@ class ReasoningService extends BaseReasoningService {
       temperature: config.temperature ?? 0.3,
     };
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch(API_ENDPOINTS.ANTHROPIC, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-API-Key": apiKey,
-        "anthropic-version": "2023-06-01",
+        "anthropic-version": API_VERSIONS.ANTHROPIC,
       },
       body: JSON.stringify(requestBody),
     });
@@ -1336,7 +1350,7 @@ class ReasoningService extends BaseReasoningService {
       }
     }
 
-    this.applyOpenAiReasoningEffort(requestBody, resolvedReasoningEffort, "chat");
+    this.applyOpenAiReasoningEffort(model, requestBody, resolvedReasoningEffort, "chat");
     if (provider === "gemini" && resolvedReasoningEffort?.provider === "gemini") {
       requestBody.reasoning_effort = resolvedReasoningEffort.value;
     }

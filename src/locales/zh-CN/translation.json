@@ -294,29 +294,29 @@
       "unableToLoadModels": "无法从端点加载模型。"
     },
     "effort": {
-      "title": "Reasoning Effort",
-      "description": "Only supported models expose this. Leave it on Auto to use the provider default.",
-      "auto": "Auto (Provider Default)",
-      "defaultValue": "Default: {{value}}",
+      "title": "推理强度",
+      "description": "仅受支持的模型会显示此选项。保持自动以使用提供商默认值。",
+      "auto": "自动（提供商默认）",
+      "defaultValue": "默认值：{{value}}",
       "options": {
-        "none": "None",
-        "default": "Default",
-        "minimal": "Minimal",
-        "low": "Low",
-        "medium": "Medium",
-        "high": "High",
-        "xhigh": "X-High",
-        "max": "Max"
+        "none": "关闭",
+        "default": "默认",
+        "minimal": "极低",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "极高",
+        "max": "最高"
       },
       "optionDescriptions": {
-        "none": "Turns reasoning off when the model allows it",
-        "default": "Uses the provider's default reasoning behavior",
-        "minimal": "Closest to no thinking, optimized for speed",
-        "low": "Lower cost and latency for simpler tasks",
-        "medium": "Balanced speed and reasoning depth",
-        "high": "More deliberate reasoning for harder tasks",
-        "xhigh": "Maximum reasoning depth on supported OpenAI models",
-        "max": "Maximum reasoning depth on supported Claude models"
+        "none": "当模型允许时关闭推理",
+        "default": "使用提供商的默认推理行为",
+        "minimal": "尽量减少思考，以速度为先",
+        "low": "适合简单任务的更低成本和延迟",
+        "medium": "在速度与推理深度之间取得平衡",
+        "high": "为更难的任务进行更充分的推理",
+        "xhigh": "在受支持的 OpenAI 模型上使用最深推理",
+        "max": "在受支持的模型上使用可用的最高推理深度"
       }
     },
     "getApiKey": "获取你的 API Key ->",

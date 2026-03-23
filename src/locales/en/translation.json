@@ -329,7 +329,7 @@
         "medium": "Balanced speed and reasoning depth",
         "high": "More deliberate reasoning for harder tasks",
         "xhigh": "Maximum reasoning depth on supported OpenAI models",
-        "max": "Maximum reasoning depth on supported Claude models"
+        "max": "Highest available reasoning depth on supported models"
       }
     },
     "getApiKey": "Get your API key ->",
