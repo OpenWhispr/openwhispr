@@ -1,4 +1,8 @@
-import { getModelProvider, getCloudModel, getOpenAiApiConfig } from "../models/ModelRegistry";
+import { getModelProvider, getOpenAiApiConfig } from "../models/ModelRegistry";
+import {
+  getModelReasoningEffortCapability,
+  isReasoningEffortSupported,
+} from "../models/reasoningEffort";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy } from "../utils/retry";
@@ -7,6 +11,11 @@ import logger from "../utils/logger";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/neonAuth";
 import { getSettings, isCloudReasoningMode } from "../stores/settingsStore";
+
+type ResolvedReasoningEffort = {
+  provider: "openai" | "anthropic" | "gemini";
+  value: string;
+};
 
 class ReasoningService extends BaseReasoningService {
   private apiKeyCache: SecureCache<string>;
@@ -24,7 +33,59 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
-  private getConfiguredOpenAIBase(): string {
+  private resolveReasoningEffort(
+    model: string,
+    provider: string,
+    config: ReasoningConfig,
+    fallbackToStoredSetting = false
+  ): ResolvedReasoningEffort | null {
+    const requested =
+      config.reasoningEffort?.trim() ||
+      (fallbackToStoredSetting ? getSettings().reasoningEffort?.trim() : "") ||
+      "";
+
+    if (!requested) return null;
+
+    if (provider === "custom") {
+      return {
+        provider: "openai",
+        value: requested,
+      };
+    }
+
+    const capability = getModelReasoningEffortCapability(model);
+    if (!capability || !isReasoningEffortSupported(capability, requested)) {
+      logger.logReasoning("REASONING_EFFORT_SKIPPED", {
+        provider,
+        model,
+        requested,
+        hasCapability: Boolean(capability),
+      });
+      return null;
+    }
+
+    return {
+      provider: capability.provider,
+      value: requested,
+    };
+  }
+
+  private applyOpenAiReasoningEffort(
+    requestBody: Record<string, unknown>,
+    reasoningEffort: ResolvedReasoningEffort | null,
+    apiType: "chat" | "responses"
+  ) {
+    if (!reasoningEffort || reasoningEffort.provider !== "openai") return;
+
+    if (apiType === "responses") {
+      requestBody.reasoning = { effort: reasoningEffort.value };
+      return;
+    }
+
+    requestBody.reasoning_effort = reasoningEffort.value;
+  }
+
+  private getConfiguredOpenAIBase(isCustomProviderOverride?: boolean): string {
     if (typeof window === "undefined") {
       return API_ENDPOINTS.OPENAI_BASE;
     }
@@ -32,7 +93,7 @@ class ReasoningService extends BaseReasoningService {
     try {
       const settings = getSettings();
       const provider = settings.reasoningProvider || "";
-      const isCustomProvider = provider === "custom";
+      const isCustomProvider = isCustomProviderOverride ?? provider === "custom";
 
       if (!isCustomProvider) {
         logger.logReasoning("CUSTOM_REASONING_ENDPOINT_CHECK", {
@@ -257,7 +318,8 @@ class ReasoningService extends BaseReasoningService {
     text: string,
     agentName: string | null,
     config: ReasoningConfig,
-    providerName: string
+    providerName: string,
+    reasoningEffort: ResolvedReasoningEffort | null = null
   ): Promise<string> {
     const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
     const userPrompt = text;
@@ -284,11 +346,7 @@ class ReasoningService extends BaseReasoningService {
         ),
     };
 
-    // Disable thinking for Groq Qwen models
-    const modelDef = getCloudModel(model);
-    if (modelDef?.disableThinking && providerName.toLowerCase() === "groq") {
-      requestBody.reasoning_effort = "none";
-    }
+    this.applyOpenAiReasoningEffort(requestBody, reasoningEffort, "chat");
 
     logger.logReasoning(`${providerName.toUpperCase()}_REQUEST`, {
       endpoint,
@@ -502,13 +560,19 @@ class ReasoningService extends BaseReasoningService {
     try {
       const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
       const userPrompt = text;
+      const resolvedReasoningEffort = this.resolveReasoningEffort(
+        model,
+        isCustomProvider ? "custom" : "openai",
+        config,
+        true
+      );
 
       const messages = [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ];
 
-      const openAiBase = this.getConfiguredOpenAIBase();
+      const openAiBase = this.getConfiguredOpenAIBase(isCustomProvider);
       const endpointCandidates = this.getOpenAIEndpointCandidates(openAiBase);
       const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
 
@@ -563,6 +627,12 @@ class ReasoningService extends BaseReasoningService {
             if (apiConfig.supportsTemperature) {
               requestBody.temperature = config.temperature || 0.3;
             }
+
+            this.applyOpenAiReasoningEffort(
+              requestBody,
+              resolvedReasoningEffort,
+              type === "responses" ? "responses" : "chat"
+            );
 
             const res = await fetch(endpoint, {
               method: "POST",
@@ -840,6 +910,7 @@ class ReasoningService extends BaseReasoningService {
     try {
       const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
       const userPrompt = text;
+      const resolvedReasoningEffort = this.resolveReasoningEffort(model, "gemini", config, true);
 
       const requestBody = {
         contents: [
@@ -864,6 +935,13 @@ class ReasoningService extends BaseReasoningService {
                 TOKEN_LIMITS.TOKEN_MULTIPLIER
               )
             ),
+          ...(resolvedReasoningEffort?.provider === "gemini"
+            ? {
+                thinkingConfig: {
+                  thinkingLevel: resolvedReasoningEffort.value,
+                },
+              }
+            : {}),
         },
       };
 
@@ -1011,6 +1089,7 @@ class ReasoningService extends BaseReasoningService {
 
     try {
       const endpoint = buildApiUrl(API_ENDPOINTS.GROQ_BASE, "/chat/completions");
+      const resolvedReasoningEffort = this.resolveReasoningEffort(model, "groq", config, true);
       return await this.callChatCompletionsApi(
         endpoint,
         apiKey,
@@ -1018,7 +1097,8 @@ class ReasoningService extends BaseReasoningService {
         text,
         agentName,
         config,
-        "Groq"
+        "Groq",
+        resolvedReasoningEffort
       );
     } catch (error) {
       logger.logReasoning("GROQ_ERROR", {
@@ -1101,6 +1181,91 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
+  private async *processAnthropicStreaming(
+    messages: Array<{ role: string; content: string }>,
+    model: string,
+    apiKey: string,
+    config: ReasoningConfig & { systemPrompt: string }
+  ): AsyncGenerator<string, void, unknown> {
+    const requestBody: Record<string, unknown> = {
+      model,
+      stream: true,
+      system: config.systemPrompt,
+      messages: messages
+        .filter((message) => message.role !== "system")
+        .map((message) => ({
+          role: message.role,
+          content: message.content,
+        })),
+      max_tokens: config.maxTokens || Math.max(4096, TOKEN_LIMITS.MAX_TOKENS),
+      temperature: config.temperature ?? 0.3,
+    };
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-API-Key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      let errorMessage: string;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage =
+          errorData.error?.message ||
+          errorData.message ||
+          errorData.error ||
+          `Anthropic API error: ${response.status}`;
+      } catch {
+        errorMessage = errorText || `Anthropic API error: ${response.status}`;
+      }
+      throw new Error(errorMessage);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith("data: ")) continue;
+
+          const data = trimmed.slice(6);
+          if (data === "[DONE]") return;
+
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
+              if (typeof parsed.delta.text === "string" && parsed.delta.text) {
+                yield parsed.delta.text;
+              }
+            }
+          } catch {
+            // skip malformed SSE chunks
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
   async *processTextStreaming(
     messages: Array<{ role: string; content: string }>,
     model: string,
@@ -1109,6 +1274,7 @@ class ReasoningService extends BaseReasoningService {
   ): AsyncGenerator<string, void, unknown> {
     const cloudProviders = ["openai", "groq", "gemini", "anthropic", "custom"];
     const isLocalProvider = !cloudProviders.includes(provider);
+    const resolvedReasoningEffort = this.resolveReasoningEffort(model, provider, config);
 
     let endpoint: string;
     let apiKey = "";
@@ -1124,6 +1290,11 @@ class ReasoningService extends BaseReasoningService {
       const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom";
       apiKey = await this.getApiKey(providerKey);
 
+      if (providerKey === "anthropic") {
+        yield* this.processAnthropicStreaming(messages, model, apiKey, config);
+        return;
+      }
+
       switch (providerKey) {
         case "groq":
           endpoint = buildApiUrl(API_ENDPOINTS.GROQ_BASE, "/chat/completions");
@@ -1133,7 +1304,10 @@ class ReasoningService extends BaseReasoningService {
           break;
         case "openai":
         case "custom":
-          endpoint = buildApiUrl(this.getConfiguredOpenAIBase(), "/chat/completions");
+          endpoint = buildApiUrl(
+            this.getConfiguredOpenAIBase(providerKey === "custom"),
+            "/chat/completions"
+          );
           break;
         default:
           endpoint = buildApiUrl(API_ENDPOINTS.OPENAI_BASE, "/chat/completions");
@@ -1160,6 +1334,11 @@ class ReasoningService extends BaseReasoningService {
       if (apiConfig.supportsTemperature) {
         requestBody.temperature = config.temperature ?? 0.3;
       }
+    }
+
+    this.applyOpenAiReasoningEffort(requestBody, resolvedReasoningEffort, "chat");
+    if (provider === "gemini" && resolvedReasoningEffort?.provider === "gemini") {
+      requestBody.reasoning_effort = resolvedReasoningEffort.value;
     }
 
     logger.logReasoning("AGENT_STREAM_REQUEST", {

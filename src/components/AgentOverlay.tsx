@@ -103,7 +103,10 @@ export default function AgentOverlay() {
             llmMessages,
             settings.agentModel,
             settings.agentProvider,
-            { systemPrompt }
+            {
+              systemPrompt,
+              reasoningEffort: settings.agentReasoningEffort,
+            }
           );
 
       for await (const chunk of streamSource) {

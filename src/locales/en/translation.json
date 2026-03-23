@@ -306,6 +306,32 @@
       "ownerLabel": "Owner: {{owner}}",
       "unableToLoadModels": "Unable to load models from endpoint."
     },
+    "effort": {
+      "title": "Reasoning Effort",
+      "description": "Only supported models expose this. Leave it on Auto to use the provider default.",
+      "auto": "Auto (Provider Default)",
+      "defaultValue": "Default: {{value}}",
+      "options": {
+        "none": "None",
+        "default": "Default",
+        "minimal": "Minimal",
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "X-High",
+        "max": "Max"
+      },
+      "optionDescriptions": {
+        "none": "Turns reasoning off when the model allows it",
+        "default": "Uses the provider's default reasoning behavior",
+        "minimal": "Closest to no thinking, optimized for speed",
+        "low": "Lower cost and latency for simpler tasks",
+        "medium": "Balanced speed and reasoning depth",
+        "high": "More deliberate reasoning for harder tasks",
+        "xhigh": "Maximum reasoning depth on supported OpenAI models",
+        "max": "Maximum reasoning depth on supported Claude models"
+      }
+    },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
     "availableModels": "Available Models"

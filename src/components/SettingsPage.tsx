@@ -406,6 +406,8 @@ interface AiModelsSectionProps {
   setReasoningModel: (model: string) => void;
   reasoningProvider: string;
   setReasoningProvider: (provider: string) => void;
+  reasoningEffort: string;
+  setReasoningEffort: (value: string) => void;
   cloudReasoningBaseUrl: string;
   setCloudReasoningBaseUrl: (url: string) => void;
   openaiApiKey: string;
@@ -436,6 +438,8 @@ function AiModelsSection({
   setReasoningModel,
   reasoningProvider,
   setReasoningProvider,
+  reasoningEffort,
+  setReasoningEffort,
   cloudReasoningBaseUrl,
   setCloudReasoningBaseUrl,
   openaiApiKey,
@@ -617,6 +621,8 @@ function AiModelsSection({
               setGroqApiKey={setGroqApiKey}
               customReasoningApiKey={customReasoningApiKey}
               setCustomReasoningApiKey={setCustomReasoningApiKey}
+              reasoningEffort={reasoningEffort}
+              setReasoningEffort={setReasoningEffort}
             />
           )}
         </>
@@ -649,6 +655,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     useReasoningModel,
     reasoningModel,
     reasoningProvider,
+    reasoningEffort,
     openaiApiKey,
     anthropicApiKey,
     geminiApiKey,
@@ -673,6 +680,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setUseReasoningModel,
     setReasoningModel,
     setReasoningProvider,
+    setReasoningEffort,
     setOpenaiApiKey,
     setAnthropicApiKey,
     setGeminiApiKey,
@@ -2616,7 +2624,7 @@ EOF`,
                       desc: t("settingsPage.general.waylandPaste.xclipDesc", {
                         defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
                       }),
-                      guide: [
+                      steps: [
                         {
                           title: t("settingsPage.general.waylandPaste.guide.xclip.step1Title", {
                             defaultValue: "Install xclip",
@@ -2908,6 +2916,8 @@ EOF`,
             setReasoningModel={setReasoningModel}
             reasoningProvider={reasoningProvider}
             setReasoningProvider={setReasoningProvider}
+            reasoningEffort={reasoningEffort}
+            setReasoningEffort={setReasoningEffort}
             cloudReasoningBaseUrl={cloudReasoningBaseUrl}
             setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
             openaiApiKey={openaiApiKey}
@@ -3049,6 +3059,8 @@ EOF`,
               setReasoningModel={setReasoningModel}
               reasoningProvider={reasoningProvider}
               setReasoningProvider={setReasoningProvider}
+              reasoningEffort={reasoningEffort}
+              setReasoningEffort={setReasoningEffort}
               cloudReasoningBaseUrl={cloudReasoningBaseUrl}
               setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
               openaiApiKey={openaiApiKey}
