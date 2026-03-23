@@ -40,6 +40,15 @@ export interface CloudModelDefinition {
   disableThinking?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
+  reasoningEffort?: ReasoningEffortCapability;
+}
+
+export type ReasoningEffortProvider = "openai" | "anthropic" | "gemini";
+
+export interface ReasoningEffortCapability {
+  provider: ReasoningEffortProvider;
+  options: string[];
+  defaultValue?: string;
 }
 
 export interface CloudProviderData {

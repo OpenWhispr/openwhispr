@@ -309,6 +309,32 @@
       "ownerLabel": "擁有者：{{owner}}",
       "unableToLoadModels": "無法從端點載入模型。"
     },
+    "effort": {
+      "title": "推理強度",
+      "description": "僅支援的模型會顯示此選項。保持自動以使用提供者預設值。",
+      "auto": "自動（提供者預設）",
+      "defaultValue": "預設值：{{value}}",
+      "options": {
+        "none": "關閉",
+        "default": "預設",
+        "minimal": "極低",
+        "low": "低",
+        "medium": "中",
+        "high": "高",
+        "xhigh": "極高",
+        "max": "最高"
+      },
+      "optionDescriptions": {
+        "none": "當模型允許時關閉推理",
+        "default": "使用提供者的預設推理行為",
+        "minimal": "盡量減少思考，以速度為優先",
+        "low": "適合簡單任務的更低成本與延遲",
+        "medium": "在速度與推理深度之間取得平衡",
+        "high": "為較困難的任務進行更充分的推理",
+        "xhigh": "在支援的 OpenAI 模型上使用最深推理",
+        "max": "在支援的模型上使用可用的最高推理深度"
+      }
+    },
     "getApiKey": "取得 API Key ->",
     "selectModel": "選擇模型",
     "availableModels": "可用模型"

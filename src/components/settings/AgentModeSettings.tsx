@@ -21,6 +21,8 @@ export default function AgentModeSettings() {
     setAgentModel,
     agentProvider,
     setAgentProvider,
+    agentReasoningEffort,
+    setAgentReasoningEffort,
     agentSystemPrompt,
     setAgentSystemPrompt,
     cloudAgentMode,
@@ -216,6 +218,8 @@ export default function AgentModeSettings() {
                 setGroqApiKey={setGroqApiKey}
                 customReasoningApiKey={customReasoningApiKey}
                 setCustomReasoningApiKey={setCustomReasoningApiKey}
+                reasoningEffort={agentReasoningEffort}
+                setReasoningEffort={setAgentReasoningEffort}
               />
             </div>
           )}

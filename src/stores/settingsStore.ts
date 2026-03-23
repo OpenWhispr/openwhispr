@@ -125,6 +125,7 @@ export interface SettingsState
   setUseReasoningModel: (value: boolean) => void;
   setReasoningModel: (value: string) => void;
   setReasoningProvider: (value: string) => void;
+  setReasoningEffort: (value: string) => void;
   setUiLanguage: (language: string) => void;
 
   setOpenaiApiKey: (key: string) => void;
@@ -160,6 +161,7 @@ export interface SettingsState
 
   setAgentModel: (value: string) => void;
   setAgentProvider: (value: string) => void;
+  setAgentReasoningEffort: (value: string) => void;
   setAgentKey: (key: string) => void;
   setAgentSystemPrompt: (value: string) => void;
   setAgentEnabled: (value: boolean) => void;
@@ -249,6 +251,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   useReasoningModel: readBoolean("useReasoningModel", true),
   reasoningModel: readString("reasoningModel", ""),
   reasoningProvider: readString("reasoningProvider", "openai"),
+  reasoningEffort: readString("reasoningEffort", ""),
 
   openaiApiKey: readString("openaiApiKey", ""),
   anthropicApiKey: readString("anthropicApiKey", ""),
@@ -312,6 +315,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   agentModel: readString("agentModel", "openai/gpt-oss-120b"),
   agentProvider: readString("agentProvider", "groq"),
+  agentReasoningEffort: readString("agentReasoningEffort", ""),
   agentKey: readString("agentKey", ""),
   agentSystemPrompt: readString("agentSystemPrompt", ""),
   agentEnabled: readBoolean("agentEnabled", true),
@@ -338,6 +342,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setUseReasoningModel: createBooleanSetter("useReasoningModel"),
   setReasoningModel: createStringSetter("reasoningModel"),
   setReasoningProvider: createStringSetter("reasoningProvider"),
+  setReasoningEffort: createStringSetter("reasoningEffort"),
 
   setCustomDictionary: (words: string[]) => {
     if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
@@ -507,6 +512,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setAgentModel: createStringSetter("agentModel"),
   setAgentProvider: createStringSetter("agentProvider"),
+  setAgentReasoningEffort: createStringSetter("agentReasoningEffort"),
   setAgentKey: (key: string) => {
     if (!isBrowser) {
       useSettingsStore.setState({ agentKey: key });
@@ -587,6 +593,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.reasoningModel !== undefined) s.setReasoningModel(settings.reasoningModel);
     if (settings.reasoningProvider !== undefined)
       s.setReasoningProvider(settings.reasoningProvider);
+    if (settings.reasoningEffort !== undefined) s.setReasoningEffort(settings.reasoningEffort);
     if (settings.cloudReasoningBaseUrl !== undefined)
       s.setCloudReasoningBaseUrl(settings.cloudReasoningBaseUrl);
     if (settings.cloudReasoningMode !== undefined)
@@ -610,6 +617,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const s = useSettingsStore.getState();
     if (settings.agentModel !== undefined) s.setAgentModel(settings.agentModel);
     if (settings.agentProvider !== undefined) s.setAgentProvider(settings.agentProvider);
+    if (settings.agentReasoningEffort !== undefined)
+      s.setAgentReasoningEffort(settings.agentReasoningEffort);
     if (settings.agentKey !== undefined) s.setAgentKey(settings.agentKey);
     if (settings.agentSystemPrompt !== undefined)
       s.setAgentSystemPrompt(settings.agentSystemPrompt);
