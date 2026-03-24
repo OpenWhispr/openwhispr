@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { Mic, SendHorizontal } from "lucide-react";
+import { Mic, SendHorizontal, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -13,6 +13,7 @@ interface ChatInputProps {
   toolStatus?: string;
   activeToolName?: string;
   onTextSubmit?: (text: string) => void;
+  onCancel?: () => void;
   showHotkey?: boolean;
 }
 
@@ -80,25 +81,13 @@ function ProcessingIndicator() {
   );
 }
 
-function ThinkingIndicator() {
-  return (
-    <div
-      className="w-10 h-0.75 rounded-full shrink-0"
-      style={{
-        background: "linear-gradient(90deg, transparent, oklch(0.65 0.2 260 / 0.4), transparent)",
-        backgroundSize: "200% 100%",
-        animation: "tool-status-sweep 1.5s ease-in-out infinite",
-      }}
-    />
-  );
-}
-
 export function ChatInput({
   agentState,
   partialTranscript,
   toolStatus,
   activeToolName,
   onTextSubmit,
+  onCancel,
   showHotkey = false,
 }: ChatInputProps) {
   const { t } = useTranslation();
@@ -124,31 +113,66 @@ export function ChatInput({
   );
 
   const isIdle = agentState === "idle";
+  const isListening = agentState === "listening";
+  const isTranscribing = agentState === "transcribing";
+  const isBusy = agentState === "thinking" || agentState === "streaming" || agentState === "tool-executing";
   const ToolIcon = activeToolName ? toolIcons[activeToolName] : null;
 
   return (
     <div
       className={cn(
-        "flex items-center gap-2 min-h-11 px-3 py-2 shrink-0",
+        "flex items-center gap-2 h-10 px-3 shrink-0",
         "bg-surface-1 border-t border-border/30"
       )}
     >
-      {isIdle && (
-        <div className="flex items-center gap-2 w-full">
+      {isListening && (
+        <>
+          <RecordingIndicator />
+          <span className="text-[12px] text-foreground/80 truncate flex-1">
+            {partialTranscript || t("agentMode.input.listening")}
+          </span>
+        </>
+      )}
+
+      {isTranscribing && (
+        <>
+          <ProcessingIndicator />
+          <span className="text-[12px] text-muted-foreground select-none">
+            {t("agentMode.input.transcribing")}
+          </span>
+        </>
+      )}
+
+      {(isIdle || isBusy) && (
+        <div className="relative flex items-center gap-2 w-full">
           <input
             ref={inputRef}
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={t("agentMode.input.typeMessage")}
+            disabled={isBusy}
+            placeholder={isBusy ? "" : t("agentMode.input.typeMessage")}
             className={cn(
-              "bg-transparent border-none outline-none flex-1",
+              "input-inline flex-1 outline-none bg-transparent",
               "text-[13px] text-foreground placeholder:text-muted-foreground/40",
-              "min-w-0"
+              "min-w-0 p-0",
+              isBusy && "opacity-0 pointer-events-none"
             )}
           />
-          {inputText.trim() ? (
+          {isBusy && (
+            <div className="absolute inset-0 flex items-center gap-2 pr-8 pointer-events-none">
+              {agentState === "tool-executing" && ToolIcon ? (
+                <ToolIcon size={12} className="text-primary/60 shrink-0" />
+              ) : null}
+              <span className="text-[12px] text-muted-foreground/60 select-none truncate">
+                {agentState === "tool-executing" && toolStatus
+                  ? toolStatus
+                  : t("agentMode.input.thinking")}
+              </span>
+            </div>
+          )}
+          {isIdle && inputText.trim() ? (
             <button
               onClick={handleSubmit}
               className={cn(
@@ -160,7 +184,19 @@ export function ChatInput({
             >
               <SendHorizontal size={14} />
             </button>
-          ) : showHotkey ? (
+          ) : isBusy && onCancel ? (
+            <button
+              onClick={onCancel}
+              className={cn(
+                "p-1 rounded-sm shrink-0",
+                "text-muted-foreground/60 hover:text-foreground hover:bg-foreground/8",
+                "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring/30",
+                "transition-colors duration-100"
+              )}
+            >
+              <Square size={12} className="fill-current" />
+            </button>
+          ) : isIdle && showHotkey ? (
             <div className="flex items-center gap-2 shrink-0">
               <div
                 className="text-muted-foreground/50"
@@ -172,46 +208,6 @@ export function ChatInput({
             </div>
           ) : null}
         </div>
-      )}
-
-      {agentState === "listening" && (
-        <>
-          <RecordingIndicator />
-          <span className="text-[12px] text-foreground/80 truncate flex-1">
-            {partialTranscript || t("agentMode.input.listening")}
-          </span>
-        </>
-      )}
-
-      {agentState === "transcribing" && (
-        <>
-          <ProcessingIndicator />
-          <span className="text-[12px] text-muted-foreground select-none">
-            {t("agentMode.input.transcribing")}
-          </span>
-        </>
-      )}
-
-      {(agentState === "thinking" || agentState === "streaming") && (
-        <>
-          <ThinkingIndicator />
-          <span className="text-[12px] text-muted-foreground select-none">
-            {t("agentMode.input.thinking")}
-          </span>
-        </>
-      )}
-
-      {agentState === "tool-executing" && (
-        <>
-          {ToolIcon ? (
-            <ToolIcon size={12} className="text-primary/60 shrink-0" />
-          ) : (
-            <ThinkingIndicator />
-          )}
-          <span className="text-[12px] text-muted-foreground select-none truncate">
-            {toolStatus || t("agentMode.input.thinking")}
-          </span>
-        </>
       )}
     </div>
   );

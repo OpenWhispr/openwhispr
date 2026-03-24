@@ -241,8 +241,8 @@ a svg:hover,
 }
 
 /* Premium input styling with subtle depth */
-input,
-textarea {
+input:not(.input-inline),
+textarea:not(.input-inline) {
   border-radius: var(--radius);
   transition:
     background-color 0.2s ease,
@@ -254,15 +254,15 @@ textarea {
 }
 
 /* Light mode inputs - embossed parchment */
-:root input,
-:root textarea {
+:root input:not(.input-inline),
+:root textarea:not(.input-inline) {
   background-color: var(--color-parchment-bg);
   border: 1px solid var(--color-parchment-border);
   color: var(--color-parchment-text);
 }
 
-:root input:focus,
-:root textarea:focus {
+:root input:not(.input-inline):focus,
+:root textarea:not(.input-inline):focus {
   border-color: var(--color-parchment-accent);
   box-shadow:
     0 0 0 2px oklch(from var(--color-parchment-accent) l c h / 0.2),
@@ -271,16 +271,16 @@ textarea {
 }
 
 /* Dark mode inputs — flat, no embossed shadow */
-.dark input,
-.dark textarea {
+.dark input:not(.input-inline),
+.dark textarea:not(.input-inline) {
   background-color: var(--color-input);
   border: 1px solid var(--color-border);
   color: var(--color-foreground);
   box-shadow: none;
 }
 
-.dark input:focus,
-.dark textarea:focus {
+.dark input:not(.input-inline):focus,
+.dark textarea:not(.input-inline):focus {
   border-color: var(--color-border-active);
   box-shadow: 0 0 0 2px oklch(from var(--color-ring) l c h / 0.15);
 }
@@ -876,6 +876,15 @@ body:has(.agent-overlay-window) #root {
   50% {
     opacity: 1;
     transform: scale(1.05);
+  }
+}
+
+@keyframes thinking-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
   }
 }
 

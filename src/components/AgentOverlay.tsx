@@ -205,6 +205,7 @@ export default function AgentOverlay() {
           toolStatus={toolStatus}
           activeToolName={activeToolName}
           onTextSubmit={handleTranscriptionComplete}
+          onCancel={streaming.cancelStream}
         />
       </div>
 

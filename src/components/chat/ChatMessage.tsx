@@ -241,10 +241,21 @@ export function ChatMessage({ role, content, isStreaming, toolCalls }: ChatMessa
           />
         )}
 
-        {isStreaming && (
+        {isStreaming && hasContent && (
           <span
             className="inline-block w-[2px] h-[14px] bg-foreground/70 align-middle ml-0.5"
             style={{ animation: "agent-cursor-blink 1s ease-in-out infinite" }}
+          />
+        )}
+
+        {isStreaming && !hasContent && (
+          <div
+            className="h-4 w-24 rounded-sm"
+            style={{
+              background: "linear-gradient(90deg, transparent, var(--color-primary-shimmer, oklch(0.65 0.2 260 / 0.25)), transparent)",
+              backgroundSize: "200% 100%",
+              animation: "thinking-shimmer 1.8s ease-in-out infinite",
+            }}
           />
         )}
 

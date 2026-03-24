@@ -168,6 +168,7 @@ export default function ChatView() {
                 toolStatus={streaming.toolStatus}
                 activeToolName={streaming.activeToolName}
                 onTextSubmit={handleTextSubmit}
+                onCancel={streaming.cancelStream}
               />
             </>
           ) : (

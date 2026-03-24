@@ -7,6 +7,7 @@ interface AgentInputProps {
   toolStatus?: string;
   activeToolName?: string;
   onTextSubmit?: (text: string) => void;
+  onCancel?: () => void;
 }
 
 export function AgentInput(props: AgentInputProps) {
