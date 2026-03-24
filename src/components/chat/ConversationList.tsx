@@ -104,6 +104,7 @@ export default function ConversationList({
   const [semanticResults, setSemanticResults] = useState<ConversationPreview[] | null>(null);
   const searchVersionRef = useRef(0);
   const [showArchived, setShowArchived] = useState(false);
+  const [hasArchivedChats, setHasArchivedChats] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const showSkeletonTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSkeleton, setShowSkeleton] = useState(false);
@@ -122,6 +123,10 @@ export default function ConversationList({
             is_archived: !!(c.archived_at),
           }))
         );
+      }
+      if (!showArchived) {
+        const archived = await window.electronAPI?.getAgentConversationsWithPreview?.(1, 0, true);
+        setHasArchivedChats(!!archived?.length);
       }
     } catch {
       // silently fail
@@ -253,6 +258,7 @@ export default function ConversationList({
       <div className="px-2 pt-2 pb-1 space-y-1.5 shrink-0">
         <div className="flex items-center gap-1.5">
           <h2 className="text-xs font-medium text-foreground px-1 flex-1">{t("sidebar.chat")}</h2>
+          {(hasArchivedChats || showArchived) && (
           <button
             onClick={() => setShowArchived((v) => !v)}
             className={cn(
@@ -266,6 +272,7 @@ export default function ConversationList({
             <ArchiveIcon size={10} />
             {t("chat.archived")}
           </button>
+          )}
           <button
             onClick={onNewChat}
             className={cn(
