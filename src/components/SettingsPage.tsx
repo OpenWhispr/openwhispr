@@ -699,6 +699,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setPauseMediaOnDictation,
     keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard,
+    maxDictationDurationSeconds,
+    setMaxDictationDurationSeconds,
     floatingIconAutoHide,
     setFloatingIconAutoHide,
     startMinimized,
@@ -3228,6 +3230,36 @@ EOF`,
                     description={t("settingsPage.privacy.usageAnalyticsDescription")}
                   >
                     <Toggle checked={telemetryEnabled} onChange={setTelemetryEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Max Dictation Duration */}
+            <div className="border-t border-border/40 pt-6">
+              <SectionHeader
+                title={t("settingsPage.privacy.maxDictationDuration")}
+                description={t("settingsPage.privacy.maxDictationDurationDescription")}
+              />
+
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.maxDictationDuration")}
+                    description={t("settingsPage.privacy.maxDictationDurationDescription")}
+                  >
+                    <select
+                      value={maxDictationDurationSeconds}
+                      onChange={(e) => setMaxDictationDurationSeconds(parseInt(e.target.value, 10))}
+                      className="h-7 rounded border border-border/70 bg-surface-1/80 px-2.5 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 focus:ring-offset-1 transition-colors duration-200"
+                    >
+                      <option value={0}>{t("settingsPage.privacy.maxDictationDurationOff")}</option>
+                      <option value={120}>{t("settingsPage.privacy.maxDictationDurationMinutes", { count: 2 })}</option>
+                      <option value={300}>{t("settingsPage.privacy.maxDictationDurationMinutes", { count: 5 })}</option>
+                      <option value={600}>{t("settingsPage.privacy.maxDictationDurationMinutes", { count: 10 })}</option>
+                      <option value={900}>{t("settingsPage.privacy.maxDictationDurationMinutes", { count: 15 })}</option>
+                      <option value={1800}>{t("settingsPage.privacy.maxDictationDurationMinutes", { count: 30 })}</option>
+                    </select>
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>

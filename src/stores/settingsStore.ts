@@ -69,7 +69,7 @@ const BOOLEAN_SETTINGS = new Set([
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
 
-const NUMERIC_SETTINGS = new Set(["audioRetentionDays"]);
+const NUMERIC_SETTINGS = new Set(["audioRetentionDays", "maxDictationDurationSeconds"]);
 
 const LANGUAGE_MIGRATIONS: Record<string, string> = { zh: "zh-CN" };
 
@@ -105,6 +105,7 @@ export interface SettingsState
   meetingAudioDetection: boolean;
   panelStartPosition: "bottom-right" | "center" | "bottom-left";
   keepTranscriptionInClipboard: boolean;
+  maxDictationDurationSeconds: number;
 
   setUseLocalWhisper: (value: boolean) => void;
   setWhisperModel: (value: string) => void;
@@ -156,6 +157,7 @@ export interface SettingsState
   setMeetingAudioDetection: (value: boolean) => void;
   setPanelStartPosition: (position: "bottom-right" | "center" | "bottom-left") => void;
   setKeepTranscriptionInClipboard: (value: boolean) => void;
+  setMaxDictationDurationSeconds: (value: number) => void;
   setIsSignedIn: (value: boolean) => void;
 
   setAgentModel: (value: string) => void;
@@ -307,7 +309,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (v === "bottom-right" || v === "center" || v === "bottom-left") return v;
     return "bottom-right" as const;
   })(),
-  keepTranscriptionInClipboard: readBoolean("keepTranscriptionInClipboard", false),
+  keepTranscriptionInClipboard: readBoolean("keepTranscriptionInClipboard", true),
+  maxDictationDurationSeconds: (() => {
+    if (!isBrowser) return 300;
+    const stored = localStorage.getItem("maxDictationDurationSeconds");
+    if (stored === null) return 300;
+    const parsed = parseInt(stored, 10);
+    return isNaN(parsed) ? 300 : parsed;
+  })(),
   isSignedIn: readBoolean("isSignedIn", false),
 
   agentModel: readString("agentModel", "openai/gpt-oss-120b"),
@@ -457,6 +466,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       {},
       "settings"
     );
+  },
+  setMaxDictationDurationSeconds: (value: number) => {
+    if (isBrowser) localStorage.setItem("maxDictationDurationSeconds", String(value));
+    set({ maxDictationDurationSeconds: value });
   },
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
   setPauseMediaOnDictation: createBooleanSetter("pauseMediaOnDictation"),
