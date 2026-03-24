@@ -227,6 +227,8 @@ function useSettingsInternal() {
     setActivationMode: store.setActivationMode,
     audioCuesEnabled: store.audioCuesEnabled,
     setAudioCuesEnabled: store.setAudioCuesEnabled,
+    vadEnabled: store.vadEnabled,
+    setVadEnabled: store.setVadEnabled,
     pauseMediaOnDictation: store.pauseMediaOnDictation,
     setPauseMediaOnDictation: store.setPauseMediaOnDictation,
     floatingIconAutoHide: store.floatingIconAutoHide,

@@ -65,6 +65,7 @@ const BOOLEAN_SETTINGS = new Set([
   "agentEnabled",
   "keepTranscriptionInClipboard",
   "dataRetentionEnabled",
+  "vadEnabled",
 ]);
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
@@ -95,6 +96,7 @@ export interface SettingsState
     AgentModeSettings {
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
+  vadEnabled: boolean;
   pauseMediaOnDictation: boolean;
   floatingIconAutoHide: boolean;
   startMinimized: boolean;
@@ -148,6 +150,7 @@ export interface SettingsState
   setAudioRetentionDays: (days: number) => void;
   setDataRetentionEnabled: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
+  setVadEnabled: (value: boolean) => void;
   setPauseMediaOnDictation: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
@@ -283,6 +286,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
+  vadEnabled: readBoolean("vadEnabled", true),
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
   startMinimized: readBoolean("startMinimized", false),
@@ -459,6 +463,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     );
   },
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
+  setVadEnabled: createBooleanSetter("vadEnabled"),
   setPauseMediaOnDictation: createBooleanSetter("pauseMediaOnDictation"),
 
   setFloatingIconAutoHide: (enabled: boolean) => {

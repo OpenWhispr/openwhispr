@@ -695,6 +695,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setCloudReasoningMode,
     audioCuesEnabled,
     setAudioCuesEnabled,
+    vadEnabled,
+    setVadEnabled,
     pauseMediaOnDictation,
     setPauseMediaOnDictation,
     keepTranscriptionInClipboard,
@@ -2110,6 +2112,21 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                     description={t("settingsPage.general.soundEffects.pauseMediaDescription")}
                   >
                     <Toggle checked={pauseMediaOnDictation} onChange={setPauseMediaOnDictation} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Audio Processing */}
+            <div>
+              <SectionHeader title="Audio Processing" />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label="Silence gap compression"
+                    description="Compress long silences before sending to cloud transcription. Prevents hallucinated phrases during pauses."
+                  >
+                    <Toggle checked={vadEnabled} onChange={setVadEnabled} />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>

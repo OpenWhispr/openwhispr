@@ -10,6 +10,7 @@ import {
   getEffectiveReasoningModel,
   isCloudReasoningMode,
 } from "../stores/settingsStore";
+import { processAudioBuffer } from "./vadProcessor.js";
 
 const SHORT_CLIP_DURATION_SECONDS = 2.5;
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -813,6 +814,101 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.cachedApiKey = apiKey;
     this.cachedApiKeyProvider = provider;
     return apiKey;
+  }
+
+  async optimizeAudio(audioBlob) {
+    return new Promise((resolve) => {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const reader = new FileReader();
+
+      reader.onload = async () => {
+        try {
+          const arrayBuffer = reader.result;
+          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+          // Convert to 16kHz mono for smaller size and faster upload
+          const sampleRate = 16000;
+          const channels = 1;
+          const length = Math.floor(audioBuffer.duration * sampleRate);
+          const offlineContext = new OfflineAudioContext(channels, length, sampleRate);
+
+          const source = offlineContext.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(offlineContext.destination);
+          source.start();
+
+          let renderedBuffer = await offlineContext.startRendering();
+
+          // VAD gap compression: compress long silence gaps to prevent
+          // cloud transcription hallucinations (e.g. "Thank you for watching!")
+          if (this.shouldApplyVAD()) {
+            try {
+              const compressed = processAudioBuffer(renderedBuffer);
+              if (compressed) {
+                renderedBuffer = compressed;
+              }
+            } catch (vadError) {
+              // VAD failure is non-fatal — send uncompressed audio
+              logger.warn("VAD processing failed, using uncompressed audio", { error: vadError.message }, "audio");
+            }
+          }
+
+          const wavBlob = this.audioBufferToWav(renderedBuffer);
+          resolve(wavBlob);
+        } catch (error) {
+          // If optimization fails, use original
+          resolve(audioBlob);
+        }
+      };
+
+      reader.onerror = () => resolve(audioBlob);
+      reader.readAsArrayBuffer(audioBlob);
+    });
+  }
+
+  shouldApplyVAD() {
+    const s = getSettings();
+    // Apply VAD for cloud transcription providers (Groq, OpenAI whisper models)
+    // Skip for local models (they handle silence internally)
+    // Respect user toggle (default: enabled)
+    return !s.useLocalWhisper && s.vadEnabled !== false;
+  }
+
+  audioBufferToWav(buffer) {
+    const length = buffer.length;
+    const arrayBuffer = new ArrayBuffer(44 + length * 2);
+    const view = new DataView(arrayBuffer);
+    const sampleRate = buffer.sampleRate;
+    const channelData = buffer.getChannelData(0);
+
+    const writeString = (offset, string) => {
+      for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+      }
+    };
+
+    writeString(0, "RIFF");
+    view.setUint32(4, 36 + length * 2, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, "data");
+    view.setUint32(40, length * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < length; i++) {
+      const sample = Math.max(-1, Math.min(1, channelData[i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      offset += 2;
+    }
+
+    return new Blob([arrayBuffer], { type: "audio/wav" });
   }
 
   async processWithReasoningModel(text, model, agentName) {
