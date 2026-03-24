@@ -335,8 +335,38 @@ class MediaPlayer {
 
   _pauseMacOS() {
     this._didPause = false;
+    this._pausedMacApps = [];
 
-    // Try MediaRemote binary first (state-aware, no toggle)
+    // Try direct AppleScript control of known players first (no accessibility permission needed)
+    const apps = [
+      { name: "Spotify", pauseCmd: 'tell application "Spotify" to pause', checkCmd: 'tell application "Spotify" to player state as string', playing: "playing" },
+      { name: "Music", pauseCmd: 'tell application "Music" to pause', checkCmd: 'tell application "Music" to player state as string', playing: "playing" },
+    ];
+
+    for (const app of apps) {
+      try {
+        // Check if app is running first (don't launch it)
+        const running = spawnSync("osascript", ["-e",
+          `tell application "System Events" to (name of processes) contains "${app.name}"`
+        ], { stdio: "pipe", timeout: 2000 });
+        if (running.status !== 0 || !(running.stdout?.toString() || "").includes("true")) continue;
+
+        const check = spawnSync("osascript", ["-e", app.checkCmd], { stdio: "pipe", timeout: 2000 });
+        if (check.status !== 0) continue;
+        const state = (check.stdout?.toString() || "").trim();
+        if (state !== app.playing) continue;
+
+        const pause = spawnSync("osascript", ["-e", app.pauseCmd], { stdio: "pipe", timeout: 2000 });
+        if (pause.status === 0) {
+          debugLogger.debug("Media paused via AppleScript", { app: app.name }, "media");
+          this._pausedMacApps.push(app.name);
+        }
+      } catch (err) {
+        debugLogger.warn("AppleScript pause failed", { app: app.name, error: err.message }, "media");
+      }
+    }
+
+    // Also try to pause browser audio via MediaRemote (catches Brain.fm etc)
     const binary = this._resolveMacMediaRemote();
     if (binary) {
       const result = spawnSync(binary, ["--pause"], {
@@ -345,16 +375,17 @@ class MediaPlayer {
       });
       if (result.status === 0) {
         debugLogger.debug("Media paused via MediaRemote", {}, "media");
-        this._didPause = true;
-        return true;
+        this._pausedMacApps.push("__mediaremote__");
       }
-      // exit 1 = nothing was playing, don't fallback to toggle
-      const output = (result.stdout?.toString() || "").trim();
-      if (output === "NOT_PLAYING") return false;
     }
 
-    // Fallback to media key toggle
-    debugLogger.debug("MediaRemote unavailable, falling back to osascript", {}, "media");
+    if (this._pausedMacApps.length > 0) {
+      this._didPause = true;
+      return true;
+    }
+
+    // Final fallback to media key toggle
+    debugLogger.debug("No players found, falling back to media key", {}, "media");
     if (this._sendMacMediaKey()) {
       this._didPause = true;
       return true;
@@ -366,20 +397,35 @@ class MediaPlayer {
     if (!this._didPause) return false;
     this._didPause = false;
 
-    const binary = this._resolveMacMediaRemote();
-    if (binary) {
-      const result = spawnSync(binary, ["--play"], {
-        stdio: "pipe",
-        timeout: 3000,
-      });
+    const apps = this._pausedMacApps || [];
+    this._pausedMacApps = [];
+    let resumed = false;
+
+    for (const appName of apps) {
+      if (appName === "__mediaremote__") {
+        const binary = this._resolveMacMediaRemote();
+        if (binary) {
+          const result = spawnSync(binary, ["--play"], { stdio: "pipe", timeout: 3000 });
+          if (result.status === 0) {
+            debugLogger.debug("Media resumed via MediaRemote", {}, "media");
+            resumed = true;
+          }
+        }
+        continue;
+      }
+
+      const playCmd = `tell application "${appName}" to play`;
+      const result = spawnSync("osascript", ["-e", playCmd], { stdio: "pipe", timeout: 2000 });
       if (result.status === 0) {
-        debugLogger.debug("Media resumed via MediaRemote", {}, "media");
-        return true;
+        debugLogger.debug("Media resumed via AppleScript", { app: appName }, "media");
+        resumed = true;
       }
     }
 
-    // Fallback to media key toggle
-    return this._sendMacMediaKey();
+    if (!resumed) {
+      return this._sendMacMediaKey();
+    }
+    return resumed;
   }
 
   _sendMacMediaKey() {
