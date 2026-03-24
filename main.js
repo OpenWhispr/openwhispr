@@ -1,3 +1,21 @@
+// KDE Wayland: force XWayland before Electron initializes Chromium.
+// On Electron 39+, appendSwitch("ozone-platform-hint") is too late and
+// process.argv.push() doesn't propagate to native argc/argv. The only way
+// is to self-relaunch with the flag on the actual command line.
+if (
+  process.platform === "linux" &&
+  process.env.XDG_SESSION_TYPE === "wayland" &&
+  /kde/i.test(process.env.XDG_CURRENT_DESKTOP || "") &&
+  !process.argv.includes("--ozone-platform=x11")
+) {
+  const { spawn } = require("child_process");
+  spawn(process.execPath, [...process.argv.slice(1), "--ozone-platform=x11"], {
+    stdio: "inherit",
+    detached: true,
+  }).unref();
+  process.exit(0);
+}
+
 const {
   app,
   globalShortcut,
@@ -75,17 +93,10 @@ if (process.platform === "win32") {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
-// Enable native Wayland support: Ozone platform for native rendering.
-// KDE uses XWayland for reliable clipboard access, with KGlobalAccel D-Bus
-// for global shortcuts. GNOME and Hyprland run native Wayland with their
-// own D-Bus shortcut managers.
+// Enable native Wayland support for non-KDE desktops (GNOME, Hyprland, etc.).
+// KDE is handled by the self-relaunch guard above (--ozone-platform=x11).
 if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") {
-  const desktop = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase();
-  if (desktop.includes("kde")) {
-    app.commandLine.appendSwitch("ozone-platform-hint", "x11");
-  } else {
-    app.commandLine.appendSwitch("ozone-platform-hint", "auto");
-  }
+  app.commandLine.appendSwitch("ozone-platform-hint", "auto");
   app.commandLine.appendSwitch("enable-features", "UseOzonePlatform,WaylandWindowDecorations");
 }
 
