@@ -1212,9 +1212,14 @@ declare global {
       updateNotificationRespond?: (action: string) => Promise<{ success: boolean }>;
 
       // Recording overlay
-      onRecordingOverlayUpdate: (callback: (event: unknown, data: { isRecording: boolean; isProcessing: boolean; audioLevel?: number }) => void) => () => void;
-      cancelRecordingFromOverlay: () => Promise<void>;
-      notifyRecordingOverlayEnabledChanged: (enabled: boolean) => void;
+      onRecordingOverlayUpdate?: (
+        callback: (
+          event: unknown,
+          data: { isRecording: boolean; isProcessing: boolean; audioLevel?: number }
+        ) => void
+      ) => () => void;
+      cancelRecordingFromOverlay?: () => Promise<void>;
+      notifyRecordingOverlayEnabledChanged?: (enabled: boolean) => void;
     };
 
     api?: {

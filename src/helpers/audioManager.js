@@ -169,7 +169,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     onTranscriptionComplete,
     onPartialTranscript,
     onStreamingCommit,
-    onAudioLevel,
+    onAudioLevel = null,
   }) {
     this.onStateChange = onStateChange;
     this.onError = onError;
