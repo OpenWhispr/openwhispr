@@ -76,13 +76,13 @@ if (process.platform === "win32") {
 }
 
 // Enable native Wayland support: Ozone platform for native rendering.
-// KDE uses XWayland for reliable clipboard access, with KGlobalAccel D-Bus
-// for global shortcuts. GNOME and Hyprland run native Wayland with their
-// own D-Bus shortcut managers.
+// KDE forces X11/XWayland because globalShortcut only works via X11,
+// and the clipboard needs X11 for reliable paste.
+// GNOME and Hyprland run native Wayland with their own D-Bus shortcut managers.
 if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") {
   const desktop = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase();
   if (desktop.includes("kde")) {
-    app.commandLine.appendSwitch("ozone-platform-hint", "x11");
+    app.commandLine.appendSwitch("ozone-platform", "x11");
   } else {
     app.commandLine.appendSwitch("ozone-platform-hint", "auto");
   }

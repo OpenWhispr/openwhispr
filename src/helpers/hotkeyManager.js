@@ -481,6 +481,18 @@ class HotkeyManager {
   }
 
   async initializeKDEShortcuts(callback) {
+    console.log("[HotkeyManager] KDE init check CONSOLE", {
+      isLinux: process.platform === "linux",
+      isWayland: KDEShortcutManager.isWayland(),
+      isKDE: KDEShortcutManager.isKDE(),
+    });
+    debugLogger.log("[HotkeyManager] KDE init check", {
+      isLinux: process.platform === "linux",
+      isWayland: KDEShortcutManager.isWayland(),
+      isKDE: KDEShortcutManager.isKDE(),
+      XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE,
+      XDG_CURRENT_DESKTOP: process.env.XDG_CURRENT_DESKTOP,
+    });
     if (
       process.platform !== "linux" ||
       !KDEShortcutManager.isWayland() ||
@@ -559,7 +571,10 @@ class HotkeyManager {
     this.mainWindow = mainWindow;
     this.hotkeyCallback = callback;
 
-    if (process.platform === "linux" && GnomeShortcutManager.isWayland()) {
+    // KDE uses XWayland (ozone-platform=x11) so globalShortcut works directly.
+    // Only enter the Wayland D-Bus path for GNOME and Hyprland.
+    const isKde = /kde/i.test(process.env.XDG_CURRENT_DESKTOP || "");
+    if (process.platform === "linux" && GnomeShortcutManager.isWayland() && !isKde) {
       const gnomeOk = await this.initializeGnomeShortcuts(callback);
 
       if (gnomeOk) {

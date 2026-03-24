@@ -25,8 +25,21 @@ console.log("[run-electron] Electron path:", electronPath);
 console.log("[run-electron] App dir:", appDir);
 console.log("[run-electron] Args:", args);
 
+// On KDE Wayland, force XWayland so globalShortcut works via X11.
+// This must be a command-line flag, not app.commandLine.appendSwitch,
+// because Chromium picks the display backend before main.js runs.
+const chromiumFlags = [];
+if (
+  process.platform === "linux" &&
+  process.env.XDG_SESSION_TYPE === "wayland" &&
+  /kde/i.test(process.env.XDG_CURRENT_DESKTOP || "")
+) {
+  chromiumFlags.push("--ozone-platform=x11");
+  console.log("[run-electron] KDE Wayland detected, forcing XWayland");
+}
+
 // Spawn electron with the cleaned environment
-const child = spawn(electronPath, [appDir, ...args], {
+const child = spawn(electronPath, [...chromiumFlags, appDir, ...args], {
   stdio: "inherit",
   env: process.env,
   cwd: appDir,
