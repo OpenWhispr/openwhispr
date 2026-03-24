@@ -5,13 +5,9 @@ import { cn } from "../lib/utils";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { formatHotkeyLabel, isGlobeLikeHotkey } from "../../utils/hotkeys";
 import type { AgentState } from "./types";
-import { toolIcons } from "./toolIcons";
-
 interface ChatInputProps {
   agentState: AgentState;
   partialTranscript: string;
-  toolStatus?: string;
-  activeToolName?: string;
   onTextSubmit?: (text: string) => void;
   onCancel?: () => void;
   showHotkey?: boolean;
@@ -84,8 +80,6 @@ function ProcessingIndicator() {
 export function ChatInput({
   agentState,
   partialTranscript,
-  toolStatus,
-  activeToolName,
   onTextSubmit,
   onCancel,
   showHotkey = false,
@@ -116,7 +110,6 @@ export function ChatInput({
   const isListening = agentState === "listening";
   const isTranscribing = agentState === "transcribing";
   const isBusy = agentState === "thinking" || agentState === "streaming" || agentState === "tool-executing";
-  const ToolIcon = activeToolName ? toolIcons[activeToolName] : null;
 
   return (
     <div
@@ -144,7 +137,7 @@ export function ChatInput({
       )}
 
       {(isIdle || isBusy) && (
-        <div className="relative flex items-center gap-2 w-full">
+        <div className="flex items-center gap-2 w-full">
           <input
             ref={inputRef}
             type="text"
@@ -152,26 +145,14 @@ export function ChatInput({
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isBusy}
-            placeholder={isBusy ? "" : t("agentMode.input.typeMessage")}
+            placeholder={t("agentMode.input.typeMessage")}
             className={cn(
               "input-inline flex-1 outline-none bg-transparent",
               "text-[13px] text-foreground placeholder:text-muted-foreground/40",
               "min-w-0 p-0",
-              isBusy && "opacity-0 pointer-events-none"
+              isBusy && "text-muted-foreground/30 cursor-not-allowed"
             )}
           />
-          {isBusy && (
-            <div className="absolute inset-0 flex items-center gap-2 pr-8 pointer-events-none">
-              {agentState === "tool-executing" && ToolIcon ? (
-                <ToolIcon size={12} className="text-primary/60 shrink-0" />
-              ) : null}
-              <span className="text-[12px] text-muted-foreground/60 select-none truncate">
-                {agentState === "tool-executing" && toolStatus
-                  ? toolStatus
-                  : t("agentMode.input.thinking")}
-              </span>
-            </div>
-          )}
           {isIdle && inputText.trim() ? (
             <button
               onClick={handleSubmit}

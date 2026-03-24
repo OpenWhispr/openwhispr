@@ -165,8 +165,6 @@ export default function ChatView() {
               <ChatInput
                 agentState={streaming.agentState}
                 partialTranscript=""
-                toolStatus={streaming.toolStatus}
-                activeToolName={streaming.activeToolName}
                 onTextSubmit={handleTextSubmit}
                 onCancel={streaming.cancelStream}
               />

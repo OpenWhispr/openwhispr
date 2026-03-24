@@ -4,8 +4,6 @@ import type { AgentState } from "../chat/types";
 interface AgentInputProps {
   agentState: AgentState;
   partialTranscript: string;
-  toolStatus?: string;
-  activeToolName?: string;
   onTextSubmit?: (text: string) => void;
   onCancel?: () => void;
 }

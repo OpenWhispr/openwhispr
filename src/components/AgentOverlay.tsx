@@ -29,7 +29,7 @@ export default function AgentOverlay() {
     },
   });
 
-  const { agentState, toolStatus, activeToolName } = streaming;
+  const { agentState } = streaming;
 
   useEffect(() => {
     agentStateRef.current = agentState;
@@ -202,8 +202,6 @@ export default function AgentOverlay() {
         <AgentInput
           agentState={agentState}
           partialTranscript={partialTranscript}
-          toolStatus={toolStatus}
-          activeToolName={activeToolName}
           onTextSubmit={handleTranscriptionComplete}
           onCancel={streaming.cancelStream}
         />

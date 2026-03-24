@@ -888,6 +888,21 @@ body:has(.agent-overlay-window) #root {
   }
 }
 
+.thinking-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    var(--color-primary) 0%,
+    oklch(0.75 0.18 260) 40%,
+    var(--color-primary) 60%,
+    oklch(0.55 0.22 260) 100%
+  );
+  background-size: 200% 100%;
+  animation: thinking-shimmer 2s ease-in-out infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 @keyframes agent-loading-dot {
   0%,
   80%,

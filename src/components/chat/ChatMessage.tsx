@@ -175,6 +175,7 @@ function extractNoteCards(toolCalls?: ToolCallInfo[]): Array<{ noteId: number; t
 }
 
 export function ChatMessage({ role, content, isStreaming, toolCalls }: ChatMessageProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -249,14 +250,11 @@ export function ChatMessage({ role, content, isStreaming, toolCalls }: ChatMessa
         )}
 
         {isStreaming && !hasContent && (
-          <div
-            className="h-4 w-24 rounded-sm"
-            style={{
-              background: "linear-gradient(90deg, transparent, var(--color-primary-shimmer, oklch(0.65 0.2 260 / 0.25)), transparent)",
-              backgroundSize: "200% 100%",
-              animation: "thinking-shimmer 1.8s ease-in-out infinite",
-            }}
-          />
+          <span
+            className="text-[13px] font-medium select-none thinking-shimmer-text"
+          >
+            {t("agentMode.input.thinking")}
+          </span>
         )}
 
         {noteCards.length > 0 && !isStreaming && (
