@@ -153,12 +153,12 @@ class WindowPositionUtil {
   }
 
   static getRecordingOverlayPosition(display) {
-    const width = 320;
-    const height = 64;
+    const width = 160;
+    const height = 32;
     const MARGIN = 16;
     const workArea = display.workArea || display.bounds;
     const x = Math.round(workArea.x + (workArea.width - width) / 2);
-    const y = workArea.y + MARGIN;
+    const y = workArea.y + workArea.height - height - MARGIN;
     return { x, y, width, height };
   }
 
@@ -218,8 +218,8 @@ const AGENT_OVERLAY_CONFIG = {
 };
 
 const RECORDING_OVERLAY_CONFIG = {
-  width: 320,
-  height: 64,
+  width: 160,
+  height: 32,
   frame: false,
   transparent: true,
   alwaysOnTop: true,

@@ -420,9 +420,13 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.showDictationPanel();
-      this.showRecordingOverlay();
       this.mainWindow.webContents.send("toggle-dictation");
       this._isDictatingToggle = !this._isDictatingToggle;
+      if (this._isDictatingToggle) {
+        this.showRecordingOverlay();
+      } else {
+        this.hideRecordingOverlay();
+      }
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     }
   }
@@ -446,6 +450,7 @@ class WindowManager {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send("stop-dictation");
       this._isDictatingToggle = false;
+      this.hideRecordingOverlay();
       this.meetingDetectionEngine?.setUserRecording(false);
     }
   }
@@ -1182,7 +1187,8 @@ class WindowManager {
       return;
     }
 
-    const display = screen.getPrimaryDisplay();
+    const cursorPos = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(cursorPos);
     const position = WindowPositionUtil.getRecordingOverlayPosition(display);
 
     this.recordingOverlayWindow = new BrowserWindow({
@@ -1212,6 +1218,11 @@ class WindowManager {
   showRecordingOverlay() {
     if (!this._recordingOverlayEnabled) return;
     if (!this.recordingOverlayWindow || this.recordingOverlayWindow.isDestroyed()) return;
+    // Reposition to the monitor where the cursor currently is
+    const cursorPos = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(cursorPos);
+    const position = WindowPositionUtil.getRecordingOverlayPosition(display);
+    this.recordingOverlayWindow.setBounds(position);
     if (typeof this.recordingOverlayWindow.showInactive === "function") {
       this.recordingOverlayWindow.showInactive();
     } else {

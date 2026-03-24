@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 interface DictationWidgetProps {
   isRecording: boolean;
@@ -22,6 +23,12 @@ export default function DictationWidget({
 }: DictationWidgetProps) {
   const { t } = useTranslation();
   const [elapsed, setElapsed] = useState(0);
+  const showRecordingOverlay = useSettingsStore((s) => s.showRecordingOverlay);
+
+  // Suppress dictation indicator when the dedicated overlay is active
+  if (isRecording && showRecordingOverlay) {
+    return null;
+  }
 
   useEffect(() => {
     if (!isRecording) {

@@ -168,12 +168,14 @@
 
   /* Make dictation window (App) transparent, but keep control panel solid */
   body:has(.dictation-window),
-  body:has(.meeting-notification-window) {
+  body:has(.meeting-notification-window),
+  body:has(.recording-overlay-root) {
     background: transparent;
   }
 
   body:has(.dictation-window) #root,
-  body:has(.meeting-notification-window) #root {
+  body:has(.meeting-notification-window) #root,
+  body:has(.recording-overlay-root) #root {
     background: transparent;
   }
 }
@@ -805,6 +807,7 @@ body:has(.agent-overlay-window) {
 body:has(.agent-overlay-window) #root {
   background: transparent;
 }
+
 
 @keyframes agent-message-in {
   from {
