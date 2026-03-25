@@ -57,6 +57,8 @@ const RESTORE_DELAYS = {
   win32_nircmd: 80,
   win32_pwsh: 80,
   linux: 200,
+  // KDE Wayland + XWayland: clipboard bridge is slow, needs more time
+  linux_kde_wayland: 600,
 };
 
 function writeClipboardInRenderer(webContents, text) {
@@ -1029,13 +1031,14 @@ class ClipboardManager {
 
     const restoreClipboard = () => {
       if (originalClipboard == null) return;
+      const delay = isKde && isWayland ? RESTORE_DELAYS.linux_kde_wayland : RESTORE_DELAYS.linux;
       setTimeout(() => {
         if (isWayland) {
           this._writeClipboardWayland(originalClipboard, webContents);
         } else {
           clipboard.writeText(originalClipboard);
         }
-      }, RESTORE_DELAYS.linux);
+      }, delay);
     };
 
     const terminalClasses = [

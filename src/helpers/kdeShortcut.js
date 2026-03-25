@@ -222,7 +222,10 @@ class KDEShortcutManager {
     try {
       // Register action then set shortcut
       await this.kglobalaccel.doRegister(actionId);
-      const result = await this.kglobalaccel.setShortcut(actionId, [qtKey], 0x02);
+      // Flag 0: always set the provided shortcut (overwrite any saved value).
+      // Flag 0x02 would keep existing shortcuts, which causes the hotkey to
+      // silently not work on startup if KGlobalAccel has a stale saved value.
+      const result = await this.kglobalaccel.setShortcut(actionId, [qtKey], 0);
 
       if (callback) this.callbacks.set(slotName, callback);
       this.registeredSlots.add(slotName);

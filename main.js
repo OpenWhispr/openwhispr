@@ -1,7 +1,6 @@
-// KDE Wayland: force XWayland before Electron initializes Chromium.
-// On Electron 39+, appendSwitch("ozone-platform-hint") is too late and
-// process.argv.push() doesn't propagate to native argc/argv. The only way
-// is to self-relaunch with the flag on the actual command line.
+// KDE Wayland: force XWayland so globalShortcut works via X11.
+// Must be a command-line flag because Chromium picks the display backend
+// before main.js can call appendSwitch.
 if (
   process.platform === "linux" &&
   process.env.XDG_SESSION_TYPE === "wayland" &&
@@ -79,6 +78,14 @@ function configureChannelUserDataPath() {
 }
 
 configureChannelUserDataPath();
+
+// Load userData .env (contains DICTATION_KEY, API keys, etc.) so they're
+// available early — before hotkey registration, which needs DICTATION_KEY
+// before the renderer page finishes loading.
+require("dotenv").config({
+  path: path.join(app.getPath("userData"), ".env"),
+  override: false,
+});
 
 // Fix transparent window flickering on Linux: --enable-transparent-visuals requires
 // the compositor to set up an ARGB visual before any windows are created.
