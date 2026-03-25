@@ -559,7 +559,8 @@ class HotkeyManager {
     this.mainWindow = mainWindow;
     this.hotkeyCallback = callback;
 
-    if (process.platform === "linux" && GnomeShortcutManager.isWayland()) {
+    const isXWayland = process.argv.includes("--ozone-platform=x11");
+    if (process.platform === "linux" && GnomeShortcutManager.isWayland() && !isXWayland) {
       const gnomeOk = await this.initializeGnomeShortcuts(callback);
 
       if (gnomeOk) {
@@ -679,9 +680,25 @@ class HotkeyManager {
       globalShortcut.unregisterAll();
     }
 
-    setTimeout(() => {
-      this.loadSavedHotkeyOrDefault(mainWindow, callback);
-    }, HOTKEY_REGISTRATION_DELAY_MS);
+    // Register hotkey immediately from env var (no need to wait for page load).
+    // Fall back to waiting for page if env var is empty (need localStorage).
+    const envHotkey = process.env.DICTATION_KEY || "";
+    if (envHotkey) {
+      const result = this.setupShortcuts(envHotkey, callback);
+      if (result.success) {
+        debugLogger.log(`[HotkeyManager] Hotkey "${envHotkey}" registered from env`);
+      } else {
+        debugLogger.log(`[HotkeyManager] Env hotkey "${envHotkey}" failed, waiting for page`);
+        this.loadSavedHotkeyOrDefault(mainWindow, callback);
+      }
+    } else {
+      const loadHotkey = () => this.loadSavedHotkeyOrDefault(mainWindow, callback);
+      if (mainWindow.webContents.isLoading()) {
+        mainWindow.webContents.once("did-finish-load", loadHotkey);
+      } else {
+        loadHotkey();
+      }
+    }
 
     this.isInitialized = true;
   }
@@ -690,12 +707,19 @@ class HotkeyManager {
     try {
       // First check file-based storage (environment variable) - more reliable
       let savedHotkey = process.env.DICTATION_KEY || "";
+      debugLogger.log(`[HotkeyManager] DICTATION_KEY from env: "${savedHotkey}"`);
 
       // Fall back to localStorage if env var is empty
       if (!savedHotkey) {
-        savedHotkey = await mainWindow.webContents.executeJavaScript(`
-          localStorage.getItem("dictationKey") || ""
-        `);
+        try {
+          savedHotkey = await mainWindow.webContents.executeJavaScript(`
+            localStorage.getItem("dictationKey") || ""
+          `);
+          debugLogger.log(`[HotkeyManager] dictationKey from localStorage: "${savedHotkey}"`);
+        } catch (jsErr) {
+          debugLogger.log(`[HotkeyManager] executeJavaScript failed: ${jsErr.message}`);
+          savedHotkey = "";
+        }
 
         // If we found a hotkey in localStorage but not in env, migrate it to .env file
         if (savedHotkey && savedHotkey.trim() !== "") {

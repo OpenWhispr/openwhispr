@@ -1,3 +1,20 @@
+// KDE Wayland: force XWayland so globalShortcut works via X11.
+// Must be a command-line flag because Chromium picks the display backend
+// before main.js can call appendSwitch.
+if (
+  process.platform === "linux" &&
+  process.env.XDG_SESSION_TYPE === "wayland" &&
+  /kde/i.test(process.env.XDG_CURRENT_DESKTOP || "") &&
+  !process.argv.includes("--ozone-platform=x11")
+) {
+  const { spawn } = require("child_process");
+  spawn(process.execPath, [...process.argv.slice(1), "--ozone-platform=x11"], {
+    stdio: "inherit",
+    detached: true,
+  }).unref();
+  process.exit(0);
+}
+
 const {
   app,
   globalShortcut,
@@ -62,6 +79,14 @@ function configureChannelUserDataPath() {
 
 configureChannelUserDataPath();
 
+// Load userData .env (contains DICTATION_KEY, API keys, etc.) so they're
+// available early — before hotkey registration, which needs DICTATION_KEY
+// before the renderer page finishes loading.
+require("dotenv").config({
+  path: path.join(app.getPath("userData"), ".env"),
+  override: false,
+});
+
 // Fix transparent window flickering on Linux: --enable-transparent-visuals requires
 // the compositor to set up an ARGB visual before any windows are created.
 // --disable-gpu-compositing prevents GPU compositing conflicts with the compositor.
@@ -75,17 +100,10 @@ if (process.platform === "win32") {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
-// Enable native Wayland support: Ozone platform for native rendering.
-// KDE uses XWayland for reliable clipboard access, with KGlobalAccel D-Bus
-// for global shortcuts. GNOME and Hyprland run native Wayland with their
-// own D-Bus shortcut managers.
+// Enable native Wayland support for non-KDE desktops (GNOME, Hyprland, etc.).
+// KDE is handled by the self-relaunch guard above (--ozone-platform=x11).
 if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") {
-  const desktop = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase();
-  if (desktop.includes("kde")) {
-    app.commandLine.appendSwitch("ozone-platform-hint", "x11");
-  } else {
-    app.commandLine.appendSwitch("ozone-platform-hint", "auto");
-  }
+  app.commandLine.appendSwitch("ozone-platform-hint", "auto");
   app.commandLine.appendSwitch("enable-features", "UseOzonePlatform,WaylandWindowDecorations");
 }
 
