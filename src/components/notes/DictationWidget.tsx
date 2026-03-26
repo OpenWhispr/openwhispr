@@ -25,11 +25,6 @@ export default function DictationWidget({
   const [elapsed, setElapsed] = useState(0);
   const showRecordingOverlay = useSettingsStore((s) => s.showRecordingOverlay);
 
-  // Suppress dictation indicator when the dedicated overlay is active
-  if (isRecording && showRecordingOverlay) {
-    return null;
-  }
-
   useEffect(() => {
     if (!isRecording) {
       setElapsed(0);
@@ -38,6 +33,11 @@ export default function DictationWidget({
     const id = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, [isRecording]);
+
+  // Suppress dictation indicator when the dedicated overlay is active
+  if (isRecording && showRecordingOverlay) {
+    return null;
+  }
 
   const minutes = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const seconds = String(elapsed % 60).padStart(2, "0");
