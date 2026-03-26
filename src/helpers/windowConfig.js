@@ -45,6 +45,7 @@ const MAIN_WINDOW_CONFIG = {
     nodeIntegration: false,
     contextIsolation: true,
     sandbox: true,
+    backgroundThrottling: false,
   },
   frame: false,
   alwaysOnTop: true,
