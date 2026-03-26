@@ -423,9 +423,15 @@ class WindowManager {
       this.mainWindow.webContents.send("toggle-dictation");
       this._isDictatingToggle = !this._isDictatingToggle;
       if (this._isDictatingToggle) {
+        if (this._recordingOverlayEnabled) {
+          this.hideDictationPanel();
+        }
         this.showRecordingOverlay();
       } else {
         this.hideRecordingOverlay();
+        if (this._recordingOverlayEnabled) {
+          this.showDictationPanel();
+        }
       }
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     }
@@ -437,8 +443,11 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.showDictationPanel();
-      this.showRecordingOverlay();
       this.mainWindow.webContents.send("start-dictation");
+      if (this._recordingOverlayEnabled) {
+        this.hideDictationPanel();
+      }
+      this.showRecordingOverlay();
       this.meetingDetectionEngine?.setUserRecording(true);
     }
   }
@@ -451,6 +460,9 @@ class WindowManager {
       this.mainWindow.webContents.send("stop-dictation");
       this._isDictatingToggle = false;
       this.hideRecordingOverlay();
+      if (this._recordingOverlayEnabled) {
+        this.showDictationPanel();
+      }
       this.meetingDetectionEngine?.setUserRecording(false);
     }
   }
