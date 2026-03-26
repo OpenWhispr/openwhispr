@@ -1188,6 +1188,8 @@
         "dictationSoundsDescription": "Riproduci un tono quando la registrazione inizia e finisce",
         "pauseMedia": "Pausa multimedia",
         "pauseMediaDescription": "Metti automaticamente in pausa la musica quando inizia la dettatura",
+        "muteSystemOutput": "Disattiva audio di sistema",
+        "muteSystemOutputDescription": "Disattiva tutto l’audio del computer durante la registrazione e poi ripristinalo",
         "title": "Effetti sonori"
       },
       "clipboard": {

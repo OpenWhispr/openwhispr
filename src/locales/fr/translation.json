@@ -1188,6 +1188,8 @@
         "dictationSoundsDescription": "Jouer un son au début et à la fin de l'enregistrement",
         "pauseMedia": "Mettre en pause le média",
         "pauseMediaDescription": "Mettre automatiquement la musique en pause au début de la dictée",
+        "muteSystemOutput": "Couper le son du système",
+        "muteSystemOutputDescription": "Couper tout le son de l’ordinateur pendant l’enregistrement puis le rétablir ensuite",
         "title": "Effets sonores"
       },
       "clipboard": {

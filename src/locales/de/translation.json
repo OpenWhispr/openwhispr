@@ -1188,6 +1188,8 @@
         "dictationSoundsDescription": "Ton abspielen, wenn die Aufnahme startet und stoppt",
         "pauseMedia": "Medien pausieren",
         "pauseMediaDescription": "Musik beim Starten der Diktat automatisch pausieren",
+        "muteSystemOutput": "Systemausgabe stummschalten",
+        "muteSystemOutputDescription": "Den gesamten Computerton während der Aufnahme stummschalten und danach wiederherstellen",
         "title": "Soundeffekte"
       },
       "clipboard": {
