@@ -311,7 +311,11 @@
     },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
-    "availableModels": "Available Models"
+    "availableModels": "Available Models",
+    "thinkingMode": {
+      "label": "Thinking Mode",
+      "description": "Extended reasoning before responding. Disable for faster responses."
+    }
   },
   "transcription": {
     "deleteModel": {

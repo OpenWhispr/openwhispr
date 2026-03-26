@@ -352,6 +352,7 @@
           "contextLength": 262144,
           "hfRepo": "bartowski/Qwen_Qwen3.5-9B-GGUF",
           "recommended": true,
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_5_9b_q4_k_m"
         },
         {
@@ -364,6 +365,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_5_4b_q4_k_m"
         },
         {
@@ -376,6 +378,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/Qwen_Qwen3.5-2B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_5_2b_q4_k_m"
         },
         {
@@ -388,6 +391,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-8B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8b_q4_k_m"
         },
         {
@@ -400,6 +404,7 @@
           "quantization": "q5_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-8B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8b_q5_k_m"
         },
         {
@@ -412,6 +417,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-4B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_4b_q4_k_m"
         },
         {
@@ -424,6 +430,7 @@
           "quantization": "q8_0",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-1.7B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_1_7b_q8_0"
         },
         {
@@ -436,6 +443,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-32B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_32b_q4_k_m"
         },
         {

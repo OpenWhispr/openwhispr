@@ -311,7 +311,11 @@
     },
     "getApiKey": "Получить API-ключ ->",
     "selectModel": "Выберите модель",
-    "availableModels": "Доступные модели"
+    "availableModels": "Доступные модели",
+    "thinkingMode": {
+      "label": "Режим размышления",
+      "description": "Расширенное рассуждение перед ответом. Отключите для более быстрых ответов."
+    }
   },
   "transcription": {
     "deleteModel": {

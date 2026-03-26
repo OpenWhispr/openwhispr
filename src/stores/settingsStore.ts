@@ -65,6 +65,7 @@ const BOOLEAN_SETTINGS = new Set([
   "agentEnabled",
   "keepTranscriptionInClipboard",
   "dataRetentionEnabled",
+  "localThinkingEnabled",
 ]);
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
@@ -105,6 +106,7 @@ export interface SettingsState
   meetingAudioDetection: boolean;
   panelStartPosition: "bottom-right" | "center" | "bottom-left";
   keepTranscriptionInClipboard: boolean;
+  localThinkingEnabled: boolean;
 
   setUseLocalWhisper: (value: boolean) => void;
   setWhisperModel: (value: string) => void;
@@ -125,6 +127,7 @@ export interface SettingsState
   setUseReasoningModel: (value: boolean) => void;
   setReasoningModel: (value: string) => void;
   setReasoningProvider: (value: string) => void;
+  setLocalThinkingEnabled: (value: boolean) => void;
   setUiLanguage: (language: string) => void;
 
   setOpenaiApiKey: (key: string) => void;
@@ -249,6 +252,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   useReasoningModel: readBoolean("useReasoningModel", true),
   reasoningModel: readString("reasoningModel", ""),
   reasoningProvider: readString("reasoningProvider", "openai"),
+  localThinkingEnabled: readBoolean("localThinkingEnabled", false),
 
   openaiApiKey: readString("openaiApiKey", ""),
   anthropicApiKey: readString("anthropicApiKey", ""),
@@ -338,6 +342,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setUseReasoningModel: createBooleanSetter("useReasoningModel"),
   setReasoningModel: createStringSetter("reasoningModel"),
   setReasoningProvider: createStringSetter("reasoningProvider"),
+  setLocalThinkingEnabled: createBooleanSetter("localThinkingEnabled"),
 
   setCustomDictionary: (words: string[]) => {
     if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
@@ -587,6 +592,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.reasoningModel !== undefined) s.setReasoningModel(settings.reasoningModel);
     if (settings.reasoningProvider !== undefined)
       s.setReasoningProvider(settings.reasoningProvider);
+    if (settings.localThinkingEnabled !== undefined)
+      s.setLocalThinkingEnabled(settings.localThinkingEnabled);
     if (settings.cloudReasoningBaseUrl !== undefined)
       s.setCloudReasoningBaseUrl(settings.cloudReasoningBaseUrl);
     if (settings.cloudReasoningMode !== undefined)

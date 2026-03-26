@@ -311,7 +311,11 @@
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
-    "availableModels": "利用可能なモデル"
+    "availableModels": "利用可能なモデル",
+    "thinkingMode": {
+      "label": "思考モード",
+      "description": "応答前に拡張推論を行います。より高速な応答のために無効にしてください。"
+    }
   },
   "transcription": {
     "deleteModel": {

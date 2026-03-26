@@ -311,7 +311,11 @@
     },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
-    "availableModels": "可用模型"
+    "availableModels": "可用模型",
+    "thinkingMode": {
+      "label": "思考模式",
+      "description": "回复前进行扩展推理。禁用以获得更快的响应。"
+    }
   },
   "transcription": {
     "deleteModel": {
