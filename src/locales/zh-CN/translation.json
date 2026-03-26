@@ -702,6 +702,8 @@
     "searchPlaceholder": "搜索..."
   },
   "microphoneSettings": {
+    "auto": "自动（最佳输入）",
+    "autoDescription": "自动测试所有麦克风并选择输入信号最强的那个。",
     "builtIn": "（内置）",
     "errors": {
       "unableToAccess": "无法访问麦克风，请检查权限设置。"

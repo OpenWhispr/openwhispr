@@ -50,7 +50,9 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
     try {
       // Request permission first to get device labels
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
+      stream.getTracks().forEach((track) => {
+        track.stop();
+      });
 
       const allDevices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = allDevices
@@ -119,9 +121,9 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
       {!preferBuiltInMic && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-foreground">
+            <p className="text-sm font-medium text-foreground">
               {t("microphoneSettings.inputDevice")}
-            </label>
+            </p>
             <Button
               variant="ghost"
               size="sm"
@@ -142,12 +144,15 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={t("microphoneSettings.selectPlaceholder")}>
-                  {selectedMicDeviceId
-                    ? selectedDevice?.label || t("microphoneSettings.unknownDevice")
-                    : t("microphoneSettings.systemDefault")}
+                  {selectedMicDeviceId === "auto"
+                    ? t("microphoneSettings.auto")
+                    : selectedMicDeviceId
+                      ? selectedDevice?.label || t("microphoneSettings.unknownDevice")
+                      : t("microphoneSettings.systemDefault")}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="auto">{t("microphoneSettings.auto")}</SelectItem>
                 <SelectItem value="default">{t("microphoneSettings.systemDefault")}</SelectItem>
                 {devices.map((device) => (
                   <SelectItem key={device.deviceId} value={device.deviceId}>
@@ -161,6 +166,10 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
                 ))}
               </SelectContent>
             </Select>
+          )}
+
+          {selectedMicDeviceId === "auto" && (
+            <p className="text-xs text-primary">{t("microphoneSettings.autoDescription")}</p>
           )}
 
           <p className="text-xs text-muted-foreground">{t("microphoneSettings.helpText")}</p>

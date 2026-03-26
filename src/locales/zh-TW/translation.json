@@ -702,6 +702,8 @@
     "searchPlaceholder": "搜尋..."
   },
   "microphoneSettings": {
+    "auto": "自動（最佳輸入）",
+    "autoDescription": "自動測試所有麥克風並選擇輸入訊號最強的那個。",
     "builtIn": "（內建）",
     "errors": {
       "unableToAccess": "無法存取麥克風。請檢查權限設定。"
