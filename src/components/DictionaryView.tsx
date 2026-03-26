@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, X, CornerDownLeft, Info, Upload } from "lucide-react";
 import { Input } from "./ui/input";
@@ -40,10 +40,16 @@ export default function DictionaryView() {
   const isEmpty = customDictionary.length === 0;
 
   // Compute preview stats for bulk import
-  const parsedImportWords = parseWords(importText);
-  const existingSet = new Set(customDictionary);
-  const newImportWords = parsedImportWords.filter((w) => !existingSet.has(w));
-  const duplicateCount = parsedImportWords.length - newImportWords.length;
+  const parsedImportWords = useMemo(() => parseWords(importText), [importText]);
+  const existingSet = useMemo(() => new Set(customDictionary), [customDictionary]);
+  const newImportWords = useMemo(
+    () => parsedImportWords.filter((w) => !existingSet.has(w)),
+    [parsedImportWords, existingSet]
+  );
+  const duplicateCount = useMemo(
+    () => parsedImportWords.length - newImportWords.length,
+    [parsedImportWords, newImportWords]
+  );
 
   const handleAdd = useCallback(() => {
     const words = newWord
@@ -77,12 +83,23 @@ export default function DictionaryView() {
       const file = e.target.files?.[0];
       if (!file) return;
 
+      // Guard against excessively large files (>1 MB)
+      if (file.size > 1_048_576) {
+        setImportText("");
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = (event) => {
         const content = event.target?.result as string;
         if (file.name.endsWith(".json")) {
           try {
-            const parsed = JSON.parse(content);
+            let parsed = JSON.parse(content);
+            // Handle { "words": [...] } or similar wrapper objects
+            if (!Array.isArray(parsed) && parsed && typeof parsed === "object") {
+              const arrayProp = Object.values(parsed).find((v) => Array.isArray(v));
+              if (arrayProp) parsed = arrayProp;
+            }
             if (Array.isArray(parsed)) {
               setImportText(parsed.join("\n"));
             } else {
