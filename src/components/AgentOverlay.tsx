@@ -160,6 +160,7 @@ export default function AgentOverlay() {
         setPartialTranscript(text);
       },
       onStreamingCommit: undefined,
+      onAudioLevel: undefined,
     });
     audioManagerRef.current = am;
     return () => {

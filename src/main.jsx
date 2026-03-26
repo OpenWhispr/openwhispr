@@ -24,6 +24,7 @@ const AgentOverlay = React.lazy(agentOverlayImport);
 const PermissionsGate = React.lazy(permissionsGateImport);
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
+import RecordingOverlay from "./components/RecordingOverlay.tsx";
 
 let root = null;
 
@@ -284,6 +285,10 @@ function AppRouter() {
 
   if (params.includes("update-notification=true")) {
     return <UpdateNotificationOverlay />;
+  }
+
+  if (params.includes("recording-overlay=true")) {
+    return <RecordingOverlay />;
   }
 
   return <MainApp />;

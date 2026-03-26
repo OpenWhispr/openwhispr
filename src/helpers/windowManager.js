@@ -12,6 +12,7 @@ const {
   CONTROL_PANEL_CONFIG,
   AGENT_OVERLAY_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
+  RECORDING_OVERLAY_CONFIG,
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
@@ -37,6 +38,8 @@ class WindowManager {
     this._agentAnimationState = null;
     this._panelStartPosition = "bottom-right";
     this._isDictatingToggle = false;
+    this.recordingOverlayWindow = null;
+    this._recordingOverlayEnabled = true;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -417,6 +420,7 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.showDictationPanel();
+      this.showRecordingOverlay();
       this.mainWindow.webContents.send("toggle-dictation");
       this._isDictatingToggle = !this._isDictatingToggle;
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
@@ -429,6 +433,7 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.showDictationPanel();
+      this.showRecordingOverlay();
       this.mainWindow.webContents.send("start-dictation");
       this.meetingDetectionEngine?.setUserRecording(true);
     }
@@ -1169,6 +1174,65 @@ class WindowManager {
       const { width, height } = CONTROL_PANEL_CONFIG;
       win.setSize(width, height);
       win.center();
+    }
+  }
+
+  async createRecordingOverlay() {
+    if (this.recordingOverlayWindow && !this.recordingOverlayWindow.isDestroyed()) {
+      return;
+    }
+
+    const display = screen.getPrimaryDisplay();
+    const position = WindowPositionUtil.getRecordingOverlayPosition(display);
+
+    this.recordingOverlayWindow = new BrowserWindow({
+      ...RECORDING_OVERLAY_CONFIG,
+      ...position,
+    });
+
+    WindowPositionUtil.setupAlwaysOnTop(this.recordingOverlayWindow);
+
+    this.recordingOverlayWindow.on("closed", () => {
+      this.recordingOverlayWindow = null;
+    });
+
+    if (process.env.NODE_ENV === "development") {
+      await DevServerManager.waitForDevServer();
+      await this.recordingOverlayWindow.loadURL(
+        `${DevServerManager.DEV_SERVER_URL}?recording-overlay=true`
+      );
+    } else {
+      const fileInfo = DevServerManager.getAppFilePath(false);
+      await this.recordingOverlayWindow.loadFile(fileInfo.path, {
+        query: { ...fileInfo.query, "recording-overlay": "true" },
+      });
+    }
+  }
+
+  showRecordingOverlay() {
+    if (!this._recordingOverlayEnabled) return;
+    if (!this.recordingOverlayWindow || this.recordingOverlayWindow.isDestroyed()) return;
+    if (typeof this.recordingOverlayWindow.showInactive === "function") {
+      this.recordingOverlayWindow.showInactive();
+    } else {
+      this.recordingOverlayWindow.show();
+    }
+  }
+
+  hideRecordingOverlay() {
+    if (!this.recordingOverlayWindow || this.recordingOverlayWindow.isDestroyed()) return;
+    this.recordingOverlayWindow.hide();
+  }
+
+  sendRecordingOverlayUpdate(data) {
+    if (!this.recordingOverlayWindow || this.recordingOverlayWindow.isDestroyed()) return;
+    this.recordingOverlayWindow.webContents.send("recording-overlay-update", data);
+  }
+
+  setRecordingOverlayEnabled(enabled) {
+    this._recordingOverlayEnabled = Boolean(enabled);
+    if (!enabled) {
+      this.hideRecordingOverlay();
     }
   }
 

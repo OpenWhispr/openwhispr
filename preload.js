@@ -555,6 +555,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Start minimized
   notifyStartMinimizedChanged: (enabled) => ipcRenderer.send("start-minimized-changed", enabled),
 
+  // Recording overlay
+  sendRecordingOverlayUpdate: (data) => ipcRenderer.send('recording-overlay-update', data),
+  onRecordingOverlayUpdate: registerListener('recording-overlay-update', (callback) => (_event, data) => callback(_event, data)),
+  cancelRecordingFromOverlay: () => ipcRenderer.invoke('recording-overlay-cancel'),
+  notifyRecordingOverlayEnabledChanged: (enabled) => ipcRenderer.send('recording-overlay-enabled-changed', enabled),
+
   // Auto-start management
   getAutoStartEnabled: () => ipcRenderer.invoke("get-auto-start-enabled"),
   setAutoStartEnabled: (enabled) => ipcRenderer.invoke("set-auto-start-enabled", enabled),
