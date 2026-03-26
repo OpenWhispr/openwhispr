@@ -152,12 +152,21 @@ class WindowPositionUtil {
     return { x, y, width, height };
   }
 
-  static getRecordingOverlayPosition(display) {
-    const width = 160;
-    const height = 32;
+  static getRecordingOverlayPosition(display, position = "center") {
+    const width = 260;
+    const height = 52;
     const MARGIN = 16;
     const workArea = display.workArea || display.bounds;
-    const x = Math.round(workArea.x + (workArea.width - width) / 2);
+
+    let x;
+    if (position === "bottom-left") {
+      x = workArea.x + MARGIN;
+    } else if (position === "bottom-right") {
+      x = workArea.x + workArea.width - width - MARGIN;
+    } else {
+      x = Math.round(workArea.x + (workArea.width - width) / 2);
+    }
+
     const y = workArea.y + workArea.height - height - MARGIN;
     return { x, y, width, height };
   }
@@ -218,8 +227,8 @@ const AGENT_OVERLAY_CONFIG = {
 };
 
 const RECORDING_OVERLAY_CONFIG = {
-  width: 160,
-  height: 32,
+  width: 260,
+  height: 52,
   frame: false,
   transparent: true,
   alwaysOnTop: true,

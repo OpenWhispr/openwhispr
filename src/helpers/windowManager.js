@@ -1201,7 +1201,7 @@ class WindowManager {
 
     const cursorPos = screen.getCursorScreenPoint();
     const display = screen.getDisplayNearestPoint(cursorPos);
-    const position = WindowPositionUtil.getRecordingOverlayPosition(display);
+    const position = WindowPositionUtil.getRecordingOverlayPosition(display, this._panelStartPosition);
 
     this.recordingOverlayWindow = new BrowserWindow({
       ...RECORDING_OVERLAY_CONFIG,
@@ -1233,7 +1233,7 @@ class WindowManager {
     // Reposition to the monitor where the cursor currently is
     const cursorPos = screen.getCursorScreenPoint();
     const display = screen.getDisplayNearestPoint(cursorPos);
-    const position = WindowPositionUtil.getRecordingOverlayPosition(display);
+    const position = WindowPositionUtil.getRecordingOverlayPosition(display, this._panelStartPosition);
     this.recordingOverlayWindow.setBounds(position);
     if (typeof this.recordingOverlayWindow.showInactive === "function") {
       this.recordingOverlayWindow.showInactive();

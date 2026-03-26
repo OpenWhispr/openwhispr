@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import "./RecordingOverlay.css";
 
-const BUFFER_SIZE = 40;
+const BUFFER_SIZE = 24;
 const BAR_WIDTH = 3;
 const BAR_GAP = 2;
 const HIDE_DELAY_MS = 300;
@@ -62,7 +62,8 @@ export default function RecordingOverlay() {
 
         // Push level into rolling buffer
         levelsRef.current.shift();
-        levelsRef.current.push(Math.min(1, level * 3)); // amplify for visibility
+        const amplified = Math.min(1, Math.pow(level * 20, 0.7));
+        levelsRef.current.push(amplified);
 
         if (rec || proc) {
           if (hideTimerRef.current) {
