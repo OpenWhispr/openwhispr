@@ -286,8 +286,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
-  pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
-  muteSystemOutputOnDictation: readBoolean("muteSystemOutputOnDictation", false),
+  pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", true),
+  muteSystemOutputOnDictation: readBoolean("muteSystemOutputOnDictation", true),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
   startMinimized: readBoolean("startMinimized", false),
   ...(() => {
