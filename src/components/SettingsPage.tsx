@@ -697,6 +697,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setAudioCuesEnabled,
     pauseMediaOnDictation,
     setPauseMediaOnDictation,
+    muteSystemOutputOnDictation,
+    setMuteSystemOutputOnDictation,
     keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
@@ -2110,6 +2112,17 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                     description={t("settingsPage.general.soundEffects.pauseMediaDescription")}
                   >
                     <Toggle checked={pauseMediaOnDictation} onChange={setPauseMediaOnDictation} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.soundEffects.muteSystemOutput")}
+                    description={t("settingsPage.general.soundEffects.muteSystemOutputDescription")}
+                  >
+                    <Toggle
+                      checked={muteSystemOutputOnDictation}
+                      onChange={setMuteSystemOutputOnDictation}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>
