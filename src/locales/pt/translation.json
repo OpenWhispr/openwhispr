@@ -283,7 +283,11 @@
     },
     "getApiKey": "Obter chave API ->",
     "selectModel": "Selecionar modelo",
-    "availableModels": "Modelos disponíveis"
+    "availableModels": "Modelos disponíveis",
+    "thinkingMode": {
+      "label": "Modo de raciocínio",
+      "description": "Raciocínio estendido antes de responder. Desativar para respostas mais rápidas."
+    }
   },
   "transcription": {
     "deleteModel": {

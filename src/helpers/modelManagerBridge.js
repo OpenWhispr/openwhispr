@@ -385,6 +385,13 @@ class ModelManager {
       { role: "user", content: prompt },
     ];
 
+    if (options.enableThinking === false && modelInfo.model.supportsThinking) {
+      const lastUserMsg = messages.find((m) => m.role === "user");
+      if (lastUserMsg) {
+        lastUserMsg.content = lastUserMsg.content + " /no_think";
+      }
+    }
+
     debugLogger.logReasoning("INFERENCE_SENDING_REQUEST", {
       messageCount: messages.length,
       systemPromptLength: (options.systemPrompt || "").length,

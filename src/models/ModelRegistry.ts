@@ -13,6 +13,7 @@ export interface ModelDefinition {
   contextLength: number;
   hfRepo: string;
   recommended?: boolean;
+  supportsThinking?: boolean;
 }
 
 export interface LocalProviderData {

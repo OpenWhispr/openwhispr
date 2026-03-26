@@ -1,4 +1,9 @@
-import { getModelProvider, getCloudModel, getOpenAiApiConfig } from "../models/ModelRegistry";
+import {
+  getModelProvider,
+  getCloudModel,
+  getOpenAiApiConfig,
+  modelRegistry,
+} from "../models/ModelRegistry";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy } from "../utils/retry";
@@ -782,9 +787,11 @@ class ReasoningService extends BaseReasoningService {
       });
 
       const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
+      const settings = getSettings();
       const result = await window.electronAPI.processLocalReasoning(text, model, agentName, {
         ...config,
         systemPrompt,
+        enableThinking: settings.localThinkingEnabled,
       });
 
       const processingTime = Date.now() - startTime;
@@ -1143,6 +1150,17 @@ class ReasoningService extends BaseReasoningService {
 
     const apiConfig = getOpenAiApiConfig(model);
     const useOldTokenParam = isLocalProvider || provider === "groq";
+
+    if (isLocalProvider) {
+      const settings = getSettings();
+      const modelSupportsThinking = modelRegistry.getModel(model)?.model?.supportsThinking ?? false;
+      if (!settings.localThinkingEnabled && modelSupportsThinking) {
+        const lastUserMsg = messages.findLast((m) => m.role === "user");
+        if (lastUserMsg) {
+          lastUserMsg.content = lastUserMsg.content + " /no_think";
+        }
+      }
+    }
 
     const requestBody: Record<string, unknown> = {
       model,

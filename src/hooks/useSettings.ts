@@ -26,6 +26,7 @@ export interface ReasoningSettings {
   useReasoningModel: boolean;
   reasoningModel: string;
   reasoningProvider: string;
+  localThinkingEnabled: boolean;
   cloudReasoningBaseUrl?: string;
   cloudReasoningMode: string;
 }
@@ -121,8 +122,7 @@ function useSettingsInternal() {
   // Sync auto-learn state to main process on mount
   useEffect(() => {
     window.electronAPI?.setAutoLearnEnabled?.(autoLearnCorrections);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [autoLearnCorrections]);
 
   // Sync startup pre-warming preferences to main process
   const {
@@ -184,6 +184,7 @@ function useSettingsInternal() {
     useReasoningModel: store.useReasoningModel,
     reasoningModel: store.reasoningModel,
     reasoningProvider: store.reasoningProvider,
+    localThinkingEnabled: store.localThinkingEnabled,
     openaiApiKey: store.openaiApiKey,
     anthropicApiKey: store.anthropicApiKey,
     geminiApiKey: store.geminiApiKey,
@@ -211,6 +212,7 @@ function useSettingsInternal() {
     setUseReasoningModel: store.setUseReasoningModel,
     setReasoningModel: store.setReasoningModel,
     setReasoningProvider: store.setReasoningProvider,
+    setLocalThinkingEnabled: store.setLocalThinkingEnabled,
     setOpenaiApiKey: store.setOpenaiApiKey,
     setAnthropicApiKey: store.setAnthropicApiKey,
     setGeminiApiKey: store.setGeminiApiKey,

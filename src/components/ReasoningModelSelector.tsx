@@ -21,6 +21,7 @@ import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
+import { useSettingsStore } from "../stores/settingsStore";
 
 type CloudModelOption = {
   value: string;
@@ -284,6 +285,7 @@ function GpuStatusBadge() {
                 {t("gpu.enableButton")}
               </Button>
               <button
+                type="button"
                 onClick={() => {
                   localStorage.setItem("llamaVulkanBannerDismissed", "true");
                   setDismissed(true);
@@ -331,6 +333,8 @@ export default function ReasoningModelSelector({
   const lastLoadedBaseRef = useRef<string | null>(null);
   const pendingBaseRef = useRef<string | null>(null);
   const isMountedRef = useRef(true);
+  const localThinkingEnabled = useSettingsStore((s) => s.localThinkingEnabled);
+  const setLocalThinkingEnabled = useSettingsStore((s) => s.setLocalThinkingEnabled);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -492,7 +496,7 @@ export default function ReasoningModelSelector({
     return customModelOptions;
   }, [isCustomBaseDirty, customModelOptions]);
 
-  const cloudProviderIds = ["openai", "anthropic", "gemini", "groq", "custom"];
+  const cloudProviderIds = useMemo(() => ["openai", "anthropic", "gemini", "groq", "custom"], []);
   const cloudProviders = cloudProviderIds.map((id) => ({
     id,
     name:
@@ -516,6 +520,19 @@ export default function ReasoningModelSelector({
       })),
     }));
   }, []);
+
+  const selectedModelDef = useMemo(() => {
+    for (const provider of localProviders) {
+      const model = provider.models.find((m) => m.id === reasoningModel);
+      if (model) return model;
+    }
+    return null;
+  }, [localProviders, reasoningModel]);
+
+  const modelSupportsThinking = useMemo(() => {
+    const result = modelRegistry.getModel(reasoningModel);
+    return result?.model?.supportsThinking ?? false;
+  }, [reasoningModel]);
 
   const openaiModelOptions = useMemo<CloudModelOption[]>(() => {
     const iconUrl = getProviderIcon("openai");
@@ -586,14 +603,15 @@ export default function ReasoningModelSelector({
 
   useEffect(() => {
     const localProviderIds = localProviders.map((p) => p.id);
+    const isCloudProvider = cloudProviderIds.includes(localReasoningProvider);
     if (localProviderIds.includes(localReasoningProvider)) {
       setSelectedMode("local");
       setSelectedLocalProvider(localReasoningProvider);
-    } else if (cloudProviderIds.includes(localReasoningProvider)) {
+    } else if (isCloudProvider) {
       setSelectedMode("cloud");
       setSelectedCloudProvider(localReasoningProvider);
     }
-  }, [localProviders, localReasoningProvider]);
+  }, [cloudProviderIds, localProviders, localReasoningProvider]);
 
   useEffect(() => {
     if (selectedCloudProvider !== "custom") return;
@@ -613,7 +631,7 @@ export default function ReasoningModelSelector({
     loadRemoteModels();
   }, [selectedCloudProvider, hasCustomBase, normalizedCustomReasoningBase, loadRemoteModels]);
 
-  const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
+  const [, setDownloadedModels] = useState<Set<string>>(new Set());
 
   const loadDownloadedModels = useCallback(async () => {
     try {
@@ -990,6 +1008,29 @@ export default function ReasoningModelSelector({
             colorScheme="purple"
             onDownloadComplete={loadDownloadedModels}
           />
+          {selectedMode === "local" && selectedModelDef && modelSupportsThinking && (
+            <div className="flex items-center justify-between px-1 mt-2">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-foreground">
+                  {t("reasoning.thinkingMode.label")}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t("reasoning.thinkingMode.description")}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={localThinkingEnabled}
+                onClick={() => setLocalThinkingEnabled(!localThinkingEnabled)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${localThinkingEnabled ? "bg-primary" : "bg-input"}`}
+              >
+                <span
+                  className={`pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${localThinkingEnabled ? "translate-x-4" : "translate-x-0"}`}
+                />
+              </button>
+            </div>
+          )}
           <GpuStatusBadge />
         </>
       )}
