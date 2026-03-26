@@ -424,11 +424,9 @@ class WindowManager {
         // Send IPC without showing mainWindow — webContents is alive even when hidden
         this.mainWindow.webContents.send("toggle-dictation");
         if (this._isDictatingToggle) {
-          this.hideDictationPanel();
           this.showRecordingOverlay();
         } else {
           this.hideRecordingOverlay();
-          this.showDictationPanel();
         }
       } else {
         this.showDictationPanel();
@@ -446,7 +444,6 @@ class WindowManager {
       if (this._recordingOverlayEnabled) {
         // Send IPC without showing mainWindow — webContents is alive even when hidden
         this.mainWindow.webContents.send("start-dictation");
-        this.hideDictationPanel();
         this.showRecordingOverlay();
       } else {
         this.showDictationPanel();
@@ -465,9 +462,6 @@ class WindowManager {
       this.mainWindow.webContents.send("stop-dictation");
       this._isDictatingToggle = false;
       this.hideRecordingOverlay();
-      if (this._recordingOverlayEnabled) {
-        this.showDictationPanel();
-      }
       this.meetingDetectionEngine?.setUserRecording(false);
     }
   }
@@ -958,7 +952,8 @@ class WindowManager {
         this.mainWindow &&
         !this.mainWindow.isDestroyed() &&
         !this.mainWindow.isVisible() &&
-        !this._floatingIconAutoHide
+        !this._floatingIconAutoHide &&
+        !this._recordingOverlayEnabled
       ) {
         this.showDictationPanel();
       }
@@ -967,7 +962,7 @@ class WindowManager {
     this.mainWindow.once("ready-to-show", () => {
       clearTimeout(showTimeout);
       this.enforceMainWindowOnTop();
-      if (!this.mainWindow.isVisible() && !this._floatingIconAutoHide) {
+      if (!this.mainWindow.isVisible() && !this._floatingIconAutoHide && !this._recordingOverlayEnabled) {
         if (typeof this.mainWindow.showInactive === "function") {
           this.mainWindow.showInactive();
         } else {
