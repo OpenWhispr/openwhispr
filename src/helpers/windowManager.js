@@ -419,19 +419,20 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.showDictationPanel();
-      this.mainWindow.webContents.send("toggle-dictation");
       this._isDictatingToggle = !this._isDictatingToggle;
-      if (this._isDictatingToggle) {
-        if (this._recordingOverlayEnabled) {
+      if (this._recordingOverlayEnabled) {
+        // Send IPC without showing mainWindow — webContents is alive even when hidden
+        this.mainWindow.webContents.send("toggle-dictation");
+        if (this._isDictatingToggle) {
           this.hideDictationPanel();
-        }
-        this.showRecordingOverlay();
-      } else {
-        this.hideRecordingOverlay();
-        if (this._recordingOverlayEnabled) {
+          this.showRecordingOverlay();
+        } else {
+          this.hideRecordingOverlay();
           this.showDictationPanel();
         }
+      } else {
+        this.showDictationPanel();
+        this.mainWindow.webContents.send("toggle-dictation");
       }
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     }
@@ -442,12 +443,16 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.showDictationPanel();
-      this.mainWindow.webContents.send("start-dictation");
       if (this._recordingOverlayEnabled) {
+        // Send IPC without showing mainWindow — webContents is alive even when hidden
+        this.mainWindow.webContents.send("start-dictation");
         this.hideDictationPanel();
+        this.showRecordingOverlay();
+      } else {
+        this.showDictationPanel();
+        this.showRecordingOverlay();
+        this.mainWindow.webContents.send("start-dictation");
       }
-      this.showRecordingOverlay();
       this.meetingDetectionEngine?.setUserRecording(true);
     }
   }
