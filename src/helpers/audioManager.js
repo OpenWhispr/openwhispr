@@ -21,6 +21,40 @@ const PLACEHOLDER_KEYS = {
   mistral: "your_mistral_api_key_here",
 };
 
+const GROQ_SEGMENT_FILTER = {
+  noSpeechProbThreshold: 0.6,
+  strongNoSpeechProbThreshold: 0.75,
+  avgLogprobThreshold: -1.0,
+  weakNoSpeechProbThreshold: 0.25,
+  weakAvgLogprobThreshold: -0.35,
+  highCompressionRatioThreshold: 1.8,
+  maxShortSegmentDurationSeconds: 1.2,
+  maxLooseSegmentDurationSeconds: 1.8,
+  maxTrailingSilenceSegmentDurationSeconds: 2.5,
+  maxShortSegmentWords: 3,
+  maxLowConfidenceWords: 4,
+  maxTrailingSilenceSegmentWords: 8,
+  maxSingleSegmentWords: 6,
+  trailingSilenceRejectSeconds: 4,
+  singleSegmentCoverageThreshold: 0.8,
+};
+
+const TRAILING_SILENCE_TRIM = {
+  minTrailingSilenceSeconds: 4,
+  silenceThreshold: 0.012,
+  leadingSilenceThreshold: 0.012,
+  keepTailSeconds: 0.75,
+  minSpeechWindowSeconds: 1.2,
+  keepLeadingSeconds: 0.2,
+};
+
+const SILENCE_GATING = {
+  fullClipSilenceGraceSeconds: 0.35,
+  minFullClipSilenceDurationSeconds: 2.5,
+  speechRmsThreshold: 0.02,
+  minSpeechFrames: 3,
+};
+
 const isValidApiKey = (key, provider = "openai") => {
   if (!key || key.trim() === "") return false;
   const placeholder = PLACEHOLDER_KEYS[provider] || PLACEHOLDER_KEYS.openai;
@@ -158,8 +192,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getCustomDictionaryPrompt() {
-    const words = getSettings().customDictionary;
-    return words.length > 0 ? words.join(", ") : null;
+    const words = Array.isArray(getSettings().customDictionary) ? getSettings().customDictionary : [];
+    const sanitizedWords = words
+      .map((word) => (typeof word === "string" ? word.replace(/\s+/g, " ").trim() : ""))
+      .filter(Boolean)
+      .filter((word) => !/[.!?]/.test(word));
+
+    return sanitizedWords.length > 0 ? sanitizedWords.join(", ") : null;
   }
 
   setCallbacks({
@@ -310,6 +349,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const sourceNode = this._silenceCtx.createMediaStreamSource(micStream);
         sourceNode.connect(this._silenceAnalyser);
         this._peakRms = 0;
+        this._speechFrameCount = 0;
+        this._speechStreakCount = 0;
+        this._speechDetected = false;
+        this._firstSpeechAt = null;
         const dataArray = new Uint8Array(this._silenceAnalyser.fftSize);
         this._silenceInterval = setInterval(() => {
           this._silenceAnalyser.getByteTimeDomainData(dataArray);
@@ -320,15 +363,35 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           const rms = Math.sqrt(sum / dataArray.length);
           if (rms > this._peakRms) this._peakRms = rms;
+          if (rms >= SILENCE_GATING.speechRmsThreshold) {
+            this._speechFrameCount += 1;
+            this._speechStreakCount += 1;
+          } else {
+            this._speechStreakCount = 0;
+          }
+          if (this._speechStreakCount >= SILENCE_GATING.minSpeechFrames) {
+            this._speechDetected = true;
+            if (!this._firstSpeechAt) {
+              this._firstSpeechAt = Date.now();
+            }
+            this._lastNonSilenceAt = Date.now();
+          }
         }, 100);
       } catch (e) {
         logger.warn("Silence detection setup failed, skipping", { error: e.message }, "audio");
         this._peakRms = 1; // assume speech if detection fails
+        this._speechFrameCount = SILENCE_GATING.minSpeechFrames;
+        this._speechStreakCount = SILENCE_GATING.minSpeechFrames;
+        this._speechDetected = true;
+        this._firstSpeechAt = Date.now();
+        this._lastNonSilenceAt = Date.now();
       }
 
       this.mediaRecorder = new MediaRecorder(micStream);
       this.audioChunks = [];
       this.recordingStartTime = Date.now();
+      this._firstSpeechAt = null;
+      this._lastNonSilenceAt = null;
       this.recordingMimeType = this.mediaRecorder.mimeType || "audio/webm";
 
       this.mediaRecorder.ondataavailable = (event) => {
@@ -365,8 +428,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const durationSeconds = this.recordingStartTime
           ? (Date.now() - this.recordingStartTime) / 1000
           : null;
+        const trailingSilenceSeconds =
+          this._speechDetected && this._lastNonSilenceAt && this.recordingStartTime
+            ? Math.max(0, (Date.now() - this._lastNonSilenceAt) / 1000)
+            : durationSeconds;
+        const leadingSilenceSeconds =
+          this._speechDetected && this._firstSpeechAt && this.recordingStartTime
+            ? Math.max(0, (this._firstSpeechAt - this.recordingStartTime) / 1000)
+            : durationSeconds;
+        const speechDetected = !!this._speechDetected;
+        const speechFrameCount = this._speechFrameCount || 0;
         this.recordingStartTime = null;
-        await this.processAudio(audioBlob, { durationSeconds });
+        this._firstSpeechAt = null;
+        this._lastNonSilenceAt = null;
+        this._speechDetected = false;
+        this._speechFrameCount = 0;
+        this._speechStreakCount = 0;
+        await this.processAudio(audioBlob, {
+          durationSeconds,
+          leadingSilenceSeconds,
+          trailingSilenceSeconds,
+          speechDetected,
+          speechFrameCount,
+        });
 
         micStream.getTracks().forEach((track) => track.stop());
       };
@@ -416,6 +500,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.isProcessing = false;
         this.audioChunks = [];
         this.recordingStartTime = null;
+        this._firstSpeechAt = null;
+        this._lastNonSilenceAt = null;
+        this._speechDetected = false;
+        this._speechFrameCount = 0;
+        this._speechStreakCount = 0;
         this.onStateChange?.({ isRecording: false, isProcessing: false });
       };
 
@@ -444,6 +533,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     // Skip transcription if recording was silence
     const SILENCE_THRESHOLD = 0.002;
+    const durationSeconds = metadata.durationSeconds ?? null;
+    const trailingSilenceSeconds = metadata.trailingSilenceSeconds ?? null;
+    const speechDetected = metadata.speechDetected === true;
+    const speechFrameCount = metadata.speechFrameCount ?? 0;
+    const isEffectivelyAllSilence =
+      typeof durationSeconds === "number" &&
+      typeof trailingSilenceSeconds === "number" &&
+      durationSeconds >= SILENCE_GATING.minFullClipSilenceDurationSeconds &&
+      trailingSilenceSeconds >= durationSeconds - SILENCE_GATING.fullClipSilenceGraceSeconds &&
+      !speechDetected;
+
     if (this._peakRms != null && this._peakRms < SILENCE_THRESHOLD) {
       logger.info(
         "Silence detected, skipping transcription",
@@ -456,6 +556,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onTranscriptionComplete?.({ success: true, text: "" });
       return;
     }
+
+    if (isEffectivelyAllSilence) {
+      logger.info(
+        "Recorder detected full-clip silence, skipping transcription",
+        {
+          durationSeconds,
+          trailingSilenceSeconds,
+          peakRms: this._peakRms,
+          speechFrameCount,
+        },
+        "audio"
+      );
+      this._peakRms = null;
+      this.isProcessing = false;
+      this.onStateChange?.({ isRecording: false, isProcessing: false });
+      this.onTranscriptionComplete?.({ success: true, text: "" });
+      return;
+    }
+
     this._peakRms = null;
 
     try {
@@ -1013,6 +1132,483 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return normalized.startsWith("gpt-4o-mini-transcribe");
   }
 
+  supportsStructuredTranscription(provider, model, shouldStream) {
+    if (shouldStream) {
+      return false;
+    }
+
+    const normalizedModel = typeof model === "string" ? model.trim() : "";
+    return provider === "groq" && normalizedModel.startsWith("whisper-large-v3");
+  }
+
+  normalizeSegmentText(text) {
+    return typeof text === "string" ? text.replace(/\s+/g, " ").trim() : "";
+  }
+
+  shouldSuppressDictionaryPrompt(provider, metadata = {}) {
+    const leadingSilenceSeconds =
+      typeof metadata.leadingSilenceSeconds === "number" ? metadata.leadingSilenceSeconds : 0;
+    return provider === "groq" && leadingSilenceSeconds >= TRAILING_SILENCE_TRIM.minTrailingSilenceSeconds;
+  }
+
+  interleaveChannels(channelData) {
+    if (!Array.isArray(channelData) || channelData.length === 0) {
+      return new Float32Array(0);
+    }
+    if (channelData.length === 1) {
+      return channelData[0];
+    }
+
+    const length = channelData[0].length;
+    const interleaved = new Float32Array(length * channelData.length);
+    for (let sampleIndex = 0; sampleIndex < length; sampleIndex++) {
+      for (let channelIndex = 0; channelIndex < channelData.length; channelIndex++) {
+        interleaved[sampleIndex * channelData.length + channelIndex] =
+          channelData[channelIndex][sampleIndex];
+      }
+    }
+    return interleaved;
+  }
+
+  encodeWavFromAudioBuffer(audioBuffer) {
+    const numChannels = audioBuffer.numberOfChannels;
+    const sampleRate = audioBuffer.sampleRate;
+    const channelData = [];
+    for (let i = 0; i < numChannels; i++) {
+      channelData.push(audioBuffer.getChannelData(i));
+    }
+
+    const interleaved = this.interleaveChannels(channelData);
+    const bytesPerSample = 2;
+    const dataLength = interleaved.length * bytesPerSample;
+    const wavBuffer = new ArrayBuffer(44 + dataLength);
+    const view = new DataView(wavBuffer);
+
+    const writeString = (offset, value) => {
+      for (let i = 0; i < value.length; i++) {
+        view.setUint8(offset + i, value.charCodeAt(i));
+      }
+    };
+
+    writeString(0, "RIFF");
+    view.setUint32(4, 36 + dataLength, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
+    view.setUint16(32, numChannels * bytesPerSample, true);
+    view.setUint16(34, 16, true);
+    writeString(36, "data");
+    view.setUint32(40, dataLength, true);
+
+    let offset = 44;
+    for (let i = 0; i < interleaved.length; i++) {
+      const sample = Math.max(-1, Math.min(1, interleaved[i]));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+      offset += 2;
+    }
+
+    return new Blob([wavBuffer], { type: "audio/wav" });
+  }
+
+  async trimTrailingSilenceForGroq(audioBlob, metadata = {}) {
+    const leadingSilenceSeconds =
+      typeof metadata.leadingSilenceSeconds === "number" ? metadata.leadingSilenceSeconds : 0;
+    const trailingSilenceSeconds =
+      typeof metadata.trailingSilenceSeconds === "number" ? metadata.trailingSilenceSeconds : 0;
+
+    const shouldTrimLeading = leadingSilenceSeconds >= TRAILING_SILENCE_TRIM.minTrailingSilenceSeconds;
+    const shouldTrimTrailing =
+      trailingSilenceSeconds >= TRAILING_SILENCE_TRIM.minTrailingSilenceSeconds;
+
+    if (!shouldTrimLeading && !shouldTrimTrailing) {
+      return audioBlob;
+    }
+
+    try {
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const audioContext = new AudioContext();
+      const decoded = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+      await audioContext.close();
+
+      const channelCount = decoded.numberOfChannels;
+      const sampleRate = decoded.sampleRate;
+      const totalSamples = decoded.length;
+      let firstActiveSample = -1;
+      let lastActiveSample = -1;
+
+      for (let sampleIndex = 0; sampleIndex < totalSamples; sampleIndex++) {
+        let peak = 0;
+        for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
+          const value = Math.abs(decoded.getChannelData(channelIndex)[sampleIndex]);
+          if (value > peak) peak = value;
+        }
+        if (peak >= TRAILING_SILENCE_TRIM.leadingSilenceThreshold) {
+          firstActiveSample = sampleIndex;
+          break;
+        }
+      }
+
+      for (let sampleIndex = totalSamples - 1; sampleIndex >= 0; sampleIndex--) {
+        let peak = 0;
+        for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
+          const value = Math.abs(decoded.getChannelData(channelIndex)[sampleIndex]);
+          if (value > peak) peak = value;
+        }
+        if (peak >= TRAILING_SILENCE_TRIM.silenceThreshold) {
+          lastActiveSample = sampleIndex;
+          break;
+        }
+      }
+
+      if (lastActiveSample < 0) {
+        return audioBlob;
+      }
+
+      const trimStart = shouldTrimLeading && firstActiveSample >= 0
+        ? Math.max(0, firstActiveSample - Math.floor(TRAILING_SILENCE_TRIM.keepLeadingSeconds * sampleRate))
+        : 0;
+
+      const trimEnd = shouldTrimTrailing
+        ? Math.min(
+            totalSamples,
+            lastActiveSample + Math.floor(TRAILING_SILENCE_TRIM.keepTailSeconds * sampleRate)
+          )
+        : totalSamples;
+
+      const trimmedLength = Math.min(
+        totalSamples,
+        Math.max(0, trimEnd - trimStart)
+      );
+
+      const minimumLength = Math.min(
+        totalSamples,
+        Math.floor(TRAILING_SILENCE_TRIM.minSpeechWindowSeconds * sampleRate)
+      );
+      const safeTrimmedLength = Math.max(trimmedLength, minimumLength);
+
+      if (safeTrimmedLength >= totalSamples - sampleRate * 0.2 && trimStart <= sampleRate * 0.1) {
+        return audioBlob;
+      }
+
+      const trimmedBuffer = new AudioBuffer({
+        length: safeTrimmedLength,
+        numberOfChannels: channelCount,
+        sampleRate,
+      });
+
+      for (let channelIndex = 0; channelIndex < channelCount; channelIndex++) {
+        const source = decoded.getChannelData(channelIndex);
+        trimmedBuffer.copyToChannel(
+          source.subarray(trimStart, trimStart + safeTrimmedLength),
+          channelIndex,
+          0
+        );
+      }
+
+      logger.info(
+        "Trimmed trailing silence before Groq transcription",
+        {
+          originalDurationSeconds: totalSamples / sampleRate,
+          leadingSilenceSeconds,
+          trimmedDurationSeconds: safeTrimmedLength / sampleRate,
+          trailingSilenceSeconds,
+          trimStartSeconds: trimStart / sampleRate,
+        },
+        "transcription"
+      );
+
+      return this.encodeWavFromAudioBuffer(trimmedBuffer);
+    } catch (error) {
+      logger.warn(
+        "Failed to trim trailing silence before Groq transcription",
+        { error: error.message },
+        "transcription"
+      );
+      return audioBlob;
+    }
+  }
+
+  looksFragmentarySegmentText(text) {
+    const normalized = this.normalizeSegmentText(text);
+    if (!normalized) {
+      return true;
+    }
+
+    const words = normalized.split(/\s+/).filter(Boolean);
+    const lower = normalized.toLowerCase();
+    const punctuationMatches = normalized.match(/[,:;.!?]/g) || [];
+    const endsWithWeakPunctuation = /[,;:]$/.test(normalized);
+    const hasMultipleClauses = /[.!?].+\s+[a-z]/.test(lower);
+    const shortWords = words.filter((word) => word.replace(/[^a-z]/gi, "").length <= 2).length;
+
+    return (
+      endsWithWeakPunctuation ||
+      (words.length <= 8 && punctuationMatches.length >= 2) ||
+      (words.length <= 8 && hasMultipleClauses) ||
+      (words.length > 0 && shortWords / words.length >= 0.5)
+    );
+  }
+
+  normalizeStructuredTranscriptionResult(result, provider) {
+    const rawText = typeof result?.text === "string" ? result.text : "";
+    const segments = Array.isArray(result?.segments)
+      ? result.segments
+          .map((segment) => {
+            const text = this.normalizeSegmentText(segment?.text);
+            if (!text) {
+              return null;
+            }
+
+            return {
+              text,
+              start: Number.isFinite(segment?.start) ? segment.start : null,
+              end: Number.isFinite(segment?.end) ? segment.end : null,
+              avgLogprob: Number.isFinite(segment?.avg_logprob) ? segment.avg_logprob : null,
+              noSpeechProb: Number.isFinite(segment?.no_speech_prob) ? segment.no_speech_prob : null,
+              compressionRatio: Number.isFinite(segment?.compression_ratio)
+                ? segment.compression_ratio
+                : null,
+              tokens: Array.isArray(segment?.tokens) ? segment.tokens : null,
+            };
+          })
+          .filter(Boolean)
+      : [];
+
+    const text =
+      this.normalizeSegmentText(rawText) ||
+      segments.map((segment) => segment.text).join(" ").replace(/\s+/g, " ").trim();
+
+    return {
+      provider,
+      rawText,
+      text,
+      segments,
+    };
+  }
+
+  shouldRejectGroqSegment(segment, context = {}) {
+    const duration =
+      typeof segment.start === "number" && typeof segment.end === "number"
+        ? Math.max(0, segment.end - segment.start)
+        : null;
+    const wordCount = segment.text.split(/\s+/).filter(Boolean).length;
+    const noSpeechProb = segment.noSpeechProb;
+    const avgLogprob = segment.avgLogprob;
+    const compressionRatio = segment.compressionRatio;
+    const trailingSilenceSeconds =
+      typeof context.trailingSilenceSeconds === "number" ? context.trailingSilenceSeconds : null;
+    const durationSeconds =
+      typeof context.durationSeconds === "number" ? context.durationSeconds : null;
+    const trailingGap =
+      durationSeconds !== null && typeof segment.end === "number"
+        ? Math.max(0, durationSeconds - segment.end)
+        : null;
+
+    if (
+      typeof noSpeechProb === "number" &&
+      noSpeechProb >= GROQ_SEGMENT_FILTER.strongNoSpeechProbThreshold &&
+      (duration === null || duration <= GROQ_SEGMENT_FILTER.maxLooseSegmentDurationSeconds)
+    ) {
+      return true;
+    }
+
+    if (
+      typeof noSpeechProb === "number" &&
+      noSpeechProb >= GROQ_SEGMENT_FILTER.noSpeechProbThreshold &&
+      (duration === null || duration <= GROQ_SEGMENT_FILTER.maxShortSegmentDurationSeconds) &&
+      wordCount <= GROQ_SEGMENT_FILTER.maxShortSegmentWords
+    ) {
+      return true;
+    }
+
+    if (
+      typeof avgLogprob === "number" &&
+      avgLogprob <= GROQ_SEGMENT_FILTER.avgLogprobThreshold &&
+      (duration === null || duration <= GROQ_SEGMENT_FILTER.maxShortSegmentDurationSeconds) &&
+      wordCount <= GROQ_SEGMENT_FILTER.maxLowConfidenceWords
+    ) {
+      return true;
+    }
+
+    const hasLongTrailingSilence =
+      (typeof trailingSilenceSeconds === "number" &&
+        trailingSilenceSeconds >= GROQ_SEGMENT_FILTER.trailingSilenceRejectSeconds) ||
+      (typeof trailingGap === "number" &&
+        trailingGap >= GROQ_SEGMENT_FILTER.trailingSilenceRejectSeconds);
+
+    const hasWeakConfidenceSignal =
+      (typeof noSpeechProb === "number" &&
+        noSpeechProb >= GROQ_SEGMENT_FILTER.weakNoSpeechProbThreshold) ||
+      (typeof avgLogprob === "number" &&
+        avgLogprob <= GROQ_SEGMENT_FILTER.weakAvgLogprobThreshold) ||
+      (typeof compressionRatio === "number" &&
+        compressionRatio >= GROQ_SEGMENT_FILTER.highCompressionRatioThreshold);
+
+    if (
+      hasLongTrailingSilence &&
+      hasWeakConfidenceSignal &&
+      (duration === null || duration <= GROQ_SEGMENT_FILTER.maxTrailingSilenceSegmentDurationSeconds) &&
+      wordCount <= GROQ_SEGMENT_FILTER.maxTrailingSilenceSegmentWords &&
+      this.looksFragmentarySegmentText(segment.text)
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  shouldRejectSingleFullClipGroqSegment(segment, context = {}) {
+    const durationSeconds =
+      typeof context.durationSeconds === "number" ? context.durationSeconds : null;
+    const trailingSilenceSeconds =
+      typeof context.trailingSilenceSeconds === "number" ? context.trailingSilenceSeconds : null;
+    const segmentStart = typeof segment.start === "number" ? segment.start : null;
+    const segmentEnd = typeof segment.end === "number" ? segment.end : null;
+
+    if (
+      durationSeconds === null ||
+      trailingSilenceSeconds === null ||
+      trailingSilenceSeconds < GROQ_SEGMENT_FILTER.trailingSilenceRejectSeconds ||
+      segmentStart === null ||
+      segmentEnd === null ||
+      durationSeconds <= 0
+    ) {
+      return false;
+    }
+
+    const wordCount = segment.text.split(/\s+/).filter(Boolean).length;
+    const coverage = Math.max(0, segmentEnd - segmentStart) / durationSeconds;
+    const noSpeechProb = segment.noSpeechProb;
+    const avgLogprob = segment.avgLogprob;
+
+    return (
+      segmentStart <= 0.15 &&
+      coverage >= GROQ_SEGMENT_FILTER.singleSegmentCoverageThreshold &&
+      wordCount <= GROQ_SEGMENT_FILTER.maxSingleSegmentWords &&
+      typeof noSpeechProb === "number" &&
+      noSpeechProb >= 0.4 &&
+      typeof avgLogprob === "number" &&
+      avgLogprob <= GROQ_SEGMENT_FILTER.weakAvgLogprobThreshold
+    );
+  }
+
+  filterLikelyHallucinatedSegments(structuredResult, metadata = {}) {
+    if (structuredResult.provider !== "groq" || structuredResult.segments.length === 0) {
+      return {
+        ...structuredResult,
+        filteredSegments: structuredResult.segments,
+        rejectedSegments: [],
+      };
+    }
+
+    const filteredSegments = [];
+    const rejectedSegments = [];
+    const filterContext = {
+      durationSeconds:
+        typeof metadata.durationSeconds === "number" ? metadata.durationSeconds : null,
+      trailingSilenceSeconds:
+        typeof metadata.trailingSilenceSeconds === "number" ? metadata.trailingSilenceSeconds : null,
+    };
+
+    logger.info(
+      "Structured Groq transcription received",
+      {
+        durationSeconds: filterContext.durationSeconds,
+        trailingSilenceSeconds: filterContext.trailingSilenceSeconds,
+        segmentCount: structuredResult.segments.length,
+        segmentPreview: structuredResult.segments.map((segment) => ({
+          text: segment.text,
+          start: segment.start,
+          end: segment.end,
+          noSpeechProb: segment.noSpeechProb,
+          avgLogprob: segment.avgLogprob,
+          compressionRatio: segment.compressionRatio,
+        })),
+      },
+      "transcription"
+    );
+
+    if (
+      structuredResult.segments.length === 1 &&
+      this.shouldRejectSingleFullClipGroqSegment(structuredResult.segments[0], filterContext)
+    ) {
+      const rejectedSegment = structuredResult.segments[0];
+      logger.info(
+        "Rejected single full-clip Groq segment after long trailing silence",
+        {
+          durationSeconds: filterContext.durationSeconds,
+          trailingSilenceSeconds: filterContext.trailingSilenceSeconds,
+          text: rejectedSegment.text,
+          start: rejectedSegment.start,
+          end: rejectedSegment.end,
+          noSpeechProb: rejectedSegment.noSpeechProb,
+          avgLogprob: rejectedSegment.avgLogprob,
+          compressionRatio: rejectedSegment.compressionRatio,
+        },
+        "transcription"
+      );
+
+      return {
+        ...structuredResult,
+        text: "",
+        filteredSegments: [],
+        rejectedSegments: [rejectedSegment],
+      };
+    }
+
+    for (const segment of structuredResult.segments) {
+      if (this.shouldRejectGroqSegment(segment, filterContext)) {
+        rejectedSegments.push(segment);
+      } else {
+        filteredSegments.push(segment);
+      }
+    }
+
+    if (rejectedSegments.length === 0) {
+      return {
+        ...structuredResult,
+        filteredSegments,
+        rejectedSegments,
+      };
+    }
+
+    const text = filteredSegments
+      .map((segment) => segment.text)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    logger.info(
+      "Structured Groq segment filter applied",
+      {
+        originalSegments: structuredResult.segments.length,
+        keptSegments: filteredSegments.length,
+        rejectedSegments: rejectedSegments.length,
+        originalTextLength: structuredResult.text.length,
+        filteredTextLength: text.length,
+        rejectedPreview: rejectedSegments.map((segment) => ({
+          text: segment.text,
+          noSpeechProb: segment.noSpeechProb,
+          avgLogprob: segment.avgLogprob,
+          start: segment.start,
+          end: segment.end,
+        })),
+      },
+      "transcription"
+    );
+
+    return {
+      ...structuredResult,
+      text,
+      filteredSegments,
+      rejectedSegments,
+    };
+  }
+
   async readTranscriptionStream(response) {
     const reader = response.body?.getReader();
     if (!reader) {
@@ -1320,14 +1916,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "transcription"
       );
 
-      const [apiKey, optimizedAudio] = await Promise.all([
+      const [apiKey, preparedAudio] = await Promise.all([
         this.getAPIKey(),
-        shouldOptimize ? this.optimizeAudio(audioBlob) : Promise.resolve(audioBlob),
+        provider === "groq"
+          ? this.trimTrailingSilenceForGroq(audioBlob, metadata)
+          : shouldOptimize
+            ? this.optimizeAudio(audioBlob)
+            : Promise.resolve(audioBlob),
       ]);
 
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
-      const mimeType = optimizedAudio.type || "audio/webm";
+      const mimeType = preparedAudio.type || "audio/webm";
       const extension = mimeType.includes("webm")
         ? "webm"
         : mimeType.includes("ogg")
@@ -1345,13 +1945,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         {
           mimeType,
           extension,
-          optimizedSize: optimizedAudio.size,
+          optimizedSize: preparedAudio.size,
           hasApiKey: !!apiKey,
         },
         "transcription"
       );
 
-      formData.append("file", optimizedAudio, `audio.${extension}`);
+      formData.append("file", preparedAudio, `audio.${extension}`);
       formData.append("model", model);
 
       if (language) {
@@ -1363,6 +1963,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Truncate at last comma boundary so we never send a partial word.
       const MAX_PROMPT_CHARS = provider === "groq" ? 896 : 900;
       let dictionaryPrompt = this.getCustomDictionaryPrompt();
+      if (dictionaryPrompt && this.shouldSuppressDictionaryPrompt(provider, metadata)) {
+        logger.info(
+          "Suppressing custom dictionary prompt for long-leading-silence Groq transcription",
+          {
+            leadingSilenceSeconds: metadata.leadingSilenceSeconds ?? null,
+          },
+          "transcription"
+        );
+        dictionaryPrompt = null;
+      }
       if (dictionaryPrompt) {
         if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
           const originalLength = dictionaryPrompt.length;
@@ -1383,8 +1993,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       const shouldStream = this.shouldStreamTranscription(model, provider);
+      const useStructuredTranscription = this.supportsStructuredTranscription(
+        provider,
+        model,
+        shouldStream
+      );
       if (shouldStream) {
         formData.append("stream", "true");
+      }
+      if (useStructuredTranscription) {
+        formData.append("response_format", "verbose_json");
+        formData.append("timestamp_granularities[]", "segment");
       }
 
       const endpoint = this.getTranscriptionEndpoint();
@@ -1398,7 +2017,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // Mistral uses x-api-key auth (not Bearer) and doesn't allow browser CORS — proxy through main process
       if (provider === "mistral" && window.electronAPI?.proxyMistralTranscription) {
-        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const audioBuffer = await preparedAudio.arrayBuffer();
         const proxyData = { audioBuffer, model, language };
 
         if (dictionaryPrompt) {
@@ -1460,6 +2079,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "model",
             language && language !== "auto" ? "language" : null,
             shouldStream ? "stream" : null,
+            useStructuredTranscription ? "response_format" : null,
+            useStructuredTranscription ? "timestamp_granularities[]" : null,
           ].filter(Boolean),
         },
         "transcription"
@@ -1550,28 +2171,78 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // Check for text - handle both empty string and missing field
-      if (result.text && result.text.trim().length > 0) {
+      const structuredResult = this.normalizeStructuredTranscriptionResult(result, provider);
+      const filteredStructuredResult = this.filterLikelyHallucinatedSegments(
+        structuredResult,
+        metadata
+      );
+
+      if (filteredStructuredResult.text && filteredStructuredResult.text.trim().length > 0) {
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
-        const rawText = result.text;
+        const rawText = structuredResult.rawText || filteredStructuredResult.text;
 
         const reasoningStart = performance.now();
-        const text = await this.processTranscription(result.text, "openai");
+        const text = await this.processTranscription(filteredStructuredResult.text, "openai");
         timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
 
         const source = (await this.isReasoningAvailable()) ? "openai-reasoned" : "openai";
         logger.debug(
           "Transcription successful",
           {
-            originalLength: result.text.length,
+            originalLength: rawText.length,
+            filteredLength: filteredStructuredResult.text.length,
             processedLength: text.length,
             source,
+            usedStructuredTranscription: useStructuredTranscription,
+            segmentCount: structuredResult.segments.length,
+            rejectedSegmentCount: filteredStructuredResult.rejectedSegments.length,
             transcriptionProcessingDurationMs: timings.transcriptionProcessingDurationMs,
             reasoningProcessingDurationMs: timings.reasoningProcessingDurationMs,
           },
           "transcription"
         );
-        return { success: true, text, rawText, source, timings };
+        return {
+          success: true,
+          text,
+          rawText,
+          source,
+          timings,
+          segments: filteredStructuredResult.filteredSegments,
+          rejectedSegments: filteredStructuredResult.rejectedSegments,
+        };
       } else {
+        const trailingSilenceSeconds =
+          typeof metadata.trailingSilenceSeconds === "number" ? metadata.trailingSilenceSeconds : 0;
+        const durationSeconds =
+          typeof metadata.durationSeconds === "number" ? metadata.durationSeconds : 0;
+        const shouldTreatAsSilence =
+          provider === "groq" &&
+          durationSeconds > 0 &&
+          trailingSilenceSeconds >= TRAILING_SILENCE_TRIM.minTrailingSilenceSeconds;
+
+        if (shouldTreatAsSilence) {
+          logger.info(
+            "Treating empty Groq transcription as silence",
+            {
+              durationSeconds,
+              trailingSilenceSeconds,
+              provider,
+              model,
+            },
+            "transcription"
+          );
+
+          return {
+            success: true,
+            text: "",
+            rawText: "",
+            source: "openai",
+            timings,
+            segments: [],
+            rejectedSegments: filteredStructuredResult.rejectedSegments,
+          };
+        }
+
         // Log at info level so it shows without debug mode
         logger.info(
           "Transcription returned empty - check audio input",
@@ -1584,6 +2255,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             mimeType,
             extension,
             resultText: result.text,
+            filteredText: filteredStructuredResult.text,
             resultKeys: Object.keys(result),
           },
           "transcription"
