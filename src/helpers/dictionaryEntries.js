@@ -4,6 +4,34 @@ const path = require("path");
 
 const DEFAULT_KIND = "manual";
 const DEFAULT_SOURCE = "manual";
+const DEFAULT_PROMPT_BUDGET = 900;
+
+const KIND_SCORES = {
+  manual: 520,
+  person: 420,
+  technical: 320,
+  project: 260,
+  organization: 220,
+  legacy: 140,
+};
+
+const SOURCE_SCORES = {
+  manual: 140,
+  auto_learn: 120,
+  otter_glossary: 60,
+  legacy: 20,
+};
+
+const PROMPT_BUDGETS = {
+  groq: 896,
+  openai: 900,
+  mistral: 900,
+  deepgram: 900,
+  assemblyai: 900,
+  "openwhispr-cloud": 900,
+  "local-whisper": 1600,
+  reasoning: 1200,
+};
 
 const GLOSSARY_BLOCKLIST = new Set([
   "My bank accounts",
@@ -52,6 +80,24 @@ function mergeEntries(currentEntry, nextEntry) {
     createdAt: currentEntry.createdAt || nextEntry.createdAt,
     updatedAt: nextEntry.updatedAt || currentEntry.updatedAt,
   };
+}
+
+function getSelectionScore(entry, agentName = null) {
+  let score =
+    (Number.isFinite(entry.priority) ? Number(entry.priority) : 100) +
+    (KIND_SCORES[entry.kind] || 0) +
+    (SOURCE_SCORES[entry.source] || 0);
+
+  if (entry.pinned) score += 10_000;
+
+  const normalizedAgentName = normalizeDictionaryTerm(agentName || "").toLowerCase();
+  if (normalizedAgentName && entry.normalizedTerm === normalizedAgentName) {
+    score += 20_000;
+  }
+
+  if (entry.term.length <= 24) score += 15;
+
+  return score;
 }
 
 function dedupeDictionaryEntries(entries) {
@@ -116,6 +162,55 @@ function createDictionaryEntriesFromWords(words, existingEntries = []) {
 
 function mergeDictionaryEntries(existingEntries, incomingEntries) {
   return dedupeDictionaryEntries([...(existingEntries || []), ...(incomingEntries || [])]);
+}
+
+function getDictionaryPromptBudget(provider) {
+  if (!provider) return DEFAULT_PROMPT_BUDGET;
+  return PROMPT_BUDGETS[provider] || DEFAULT_PROMPT_BUDGET;
+}
+
+function buildDictionaryPrompt(entries, options = {}) {
+  const normalizedEntries =
+    Array.isArray(entries) && typeof entries[0] === "string"
+      ? createDictionaryEntriesFromWords(entries)
+      : dedupeDictionaryEntries(entries || []);
+  const enabledEntries = normalizedEntries.filter((entry) => entry.enabled);
+  const maxChars =
+    options.maxChars ?? getDictionaryPromptBudget(options.provider);
+
+  const rankedEntries = [...enabledEntries].sort((left, right) => {
+    const scoreDelta =
+      getSelectionScore(right, options.agentName) - getSelectionScore(left, options.agentName);
+    if (scoreDelta !== 0) return scoreDelta;
+
+    const pinnedDelta = Number(Boolean(right.pinned)) - Number(Boolean(left.pinned));
+    if (pinnedDelta !== 0) return pinnedDelta;
+
+    const priorityDelta = (right.priority || 0) - (left.priority || 0);
+    if (priorityDelta !== 0) return priorityDelta;
+
+    return left.term.localeCompare(right.term);
+  });
+
+  const selectedEntries = [];
+  let currentChars = 0;
+
+  for (const entry of rankedEntries) {
+    const additionalChars = selectedEntries.length === 0 ? entry.term.length : entry.term.length + 2;
+    if (currentChars + additionalChars > maxChars) continue;
+
+    selectedEntries.push(entry);
+    currentChars += additionalChars;
+  }
+
+  return {
+    prompt: selectedEntries.length > 0 ? selectedEntries.map((entry) => entry.term).join(", ") : null,
+    totalEntries: normalizedEntries.length,
+    enabledEntries: enabledEntries.length,
+    selectedEntries,
+    droppedEntries: Math.max(0, enabledEntries.length - selectedEntries.length),
+    maxChars,
+  };
 }
 
 function shouldSkipGlossaryTerm(term, kind) {
@@ -215,6 +310,8 @@ module.exports = {
   getDictionaryWords,
   createDictionaryEntriesFromWords,
   mergeDictionaryEntries,
+  getDictionaryPromptBudget,
+  buildDictionaryPrompt,
   buildOtterGlossaryEntries,
   loadOtterGlossaryEntries,
 };

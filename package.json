@@ -62,6 +62,7 @@
     "lint": "eslint . && cd src && eslint .",
     "test:unit": "cd src && vitest run",
     "test:dictionary": "cd src && vitest run utils/dictionaryUtils.test.js helpers/dictionaryEntries.test.js",
+    "validate:dictionary": "node scripts/validate-dictionary-fixtures.js --manifest validation/dictionary-validation.openai.json",
     "typecheck": "cd src && tsc --noEmit",
     "quality-check": "npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",
