@@ -1,0 +1,49 @@
+{
+  "name": "OpenWhispr hard-word validation",
+  "baseUrl": "https://api.openai.com/v1",
+  "model": "gpt-4o-mini-transcribe",
+  "language": "en",
+  "promptProvider": "openai",
+  "useLiveDictionary": true,
+  "dictionaryTerms": [
+    "OpenWhispr",
+    "OpenClaw"
+  ],
+  "cases": [
+    {
+      "name": "OpenWhispr in correction phrase",
+      "transcriptionId": 1112,
+      "expectedTerms": ["OpenWhispr"]
+    },
+    {
+      "name": "OpenWhispr in lab bot phrase",
+      "transcriptionId": 1113,
+      "expectedTerms": ["OpenWhispr"]
+    },
+    {
+      "name": "OpenWhispr in integration phrase",
+      "transcriptionId": 1119,
+      "expectedTerms": ["OpenWhispr"]
+    },
+    {
+      "name": "OpenWhispr in repo handoff phrase",
+      "transcriptionId": 1130,
+      "expectedTerms": ["OpenWhispr"]
+    },
+    {
+      "name": "OpenWhispr project name",
+      "transcriptionId": 1156,
+      "expectedTerms": ["OpenWhispr"]
+    },
+    {
+      "name": "OpenWhispr dictionary phrase",
+      "transcriptionId": 1174,
+      "expectedTerms": ["OpenWhispr"]
+    },
+    {
+      "name": "OpenWhispr and OpenClaw pair",
+      "transcriptionId": 1330,
+      "expectedTerms": ["OpenWhispr", "OpenClaw"]
+    }
+  ]
+}

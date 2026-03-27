@@ -45,6 +45,7 @@ const MAIN_WINDOW_CONFIG = {
     nodeIntegration: false,
     contextIsolation: true,
     sandbox: true,
+    backgroundThrottling: false,
   },
   frame: false,
   alwaysOnTop: true,
@@ -152,6 +153,25 @@ class WindowPositionUtil {
     return { x, y, width, height };
   }
 
+  static getRecordingOverlayPosition(display, position = "center") {
+    const width = 260;
+    const height = 52;
+    const MARGIN = 16;
+    const workArea = display.workArea || display.bounds;
+
+    let x;
+    if (position === "bottom-left") {
+      x = workArea.x + MARGIN;
+    } else if (position === "bottom-right") {
+      x = workArea.x + workArea.width - width - MARGIN;
+    } else {
+      x = Math.round(workArea.x + (workArea.width - width) / 2);
+    }
+
+    const y = workArea.y + workArea.height - height - MARGIN;
+    return { x, y, width, height };
+  }
+
   static setupAlwaysOnTop(window) {
     if (process.platform === "darwin") {
       // macOS: Use panel level for proper floating behavior
@@ -207,11 +227,34 @@ const AGENT_OVERLAY_CONFIG = {
   },
 };
 
+const RECORDING_OVERLAY_CONFIG = {
+  width: 260,
+  height: 52,
+  frame: false,
+  transparent: true,
+  alwaysOnTop: true,
+  skipTaskbar: true,
+  resizable: false,
+  focusable: false,
+  hasShadow: false,
+  show: false,
+  webPreferences: {
+    preload: path.join(__dirname, "..", "..", "preload.js"),
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+  },
+  visibleOnAllWorkspaces: process.platform !== "win32",
+  type:
+    process.platform === "darwin" ? "panel" : process.platform === "linux" ? "toolbar" : "normal",
+};
+
 module.exports = {
   MAIN_WINDOW_CONFIG,
   CONTROL_PANEL_CONFIG,
   AGENT_OVERLAY_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
+  RECORDING_OVERLAY_CONFIG,
   WINDOW_SIZES,
   WindowPositionUtil,
 };

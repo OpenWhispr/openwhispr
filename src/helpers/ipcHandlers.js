@@ -136,6 +136,14 @@ class IPCHandlers {
     }
   }
 
+  _getDictionaryEntriesSafe() {
+    try {
+      return this.databaseManager.getDictionaryEntries();
+    } catch {
+      return [];
+    }
+  }
+
   _cleanupTextEditMonitor() {
     if (this._autoLearnDebounceTimer) {
       clearTimeout(this._autoLearnDebounceTimer);
@@ -238,6 +246,10 @@ class IPCHandlers {
         }
 
         this.broadcastToWindows("dictionary-updated", updatedDict);
+        this.broadcastToWindows(
+          "dictionary-entries-updated",
+          this._getDictionaryEntriesSafe()
+        );
 
         // Show the overlay so the toast is visible (it may have been hidden after dictation)
         this.windowManager.showDictationPanel();
@@ -479,11 +491,34 @@ class IPCHandlers {
       return this.databaseManager.getDictionary();
     });
 
+    ipcMain.handle("db-get-dictionary-entries", async () => {
+      return this.databaseManager.getDictionaryEntries();
+    });
+
     ipcMain.handle("db-set-dictionary", async (event, words) => {
       if (!Array.isArray(words)) {
         throw new Error("words must be an array");
       }
-      return this.databaseManager.setDictionary(words);
+      const result = this.databaseManager.setDictionary(words);
+      const updatedWords = this._getDictionarySafe();
+      this.broadcastToWindows("dictionary-updated", updatedWords);
+      this.broadcastToWindows(
+        "dictionary-entries-updated",
+        this._getDictionaryEntriesSafe()
+      );
+      return result;
+    });
+
+    ipcMain.handle("dictionary-import-otter-glossary", async () => {
+      const result = this.databaseManager.importOtterGlossaryDictionary();
+      if (result?.success) {
+        this.broadcastToWindows("dictionary-updated", this._getDictionarySafe());
+        this.broadcastToWindows(
+          "dictionary-entries-updated",
+          this._getDictionaryEntriesSafe()
+        );
+      }
+      return result;
     });
 
     ipcMain.handle("undo-learned-corrections", async (_event, words) => {
@@ -506,6 +541,10 @@ class IPCHandlers {
           return { success: false };
         }
         this.broadcastToWindows("dictionary-updated", updatedDict);
+        this.broadcastToWindows(
+          "dictionary-entries-updated",
+          this._getDictionaryEntriesSafe()
+        );
         debugLogger.debug("[AutoLearn] Undo: removed words", { words: validWords });
         return { success: true };
       } catch (err) {
@@ -2043,6 +2082,16 @@ class IPCHandlers {
     ipcMain.handle("resume-media-playback", () => {
       const mediaPlayer = require("./mediaPlayer");
       return mediaPlayer.resumeMedia();
+    });
+
+    ipcMain.handle("mute-system-output", () => {
+      const mediaPlayer = require("./mediaPlayer");
+      return mediaPlayer.muteSystemOutput();
+    });
+
+    ipcMain.handle("restore-system-output", () => {
+      const mediaPlayer = require("./mediaPlayer");
+      return mediaPlayer.restoreSystemOutput();
     });
 
     ipcMain.handle("request-microphone-access", async () => {

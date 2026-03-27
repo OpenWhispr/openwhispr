@@ -1188,6 +1188,8 @@
         "dictationSoundsDescription": "Jouer un son au début et à la fin de l'enregistrement",
         "pauseMedia": "Mettre en pause le média",
         "pauseMediaDescription": "Mettre automatiquement la musique en pause au début de la dictée",
+        "muteSystemOutput": "Couper le son du système",
+        "muteSystemOutputDescription": "Couper tout le son de l’ordinateur pendant l'enregistrement puis le rétablir ensuite",
         "title": "Effets sonores"
       },
       "clipboard": {
@@ -1755,7 +1757,13 @@
     "howItWorks": "Comment ça marche",
     "howItWorksDetail": "Les mots sont transmis comme indices contextuels au modèle vocal, l'aidant à reconnaître les termes peu courants. Pour les mots difficiles, essayez d'ajouter du contexte comme « Le mot est Synty » en plus du mot lui-même.",
     "autoManaged": "Géré automatiquement — synchronisé depuis le nom de l'agent",
-    "inputHint": "Séparez les mots par des virgules. Ajoutez des phrases de contexte comme « Le mot est Synty » pour une meilleure reconnaissance."
+    "inputHint": "Séparez les mots par des virgules. Ajoutez des phrases de contexte comme « Le mot est Synty » pour une meilleure reconnaissance.",
+    "importGlossary": "Import Claude glossary",
+    "importGlossaryBusy": "Importing glossary...",
+    "modeCloud": "cloud",
+    "modeLocal": "local",
+    "summary": "Stored {{stored}} entries. Current {{mode}} transcription sends the best {{selected}} to the model.",
+    "summaryWithDrop": "Stored {{stored}} entries. Current {{mode}} transcription sends the best {{selected}} and skips {{dropped}}."
   },
   "support": {
     "joinDiscord": "Rejoindre Discord",

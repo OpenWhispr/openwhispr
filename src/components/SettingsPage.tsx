@@ -697,10 +697,14 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setAudioCuesEnabled,
     pauseMediaOnDictation,
     setPauseMediaOnDictation,
+    muteSystemOutputOnDictation,
+    setMuteSystemOutputOnDictation,
     keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
     setFloatingIconAutoHide,
+    showRecordingOverlay,
+    setShowRecordingOverlay,
     startMinimized,
     setStartMinimized,
     panelStartPosition,
@@ -2112,6 +2116,17 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                     <Toggle checked={pauseMediaOnDictation} onChange={setPauseMediaOnDictation} />
                   </SettingsRow>
                 </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.soundEffects.muteSystemOutput")}
+                    description={t("settingsPage.general.soundEffects.muteSystemOutputDescription")}
+                  >
+                    <Toggle
+                      checked={muteSystemOutputOnDictation}
+                      onChange={setMuteSystemOutputOnDictation}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
@@ -2172,6 +2187,14 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                     description={t("settingsPage.general.floatingIcon.autoHideDescription")}
                   >
                     <Toggle checked={floatingIconAutoHide} onChange={setFloatingIconAutoHide} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label="Show recording overlay"
+                    description="Show a floating overlay with audio waveform while recording"
+                  >
+                    <Toggle checked={showRecordingOverlay} onChange={setShowRecordingOverlay} />
                   </SettingsRow>
                 </SettingsPanelRow>
                 <SettingsPanelRow>
@@ -2606,7 +2629,7 @@ EOF`,
                       desc: t("settingsPage.general.waylandPaste.xclipDesc", {
                         defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
                       }),
-                      guide: [
+                      steps: [
                         {
                           title: t("settingsPage.general.waylandPaste.guide.xclip.step1Title", {
                             defaultValue: "Install xclip",

@@ -89,6 +89,7 @@
     "resources/bin/macos-audio-tap",
     "resources/bin/macos-globe-listener",
     "resources/bin/macos-fast-paste",
+    "resources/bin/macos-media-remote",
     "resources/bin/macos-mic-listener",
     "resources/bin/macos-text-monitor",
     "resources/bin/macos-media-remote",

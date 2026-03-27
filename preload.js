@@ -53,11 +53,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Dictionary functions
   getDictionary: () => ipcRenderer.invoke("db-get-dictionary"),
+  getDictionaryEntries: () => ipcRenderer.invoke("db-get-dictionary-entries"),
   setDictionary: (words) => ipcRenderer.invoke("db-set-dictionary", words),
+  importOtterGlossaryDictionary: () => ipcRenderer.invoke("dictionary-import-otter-glossary"),
   onDictionaryUpdated: (callback) => {
     const listener = (_event, words) => callback?.(words);
     ipcRenderer.on("dictionary-updated", listener);
     return () => ipcRenderer.removeListener("dictionary-updated", listener);
+  },
+  onDictionaryEntriesUpdated: (callback) => {
+    const listener = (_event, entries) => callback?.(entries);
+    ipcRenderer.on("dictionary-entries-updated", listener);
+    return () => ipcRenderer.removeListener("dictionary-entries-updated", listener);
   },
   setAutoLearnEnabled: (enabled) => ipcRenderer.send("auto-learn-changed", enabled),
   onCorrectionsLearned: (callback) => {
@@ -371,6 +378,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
   pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
   resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
+  muteSystemOutput: () => ipcRenderer.invoke("mute-system-output"),
+  restoreSystemOutput: () => ipcRenderer.invoke("restore-system-output"),
   openWhisperModelsFolder: () => ipcRenderer.invoke("open-whisper-models-folder"),
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),
 
@@ -554,6 +563,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Start minimized
   notifyStartMinimizedChanged: (enabled) => ipcRenderer.send("start-minimized-changed", enabled),
+
+  // Recording overlay
+  sendRecordingOverlayUpdate: (data) => ipcRenderer.send('recording-overlay-update', data),
+  onRecordingOverlayUpdate: registerListener('recording-overlay-update', (callback) => (_event, data) => callback(_event, data)),
+  cancelRecordingFromOverlay: () => ipcRenderer.invoke('recording-overlay-cancel'),
+  notifyRecordingOverlayEnabledChanged: (enabled) => ipcRenderer.send('recording-overlay-enabled-changed', enabled),
 
   // Auto-start management
   getAutoStartEnabled: () => ipcRenderer.invoke("get-auto-start-enabled"),

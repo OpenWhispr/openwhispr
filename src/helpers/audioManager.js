@@ -4,6 +4,7 @@ import logger from "../utils/logger";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/neonAuth";
+import { buildDictionaryPrompt } from "../utils/dictionaryUtils";
 import { getBaseLanguageCode, validateLanguageForModel } from "../utils/languageSupport";
 import {
   getSettings,
@@ -74,6 +75,7 @@ class AudioManager {
     this.onError = null;
     this.onTranscriptionComplete = null;
     this.onPartialTranscript = null;
+    this.onAudioLevel = null;
     this.cachedApiKey = null;
     this.cachedApiKeyProvider = null;
 
@@ -157,9 +159,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.workletBlobUrl;
   }
 
-  getCustomDictionaryPrompt() {
-    const words = getSettings().customDictionary;
-    return words.length > 0 ? words.join(", ") : null;
+  getCustomDictionaryPrompt(provider = null) {
+    const settings = getSettings();
+    const selection = buildDictionaryPrompt(
+      settings.dictionaryEntries?.length ? settings.dictionaryEntries : settings.customDictionary,
+      { provider }
+    );
+
+    if (selection.droppedEntries > 0) {
+      logger.debug(
+        "Dictionary prompt selection truncated",
+        {
+          provider: provider || "default",
+          totalEntries: selection.totalEntries,
+          selectedEntries: selection.selectedEntries.length,
+          droppedEntries: selection.droppedEntries,
+          maxChars: selection.maxChars,
+        },
+        "transcription"
+      );
+    }
+
+    return selection.prompt;
   }
 
   setCallbacks({
@@ -168,12 +189,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     onTranscriptionComplete,
     onPartialTranscript,
     onStreamingCommit,
+    onAudioLevel = null,
   }) {
     this.onStateChange = onStateChange;
     this.onError = onError;
     this.onTranscriptionComplete = onTranscriptionComplete;
     this.onPartialTranscript = onPartialTranscript;
     this.onStreamingCommit = onStreamingCommit;
+    this.onAudioLevel = onAudioLevel;
   }
 
   setSkipReasoning(skip) {
@@ -320,6 +343,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           const rms = Math.sqrt(sum / dataArray.length);
           if (rms > this._peakRms) this._peakRms = rms;
+          if (typeof this.onAudioLevel === 'function') {
+            this.onAudioLevel(rms);
+          }
         }, 100);
       } catch (e) {
         logger.warn("Silence detection setup failed, skipping", { error: e.message }, "audio");
@@ -587,7 +613,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // Add custom dictionary as initial prompt to help Whisper recognize specific words
-      const dictionaryPrompt = this.getCustomDictionaryPrompt();
+      const dictionaryPrompt = this.getCustomDictionaryPrompt("local-whisper");
       if (dictionaryPrompt) {
         options.initialPrompt = dictionaryPrompt;
       }
@@ -1175,7 +1201,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       opts.sendLogs = "false";
     }
 
-    const dictionaryPrompt = this.getCustomDictionaryPrompt();
+    const dictionaryPrompt = this.getCustomDictionaryPrompt("openwhispr-cloud");
     if (dictionaryPrompt) opts.prompt = dictionaryPrompt;
 
     // Use withSessionRefresh to handle AUTH_EXPIRED automatically
@@ -1358,27 +1384,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("language", language);
       }
 
-      // Add custom dictionary as prompt hint for cloud transcription
-      // Groq Whisper API limits prompt to 896 chars; OpenAI ~900 chars.
-      // Truncate at last comma boundary so we never send a partial word.
-      const MAX_PROMPT_CHARS = provider === "groq" ? 896 : 900;
-      let dictionaryPrompt = this.getCustomDictionaryPrompt();
+      // Add a ranked subset of dictionary entries as prompt bias for cloud transcription.
+      const dictionaryPrompt = this.getCustomDictionaryPrompt(provider);
       if (dictionaryPrompt) {
-        if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
-          const originalLength = dictionaryPrompt.length;
-          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
-          const lastComma = truncated.lastIndexOf(",");
-          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
-          logger.debug(
-            "Custom dictionary prompt truncated",
-            {
-              originalLength,
-              truncatedLength: dictionaryPrompt.length,
-              maxChars: MAX_PROMPT_CHARS,
-            },
-            "transcription"
-          );
-        }
         formData.append("prompt", dictionaryPrompt);
       }
 
@@ -2630,6 +2638,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.onTranscriptionComplete = null;
     this.onPartialTranscript = null;
     this.onStreamingCommit = null;
+    this.onAudioLevel = null;
     if (this._onApiKeyChanged) {
       window.removeEventListener("api-key-changed", this._onApiKeyChanged);
     }

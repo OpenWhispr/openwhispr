@@ -3,6 +3,7 @@ import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
 import type { LocalTranscriptionProvider } from "../types/electron";
+import type { DictionaryEntry } from "../types/dictionary";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -91,14 +92,32 @@ function useSettingsInternal() {
 
   // Listen for dictionary updates from main process (auto-learn corrections)
   useEffect(() => {
-    if (typeof window === "undefined" || !window.electronAPI?.onDictionaryUpdated) return;
-    const unsubscribe = window.electronAPI.onDictionaryUpdated((words: string[]) => {
-      if (Array.isArray(words)) {
-        store.setCustomDictionary(words);
-      }
-    });
-    return unsubscribe;
-  }, [store.setCustomDictionary]);
+    if (typeof window === "undefined") return;
+
+    const unsubscribers: Array<() => void> = [];
+
+    if (window.electronAPI?.onDictionaryEntriesUpdated) {
+      const unsubscribe = window.electronAPI.onDictionaryEntriesUpdated(
+        (entries: DictionaryEntry[]) => {
+          if (Array.isArray(entries)) {
+            store.hydrateDictionaryEntries(entries);
+          }
+        }
+      );
+      unsubscribers.push(unsubscribe);
+    } else if (window.electronAPI?.onDictionaryUpdated) {
+      const unsubscribe = window.electronAPI.onDictionaryUpdated((words: string[]) => {
+        if (Array.isArray(words)) {
+          store.setCustomDictionary(words);
+        }
+      });
+      unsubscribers.push(unsubscribe);
+    }
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [store.hydrateDictionaryEntries, store.setCustomDictionary]);
 
   // Auto-learn corrections from user edits in external apps
   const [autoLearnCorrections, setAutoLearnCorrectionsRaw] = useLocalStorage(
@@ -117,6 +136,19 @@ function useSettingsInternal() {
     },
     [setAutoLearnCorrectionsRaw]
   );
+
+  const importOtterGlossaryDictionary = useCallback(async () => {
+    if (!window.electronAPI?.importOtterGlossaryDictionary) {
+      return {
+        success: false,
+        importedCount: 0,
+        totalCount: store.customDictionary.length,
+        error: "Otter glossary import is unavailable",
+      };
+    }
+
+    return window.electronAPI.importOtterGlossaryDictionary();
+  }, [store.customDictionary.length]);
 
   // Sync auto-learn state to main process on mount
   useEffect(() => {
@@ -179,6 +211,7 @@ function useSettingsInternal() {
     cloudTranscriptionMode: store.cloudTranscriptionMode,
     cloudReasoningMode: store.cloudReasoningMode,
     customDictionary: store.customDictionary,
+    dictionaryEntries: store.dictionaryEntries,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
     useReasoningModel: store.useReasoningModel,
@@ -208,6 +241,7 @@ function useSettingsInternal() {
     setCloudTranscriptionMode: store.setCloudTranscriptionMode,
     setCloudReasoningMode: store.setCloudReasoningMode,
     setCustomDictionary: store.setCustomDictionary,
+    importOtterGlossaryDictionary,
     setUseReasoningModel: store.setUseReasoningModel,
     setReasoningModel: store.setReasoningModel,
     setReasoningProvider: store.setReasoningProvider,
@@ -227,8 +261,12 @@ function useSettingsInternal() {
     setActivationMode: store.setActivationMode,
     audioCuesEnabled: store.audioCuesEnabled,
     setAudioCuesEnabled: store.setAudioCuesEnabled,
+    showRecordingOverlay: store.showRecordingOverlay,
+    setShowRecordingOverlay: store.setShowRecordingOverlay,
     pauseMediaOnDictation: store.pauseMediaOnDictation,
     setPauseMediaOnDictation: store.setPauseMediaOnDictation,
+    muteSystemOutputOnDictation: store.muteSystemOutputOnDictation,
+    setMuteSystemOutputOnDictation: store.setMuteSystemOutputOnDictation,
     floatingIconAutoHide: store.floatingIconAutoHide,
     setFloatingIconAutoHide: store.setFloatingIconAutoHide,
     startMinimized: store.startMinimized,

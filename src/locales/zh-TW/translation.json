@@ -1188,6 +1188,8 @@
         "dictationSoundsDescription": "錄音開始和結束時播放提示音",
         "pauseMedia": "暫停媒體",
         "pauseMediaDescription": "開始聽寫時自動暫停音樂",
+        "muteSystemOutput": "將系統輸出靜音",
+        "muteSystemOutputDescription": "錄音時將電腦的所有聲音靜音，結束後再恢復",
         "title": "音效"
       },
       "clipboard": {
@@ -1713,6 +1715,12 @@
     "howItWorksDetail": "你新增的詞彙會包含在 AI 提示詞中，讓模型在轉錄整理時能辨識並保留這些詞彙。",
     "autoManaged": "助理名稱（自動管理）",
     "inputHint": "按 Enter 新增",
+    "importGlossary": "Import Claude glossary",
+    "importGlossaryBusy": "Importing glossary...",
+    "modeCloud": "cloud",
+    "modeLocal": "local",
+    "summary": "Stored {{stored}} entries. Current {{mode}} transcription sends the best {{selected}} to the model.",
+    "summaryWithDrop": "Stored {{stored}} entries. Current {{mode}} transcription sends the best {{selected}} and skips {{dropped}}.",
     "title": "自訂字典",
     "description": "教 AI 學習你的詞彙 — 名字、專業術語和它可能遺漏的表達",
     "clearTitle": "清空字典？",

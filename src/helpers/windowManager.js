@@ -12,6 +12,7 @@ const {
   CONTROL_PANEL_CONFIG,
   AGENT_OVERLAY_CONFIG,
   NOTIFICATION_WINDOW_CONFIG,
+  RECORDING_OVERLAY_CONFIG,
   WINDOW_SIZES,
   WindowPositionUtil,
 } = require("./windowConfig");
@@ -37,6 +38,8 @@ class WindowManager {
     this._agentAnimationState = null;
     this._panelStartPosition = "bottom-right";
     this._isDictatingToggle = false;
+    this.recordingOverlayWindow = null;
+    this._recordingOverlayEnabled = true;
 
     app.on("before-quit", () => {
       this.isQuitting = true;
@@ -416,9 +419,19 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.showDictationPanel();
-      this.mainWindow.webContents.send("toggle-dictation");
       this._isDictatingToggle = !this._isDictatingToggle;
+      if (this._recordingOverlayEnabled) {
+        // Send IPC without showing mainWindow — webContents is alive even when hidden
+        this.mainWindow.webContents.send("toggle-dictation");
+        if (this._isDictatingToggle) {
+          this.showRecordingOverlay();
+        } else {
+          this.hideRecordingOverlay();
+        }
+      } else {
+        this.showDictationPanel();
+        this.mainWindow.webContents.send("toggle-dictation");
+      }
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     }
   }
@@ -428,8 +441,15 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.showDictationPanel();
-      this.mainWindow.webContents.send("start-dictation");
+      if (this._recordingOverlayEnabled) {
+        // Send IPC without showing mainWindow — webContents is alive even when hidden
+        this.mainWindow.webContents.send("start-dictation");
+        this.showRecordingOverlay();
+      } else {
+        this.showDictationPanel();
+        this.showRecordingOverlay();
+        this.mainWindow.webContents.send("start-dictation");
+      }
       this.meetingDetectionEngine?.setUserRecording(true);
     }
   }
@@ -441,6 +461,7 @@ class WindowManager {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send("stop-dictation");
       this._isDictatingToggle = false;
+      this.hideRecordingOverlay();
       this.meetingDetectionEngine?.setUserRecording(false);
     }
   }
@@ -931,7 +952,8 @@ class WindowManager {
         this.mainWindow &&
         !this.mainWindow.isDestroyed() &&
         !this.mainWindow.isVisible() &&
-        !this._floatingIconAutoHide
+        !this._floatingIconAutoHide &&
+        !this._recordingOverlayEnabled
       ) {
         this.showDictationPanel();
       }
@@ -940,7 +962,7 @@ class WindowManager {
     this.mainWindow.once("ready-to-show", () => {
       clearTimeout(showTimeout);
       this.enforceMainWindowOnTop();
-      if (!this.mainWindow.isVisible() && !this._floatingIconAutoHide) {
+      if (!this.mainWindow.isVisible() && !this._floatingIconAutoHide && !this._recordingOverlayEnabled) {
         if (typeof this.mainWindow.showInactive === "function") {
           this.mainWindow.showInactive();
         } else {
@@ -1169,6 +1191,78 @@ class WindowManager {
       const { width, height } = CONTROL_PANEL_CONFIG;
       win.setSize(width, height);
       win.center();
+    }
+  }
+
+  async createRecordingOverlay() {
+    if (this.recordingOverlayWindow && !this.recordingOverlayWindow.isDestroyed()) {
+      return;
+    }
+
+    const cursorPos = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(cursorPos);
+    const position = WindowPositionUtil.getRecordingOverlayPosition(display, this._panelStartPosition);
+
+    this.recordingOverlayWindow = new BrowserWindow({
+      ...RECORDING_OVERLAY_CONFIG,
+      ...position,
+    });
+
+    WindowPositionUtil.setupAlwaysOnTop(this.recordingOverlayWindow);
+
+    this.recordingOverlayWindow.on("closed", () => {
+      this.recordingOverlayWindow = null;
+    });
+
+    if (process.env.NODE_ENV === "development") {
+      await DevServerManager.waitForDevServer();
+      await this.recordingOverlayWindow.loadURL(
+        `${DevServerManager.DEV_SERVER_URL}?recording-overlay=true`
+      );
+    } else {
+      const fileInfo = DevServerManager.getAppFilePath(false);
+      await this.recordingOverlayWindow.loadFile(fileInfo.path, {
+        query: { ...fileInfo.query, "recording-overlay": "true" },
+      });
+    }
+  }
+
+  showRecordingOverlay() {
+    if (!this._recordingOverlayEnabled) return;
+    if (!this.recordingOverlayWindow || this.recordingOverlayWindow.isDestroyed()) return;
+    // Reposition to the monitor where the cursor currently is
+    const cursorPos = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(cursorPos);
+    const position = WindowPositionUtil.getRecordingOverlayPosition(display, this._panelStartPosition);
+    this.recordingOverlayWindow.setBounds(position);
+    // Other code paths can still surface the legacy floating panel.
+    // Force-hide it whenever the dedicated recording overlay takes over.
+    if (this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isVisible()) {
+      this.mainWindow.hide();
+    }
+    if (typeof this.recordingOverlayWindow.showInactive === "function") {
+      this.recordingOverlayWindow.showInactive();
+    } else {
+      this.recordingOverlayWindow.show();
+    }
+  }
+
+  hideRecordingOverlay() {
+    if (!this.recordingOverlayWindow || this.recordingOverlayWindow.isDestroyed()) return;
+    this.recordingOverlayWindow.hide();
+  }
+
+  sendRecordingOverlayUpdate(data) {
+    if (!this.recordingOverlayWindow || this.recordingOverlayWindow.isDestroyed()) return;
+    this.recordingOverlayWindow.webContents.send("recording-overlay-update", data);
+  }
+
+  setRecordingOverlayEnabled(enabled) {
+    this._recordingOverlayEnabled = Boolean(enabled);
+    if (!enabled) {
+      this.hideRecordingOverlay();
+    } else if (this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isVisible()) {
+      this.mainWindow.hide();
     }
   }
 

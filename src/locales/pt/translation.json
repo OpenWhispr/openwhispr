@@ -1160,6 +1160,8 @@
         "dictationSoundsDescription": "Tocar um som ao iniciar e parar a gravação",
         "pauseMedia": "Pausar mídia",
         "pauseMediaDescription": "Pausar a música automaticamente ao iniciar o ditado",
+        "muteSystemOutput": "Silenciar saída do sistema",
+        "muteSystemOutputDescription": "Silencia todo o áudio do computador durante a gravação e restaura depois",
         "title": "Efeitos sonoros"
       },
       "clipboard": {
@@ -1713,6 +1715,12 @@
     "howItWorksDetail": "As palavras adicionadas são incluídas no prompt de IA para que o modelo saiba procurar e preservar esses termos durante a limpeza da transcrição.",
     "autoManaged": "Gerenciado automaticamente",
     "inputHint": "Pressione Enter para adicionar",
+    "importGlossary": "Import Claude glossary",
+    "importGlossaryBusy": "Importing glossary...",
+    "modeCloud": "cloud",
+    "modeLocal": "local",
+    "summary": "Stored {{stored}} entries. Current {{mode}} transcription sends the best {{selected}} to the model.",
+    "summaryWithDrop": "Stored {{stored}} entries. Current {{mode}} transcription sends the best {{selected}} and skips {{dropped}}.",
     "title": "Dicionário personalizado",
     "description": "Ensine a IA o seu vocabulário — nomes, jargões e termos que ela poderia não reconhecer",
     "clearTitle": "Limpar o dicionário?",

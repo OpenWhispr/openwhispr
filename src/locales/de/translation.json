@@ -1188,6 +1188,8 @@
         "dictationSoundsDescription": "Ton abspielen, wenn die Aufnahme startet und stoppt",
         "pauseMedia": "Medien pausieren",
         "pauseMediaDescription": "Musik beim Starten der Diktat automatisch pausieren",
+        "muteSystemOutput": "Systemausgabe stummschalten",
+        "muteSystemOutputDescription": "Den gesamten Computerton während der Aufnahme stummschalten und danach wiederherstellen",
         "title": "Soundeffekte"
       },
       "clipboard": {
@@ -1713,6 +1715,12 @@
     "howItWorksDetail": "Hinzugefügte Wörter werden in den KI-Prompt aufgenommen, damit das Modell diese Begriffe bei der Transkriptionsbereinigung erkennt und beibehält.",
     "autoManaged": "Agent-Name (automatisch verwaltet)",
     "inputHint": "Enter drücken zum Hinzufügen",
+    "importGlossary": "Import Claude glossary",
+    "importGlossaryBusy": "Importing glossary...",
+    "modeCloud": "cloud",
+    "modeLocal": "local",
+    "summary": "Stored {{stored}} entries. Current {{mode}} transcription sends the best {{selected}} to the model.",
+    "summaryWithDrop": "Stored {{stored}} entries. Current {{mode}} transcription sends the best {{selected}} and skips {{dropped}}.",
     "title": "Benutzerdefiniertes Wörterbuch",
     "description": "Bringe der KI dein Vokabular bei – Namen, Fachbegriffe und Ausdrücke, die sie sonst übersehen könnte",
     "clearTitle": "Wörterbuch leeren?",

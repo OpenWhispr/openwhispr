@@ -1,3 +1,5 @@
+import type { DictionaryEntry } from "./dictionary";
+
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
 export type TranscriptionStatus = "completed" | "failed" | "pending";
@@ -331,8 +333,16 @@ declare global {
 
       // Dictionary operations
       getDictionary: () => Promise<string[]>;
+      getDictionaryEntries?: () => Promise<DictionaryEntry[]>;
       setDictionary: (words: string[]) => Promise<{ success: boolean }>;
+      importOtterGlossaryDictionary?: () => Promise<{
+        success: boolean;
+        importedCount: number;
+        totalCount: number;
+        error?: string;
+      }>;
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
+      onDictionaryEntriesUpdated?: (callback: (entries: DictionaryEntry[]) => void) => () => void;
       setAutoLearnEnabled?: (enabled: boolean) => void;
       onCorrectionsLearned?: (callback: (words: string[]) => void) => () => void;
       undoLearnedCorrections?: (words: string[]) => Promise<{ success: boolean }>;
@@ -749,6 +759,8 @@ declare global {
       toggleMediaPlayback?: () => Promise<boolean>;
       pauseMediaPlayback?: () => Promise<boolean>;
       resumeMediaPlayback?: () => Promise<boolean>;
+      muteSystemOutput?: () => Promise<boolean>;
+      restoreSystemOutput?: () => Promise<boolean>;
       openWhisperModelsFolder?: () => Promise<{ success: boolean; error?: string }>;
 
       // Windows Push-to-Talk notifications
@@ -1210,6 +1222,16 @@ declare global {
       } | null>;
       updateNotificationReady?: () => Promise<void>;
       updateNotificationRespond?: (action: string) => Promise<{ success: boolean }>;
+
+      // Recording overlay
+      onRecordingOverlayUpdate?: (
+        callback: (
+          event: unknown,
+          data: { isRecording: boolean; isProcessing: boolean; audioLevel?: number }
+        ) => void
+      ) => () => void;
+      cancelRecordingFromOverlay?: () => Promise<void>;
+      notifyRecordingOverlayEnabledChanged?: (enabled: boolean) => void;
     };
 
     api?: {
