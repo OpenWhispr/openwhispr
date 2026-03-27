@@ -16,7 +16,63 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
+  const mediaEffectsFrameRef = useRef(null);
+  const mediaEffectsTimeoutRef = useRef(null);
   const { onToggle } = options;
+
+  const clearPendingStartMediaEffects = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    if (
+      mediaEffectsFrameRef.current !== null &&
+      typeof window.cancelAnimationFrame === "function"
+    ) {
+      window.cancelAnimationFrame(mediaEffectsFrameRef.current);
+      mediaEffectsFrameRef.current = null;
+    }
+
+    if (mediaEffectsTimeoutRef.current !== null) {
+      window.clearTimeout(mediaEffectsTimeoutRef.current);
+      mediaEffectsTimeoutRef.current = null;
+    }
+  }, []);
+
+  const runStartMediaEffects = useCallback(() => {
+    mediaEffectsFrameRef.current = null;
+    mediaEffectsTimeoutRef.current = null;
+
+    const state = audioManagerRef.current?.getState?.();
+    if (!state || (!state.isRecording && !state.isStreaming && !state.isStreamingStartInProgress)) {
+      return;
+    }
+
+    const settings = getSettings();
+    if (settings.pauseMediaOnDictation) {
+      void window.electronAPI?.pauseMediaPlayback?.();
+    }
+    if (settings.muteSystemOutputOnDictation) {
+      void window.electronAPI?.muteSystemOutput?.();
+    }
+  }, []);
+
+  const scheduleStartMediaEffects = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    clearPendingStartMediaEffects();
+
+    const queueEffects = () => {
+      mediaEffectsFrameRef.current = null;
+      mediaEffectsTimeoutRef.current = window.setTimeout(() => {
+        runStartMediaEffects();
+      }, 0);
+    };
+
+    if (typeof window.requestAnimationFrame === "function") {
+      mediaEffectsFrameRef.current = window.requestAnimationFrame(queueEffects);
+    } else {
+      queueEffects();
+    }
+  }, [clearPendingStartMediaEffects, runStartMediaEffects]);
 
   const performStartRecording = useCallback(async () => {
     if (startLockRef.current) return false;
@@ -40,23 +96,22 @@ export const useAudioRecording = (toast, options = {}) => {
         : await audioManagerRef.current.startRecording();
 
       if (didStart) {
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.pauseMediaPlayback?.();
-        }
         void playStartCue();
+        scheduleStartMediaEffects();
       }
 
       return didStart;
     } finally {
       startLockRef.current = false;
     }
-  }, []);
+  }, [scheduleStartMediaEffects]);
 
   const performStopRecording = useCallback(async () => {
     if (stopLockRef.current) return false;
     stopLockRef.current = true;
     try {
       if (!audioManagerRef.current) return false;
+      clearPendingStartMediaEffects();
 
       const currentState = audioManagerRef.current.getState();
       if (!currentState.isRecording && !currentState.isStreamingStartInProgress) return false;
@@ -76,7 +131,7 @@ export const useAudioRecording = (toast, options = {}) => {
     } finally {
       stopLockRef.current = false;
     }
-  }, []);
+  }, [clearPendingStartMediaEffects]);
 
   useEffect(() => {
     audioManagerRef.current = new AudioManager();
@@ -103,6 +158,7 @@ export const useAudioRecording = (toast, options = {}) => {
         });
       },
       onError: (error) => {
+        clearPendingStartMediaEffects();
         const title = getRecordingErrorTitle(error, t);
         toast({
           title,
@@ -110,6 +166,9 @@ export const useAudioRecording = (toast, options = {}) => {
           variant: "destructive",
           duration: error.code === "AUTH_EXPIRED" ? 8000 : undefined,
         });
+        if (getSettings().muteSystemOutputOnDictation) {
+          window.electronAPI?.restoreSystemOutput?.();
+        }
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
@@ -118,6 +177,10 @@ export const useAudioRecording = (toast, options = {}) => {
         setPartialTranscript(text);
       },
       onTranscriptionComplete: async (result) => {
+        clearPendingStartMediaEffects();
+        if (getSettings().muteSystemOutputOnDictation) {
+          window.electronAPI?.restoreSystemOutput?.();
+        }
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
@@ -233,6 +296,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
     // Cleanup
     return () => {
+      clearPendingStartMediaEffects();
       disposeToggle?.();
       disposeStart?.();
       disposeStop?.();
@@ -241,11 +305,22 @@ export const useAudioRecording = (toast, options = {}) => {
         audioManagerRef.current.cleanup();
       }
     };
-  }, [toast, onToggle, performStartRecording, performStopRecording, t]);
+  }, [
+    clearPendingStartMediaEffects,
+    toast,
+    onToggle,
+    performStartRecording,
+    performStopRecording,
+    t,
+  ]);
 
   const cancelRecording = async () => {
     if (audioManagerRef.current) {
+      clearPendingStartMediaEffects();
       const state = audioManagerRef.current.getState();
+      if (getSettings().muteSystemOutputOnDictation) {
+        window.electronAPI?.restoreSystemOutput?.();
+      }
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
       }

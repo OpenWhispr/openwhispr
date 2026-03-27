@@ -57,6 +57,7 @@ const BOOLEAN_SETTINGS = new Set([
   "telemetryEnabled",
   "audioCuesEnabled",
   "pauseMediaOnDictation",
+  "muteSystemOutputOnDictation",
   "floatingIconAutoHide",
   "showRecordingOverlay",
   "startMinimized",
@@ -97,6 +98,7 @@ export interface SettingsState
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   pauseMediaOnDictation: boolean;
+  muteSystemOutputOnDictation: boolean;
   floatingIconAutoHide: boolean;
   showRecordingOverlay: boolean;
   startMinimized: boolean;
@@ -151,6 +153,7 @@ export interface SettingsState
   setDataRetentionEnabled: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
   setPauseMediaOnDictation: (value: boolean) => void;
+  setMuteSystemOutputOnDictation: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setShowRecordingOverlay: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
@@ -287,6 +290,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
+  muteSystemOutputOnDictation: readBoolean("muteSystemOutputOnDictation", false),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
   showRecordingOverlay: readBoolean("showRecordingOverlay", true),
   startMinimized: readBoolean("startMinimized", false),
@@ -464,6 +468,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
   setPauseMediaOnDictation: createBooleanSetter("pauseMediaOnDictation"),
+  setMuteSystemOutputOnDictation: createBooleanSetter("muteSystemOutputOnDictation"),
 
   setFloatingIconAutoHide: (enabled: boolean) => {
     if (get().floatingIconAutoHide === enabled) return;

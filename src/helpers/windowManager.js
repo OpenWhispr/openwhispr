@@ -1235,6 +1235,11 @@ class WindowManager {
     const display = screen.getDisplayNearestPoint(cursorPos);
     const position = WindowPositionUtil.getRecordingOverlayPosition(display, this._panelStartPosition);
     this.recordingOverlayWindow.setBounds(position);
+    // Other code paths can still surface the legacy floating panel.
+    // Force-hide it whenever the dedicated recording overlay takes over.
+    if (this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isVisible()) {
+      this.mainWindow.hide();
+    }
     if (typeof this.recordingOverlayWindow.showInactive === "function") {
       this.recordingOverlayWindow.showInactive();
     } else {
@@ -1256,6 +1261,8 @@ class WindowManager {
     this._recordingOverlayEnabled = Boolean(enabled);
     if (!enabled) {
       this.hideRecordingOverlay();
+    } else if (this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isVisible()) {
+      this.mainWindow.hide();
     }
   }
 

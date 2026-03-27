@@ -12,6 +12,8 @@ class MediaPlayer {
     this._macBinaryChecked = false;
     this._macBinaryPath = null;
     this._pausedPlayers = []; // MPRIS players we paused (Linux)
+    this._pausedMacApps = []; // macOS apps/UI targets we paused
+    this._savedMacVolumeSettings = null; // macOS system output state we muted
     this._didPause = false; // Whether we sent a pause via toggle fallback
   }
 
@@ -91,6 +93,13 @@ class MediaPlayer {
     return null;
   }
 
+  _runAppleScript(script, timeout = 3000) {
+    return spawnSync("osascript", ["-e", script], {
+      stdio: "pipe",
+      timeout,
+    });
+  }
+
   pauseMedia() {
     try {
       if (process.platform === "linux") {
@@ -102,6 +111,28 @@ class MediaPlayer {
       }
     } catch (err) {
       debugLogger.warn("Media pause failed", { error: err.message }, "media");
+    }
+    return false;
+  }
+
+  muteSystemOutput() {
+    try {
+      if (process.platform === "darwin") {
+        return this._muteMacOSSystemOutput();
+      }
+    } catch (err) {
+      debugLogger.warn("System output mute failed", { error: err.message }, "media");
+    }
+    return false;
+  }
+
+  restoreSystemOutput() {
+    try {
+      if (process.platform === "darwin") {
+        return this._restoreMacOSSystemOutput();
+      }
+    } catch (err) {
+      debugLogger.warn("System output restore failed", { error: err.message }, "media");
     }
     return false;
   }
@@ -346,17 +377,18 @@ class MediaPlayer {
     for (const app of apps) {
       try {
         // Check if app is running first (don't launch it)
-        const running = spawnSync("osascript", ["-e",
-          `tell application "System Events" to (name of processes) contains "${app.name}"`
-        ], { stdio: "pipe", timeout: 2000 });
+        const running = this._runAppleScript(
+          `tell application "System Events" to (name of processes) contains "${app.name}"`,
+          2000
+        );
         if (running.status !== 0 || !(running.stdout?.toString() || "").includes("true")) continue;
 
-        const check = spawnSync("osascript", ["-e", app.checkCmd], { stdio: "pipe", timeout: 2000 });
+        const check = this._runAppleScript(app.checkCmd, 2000);
         if (check.status !== 0) continue;
         const state = (check.stdout?.toString() || "").trim();
         if (state !== app.playing) continue;
 
-        const pause = spawnSync("osascript", ["-e", app.pauseCmd], { stdio: "pipe", timeout: 2000 });
+        const pause = this._runAppleScript(app.pauseCmd, 2000);
         if (pause.status === 0) {
           debugLogger.debug("Media paused via AppleScript", { app: app.name }, "media");
           this._pausedMacApps.push(app.name);
@@ -377,6 +409,13 @@ class MediaPlayer {
         debugLogger.debug("Media paused via MediaRemote", {}, "media");
         this._pausedMacApps.push("__mediaremote__");
       }
+    }
+
+    // Final app-level fallback for non-scriptable desktop players (for example Brain.fm).
+    // This requires Accessibility permission and searches menu items heuristically.
+    const uiPausedApps = this._pauseMacOSViaUiScripting();
+    if (uiPausedApps.length > 0) {
+      this._pausedMacApps.push(...uiPausedApps);
     }
 
     if (this._pausedMacApps.length > 0) {
@@ -414,8 +453,16 @@ class MediaPlayer {
         continue;
       }
 
+      if (appName.startsWith("__ui__:")) {
+        const uiApp = appName.slice("__ui__:".length);
+        if (this._resumeMacOSViaUiScripting(uiApp)) {
+          resumed = true;
+        }
+        continue;
+      }
+
       const playCmd = `tell application "${appName}" to play`;
-      const result = spawnSync("osascript", ["-e", playCmd], { stdio: "pipe", timeout: 2000 });
+      const result = this._runAppleScript(playCmd, 2000);
       if (result.status === 0) {
         debugLogger.debug("Media resumed via AppleScript", { app: appName }, "media");
         resumed = true;
@@ -429,14 +476,7 @@ class MediaPlayer {
   }
 
   _sendMacMediaKey() {
-    const result = spawnSync(
-      "osascript",
-      ["-e", 'tell application "System Events" to key code 100'],
-      {
-        stdio: "pipe",
-        timeout: 3000,
-      }
-    );
+    const result = this._runAppleScript('tell application "System Events" to key code 100');
     if (result.status === 0) {
       debugLogger.debug("Media key sent via osascript", {}, "media");
       return true;
@@ -445,19 +485,152 @@ class MediaPlayer {
   }
 
   _toggleMacOS() {
-    const result = spawnSync(
-      "osascript",
-      ["-e", 'tell application "System Events" to key code 100'],
-      {
-        stdio: "pipe",
-        timeout: 3000,
-      }
-    );
+    const result = this._runAppleScript('tell application "System Events" to key code 100');
     if (result.status === 0) {
       debugLogger.debug("Media toggled via osascript", {}, "media");
       return true;
     }
     return false;
+  }
+
+  _muteMacOSSystemOutput() {
+    if (this._savedMacVolumeSettings) return true;
+
+    const readResult = this._runAppleScript(
+      'set v to get volume settings\nreturn (output volume of v as string) & "," & (alert volume of v as string) & "," & (output muted of v as string)'
+    );
+
+    if (readResult.status !== 0) {
+      return false;
+    }
+
+    const [outputVolumeRaw, alertVolumeRaw, outputMutedRaw] = (
+      readResult.stdout?.toString() || ""
+    )
+      .trim()
+      .split(",");
+
+    const outputVolume = Number.parseInt(outputVolumeRaw, 10);
+    const alertVolume = Number.parseInt(alertVolumeRaw, 10);
+    const outputMuted = outputMutedRaw === "true";
+
+    if (Number.isNaN(outputVolume) || Number.isNaN(alertVolume)) {
+      return false;
+    }
+
+    this._savedMacVolumeSettings = {
+      outputVolume,
+      alertVolume,
+      outputMuted,
+    };
+
+    const muteResult = this._runAppleScript("set volume output muted true");
+    if (muteResult.status === 0) {
+      debugLogger.debug("System output muted via AppleScript", this._savedMacVolumeSettings, "media");
+      return true;
+    }
+
+    this._savedMacVolumeSettings = null;
+    return false;
+  }
+
+  _restoreMacOSSystemOutput() {
+    if (!this._savedMacVolumeSettings) return false;
+
+    const { outputVolume, alertVolume, outputMuted } = this._savedMacVolumeSettings;
+    const restoreResult = this._runAppleScript(
+      `set volume output volume ${outputVolume} alert volume ${alertVolume} output muted ${
+        outputMuted ? "true" : "false"
+      }`
+    );
+
+    if (restoreResult.status === 0) {
+      debugLogger.debug(
+        "System output restored via AppleScript",
+        this._savedMacVolumeSettings,
+        "media"
+      );
+      this._savedMacVolumeSettings = null;
+      return true;
+    }
+
+    return false;
+  }
+
+  _buildMacUiMenuScript(appName, labels) {
+    const appleScriptList = labels.map((label) => `"${label.replace(/"/g, '\\"')}"`).join(", ");
+    const escapedAppName = appName.replace(/"/g, '\\"');
+    return `
+set targetLabels to {${appleScriptList}}
+tell application "System Events"
+  if not ((name of processes) contains "${escapedAppName}") then
+    return "NOT_RUNNING"
+  end if
+  tell process "${escapedAppName}"
+    repeat with mbItem in every menu bar item of menu bar 1
+      try
+        tell menu 1 of mbItem
+          repeat with mi in every menu item
+            set itemName to name of mi
+            repeat with targetLabel in targetLabels
+              if itemName is (contents of targetLabel) then
+                click mi
+                return itemName
+              end if
+            end repeat
+          end repeat
+        end tell
+      end try
+    end repeat
+  end tell
+end tell
+return "NOT_FOUND"
+`.trim();
+  }
+
+  _runMacUiMenuCommand(appName, labels) {
+    const result = this._runAppleScript(this._buildMacUiMenuScript(appName, labels), 3000);
+    const output = (result.stdout?.toString() || "").trim();
+    if (result.status === 0 && output && output !== "NOT_FOUND" && output !== "NOT_RUNNING") {
+      debugLogger.debug("Media controlled via UI scripting", { app: appName, menuItem: output }, "media");
+      return true;
+    }
+    if (result.status !== 0) {
+      const error = (result.stderr?.toString() || "").trim();
+      debugLogger.debug("UI scripting media control unavailable", { app: appName, error }, "media");
+    }
+    return false;
+  }
+
+  _pauseMacOSViaUiScripting() {
+    const candidates = ["Brain.fm"];
+    const labels = [
+      "Pause",
+      "Pause Session",
+      "Pause Music",
+      "Pause Playback",
+      "Play/Pause",
+    ];
+    const pausedApps = [];
+
+    for (const appName of candidates) {
+      if (this._runMacUiMenuCommand(appName, labels)) {
+        pausedApps.push(`__ui__:${appName}`);
+      }
+    }
+
+    return pausedApps;
+  }
+
+  _resumeMacOSViaUiScripting(appName) {
+    const labels = [
+      "Play",
+      "Resume",
+      "Resume Session",
+      "Play Session",
+      "Play/Pause",
+    ];
+    return this._runMacUiMenuCommand(appName, labels);
   }
 
   // --- Windows: GSMTC-aware pause/resume ---

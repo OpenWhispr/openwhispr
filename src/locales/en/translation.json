@@ -1236,6 +1236,8 @@
         "dictationSoundsDescription": "Play a tone when recording starts and stops",
         "pauseMedia": "Pause media",
         "pauseMediaDescription": "Automatically pause music when dictation starts",
+        "muteSystemOutput": "Mute system output",
+        "muteSystemOutputDescription": "Mute all computer audio while recording and restore it afterward",
         "title": "Sound Effects"
       },
       "clipboard": {

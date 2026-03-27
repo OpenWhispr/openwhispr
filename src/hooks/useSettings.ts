@@ -231,6 +231,8 @@ function useSettingsInternal() {
     setShowRecordingOverlay: store.setShowRecordingOverlay,
     pauseMediaOnDictation: store.pauseMediaOnDictation,
     setPauseMediaOnDictation: store.setPauseMediaOnDictation,
+    muteSystemOutputOnDictation: store.muteSystemOutputOnDictation,
+    setMuteSystemOutputOnDictation: store.setMuteSystemOutputOnDictation,
     floatingIconAutoHide: store.floatingIconAutoHide,
     setFloatingIconAutoHide: store.setFloatingIconAutoHide,
     showRecordingOverlay: store.showRecordingOverlay,
