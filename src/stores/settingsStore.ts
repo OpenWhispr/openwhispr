@@ -4,8 +4,13 @@ import i18n, { normalizeUiLanguage } from "../i18n";
 import { hasStoredByokKey } from "../utils/byokDetection";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import logger from "../utils/logger";
+import type { DictionaryEntry } from "../types/dictionary";
 import type { LocalTranscriptionProvider } from "../types/electron";
 import type { GoogleCalendarAccount } from "../types/calendar";
+import {
+  createDictionaryEntriesFromWords,
+  getDictionaryTerms,
+} from "../utils/dictionaryUtils";
 import type {
   TranscriptionSettings,
   ReasoningSettings,
@@ -105,6 +110,7 @@ export interface SettingsState
   meetingAudioDetection: boolean;
   panelStartPosition: "bottom-right" | "center" | "bottom-left";
   keepTranscriptionInClipboard: boolean;
+  dictionaryEntries: DictionaryEntry[];
 
   setUseLocalWhisper: (value: boolean) => void;
   setWhisperModel: (value: string) => void;
@@ -121,6 +127,7 @@ export interface SettingsState
   setCloudReasoningMode: (value: string) => void;
   setCloudReasoningBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
+  hydrateDictionaryEntries: (entries: DictionaryEntry[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setUseReasoningModel: (value: boolean) => void;
   setReasoningModel: (value: string) => void;
@@ -200,6 +207,20 @@ function debouncedPersistToEnv() {
   }, 1000);
 }
 
+function applyDictionaryEntriesToState(entries: DictionaryEntry[]) {
+  const nextEntries = createDictionaryEntriesFromWords(getDictionaryTerms(entries), entries);
+  const nextWords = getDictionaryTerms(nextEntries);
+
+  if (isBrowser) {
+    localStorage.setItem("customDictionary", JSON.stringify(nextWords));
+  }
+
+  useSettingsStore.setState({
+    customDictionary: nextWords,
+    dictionaryEntries: nextEntries,
+  });
+}
+
 function invalidateApiKeyCaches(
   provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom"
 ) {
@@ -220,6 +241,14 @@ function invalidateApiKeyCaches(
 }
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
+  ...(() => {
+    const initialWords = readStringArray("customDictionary", []);
+    const initialEntries = createDictionaryEntriesFromWords(initialWords);
+    return {
+      customDictionary: getDictionaryTerms(initialEntries),
+      dictionaryEntries: initialEntries,
+    };
+  })(),
   uiLanguage: normalizeUiLanguage(isBrowser ? localStorage.getItem("uiLanguage") : null),
   useLocalWhisper: readBoolean("useLocalWhisper", false),
   whisperModel: readString("whisperModel", "base"),
@@ -243,7 +272,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ),
   cloudReasoningMode: readString("cloudReasoningMode", "openwhispr"),
   cloudReasoningBaseUrl: readString("cloudReasoningBaseUrl", API_ENDPOINTS.OPENAI_BASE),
-  customDictionary: readStringArray("customDictionary", []),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
   useReasoningModel: readBoolean("useReasoningModel", true),
@@ -340,15 +368,21 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setReasoningProvider: createStringSetter("reasoningProvider"),
 
   setCustomDictionary: (words: string[]) => {
-    if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
-    set({ customDictionary: words });
-    window.electronAPI?.setDictionary(words).catch((err) => {
+    const currentEntries = get().dictionaryEntries;
+    const nextEntries = createDictionaryEntriesFromWords(words, currentEntries);
+    const nextWords = getDictionaryTerms(nextEntries);
+    if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(nextWords));
+    set({ customDictionary: nextWords, dictionaryEntries: nextEntries });
+    window.electronAPI?.setDictionary(nextWords).catch((err) => {
       logger.warn(
         "Failed to sync dictionary to SQLite",
         { error: (err as Error).message },
         "settings"
       );
     });
+  },
+  hydrateDictionaryEntries: (entries: DictionaryEntry[]) => {
+    applyDictionaryEntriesToState(entries);
   },
 
   setUiLanguage: (language: string) => {
@@ -769,16 +803,24 @@ export async function initializeSettings(): Promise<void> {
       useSettingsStore.setState({ preferredLanguage: migratedLang });
     }
 
-    // Sync dictionary from SQLite <-> localStorage
+    // Sync dictionary from SQLite, which is the source of truth.
     try {
-      if (window.electronAPI.getDictionary) {
+      if (window.electronAPI.getDictionaryEntries) {
+        const currentDictionary = useSettingsStore.getState().customDictionary;
+        const dbEntries = await window.electronAPI.getDictionaryEntries();
+        if (dbEntries.length === 0 && currentDictionary.length > 0) {
+          await window.electronAPI.setDictionary(currentDictionary);
+          applyDictionaryEntriesToState(createDictionaryEntriesFromWords(currentDictionary));
+        } else {
+          applyDictionaryEntriesToState(dbEntries);
+        }
+      } else if (window.electronAPI.getDictionary) {
         const currentDictionary = useSettingsStore.getState().customDictionary;
         const dbWords = await window.electronAPI.getDictionary();
         if (dbWords.length === 0 && currentDictionary.length > 0) {
           await window.electronAPI.setDictionary(currentDictionary);
-        } else if (dbWords.length > 0 && currentDictionary.length === 0) {
-          if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(dbWords));
-          useSettingsStore.setState({ customDictionary: dbWords });
+        } else {
+          applyDictionaryEntriesToState(createDictionaryEntriesFromWords(dbWords));
         }
       }
     } catch (err) {

@@ -3,6 +3,12 @@ const path = require("path");
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const { app } = require("electron");
+const {
+  createDictionaryEntriesFromWords,
+  dedupeDictionaryEntries,
+  getDictionaryWords,
+  loadOtterGlossaryEntries,
+} = require("./dictionaryEntries");
 
 class DatabaseManager {
   constructor() {
@@ -75,6 +81,23 @@ class DatabaseManager {
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS dictionary_entries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          term TEXT NOT NULL,
+          normalized_term TEXT NOT NULL UNIQUE,
+          kind TEXT NOT NULL DEFAULT 'manual',
+          source TEXT NOT NULL DEFAULT 'manual',
+          priority INTEGER NOT NULL DEFAULT 100,
+          pinned INTEGER NOT NULL DEFAULT 0,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      this._migrateLegacyDictionaryEntries();
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS notes (
@@ -486,9 +509,7 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const stmt = this.db.prepare("SELECT word FROM custom_dictionary ORDER BY id ASC");
-      const rows = stmt.all();
-      return rows.map((row) => row.word);
+      return getDictionaryWords(this.getDictionaryEntries());
     } catch (error) {
       debugLogger.error("Error getting dictionary", { error: error.message }, "database");
       throw error;
@@ -500,21 +521,166 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const transaction = this.db.transaction((wordList) => {
-        this.db.prepare("DELETE FROM custom_dictionary").run();
-        const insert = this.db.prepare("INSERT OR IGNORE INTO custom_dictionary (word) VALUES (?)");
-        for (const word of wordList) {
-          const trimmed = typeof word === "string" ? word.trim() : "";
-          if (trimmed) {
-            insert.run(trimmed);
-          }
-        }
-      });
-      transaction(words);
+      const nextEntries = createDictionaryEntriesFromWords(words, this.getDictionaryEntries());
+      this.setDictionaryEntries(nextEntries);
       return { success: true };
     } catch (error) {
       debugLogger.error("Error setting dictionary", { error: error.message }, "database");
       throw error;
+    }
+  }
+
+  getDictionaryEntries() {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+
+      const stmt = this.db.prepare(`
+        SELECT
+          id,
+          term,
+          normalized_term,
+          kind,
+          source,
+          priority,
+          pinned,
+          enabled,
+          created_at,
+          updated_at
+        FROM dictionary_entries
+        ORDER BY pinned DESC, priority DESC, term COLLATE NOCASE ASC
+      `);
+      const rows = stmt.all();
+      return rows.map((row) => ({
+        id: row.id,
+        term: row.term,
+        normalizedTerm: row.normalized_term,
+        kind: row.kind,
+        source: row.source,
+        priority: row.priority,
+        pinned: Boolean(row.pinned),
+        enabled: Boolean(row.enabled),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      }));
+    } catch (error) {
+      debugLogger.error("Error getting dictionary entries", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  setDictionaryEntries(entries) {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+
+      const nextEntries = dedupeDictionaryEntries(entries);
+      const transaction = this.db.transaction((entryList) => {
+        this.db.prepare("DELETE FROM dictionary_entries").run();
+
+        const insertEntry = this.db.prepare(`
+          INSERT INTO dictionary_entries (
+            term,
+            normalized_term,
+            kind,
+            source,
+            priority,
+            pinned,
+            enabled
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        for (const entry of entryList) {
+          insertEntry.run(
+            entry.term,
+            entry.normalizedTerm,
+            entry.kind,
+            entry.source,
+            entry.priority,
+            entry.pinned ? 1 : 0,
+            entry.enabled ? 1 : 0
+          );
+        }
+
+        this.db.prepare("DELETE FROM custom_dictionary").run();
+        const insertLegacyWord = this.db.prepare(
+          "INSERT OR IGNORE INTO custom_dictionary (word) VALUES (?)"
+        );
+        for (const word of getDictionaryWords(entryList)) {
+          insertLegacyWord.run(word);
+        }
+      });
+
+      transaction(nextEntries);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error setting dictionary entries", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  importOtterGlossaryDictionary() {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+
+      const glossaryEntries = loadOtterGlossaryEntries();
+      const currentEntries = this.getDictionaryEntries();
+      const mergedEntries = dedupeDictionaryEntries([...currentEntries, ...glossaryEntries]);
+      const previousWords = new Set(getDictionaryWords(currentEntries).map((word) => word.toLowerCase()));
+      const mergedWords = getDictionaryWords(mergedEntries);
+
+      this.setDictionaryEntries(mergedEntries);
+
+      const importedCount = mergedWords.filter((word) => !previousWords.has(word.toLowerCase())).length;
+
+      return {
+        success: true,
+        importedCount,
+        totalCount: mergedWords.length,
+      };
+    } catch (error) {
+      debugLogger.error("Error importing Otter glossary dictionary", { error: error.message }, "database");
+      return {
+        success: false,
+        error: error.message,
+        importedCount: 0,
+        totalCount: this.getDictionary().length,
+      };
+    }
+  }
+
+  _migrateLegacyDictionaryEntries() {
+    try {
+      const existingCount = this.db
+        .prepare("SELECT COUNT(*) as count FROM dictionary_entries")
+        .get();
+
+      if (existingCount.count > 0) {
+        return;
+      }
+
+      const legacyRows = this.db
+        .prepare("SELECT word FROM custom_dictionary ORDER BY id ASC")
+        .all();
+
+      if (legacyRows.length === 0) {
+        return;
+      }
+
+      const migratedEntries = createDictionaryEntriesFromWords(
+        legacyRows.map((row) => row.word)
+      );
+      this.setDictionaryEntries(migratedEntries);
+    } catch (error) {
+      debugLogger.error(
+        "Error migrating legacy dictionary entries",
+        { error: error.message },
+        "database"
+      );
     }
   }
 
