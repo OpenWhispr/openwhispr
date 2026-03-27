@@ -4,6 +4,7 @@ import logger from "../utils/logger";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/neonAuth";
+import { buildDictionaryPrompt } from "../utils/dictionaryUtils";
 import { getBaseLanguageCode, validateLanguageForModel } from "../utils/languageSupport";
 import {
   getSettings,
@@ -158,9 +159,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.workletBlobUrl;
   }
 
-  getCustomDictionaryPrompt() {
-    const words = getSettings().customDictionary;
-    return words.length > 0 ? words.join(", ") : null;
+  getCustomDictionaryPrompt(provider = null) {
+    const settings = getSettings();
+    const selection = buildDictionaryPrompt(
+      settings.dictionaryEntries?.length ? settings.dictionaryEntries : settings.customDictionary,
+      { provider }
+    );
+
+    if (selection.droppedEntries > 0) {
+      logger.debug(
+        "Dictionary prompt selection truncated",
+        {
+          provider: provider || "default",
+          totalEntries: selection.totalEntries,
+          selectedEntries: selection.selectedEntries.length,
+          droppedEntries: selection.droppedEntries,
+          maxChars: selection.maxChars,
+        },
+        "transcription"
+      );
+    }
+
+    return selection.prompt;
   }
 
   setCallbacks({
@@ -593,7 +613,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // Add custom dictionary as initial prompt to help Whisper recognize specific words
-      const dictionaryPrompt = this.getCustomDictionaryPrompt();
+      const dictionaryPrompt = this.getCustomDictionaryPrompt("local-whisper");
       if (dictionaryPrompt) {
         options.initialPrompt = dictionaryPrompt;
       }
@@ -1181,7 +1201,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       opts.sendLogs = "false";
     }
 
-    const dictionaryPrompt = this.getCustomDictionaryPrompt();
+    const dictionaryPrompt = this.getCustomDictionaryPrompt("openwhispr-cloud");
     if (dictionaryPrompt) opts.prompt = dictionaryPrompt;
 
     // Use withSessionRefresh to handle AUTH_EXPIRED automatically
@@ -1364,27 +1384,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("language", language);
       }
 
-      // Add custom dictionary as prompt hint for cloud transcription
-      // Groq Whisper API limits prompt to 896 chars; OpenAI ~900 chars.
-      // Truncate at last comma boundary so we never send a partial word.
-      const MAX_PROMPT_CHARS = provider === "groq" ? 896 : 900;
-      let dictionaryPrompt = this.getCustomDictionaryPrompt();
+      // Add a ranked subset of dictionary entries as prompt bias for cloud transcription.
+      const dictionaryPrompt = this.getCustomDictionaryPrompt(provider);
       if (dictionaryPrompt) {
-        if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
-          const originalLength = dictionaryPrompt.length;
-          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
-          const lastComma = truncated.lastIndexOf(",");
-          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
-          logger.debug(
-            "Custom dictionary prompt truncated",
-            {
-              originalLength,
-              truncatedLength: dictionaryPrompt.length,
-              maxChars: MAX_PROMPT_CHARS,
-            },
-            "transcription"
-          );
-        }
         formData.append("prompt", dictionaryPrompt);
       }
 

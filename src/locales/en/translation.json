@@ -78,8 +78,7 @@
   "systemSettings": {
     "microphone": "Please open your system settings to configure microphone permissions.",
     "sound": "Please open your system sound settings (for example, pavucontrol).",
-    "accessibility": "Accessibility settings are not available on this platform.",
-    "systemAudio": "System audio settings are not available on this platform."
+    "accessibility": "Accessibility settings are not available on this platform."
   },
   "titleBar": {
     "quitTitle": "Quit OpenWhispr",
@@ -157,9 +156,8 @@
       "microphoneTitle": "Microphone",
       "microphoneDescription": "Captures your voice for transcription",
       "grant": "Grant",
-      "grantAccess": "Grant Access",
       "accessibilityTitle": "Accessibility",
-      "accessibilityDescription": "Allows auto-pasting transcribed text into any app",
+      "accessibilityDescription": "Enable in System Settings by toggling it on",
       "testAndGrant": "Test & Grant",
       "requiredForApp": "Required for OpenWhispr to work",
       "microphoneRequired": "Microphone access required",
@@ -278,8 +276,7 @@
       "bannerDescription": "Enable GPU acceleration for faster performance.",
       "enableButton": "Enable GPU",
       "dismissButton": "Not now"
-    },
-    "backToNotes": "Back to notes"
+    }
   },
   "reasoning": {
     "mode": {
@@ -571,15 +568,9 @@
     "noMoreMeetings": "No more meetings today",
     "now": "Now",
     "join": "Join",
-    "untitledEvent": "Untitled Event",
+    "untitledEvent": "Untitled event",
     "systemAudioRequired": "System Audio permission is needed to capture other participants' audio.",
-    "openSettings": "Open System Settings",
-    "signInRequired": "Sign in to use meeting recording",
-    "signInDescription": "Create an account or sign in to record and transcribe meetings.",
-    "connectCalendar": "Connect your calendar",
-    "connectCalendarDescription": "Link your Google Calendar to see upcoming meetings and automatically record notes.",
-    "notABot": "OpenWhispr records using your system audio — it never joins meetings as a bot.",
-    "connectCalendarButton": "Connect Calendar"
+    "openSettings": "Open System Settings"
   },
   "cleanupPrompt": "Cleanup",
   "developerSection": {
@@ -1307,12 +1298,8 @@
             "step1Title": "Start the daemon",
             "step1Desc": "Start ydotoold and enable it so it runs on every login.",
             "step2Title": "Verify it's running"
-          },
-          "xclip": {
-            "step1Title": "Install xclip"
           }
-        },
-        "xclipDesc": "Clipboard tool for KDE Wayland paste (xclip or xsel)"
+        }
       },
       "updates": {
         "badges": {
@@ -1386,7 +1373,6 @@
       "optional": "Optional",
       "systemAudioTitle": "System Audio",
       "systemAudioDescription": "Captures other participants' audio from calls and meetings",
-      "grantAccess": "Grant Access",
       "test": "Test",
       "testAndGrant": "Test & Grant",
       "title": "Permissions",
@@ -1787,10 +1773,6 @@
     },
     "enhance": {
       "title": "Enhancement error"
-    },
-    "speaker": {
-      "you": "You",
-      "them": "Them"
     }
   },
   "dictionary": {
@@ -1805,7 +1787,21 @@
     "howItWorks": "How it works",
     "howItWorksDetail": "Words are fed as context hints to the speech model, helping it recognize uncommon terms. For difficult words, try adding context like \"The word is Synty\" alongside the word itself.",
     "autoManaged": "Auto-managed — synced from agent name",
-    "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition."
+    "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition.",
+    "import": "Import",
+    "importTitle": "Import Words",
+    "importDescription": "Paste words below (one per line, or comma/tab separated), or upload a .txt, .csv, or .json file.",
+    "importPlaceholder": "scRNA-seq\nGWAS\nHepG2\nTIP-seq",
+    "uploadFile": "Upload file",
+    "importPreview": "{{newCount}} new, {{dupeCount}} duplicates skipped",
+    "importCancel": "Cancel",
+    "importConfirm": "Import {{count}} words",
+    "importGlossary": "Import Claude glossary",
+    "importGlossaryBusy": "Importing glossary...",
+    "modeCloud": "cloud",
+    "modeLocal": "local",
+    "summary": "Stored {{stored}} entries. Current {{mode}} transcription sends the best {{selected}} to the model.",
+    "summaryWithDrop": "Stored {{stored}} entries. Current {{mode}} transcription sends the best {{selected}} and skips {{dropped}}."
   },
   "support": {
     "joinDiscord": "Join Discord",
@@ -1952,6 +1948,23 @@
       "title": "OpenWhispr is a meeting recorder, not a bot",
       "description": "OpenWhispr captures audio directly from your system — it never joins your meetings as a participant. Just connect your calendar and take notes as normal."
     }
+  },
+  "upcoming": {
+    "title": "Upcoming Meetings",
+    "transcriptions": "Transcriptions",
+    "tomorrow": "Tomorrow",
+    "noMoreMeetings": "No more meetings today",
+    "now": "Now",
+    "join": "Join",
+    "untitledEvent": "Untitled Event",
+    "systemAudioRequired": "System Audio permission is needed to capture other participants' audio.",
+    "openSettings": "Open System Settings",
+    "signInRequired": "Sign in to use meeting recording",
+    "signInDescription": "Create an account or sign in to record and transcribe meetings.",
+    "connectCalendar": "Connect your calendar",
+    "connectCalendarDescription": "Link your Google Calendar to see upcoming meetings and automatically record notes.",
+    "notABot": "OpenWhispr records using your system audio — it never joins meetings as a bot.",
+    "connectCalendarButton": "Connect Calendar"
   },
   "notesView": {
     "searchPlaceholder": "Search notes…",
