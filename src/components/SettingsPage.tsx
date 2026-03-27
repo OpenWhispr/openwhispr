@@ -2629,7 +2629,7 @@ EOF`,
                       desc: t("settingsPage.general.waylandPaste.xclipDesc", {
                         defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
                       }),
-                      guide: [
+                      steps: [
                         {
                           title: t("settingsPage.general.waylandPaste.guide.xclip.step1Title", {
                             defaultValue: "Install xclip",
