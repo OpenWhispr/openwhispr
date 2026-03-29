@@ -139,7 +139,7 @@
     "react-markdown": "^10.1.0",
     "shadcn-ui": "^0.9.5",
     "tailwind-merge": "^3.3.1",
-    "tar": "^7.4.3",
+    "tar": "^7.5.13",
     "tiptap-markdown": "^0.9.0",
     "tw-animate-css": "^1.3.4",
     "unbzip2-stream": "^1.4.3",
