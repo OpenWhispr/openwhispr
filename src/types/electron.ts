@@ -1,3 +1,5 @@
+import type { DictionaryEntry } from "./dictionary";
+
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
 export type TranscriptionStatus = "completed" | "failed" | "pending";
@@ -331,8 +333,16 @@ declare global {
 
       // Dictionary operations
       getDictionary: () => Promise<string[]>;
+      getDictionaryEntries?: () => Promise<DictionaryEntry[]>;
       setDictionary: (words: string[]) => Promise<{ success: boolean }>;
+      importOtterGlossaryDictionary?: () => Promise<{
+        success: boolean;
+        importedCount: number;
+        totalCount: number;
+        error?: string;
+      }>;
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
+      onDictionaryEntriesUpdated?: (callback: (entries: DictionaryEntry[]) => void) => () => void;
       setAutoLearnEnabled?: (enabled: boolean) => void;
       onCorrectionsLearned?: (callback: (words: string[]) => void) => () => void;
       undoLearnedCorrections?: (words: string[]) => Promise<{ success: boolean }>;

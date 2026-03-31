@@ -1,6 +1,7 @@
 import promptData from "./promptData.json";
 import i18n, { normalizeUiLanguage } from "../i18n";
 import { en as enPrompts, type PromptBundle } from "../locales/prompts";
+import { buildDictionaryPrompt } from "../utils/dictionaryUtils";
 import { getLanguageInstruction } from "../utils/languageSupport";
 
 export const CLEANUP_PROMPT = promptData.CLEANUP_PROMPT;
@@ -128,7 +129,12 @@ export function getSystemPrompt(
   }
 
   if (customDictionary && customDictionary.length > 0) {
-    prompt += prompts.dictionarySuffix + customDictionary.join(", ");
+    const dictionarySelection = buildDictionaryPrompt(customDictionary, {
+      provider: "reasoning",
+    });
+    if (dictionarySelection.prompt) {
+      prompt += prompts.dictionarySuffix + dictionarySelection.prompt;
+    }
   }
 
   return prompt;
