@@ -1188,6 +1188,8 @@
         "dictationSoundsDescription": "錄音開始和結束時播放提示音",
         "pauseMedia": "暫停媒體",
         "pauseMediaDescription": "開始聽寫時自動暫停音樂",
+        "muteSystemOutput": "將系統輸出靜音",
+        "muteSystemOutputDescription": "錄音時將電腦的所有聲音靜音，結束後再恢復",
         "title": "音效"
       },
       "clipboard": {

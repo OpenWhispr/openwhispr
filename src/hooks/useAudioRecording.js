@@ -43,6 +43,9 @@ export const useAudioRecording = (toast, options = {}) => {
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.pauseMediaPlayback?.();
         }
+        if (getSettings().muteSystemOutputOnDictation) {
+          window.electronAPI?.muteSystemOutput?.();
+        }
         void playStartCue();
       }
 
@@ -98,6 +101,9 @@ export const useAudioRecording = (toast, options = {}) => {
           variant: "destructive",
           duration: error.code === "AUTH_EXPIRED" ? 8000 : undefined,
         });
+        if (getSettings().muteSystemOutputOnDictation) {
+          window.electronAPI?.restoreSystemOutput?.();
+        }
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
@@ -106,6 +112,9 @@ export const useAudioRecording = (toast, options = {}) => {
         setPartialTranscript(text);
       },
       onTranscriptionComplete: async (result) => {
+        if (getSettings().muteSystemOutputOnDictation) {
+          window.electronAPI?.restoreSystemOutput?.();
+        }
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
         }
@@ -234,6 +243,9 @@ export const useAudioRecording = (toast, options = {}) => {
   const cancelRecording = async () => {
     if (audioManagerRef.current) {
       const state = audioManagerRef.current.getState();
+      if (getSettings().muteSystemOutputOnDictation) {
+        window.electronAPI?.restoreSystemOutput?.();
+      }
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
       }

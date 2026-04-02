@@ -1188,6 +1188,8 @@
         "dictationSoundsDescription": "Reproduce un tono al iniciar y detener la grabación",
         "pauseMedia": "Pausar multimedia",
         "pauseMediaDescription": "Pausar la música automáticamente al iniciar el dictado",
+        "muteSystemOutput": "Silenciar salida del sistema",
+        "muteSystemOutputDescription": "Silencia todo el audio del ordenador mientras grabas y restáuralo después",
         "title": "Efectos de sonido"
       },
       "clipboard": {
