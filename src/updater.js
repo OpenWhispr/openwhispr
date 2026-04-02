@@ -10,6 +10,9 @@ class UpdateManager {
     this.isInstalling = false;
     this.isDownloading = false;
     this.eventListeners = [];
+    this.updateCheckInterval = null;
+    this.windowManager = null;
+    this._suppressNotification = false;
 
     this.setupAutoUpdater();
   }
@@ -19,14 +22,15 @@ class UpdateManager {
     this.controlPanelWindow = controlPanelWindow;
   }
 
+  setWindowManager(windowManager) {
+    this.windowManager = windowManager;
+  }
+
   setupAutoUpdater() {
-    // Only configure auto-updater in production
     if (process.env.NODE_ENV === "development") {
-      // Auto-updater disabled in development mode
       return;
     }
 
-    // Configure auto-updater for GitHub releases
     autoUpdater.setFeedURL({
       provider: "github",
       owner: "OpenWhispr",
@@ -64,18 +68,10 @@ class UpdateManager {
       autoUpdater.channel = nativeArch === "arm64" ? "latest-arm64" : "latest-x64";
     }
 
-    // Disable auto-download - let user control when to download
     autoUpdater.autoDownload = false;
-
-    // Enable auto-install on quit - if user ignores update and quits normally,
-    // the update will install automatically (best UX)
-    // User can also manually trigger install with "Install & Restart" button
     autoUpdater.autoInstallOnAppQuit = true;
-
-    // Enable logging in production for debugging (logs are user-accessible)
     autoUpdater.logger = console;
 
-    // Set up event handlers
     this.setupEventHandlers();
   }
 
@@ -95,16 +91,25 @@ class UpdateManager {
           };
         }
         this.notifyRenderers("update-available", info);
+        if (this.windowManager && info && !this._suppressNotification) {
+          this.windowManager.showUpdateNotification(info).catch((err) => {
+            console.error("Failed to show update notification:", err);
+          });
+        }
+        this._suppressNotification = false;
       },
       "update-not-available": (info) => {
         this.updateAvailable = false;
-        this.updateDownloaded = false;
-        this.isDownloading = false;
-        this.lastUpdateInfo = null;
+        this._suppressNotification = false;
+        if (!this.updateDownloaded) {
+          this.isDownloading = false;
+          this.lastUpdateInfo = null;
+        }
         this.notifyRenderers("update-not-available", info);
       },
       error: (err) => {
         console.error("❌ Auto-updater error:", err);
+        this._suppressNotification = false;
         this.isDownloading = false;
         this.notifyRenderers("update-error", err);
       },
@@ -130,7 +135,6 @@ class UpdateManager {
       },
     };
 
-    // Register and track event listeners for cleanup
     Object.entries(handlers).forEach(([event, handler]) => {
       autoUpdater.on(event, handler);
       this.eventListeners.push({ event, handler });
@@ -160,14 +164,11 @@ class UpdateManager {
       }
 
       console.log("🔍 Checking for updates...");
+      this._suppressNotification = true;
       const result = await autoUpdater.checkForUpdates();
 
       if (result?.isUpdateAvailable && result?.updateInfo) {
         console.log("📋 Update available:", result.updateInfo.version);
-        console.log(
-          "📦 Download size:",
-          result.updateInfo.files?.map((f) => `${(f.size / 1024 / 1024).toFixed(2)}MB`).join(", ")
-        );
         return {
           updateAvailable: true,
           version: result.updateInfo.version,
@@ -252,8 +253,8 @@ class UpdateManager {
 
       const { app, BrowserWindow } = require("electron");
 
-      // Remove listeners that prevent windows from closing
-      // so quitAndInstall can shut down cleanly
+      // Set windowManager.isQuitting before removing close listeners
+      app.emit("before-quit");
       app.removeAllListeners("window-all-closed");
       BrowserWindow.getAllWindows().forEach((win) => {
         win.removeAllListeners("close");
@@ -310,10 +311,22 @@ class UpdateManager {
           console.error("Startup update check failed:", err);
         });
       }, 3000);
+
+      const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+      this.updateCheckInterval = setInterval(() => {
+        console.log("🔄 Periodic update check...");
+        autoUpdater.checkForUpdates().catch((err) => {
+          console.error("Periodic update check failed:", err);
+        });
+      }, FOUR_HOURS_MS);
     }
   }
 
   cleanup() {
+    if (this.updateCheckInterval) {
+      clearInterval(this.updateCheckInterval);
+      this.updateCheckInterval = null;
+    }
     this.eventListeners.forEach(({ event, handler }) => {
       autoUpdater.removeListener(event, handler);
     });

@@ -237,19 +237,26 @@ class DatabaseManager {
             "INSERT INTO actions (name, description, prompt, icon, is_builtin, sort_order, translation_key) VALUES (?, ?, ?, ?, 1, 0, ?)"
           )
           .run(
-            "Clean Up Notes",
-            "Fix grammar, structure, and formatting",
-            "Clean up grammar, improve structure, and format these notes for readability while preserving all original meaning.",
+            "Generate Notes",
+            "Clean up, structure, and enhance your notes",
+            "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.",
             "sparkles",
-            "notes.actions.builtin.cleanupNotes"
+            "notes.actions.builtin.generateNotes"
           );
       }
 
+      // Migrate built-in action to "Generate Notes"
       this.db
         .prepare(
-          "UPDATE actions SET translation_key = ? WHERE is_builtin = 1 AND name = ? AND translation_key IS NULL"
+          "UPDATE actions SET name = ?, description = ?, prompt = ?, translation_key = ? WHERE is_builtin = 1 AND translation_key != ?"
         )
-        .run("notes.actions.builtin.cleanupNotes", "Clean Up Notes");
+        .run(
+          "Generate Notes",
+          "Clean up, structure, and enhance your notes",
+          "Transform the provided content into clean, well-structured notes in markdown. Preserve the user's intent and all substantive information. Remove filler, small talk, false starts, and redundant content. For personal notes, improve grammar and structure for readability. For meeting transcripts, extract key discussion points, decisions, action items, and follow-ups.",
+          "notes.actions.builtin.generateNotes",
+          "notes.actions.builtin.generateNotes"
+        );
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS google_calendar_tokens (
@@ -1236,6 +1243,14 @@ class DatabaseManager {
 
   cleanup() {
     try {
+      if (this.db) {
+        try {
+          this.db.close();
+        } catch (closeError) {
+          debugLogger.error("Error closing database", { error: closeError.message }, "database");
+        }
+        this.db = null;
+      }
       const dbPath = path.join(
         app.getPath("userData"),
         process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db"

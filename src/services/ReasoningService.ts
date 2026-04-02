@@ -1,4 +1,4 @@
-import { getModelProvider, getCloudModel } from "../models/ModelRegistry";
+import { getModelProvider, getCloudModel, getOpenAiApiConfig } from "../models/ModelRegistry";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy } from "../utils/retry";
@@ -508,8 +508,6 @@ class ReasoningService extends BaseReasoningService {
         { role: "user", content: userPrompt },
       ];
 
-      const isOlderModel = model && (model.startsWith("gpt-4") || model.startsWith("gpt-3"));
-
       const openAiBase = this.getConfiguredOpenAIBase();
       const endpointCandidates = this.getOpenAIEndpointCandidates(openAiBase);
       const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
@@ -538,16 +536,32 @@ class ReasoningService extends BaseReasoningService {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 30000);
           try {
+            const maxTokens =
+              config.maxTokens ||
+              Math.max(
+                4096,
+                this.calculateMaxTokens(
+                  text.length,
+                  TOKEN_LIMITS.MIN_TOKENS,
+                  TOKEN_LIMITS.MAX_TOKENS,
+                  TOKEN_LIMITS.TOKEN_MULTIPLIER
+                )
+              );
+
+            const apiConfig = getOpenAiApiConfig(model);
             const requestBody: any = { model };
 
             if (type === "responses") {
               requestBody.input = messages;
               requestBody.store = false;
+              requestBody.max_output_tokens = maxTokens;
             } else {
               requestBody.messages = messages;
-              if (isOlderModel) {
-                requestBody.temperature = config.temperature || 0.3;
-              }
+              requestBody[apiConfig.tokenParam] = maxTokens;
+            }
+
+            if (apiConfig.supportsTemperature) {
+              requestBody.temperature = config.temperature || 0.3;
             }
 
             const res = await fetch(endpoint, {
@@ -1038,7 +1052,7 @@ class ReasoningService extends BaseReasoningService {
       const locale = this.getUiLanguage();
 
       const result = await withSessionRefresh(async () => {
-        const res = await (window as any).electronAPI.cloudReason(text, {
+        const res = await window.electronAPI?.cloudReason?.(text, {
           agentName,
           customDictionary,
           customPrompt: this.getCustomPrompt(),
@@ -1047,9 +1061,9 @@ class ReasoningService extends BaseReasoningService {
           locale,
         });
 
-        if (!res.success) {
-          const err: any = new Error(res.error || "OpenWhispr cloud reasoning failed");
-          err.code = res.code;
+        if (!res?.success) {
+          const err: any = new Error(res?.error || "OpenWhispr cloud reasoning failed");
+          err.code = res?.code;
           throw err;
         }
 
@@ -1114,6 +1128,9 @@ class ReasoningService extends BaseReasoningService {
         case "groq":
           endpoint = buildApiUrl(API_ENDPOINTS.GROQ_BASE, "/chat/completions");
           break;
+        case "gemini":
+          endpoint = buildApiUrl(API_ENDPOINTS.GEMINI, "/openai/chat/completions");
+          break;
         case "openai":
         case "custom":
           endpoint = buildApiUrl(this.getConfiguredOpenAIBase(), "/chat/completions");
@@ -1124,13 +1141,26 @@ class ReasoningService extends BaseReasoningService {
       }
     }
 
+    const apiConfig = getOpenAiApiConfig(model);
+    const useOldTokenParam = isLocalProvider || provider === "groq";
+
     const requestBody: Record<string, unknown> = {
       model,
       messages,
       stream: true,
-      temperature: config.temperature ?? 0.3,
-      max_tokens: config.maxTokens || Math.max(4096, TOKEN_LIMITS.MAX_TOKENS),
     };
+
+    const maxTokens = config.maxTokens || Math.max(4096, TOKEN_LIMITS.MAX_TOKENS);
+
+    if (useOldTokenParam) {
+      requestBody.temperature = config.temperature ?? 0.3;
+      requestBody.max_tokens = maxTokens;
+    } else {
+      requestBody[apiConfig.tokenParam] = maxTokens;
+      if (apiConfig.supportsTemperature) {
+        requestBody.temperature = config.temperature ?? 0.3;
+      }
+    }
 
     logger.logReasoning("AGENT_STREAM_REQUEST", {
       endpoint,
@@ -1281,6 +1311,15 @@ class ReasoningService extends BaseReasoningService {
     try {
       if (isCloudReasoningMode()) {
         logger.logReasoning("API_KEY_CHECK", { cloudReasoningMode: true });
+        return true;
+      }
+
+      const settings = getSettings();
+      if (settings.reasoningProvider === "custom" && settings.cloudReasoningBaseUrl?.trim()) {
+        logger.logReasoning("API_KEY_CHECK", {
+          customProvider: true,
+          hasCustomEndpoint: true,
+        });
         return true;
       }
 

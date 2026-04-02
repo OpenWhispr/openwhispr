@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -6,7 +6,6 @@ import { Badge } from "./ui/badge";
 import {
   RefreshCw,
   Download,
-  Command,
   Mic,
   Shield,
   FolderOpen,
@@ -17,7 +16,6 @@ import {
   Monitor,
   Cloud,
   Key,
-  ChevronDown,
   Sparkles,
   AlertTriangle,
   Loader2,
@@ -28,9 +26,10 @@ import {
   RotateCw,
   BookOpen,
   Copy,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { NEON_AUTH_URL, signOut } from "../lib/neonAuth";
+import { NEON_AUTH_URL, signOut, deleteAccount } from "../lib/neonAuth";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
 import PermissionCard from "./ui/PermissionCard";
@@ -44,6 +43,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "./ui/dialog";
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
@@ -51,16 +51,15 @@ import { useDialogs } from "../hooks/useDialogs";
 import { useAgentName } from "../utils/agentName";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
-import { useScreenRecordingPermission } from "../hooks/useScreenRecordingPermission";
+import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useClipboard } from "../hooks/useClipboard";
 import { useUpdater } from "../hooks/useUpdater";
 
 import PromptStudio from "./ui/PromptStudio";
 import ReasoningModelSelector from "./ReasoningModelSelector";
 import { HotkeyInput } from "./ui/HotkeyInput";
-import HotkeyGuidanceAccordion from "./ui/HotkeyGuidanceAccordion";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
-import { getValidationMessage } from "../utils/hotkeyValidator";
+import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
 import { getDefaultHotkey, formatHotkeyLabel } from "../utils/hotkeys";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
@@ -72,13 +71,17 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/Toast";
 import { useTheme } from "../hooks/useTheme";
-import type { LocalTranscriptionProvider } from "../types/electron";
+import type { GpuDevice, LocalTranscriptionProvider } from "../types/electron";
 import logger from "../utils/logger";
 import { SettingsRow } from "./ui/SettingsSection";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { formatBytes } from "../utils/formatBytes";
+import { useSettingsStore } from "../stores/settingsStore";
+
+const formatAmount = (cents: number, currency: string) =>
+  (cents / 100).toLocaleString(undefined, { style: "currency", currency });
 
 export type SettingsSectionType =
   | "account"
@@ -389,6 +392,7 @@ function TranscriptionSection({
           variant="settings"
         />
       )}
+      <GpuDeviceSelector purpose="transcription" />
     </div>
   );
 }
@@ -415,7 +419,6 @@ interface AiModelsSectionProps {
   setGroqApiKey: (key: string) => void;
   customReasoningApiKey: string;
   setCustomReasoningApiKey: (key: string) => void;
-  showAlertDialog: (dialog: { title: string; description: string }) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -446,7 +449,6 @@ function AiModelsSection({
   setGroqApiKey,
   customReasoningApiKey,
   setCustomReasoningApiKey,
-  showAlertDialog,
   toast,
 }: AiModelsSectionProps) {
   const { t } = useTranslation();
@@ -618,8 +620,60 @@ function AiModelsSection({
               setCustomReasoningApiKey={setCustomReasoningApiKey}
             />
           )}
+          <GpuDeviceSelector purpose="intelligence" />
         </>
       )}
+    </div>
+  );
+}
+
+function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligence" }) {
+  const { t } = useTranslation();
+  const [gpus, setGpus] = useState<GpuDevice[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState("0");
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      window.electronAPI?.listGpus?.() ?? Promise.resolve([]),
+      window.electronAPI?.getGpuDeviceIndex?.(purpose) ?? Promise.resolve("0"),
+    ]).then(([gpuList, idx]) => {
+      setGpus(gpuList);
+      setSelectedIndex(idx);
+      setLoaded(true);
+    }).catch(() => setLoaded(true));
+  }, [purpose]);
+
+  if (!loaded || gpus.length < 2) return null;
+
+  return (
+    <div className="border-t border-border/40 pt-4 mt-4">
+      <SectionHeader
+        title={t(`settingsPage.${purpose}.gpuDevice.title`)}
+        description={t(`settingsPage.${purpose}.gpuDevice.description`)}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <div className="relative w-full">
+            <select
+              value={selectedIndex}
+              onChange={async (e) => {
+                const idx = e.target.value;
+                setSelectedIndex(idx);
+                await window.electronAPI?.setGpuDeviceIndex?.(purpose, Number(idx));
+              }}
+              className="w-full appearance-none rounded-md border border-border bg-background px-3 pr-10 py-2 text-sm"
+            >
+              {gpus.map((gpu) => (
+                <option key={gpu.index} value={String(gpu.index)}>
+                  GPU {gpu.index}: {gpu.name} ({Math.round(gpu.vramMb / 1024)}GB)
+                </option>
+              ))}
+            </select>
+            <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+        </SettingsPanelRow>
+      </SettingsPanel>
     </div>
   );
 }
@@ -684,6 +738,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setCustomReasoningApiKey,
     setDictationKey,
     setCancelKey,
+    meetingKey,
+    setMeetingKey,
     autoLearnCorrections,
     setAutoLearnCorrections,
     updateTranscriptionSettings,
@@ -710,9 +766,15 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setTelemetryEnabled,
     audioRetentionDays,
     setAudioRetentionDays,
+    dataRetentionEnabled,
+    setDataRetentionEnabled,
     customDictionary,
     setCustomDictionary,
   } = useSettings();
+
+  const agentKey = useSettingsStore((s) => s.agentKey);
+  const meetingAudioDetection = useSettingsStore((s) => s.meetingAudioDetection);
+  const setMeetingAudioDetection = useSettingsStore((s) => s.setMeetingAudioDetection);
 
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -745,11 +807,10 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
 
   const whisperHook = useWhisper();
   const permissionsHook = usePermissions(showAlertDialog);
-  const screenRecording = useScreenRecordingPermission();
+  const systemAudio = useSystemAudioPermission();
   useClipboard(showAlertDialog);
   const { agentName, setAgentName } = useAgentName();
   const [agentNameInput, setAgentNameInput] = useState(agentName);
-  const [newDictionaryWord, setNewDictionaryWord] = useState("");
   const [audioStorageUsage, setAudioStorageUsage] = useState<{
     fileCount: number;
     totalBytes: number;
@@ -788,6 +849,9 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     hasUdevRule: boolean;
     hasGroup: boolean;
     allGood: boolean;
+    isKde?: boolean;
+    hasXclip?: boolean;
+    hasXsel?: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
 
@@ -801,31 +865,6 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
   useEffect(() => {
     refreshYdotoolStatus();
   }, [refreshYdotoolStatus]);
-
-  const handleAddDictionaryWord = useCallback(() => {
-    const existingWords = new Set(customDictionary.map((w) => w.toLowerCase()));
-    const words = newDictionaryWord
-      .split(",")
-      .map((w) => w.trim())
-      .filter((w) => {
-        const normalized = w.toLowerCase();
-        if (!w || existingWords.has(normalized)) return false;
-        existingWords.add(normalized);
-        return true;
-      });
-    if (words.length > 0) {
-      setCustomDictionary([...customDictionary, ...words]);
-      setNewDictionaryWord("");
-    }
-  }, [newDictionaryWord, customDictionary, setCustomDictionary]);
-
-  const handleRemoveDictionaryWord = useCallback(
-    (word: string) => {
-      if (word === agentName) return;
-      setCustomDictionary(customDictionary.filter((w) => w !== word));
-    },
-    [customDictionary, setCustomDictionary, agentName]
-  );
 
   const handleSaveAgentName = useCallback(() => {
     const trimmed = agentNameInput.trim();
@@ -887,12 +926,49 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     showAlert: showAlertDialog,
   });
 
-  const validateHotkeyForInput = useCallback(
-    (hotkey: string) => getValidationMessage(hotkey, getPlatform()),
-    []
+  const meetingRegisterFn = useCallback(async (hotkey: string) => {
+    const result = await window.electronAPI?.registerMeetingHotkey?.(hotkey);
+    return result ?? { success: false, message: "Electron API unavailable" };
+  }, []);
+
+  const { registerHotkey: registerMeetingHotkey, isRegistering: isMeetingHotkeyRegistering } =
+    useHotkeyRegistration({
+      onSuccess: (registeredHotkey) => {
+        setMeetingKey(registeredHotkey);
+      },
+      showSuccessToast: false,
+      showErrorToast: true,
+      showAlert: showAlertDialog,
+      registerFn: meetingRegisterFn,
+    });
+
+  const validateDictationHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+          "agentMode.settings.hotkey": agentKey,
+        },
+        t
+      ),
+    [meetingKey, agentKey, t]
   );
 
-  const [isUsingGnomeHotkeys, setIsUsingGnomeHotkeys] = useState(false);
+  const validateMeetingHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "agentMode.settings.hotkey": agentKey,
+        },
+        t
+      ),
+    [dictationKey, agentKey, t]
+  );
+
+  const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
 
   const platform = getCachedPlatform();
 
@@ -958,8 +1034,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     const checkHotkeyMode = async () => {
       try {
         const info = await window.electronAPI?.getHotkeyModeInfo();
-        if (info?.isUsingGnome) {
-          setIsUsingGnomeHotkeys(true);
+        if (info?.isUsingNativeShortcut) {
+          setIsUsingNativeShortcut(true);
           setActivationMode("tap");
         }
       } catch (error) {
@@ -1009,7 +1085,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
       title: t("settingsPage.permissions.resetAccessibility.title"),
       description: message,
       onConfirm: () => {
-        permissionsHook.openAccessibilitySettings();
+        permissionsHook.requestAccessibilityPermission();
       },
     });
   };
@@ -1062,14 +1138,22 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
 
   const { isSignedIn, isLoaded, user } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isOpeningBilling, setIsOpeningBilling] = useState(false);
-  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annual">("monthly");
-
-  useEffect(() => {
-    if (usage?.billingInterval) {
-      setBillingPeriod(usage.billingInterval);
-    }
-  }, [usage?.billingInterval]);
+  const [billingState, setBillingState] = useState<Record<string, boolean>>({
+    pro: true,
+    business: true,
+  });
+  const [switchPreview, setSwitchPreview] = useState<{
+    plan: "monthly" | "annual";
+    tier: "pro" | "business";
+    immediateAmount: number;
+    currency: string;
+    newPriceAmount: number;
+    newInterval: string;
+    nextBillingDate: string | null;
+  } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const startOnboarding = useCallback(() => {
     localStorage.setItem("pendingCloudMigration", "true");
@@ -1077,6 +1161,77 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     localStorage.removeItem("onboardingCompleted");
     window.location.reload();
   }, []);
+
+  const handleBillingPortal = useCallback(async () => {
+    const result = await usage.openBillingPortal();
+    if (!result.success) {
+      toast({
+        title: t("settingsPage.account.checkout.couldNotOpenTitle"),
+        description: t("settingsPage.account.checkout.couldNotOpenDescription"),
+      });
+    }
+  }, [usage, toast, t]);
+
+  const handleSwitchPlan = useCallback(
+    async (plan: "monthly" | "annual", tier: "pro" | "business") => {
+      setPreviewLoading(true);
+      try {
+        const preview = await usage.previewSwitchPlan({ plan, tier });
+        if (!preview.success) {
+          toast({
+            title: t("settingsPage.account.checkout.couldNotOpenTitle"),
+            description:
+              preview.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
+          });
+          return;
+        }
+        if (preview.alreadyOnPlan) {
+          toast({ title: t("settingsPage.account.pricing.planSwitched") });
+          return;
+        }
+        setSwitchPreview({
+          plan,
+          tier,
+          immediateAmount: preview.immediateAmount ?? 0,
+          currency: preview.currency ?? "usd",
+          newPriceAmount: preview.newPriceAmount ?? 0,
+          newInterval: preview.newInterval ?? "month",
+          nextBillingDate: preview.nextBillingDate ?? null,
+        });
+      } finally {
+        setPreviewLoading(false);
+      }
+    },
+    [usage, toast, t]
+  );
+
+  const confirmSwitchPlan = useCallback(async () => {
+    if (!switchPreview) return;
+    const { plan, tier } = switchPreview;
+    setSwitchPreview(null);
+    const result = await usage.switchPlan({ plan, tier });
+    if (result.success) {
+      toast({ title: t("settingsPage.account.pricing.planSwitched") });
+    } else {
+      toast({
+        title: t("settingsPage.account.checkout.couldNotOpenTitle"),
+        description: result.error || t("settingsPage.account.checkout.couldNotOpenDescription"),
+      });
+    }
+  }, [switchPreview, usage, toast, t]);
+
+  const handleCheckout = useCallback(
+    async (plan: "monthly" | "annual", tier: "pro" | "business") => {
+      const result = await usage.openCheckout({ plan, tier });
+      if (!result.success) {
+        toast({
+          title: t("settingsPage.account.checkout.couldNotOpenTitle"),
+          description: t("settingsPage.account.checkout.couldNotOpenDescription"),
+        });
+      }
+    },
+    [usage, toast, t]
+  );
 
   const handleSignOut = useCallback(async () => {
     setIsSigningOut(true);
@@ -1093,6 +1248,49 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
       setIsSigningOut(false);
     }
   }, [showAlertDialog, t]);
+
+  const handleDeleteAccount = useCallback(() => {
+    showConfirmDialog({
+      title: t("settingsPage.account.deleteAccount.title"),
+      description: t("settingsPage.account.deleteAccount.description"),
+      onConfirm: async () => {
+        setIsDeletingAccount(true);
+        try {
+          // Best-effort cloud cleanup (needs session cookies before sign-out)
+          try {
+            const { NotesService } = await import("../services/NotesService");
+            await NotesService.deleteAll();
+          } catch {}
+
+          const result = await deleteAccount();
+          if (result.error) {
+            logger.error("Server account deletion failed", result.error, "auth");
+          }
+
+          try {
+            await signOut();
+          } catch {}
+          await window.electronAPI?.cleanupApp();
+
+          showAlertDialog({
+            title: t("settingsPage.account.deleteAccount.successTitle"),
+            description: t("settingsPage.account.deleteAccount.successDescription"),
+          });
+          setTimeout(() => window.location.reload(), 1000);
+        } catch (error) {
+          logger.error("Account deletion failed", error, "auth");
+          showAlertDialog({
+            title: t("settingsPage.account.deleteAccount.failedTitle"),
+            description: t("settingsPage.account.deleteAccount.failedDescription"),
+          });
+        } finally {
+          setIsDeletingAccount(false);
+        }
+      },
+      variant: "destructive",
+      confirmText: t("settingsPage.account.deleteAccount.confirmText"),
+    });
+  }, [showConfirmDialog, showAlertDialog, t]);
 
   const renderSectionContent = () => {
     switch (activeSection) {
@@ -1158,6 +1356,28 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                         ? t("settingsPage.account.signOut.signingOut")
                         : t("settingsPage.account.signOut.signOut")}
                     </Button>
+                  </SettingsPanelRow>
+                </SettingsPanel>
+
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.account.deleteAccount.label")}
+                      description={t("settingsPage.account.deleteAccount.labelDescription")}
+                    >
+                      <Button
+                        onClick={handleDeleteAccount}
+                        variant="outline"
+                        disabled={isDeletingAccount}
+                        size="sm"
+                        className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
+                      >
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        {isDeletingAccount
+                          ? t("settingsPage.account.deleteAccount.deleting")
+                          : t("settingsPage.account.deleteAccount.button")}
+                      </Button>
+                    </SettingsRow>
                   </SettingsPanelRow>
                 </SettingsPanel>
               </>
@@ -1236,64 +1456,41 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
             ) : isLoaded ? (
               <>
                 <SectionHeader title={t("settingsPage.account.pricing.title")} />
-                <div className="space-y-2.5">
-                  <div className="flex justify-center">
-                    <div className="inline-flex rounded-md bg-muted/40 dark:bg-surface-2/40 p-0.5 border border-border/30 dark:border-border-subtle/40">
-                      <button
-                        onClick={() => setBillingPeriod("monthly")}
-                        className={cn(
-                          "px-3 py-1 text-[11px] font-medium rounded-[3px] transition-all duration-150",
-                          billingPeriod === "monthly"
-                            ? "bg-background dark:bg-surface-raised text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        {t("settingsPage.account.pricing.monthly")}
-                      </button>
-                      <button
-                        onClick={() => setBillingPeriod("annual")}
-                        className={cn(
-                          "px-3 py-1 text-[11px] font-medium rounded-[3px] transition-all duration-150 flex items-center gap-1",
-                          billingPeriod === "annual"
-                            ? "bg-background dark:bg-surface-raised text-foreground shadow-sm"
-                            : "text-muted-foreground hover:text-foreground"
-                        )}
-                      >
-                        {t("settingsPage.account.pricing.annual")}
-                        <span className="text-[9px] font-semibold text-primary">
-                          {t("settingsPage.account.pricing.annualBadge")}
-                        </span>
-                      </button>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {/* Free */}
+                  <div
+                    className={cn(
+                      "rounded-md p-2.5 flex flex-col",
+                      !usage?.isSubscribed && !usage?.isTrial
+                        ? "border-2 border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
+                        : "border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
+                    )}
+                  >
+                    <p className="text-xs font-semibold text-foreground">
+                      {t("settingsPage.account.pricing.free.name")}
+                    </p>
+                    <div className="flex items-baseline gap-0.5 mt-0.5">
+                      <span className="text-lg font-bold text-foreground">
+                        {t("settingsPage.account.pricing.free.price")}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground">
+                        / {t("settingsPage.account.pricing.free.period")}
+                      </span>
                     </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    {/* Free */}
-                    <div
-                      className={cn(
-                        "rounded-md border p-2.5 flex flex-col",
-                        !usage?.isSubscribed && !usage?.isTrial
-                          ? "border-primary/30 bg-primary/3 dark:border-primary/20 dark:bg-primary/5"
-                          : "border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30"
-                      )}
-                    >
-                      <p className="text-[11px] font-semibold text-foreground">
-                        {t("settingsPage.account.pricing.free.name")}
-                      </p>
-                      <div className="flex items-baseline gap-0.5 mt-0.5">
-                        <span className="text-sm font-bold text-foreground">
-                          {t("settingsPage.account.pricing.free.price")}
-                        </span>
-                        <span className="text-[9px] text-muted-foreground">
-                          {t("settingsPage.account.pricing.free.period")}
-                        </span>
-                      </div>
-                      <ul className="space-y-0.5 mt-2 flex-1">
-                        {(
-                          t("settingsPage.account.pricing.free.features", {
-                            returnObjects: true,
-                          }) as string[]
-                        ).map((feature, i) => (
+                    <ul className="space-y-0.5 mt-2 flex-1">
+                      {(
+                        t("settingsPage.account.pricing.free.features", {
+                          returnObjects: true,
+                        }) as string[]
+                      ).map((feature, i) =>
+                        feature.startsWith("## ") ? (
+                          <li
+                            key={i}
+                            className={`text-[8px] font-semibold uppercase tracking-wide text-muted-foreground/60 ${i > 0 ? "pt-1.5" : ""}`}
+                          >
+                            {feature.slice(3)}
+                          </li>
+                        ) : (
                           <li
                             key={i}
                             className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
@@ -1301,162 +1498,353 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                             <Check size={9} className="mt-[2px] text-primary/70 shrink-0" />
                             {feature}
                           </li>
-                        ))}
-                      </ul>
-                      {isSignedIn && !usage?.isSubscribed && !usage?.isTrial ? (
-                        <div className="mt-2 text-center">
-                          <span className="text-[9px] font-medium text-primary/70">
-                            {t("settingsPage.account.pricing.currentPlan")}
-                          </span>
-                        </div>
-                      ) : !isSignedIn ? (
-                        <Button
-                          onClick={startOnboarding}
-                          variant="outline"
-                          size="sm"
-                          className="mt-2 w-full h-6 text-[10px]"
-                        >
-                          {t("settingsPage.account.signedOutPlans.button")}
-                        </Button>
-                      ) : null}
-                    </div>
-
-                    {/* Pro */}
-                    <div
-                      className={cn(
-                        "rounded-md border-2 p-2.5 flex flex-col",
-                        usage?.isSubscribed || usage?.isTrial
-                          ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
-                          : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
-                      )}
-                    >
-                      <p className="text-[11px] font-semibold text-foreground">
-                        {t("settingsPage.account.pricing.pro.name")}
-                      </p>
-                      <div className="flex items-baseline gap-0.5 mt-0.5">
-                        <span className="text-sm font-bold text-foreground">
-                          {billingPeriod === "monthly"
-                            ? t("settingsPage.account.pricing.pro.monthlyPrice")
-                            : t("settingsPage.account.pricing.pro.annualPrice")}
-                        </span>
-                        <span className="text-[9px] text-muted-foreground">
-                          {billingPeriod === "monthly"
-                            ? t("settingsPage.account.pricing.pro.monthlyPeriod")
-                            : t("settingsPage.account.pricing.pro.annualPeriod")}
-                        </span>
-                        {billingPeriod === "annual" && (
-                          <span className="text-[9px] font-semibold text-primary ml-1">
-                            {t("settingsPage.account.pricing.annualBadge")}
-                          </span>
-                        )}
-                      </div>
-                      <ul className="space-y-0.5 mt-2 flex-1">
-                        {(
-                          t("settingsPage.account.pricing.pro.features", {
-                            returnObjects: true,
-                          }) as string[]
-                        ).map((feature, i) => (
-                          <li
-                            key={i}
-                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                          >
-                            <Check size={9} className="mt-[2px] text-primary shrink-0" />
-                            {feature}
-                          </li>
-                        ))}
-                      </ul>
-                      {usage?.isSubscribed && !usage?.isTrial ? (
-                        billingPeriod === "annual" ? (
-                          <Button
-                            onClick={async () => {
-                              const result = await usage.openBillingPortal();
-                              if (!result.success) {
-                                toast({
-                                  title: t("settingsPage.account.billing.couldNotOpenTitle"),
-                                  description: t(
-                                    "settingsPage.account.billing.couldNotOpenDescription"
-                                  ),
-                                  variant: "destructive",
-                                });
-                              }
-                            }}
-                            variant="outline"
-                            size="sm"
-                            className="mt-2 w-full h-6 text-[10px]"
-                            disabled={usage?.checkoutLoading}
-                          >
-                            {t("settingsPage.account.pricing.pro.switchToAnnual")}
-                          </Button>
-                        ) : (
-                          <div className="mt-2 text-center">
-                            <span className="text-[9px] font-medium text-primary">
-                              {t("settingsPage.account.pricing.currentPlan")}
-                            </span>
-                          </div>
                         )
-                      ) : usage?.isTrial ? (
-                        <div className="mt-2 text-center">
-                          <span className="text-[9px] font-medium text-primary">
-                            {t("settingsPage.account.pricing.currentPlan")}
-                          </span>
-                        </div>
-                      ) : (
-                        <Button
-                          onClick={() =>
-                            window.electronAPI?.openExternal?.(
-                              `https://openwhispr.com/get-started?plan=${billingPeriod}`
-                            )
-                          }
-                          size="sm"
-                          className="mt-2 w-full h-6 text-[10px]"
-                        >
-                          {t("settingsPage.account.pricing.pro.cta")}
-                        </Button>
                       )}
-                    </div>
-
-                    {/* Enterprise */}
-                    <div className="rounded-md border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
-                      <p className="text-[11px] font-semibold text-foreground">
-                        {t("settingsPage.account.pricing.enterprise.name")}
-                      </p>
-                      <div className="flex items-baseline gap-0.5 mt-0.5">
-                        <span className="text-sm font-bold text-foreground">
-                          {t("settingsPage.account.pricing.enterprise.price")}
-                        </span>
-                      </div>
-                      <ul className="space-y-0.5 mt-2 flex-1">
-                        {(
-                          t("settingsPage.account.pricing.enterprise.features", {
-                            returnObjects: true,
-                          }) as string[]
-                        ).map((feature, i) => (
-                          <li
-                            key={i}
-                            className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
-                          >
-                            <Check
-                              size={9}
-                              className="mt-[2px] text-purple-500 dark:text-purple-400 shrink-0"
-                            />
-                            {feature}
-                          </li>
-                        ))}
-                      </ul>
+                    </ul>
+                    {!isSignedIn ? (
                       <Button
+                        onClick={startOnboarding}
                         variant="outline"
                         size="sm"
                         className="mt-2 w-full h-6 text-[10px]"
-                        onClick={() =>
-                          window.electronAPI?.openExternal?.("mailto:gabe@openwhispr.com")
-                        }
                       >
-                        <Mail size={10} />
-                        {t("settingsPage.account.pricing.enterprise.cta")}
+                        {t("settingsPage.account.signedOutPlans.button")}
                       </Button>
+                    ) : usage?.isSubscribed && !usage?.isTrial ? (
+                      <Button
+                        onClick={handleBillingPortal}
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 w-full h-6 text-[10px]"
+                      >
+                        {t("settingsPage.account.pricing.downgrade")}
+                      </Button>
+                    ) : (
+                      <div className="mt-2 text-center">
+                        <span className="text-[9px] font-medium text-primary/70">
+                          {t("settingsPage.account.pricing.currentPlan")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pro */}
+                  <div
+                    className={cn(
+                      "rounded-md border-2 p-2.5 flex flex-col",
+                      usage?.isSubscribed && usage?.plan === "pro"
+                        ? "border-primary/40 bg-primary/5 dark:border-primary/30 dark:bg-primary/8"
+                        : "border-primary/20 bg-primary/2 dark:border-primary/15 dark:bg-primary/3"
+                    )}
+                  >
+                    <p className="text-xs font-semibold text-foreground">
+                      {t("settingsPage.account.pricing.pro.name")}
+                    </p>
+                    <button
+                      onClick={() => setBillingState((prev) => ({ ...prev, pro: !prev.pro }))}
+                      role="switch"
+                      aria-checked={billingState.pro}
+                      className="flex items-center gap-1.5 mt-1"
+                    >
+                      <div
+                        className={`relative w-7 h-4 rounded-full transition-colors ${billingState.pro ? "bg-primary" : "bg-muted"}`}
+                      >
+                        <div
+                          className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.pro ? "translate-x-3" : ""}`}
+                        />
+                      </div>
+                      <span className="text-[9px] text-muted-foreground">
+                        {t("settingsPage.account.pricing.billedYearly")}
+                      </span>
+                    </button>
+                    <div className="flex items-baseline gap-0.5 mt-1">
+                      <span className="text-lg font-bold text-foreground">
+                        {billingState.pro
+                          ? t("settingsPage.account.pricing.pro.annualEquivalent")
+                          : t("settingsPage.account.pricing.pro.monthlyPrice")}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground">
+                        {t("settingsPage.account.pricing.pro.monthlyPeriod")}
+                      </span>
                     </div>
+                    <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                      {t("settingsPage.account.pricing.pro.includesPrefix")}
+                    </p>
+                    <ul className="space-y-0.5 mt-1 flex-1">
+                      {(
+                        t("settingsPage.account.pricing.pro.features", {
+                          returnObjects: true,
+                        }) as string[]
+                      ).map((feature, i) => (
+                        <li
+                          key={i}
+                          className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                        >
+                          <Check size={9} className="mt-[2px] text-primary shrink-0" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    {(usage?.isSubscribed && usage?.plan === "pro" && !usage?.isTrial) ||
+                    usage?.isTrial ? (
+                      <div className="mt-2 text-center">
+                        <span className="text-[9px] font-medium text-primary">
+                          {t("settingsPage.account.pricing.currentPlan")}
+                        </span>
+                      </div>
+                    ) : usage?.isSubscribed && usage?.plan === "business" ? (
+                      <Button
+                        onClick={() =>
+                          handleSwitchPlan(billingState.pro ? "annual" : "monthly", "pro")
+                        }
+                        disabled={previewLoading || usage.checkoutLoading}
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 w-full h-6 text-[10px]"
+                      >
+                        {previewLoading ? (
+                          <Loader2 size={10} className="animate-spin" />
+                        ) : (
+                          t("settingsPage.account.pricing.downgrade")
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() =>
+                          handleCheckout(billingState.pro ? "annual" : "monthly", "pro")
+                        }
+                        disabled={usage?.checkoutLoading}
+                        size="sm"
+                        className="mt-2 w-full h-6 text-[10px]"
+                      >
+                        {t("settingsPage.account.pricing.pro.cta")}
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Business */}
+                  <div className="rounded-md border-2 border-primary/50 bg-primary/8 dark:border-primary/40 dark:bg-primary/10 p-2.5 flex flex-col relative">
+                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[8px] font-semibold px-2.5 py-0.5 rounded-full whitespace-nowrap shadow-sm">
+                      {t("settingsPage.account.pricing.business.badge")}
+                    </span>
+                    <p className="text-xs font-semibold text-foreground">
+                      {t("settingsPage.account.pricing.business.name")}
+                    </p>
+                    <button
+                      onClick={() =>
+                        setBillingState((prev) => ({ ...prev, business: !prev.business }))
+                      }
+                      role="switch"
+                      aria-checked={billingState.business}
+                      className="flex items-center gap-1.5 mt-1"
+                    >
+                      <div
+                        className={`relative w-7 h-4 rounded-full transition-colors ${billingState.business ? "bg-primary" : "bg-muted"}`}
+                      >
+                        <div
+                          className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${billingState.business ? "translate-x-3" : ""}`}
+                        />
+                      </div>
+                      <span className="text-[9px] text-muted-foreground">
+                        {t("settingsPage.account.pricing.billedYearly")}
+                      </span>
+                    </button>
+                    <div className="flex items-baseline gap-0.5 mt-1">
+                      <span className="text-lg font-bold text-foreground">
+                        {billingState.business
+                          ? t("settingsPage.account.pricing.business.annualEquivalent")
+                          : t("settingsPage.account.pricing.business.monthlyPrice")}
+                      </span>
+                      <span className="text-[9px] text-muted-foreground">
+                        {t("settingsPage.account.pricing.business.monthlyPeriod")}
+                      </span>
+                    </div>
+                    <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                      {t("settingsPage.account.pricing.business.includesPrefix")}
+                    </p>
+                    <ul className="space-y-0.5 mt-1 flex-1">
+                      {(
+                        t("settingsPage.account.pricing.business.features", {
+                          returnObjects: true,
+                        }) as string[]
+                      ).map((feature, i) => (
+                        <li
+                          key={i}
+                          className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                        >
+                          <Check size={9} className="mt-[2px] text-primary shrink-0" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    {usage?.isSubscribed && usage?.plan === "business" && !usage?.isTrial ? (
+                      <div className="mt-2 text-center">
+                        <span className="text-[9px] font-medium text-primary">
+                          {t("settingsPage.account.pricing.currentPlan")}
+                        </span>
+                      </div>
+                    ) : usage?.isSubscribed && usage?.plan === "pro" && !usage?.isTrial ? (
+                      <Button
+                        onClick={() =>
+                          handleSwitchPlan(billingState.business ? "annual" : "monthly", "business")
+                        }
+                        disabled={previewLoading || usage.checkoutLoading}
+                        size="sm"
+                        className="mt-2 w-full h-6 text-[10px]"
+                      >
+                        {previewLoading ? (
+                          <Loader2 size={10} className="animate-spin" />
+                        ) : (
+                          t("settingsPage.account.pricing.upgrade")
+                        )}
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() =>
+                          handleCheckout(billingState.business ? "annual" : "monthly", "business")
+                        }
+                        disabled={usage?.checkoutLoading}
+                        size="sm"
+                        className="mt-2 w-full h-6 text-[10px]"
+                      >
+                        {t("settingsPage.account.pricing.business.cta")}
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Enterprise */}
+                  <div className="rounded-md border border-border/50 dark:border-border-subtle/60 bg-card/30 dark:bg-surface-2/30 p-2.5 flex flex-col">
+                    <p className="text-xs font-semibold text-foreground">
+                      {t("settingsPage.account.pricing.enterprise.name")}
+                    </p>
+                    <p className="text-[9px] text-muted-foreground mt-1">
+                      {t("settingsPage.account.pricing.enterprise.subtitle")}
+                    </p>
+                    <div className="flex items-baseline gap-0.5 mt-1">
+                      <span className="text-lg font-bold text-foreground">
+                        {t("settingsPage.account.pricing.enterprise.price")}
+                      </span>
+                    </div>
+                    <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                      {t("settingsPage.account.pricing.enterprise.includesPrefix")}
+                    </p>
+                    <ul className="space-y-0.5 mt-1 flex-1">
+                      {(
+                        t("settingsPage.account.pricing.enterprise.features", {
+                          returnObjects: true,
+                        }) as string[]
+                      ).map((feature, i) => (
+                        <li
+                          key={i}
+                          className="flex items-start gap-1 text-[10px] text-muted-foreground leading-tight"
+                        >
+                          <Check
+                            size={9}
+                            className="mt-[2px] text-purple-500 dark:text-purple-400 shrink-0"
+                          />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 w-full h-6 text-[10px]"
+                      onClick={() =>
+                        window.electronAPI?.openExternal?.("https://openwhispr.com/contact-sales")
+                      }
+                    >
+                      <Mail size={10} />
+                      {t("settingsPage.account.pricing.enterprise.cta")}
+                    </Button>
                   </div>
                 </div>
+
+                <Dialog
+                  open={!!switchPreview}
+                  onOpenChange={(open) => !open && setSwitchPreview(null)}
+                >
+                  <DialogContent className="sm:max-w-[360px]">
+                    <DialogHeader>
+                      <DialogTitle>
+                        {t("settingsPage.account.pricing.confirmSwitch.title")}
+                      </DialogTitle>
+                      <DialogDescription>
+                        {switchPreview &&
+                          t("settingsPage.account.pricing.confirmSwitch.description", {
+                            plan: switchPreview.tier === "pro" ? "Pro" : "Business",
+                            interval:
+                              switchPreview.plan === "annual"
+                                ? t("settingsPage.account.pricing.confirmSwitch.yearly")
+                                : t("settingsPage.account.pricing.confirmSwitch.monthly"),
+                          })}
+                      </DialogDescription>
+                    </DialogHeader>
+                    {switchPreview && (
+                      <div className="rounded-lg border border-border/50 dark:border-border-subtle/60 overflow-hidden">
+                        <div className="flex justify-between items-center px-3 py-2.5 bg-muted/40 dark:bg-surface-2/50">
+                          <span className="text-xs text-muted-foreground">
+                            {switchPreview.immediateAmount < 0
+                              ? t("settingsPage.account.pricing.confirmSwitch.accountCredit")
+                              : t("settingsPage.account.pricing.confirmSwitch.chargeToday")}
+                          </span>
+                          <span
+                            className={cn(
+                              "text-sm font-semibold",
+                              switchPreview.immediateAmount < 0
+                                ? "text-emerald-600 dark:text-emerald-400"
+                                : "text-foreground"
+                            )}
+                          >
+                            {formatAmount(
+                              Math.abs(switchPreview.immediateAmount),
+                              switchPreview.currency
+                            )}
+                          </span>
+                        </div>
+                        <div className="divide-y divide-border/40">
+                          <div className="flex justify-between items-center px-3 py-2">
+                            <span className="text-xs text-muted-foreground">
+                              {t("settingsPage.account.pricing.confirmSwitch.newPrice")}
+                            </span>
+                            <span className="text-xs font-medium text-foreground">
+                              {formatAmount(switchPreview.newPriceAmount, switchPreview.currency)}/
+                              {switchPreview.newInterval === "year"
+                                ? t("settingsPage.account.pricing.confirmSwitch.yr")
+                                : t("settingsPage.account.pricing.confirmSwitch.mo")}
+                            </span>
+                          </div>
+                          {switchPreview.nextBillingDate && (
+                            <div className="flex justify-between items-center px-3 py-2">
+                              <span className="text-xs text-muted-foreground">
+                                {t("settingsPage.account.pricing.confirmSwitch.nextBilling")}
+                              </span>
+                              <span className="text-xs font-medium text-foreground">
+                                {new Date(switchPreview.nextBillingDate).toLocaleDateString()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <DialogFooter>
+                      <Button variant="outline" size="sm" onClick={() => setSwitchPreview(null)}>
+                        {t("settingsPage.account.pricing.confirmSwitch.cancel")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={confirmSwitchPlan}
+                        disabled={usage?.checkoutLoading}
+                      >
+                        {usage?.checkoutLoading ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          t("settingsPage.account.pricing.confirmSwitch.confirm")
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
 
                 {isSignedIn ? (
                   <>
@@ -1501,7 +1889,9 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                                 : usage.isPastDue
                                   ? t("settingsPage.account.planLabels.free")
                                   : usage.isSubscribed
-                                    ? t("settingsPage.account.planLabels.pro")
+                                    ? usage.plan === "business"
+                                      ? t("settingsPage.account.planLabels.business")
+                                      : t("settingsPage.account.planLabels.pro")
                                     : t("settingsPage.account.planLabels.free")
                             }
                             description={
@@ -1537,7 +1927,9 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                               </Badge>
                             ) : usage.isSubscribed ? (
                               <Badge variant="success">
-                                {t("settingsPage.account.badges.pro")}
+                                {usage.plan === "business"
+                                  ? t("settingsPage.account.badges.business")
+                                  : t("settingsPage.account.badges.pro")}
                               </Badge>
                             ) : usage.isOverLimit ? (
                               <Badge variant="warning">
@@ -1648,7 +2040,10 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                           ) : (
                             <Button
                               onClick={async () => {
-                                const result = await usage.openCheckout(billingPeriod);
+                                const result = await usage.openCheckout({
+                                  plan: billingState.pro ? "annual" : "monthly",
+                                  tier: "pro",
+                                });
                                 if (!result.success) {
                                   toast({
                                     title: t("settingsPage.account.checkout.couldNotOpenTitle"),
@@ -1770,6 +2165,32 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
                     description={t("settingsPage.general.soundEffects.pauseMediaDescription")}
                   >
                     <Toggle checked={pauseMediaOnDictation} onChange={setPauseMediaOnDictation} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Meeting Detection */}
+            <div>
+              <SectionHeader
+                title={t("calendar.detection.title")}
+                description={t("calendar.detection.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("calendar.detection.audioDetection")}
+                    description={t("calendar.detection.audioDescription")}
+                  >
+                    <Toggle
+                      checked={meetingAudioDetection}
+                      onChange={(value) => {
+                        setMeetingAudioDetection(value);
+                        window.electronAPI?.meetingDetectionSetPreferences?.({
+                          audioDetection: value,
+                        });
+                      }}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -2232,6 +2653,28 @@ EOF`,
                     },
                   ];
 
+                  if (ydotoolStatus.isKde) {
+                    checks.push({
+                      key: "hasXclip",
+                      label: "xclip",
+                      ok: ydotoolStatus.hasXclip || ydotoolStatus.hasXsel || false,
+                      desc: t("settingsPage.general.waylandPaste.xclipDesc", {
+                        defaultValue: "Clipboard tool for KDE Wayland paste (xclip or xsel)",
+                      }),
+                      guide: [
+                        {
+                          title: t("settingsPage.general.waylandPaste.guide.xclip.step1Title", {
+                            defaultValue: "Install xclip",
+                          }),
+                          cmds: [
+                            { cmd: "sudo dnf install xclip  # Fedora" },
+                            { cmd: "sudo apt install xclip  # Debian/Ubuntu" },
+                          ],
+                        },
+                      ],
+                    });
+                  }
+
                   const allOk = checks.every((c) => c.ok);
                   const activeGuide = checks.find((c) => c.key === ydotoolGuideKey);
 
@@ -2382,6 +2825,7 @@ EOF`,
                 })()}
               </div>
             )}
+
           </div>
         );
 
@@ -2402,7 +2846,7 @@ EOF`,
                       await registerHotkey(newHotkey);
                     }}
                     disabled={isHotkeyRegistering}
-                    validate={validateHotkeyForInput}
+                    validate={validateDictationHotkey}
                   />
                   {dictationKey && dictationKey !== getDefaultHotkey() && (
                     <button
@@ -2427,7 +2871,7 @@ EOF`,
                   </p>
                   <HotkeyInput
                     value={cancelKey}
-                    onChange={(newKey) => setCancelKey(newKey)}
+                    onChange={setCancelKey}
                     skipListeningMode
                   />
                   {cancelKey && cancelKey !== "Escape" && (
@@ -2440,7 +2884,7 @@ EOF`,
                   )}
                 </SettingsPanelRow>
 
-                {!isUsingGnomeHotkeys && (
+                {!isUsingNativeShortcut && (
                   <SettingsPanelRow>
                     <p className="text-xs font-medium text-muted-foreground/80 mb-2">
                       {t("settingsPage.general.hotkey.activationMode")}
@@ -2448,6 +2892,38 @@ EOF`,
                     <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
                   </SettingsPanelRow>
                 )}
+              </SettingsPanel>
+            </div>
+
+            {/* Meeting Mode Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.meetingHotkey.title")}
+                description={t("settingsPage.general.meetingHotkey.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyInput
+                    value={meetingKey}
+                    onChange={async (newHotkey) => {
+                      await registerMeetingHotkey(newHotkey);
+                    }}
+                    disabled={isMeetingHotkeyRegistering}
+                    validate={validateMeetingHotkey}
+                  />
+                  {meetingKey && (
+                    <button
+                      onClick={async () => {
+                        await window.electronAPI?.registerMeetingHotkey?.("");
+                        setMeetingKey("");
+                      }}
+                      disabled={isMeetingHotkeyRegistering}
+                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
+                    >
+                      {t("settingsPage.general.meetingHotkey.clear")}
+                    </button>
+                  )}
+                </SettingsPanelRow>
               </SettingsPanel>
             </div>
           </div>
@@ -2513,7 +2989,6 @@ EOF`,
             setGroqApiKey={setGroqApiKey}
             customReasoningApiKey={customReasoningApiKey}
             setCustomReasoningApiKey={setCustomReasoningApiKey}
-            showAlertDialog={showAlertDialog}
             toast={toast}
           />
         );
@@ -2655,7 +3130,6 @@ EOF`,
               setGroqApiKey={setGroqApiKey}
               customReasoningApiKey={customReasoningApiKey}
               setCustomReasoningApiKey={setCustomReasoningApiKey}
-              showAlertDialog={showAlertDialog}
               toast={toast}
             />
 
@@ -2901,6 +3375,20 @@ EOF`,
               </SettingsPanel>
             </div>
 
+            {/* Data Retention */}
+            <div className="border-t border-border/40 pt-6">
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.dataRetention")}
+                    description={t("settingsPage.privacy.dataRetentionDescription")}
+                  >
+                    <Toggle checked={dataRetentionEnabled} onChange={setDataRetentionEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
             {/* Permissions */}
             <div className="border-t border-border/40 pt-6">
               <SectionHeader
@@ -2915,8 +3403,7 @@ EOF`,
                   description={t("settingsPage.permissions.microphoneDescription")}
                   granted={permissionsHook.micPermissionGranted}
                   onRequest={permissionsHook.requestMicPermission}
-                  buttonText={t("settingsPage.permissions.test")}
-                  onOpenSettings={permissionsHook.openMicPrivacySettings}
+                  buttonText={t("settingsPage.permissions.grantAccess")}
                 />
 
                 {platform === "darwin" && (
@@ -2926,20 +3413,20 @@ EOF`,
                       title={t("settingsPage.permissions.accessibilityTitle")}
                       description={t("settingsPage.permissions.accessibilityDescription")}
                       granted={permissionsHook.accessibilityPermissionGranted}
-                      onRequest={permissionsHook.testAccessibilityPermission}
-                      buttonText={t("settingsPage.permissions.testAndGrant")}
-                      onOpenSettings={permissionsHook.openAccessibilitySettings}
+                      onRequest={permissionsHook.requestAccessibilityPermission}
+                      buttonText={t("settingsPage.permissions.grantAccess")}
                     />
-                    <PermissionCard
-                      icon={Monitor}
-                      title={t("settingsPage.permissions.screenRecordingTitle")}
-                      description={t("settingsPage.permissions.screenRecordingDescription")}
-                      granted={screenRecording.granted}
-                      onRequest={screenRecording.request}
-                      buttonText={t("settingsPage.permissions.test")}
-                      onOpenSettings={screenRecording.openSettings}
-                      badge={t("settingsPage.permissions.optional")}
-                    />
+                    {systemAudio.mode === "native" && (
+                      <PermissionCard
+                        icon={Monitor}
+                        title={t("settingsPage.permissions.systemAudioTitle")}
+                        description={t("settingsPage.permissions.systemAudioDescription")}
+                        granted={systemAudio.granted}
+                        onRequest={systemAudio.request}
+                        buttonText={t("settingsPage.permissions.grantAccess")}
+                        badge={t("settingsPage.permissions.optional")}
+                      />
+                    )}
                   </>
                 )}
               </div>
@@ -2989,6 +3476,7 @@ EOF`,
                 </div>
               )}
             </div>
+
           </div>
         );
 
@@ -3037,35 +3525,15 @@ EOF`,
                       onClick={async () => {
                         try {
                           const result = await checkForUpdates();
-                          if (result?.updateAvailable) {
-                            showAlertDialog({
-                              title: t(
-                                "settingsPage.general.updates.dialogs.updateAvailable.title"
-                              ),
-                              description: t(
-                                "settingsPage.general.updates.dialogs.updateAvailable.description",
-                                {
-                                  version:
-                                    result.version || t("settingsPage.general.updates.newVersion"),
-                                }
-                              ),
-                            });
-                          } else {
-                            showAlertDialog({
+                          if (result && !result.updateAvailable) {
+                            toast({
                               title: t("settingsPage.general.updates.dialogs.noUpdates.title"),
-                              description:
-                                result?.message ||
-                                t("settingsPage.general.updates.dialogs.noUpdates.description"),
+                              description: t(
+                                "settingsPage.general.updates.dialogs.noUpdates.description"
+                              ),
                             });
                           }
-                        } catch {
-                          showAlertDialog({
-                            title: t("settingsPage.general.updates.dialogs.checkFailed.title"),
-                            description: t(
-                              "settingsPage.general.updates.dialogs.checkFailed.description"
-                            ),
-                          });
-                        }
+                        } catch {}
                       }}
                       disabled={checkingForUpdates || updateStatus.isDevelopment}
                       variant="outline"
@@ -3243,28 +3711,29 @@ EOF`,
                           showConfirmDialog({
                             title: t("settingsPage.developer.resetAll.title"),
                             description: t("settingsPage.developer.resetAll.description"),
-                            onConfirm: () => {
-                              window.electronAPI
-                                ?.cleanupApp()
-                                .then(() => {
-                                  showAlertDialog({
-                                    title: t("settingsPage.developer.resetAll.successTitle"),
-                                    description: t(
-                                      "settingsPage.developer.resetAll.successDescription"
-                                    ),
-                                  });
-                                  setTimeout(() => {
-                                    window.location.reload();
-                                  }, 1000);
-                                })
-                                .catch(() => {
-                                  showAlertDialog({
-                                    title: t("settingsPage.developer.resetAll.failedTitle"),
-                                    description: t(
-                                      "settingsPage.developer.resetAll.failedDescription"
-                                    ),
-                                  });
+                            onConfirm: async () => {
+                              try {
+                                try {
+                                  await signOut();
+                                } catch {}
+                                await window.electronAPI?.cleanupApp();
+                                showAlertDialog({
+                                  title: t("settingsPage.developer.resetAll.successTitle"),
+                                  description: t(
+                                    "settingsPage.developer.resetAll.successDescription"
+                                  ),
                                 });
+                                setTimeout(() => {
+                                  window.location.reload();
+                                }, 1000);
+                              } catch {
+                                showAlertDialog({
+                                  title: t("settingsPage.developer.resetAll.failedTitle"),
+                                  description: t(
+                                    "settingsPage.developer.resetAll.failedDescription"
+                                  ),
+                                });
+                              }
                             },
                             variant: "destructive",
                             confirmText: t("settingsPage.developer.resetAll.confirmText"),

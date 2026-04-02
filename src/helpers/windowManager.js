@@ -23,11 +23,12 @@ class WindowManager {
     this.agentWindow = null;
     this.notificationWindow = null;
     this._notificationTimeout = null;
+    this.updateNotificationWindow = null;
+    this._updateNotificationDismissed = false;
     this.tray = null;
     this.hotkeyManager = new HotkeyManager();
     this.dragManager = new DragManager();
     this.isQuitting = false;
-    this.isMainWindowInteractive = false;
     this.loadErrorShown = false;
     this.macCompoundPushState = null;
     this.winPushState = null;
@@ -43,7 +44,8 @@ class WindowManager {
   }
 
   async createMainWindow() {
-    const display = screen.getPrimaryDisplay();
+    const cursorPos = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(cursorPos);
     const position = WindowPositionUtil.getMainWindowPosition(
       display,
       null,
@@ -98,12 +100,18 @@ class WindowManager {
       return;
     }
 
+    if (process.platform === "win32") {
+      // Windows click-through forwarding is unreliable for this floating panel.
+      // Keep the panel interactive so the mic button and cancel button are always clickable.
+      this.mainWindow.setIgnoreMouseEvents(false);
+      return;
+    }
+
     if (shouldCapture) {
       this.mainWindow.setIgnoreMouseEvents(false);
     } else {
       this.mainWindow.setIgnoreMouseEvents(true, { forward: true });
     }
-    this.isMainWindowInteractive = shouldCapture;
   }
 
   resizeMainWindow(sizeKey) {
@@ -483,6 +491,18 @@ class WindowManager {
     return this.hotkeyManager.isUsingGnome();
   }
 
+  isUsingHyprlandHotkeys() {
+    return this.hotkeyManager.isUsingHyprland();
+  }
+
+  isUsingKDEHotkeys() {
+    return this.hotkeyManager.isUsingKDE();
+  }
+
+  isUsingNativeShortcutHotkeys() {
+    return this.hotkeyManager.isUsingNativeShortcut();
+  }
+
   async startWindowDrag() {
     return await this.dragManager.startWindowDrag();
   }
@@ -637,6 +657,10 @@ class WindowManager {
 
     this.agentWindow.once("ready-to-show", () => {
       WindowPositionUtil.setupAlwaysOnTop(this.agentWindow);
+    });
+
+    this.agentWindow.webContents.on("did-finish-load", () => {
+      this.agentWindow.setTitle(i18nMain.t("window.agentChatTitle"));
     });
 
     this.agentWindow.on("closed", () => {
@@ -819,9 +843,37 @@ class WindowManager {
     this.agentWindow.setBounds(bounds);
   }
 
+  _repositionToCursorDisplay() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+
+    const cursorPos = screen.getCursorScreenPoint();
+    const cursorDisplay = screen.getDisplayNearestPoint(cursorPos);
+
+    const currentBounds = this.mainWindow.getBounds();
+    const currentDisplay = screen.getDisplayNearestPoint({
+      x: currentBounds.x + currentBounds.width / 2,
+      y: currentBounds.y + currentBounds.height / 2,
+    });
+
+    if (currentDisplay.id === cursorDisplay.id) return;
+
+    const newPos = WindowPositionUtil.getMainWindowPosition(
+      cursorDisplay,
+      { width: currentBounds.width, height: currentBounds.height },
+      this._panelStartPosition
+    );
+    this.mainWindow.setBounds(newPos);
+  }
+
   showDictationPanel(options = {}) {
     const { focus = false } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const wasHidden = !this.mainWindow.isVisible() || this.mainWindow.isMinimized();
+
+      if (wasHidden) {
+        this._repositionToCursorDisplay();
+      }
+
       if (this.mainWindow.isMinimized()) {
         this.mainWindow.restore();
       }
@@ -908,7 +960,6 @@ class WindowManager {
     this.mainWindow.on("closed", () => {
       this.dragManager.cleanup();
       this.mainWindow = null;
-      this.isMainWindowInteractive = false;
     });
   }
 
@@ -952,14 +1003,23 @@ class WindowManager {
 
     this._pendingNotificationData = promptData;
 
-    setTimeout(() => {
+    this._notificationReadyFallback = setTimeout(() => {
+      this._notificationReadyFallback = null;
       if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+        debugLogger.warn(
+          "Notification renderer did not signal ready, force-showing",
+          {},
+          "meeting"
+        );
         this.notificationWindow.webContents.send("meeting-notification-data", promptData);
         this.notificationWindow.showInactive();
       }
-    }, 300);
+    }, 3000);
 
     this._notificationTimeout = setTimeout(() => {
+      if (this.meetingDetectionEngine) {
+        this.meetingDetectionEngine.handleNotificationTimeout();
+      }
       this.dismissMeetingNotification();
     }, 30000);
 
@@ -972,8 +1032,22 @@ class WindowManager {
     });
   }
 
+  showNotificationWindow() {
+    if (this._notificationReadyFallback) {
+      clearTimeout(this._notificationReadyFallback);
+      this._notificationReadyFallback = null;
+    }
+    if (this.notificationWindow && !this.notificationWindow.isDestroyed()) {
+      this.notificationWindow.showInactive();
+    }
+  }
+
   dismissMeetingNotification() {
     this._pendingNotificationData = null;
+    if (this._notificationReadyFallback) {
+      clearTimeout(this._notificationReadyFallback);
+      this._notificationReadyFallback = null;
+    }
     if (this._notificationTimeout) {
       clearTimeout(this._notificationTimeout);
       this._notificationTimeout = null;
@@ -982,6 +1056,79 @@ class WindowManager {
       this.notificationWindow.close();
     }
     this.notificationWindow = null;
+  }
+
+  async showUpdateNotification(info) {
+    if (this._updateNotificationDismissed) return;
+    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
+      this.updateNotificationWindow.close();
+      this.updateNotificationWindow = null;
+    }
+
+    const display = screen.getPrimaryDisplay();
+    const position = WindowPositionUtil.getNotificationPosition(display);
+
+    this.updateNotificationWindow = new BrowserWindow({
+      ...NOTIFICATION_WINDOW_CONFIG,
+      ...position,
+    });
+
+    WindowPositionUtil.setupAlwaysOnTop(this.updateNotificationWindow);
+
+    if (process.env.NODE_ENV === "development") {
+      await DevServerManager.waitForDevServer();
+      await this.updateNotificationWindow.loadURL(
+        `${DevServerManager.DEV_SERVER_URL}?update-notification=true`
+      );
+    } else {
+      const fileInfo = DevServerManager.getAppFilePath(false);
+      await this.updateNotificationWindow.loadFile(fileInfo.path, {
+        query: { ...fileInfo.query, "update-notification": "true" },
+      });
+    }
+
+    this._pendingUpdateNotificationData = {
+      version: info?.version,
+      releaseDate: info?.releaseDate,
+    };
+
+    this._updateNotificationReadyFallback = setTimeout(() => {
+      this._updateNotificationReadyFallback = null;
+      if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
+        this.updateNotificationWindow.webContents.send(
+          "update-notification-data",
+          this._pendingUpdateNotificationData
+        );
+        this.updateNotificationWindow.showInactive();
+      }
+    }, 3000);
+
+    this.updateNotificationWindow.on("closed", () => {
+      this.updateNotificationWindow = null;
+    });
+  }
+
+  showUpdateNotificationWindow() {
+    if (this._updateNotificationReadyFallback) {
+      clearTimeout(this._updateNotificationReadyFallback);
+      this._updateNotificationReadyFallback = null;
+    }
+    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
+      this.updateNotificationWindow.showInactive();
+    }
+  }
+
+  dismissUpdateNotification() {
+    this._pendingUpdateNotificationData = null;
+    this._updateNotificationDismissed = true;
+    if (this._updateNotificationReadyFallback) {
+      clearTimeout(this._updateNotificationReadyFallback);
+      this._updateNotificationReadyFallback = null;
+    }
+    if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
+      this.updateNotificationWindow.close();
+    }
+    this.updateNotificationWindow = null;
   }
 
   sendToControlPanel(channel, data) {
@@ -1035,6 +1182,10 @@ class WindowManager {
 
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.setTitle(i18nMain.t("window.voiceRecorderTitle"));
+    }
+
+    if (this.agentWindow && !this.agentWindow.isDestroyed()) {
+      this.agentWindow.setTitle(i18nMain.t("window.agentChatTitle"));
     }
   }
 

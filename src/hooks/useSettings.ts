@@ -33,6 +33,7 @@ export interface ReasoningSettings {
 export interface HotkeySettings {
   dictationKey: string;
   cancelKey: string;
+  meetingKey: string;
   activationMode: "tap" | "push";
 }
 
@@ -55,6 +56,7 @@ export interface PrivacySettings {
   cloudBackupEnabled: boolean;
   telemetryEnabled: boolean;
   audioRetentionDays: number;
+  dataRetentionEnabled: boolean;
 }
 
 export interface ThemeSettings {
@@ -190,6 +192,7 @@ function useSettingsInternal() {
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
     cancelKey: store.cancelKey,
+    meetingKey: store.meetingKey,
     theme: store.theme,
     setUseLocalWhisper: store.setUseLocalWhisper,
     setWhisperModel: store.setWhisperModel,
@@ -221,6 +224,7 @@ function useSettingsInternal() {
     setCustomReasoningApiKey: store.setCustomReasoningApiKey,
     setDictationKey: store.setDictationKey,
     setCancelKey: store.setCancelKey,
+    setMeetingKey: store.setMeetingKey,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
@@ -248,6 +252,8 @@ function useSettingsInternal() {
     setTelemetryEnabled: store.setTelemetryEnabled,
     audioRetentionDays: store.audioRetentionDays,
     setAudioRetentionDays: store.setAudioRetentionDays,
+    dataRetentionEnabled: store.dataRetentionEnabled,
+    setDataRetentionEnabled: store.setDataRetentionEnabled,
     updateTranscriptionSettings: store.updateTranscriptionSettings,
     updateReasoningSettings: store.updateReasoningSettings,
     updateApiKeys: store.updateApiKeys,

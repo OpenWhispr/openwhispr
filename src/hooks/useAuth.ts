@@ -37,6 +37,7 @@ export function useAuth() {
 
   return {
     isSignedIn,
+    isGracePeriodOnly: !rawIsSignedIn && gracePeriodActive,
     isLoaded: !isPending,
     session,
     user,

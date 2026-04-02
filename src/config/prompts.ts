@@ -106,7 +106,10 @@ export function getSystemPrompt(
     const customPrompt = window.localStorage.getItem("customUnifiedPrompt");
     if (customPrompt) {
       try {
-        promptTemplate = JSON.parse(customPrompt);
+        const parsed = JSON.parse(customPrompt);
+        if (typeof parsed === "string") {
+          promptTemplate = parsed;
+        }
       } catch {}
     }
   }

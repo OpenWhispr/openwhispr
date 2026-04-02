@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -5,6 +6,7 @@ import { HotkeyInput } from "../ui/HotkeyInput";
 import { Toggle } from "../ui/toggle";
 import { SettingsRow, SettingsPanel, SettingsPanelRow, SectionHeader } from "../ui/SettingsSection";
 import ReasoningModelSelector from "../ReasoningModelSelector";
+import { validateHotkeyForSlot } from "../../utils/hotkeyValidation";
 
 export default function AgentModeSettings() {
   const { t } = useTranslation();
@@ -13,6 +15,8 @@ export default function AgentModeSettings() {
     setAgentEnabled,
     agentKey,
     setAgentKey,
+    dictationKey,
+    meetingKey,
     agentModel,
     setAgentModel,
     agentProvider,
@@ -38,6 +42,19 @@ export default function AgentModeSettings() {
 
   const isCloudMode = isSignedIn && cloudAgentMode === "openwhispr";
   const isCustomMode = cloudAgentMode === "byok";
+
+  const validateAgentHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+        },
+        t
+      ),
+    [dictationKey, meetingKey, t]
+  );
 
   return (
     <div className="space-y-6">
@@ -66,7 +83,7 @@ export default function AgentModeSettings() {
               title={t("agentMode.settings.hotkey")}
               description={t("agentMode.settings.hotkeyDescription")}
             />
-            <HotkeyInput value={agentKey} onChange={setAgentKey} />
+            <HotkeyInput value={agentKey} onChange={setAgentKey} validate={validateAgentHotkey} />
           </div>
 
           {/* Cloud / BYOK toggle */}

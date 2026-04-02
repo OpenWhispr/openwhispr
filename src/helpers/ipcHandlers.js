@@ -1,11 +1,11 @@
-const { ipcMain, app, shell, BrowserWindow } = require("electron");
+const { ipcMain, app, shell, BrowserWindow, systemPreferences } = require("electron");
 const path = require("path");
 const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
-const AppUtils = require("../utils");
 const debugLogger = require("./debugLogger");
 const GnomeShortcutManager = require("./gnomeShortcut");
+const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
@@ -103,10 +103,13 @@ class IPCHandlers {
     this.whisperCudaManager = managers.whisperCudaManager;
     this.googleCalendarManager = managers.googleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
+    this.audioTapManager = managers.audioTapManager;
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
-    this.openaiRealtimeStreaming = null;
+    this._dictationStreaming = null;
+    this._meetingMicStreaming = null;
+    this._meetingSystemStreaming = null;
     this._autoLearnEnabled = true; // Default on, synced from renderer
     this._autoLearnDebounceTimer = null;
     this._autoLearnLatestData = null;
@@ -116,6 +119,7 @@ class IPCHandlers {
     this._audioCleanupInterval = null;
     this._setupTextEditMonitor();
     this._setupAudioCleanup();
+    this._logDetectedGpus();
     this.setupHandlers();
 
     if (this.whisperManager?.serverManager) {
@@ -133,6 +137,22 @@ class IPCHandlers {
     }
   }
 
+  _resolveByokModel(provider, configuredModel) {
+    const trimmed = (configuredModel || "").trim();
+    if (provider === "custom") return trimmed || "whisper-1";
+    if (trimmed) {
+      const isGroq = trimmed.startsWith("whisper-large-v3");
+      const isOpenAI = trimmed.startsWith("gpt-4o") || trimmed === "whisper-1";
+      const isMistral = trimmed.startsWith("voxtral-");
+      if (provider === "groq" && isGroq) return trimmed;
+      if (provider === "openai" && isOpenAI) return trimmed;
+      if (provider === "mistral" && isMistral) return trimmed;
+    }
+    if (provider === "groq") return "whisper-large-v3-turbo";
+    if (provider === "mistral") return "voxtral-mini-latest";
+    return "gpt-4o-mini-transcribe";
+  }
+
   _cleanupTextEditMonitor() {
     if (this._autoLearnDebounceTimer) {
       clearTimeout(this._autoLearnDebounceTimer);
@@ -142,6 +162,16 @@ class IPCHandlers {
     if (this.textEditMonitor && this._textEditHandler) {
       this.textEditMonitor.removeListener("text-edited", this._textEditHandler);
       this._textEditHandler = null;
+    }
+  }
+
+  async _logDetectedGpus() {
+    const { listNvidiaGpus } = require("../utils/gpuDetection");
+    const gpus = await listNvidiaGpus();
+    if (gpus.length > 0) {
+      debugLogger.info("NVIDIA GPUs detected", { count: gpus.length, devices: gpus.map(g => `${g.name} (${g.vramMb}MB)`) }, "gpu");
+    } else {
+      debugLogger.debug("No NVIDIA GPUs detected", {}, "gpu");
     }
   }
 
@@ -301,6 +331,7 @@ class IPCHandlers {
 
     ipcMain.handle("restore-from-meeting-mode", () => {
       this.windowManager.restoreControlPanelFromMeetingMode();
+      this.meetingDetectionEngine?.setMeetingModeActive(false);
     });
 
     ipcMain.handle("app-quit", () => {
@@ -793,8 +824,14 @@ class IPCHandlers {
       return result;
     });
 
-    ipcMain.handle("check-accessibility-permission", async () => {
-      return this.clipboardManager.checkAccessibilityPermissions();
+    ipcMain.handle("check-accessibility-permission", async (_event, silent = false) => {
+      return this.clipboardManager.checkAccessibilityPermissions(silent);
+    });
+
+    // Passes `true` to isTrustedAccessibilityClient to trigger the macOS system prompt
+    ipcMain.handle("prompt-accessibility-permission", async () => {
+      if (process.platform !== "darwin") return true;
+      return systemPreferences.isTrustedAccessibilityClient(true);
     });
 
     ipcMain.handle("read-clipboard", async (event) => {
@@ -959,14 +996,73 @@ class IPCHandlers {
       return detectNvidiaGpu();
     });
 
+    ipcMain.handle("list-gpus", async () => {
+      const { listNvidiaGpus } = require("../utils/gpuDetection");
+      return listNvidiaGpus();
+    });
+
+    ipcMain.handle("set-gpu-device-index", async (_event, purpose, index) => {
+      if (purpose !== "transcription" && purpose !== "intelligence") {
+        return { success: false };
+      }
+      const parsed = parseInt(index, 10);
+      if (isNaN(parsed) || parsed < 0) {
+        return { success: false };
+      }
+      const idx = String(parsed);
+      const key = purpose === "intelligence" ? "INTELLIGENCE_GPU_INDEX" : "TRANSCRIPTION_GPU_INDEX";
+      const oldIdx = process.env[key] || "0";
+      process.env[key] = idx;
+      this.environmentManager.saveAllKeysToEnvFile().catch((err) => {
+        debugLogger.error("Failed to persist GPU index", { error: err.message }, "gpu");
+      });
+
+      if (oldIdx !== idx) {
+        try {
+          if (purpose === "transcription" && this.whisperManager?.serverManager?.process) {
+            debugLogger.info("Restarting whisper-server for GPU change", { from: oldIdx, to: idx }, "gpu");
+            const modelName = this.whisperManager.currentServerModel;
+            await this.whisperManager.stopServer();
+            if (modelName) {
+              await this.whisperManager.startServer(modelName, { useCuda: !!process.env.WHISPER_CUDA_ENABLED });
+            }
+          }
+          if (purpose === "intelligence") {
+            const modelManager = require("./modelManagerBridge").default;
+            if (modelManager.serverManager?.process) {
+              debugLogger.info("Restarting llama-server for GPU change", { from: oldIdx, to: idx }, "gpu");
+              const modelPath = modelManager.serverManager.modelPath;
+              await modelManager.serverManager.stop();
+              if (modelPath) {
+                await modelManager.serverManager.start(modelPath);
+              }
+            }
+          }
+        } catch (err) {
+          debugLogger.error("Failed to restart server after GPU change", { error: err.message, purpose }, "gpu");
+        }
+      }
+
+      return { success: true };
+    });
+
+    ipcMain.handle("get-gpu-device-index", async (_event, purpose) => {
+      if (purpose !== "transcription" && purpose !== "intelligence") {
+        return "0";
+      }
+      const key = purpose === "intelligence" ? "INTELLIGENCE_GPU_INDEX" : "TRANSCRIPTION_GPU_INDEX";
+      return process.env[key] || "0";
+    });
+
     ipcMain.handle("get-cuda-whisper-status", async () => {
       const { detectNvidiaGpu } = require("../utils/gpuDetection");
       const gpuInfo = await detectNvidiaGpu();
       if (!this.whisperCudaManager) {
-        return { downloaded: false, path: null, gpuInfo };
+        return { downloaded: false, downloading: false, path: null, gpuInfo };
       }
       return {
         downloaded: this.whisperCudaManager.isDownloaded(),
+        downloading: this.whisperCudaManager.isDownloading(),
         path: this.whisperCudaManager.getCudaBinaryPath(),
         gpuInfo,
       };
@@ -987,8 +1083,14 @@ class IPCHandlers {
           }
         });
         this._syncStartupEnv({ WHISPER_CUDA_ENABLED: "true" });
+        // Restart whisper-server so it picks up the CUDA binary
+        await this.whisperManager.stopServer().catch(() => {});
         return { success: true };
       } catch (error) {
+        debugLogger.error("CUDA binary download failed", {
+          error: error.message,
+          stack: error.stack,
+        });
         return { success: false, error: error.message };
       }
     });
@@ -1003,6 +1105,8 @@ class IPCHandlers {
       const result = await this.whisperCudaManager.delete();
       if (result.success) {
         this._syncStartupEnv({}, ["WHISPER_CUDA_ENABLED"]);
+        // Restart whisper-server so it falls back to CPU binary
+        await this.whisperManager.stopServer().catch(() => {});
       }
       return result;
     });
@@ -1134,8 +1238,111 @@ class IPCHandlers {
     });
 
     ipcMain.handle("cleanup-app", async (event) => {
-      AppUtils.cleanup(this.windowManager.mainWindow);
-      return { success: true, message: "Cleanup completed successfully" };
+      const fs = require("fs");
+      const os = require("os");
+      const errors = [];
+      const mainWindow = this.windowManager.mainWindow;
+
+      // Stop services before deleting files they hold open
+      try {
+        await this.parakeetManager?.stopServer();
+      } catch (e) {
+        errors.push(`Parakeet stop: ${e.message}`);
+      }
+      try {
+        this.whisperManager?.stopServer();
+      } catch (e) {
+        errors.push(`Whisper stop: ${e.message}`);
+      }
+      try {
+        this.googleCalendarManager?.stop();
+      } catch (e) {
+        errors.push(`GCal stop: ${e.message}`);
+      }
+
+      // Revoke Google OAuth tokens before DB is closed
+      try {
+        await this.googleCalendarManager?.revokeAllTokens();
+      } catch (e) {
+        errors.push(`GCal revoke: ${e.message}`);
+      }
+
+      // Close DB connection before deleting the file
+      try {
+        this.databaseManager?.db?.close();
+      } catch (e) {
+        errors.push(`DB close: ${e.message}`);
+      }
+
+      // Delete audio files
+      try {
+        this.audioStorageManager.deleteAllAudio();
+      } catch (e) {
+        errors.push(`Audio delete: ${e.message}`);
+      }
+
+      // Delete downloaded models
+      try {
+        const whisperDir = path.join(os.homedir(), ".cache", "openwhispr", "whisper-models");
+        if (fs.existsSync(whisperDir)) fs.rmSync(whisperDir, { recursive: true, force: true });
+      } catch (e) {
+        errors.push(`Whisper models: ${e.message}`);
+      }
+      try {
+        await this.parakeetManager?.deleteAllParakeetModels();
+      } catch (e) {
+        errors.push(`Parakeet models: ${e.message}`);
+      }
+      try {
+        const modelManager = require("./modelManagerBridge").default;
+        await modelManager.deleteAllModels();
+      } catch (e) {
+        errors.push(`LLM models: ${e.message}`);
+      }
+
+      // Delete database file + WAL/SHM
+      try {
+        const dbPath = path.join(
+          app.getPath("userData"),
+          process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db"
+        );
+        if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+        if (fs.existsSync(dbPath + "-wal")) fs.unlinkSync(dbPath + "-wal");
+        if (fs.existsSync(dbPath + "-shm")) fs.unlinkSync(dbPath + "-shm");
+      } catch (e) {
+        errors.push(`DB file: ${e.message}`);
+      }
+
+      // Delete .env file
+      try {
+        const envPath = path.join(app.getPath("userData"), ".env");
+        if (fs.existsSync(envPath)) fs.unlinkSync(envPath);
+      } catch (e) {
+        errors.push(`Env file: ${e.message}`);
+      }
+
+      // Clear session cookies
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) await win.webContents.session.clearStorageData({ storages: ["cookies"] });
+      } catch (e) {
+        errors.push(`Cookies: ${e.message}`);
+      }
+
+      // Clear localStorage
+      if (mainWindow?.webContents) {
+        try {
+          await mainWindow.webContents.executeJavaScript("localStorage.clear()");
+        } catch (e) {
+          errors.push(`localStorage: ${e.message}`);
+        }
+      }
+
+      if (errors.length > 0) {
+        debugLogger.warn("Cleanup completed with errors", { errors }, "cleanup");
+      }
+
+      return { success: errors.length === 0, message: "Cleanup completed", errors };
     });
 
     ipcMain.handle("update-hotkey", async (event, hotkey) => {
@@ -1184,6 +1391,14 @@ class IPCHandlers {
             debugLogger.warn("[IPC] Failed to unregister GNOME keybinding:", err.message);
           });
         }
+
+        // On Hyprland Wayland, unregister the keybinding during capture
+        if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager) {
+          debugLogger.log("[IPC] Unregistering Hyprland keybinding for hotkey capture mode");
+          await hotkeyManager.hyprlandManager.unregisterKeybinding().catch((err) => {
+            debugLogger.warn("[IPC] Failed to unregister Hyprland keybinding:", err.message);
+          });
+        }
       } else {
         // Exiting capture mode - re-register globalShortcut if not already registered
         if (effectiveHotkey && !usesNativeListener(effectiveHotkey)) {
@@ -1213,10 +1428,14 @@ class IPCHandlers {
           const needsListener =
             effectiveHotkey &&
             !isGlobeLikeHotkey(effectiveHotkey) &&
-            (activationMode === "push" || isModifierOnlyHotkey(effectiveHotkey));
+            (activationMode === "push" ||
+              isModifierOnlyHotkey(effectiveHotkey) ||
+              isRightSideModifier(effectiveHotkey));
           if (needsListener) {
             debugLogger.log(`[IPC] Restarting Windows key listener for hotkey: ${effectiveHotkey}`);
             this.windowsKeyManager.start(effectiveHotkey);
+          } else {
+            this.windowsKeyManager.stop();
           }
         }
 
@@ -1231,6 +1450,17 @@ class IPCHandlers {
             hotkeyManager.currentHotkey = effectiveHotkey;
           }
         }
+
+        // On Hyprland Wayland, re-register the keybinding with the effective hotkey
+        if (hotkeyManager.isUsingHyprland() && hotkeyManager.hyprlandManager && effectiveHotkey) {
+          debugLogger.log(
+            `[IPC] Re-registering Hyprland keybinding "${effectiveHotkey}" after capture mode`
+          );
+          const success = await hotkeyManager.hyprlandManager.registerKeybinding(effectiveHotkey);
+          if (success) {
+            hotkeyManager.currentHotkey = effectiveHotkey;
+          }
+        }
       }
 
       return { success: true };
@@ -1239,6 +1469,9 @@ class IPCHandlers {
     ipcMain.handle("get-hotkey-mode-info", async () => {
       return {
         isUsingGnome: this.windowManager.isUsingGnomeHotkeys(),
+        isUsingHyprland: this.windowManager.isUsingHyprlandHotkeys(),
+        isUsingKDE: this.windowManager.isUsingKDEHotkeys(),
+        isUsingNativeShortcut: this.windowManager.isUsingNativeShortcutHotkeys(),
       };
     });
 
@@ -1790,11 +2023,17 @@ class IPCHandlers {
           delete process.env.LLAMA_GPU_BACKEND;
           const modelManager = require("./modelManagerBridge").default;
           modelManager.serverManager.cachedServerBinaryPaths = null;
-          this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+          await this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
+          // Restart llama server so it picks up the Vulkan binary
+          await modelManager.stopServer().catch(() => {});
         }
 
         return result;
       } catch (error) {
+        debugLogger.error("Vulkan binary download failed", {
+          error: error.message,
+          stack: error.stack,
+        });
         return { success: false, error: error.message };
       }
     });
@@ -1846,7 +2085,7 @@ class IPCHandlers {
         sound: "x-apple.systempreferences:com.apple.preference.sound?input",
         accessibility:
           "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
-        screenRecording:
+        systemAudio:
           "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
       },
       win32: {
@@ -1866,6 +2105,7 @@ class IPCHandlers {
           microphone: i18nMain.t("systemSettings.microphone"),
           sound: i18nMain.t("systemSettings.sound"),
           accessibility: i18nMain.t("systemSettings.accessibility"),
+          systemAudio: i18nMain.t("systemSettings.systemAudio"),
         };
         return {
           success: false,
@@ -1886,7 +2126,7 @@ class IPCHandlers {
     ipcMain.handle("open-microphone-settings", () => openSystemSettings("microphone"));
     ipcMain.handle("open-sound-input-settings", () => openSystemSettings("sound"));
     ipcMain.handle("open-accessibility-settings", () => openSystemSettings("accessibility"));
-    ipcMain.handle("open-screen-recording-settings", () => openSystemSettings("screenRecording"));
+    ipcMain.handle("open-system-audio-settings", () => openSystemSettings("systemAudio"));
 
     ipcMain.handle("toggle-media-playback", () => {
       const mediaPlayer = require("./mediaPlayer");
@@ -1905,20 +2145,62 @@ class IPCHandlers {
 
     ipcMain.handle("request-microphone-access", async () => {
       if (process.platform !== "darwin") {
-        return { granted: true };
+        return { granted: true, status: "granted" };
       }
-      const { systemPreferences } = require("electron");
       const granted = await systemPreferences.askForMediaAccess("microphone");
       return { granted };
     });
 
-    ipcMain.handle("check-screen-recording-access", () => {
+    ipcMain.handle("check-microphone-access", () => {
       if (process.platform !== "darwin") {
-        return { granted: true };
+        return { granted: true, status: "granted" };
       }
-      const { systemPreferences } = require("electron");
-      const status = systemPreferences.getMediaAccessStatus("screen");
-      return { granted: status === "granted" };
+      const status = systemPreferences.getMediaAccessStatus("microphone");
+      return { granted: status === "granted", status };
+    });
+
+    ipcMain.handle("check-system-audio-access", () => {
+      if (process.platform !== "darwin") {
+        return { granted: true, status: "granted", mode: "unsupported" };
+      }
+
+      if (!this.audioTapManager?.isSupported()) {
+        return { granted: false, status: "unsupported", mode: "unsupported" };
+      }
+
+      const screenStatus = systemPreferences.getMediaAccessStatus("screen");
+      const tapStatus = this.audioTapManager.getPermissionStatus();
+      const granted = screenStatus === "granted" || tapStatus === "granted";
+      return { granted, status: granted ? "granted" : screenStatus, mode: "native" };
+    });
+
+    ipcMain.handle("request-system-audio-access", async () => {
+      if (process.platform !== "darwin") {
+        return { granted: true, status: "granted", mode: "unsupported" };
+      }
+
+      if (!this.audioTapManager?.isSupported()) {
+        return { granted: false, status: "unsupported", mode: "unsupported" };
+      }
+
+      const screenStatus = systemPreferences.getMediaAccessStatus("screen");
+      if (screenStatus === "granted") {
+        return { granted: true, status: "granted", mode: "native" };
+      }
+
+      // Probe the binary — AudioHardwareCreateProcessTap triggers the native consent dialog
+      try {
+        const result = await this.audioTapManager.requestAccess();
+        if (result.granted) {
+          return { granted: true, status: "granted", mode: "native" };
+        }
+      } catch {
+        // Falls through to opening System Settings
+      }
+
+      // Fallback for older macOS or if the native prompt was denied
+      await openSystemSettings("systemAudio");
+      return { granted: false, status: screenStatus, mode: "native" };
     });
 
     // Auth: clear all session cookies for sign-out.
@@ -2133,20 +2415,23 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("retry-transcription", async (event, id) => {
+    ipcMain.handle("retry-transcription", async (event, id, settings) => {
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       if (!buffer) return { success: false, error: "Audio file not found" };
       try {
         let result;
-        // Try local engines first
-        if (this.parakeetManager?.serverManager?.isAvailable?.()) {
-          result = await this.parakeetManager.transcribeLocalParakeet(buffer, {});
-        } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
-          result = await this.whisperManager.transcribeLocalWhisper(buffer, {});
-        }
 
-        // Fall back to cloud transcription
-        if (!result?.text) {
+        if (settings?.useLocalWhisper) {
+          if (settings.localTranscriptionProvider === "nvidia") {
+            const model =
+              settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
+            result = await this.parakeetManager.transcribeLocalParakeet(buffer, { model });
+          } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
+            result = await this.whisperManager.transcribeLocalWhisper(buffer, {
+              model: settings.whisperModel,
+            });
+          }
+        } else if (settings?.cloudTranscriptionMode === "openwhispr") {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
             const cookieHeader = await getSessionCookiesFromWindow(win);
@@ -2168,6 +2453,52 @@ class IPCHandlers {
               }
             }
           }
+        } else {
+          const provider = settings?.cloudTranscriptionProvider || "openai";
+          const model = this._resolveByokModel(provider, settings?.cloudTranscriptionModel);
+
+          let apiKey, endpoint;
+          if (provider === "groq") {
+            apiKey = this.environmentManager.getGroqKey();
+            endpoint = "https://api.groq.com/openai/v1/audio/transcriptions";
+          } else if (provider === "mistral") {
+            apiKey = this.environmentManager.getMistralKey();
+            endpoint = MISTRAL_TRANSCRIPTION_URL;
+          } else if (provider === "custom") {
+            apiKey = this.environmentManager.getCustomTranscriptionKey();
+            const base = (settings?.cloudTranscriptionBaseUrl || "").trim();
+            endpoint = base
+              ? /\/audio\/(transcriptions|translations)$/i.test(base)
+                ? base
+                : `${base}/audio/transcriptions`
+              : "https://api.openai.com/v1/audio/transcriptions";
+          } else {
+            apiKey = this.environmentManager.getOpenAIKey();
+            endpoint = "https://api.openai.com/v1/audio/transcriptions";
+          }
+          if (!apiKey && provider !== "custom") {
+            throw new Error(`${provider} API key not configured`);
+          }
+
+          const formData = new FormData();
+          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+          formData.append("model", model);
+          const headers = {};
+          if (provider === "mistral") {
+            headers["x-api-key"] = apiKey;
+          } else if (apiKey) {
+            headers.Authorization = `Bearer ${apiKey}`;
+          }
+
+          const response = await fetch(endpoint, { method: "POST", headers, body: formData });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
+          }
+          const data = await response.json();
+          if (data?.text) {
+            result = { text: data.text, source: provider, model };
+          }
         }
 
         if (!result?.text) {
@@ -2176,13 +2507,13 @@ class IPCHandlers {
 
         this.databaseManager.updateTranscriptionText(id, result.text, result.text);
         this.databaseManager.updateTranscriptionStatus(id, "completed");
-        const provider = result.source || "local";
-        const model = result.model || null;
+        const providerName = result.source || "local";
+        const modelName = result.model || null;
         this.databaseManager.updateTranscriptionAudio(id, {
           hasAudio: 1,
           audioDurationMs: null,
-          provider,
-          model,
+          provider: providerName,
+          model: modelName,
         });
         const updated = this.databaseManager.getTranscriptionById(id);
         if (updated) {
@@ -2205,25 +2536,49 @@ class IPCHandlers {
     let meetingTranscriptionPrepareInProgress = false;
     let meetingTranscriptionPreparePromise = null;
 
-    const attachMeetingStreamingHandlers = (streaming, win) => {
-      streaming.onPartialTranscript = (text) => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send("meeting-transcription-partial", text);
+    const attachMeetingStreamingHandlers = (streaming, win, source) => {
+      const send = (channel, data) => {
+        if (!win || win.isDestroyed()) {
+          debugLogger.error("Meeting segment send failed: window unavailable", {
+            channel,
+            source,
+            winExists: !!win,
+          });
+          return;
         }
+        win.webContents.send(channel, data);
       };
-      streaming.onFinalTranscript = (text) => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send("meeting-transcription-final", text);
-        }
+
+      streaming.onPartialTranscript = (text) => {
+        send("meeting-transcription-segment", { text, source, type: "partial" });
+      };
+      streaming.onFinalTranscript = (text, timestamp) => {
+        const segments = streaming.completedSegments;
+        const latestSegment = segments.length > 0 ? segments[segments.length - 1] : text;
+        debugLogger.debug("Meeting segment sending to renderer", {
+          source,
+          text: latestSegment.slice(0, 80),
+          segmentCount: segments.length,
+        });
+        send("meeting-transcription-segment", {
+          text: latestSegment,
+          source,
+          type: "final",
+          timestamp,
+        });
       };
       streaming.onError = (error) => {
-        if (win && !win.isDestroyed()) {
-          win.webContents.send("meeting-transcription-error", error.message);
-        }
+        send("meeting-transcription-error", error.message);
       };
     };
 
-    const fetchRealtimeToken = async (event, options) => {
+    const fetchRealtimeToken = async (event, options, { streams } = {}) => {
+      if (options.mode === "byok") {
+        const apiKey = this.environmentManager.getOpenAIKey();
+        if (!apiKey) throw new Error("No OpenAI API key configured. Add your key in Settings.");
+        return streams === 2 ? [apiKey, apiKey] : apiKey;
+      }
+
       const apiUrl = getApiUrl();
       if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
@@ -2233,7 +2588,11 @@ class IPCHandlers {
       const tokenResponse = await fetch(`${apiUrl}/api/openai-realtime-token`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Cookie: cookieHeader },
-        body: JSON.stringify({ model: options.model, language: options.language }),
+        body: JSON.stringify({
+          model: options.model,
+          language: options.language,
+          streams: streams || 1,
+        }),
       });
 
       if (!tokenResponse.ok) {
@@ -2241,40 +2600,135 @@ class IPCHandlers {
         throw new Error(err.error || `Token request failed: ${tokenResponse.status}`);
       }
 
-      const { clientSecret } = await tokenResponse.json();
-      if (!clientSecret) throw new Error("No client secret received");
-      return clientSecret;
+      const data = await tokenResponse.json();
+      if (streams === 2) {
+        if (!data.clientSecrets || data.clientSecrets.length < 2) {
+          throw new Error("Expected two client secrets for dual-stream");
+        }
+        return data.clientSecrets;
+      }
+      if (!data.clientSecret) throw new Error("No client secret received");
+      return data.clientSecret;
     };
 
+    const getMeetingSystemAudioMode = () =>
+      this.audioTapManager?.isSupported() ? "native" : "unsupported";
+
+    const hasNativeMeetingSystemAudio = () => getMeetingSystemAudioMode() === "native";
+
+    const isMeetingStreamingConnected = () =>
+      !!this._meetingMicStreaming?.isConnected &&
+      (!hasNativeMeetingSystemAudio() || !!this._meetingSystemStreaming?.isConnected);
+
     const connectRealtimeStreaming = async (event, options) => {
-      if (this.openaiRealtimeStreaming?.isConnected) {
-        await this.openaiRealtimeStreaming.disconnect();
+      if (this._meetingMicStreaming?.isConnected) {
+        await this._meetingMicStreaming.disconnect();
       }
-
-      const clientSecret = await fetchRealtimeToken(event, options);
-      this.openaiRealtimeStreaming = new OpenAIRealtimeStreaming();
-
+      if (this._meetingSystemStreaming?.isConnected) {
+        await this._meetingSystemStreaming.disconnect();
+      }
+      this._meetingMicStreaming = null;
+      this._meetingSystemStreaming = null;
       const win = BrowserWindow.fromWebContents(event.sender);
-      attachMeetingStreamingHandlers(this.openaiRealtimeStreaming, win);
 
-      await this.openaiRealtimeStreaming.connect({
-        apiKey: clientSecret,
+      const connectOpts = {
         model: options.model,
         language: options.language,
-      });
+        preconfigured: options.mode !== "byok",
+      };
+      let pairs;
+      if (hasNativeMeetingSystemAudio()) {
+        const secrets = await fetchRealtimeToken(event, options, { streams: 2 });
+        pairs = [
+          { ref: "_meetingMicStreaming", secret: secrets[0], source: "mic" },
+          { ref: "_meetingSystemStreaming", secret: secrets[1], source: "system" },
+        ];
+      } else {
+        pairs = [
+          {
+            ref: "_meetingMicStreaming",
+            secret: await fetchRealtimeToken(event, options),
+            source: "mic",
+          },
+        ];
+      }
+
+      for (const { ref, source } of pairs) {
+        this[ref] = new OpenAIRealtimeStreaming();
+        attachMeetingStreamingHandlers(this[ref], win, source);
+      }
+
+      await Promise.all(
+        pairs.map(({ ref, secret }) => this[ref].connect({ apiKey: secret, ...connectOpts }))
+      );
 
       return win;
     };
 
-    // Pre-warm: fetch token + connect WebSocket before user hits record
+    let meetingSendCounts = { mic: 0, system: 0 };
+
+    const resetMeetingStreamingState = () => {
+      this._meetingMicStreaming = null;
+      this._meetingSystemStreaming = null;
+      meetingSendCounts = { mic: 0, system: 0 };
+    };
+
+    const disconnectMeetingStreaming = async () => {
+      const results = await Promise.all([
+        this._meetingMicStreaming
+          ? this._meetingMicStreaming.disconnect().catch(() => ({ text: "" }))
+          : Promise.resolve({ text: "" }),
+        this._meetingSystemStreaming
+          ? this._meetingSystemStreaming.disconnect().catch(() => ({ text: "" }))
+          : Promise.resolve({ text: "" }),
+      ]);
+
+      resetMeetingStreamingState();
+      return results;
+    };
+
+    const rollbackMeetingTranscriptionStart = async () => {
+      if (this.audioTapManager) {
+        await this.audioTapManager.stop().catch(() => {});
+      }
+      await disconnectMeetingStreaming().catch(() => {});
+    };
+
+    const setupDictationCallbacks = (streaming, event) => {
+      streaming.onPartialTranscript = (text) =>
+        event.sender.send("dictation-realtime-partial", text);
+      streaming.onFinalTranscript = (text) => event.sender.send("dictation-realtime-final", text);
+      streaming.onError = (err) => event.sender.send("dictation-realtime-error", err.message);
+      streaming.onSessionEnd = (data) =>
+        event.sender.send("dictation-realtime-session-end", data || {});
+    };
+
+    const connectDictationStreaming = async (event, options) => {
+      if (this._dictationStreaming) {
+        await this._dictationStreaming.disconnect().catch(() => {});
+        this._dictationStreaming = null;
+      }
+      const isCloud = options.mode !== "byok";
+      const apiKey = await fetchRealtimeToken(event, { mode: options.mode });
+      const streaming = new OpenAIRealtimeStreaming();
+      setupDictationCallbacks(streaming, event);
+      await streaming.connect({
+        apiKey,
+        model: options.model || "gpt-4o-mini-transcribe",
+        preconfigured: isCloud,
+      });
+      this._dictationStreaming = streaming;
+    };
+
+    // Pre-warm: fetch tokens + connect WebSockets before user hits record
     ipcMain.handle("meeting-transcription-prepare", async (event, options = {}) => {
       if (meetingTranscriptionPrepareInProgress || meetingTranscriptionStartInProgress) {
         debugLogger.debug("Meeting transcription prepare already in progress, ignoring");
         return { success: false, error: "Operation in progress" };
       }
 
-      if (this.openaiRealtimeStreaming?.isConnected) {
-        debugLogger.debug("Meeting transcription already prepared (warm connection)");
+      if (isMeetingStreamingConnected()) {
+        debugLogger.debug("Meeting transcription already prepared (warm connections)");
         return { success: true, alreadyPrepared: true };
       }
 
@@ -2286,7 +2740,7 @@ class IPCHandlers {
       meetingTranscriptionPreparePromise = (async () => {
         try {
           await connectRealtimeStreaming(event, options);
-          debugLogger.debug("Meeting transcription prepared (WebSocket warm)");
+          debugLogger.debug("Meeting transcription prepared (meeting streams warm)");
           return { success: true };
         } catch (error) {
           debugLogger.error("Meeting transcription prepare error", { error: error.message });
@@ -2314,12 +2768,18 @@ class IPCHandlers {
 
       meetingTranscriptionStartInProgress = true;
       try {
-        // If already prepared (warm connection from prepare), just re-attach handlers
-        if (this.openaiRealtimeStreaming?.isConnected) {
-          debugLogger.debug("Meeting transcription start: reusing warm connection");
+        const systemAudioMode = getMeetingSystemAudioMode();
+
+        // If already prepared (warm connections from prepare), just re-attach handlers
+        if (isMeetingStreamingConnected()) {
+          debugLogger.debug("Meeting transcription start: reusing warm connections");
           const win = BrowserWindow.fromWebContents(event.sender);
-          attachMeetingStreamingHandlers(this.openaiRealtimeStreaming, win);
-          return { success: true };
+          attachMeetingStreamingHandlers(this._meetingMicStreaming, win, "mic");
+          if (systemAudioMode === "native") {
+            attachMeetingStreamingHandlers(this._meetingSystemStreaming, win, "system");
+            await startNativeMeetingSystemAudio(event);
+          }
+          return { success: true, systemAudioMode };
         }
 
         if (options.provider !== "openai-realtime") {
@@ -2327,8 +2787,12 @@ class IPCHandlers {
         }
 
         await connectRealtimeStreaming(event, options);
-        return { success: true };
+        if (systemAudioMode === "native") {
+          await startNativeMeetingSystemAudio(event);
+        }
+        return { success: true, systemAudioMode };
       } catch (error) {
+        await rollbackMeetingTranscriptionStart();
         debugLogger.error("Meeting transcription start error", { error: error.message });
         return { success: false, error: error.message };
       } finally {
@@ -2336,23 +2800,94 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.on("meeting-transcription-send", (_event, audioBuffer) => {
-      if (!this.openaiRealtimeStreaming) return;
-      this.openaiRealtimeStreaming.sendAudio(Buffer.from(audioBuffer));
+    const sendMeetingAudio = (audioBuffer, source) => {
+      const streaming = source === "mic" ? this._meetingMicStreaming : this._meetingSystemStreaming;
+      if (!streaming) {
+        if (meetingSendCounts[source] === 0) {
+          debugLogger.error("Meeting audio send: no streaming instance", { source });
+        }
+        return;
+      }
+      const buf = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      const sent = streaming.sendAudio(buf);
+      meetingSendCounts[source]++;
+      if (meetingSendCounts[source] <= 5 || meetingSendCounts[source] % 100 === 0) {
+        debugLogger.debug("Meeting audio send", {
+          source,
+          bytes: buf.length,
+          sent,
+          wsReady: streaming.ws?.readyState,
+          totalSent: streaming.audioBytesSent,
+          count: meetingSendCounts[source],
+        });
+      }
+    };
+
+    const startNativeMeetingSystemAudio = async (event) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      await this.audioTapManager.start({
+        onChunk: (chunk) => {
+          sendMeetingAudio(chunk, "system");
+        },
+        onError: (error) => {
+          if (win && !win.isDestroyed()) {
+            win.webContents.send("meeting-transcription-error", error.message);
+          }
+        },
+      });
+    };
+
+    ipcMain.on("meeting-transcription-send", (_event, audioBuffer, source) => {
+      sendMeetingAudio(audioBuffer, source);
     });
 
     ipcMain.handle("meeting-transcription-stop", async () => {
       try {
-        let result = { text: "" };
-        if (this.openaiRealtimeStreaming) {
-          result = await this.openaiRealtimeStreaming.disconnect();
-          this.openaiRealtimeStreaming = null;
+        if (this.audioTapManager) {
+          await this.audioTapManager.stop();
         }
-        return { success: true, transcript: result?.text || "" };
+
+        const results = await disconnectMeetingStreaming();
+
+        return {
+          success: true,
+          transcript: [results[0]?.text, results[1]?.text].filter(Boolean).join(" "),
+        };
       } catch (error) {
         debugLogger.error("Meeting transcription stop error", { error: error.message });
         return { success: false, error: error.message };
       }
+    });
+
+    ipcMain.handle("dictation-realtime-warmup", async (event, options = {}) => {
+      try {
+        await connectDictationStreaming(event, options);
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
+      try {
+        if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.on("dictation-realtime-send", (_event, buffer) => {
+      this._dictationStreaming?.sendAudio(Buffer.from(buffer));
+    });
+
+    ipcMain.handle("dictation-realtime-stop", async () => {
+      if (!this._dictationStreaming) {
+        return { success: true, text: "" };
+      }
+      const result = await this._dictationStreaming.disconnect().catch(() => ({ text: "" }));
+      this._dictationStreaming = null;
+      return { success: true, text: result.text || "" };
     });
 
     ipcMain.handle("update-transcription-text", async (_event, id, text, rawText) => {
@@ -2627,18 +3162,71 @@ class IPCHandlers {
       }
     };
 
-    ipcMain.handle("cloud-checkout", (event, plan) =>
-      fetchStripeUrl(
-        event,
-        "/api/stripe/checkout",
-        "Cloud checkout error",
-        plan ? { plan } : undefined
-      )
+    ipcMain.handle("cloud-checkout", (event, opts) =>
+      fetchStripeUrl(event, "/api/stripe/checkout", "Cloud checkout error", opts || undefined)
     );
 
     ipcMain.handle("cloud-billing-portal", (event) =>
       fetchStripeUrl(event, "/api/stripe/portal", "Cloud billing portal error")
     );
+
+    ipcMain.handle("cloud-switch-plan", async (event, opts) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        const response = await fetch(`${apiUrl}/api/stripe/switch-plan`, {
+          method: "POST",
+          headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
+          body: JSON.stringify(opts),
+        });
+
+        if (response.status === 401) {
+          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+          return { success: false, error: data.error || "Failed to switch plan" };
+        }
+        return data;
+      } catch (error) {
+        debugLogger.error(`Cloud switch plan error: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("cloud-preview-switch", async (event, opts) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        const response = await fetch(`${apiUrl}/api/stripe/preview-switch`, {
+          method: "POST",
+          headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
+          body: JSON.stringify(opts),
+        });
+
+        if (response.status === 401) {
+          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+        }
+
+        const data = await response.json();
+        if (!response.ok) {
+          return { success: false, error: data.error || "Failed to preview plan change" };
+        }
+        return { success: true, ...data };
+      } catch (error) {
+        debugLogger.error(`Cloud preview switch error: ${error.message}`);
+        return { success: false, error: error.message };
+      }
+    });
 
     ipcMain.handle("get-stt-config", async (event) => {
       try {
@@ -3016,7 +3604,22 @@ class IPCHandlers {
 
     ipcMain.handle("get-ydotool-status", () => {
       const { getYdotoolStatus } = require("./ensureYdotool");
-      return getYdotoolStatus();
+      const { execFileSync } = require("child_process");
+      const status = getYdotoolStatus();
+      const isKde = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase().includes("kde");
+      let hasXclip = false;
+      let hasXsel = false;
+      if (isKde) {
+        try {
+          execFileSync("which", ["xclip"], { timeout: 1000 });
+          hasXclip = true;
+        } catch {}
+        try {
+          execFileSync("which", ["xsel"], { timeout: 1000 });
+          hasXsel = true;
+        } catch {}
+      }
+      return { ...status, isKde, hasXclip, hasXsel };
     });
 
     ipcMain.handle("get-debug-state", async () => {
@@ -3611,7 +4214,23 @@ class IPCHandlers {
       if (!agentCallback) {
         return { success: false, message: "Agent hotkey callback not initialized" };
       }
-      return hotkeyManager.registerSlot("agent", hotkey, agentCallback);
+
+      if (!hotkey) {
+        hotkeyManager.unregisterSlot("agent");
+        this.environmentManager.saveAgentKey?.("");
+        return { success: true, message: "Agent hotkey cleared" };
+      }
+
+      const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback);
+      if (result.success) {
+        this.environmentManager.saveAgentKey?.(hotkey);
+        return { success: true, message: `Agent hotkey updated to: ${hotkey}` };
+      }
+
+      return {
+        success: false,
+        message: result.error || `Failed to update agent hotkey to: ${hotkey}`,
+      };
     });
 
     ipcMain.handle("get-agent-key", async () => {
@@ -3769,15 +4388,28 @@ class IPCHandlers {
       return this.windowManager?._pendingNotificationData ?? null;
     });
 
-    ipcMain.handle("get-desktop-sources", async (_event, types) => {
-      try {
-        const { desktopCapturer } = require("electron");
-        const sources = await desktopCapturer.getSources({ types: types || ["screen"] });
-        return sources.map((s) => ({ id: s.id, name: s.name }));
-      } catch (error) {
-        debugLogger.error("Failed to get desktop sources", { error: error.message }, "calendar");
-        return [];
+    ipcMain.handle("meeting-notification-ready", async () => {
+      this.windowManager?.showNotificationWindow();
+    });
+
+    ipcMain.handle("get-update-notification-data", async () => {
+      return this.windowManager?._pendingUpdateNotificationData ?? null;
+    });
+
+    ipcMain.handle("update-notification-ready", async () => {
+      this.windowManager?.showUpdateNotificationWindow();
+    });
+
+    ipcMain.handle("update-notification-respond", async (_event, action) => {
+      this.windowManager?.dismissUpdateNotification();
+      if (action === "update") {
+        try {
+          await this.updateManager?.downloadUpdate();
+        } catch (error) {
+          console.error("Failed to start update download from notification:", error);
+        }
       }
+      return { success: true };
     });
   }
 

@@ -44,4 +44,46 @@ function detectNvidiaGpu() {
   });
 }
 
-module.exports = { detectNvidiaGpu };
+let cachedGpuList = null;
+
+function listNvidiaGpus() {
+  if (cachedGpuList) return Promise.resolve(cachedGpuList);
+
+  if (process.platform === "darwin") {
+    cachedGpuList = [];
+    return Promise.resolve(cachedGpuList);
+  }
+
+  return new Promise((resolve) => {
+    execFile(
+      "nvidia-smi",
+      ["--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits"],
+      { timeout: 5000 },
+      (error, stdout) => {
+        if (error || !stdout) {
+          cachedGpuList = [];
+          resolve(cachedGpuList);
+          return;
+        }
+
+        const gpus = stdout
+          .trim()
+          .split("\n")
+          .map((line) => {
+            const parts = line.split(",").map((s) => s.trim());
+            return {
+              index: parseInt(parts[0], 10),
+              name: parts[1] || "Unknown GPU",
+              vramMb: parseInt(parts[2], 10) || 0,
+            };
+          })
+          .filter((g) => !isNaN(g.index));
+
+        if (gpus.length > 0) cachedGpuList = gpus;
+        resolve(gpus);
+      }
+    );
+  });
+}
+
+module.exports = { detectNvidiaGpu, listNvidiaGpus };

@@ -167,40 +167,60 @@
       "name": "OpenAI",
       "models": [
         {
+          "id": "gpt-5.4",
+          "name": "GPT-5.4",
+          "description": "Frontier model for complex reasoning",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_4",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
           "id": "gpt-5.2",
           "name": "GPT-5.2",
-          "description": "Latest flagship reasoning model",
-          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_2"
+          "description": "Strong reasoning model",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_2",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
         },
         {
           "id": "gpt-5-mini",
           "name": "GPT-5 Mini",
           "description": "Fast and cost-efficient",
-          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_mini"
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_mini",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
         },
         {
           "id": "gpt-5-nano",
           "name": "GPT-5 Nano",
           "description": "Ultra-fast, low latency",
-          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_nano"
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_nano",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
         },
         {
           "id": "gpt-4.1",
           "name": "GPT-4.1",
           "description": "Strong baseline, 1M context",
-          "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1"
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": true
         },
         {
           "id": "gpt-4.1-mini",
           "name": "GPT-4.1 Mini",
           "description": "Smaller GPT-4.1 model",
-          "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_mini"
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_mini",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": true
         },
         {
           "id": "gpt-4.1-nano",
           "name": "GPT-4.1 Nano",
           "description": "Lowest latency GPT-4.1",
-          "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_nano"
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_4_1_nano",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": true
         }
       ]
     },
@@ -322,6 +342,43 @@
       "promptTemplate": "<|im_start|>system\n{system}<|im_end|>\n<|im_start|>user\n{user}<|im_end|>\n<|im_start|>assistant\n",
       "models": [
         {
+          "id": "qwen3.5-9b-q4_k_m",
+          "name": "Qwen3.5 9B",
+          "size": "5.5GB",
+          "sizeBytes": 5889811552,
+          "description": "Powerful hybrid model",
+          "fileName": "Qwen_Qwen3.5-9B-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "bartowski/Qwen_Qwen3.5-9B-GGUF",
+          "recommended": true,
+          "descriptionKey": "models.descriptions.local.qwen_qwen3_5_9b_q4_k_m"
+        },
+        {
+          "id": "qwen3.5-4b-q4_k_m",
+          "name": "Qwen3.5 4B",
+          "size": "2.7GB",
+          "sizeBytes": 2871743520,
+          "description": "Balanced Qwen3.5 for general use",
+          "fileName": "Qwen_Qwen3.5-4B-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+          "descriptionKey": "models.descriptions.local.qwen_qwen3_5_4b_q4_k_m"
+        },
+        {
+          "id": "qwen3.5-2b-q4_k_m",
+          "name": "Qwen3.5 2B",
+          "size": "1.3GB",
+          "sizeBytes": 1329766560,
+          "description": "Small Qwen3.5 for quick tasks",
+          "fileName": "Qwen_Qwen3.5-2B-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 262144,
+          "hfRepo": "bartowski/Qwen_Qwen3.5-2B-GGUF",
+          "descriptionKey": "models.descriptions.local.qwen_qwen3_5_2b_q4_k_m"
+        },
+        {
           "id": "qwen3-8b-q4_k_m",
           "name": "Qwen3 8B",
           "size": "5.0GB",
@@ -331,7 +388,6 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-8B-GGUF",
-          "recommended": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8b_q4_k_m"
         },
         {
@@ -371,18 +427,6 @@
           "descriptionKey": "models.descriptions.local.qwen_qwen3_1_7b_q8_0"
         },
         {
-          "id": "qwen3-0.6b-q8_0",
-          "name": "Qwen3 0.6B",
-          "size": "0.6GB",
-          "sizeBytes": 686817280,
-          "description": "Tiny Qwen3 for edge devices",
-          "fileName": "Qwen3-0.6B-Q8_0.gguf",
-          "quantization": "q8_0",
-          "contextLength": 131072,
-          "hfRepo": "Qwen/Qwen3-0.6B-GGUF",
-          "descriptionKey": "models.descriptions.local.qwen_qwen3_0_6b_q8_0"
-        },
-        {
           "id": "qwen3-32b-q4_k_m",
           "name": "Qwen3 32B",
           "size": "19.8GB",
@@ -393,18 +437,6 @@
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-32B-GGUF",
           "descriptionKey": "models.descriptions.local.qwen_qwen3_32b_q4_k_m"
-        },
-        {
-          "id": "qwen2.5-0.5b-instruct-q5_k_m",
-          "name": "Qwen2.5 0.5B",
-          "size": "0.5GB",
-          "sizeBytes": 548405248,
-          "description": "Smallest model, fast but limited capabilities",
-          "fileName": "qwen2.5-0.5b-instruct-q5_k_m.gguf",
-          "quantization": "q5_k_m",
-          "contextLength": 32768,
-          "hfRepo": "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
-          "descriptionKey": "models.descriptions.local.qwen_qwen2_5_0_5b_instruct_q5_k_m"
         },
         {
           "id": "qwen2.5-1.5b-instruct-q5_k_m",
@@ -463,6 +495,19 @@
       "promptTemplate": "[INST] {system}\n\n{user} [/INST]",
       "models": [
         {
+          "id": "mistral-nemo-12b-instruct-q4_k_m",
+          "name": "Mistral Nemo 12B",
+          "size": "7.5GB",
+          "sizeBytes": 8028321792,
+          "description": "Mistral's 12B model, strong multilingual performance",
+          "fileName": "Mistral-Nemo-12B-Instruct.Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 131072,
+          "hfRepo": "mradermacher/Mistral-Nemo-12B-Instruct-GGUF",
+          "recommended": true,
+          "descriptionKey": "models.descriptions.local.mistral_nemo_12b_instruct_q4_k_m"
+        },
+        {
           "id": "mistral-7b-instruct-v0.3-q4_k_m",
           "name": "Mistral 7B Instruct v0.3",
           "size": "4.4GB",
@@ -472,7 +517,6 @@
           "quantization": "q4_k_m",
           "contextLength": 32768,
           "hfRepo": "bartowski/Mistral-7B-Instruct-v0.3-GGUF",
-          "recommended": true,
           "descriptionKey": "models.descriptions.local.mistral_mistral_7b_instruct_v0_3_q4_k_m"
         },
         {
@@ -562,6 +606,19 @@
       "promptTemplate": "<bos><start_of_turn>user\n{system}\n\n{user}<end_of_turn>\n<start_of_turn>model\n",
       "models": [
         {
+          "id": "gemma-3-12b-it-q4_k_m",
+          "name": "Gemma 3 12B",
+          "size": "7.3GB",
+          "sizeBytes": 7847624704,
+          "description": "Google's mid-range model, strong reasoning",
+          "fileName": "google_gemma-3-12b-it-Q4_K_M.gguf",
+          "quantization": "q4_k_m",
+          "contextLength": 131072,
+          "hfRepo": "bartowski/google_gemma-3-12b-it-GGUF",
+          "recommended": true,
+          "descriptionKey": "models.descriptions.local.gemma_gemma_3_12b_it_q4_k_m"
+        },
+        {
           "id": "gemma-3-4b-it-q4_k_m",
           "name": "Gemma 3 4B",
           "size": "2.49GB",
@@ -571,7 +628,6 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "bartowski/google_gemma-3-4b-it-GGUF",
-          "recommended": true,
           "descriptionKey": "models.descriptions.local.gemma_gemma_3_4b_it_q4_k_m"
         },
         {

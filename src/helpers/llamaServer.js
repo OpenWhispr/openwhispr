@@ -215,6 +215,10 @@ class LlamaServerManager {
       env.PATH = binDir + (env.PATH ? `;${env.PATH}` : "");
     }
 
+    if (process.env.INTELLIGENCE_GPU_INDEX) {
+      env.CUDA_VISIBLE_DEVICES = process.env.INTELLIGENCE_GPU_INDEX;
+    }
+
     return env;
   }
 

@@ -6,7 +6,7 @@ import { Badge } from "./ui/badge";
 import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
 import { ConfirmDialog } from "./ui/dialog";
 import { useSettingsStore } from "../stores/settingsStore";
-import { useScreenRecordingPermission } from "../hooks/useScreenRecordingPermission";
+import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import googleCalendarIcon from "../assets/icons/google-calendar.svg";
 
 export default function IntegrationsView() {
@@ -16,7 +16,7 @@ export default function IntegrationsView() {
   const [disconnectingEmail, setDisconnectingEmail] = useState<string | null>(null);
   const [confirmDisconnectEmail, setConfirmDisconnectEmail] = useState<string | null>(null);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
-  const screenRecording = useScreenRecordingPermission();
+  const systemAudio = useSystemAudioPermission();
   const hasAccounts = gcalAccounts.length > 0;
 
   const startOAuth = useCallback(async () => {
@@ -36,12 +36,12 @@ export default function IntegrationsView() {
   }, [setGcalAccounts]);
 
   const handleConnect = useCallback(async () => {
-    if (screenRecording.isMacOS && !screenRecording.granted) {
+    if (systemAudio.isMacOS && systemAudio.status === "denied") {
       setShowPermissionDialog(true);
       return;
     }
     await startOAuth();
-  }, [screenRecording.isMacOS, screenRecording.granted, startOAuth]);
+  }, [systemAudio.isMacOS, systemAudio.status, startOAuth]);
 
   const handleDisconnect = useCallback(
     async (email: string) => {
@@ -213,10 +213,10 @@ export default function IntegrationsView() {
       <ConfirmDialog
         open={showPermissionDialog}
         onOpenChange={setShowPermissionDialog}
-        title={t("integrations.googleCalendar.screenRecordingRequired")}
-        description={t("integrations.googleCalendar.screenRecordingDescription")}
+        title={t("integrations.googleCalendar.systemAudioRequired")}
+        description={t("integrations.googleCalendar.systemAudioDescription")}
         confirmText={t("integrations.googleCalendar.openSettings")}
-        onConfirm={screenRecording.openSettings}
+        onConfirm={systemAudio.openSettings}
       />
     </div>
   );

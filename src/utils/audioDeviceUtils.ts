@@ -30,6 +30,8 @@ export function isBuiltInMicrophone(label: string): boolean {
       "external",
       "headset",
       "webcam",
+      "iphone",
+      "ipad",
     ];
     return !externalIndicators.some((indicator) => lowerLabel.includes(indicator));
   }

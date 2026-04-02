@@ -1,15 +1,10 @@
-import { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Download,
-  Loader2,
-  FileText,
-  Sparkles,
-  AlignLeft,
-  Radio,
-  MessageSquareText,
-} from "lucide-react";
-import { MarkdownTextarea } from "../ui/MarkdownTextarea";
+import { Download, Loader2, FileText, Sparkles, AlignLeft, MessageSquareText } from "lucide-react";
+import { RichTextEditor } from "../ui/RichTextEditor";
+import type { Editor } from "@tiptap/react";
+import { MeetingTranscriptChat } from "./MeetingTranscriptChat";
+import type { TranscriptSegment } from "../../hooks/useMeetingTranscription";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -22,7 +17,7 @@ import type { ActionProcessingState } from "../../hooks/useActionProcessing";
 import ActionProcessingOverlay from "./ActionProcessingOverlay";
 import DictationWidget from "./DictationWidget";
 import { normalizeDbDate } from "../../utils/dateFormatting";
-import { useSettingsStore } from "../../stores/settingsStore";
+import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 
 function formatNoteDate(dateStr: string): string {
   const date = normalizeDbDate(dateStr);
@@ -50,11 +45,6 @@ interface NoteEditorProps {
   onContentChange: (content: string) => void;
   isSaving: boolean;
   isRecording: boolean;
-  partialTranscript: string;
-  finalTranscript: string | null;
-  onFinalTranscriptConsumed: () => void;
-  streamingCommit: string | null;
-  onStreamingCommitConsumed: () => void;
   isProcessing: boolean;
   onStartRecording: () => void;
   onStopRecording: () => void;
@@ -65,79 +55,11 @@ interface NoteEditorProps {
   actionName?: string | null;
   isMeetingRecording?: boolean;
   meetingTranscript?: string;
+  meetingSegments?: TranscriptSegment[];
+  meetingMicPartial?: string;
+  meetingSystemPartial?: string;
   onStopMeetingRecording?: () => void;
-  onGenerateNotes?: () => void;
-}
-
-interface DictationRange {
-  start: number;
-  partialStart: number;
-  end: number;
-  committedChars: number;
-}
-
-interface TextSelectionRange {
-  start: number;
-  end: number;
-}
-
-interface PendingSelectionRestore extends TextSelectionRange {
-  version: number;
-}
-
-function transformSelectionForReplacement(
-  selection: TextSelectionRange,
-  replaceStart: number,
-  replaceEnd: number,
-  insertLength: number
-): TextSelectionRange {
-  const replacementEnd = replaceStart + insertLength;
-
-  const overlapsReplacement =
-    selection.start === selection.end
-      ? selection.start >= replaceStart && selection.start <= replaceEnd
-      : selection.start < replaceEnd && selection.end > replaceStart;
-
-  if (overlapsReplacement) {
-    return { start: replacementEnd, end: replacementEnd };
-  }
-
-  const delta = insertLength - (replaceEnd - replaceStart);
-  const shift = (index: number) => {
-    if (index > replaceEnd) return index + delta;
-    if (index === replaceEnd) return replacementEnd;
-    return index;
-  };
-
-  return {
-    start: shift(selection.start),
-    end: shift(selection.end),
-  };
-}
-
-function mapIndexThroughUserEdit(
-  index: number,
-  editStart: number,
-  editEnd: number,
-  insertLength: number
-): number {
-  const delta = insertLength - (editEnd - editStart);
-
-  if (editStart === editEnd) {
-    return index < editStart ? index : index + delta;
-  }
-
-  if (index < editStart) return index;
-  if (index > editEnd) return index + delta;
-  return editStart + insertLength;
-}
-
-function mapIndexAfterRangeRemoval(index: number, removeStart: number, removeEnd: number): number {
-  const removedLength = removeEnd - removeStart;
-
-  if (index < removeStart) return index;
-  if (index > removeEnd) return index - removedLength;
-  return removeStart;
+  liveTranscript?: string;
 }
 
 export default function NoteEditor({
@@ -147,11 +69,6 @@ export default function NoteEditor({
   isSaving,
   isRecording,
   isProcessing,
-  partialTranscript,
-  finalTranscript,
-  onFinalTranscriptConsumed,
-  streamingCommit,
-  onStreamingCommitConsumed,
   onStartRecording,
   onStopRecording,
   onExportNote,
@@ -161,212 +78,30 @@ export default function NoteEditor({
   actionName,
   isMeetingRecording,
   meetingTranscript,
+  meetingSegments,
+  meetingMicPartial,
+  meetingSystemPartial,
   onStopMeetingRecording,
-  onGenerateNotes,
+  liveTranscript,
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<MeetingViewMode>("raw");
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<Editor | null>(null);
   const titleRef = useRef<HTMLDivElement>(null);
   const prevNoteIdRef = useRef<number>(note.id);
-
-  const isSignedIn = useSettingsStore((s) => s.isSignedIn);
-  const cloudMode = useSettingsStore((s) => s.cloudTranscriptionMode);
-  const useLocalWhisper = useSettingsStore((s) => s.useLocalWhisper);
-  const canStream = isSignedIn && cloudMode === "openwhispr" && !useLocalWhisper;
-
-  const [liveMode, setLiveMode] = useState(() => {
-    const pref = localStorage.getItem("notesStreamingPreference");
-    return pref === "streaming";
-  });
-
-  const handleLiveToggle = useCallback(() => {
-    setLiveMode((prev) => {
-      const next = !prev;
-      localStorage.setItem("notesStreamingPreference", next ? "streaming" : "batch");
-      return next;
-    });
-  }, []);
-
-  const cursorPosRef = useRef(0);
-  const selectionEndRef = useRef(0);
-  const dictationRef = useRef<DictationRange | null>(null);
-  const prevRecordingRef = useRef(false);
-  const expectedSelectionRef = useRef<TextSelectionRange>({ start: 0, end: 0 });
-  const selectionVersionRef = useRef(0);
-  const pendingSelectionRestoreRef = useRef<PendingSelectionRestore | null>(null);
-  const suppressSelectionCaptureRef = useRef(false);
-  const beforeInputSelectionRef = useRef<TextSelectionRange | null>(null);
-  const contentRef = useRef(note.content);
-  contentRef.current = note.content;
-
-  const syncSelectionRefs = useCallback((start: number, end: number) => {
-    cursorPosRef.current = start;
-    selectionEndRef.current = end;
-    expectedSelectionRef.current = { start, end };
-  }, []);
-
-  const queueSelectionRestore = useCallback(
-    (start: number, end: number, version = selectionVersionRef.current) => {
-      syncSelectionRefs(start, end);
-      pendingSelectionRestoreRef.current = { start, end, version };
-    },
-    [syncSelectionRefs]
-  );
-
-  const applyProgrammaticSelection = useCallback(
-    (start: number, end: number) => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      suppressSelectionCaptureRef.current = true;
-      ta.setSelectionRange(start, end);
-      queueMicrotask(() => {
-        suppressSelectionCaptureRef.current = false;
-      });
-      syncSelectionRefs(start, end);
-    },
-    [syncSelectionRefs]
-  );
-
-  const commitContentChange = useCallback(
-    (newContent: string, nextSelection?: TextSelectionRange, selectionVersion?: number) => {
-      if (nextSelection) {
-        queueSelectionRestore(nextSelection.start, nextSelection.end, selectionVersion);
-      }
-      contentRef.current = newContent;
-      onContentChange(newContent);
-    },
-    [onContentChange, queueSelectionRestore]
-  );
-
-  const replaceContentRange = useCallback(
-    (replaceStart: number, replaceEnd: number, insertText: string) => {
-      const currentContent = contentRef.current;
-      const before = currentContent.slice(0, replaceStart);
-      const after = currentContent.slice(replaceEnd);
-      const newContent = before + insertText + after;
-      const selectionBefore = expectedSelectionRef.current;
-      const selectionVersion = selectionVersionRef.current;
-      const nextSelection = transformSelectionForReplacement(
-        selectionBefore,
-        replaceStart,
-        replaceEnd,
-        insertText.length
-      );
-
-      commitContentChange(newContent, nextSelection, selectionVersion);
-      return newContent;
-    },
-    [commitContentChange]
-  );
-
-  const reanchorDictationToSelection = useCallback(
-    (anchorStart: number, anchorEnd: number, selectionVersion: number) => {
-      const range = dictationRef.current;
-      if (!range) return;
-
-      if (range.partialStart === range.end) {
-        range.start = anchorStart;
-        range.partialStart = anchorStart;
-        range.end = anchorEnd;
-        return;
-      }
-
-      const currentContent = contentRef.current;
-      const partialText = currentContent.slice(range.partialStart, range.end);
-
-      if (!partialText) {
-        range.start = anchorStart;
-        range.partialStart = anchorStart;
-        range.end = anchorEnd;
-        return;
-      }
-
-      const withoutPartial =
-        currentContent.slice(0, range.partialStart) + currentContent.slice(range.end);
-      const targetStart = mapIndexAfterRangeRemoval(anchorStart, range.partialStart, range.end);
-      const targetEnd = mapIndexAfterRangeRemoval(anchorEnd, range.partialStart, range.end);
-      const newContent =
-        withoutPartial.slice(0, targetStart) + partialText + withoutPartial.slice(targetEnd);
-
-      const newPartialStart = targetStart;
-      const newEnd = newPartialStart + partialText.length;
-
-      range.start = newPartialStart;
-      range.partialStart = newPartialStart;
-      range.end = newEnd;
-
-      commitContentChange(newContent, { start: newEnd, end: newEnd }, selectionVersion);
-    },
-    [commitContentChange]
-  );
-
-  const captureUserSelection = useCallback(
-    (start: number, end: number) => {
-      const prev = expectedSelectionRef.current;
-      const changed = prev.start !== start || prev.end !== end;
-
-      syncSelectionRefs(start, end);
-
-      if (!changed) return;
-
-      selectionVersionRef.current += 1;
-
-      if (dictationRef.current) {
-        reanchorDictationToSelection(start, end, selectionVersionRef.current);
-      }
-    },
-    [reanchorDictationToSelection, syncSelectionRefs]
-  );
-
-  useLayoutEffect(() => {
-    const pending = pendingSelectionRestoreRef.current;
-    if (!pending) return;
-    pendingSelectionRestoreRef.current = null;
-    if (pending.version !== selectionVersionRef.current) return;
-    applyProgrammaticSelection(pending.start, pending.end);
-  }, [note.content, applyProgrammaticSelection]);
-
-  // Capture selection before browser applies user edits so dictation range
-  // adjustments handle replacements/paste correctly.
-  useEffect(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const handler = () => {
-      if (suppressSelectionCaptureRef.current) return;
-      beforeInputSelectionRef.current = {
-        start: ta.selectionStart,
-        end: ta.selectionEnd,
-      };
-    };
-    ta.addEventListener("beforeinput", handler);
-    return () => {
-      ta.removeEventListener("beforeinput", handler);
-    };
-  }, [viewMode]);
-
-  // Capture cursor on mouse interaction — click for positioning,
-  // mouseup for drag-selections (click may not fire if drag distance is large)
-  useEffect(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const handler = () => {
-      if (suppressSelectionCaptureRef.current) return;
-      captureUserSelection(ta.selectionStart, ta.selectionEnd);
-    };
-    ta.addEventListener("click", handler);
-    ta.addEventListener("mouseup", handler);
-    return () => {
-      ta.removeEventListener("click", handler);
-      ta.removeEventListener("mouseup", handler);
-    };
-  }, [captureUserSelection, viewMode]);
 
   const segmentContainerRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ opacity: 0 });
 
-  const effectiveTranscript = meetingTranscript || note.transcript || "";
+  const effectiveTranscript = liveTranscript || meetingTranscript || note.transcript || "";
   const hasMeetingTranscript = !isMeetingRecording && !!effectiveTranscript;
+
+  const displaySegments = useMemo<TranscriptSegment[]>(() => {
+    if (meetingSegments && meetingSegments.length > 0) return meetingSegments;
+    return parseTranscriptSegments(note.transcript || "");
+  }, [meetingSegments, note.transcript]);
+
+  const hasChatSegments = displaySegments.length > 0;
 
   const updateSegmentIndicator = useCallback(() => {
     const container = segmentContainerRef.current;
@@ -407,20 +142,15 @@ export default function NoteEditor({
   useEffect(() => {
     if (note.id !== prevNoteIdRef.current) {
       prevNoteIdRef.current = note.id;
-      setViewMode("raw");
+      if (!isMeetingRecording) {
+        setViewMode("raw");
+      }
       if (titleRef.current && titleRef.current.textContent !== note.title) {
         titleRef.current.textContent = note.title || "";
       }
-      textareaRef.current?.focus();
-      if (textareaRef.current) {
-        const start = textareaRef.current.selectionStart;
-        const end = textareaRef.current.selectionEnd;
-        syncSelectionRefs(start, end);
-      }
-      pendingSelectionRestoreRef.current = null;
-      beforeInputSelectionRef.current = null;
+      editorRef.current?.commands.focus();
     }
-  }, [note.id, syncSelectionRefs]);
+  }, [note.id, isMeetingRecording]);
 
   useEffect(() => {
     if (titleRef.current && titleRef.current.textContent !== note.title) {
@@ -438,7 +168,7 @@ export default function NoteEditor({
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      textareaRef.current?.focus();
+      editorRef.current?.commands.focus();
     }
   }, []);
 
@@ -448,181 +178,34 @@ export default function NoteEditor({
     document.execCommand("insertText", false, text);
   }, []);
 
-  const handleStartRecording = useCallback(() => {
-    if (textareaRef.current) {
-      syncSelectionRefs(textareaRef.current.selectionStart, textareaRef.current.selectionEnd);
-    }
-    onStartRecording();
-  }, [onStartRecording, syncSelectionRefs]);
+  // Auto-switch to transcript view after recording stops and transcript is ready
+  const prevRecordingRef = useRef(false);
+  const pendingTranscriptSwitchRef = useRef(false);
 
   useEffect(() => {
     if (isRecording && !prevRecordingRef.current) {
-      const selStart = cursorPosRef.current;
-      const selEnd = selectionEndRef.current;
-      dictationRef.current = {
-        start: selStart,
-        partialStart: selStart,
-        end: selEnd,
-        committedChars: 0,
-      };
-      if (viewMode === "enhanced") setViewMode("raw");
-    }
-    if (!isRecording && prevRecordingRef.current) {
-      // Only clear if no progressive text was inserted (non-streaming case).
-      // For streaming, keep dictationRef alive so the final transcript replaces
-      // the partial zone instead of inserting a duplicate at cursor.
-      const range = dictationRef.current;
-      if (range && range.partialStart === range.start && range.end === range.start) {
-        dictationRef.current = null;
-      }
+      pendingTranscriptSwitchRef.current = true;
     }
     prevRecordingRef.current = isRecording;
   }, [isRecording]);
 
-  // Partial effect: only replace the active partial zone [partialStart, end].
-  // Committed text before partialStart is untouched — users can edit it freely.
   useEffect(() => {
-    if (!partialTranscript || !dictationRef.current) return;
-
-    const { partialStart, end } = dictationRef.current;
-    const hasCommitted = partialStart > dictationRef.current.start;
-    const textToInsert = (hasCommitted ? " " : "") + partialTranscript;
-    const newEnd = partialStart + textToInsert.length;
-
-    replaceContentRange(partialStart, end, textToInsert);
-    dictationRef.current.end = newEnd;
-  }, [partialTranscript, replaceContentRange]); // note.content intentionally excluded
-
-  // Streaming commit: a Deepgram segment was finalized. Replace the partial zone
-  // with the committed text and advance partialStart for the next utterance.
-  useEffect(() => {
-    if (streamingCommit == null || !dictationRef.current) return;
-
-    const { partialStart, end } = dictationRef.current;
-    const newPartialStart = partialStart + streamingCommit.length;
-
-    replaceContentRange(partialStart, end, streamingCommit);
-    dictationRef.current.partialStart = newPartialStart;
-    dictationRef.current.end = newPartialStart;
-    dictationRef.current.committedChars += streamingCommit.length;
-
-    onStreamingCommitConsumed();
-  }, [streamingCommit, onStreamingCommitConsumed, replaceContentRange]); // note.content intentionally excluded
-
-  // Final transcript (on recording stop).
-  useEffect(() => {
-    if (finalTranscript == null) return;
-
-    const range = dictationRef.current;
-    if (!range) {
-      // Non-streaming: insert at cursor with separator
-      const pos = cursorPosRef.current;
-      const before = contentRef.current.slice(0, pos);
-      const after = contentRef.current.slice(pos);
-      const separator = before && !before.endsWith("\n") ? "\n" : "";
-      const newContent = before + separator + finalTranscript + after;
-      commitContentChange(newContent);
-      onFinalTranscriptConsumed();
-      return;
+    if (!isRecording && !isProcessing && pendingTranscriptSwitchRef.current && liveTranscript) {
+      pendingTranscriptSwitchRef.current = false;
+      setViewMode("transcript");
     }
+  }, [isRecording, isProcessing, liveTranscript]);
 
-    // Streaming: committed text is already in the note. Only finalize the
-    // remaining partial zone with the tail of the final transcript.
-    const { partialStart, end, committedChars } = range;
-    const remainingFinal = finalTranscript.slice(committedChars);
-
-    // If partial zone is empty and nothing new to insert, just clean up
-    if (partialStart === end && !remainingFinal.trim()) {
-      dictationRef.current = null;
-      onFinalTranscriptConsumed();
-      return;
-    }
-
-    replaceContentRange(partialStart, end, remainingFinal);
-    dictationRef.current = null;
-    onFinalTranscriptConsumed();
-  }, [finalTranscript, commitContentChange, onFinalTranscriptConsumed, replaceContentRange]); // note.content intentionally excluded
-
-  // Safety: clear dictation range when processing ends without a final transcript
-  // (e.g. cancelled recording with no captured text). Declared after the final
-  // transcript effect so it runs second if both trigger in the same render.
-  const prevDictationProcessingRef = useRef(false);
-  useEffect(() => {
-    if (prevDictationProcessingRef.current && !isProcessing && dictationRef.current) {
-      dictationRef.current = null;
-    }
-    prevDictationProcessingRef.current = isProcessing;
-  }, [isProcessing]);
-
-  const handleSelect = () => {
-    if (textareaRef.current && document.activeElement === textareaRef.current) {
-      if (suppressSelectionCaptureRef.current) return;
-      captureUserSelection(textareaRef.current.selectionStart, textareaRef.current.selectionEnd);
-    }
-  };
-
-  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newValue = e.target.value;
-
-    // Skip no-op changes (e.g. React controlled-component echo during dictation)
-    if (newValue === note.content) return;
-
-    if (dictationRef.current) {
-      const beforeInput = beforeInputSelectionRef.current;
-      beforeInputSelectionRef.current = null;
-
-      if (beforeInput) {
-        const replacedLength = beforeInput.end - beforeInput.start;
-        const insertLength = newValue.length - (note.content.length - replacedLength);
-        const range = dictationRef.current;
-
-        const nextStart = mapIndexThroughUserEdit(
-          range.start,
-          beforeInput.start,
-          beforeInput.end,
-          insertLength
-        );
-        const nextPartialStart = mapIndexThroughUserEdit(
-          range.partialStart,
-          beforeInput.start,
-          beforeInput.end,
-          insertLength
-        );
-        const nextEnd = mapIndexThroughUserEdit(
-          range.end,
-          beforeInput.start,
-          beforeInput.end,
-          insertLength
-        );
-
-        range.start = Math.min(nextStart, newValue.length);
-        range.partialStart = Math.min(Math.max(nextPartialStart, range.start), newValue.length);
-        range.end = Math.min(Math.max(nextEnd, range.partialStart), newValue.length);
-      } else {
-        const delta = newValue.length - note.content.length;
-        const editPos = e.target.selectionStart - delta;
-        if (editPos <= dictationRef.current.start) {
-          dictationRef.current.start += delta;
-          dictationRef.current.partialStart += delta;
-          dictationRef.current.end += delta;
-        } else if (editPos <= dictationRef.current.partialStart) {
-          dictationRef.current.partialStart += delta;
-          dictationRef.current.end += delta;
-        } else if (editPos < dictationRef.current.end) {
-          dictationRef.current.end += delta;
-        }
-      }
-    }
-
-    beforeInputSelectionRef.current = null;
-    contentRef.current = newValue;
-    onContentChange(newValue);
-    captureUserSelection(e.target.selectionStart, e.target.selectionEnd);
-  };
+  const handleContentChange = useCallback(
+    (newValue: string) => {
+      onContentChange(newValue);
+    },
+    [onContentChange]
+  );
 
   const handleEnhancedChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      enhancement?.onChange(e.target.value);
+    (value: string) => {
+      enhancement?.onChange(value);
     },
     [enhancement]
   );
@@ -633,30 +216,6 @@ export default function NoteEditor({
   }, [note.content]);
 
   const noteDate = formatNoteDate(note.created_at);
-
-  const generateNotesButton = onGenerateNotes ? (
-    <button
-      onClick={onGenerateNotes}
-      disabled={actionProcessingState === "processing"}
-      className={cn(
-        "flex items-center gap-2 h-11 px-5 rounded-xl",
-        "bg-accent/8 dark:bg-accent/12",
-        "backdrop-blur-xl",
-        "border border-accent/15 dark:border-accent/20",
-        "shadow-sm hover:shadow-md",
-        "text-accent/70 hover:text-accent",
-        "transition-[background-color,color,transform] duration-200",
-        "hover:bg-accent/12 dark:hover:bg-accent/18",
-        "active:scale-[0.98]",
-        "disabled:opacity-40 disabled:pointer-events-none"
-      )}
-    >
-      <Sparkles size={14} />
-      <span className="text-xs font-semibold tracking-tight">
-        {t("notes.editor.generateNotes")}
-      </span>
-    </button>
-  ) : null;
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -688,7 +247,7 @@ export default function NoteEditor({
           </div>
           <div className="flex-1" />
           <div className="flex items-center gap-1">
-            {(enhancement || hasMeetingTranscript) && (
+            {(enhancement || hasMeetingTranscript || hasChatSegments || isMeetingRecording) && (
               <div
                 ref={segmentContainerRef}
                 className="relative flex items-center shrink-0 rounded-md bg-foreground/3 dark:bg-white/3 p-0.5"
@@ -697,7 +256,7 @@ export default function NoteEditor({
                   className="absolute top-0.5 left-0 rounded bg-background dark:bg-surface-2 shadow-sm transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
                   style={indicatorStyle}
                 />
-                {hasMeetingTranscript && (
+                {(hasMeetingTranscript || hasChatSegments || isMeetingRecording) && (
                   <button
                     data-segment-button
                     data-segment-value="transcript"
@@ -725,7 +284,7 @@ export default function NoteEditor({
                   )}
                 >
                   <AlignLeft size={10} />
-                  {hasMeetingTranscript ? t("notes.editor.notes") : t("notes.editor.raw")}
+                  {t("notes.editor.notes")}
                 </button>
                 {enhancement && (
                   <button
@@ -750,21 +309,6 @@ export default function NoteEditor({
                   </button>
                 )}
               </div>
-            )}
-            {canStream && (
-              <button
-                onClick={handleLiveToggle}
-                className={cn(
-                  "shrink-0 h-6 px-1.5 flex items-center gap-1 rounded-md text-xs font-medium transition-colors duration-150",
-                  liveMode
-                    ? "bg-primary/8 text-primary/70 hover:bg-primary/12 dark:bg-primary/12 dark:text-primary/80"
-                    : "bg-foreground/3 dark:bg-white/3 text-foreground/25 hover:text-foreground/40 hover:bg-foreground/6 dark:hover:bg-white/6"
-                )}
-                aria-label={t("notes.editor.live")}
-              >
-                <Radio size={9} />
-                {t("notes.editor.live")}
-              </button>
             )}
             {onExportNote && (
               <DropdownMenu>
@@ -794,16 +338,21 @@ export default function NoteEditor({
 
       <div className="flex-1 relative min-h-0">
         <div className="h-full overflow-y-auto">
-          {viewMode === "transcript" && hasMeetingTranscript ? (
-            <MarkdownTextarea value={effectiveTranscript} disabled />
+          {viewMode === "transcript" && (hasChatSegments || isMeetingRecording) ? (
+            <MeetingTranscriptChat
+              segments={displaySegments}
+              micPartial={isMeetingRecording ? meetingMicPartial : undefined}
+              systemPartial={isMeetingRecording ? meetingSystemPartial : undefined}
+            />
+          ) : viewMode === "transcript" && hasMeetingTranscript ? (
+            <RichTextEditor value={effectiveTranscript} disabled />
           ) : viewMode === "enhanced" && enhancement ? (
-            <MarkdownTextarea value={enhancement.content} onChange={handleEnhancedChange} />
+            <RichTextEditor value={enhancement.content} onChange={handleEnhancedChange} />
           ) : (
-            <MarkdownTextarea
+            <RichTextEditor
               value={note.content}
               onChange={handleContentChange}
-              onSelect={handleSelect}
-              textareaRef={textareaRef}
+              editorRef={editorRef}
               placeholder={t("notes.editor.startWriting")}
               disabled={actionProcessingState === "processing"}
             />
@@ -820,15 +369,11 @@ export default function NoteEditor({
         <DictationWidget
           isRecording={isRecording || !!isMeetingRecording}
           isProcessing={isProcessing}
-          onStart={handleStartRecording}
-          onStop={isMeetingRecording ? onStopMeetingRecording! : onStopRecording}
-          actionPicker={
-            isMeetingRecording
-              ? undefined
-              : hasMeetingTranscript && !enhancement
-                ? generateNotesButton
-                : actionPicker
+          onStart={onStartRecording}
+          onStop={
+            isMeetingRecording ? (onStopMeetingRecording ?? onStopRecording) : onStopRecording
           }
+          actionPicker={isMeetingRecording ? undefined : actionPicker}
         />
       </div>
     </div>

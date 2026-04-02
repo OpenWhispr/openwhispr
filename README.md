@@ -51,6 +51,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - 📅 **Google Calendar Integration**: Connect multiple Google accounts, view upcoming meetings in the sidebar, and receive auto-detection prompts
 - 🎙️ **Live Meeting Transcription**: Record and transcribe meetings in real-time via OpenAI Realtime API with automatic meeting detection (Zoom, Teams, FaceTime)
+- ⚡ **WebSocket Streaming for BYOK**: Real-time OpenAI Realtime API streaming for standard dictation mode, not just meetings — unified streaming path for all transcription
+- ⌨️ **Meeting Hotkey**: Dedicated hotkey to start/stop meeting transcription independently from dictation
 - 🔍 **Smart Detection**: Combines process monitoring, sustained audio detection, and calendar awareness to detect meetings automatically
 
 ### Notes
@@ -76,12 +78,15 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - ⌨️ **Compound Hotkeys**: Support for multi-key combinations like `Cmd+Shift+K`
 - 🎙️ **Push-to-Talk (Windows)**: Native low-level keyboard hook for true push-to-talk with compound hotkey support
 - 🐧 **GNOME Wayland Support**: Native global shortcuts via D-Bus for GNOME Wayland users
+- 🐧 **KDE Wayland Support**: Native global shortcuts via D-Bus for KDE Plasma on Wayland
+- 🐧 **Hyprland Wayland Support**: Native global shortcuts via `hyprctl` keybindings + D-Bus for Hyprland users
+- 🖥️ **Multi-Monitor**: Floating dictation icon follows your cursor across monitors
 - 🧹 **Model Cleanup**: One-click removal of cached models with uninstall hooks to keep disks tidy
 
 ## Prerequisites
 
-- **Node.js 18+** and npm (Download from [nodejs.org](https://nodejs.org/))
-- **macOS 10.15+**, **Windows 10+**, or **Linux**
+- **Node.js 22+** and npm (Download from [nodejs.org](https://nodejs.org/))
+- **macOS 12+**, **Windows 10+**, or **Linux**
 - On macOS, Globe key support requires the Xcode Command Line Tools (`xcode-select --install`) so the bundled Swift helper can run
 
 ## Quick Start
@@ -566,7 +571,7 @@ open-whispr/
 
 - **Frontend**: React 19, TypeScript, Tailwind CSS v4
 - **Build Tool**: Vite with optimized Tailwind plugin
-- **Desktop**: Electron 36 with context isolation
+- **Desktop**: Electron 39 with context isolation
 - **UI Components**: shadcn/ui with Radix primitives
 - **Database**: better-sqlite3 with FTS5 for local storage (transcriptions, notes, agents, calendar)
 - **Speech-to-Text**: OpenAI Whisper (whisper.cpp) + NVIDIA Parakeet (sherpa-onnx) for local, OpenAI API for cloud
@@ -844,7 +849,7 @@ A: No. As of v1.6.0, OpenWhispr uses NSEvent monitors instead of CGEvent taps, e
 
 ## Project Status
 
-OpenWhispr is actively maintained and ready for production use. Current version: 1.6.0
+OpenWhispr is actively maintained and ready for production use. Current version: 1.6.6
 
 - ✅ Core dictation with local and cloud processing
 - ✅ Cross-platform support (macOS, Windows, Linux)
@@ -860,8 +865,10 @@ OpenWhispr is actively maintained and ready for production use. Current version:
 - ✅ Custom dictionary with auto-learn correction monitoring
 - ✅ NVIDIA Parakeet support via sherpa-onnx
 - ✅ Compound hotkeys and Windows Push-to-Talk
-- ✅ GNOME Wayland native global shortcuts
+- ✅ GNOME Wayland and Hyprland native global shortcuts
 - ✅ Referral program with shareable invite cards
+- ✅ Dedicated meeting mode hotkey
+- ✅ CodeQL static analysis and Dependabot dependency updates
 
 ## Acknowledgments
 

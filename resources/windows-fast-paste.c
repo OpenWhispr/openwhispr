@@ -84,23 +84,61 @@ static BOOL IsTerminalExe(const char* exeName) {
     return FALSE;
 }
 
+static void SetKey(INPUT* input, WORD vk, DWORD flags) {
+    input->type = INPUT_KEYBOARD;
+    input->ki.wVk = vk;
+    input->ki.wScan = (WORD)MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
+    input->ki.dwFlags = flags;
+}
+
+/* Modifier keys that may interfere with SendInput if held by the user's
+   hotkey.  We check left/right-specific variants since GetAsyncKeyState
+   reports physical key state per side. */
+static const WORD MODIFIER_VKS[] = {
+    VK_LCONTROL, VK_RCONTROL,
+    VK_LSHIFT,   VK_RSHIFT,
+    VK_LMENU,    VK_RMENU,
+    VK_LWIN,     VK_RWIN,
+};
+#define NUM_MODIFIERS (sizeof(MODIFIER_VKS) / sizeof(MODIFIER_VKS[0]))
+
+/* Release any modifier keys that are currently held down so they don't
+   contaminate the paste keystroke.  Returns the count of keys released;
+   the caller must pass the same arrays back to RestoreModifiers(). */
+static int ReleaseModifiers(INPUT* released, WORD* releasedVKs) {
+    int count = 0;
+    for (int i = 0; i < (int)NUM_MODIFIERS; i++) {
+        if (GetAsyncKeyState(MODIFIER_VKS[i]) & 0x8000) {
+            releasedVKs[count] = MODIFIER_VKS[i];
+            SetKey(&released[count], MODIFIER_VKS[i], KEYEVENTF_KEYUP);
+            count++;
+        }
+    }
+    if (count > 0) {
+        SendInput((UINT)count, released, sizeof(INPUT));
+    }
+    return count;
+}
+
+/* Re-press modifier keys that were released by ReleaseModifiers(). */
+static void RestoreModifiers(WORD* releasedVKs, int count) {
+    if (count == 0) return;
+    INPUT restore[NUM_MODIFIERS];
+    ZeroMemory(restore, sizeof(restore));
+    for (int i = 0; i < count; i++) {
+        SetKey(&restore[i], releasedVKs[i], 0);
+    }
+    SendInput((UINT)count, restore, sizeof(INPUT));
+}
+
 static int SendPasteNormal(void) {
     INPUT inputs[4];
     ZeroMemory(inputs, sizeof(inputs));
 
-    inputs[0].type = INPUT_KEYBOARD;
-    inputs[0].ki.wVk = VK_CONTROL;
-
-    inputs[1].type = INPUT_KEYBOARD;
-    inputs[1].ki.wVk = 'V';
-
-    inputs[2].type = INPUT_KEYBOARD;
-    inputs[2].ki.wVk = 'V';
-    inputs[2].ki.dwFlags = KEYEVENTF_KEYUP;
-
-    inputs[3].type = INPUT_KEYBOARD;
-    inputs[3].ki.wVk = VK_CONTROL;
-    inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
+    SetKey(&inputs[0], VK_LCONTROL, 0);
+    SetKey(&inputs[1], 'V', 0);
+    SetKey(&inputs[2], 'V', KEYEVENTF_KEYUP);
+    SetKey(&inputs[3], VK_LCONTROL, KEYEVENTF_KEYUP);
 
     UINT sent = SendInput(4, inputs, sizeof(INPUT));
     return (sent == 4) ? 0 : 1;
@@ -110,26 +148,12 @@ static int SendPasteTerminal(void) {
     INPUT inputs[6];
     ZeroMemory(inputs, sizeof(inputs));
 
-    inputs[0].type = INPUT_KEYBOARD;
-    inputs[0].ki.wVk = VK_CONTROL;
-
-    inputs[1].type = INPUT_KEYBOARD;
-    inputs[1].ki.wVk = VK_SHIFT;
-
-    inputs[2].type = INPUT_KEYBOARD;
-    inputs[2].ki.wVk = 'V';
-
-    inputs[3].type = INPUT_KEYBOARD;
-    inputs[3].ki.wVk = 'V';
-    inputs[3].ki.dwFlags = KEYEVENTF_KEYUP;
-
-    inputs[4].type = INPUT_KEYBOARD;
-    inputs[4].ki.wVk = VK_SHIFT;
-    inputs[4].ki.dwFlags = KEYEVENTF_KEYUP;
-
-    inputs[5].type = INPUT_KEYBOARD;
-    inputs[5].ki.wVk = VK_CONTROL;
-    inputs[5].ki.dwFlags = KEYEVENTF_KEYUP;
+    SetKey(&inputs[0], VK_LCONTROL, 0);
+    SetKey(&inputs[1], VK_LSHIFT, 0);
+    SetKey(&inputs[2], 'V', 0);
+    SetKey(&inputs[3], 'V', KEYEVENTF_KEYUP);
+    SetKey(&inputs[4], VK_LSHIFT, KEYEVENTF_KEYUP);
+    SetKey(&inputs[5], VK_LCONTROL, KEYEVENTF_KEYUP);
 
     UINT sent = SendInput(6, inputs, sizeof(INPUT));
     return (sent == 6) ? 0 : 1;
@@ -176,7 +200,14 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    Sleep(5);
+    Sleep(10);
+
+    /* Release any modifier keys held by the user's hotkey so they don't
+       contaminate the paste keystroke (e.g. Ctrl+Win held → Ctrl+Win+V). */
+    INPUT releasedInputs[NUM_MODIFIERS];
+    WORD  releasedVKs[NUM_MODIFIERS];
+    ZeroMemory(releasedInputs, sizeof(releasedInputs));
+    int releasedCount = ReleaseModifiers(releasedInputs, releasedVKs);
 
     int result;
     if (isTerminal) {
@@ -184,6 +215,8 @@ int main(int argc, char* argv[]) {
     } else {
         result = SendPasteNormal();
     }
+
+    RestoreModifiers(releasedVKs, releasedCount);
 
     if (result != 0) {
         fprintf(stderr, "ERROR: SendInput failed (error %lu)\n", GetLastError());

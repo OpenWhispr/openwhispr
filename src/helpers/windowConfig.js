@@ -5,6 +5,29 @@ const isGnomeWayland =
   process.env.XDG_SESSION_TYPE === "wayland" &&
   /gnome|ubuntu|unity/i.test(process.env.XDG_CURRENT_DESKTOP || "");
 
+const isKDEWayland =
+  process.platform === "linux" &&
+  process.env.XDG_SESSION_TYPE === "wayland" &&
+  /kde/i.test(process.env.XDG_CURRENT_DESKTOP || "");
+
+const MAIN_OVERLAY_TYPE =
+  process.platform === "darwin"
+    ? "panel"
+    : process.platform === "linux"
+      ? isGnomeWayland || isKDEWayland
+        ? "normal"
+        : "toolbar"
+      : "normal";
+
+const FLOATING_OVERLAY_TYPE =
+  process.platform === "darwin"
+    ? "panel"
+    : process.platform === "linux"
+      ? isKDEWayland
+        ? "normal"
+        : "toolbar"
+      : "normal";
+
 const WINDOW_SIZES = {
   BASE: { width: 96, height: 96 },
   WITH_MENU: { width: 240, height: 280 },
@@ -34,14 +57,7 @@ const MAIN_WINDOW_CONFIG = {
   fullScreenable: false,
   hasShadow: false,
   acceptsFirstMouse: true,
-  type:
-    process.platform === "darwin"
-      ? "panel"
-      : process.platform === "linux"
-        ? isGnomeWayland
-          ? "normal"
-          : "toolbar"
-        : "normal",
+  type: MAIN_OVERLAY_TYPE,
 };
 
 // Control panel window configuration
@@ -101,8 +117,7 @@ const NOTIFICATION_WINDOW_CONFIG = {
     sandbox: true,
   },
   visibleOnAllWorkspaces: process.platform !== "win32",
-  type:
-    process.platform === "darwin" ? "panel" : process.platform === "linux" ? "toolbar" : "normal",
+  type: FLOATING_OVERLAY_TYPE,
 };
 
 class WindowPositionUtil {
@@ -156,6 +171,7 @@ class WindowPositionUtil {
     } else if (isGnomeWayland) {
       window.setAlwaysOnTop(true, "floating");
     } else {
+      // KDE XWayland and other Linux — "screen-saver" is the strongest z-level
       window.setAlwaysOnTop(true, "screen-saver");
     }
   }
@@ -178,8 +194,7 @@ const AGENT_OVERLAY_CONFIG = {
   resizable: false,
   fullScreenable: false,
   acceptsFirstMouse: true,
-  type:
-    process.platform === "darwin" ? "panel" : process.platform === "linux" ? "toolbar" : "normal",
+  type: FLOATING_OVERLAY_TYPE,
   visibleOnAllWorkspaces: process.platform !== "win32",
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),

@@ -1,8 +1,20 @@
 #!/bin/bash
 # Post-install script for OpenWhispr (deb/rpm)
-# Sets up ydotool daemon prerequisites for Wayland paste support
+# Sets up chrome-sandbox permissions and ydotool daemon prerequisites
 
 set -euo pipefail
+
+# 0. Set SUID bit on chrome-sandbox (required by Electron for Linux sandboxing)
+#    Find it wherever dpkg placed the package files, rather than hardcoding /opt/...
+CHROME_SANDBOX=$(dpkg -L open-whispr 2>/dev/null | grep chrome-sandbox || echo "")
+if [ -z "$CHROME_SANDBOX" ]; then
+  # Fallback: conventional electron-builder install path
+  CHROME_SANDBOX="/opt/OpenWhispr/chrome-sandbox"
+fi
+if [ -f "$CHROME_SANDBOX" ]; then
+  chown root:root "$CHROME_SANDBOX"
+  chmod 4755 "$CHROME_SANDBOX"
+fi
 
 UDEV_RULE='KERNEL=="uinput", GROUP="input", MODE="0660", TAG+="uaccess"'
 UDEV_RULE_PATH="/etc/udev/rules.d/70-uinput.rules"

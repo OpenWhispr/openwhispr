@@ -18,11 +18,12 @@ import {
   updateTranscription as updateInStore,
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import ControlPanelSidebar, { type ControlPanelView } from "./ControlPanelSidebar";
 import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
-import { setActiveNoteId, setActiveFolderId } from "../stores/noteStore";
+import { setActiveNoteId, setActiveFolderId, initializeNotes } from "../stores/noteStore";
 import HistoryView from "./HistoryView";
 
 const platform = getCachedPlatform();
@@ -65,6 +66,8 @@ export default function ControlPanel() {
     () => localStorage.getItem("gpuBannerDismissedUnified") === "true"
   );
   const cloudMigrationProcessed = useRef(false);
+  const updateReadyToastShown = useRef(false);
+  const updateErrorToastShown = useRef<Error | null>(null);
   const { hotkey } = useHotkey();
   const { toast } = useToast();
   const {
@@ -114,21 +117,30 @@ export default function ControlPanel() {
 
   useEffect(() => {
     if (updateStatus.updateDownloaded && !isDownloading) {
-      toast({
-        title: t("controlPanel.update.readyTitle"),
-        description: t("controlPanel.update.readyDescription"),
-        variant: "success",
-      });
+      if (!updateReadyToastShown.current) {
+        updateReadyToastShown.current = true;
+        toast({
+          title: t("controlPanel.update.readyTitle"),
+          description: t("controlPanel.update.readyDescription"),
+          variant: "success",
+        });
+      }
+    } else {
+      updateReadyToastShown.current = false;
     }
   }, [updateStatus.updateDownloaded, isDownloading, toast, t]);
 
   useEffect(() => {
-    if (updateError) {
+    if (updateError && updateError !== updateErrorToastShown.current) {
+      updateErrorToastShown.current = updateError;
       toast({
         title: t("controlPanel.update.problemTitle"),
         description: t("controlPanel.update.problemDescription"),
         variant: "destructive",
       });
+    }
+    if (!updateError) {
+      updateErrorToastShown.current = null;
     }
   }, [updateError, toast, t]);
 
@@ -210,9 +222,24 @@ export default function ControlPanel() {
       setActiveView("personal-notes");
       setIsMeetingMode(true);
       setMeetingRecordingRequest(data);
+      initializeNotes(null, 50, data.folderId);
     });
     return () => cleanup?.();
   }, []);
+
+  // When accessibility is missing on macOS, open the permissions settings page
+  useEffect(() => {
+    const cleanup = window.electronAPI?.onAccessibilityMissing?.(() => {
+      setSettingsSection("privacyData");
+      setShowSettings(true);
+      toast({
+        title: t("controlPanel.accessibilityMissing.title"),
+        description: t("controlPanel.accessibilityMissing.description"),
+        duration: 10000,
+      });
+    });
+    return () => cleanup?.();
+  }, [toast, t]);
 
   const handleMeetingRecordingRequestHandled = useCallback(
     () => setMeetingRecordingRequest(null),
@@ -342,7 +369,17 @@ export default function ControlPanel() {
   const retryTranscription = useCallback(
     async (id: number) => {
       try {
-        const result = await window.electronAPI.retryTranscription(id);
+        const s = useSettingsStore.getState();
+        const result = await window.electronAPI.retryTranscription(id, {
+          useLocalWhisper: s.useLocalWhisper,
+          localTranscriptionProvider: s.localTranscriptionProvider,
+          cloudTranscriptionMode: s.cloudTranscriptionMode,
+          cloudTranscriptionProvider: s.cloudTranscriptionProvider,
+          cloudTranscriptionModel: s.cloudTranscriptionModel,
+          cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
+          parakeetModel: s.parakeetModel,
+          whisperModel: s.whisperModel,
+        });
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;
           let finalTranscription = result.transcription;
@@ -588,7 +625,7 @@ export default function ControlPanel() {
                   className="h-7 px-2.5 pl-1.5 gap-1"
                 >
                   <ChevronLeft size={14} strokeWidth={1.8} />
-                  Back to notes
+                  {t("controlPanel.backToNotes")}
                 </Button>
               </div>
             )}

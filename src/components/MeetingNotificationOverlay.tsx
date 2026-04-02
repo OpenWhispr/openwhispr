@@ -15,18 +15,24 @@ export default function MeetingNotificationOverlay() {
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
-    const cleanup = window.electronAPI?.onMeetingNotificationData?.(
-      (incoming: NotificationData) => {
-        setData(incoming);
-        setTimeout(() => setIsVisible(true), 50);
-      }
+    let shown = false;
+
+    const show = (d: NotificationData) => {
+      if (shown) return;
+      shown = true;
+      setData(d);
+      setTimeout(() => {
+        setIsVisible(true);
+        window.electronAPI?.meetingNotificationReady?.();
+      }, 50);
+    };
+
+    const cleanup = window.electronAPI?.onMeetingNotificationData?.((incoming: NotificationData) =>
+      show(incoming)
     );
 
     window.electronAPI?.getMeetingNotificationData?.().then((pulled: NotificationData | null) => {
-      if (pulled) {
-        setData((prev) => prev ?? pulled);
-        setTimeout(() => setIsVisible(true), 50);
-      }
+      if (pulled) show(pulled);
     });
 
     return () => cleanup?.();

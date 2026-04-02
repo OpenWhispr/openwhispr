@@ -511,6 +511,7 @@ export default function ReasoningModelSelector({
         size: model.size,
         sizeBytes: model.sizeBytes,
         description: model.description,
+        descriptionKey: model.descriptionKey,
         recommended: model.recommended,
       })),
     }));

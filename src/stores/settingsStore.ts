@@ -64,6 +64,7 @@ const BOOLEAN_SETTINGS = new Set([
   "isSignedIn",
   "agentEnabled",
   "keepTranscriptionInClipboard",
+  "dataRetentionEnabled",
 ]);
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
@@ -136,6 +137,7 @@ export interface SettingsState
 
   setDictationKey: (key: string) => void;
   setCancelKey: (key: string) => void;
+  setMeetingKey: (key: string) => void;
   setActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
@@ -145,6 +147,7 @@ export interface SettingsState
   setCloudBackupEnabled: (value: boolean) => void;
   setTelemetryEnabled: (value: boolean) => void;
   setAudioRetentionDays: (days: number) => void;
+  setDataRetentionEnabled: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
   setPauseMediaOnDictation: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
@@ -258,6 +261,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   dictationKey: readString("dictationKey", ""),
   cancelKey: readString("cancelKey", "Escape"),
+  meetingKey: readString("meetingKey", ""),
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     | "tap"
     | "push",
@@ -279,6 +283,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const parsed = parseInt(stored, 10);
     return isNaN(parsed) ? 30 : parsed;
   })(),
+  dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
@@ -304,7 +309,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (v === "bottom-right" || v === "center" || v === "bottom-left") return v;
     return "bottom-right" as const;
   })(),
-  keepTranscriptionInClipboard: readBoolean("keepTranscriptionInClipboard", true),
+  keepTranscriptionInClipboard: readBoolean("keepTranscriptionInClipboard", false),
   isSignedIn: readBoolean("isSignedIn", false),
 
   agentModel: readString("agentModel", "openai/gpt-oss-120b"),
@@ -398,7 +403,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) localStorage.setItem("customTranscriptionApiKey", key);
     set({ customTranscriptionApiKey: key });
     window.electronAPI?.saveCustomTranscriptionKey?.(key);
-    invalidateApiKeyCaches();
+    invalidateApiKeyCaches("custom");
   },
   setCustomReasoningApiKey: (key: string) => {
     if (isBrowser) localStorage.setItem("customReasoningApiKey", key);
@@ -415,6 +420,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.saveDictationKey?.(key);
     }
   },
+  setMeetingKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("meetingKey", key);
+    set({ meetingKey: key });
+  },
 
   setCancelKey: (key: string) => {
     if (isBrowser) localStorage.setItem("cancelKey", key);
@@ -422,10 +431,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   setActivationMode: (mode: "tap" | "push") => {
-    if (isBrowser) localStorage.setItem("activationMode", mode);
-    set({ activationMode: mode });
+    // Linux has no native key listener for push-to-talk — force tap
+    const effective = isBrowser && window.electronAPI?.getPlatform?.() === "linux" ? "tap" : mode;
+    if (isBrowser) localStorage.setItem("activationMode", effective);
+    set({ activationMode: effective });
     if (isBrowser) {
-      window.electronAPI?.notifyActivationModeChanged?.(mode);
+      window.electronAPI?.notifyActivationModeChanged?.(effective);
     }
   },
 
@@ -442,6 +453,17 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAudioRetentionDays: (days: number) => {
     if (isBrowser) localStorage.setItem("audioRetentionDays", String(days));
     set({ audioRetentionDays: days });
+  },
+  setDataRetentionEnabled: (value: boolean) => {
+    if (isBrowser) localStorage.setItem("dataRetentionEnabled", String(value));
+    set({ dataRetentionEnabled: value });
+    logger.info(
+      value
+        ? "Data retention enabled — transcriptions and audio will be saved"
+        : "Data retention disabled — transcriptions and audio will not be saved",
+      {},
+      "settings"
+    );
   },
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
   setPauseMediaOnDictation: createBooleanSetter("pauseMediaOnDictation"),
@@ -493,12 +515,44 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAgentModel: createStringSetter("agentModel"),
   setAgentProvider: createStringSetter("agentProvider"),
   setAgentKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("agentKey", key);
-    useSettingsStore.setState({ agentKey: key });
-    if (isBrowser) {
-      window.electronAPI?.notifyAgentHotkeyChanged?.(key);
-      window.electronAPI?.saveAgentKey?.(key);
+    if (!isBrowser) {
+      useSettingsStore.setState({ agentKey: key });
+      return;
     }
+
+    const updateAgentHotkey = window.electronAPI?.updateAgentHotkey;
+    if (!updateAgentHotkey) {
+      localStorage.setItem("agentKey", key);
+      useSettingsStore.setState({ agentKey: key });
+      window.electronAPI?.saveAgentKey?.(key);
+      return;
+    }
+
+    const previousKey = get().agentKey;
+
+    void updateAgentHotkey(key)
+      .then((result) => {
+        if (!result?.success) {
+          localStorage.setItem("agentKey", previousKey);
+          useSettingsStore.setState({ agentKey: previousKey });
+          logger.warn(
+            "Failed to update agent hotkey",
+            { hotkey: key, message: result?.message },
+            "settings"
+          );
+          return;
+        }
+
+        localStorage.setItem("agentKey", key);
+        useSettingsStore.setState({ agentKey: key });
+      })
+      .catch((error) => {
+        logger.warn(
+          "Failed to update agent hotkey",
+          { hotkey: key, error: error instanceof Error ? error.message : String(error) },
+          "settings"
+        );
+      });
   },
   setAgentSystemPrompt: createStringSetter("agentSystemPrompt"),
   setAgentEnabled: createBooleanSetter("agentEnabled"),
@@ -683,9 +737,10 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Sync activation mode from main process
+    // Sync activation mode from main process (Linux forces tap — no native key listener)
     try {
-      const envMode = await window.electronAPI.getActivationMode?.();
+      let envMode = await window.electronAPI.getActivationMode?.();
+      if (window.electronAPI?.getPlatform?.() === "linux") envMode = "tap";
       if (envMode && envMode !== state.activationMode) {
         if (isBrowser) localStorage.setItem("activationMode", envMode);
         useSettingsStore.setState({ activationMode: envMode });
@@ -741,6 +796,21 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
+    // Sync meeting detection preferences to main process
+    try {
+      const currentState = useSettingsStore.getState();
+      await window.electronAPI.meetingDetectionSetPreferences?.({
+        processDetection: currentState.meetingProcessDetection,
+        audioDetection: currentState.meetingAudioDetection,
+      });
+    } catch (err) {
+      logger.warn(
+        "Failed to sync meeting detection preferences on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
     ensureAgentNameInDictionary();
   }
 
@@ -782,6 +852,21 @@ export async function initializeSettings(): Promise<void> {
 
     if (key === "uiLanguage" && typeof value === "string") {
       void i18n.changeLanguage(value);
+    }
+  });
+
+  // Sync settings pushed from main process (e.g., hotkey changed in control panel)
+  window.electronAPI?.onSettingUpdated?.((data: { key: string; value: unknown }) => {
+    const state = useSettingsStore.getState();
+    if (
+      data.key in state &&
+      typeof (state as unknown as Record<string, unknown>)[data.key] !== "function"
+    ) {
+      localStorage.setItem(
+        data.key,
+        typeof data.value === "string" ? data.value : JSON.stringify(data.value)
+      );
+      useSettingsStore.setState({ [data.key]: data.value });
     }
   });
 }

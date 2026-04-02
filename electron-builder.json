@@ -1,5 +1,6 @@
 {
   "appId": "com.herotools.openwispr",
+  "afterPack": "scripts/afterPack.js",
   "productName": "OpenWhispr",
   "protocols": {
     "name": "OpenWhispr Protocol",
@@ -86,10 +87,12 @@
   "extraResources": [
     ".env",
     "src/assets/**/*",
+    "resources/bin/macos-audio-tap",
     "resources/bin/macos-globe-listener",
     "resources/bin/macos-fast-paste",
-    "resources/bin/macos-mic-check",
+    "resources/bin/macos-mic-listener",
     "resources/bin/macos-text-monitor",
+    "resources/bin/macos-media-remote",
     "resources/bin/linux-fast-paste",
     "resources/bin/linux-text-monitor",
     {
@@ -101,6 +104,7 @@
         "llama-server-*",
         "sherpa-onnx-*",
         "windows-key-listener*",
+        "windows-mic-listener*",
         "windows-text-monitor*",
         "windows-fast-paste*",
         "*.dylib",
@@ -121,7 +125,8 @@
     "notarize": true,
     "extendInfo": {
       "LSUIElement": false,
-      "NSMicrophoneUsageDescription": "OpenWhispr needs microphone access for speech-to-text transcription.",
+      "NSMicrophoneUsageDescription": "OpenWhispr uses the microphone to capture your voice for transcription.",
+      "NSAudioCaptureUsageDescription": "OpenWhispr uses system audio to capture other participants' audio from calls and meetings. Your screen is never recorded.",
       "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications."
     }
   },
@@ -172,13 +177,19 @@
       "--deb-suggests",
       "wtype",
       "--deb-recommends",
-      "wl-clipboard"
+      "wl-clipboard",
+      "--deb-recommends",
+      "xclip",
+      "--deb-suggests",
+      "xsel"
     ]
   },
   "rpm": {
     "fpm": [
       "--after-install",
       "resources/linux/after-install.sh",
+      "--rpm-rpmbuild-define",
+      "_build_id_links none",
       "--rpm-tag",
       "Requires: ydotool",
       "--rpm-tag",
@@ -186,7 +197,11 @@
       "--rpm-tag",
       "Suggests: wtype",
       "--rpm-tag",
-      "Recommends: wl-clipboard"
+      "Recommends: wl-clipboard",
+      "--rpm-tag",
+      "Recommends: xclip",
+      "--rpm-tag",
+      "Suggests: xsel"
     ]
   },
   "nsis": {

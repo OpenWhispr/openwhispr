@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install platform-specific native binaries
+        run: npm install @rollup/rollup-linux-x64-gnu lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu --no-save
+
       - name: Cache native binaries
         uses: actions/cache@v4
         with:
@@ -88,6 +91,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install platform-specific native binaries
+        run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save
 
       - name: Cache native binaries
         uses: actions/cache@v4
@@ -166,7 +172,9 @@ jobs:
 
       - name: Install ffmpeg-static for target architecture
         if: matrix.arch == 'x64'
-        run: npm_config_arch=x64 node node_modules/ffmpeg-static/install.js
+        run: |
+          rm -f node_modules/ffmpeg-static/ffmpeg
+          npm_config_arch=x64 node node_modules/ffmpeg-static/install.js
 
       - name: Cache native binaries
         uses: actions/cache@v4

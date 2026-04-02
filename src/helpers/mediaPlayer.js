@@ -482,7 +482,7 @@ try {
   _pauseWindows() {
     this._pausedWinApps = [];
 
-    // Try GSMTC first (Windows 10 1809+)
+    // Use GSMTC (Windows 10 1809+) — state-aware, targets specific apps
     const result = spawnSync(
       "powershell",
       ["-NoProfile", "-NonInteractive", "-Command", this._gsmtcPauseScript()],
@@ -491,25 +491,20 @@ try {
 
     if (result.status === 0) {
       const output = (result.stdout?.toString() || "").trim();
-      if (output && output !== "GSMTC_FAIL") {
-        this._pausedWinApps = output.split("|").filter(Boolean);
-        if (this._pausedWinApps.length > 0) {
-          debugLogger.debug("Media paused via GSMTC", { apps: this._pausedWinApps }, "media");
-          return true;
-        }
-        // GSMTC worked but nothing was playing
+      if (output === "GSMTC_FAIL") {
+        debugLogger.debug("GSMTC unavailable on this system", {}, "media");
         return false;
       }
+      this._pausedWinApps = output.split("|").filter(Boolean);
+      if (this._pausedWinApps.length > 0) {
+        debugLogger.debug("Media paused via GSMTC", { apps: this._pausedWinApps }, "media");
+        return true;
+      }
+      debugLogger.debug("GSMTC found no playing sessions", {}, "media");
+      return false;
     }
 
-    // Fallback to media key toggle
-    debugLogger.debug("GSMTC unavailable, falling back to media key", {}, "media");
-    this._didPause = false;
-    if (this._sendWindowsMediaKey()) {
-      debugLogger.debug("Media paused via Windows media key", {}, "media");
-      this._didPause = true;
-      return true;
-    }
+    debugLogger.debug("GSMTC PowerShell failed to execute", { status: result.status }, "media");
     return false;
   }
 
@@ -532,13 +527,6 @@ try {
       return false;
     }
 
-    // Fallback: only toggle back if we toggled on pause
-    if (!this._didPause) return false;
-    this._didPause = false;
-    if (this._sendWindowsMediaKey()) {
-      debugLogger.debug("Media resumed via Windows media key", {}, "media");
-      return true;
-    }
     return false;
   }
 
