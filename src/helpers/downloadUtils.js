@@ -255,7 +255,7 @@ async function downloadFile(url, destPath, options = {}) {
 
   const tempPath = `${destPath}.tmp`;
 
-  debugLogger.info("Download starting", { url: url.substring(0, 80), destPath });
+  debugLogger.info("Download starting", { url, destPath });
 
   let startOffset = 0;
   try {
@@ -333,6 +333,11 @@ async function downloadFile(url, destPath, options = {}) {
     }
   }
 
+  debugLogger.error("Download failed after all retries", {
+    url,
+    error: lastError?.message,
+    code: lastError?.code,
+  });
   await fsPromises.unlink(tempPath).catch(() => {});
   throw lastError;
 }
