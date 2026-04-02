@@ -172,7 +172,12 @@
           "description": "Frontier model for complex reasoning",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_4",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "reasoningEffort": {
+            "provider": "openai",
+            "options": ["none", "low", "medium", "high", "xhigh"],
+            "defaultValue": "none"
+          }
         },
         {
           "id": "gpt-5.2",
@@ -180,7 +185,12 @@
           "description": "Strong reasoning model",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_2",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "reasoningEffort": {
+            "provider": "openai",
+            "options": ["none", "low", "medium", "high", "xhigh"],
+            "defaultValue": "none"
+          }
         },
         {
           "id": "gpt-5-mini",
@@ -188,7 +198,11 @@
           "description": "Fast and cost-efficient",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_mini",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "reasoningEffort": {
+            "provider": "openai",
+            "options": ["minimal", "low", "medium", "high"]
+          }
         },
         {
           "id": "gpt-5-nano",
@@ -196,7 +210,11 @@
           "description": "Ultra-fast, low latency",
           "descriptionKey": "models.descriptions.cloud.openai_gpt_5_nano",
           "tokenParam": "max_completion_tokens",
-          "supportsTemperature": false
+          "supportsTemperature": false,
+          "reasoningEffort": {
+            "provider": "openai",
+            "options": ["minimal", "low", "medium", "high"]
+          }
         },
         {
           "id": "gpt-4.1",
@@ -256,13 +274,21 @@
           "id": "gemini-3.1-pro-preview",
           "name": "Gemini 3.1 Pro",
           "description": "Next-gen flagship model for complex reasoning",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
+          "reasoningEffort": {
+            "provider": "gemini",
+            "options": ["low", "high"]
+          }
         },
         {
           "id": "gemini-3-flash-preview",
           "name": "Gemini 3 Flash",
           "description": "Ultra-fast, high-capability next-gen model",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview",
+          "reasoningEffort": {
+            "provider": "gemini",
+            "options": ["minimal", "low", "medium", "high"]
+          }
         },
         {
           "id": "gemini-2.5-flash-lite",
@@ -281,19 +307,32 @@
           "name": "Qwen3 32B",
           "description": "Powerful reasoning model, 131K context",
           "disableThinking": true,
-          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b"
+          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b",
+          "reasoningEffort": {
+            "provider": "openai",
+            "options": ["none"],
+            "defaultValue": "none"
+          }
         },
         {
           "id": "openai/gpt-oss-120b",
           "name": "GPT-OSS 120B",
           "description": "OpenAI's open-source flagship, 500 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b"
+          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b",
+          "reasoningEffort": {
+            "provider": "openai",
+            "options": ["low", "medium", "high"]
+          }
         },
         {
           "id": "openai/gpt-oss-20b",
           "name": "GPT-OSS 20B",
           "description": "Fast open-source model, 1000 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b"
+          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b",
+          "reasoningEffort": {
+            "provider": "openai",
+            "options": ["low", "medium", "high"]
+          }
         },
         {
           "id": "llama-3.3-70b-versatile",

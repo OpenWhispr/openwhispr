@@ -17,10 +17,19 @@ import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constant
 import logger from "../utils/logger";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { modelRegistry } from "../models/ModelRegistry";
+import type { ReasoningEffortCapability } from "../models/ModelRegistry";
+import {
+  AUTO_REASONING_EFFORT,
+  extractDynamicReasoningEffortCapability,
+  getModelReasoningEffortCapability,
+  hasSelectableReasoningEffort,
+  isReasoningEffortSupported,
+} from "../models/reasoningEffort";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 type CloudModelOption = {
   value: string;
@@ -30,6 +39,7 @@ type CloudModelOption = {
   icon?: string;
   ownedBy?: string;
   invertInDark?: boolean;
+  reasoningEffortCapability?: ReasoningEffortCapability | null;
 };
 
 interface ReasoningModelSelectorProps {
@@ -49,7 +59,25 @@ interface ReasoningModelSelectorProps {
   setGroqApiKey: (key: string) => void;
   customReasoningApiKey?: string;
   setCustomReasoningApiKey?: (key: string) => void;
+  reasoningEffort?: string;
+  setReasoningEffort?: (value: string) => void;
 }
+
+function getReasoningEffortLabel(
+  effort: string,
+  t: (key: string, options?: Record<string, unknown>) => string
+) {
+  return t(`reasoning.effort.options.${effort}`, { defaultValue: effort });
+}
+
+function getReasoningEffortDescription(
+  effort: string,
+  t: (key: string, options?: Record<string, unknown>) => string
+) {
+  return t(`reasoning.effort.optionDescriptions.${effort}`, { defaultValue: "" });
+}
+
+const AUTO_REASONING_EFFORT_VALUE = "__auto__";
 
 function GpuStatusBadge() {
   const { t } = useTranslation();
@@ -319,6 +347,8 @@ export default function ReasoningModelSelector({
   setGroqApiKey,
   customReasoningApiKey = "",
   setCustomReasoningApiKey,
+  reasoningEffort = "",
+  setReasoningEffort,
 }: ReasoningModelSelectorProps) {
   const { t } = useTranslation();
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">("cloud");
@@ -444,6 +474,7 @@ export default function ReasoningModelSelector({
                 (item?.description as string) ||
                 (ownedBy ? t("reasoning.custom.ownerLabel", { owner: ownedBy }) : undefined),
               ownedBy,
+              reasoningEffortCapability: extractDynamicReasoningEffortCapability(item),
             } as CloudModelOption;
           })
           .filter(Boolean) as CloudModelOption[];
@@ -526,6 +557,7 @@ export default function ReasoningModelSelector({
         : model.description,
       icon: iconUrl,
       invertInDark: true,
+      reasoningEffortCapability: getModelReasoningEffortCapability(model.value),
     }));
   }, [t]);
 
@@ -545,6 +577,7 @@ export default function ReasoningModelSelector({
         : model.description,
       icon: iconUrl,
       invertInDark,
+      reasoningEffortCapability: getModelReasoningEffortCapability(model.value),
     }));
   }, [selectedCloudProvider, openaiModelOptions, displayedCustomModels, t]);
 
@@ -716,6 +749,58 @@ export default function ReasoningModelSelector({
       }
     }
   };
+
+  const currentReasoningEffortCapability = useMemo(() => {
+    if (selectedMode !== "cloud" || !reasoningModel) return null;
+    if (selectedCloudProvider === "custom") {
+      return (
+        customModelOptions.find((model) => model.value === reasoningModel)?.reasoningEffortCapability ||
+        null
+      );
+    }
+    return getModelReasoningEffortCapability(reasoningModel);
+  }, [customModelOptions, reasoningModel, selectedCloudProvider, selectedMode]);
+
+  const canResolveCurrentCapability =
+    selectedMode !== "cloud"
+      ? true
+      : selectedCloudProvider !== "custom"
+        ? true
+        : !customModelsLoading &&
+          !isCustomBaseDirty &&
+          (!hasCustomBase || lastLoadedBaseRef.current === normalizedCustomReasoningBase);
+
+  useEffect(() => {
+    if (!setReasoningEffort || !reasoningEffort) return;
+    if (selectedMode !== "cloud") return;
+    if (!canResolveCurrentCapability) return;
+    if (
+      !hasSelectableReasoningEffort(currentReasoningEffortCapability) ||
+      !isReasoningEffortSupported(currentReasoningEffortCapability, reasoningEffort)
+    ) {
+      setReasoningEffort(AUTO_REASONING_EFFORT);
+    }
+  }, [
+    canResolveCurrentCapability,
+    currentReasoningEffortCapability,
+    reasoningEffort,
+    selectedMode,
+    setReasoningEffort,
+  ]);
+
+  const reasoningEffortOptions = useMemo(() => {
+    if (!hasSelectableReasoningEffort(currentReasoningEffortCapability)) return [];
+
+    return currentReasoningEffortCapability.options.map((effort) => ({
+      value: effort,
+      label: getReasoningEffortLabel(effort, t),
+      description: getReasoningEffortDescription(effort, t),
+    }));
+  }, [currentReasoningEffortCapability, t]);
+
+  const defaultReasoningEffortLabel = currentReasoningEffortCapability?.defaultValue
+    ? getReasoningEffortLabel(currentReasoningEffortCapability.defaultValue, t)
+    : null;
 
   const MODE_TABS = [
     { id: "cloud", name: t("reasoning.mode.cloud") },
@@ -992,6 +1077,51 @@ export default function ReasoningModelSelector({
           />
           <GpuStatusBadge />
         </>
+      )}
+
+      {setReasoningEffort && hasSelectableReasoningEffort(currentReasoningEffortCapability) && (
+        <div className="rounded-lg border border-border/50 bg-card/50 px-4 py-3 space-y-2.5">
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-medium text-foreground">{t("reasoning.effort.title")}</h4>
+              {defaultReasoningEffortLabel && (
+                <span className="text-[11px] text-muted-foreground">
+                  {t("reasoning.effort.defaultValue", {
+                    value: defaultReasoningEffortLabel,
+                  })}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {t("reasoning.effort.description")}
+            </p>
+          </div>
+
+          <Select
+            value={reasoningEffort || AUTO_REASONING_EFFORT_VALUE}
+            onValueChange={(value) =>
+              setReasoningEffort(
+                value === AUTO_REASONING_EFFORT_VALUE ? AUTO_REASONING_EFFORT : value
+              )
+            }
+          >
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder={t("reasoning.effort.auto")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={AUTO_REASONING_EFFORT_VALUE}>
+                {t("reasoning.effort.auto")}
+              </SelectItem>
+              {reasoningEffortOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.description
+                    ? `${option.label} - ${option.description}`
+                    : option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       )}
     </div>
   );

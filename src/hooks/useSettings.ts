@@ -26,6 +26,7 @@ export interface ReasoningSettings {
   useReasoningModel: boolean;
   reasoningModel: string;
   reasoningProvider: string;
+  reasoningEffort: string;
   cloudReasoningBaseUrl?: string;
   cloudReasoningMode: string;
 }
@@ -65,6 +66,7 @@ export interface ThemeSettings {
 export interface AgentModeSettings {
   agentModel: string;
   agentProvider: string;
+  agentReasoningEffort: string;
   agentKey: string;
   agentSystemPrompt: string;
   agentEnabled: boolean;
@@ -184,6 +186,7 @@ function useSettingsInternal() {
     useReasoningModel: store.useReasoningModel,
     reasoningModel: store.reasoningModel,
     reasoningProvider: store.reasoningProvider,
+    reasoningEffort: store.reasoningEffort,
     openaiApiKey: store.openaiApiKey,
     anthropicApiKey: store.anthropicApiKey,
     geminiApiKey: store.geminiApiKey,
@@ -211,6 +214,7 @@ function useSettingsInternal() {
     setUseReasoningModel: store.setUseReasoningModel,
     setReasoningModel: store.setReasoningModel,
     setReasoningProvider: store.setReasoningProvider,
+    setReasoningEffort: store.setReasoningEffort,
     setOpenaiApiKey: store.setOpenaiApiKey,
     setAnthropicApiKey: store.setAnthropicApiKey,
     setGeminiApiKey: store.setGeminiApiKey,
@@ -243,6 +247,8 @@ function useSettingsInternal() {
     setAutoLearnCorrections,
     keepTranscriptionInClipboard: store.keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard: store.setKeepTranscriptionInClipboard,
+    agentReasoningEffort: store.agentReasoningEffort,
+    setAgentReasoningEffort: store.setAgentReasoningEffort,
     cloudBackupEnabled: store.cloudBackupEnabled,
     setCloudBackupEnabled: store.setCloudBackupEnabled,
     telemetryEnabled: store.telemetryEnabled,
