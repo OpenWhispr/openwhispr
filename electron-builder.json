@@ -1,5 +1,6 @@
 {
   "appId": "com.herotools.openwispr",
+  "afterPack": "scripts/afterPack.js",
   "productName": "OpenWhispr",
   "protocols": {
     "name": "OpenWhispr Protocol",

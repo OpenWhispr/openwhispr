@@ -75,10 +75,9 @@ if (process.platform === "win32") {
   app.commandLine.appendSwitch("disable-gpu-compositing");
 }
 
-// Enable native Wayland support: Ozone platform for native rendering.
-// KDE uses XWayland for reliable clipboard access, with KGlobalAccel D-Bus
-// for global shortcuts. GNOME and Hyprland run native Wayland with their
-// own D-Bus shortcut managers.
+// Wayland: packaged builds use the wrapper script (scripts/afterPack.js) to
+// force --ozone-platform=x11 before Electron starts. appendSwitch below is a
+// best-effort fallback for unpackaged dev mode (may not take effect on E39+).
 if (process.platform === "linux" && process.env.XDG_SESSION_TYPE === "wayland") {
   const desktop = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase();
   if (desktop.includes("kde")) {
