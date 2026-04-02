@@ -142,12 +142,17 @@ jobs:
       - name: Download windows-fast-paste.exe
         run: node scripts/download-windows-fast-paste.js
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
       - name: Download windows-key-listener.exe
         run: node scripts/download-windows-key-listener.js
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+
+      - name: Download windows-mic-listener.exe
+        run: node scripts/download-windows-mic-listener.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
 
       - name: Cache Electron
         uses: actions/cache@v4
@@ -162,17 +167,7 @@ jobs:
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
 
-      - name: Build Application
-        if: github.event_name == 'pull_request'
-        run: npm run build:win -- --publish never
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
-          VITE_NEON_AUTH_URL: ${{ vars.VITE_NEON_AUTH_URL }}
-          VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
-          VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
-
       - name: Build and Sign Application
-        if: github.event_name != 'pull_request'
         run: npm run build:win -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
