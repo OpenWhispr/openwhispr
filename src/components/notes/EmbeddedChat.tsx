@@ -34,6 +34,7 @@ interface EmbeddedChatProps {
   activeConversationId?: number | null;
   onSwitchConversation?: (id: number) => void;
   onNewChat?: () => void;
+  sidebarClassName?: string;
 }
 
 function EmptyState() {
@@ -64,6 +65,7 @@ export default function EmbeddedChat({
   activeConversationId,
   onSwitchConversation,
   onNewChat,
+  sidebarClassName,
 }: EmbeddedChatProps) {
   const { t } = useTranslation();
 
@@ -223,7 +225,8 @@ export default function EmbeddedChat({
         "border-l border-border/25 dark:border-white/10",
         "bg-surface-1 dark:bg-surface-2",
         "flex flex-col",
-        "min-h-0"
+        "min-h-0",
+        sidebarClassName
       )}
     >
       {chatContent}

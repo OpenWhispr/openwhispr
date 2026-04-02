@@ -34,6 +34,9 @@ import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import { normalizeDbDate } from "../../utils/dateFormatting";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
+import { getCachedPlatform } from "../../utils/platform";
+
+const isMac = getCachedPlatform() === "darwin";
 
 function formatNoteDate(dateStr: string): string {
   const date = normalizeDbDate(dateStr);
@@ -597,6 +600,7 @@ export default function NoteEditor({
           activeConversationId={embeddedChat.activeConversationId}
           onSwitchConversation={embeddedChat.switchConversation}
           onNewChat={embeddedChat.startNewChat}
+          sidebarClassName={isMac ? "-mt-8 pt-8" : undefined}
         />
       )}
     </div>
