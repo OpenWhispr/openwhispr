@@ -99,18 +99,18 @@ export default function NoteBottomBar({
               onClick={onStopRecording}
               className={cn(
                 "flex items-center gap-2 h-10 pl-3.5 pr-3 rounded-xl",
-                "bg-foreground/3 dark:bg-white/4",
-                "border border-border/20 dark:border-white/6",
+                "bg-primary/6 dark:bg-primary/10",
+                "border border-primary/20 dark:border-primary/25",
                 "backdrop-blur-sm",
                 "transition-colors duration-150",
-                "hover:bg-foreground/5 dark:hover:bg-white/6"
+                "hover:bg-primary/10 dark:hover:bg-primary/15"
               )}
             >
               <div className="flex items-end gap-0.5 h-3.5">
                 {Array.from({ length: BAR_COUNT }, (_, i) => (
                   <div
                     key={i}
-                    className="w-0.5 rounded-full bg-foreground/40 dark:bg-white/40 origin-bottom"
+                    className="w-0.5 rounded-full bg-primary/60 dark:bg-primary/70 origin-bottom"
                     style={{
                       height: "100%",
                       animation: `waveform-bar ${0.5 + i * 0.07}s ease-in-out infinite`,
@@ -119,10 +119,10 @@ export default function NoteBottomBar({
                   />
                 ))}
               </div>
-              <span className="text-[11px] font-medium tabular-nums text-foreground/40 dark:text-foreground/30">
+              <span className="text-[11px] font-medium tabular-nums text-primary/60 dark:text-primary/70">
                 {minutes}:{seconds}
               </span>
-              <Square size={9} fill="currentColor" className="text-foreground/30" />
+              <Square size={9} fill="currentColor" className="text-primary/50" />
             </button>
           ) : isProcessing ? (
             <div

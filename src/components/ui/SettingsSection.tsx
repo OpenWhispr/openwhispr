@@ -1,4 +1,5 @@
 import React from "react";
+import { useSettingsLayout } from "./SidebarModal";
 
 interface SettingsSectionProps {
   title: string;
@@ -66,15 +67,21 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
   children,
   className = "",
 }) => {
+  const { isCompact } = useSettingsLayout();
+
   return (
-    <div className={`flex items-center justify-between gap-4 ${className}`}>
+    <div
+      className={`flex ${
+        isCompact ? "flex-col items-start gap-2" : "items-center justify-between gap-4"
+      } ${className}`}
+    >
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-foreground">{label}</p>
         {description && (
           <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
         )}
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className={isCompact ? "" : "shrink-0"}>{children}</div>
     </div>
   );
 };
@@ -102,7 +109,11 @@ export function SettingsPanelRow({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <div className={`px-4 py-3 ${className}`}>{children}</div>;
+  const { isCompact } = useSettingsLayout();
+
+  return (
+    <div className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>{children}</div>
+  );
 }
 
 export function SectionHeader({ title, description }: { title: string; description?: string }) {

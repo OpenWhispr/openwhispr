@@ -74,6 +74,7 @@ import { useTheme } from "../hooks/useTheme";
 import type { GpuDevice, LocalTranscriptionProvider } from "../types/electron";
 import logger from "../utils/logger";
 import { SettingsRow } from "./ui/SettingsSection";
+import { useSettingsLayout } from "./ui/SidebarModal";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { startMigration, useMigration } from "../stores/noteStore.js";
@@ -137,7 +138,11 @@ function SettingsPanelRow({
   children: React.ReactNode;
   className?: string;
 }) {
-  return <div className={`px-4 py-3 ${className}`}>{children}</div>;
+  const { isCompact } = useSettingsLayout();
+
+  return (
+    <div className={`${isCompact ? "px-3 py-2.5" : "px-4 py-3"} ${className}`}>{children}</div>
+  );
 }
 
 function SectionHeader({ title, description }: { title: string; description?: string }) {
@@ -692,6 +697,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
 }
 
 export default function SettingsPage({ activeSection = "general" }: SettingsPageProps) {
+  const { isCompact } = useSettingsLayout();
   const {
     confirmDialog,
     alertDialog,
@@ -1505,7 +1511,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
             ) : isLoaded ? (
               <>
                 <SectionHeader title={t("settingsPage.account.pricing.title")} />
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className={`grid gap-1.5 ${isCompact ? "grid-cols-2" : "grid-cols-4"}`}>
                   {/* Free */}
                   <div
                     className={cn(

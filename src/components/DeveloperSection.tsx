@@ -4,10 +4,12 @@ import { Button } from "./ui/button";
 import { FolderOpen, Copy, Check } from "lucide-react";
 import { useToast } from "./ui/Toast";
 import { Toggle } from "./ui/toggle";
+import { useSettingsLayout } from "./ui/SidebarModal";
 import logger from "../utils/logger";
 
 export default function DeveloperSection() {
   const { t } = useTranslation();
+  const { isCompact } = useSettingsLayout();
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [logPath, setLogPath] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -197,7 +199,9 @@ export default function DeveloperSection() {
         </div>
         <div className="rounded-xl border border-border/60 dark:border-border-subtle bg-card dark:bg-surface-2">
           <div className="px-5 py-4">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+            <div
+              className={`grid gap-y-2 ${isCompact ? "grid-cols-1 gap-x-0" : "grid-cols-2 gap-x-6"}`}
+            >
               {[
                 t("developerSection.whatGetsLogged.items.audioProcessing"),
                 t("developerSection.whatGetsLogged.items.apiRequests"),

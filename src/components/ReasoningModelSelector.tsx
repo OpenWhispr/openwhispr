@@ -824,7 +824,7 @@ export default function ReasoningModelSelector({
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {t("reasoning.custom.queryPrefix")}{" "}
-                      <code>
+                      <code className="break-all">
                         {hasCustomBase
                           ? `${effectiveReasoningBase}/models`
                           : `${defaultOpenAIBase}/models`}
