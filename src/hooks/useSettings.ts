@@ -243,6 +243,8 @@ function useSettingsInternal() {
     setAutoLearnCorrections,
     keepTranscriptionInClipboard: store.keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard: store.setKeepTranscriptionInClipboard,
+    maxDictationDurationSeconds: store.maxDictationDurationSeconds,
+    setMaxDictationDurationSeconds: store.setMaxDictationDurationSeconds,
     cloudBackupEnabled: store.cloudBackupEnabled,
     setCloudBackupEnabled: store.setCloudBackupEnabled,
     telemetryEnabled: store.telemetryEnabled,
