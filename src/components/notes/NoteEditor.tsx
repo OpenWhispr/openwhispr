@@ -126,6 +126,7 @@ export default function NoteEditor({
 
   const embeddedChat = useEmbeddedChat({
     noteId: note.id,
+    folderId: note.folder_id,
     noteTitle: note.title,
     noteContent: note.content,
     noteTranscript: note.transcript ?? undefined,

@@ -5,6 +5,7 @@ import type { Message, AgentState } from "../components/chat/types";
 
 interface UseEmbeddedChatOptions {
   noteId: number | null;
+  folderId: number | null;
   noteTitle: string;
   noteContent: string;
   noteTranscript?: string;
@@ -19,6 +20,7 @@ interface UseEmbeddedChatReturn {
 
 export function useEmbeddedChat({
   noteId,
+  folderId,
   noteTitle,
   noteContent,
   noteTranscript,
@@ -35,6 +37,8 @@ export function useEmbeddedChat({
 
   const noteContextRef = useRef("");
   noteContextRef.current = [
+    `Note ID: ${noteId}`,
+    folderId != null ? `Folder ID: ${folderId}` : "",
     `Title: ${noteTitle}`,
     `Content:\n${noteContent}`,
     noteTranscript ? `\nTranscript:\n${noteTranscript}` : "",

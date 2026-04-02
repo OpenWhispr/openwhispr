@@ -5,7 +5,7 @@ import { syncNoteUpdateToCloud } from "../../stores/noteStore";
 export const updateNoteTool: ToolDefinition = {
   name: "update_note",
   description:
-    "Update an existing note's title, content, or move it to a different folder. Use search_notes first to find the note ID.",
+    "Update an existing note's title, content, or move it to a different folder. If the current note's ID is provided in the context, use it directly. Otherwise, use search_notes first to find the note ID.",
   parameters: {
     type: "object",
     properties: {
