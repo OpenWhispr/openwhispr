@@ -636,8 +636,11 @@ class HotkeyManager {
         this.isInitialized = true;
         return;
       }
+    }
 
-      // Try Hyprland native shortcuts if GNOME/KDE paths were not applicable
+    // Hyprland uses hyprctl + dbus-send, which works regardless of XWayland,
+    // so it must be tried outside the !isXWayland gate above.
+    if (process.platform === "linux" && HyprlandShortcutManager.isHyprland()) {
       const hyprlandOk = await this.initializeHyprlandShortcuts(callback);
 
       if (hyprlandOk) {
