@@ -1395,6 +1395,12 @@
           "title": "Passato a configurazione personalizzata"
         }
       },
+      "transcriptionPrompt": {
+        "title": "Prompt di trascrizione",
+        "description": "Whisper imita lo stile di formattazione di questo prompt — includi punteggiatura varia (virgole, trattini, virgolette) per ottenere testo punteggiato. In modalità \"auto\", la lingua del prompt influenza anche il rilevamento della lingua. Le parole del dizionario vengono aggiunte automaticamente.",
+        "placeholder": "Inserisci un paragrafo ben punteggiato per guidare lo stile di trascrizione...",
+        "insertPreset": "Inserisci modello"
+      },
       "gpuDevice": {
         "title": "GPU trascrizione",
         "description": "GPU usata per la trascrizione locale"

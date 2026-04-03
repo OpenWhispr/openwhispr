@@ -70,6 +70,12 @@ import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/Toast";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./ui/dropdown-menu";
 import { useTheme } from "../hooks/useTheme";
 import type { GpuDevice, LocalTranscriptionProvider } from "../types/electron";
 import logger from "../utils/logger";
@@ -83,6 +89,49 @@ import { useSettingsStore } from "../stores/settingsStore";
 
 const formatAmount = (cents: number, currency: string) =>
   (cents / 100).toLocaleString(undefined, { style: "currency", currency });
+
+const TRANSCRIPTION_PROMPT_PRESETS: Record<string, { label: string; prompt: string }> = {
+  en: {
+    label: "English",
+    prompt: 'Hello! How are you? I think we should try it. Here\'s what he said: "Let\'s do this today — while we have time." Of course, it\'s not that simple; we need to consider several factors...',
+  },
+  es: {
+    label: "Español",
+    prompt: '¡Hola! ¿Cómo estás? Creo que deberíamos intentarlo. Esto es lo que dijo: "Hagámoslo hoy, mientras tengamos tiempo". Por supuesto, no es tan sencillo; hay que considerar varios factores...',
+  },
+  fr: {
+    label: "Français",
+    prompt: 'Bonjour ! Comment allez-vous ? Je pense qu\'on devrait essayer. Voici ce qu\'il a dit : « Faisons-le aujourd\'hui — tant qu\'on a le temps. » Bien sûr, ce n\'est pas si simple ; il faut considérer plusieurs facteurs...',
+  },
+  de: {
+    label: "Deutsch",
+    prompt: 'Hallo! Wie geht es Ihnen? Ich denke, wir sollten es versuchen. Das hat er gesagt: „Machen wir es heute — solange wir Zeit haben." Natürlich ist es nicht so einfach; wir müssen mehrere Faktoren berücksichtigen...',
+  },
+  pt: {
+    label: "Português",
+    prompt: 'Olá! Como você está? Acho que deveríamos tentar. Foi isso que ele disse: "Vamos fazer isso hoje — enquanto temos tempo." Claro, não é tão simples; precisamos considerar vários fatores...',
+  },
+  it: {
+    label: "Italiano",
+    prompt: 'Ciao! Come stai? Penso che dovremmo provare. Ecco cosa ha detto: "Facciamolo oggi — finché abbiamo tempo." Certo, non è così semplice; bisogna considerare diversi fattori...',
+  },
+  ru: {
+    label: "Русский",
+    prompt: 'Привет, как дела? Я думаю, что стоит попробовать! Вот что он сказал: «Давайте сделаем это сегодня — пока есть время». Конечно, не всё так просто; нужно учитывать несколько факторов.',
+  },
+  ja: {
+    label: "日本語",
+    prompt: 'こんにちは！お元気ですか？試してみるべきだと思います。彼はこう言いました：「今日やりましょう——時間があるうちに。」もちろん、そう簡単ではありません。いくつかの要素を考慮する必要があります...',
+  },
+  "zh-CN": {
+    label: "中文（简体）",
+    prompt: '你好！你怎么样？我觉得我们应该试试。他是这么说的："趁现在有时间，今天就做吧。"当然，事情没那么简单；我们需要考虑好几个因素……',
+  },
+  "zh-TW": {
+    label: "中文（繁體）",
+    prompt: '你好！你怎麼樣？我覺得我們應該試試。他是這麼說的：「趁現在有時間，今天就做吧。」當然，事情沒那麼簡單；我們需要考慮好幾個因素……',
+  },
+};
 
 export type SettingsSectionType =
   | "account"
@@ -183,6 +232,8 @@ interface TranscriptionSectionProps {
   setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl: (url: string) => void;
+  customTranscriptionPrompt: string;
+  setCustomTranscriptionPrompt: (value: string) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -218,6 +269,8 @@ function TranscriptionSection({
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
   setCloudTranscriptionBaseUrl,
+  customTranscriptionPrompt,
+  setCustomTranscriptionPrompt,
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
@@ -398,6 +451,51 @@ function TranscriptionSection({
         />
       )}
       <GpuDeviceSelector purpose="transcription" />
+
+      {/* Transcription Prompt */}
+      <SectionHeader
+        title={t("settingsPage.transcription.transcriptionPrompt.title")}
+        description={t("settingsPage.transcription.transcriptionPrompt.description")}
+      />
+      <SettingsPanel>
+        <textarea
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
+          rows={4}
+          maxLength={900}
+          value={customTranscriptionPrompt}
+          onChange={(e) => setCustomTranscriptionPrompt(e.target.value)}
+          placeholder={t("settingsPage.transcription.transcriptionPrompt.placeholder")}
+        />
+        <div className="flex items-center justify-between mt-1.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                {t("settingsPage.transcription.transcriptionPrompt.insertPreset")}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {Object.entries(TRANSCRIPTION_PROMPT_PRESETS).map(([code, { label }]) => (
+                <DropdownMenuItem
+                  key={code}
+                  onClick={() =>
+                    setCustomTranscriptionPrompt(TRANSCRIPTION_PROMPT_PRESETS[code].prompt)
+                  }
+                >
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <span
+            className={cn(
+              "text-xs tabular-nums text-muted-foreground/70",
+              customTranscriptionPrompt.length > 800 && "text-destructive"
+            )}
+          >
+            {customTranscriptionPrompt.length} / 900
+          </span>
+        </div>
+      </SettingsPanel>
     </div>
   );
 }
@@ -787,6 +885,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setDataRetentionEnabled,
     customDictionary,
     setCustomDictionary,
+    customTranscriptionPrompt,
+    setCustomTranscriptionPrompt,
     noteFilesEnabled,
     setNoteFilesEnabled,
     noteFilesPath,
@@ -3043,6 +3143,8 @@ EOF`,
             setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
             cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
             setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+            customTranscriptionPrompt={customTranscriptionPrompt}
+            setCustomTranscriptionPrompt={setCustomTranscriptionPrompt}
             toast={toast}
           />
         );

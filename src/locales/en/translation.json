@@ -1443,6 +1443,12 @@
           "title": "Switched to Custom Setup"
         }
       },
+      "transcriptionPrompt": {
+        "title": "Transcription Prompt",
+        "description": "Whisper mimics the formatting style of this prompt — include varied punctuation (commas, dashes, quotes) to get punctuated output. In \"auto\" mode, the prompt language also affects language detection. Dictionary words are prepended automatically.",
+        "placeholder": "Enter a well-punctuated paragraph to guide transcription style...",
+        "insertPreset": "Insert preset"
+      },
       "gpuDevice": {
         "title": "Transcription GPU",
         "description": "GPU used for local speech-to-text"

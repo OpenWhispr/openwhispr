@@ -1390,6 +1390,12 @@
           "title": "已切換至自訂設定"
         }
       },
+      "transcriptionPrompt": {
+        "title": "轉錄提示詞",
+        "description": "Whisper 會模仿此提示詞的格式風格 — 包含多樣的標點（逗號、破折號、引號）以獲得帶標點的輸出。在「自動」模式下，提示詞的語言也會影響語言偵測。詞典中的詞語會自動加到前面。",
+        "placeholder": "輸入一段標點規範的段落來引導轉錄風格...",
+        "insertPreset": "插入預設"
+      },
       "gpuDevice": {
         "title": "轉錄 GPU",
         "description": "用於本機語音辨識的 GPU"

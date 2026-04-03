@@ -1395,6 +1395,12 @@
           "title": "Cambiado a configuración personalizada"
         }
       },
+      "transcriptionPrompt": {
+        "title": "Prompt de transcripción",
+        "description": "Whisper imita el estilo de formato de este prompt — incluye puntuación variada (comas, guiones, comillas) para obtener texto puntuado. En modo \"auto\", el idioma del prompt también afecta la detección de idioma. Las palabras del diccionario se anteponen automáticamente.",
+        "placeholder": "Escribe un párrafo bien puntuado para guiar el estilo de transcripción...",
+        "insertPreset": "Insertar preajuste"
+      },
       "gpuDevice": {
         "title": "GPU de transcripción",
         "description": "GPU usada para transcripción local"
