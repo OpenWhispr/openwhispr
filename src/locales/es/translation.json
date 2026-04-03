@@ -711,6 +711,8 @@
     "searchPlaceholder": "Buscar..."
   },
   "microphoneSettings": {
+    "auto": "Automático (mejor entrada)",
+    "autoDescription": "Prueba automáticamente todos los micrófonos y selecciona el que tiene la señal de entrada más fuerte.",
     "builtIn": "(Integrado)",
     "errors": {
       "unableToAccess": "No se pudo acceder al micrófono. Revisa los permisos."

@@ -711,6 +711,8 @@
     "searchPlaceholder": "Suchen..."
   },
   "microphoneSettings": {
+    "auto": "Auto (bester Eingang)",
+    "autoDescription": "Testet automatisch alle Mikrofone und wählt das mit dem stärksten Eingangssignal.",
     "builtIn": "(Integriert)",
     "errors": {
       "unableToAccess": "Zugriff auf das Mikrofon nicht möglich. Bitte prüfen Sie die Berechtigungen."

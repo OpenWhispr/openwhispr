@@ -110,6 +110,16 @@ class AudioManager {
     this.sttConfig = null;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
+
+    // Invalidate auto-selected mic cache when devices change
+    if (typeof navigator !== "undefined" && navigator.mediaDevices) {
+      navigator.mediaDevices.addEventListener("devicechange", () => {
+        if (getSettings().selectedMicDeviceId === "auto") {
+          this.cachedMicDeviceId = null;
+          logger.debug("Device change detected, cleared auto-selected mic cache", {}, "audio");
+        }
+      });
+    }
   }
 
   getWorkletBlobUrl() {
@@ -250,6 +260,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     }
 
+    // Auto-select: probe all devices and pick the loudest one
+    if (!preferBuiltIn && selectedDeviceId === "auto") {
+      if (this.cachedMicDeviceId) {
+        logger.debug(
+          "Using cached auto-selected device",
+          { deviceId: this.cachedMicDeviceId },
+          "audio"
+        );
+        return { audio: { deviceId: { exact: this.cachedMicDeviceId }, ...noProcessing } };
+      }
+
+      const bestDeviceId = await this.probeDevices();
+      if (bestDeviceId) {
+        this.cachedMicDeviceId = bestDeviceId;
+        return { audio: { deviceId: { exact: bestDeviceId }, ...noProcessing } };
+      }
+
+      logger.debug("Auto-select found no devices, using default", {}, "audio");
+      return { audio: noProcessing };
+    }
+
     if (!preferBuiltIn && selectedDeviceId) {
       logger.debug("Using selected microphone", { deviceId: selectedDeviceId }, "audio");
       return { audio: { deviceId: { exact: selectedDeviceId }, ...noProcessing } };
@@ -274,6 +305,99 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     } catch (error) {
       logger.debug("Failed to pre-cache microphone device ID", { error: error.message }, "audio");
+    }
+  }
+
+  /**
+   * Probes all available audio input devices and returns the one with the
+   * highest measured RMS energy (i.e., the one that picks up the most sound).
+   * Each device is sampled for ~300 ms.  Returns the winning deviceId or null.
+   */
+  async probeDevices() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const audioInputs = devices.filter((d) => d.kind === "audioinput" && d.deviceId !== "default");
+
+      if (audioInputs.length === 0) return null;
+      if (audioInputs.length === 1) return audioInputs[0].deviceId;
+
+      let bestDeviceId = null;
+      let bestRms = -1;
+
+      for (const device of audioInputs) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              deviceId: { exact: device.deviceId },
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            },
+          });
+
+          const ctx = new AudioContext();
+          const source = ctx.createMediaStreamSource(stream);
+          const analyser = ctx.createAnalyser();
+          analyser.fftSize = 2048;
+          source.connect(analyser);
+
+          // Sample for 300 ms
+          let peakRms = 0;
+          const dataArray = new Uint8Array(analyser.fftSize);
+          await new Promise((resolve) => {
+            const interval = setInterval(() => {
+              analyser.getByteTimeDomainData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < dataArray.length; i++) {
+                const v = (dataArray[i] - 128) / 128;
+                sum += v * v;
+              }
+              const rms = Math.sqrt(sum / dataArray.length);
+              if (rms > peakRms) peakRms = rms;
+            }, 50);
+
+            setTimeout(() => {
+              clearInterval(interval);
+              resolve();
+            }, 300);
+          });
+
+          stream.getTracks().forEach((t) => {
+            t.stop();
+          });
+          await ctx.close();
+
+          logger.debug(
+            "Mic probe result",
+            { deviceId: device.deviceId, label: device.label, peakRms: peakRms.toFixed(4) },
+            "audio"
+          );
+
+          if (peakRms > bestRms) {
+            bestRms = peakRms;
+            bestDeviceId = device.deviceId;
+          }
+        } catch (err) {
+          logger.debug(
+            "Mic probe failed for device",
+            { deviceId: device.deviceId, error: err.message },
+            "audio"
+          );
+        }
+      }
+
+      if (bestDeviceId) {
+        logger.info(
+          "Auto-selected microphone",
+          { deviceId: bestDeviceId, peakRms: bestRms.toFixed(4) },
+          "audio"
+        );
+      }
+
+      return bestDeviceId;
+    } catch (err) {
+      logger.warn("Device probing failed", { error: err.message }, "audio");
+      return null;
     }
   }
 
@@ -367,7 +491,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.recordingStartTime = null;
         await this.processAudio(audioBlob, { durationSeconds });
 
-        micStream.getTracks().forEach((track) => track.stop());
+        micStream.getTracks().forEach((track) => {
+          track.stop();
+        });
       };
 
       this.mediaRecorder.start();
@@ -421,7 +547,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.mediaRecorder.stop();
 
       if (this.mediaRecorder.stream) {
-        this.mediaRecorder.stream.getTracks().forEach((track) => track.stop());
+        this.mediaRecorder.stream.getTracks().forEach((track) => {
+          track.stop();
+        });
       }
 
       return true;
@@ -1969,7 +2097,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           try {
             const constraints = await this.getAudioConstraints();
             const tempStream = await navigator.mediaDevices.getUserMedia(constraints);
-            tempStream.getTracks().forEach((track) => track.stop());
+            tempStream.getTracks().forEach((track) => {
+              track.stop();
+            });
             this.micDriverWarmedUp = true;
             logger.debug("Microphone driver pre-warmed", {}, "streaming");
           } catch (e) {
@@ -2296,7 +2426,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.streamingFallbackChunks = [];
 
     if (this.streamingStream) {
-      this.streamingStream.getTracks().forEach((track) => track.stop());
+      this.streamingStream.getTracks().forEach((track) => {
+        track.stop();
+      });
       this.streamingStream = null;
     }
     const tAudioCleanup = performance.now();
@@ -2558,7 +2690,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.streamingAudioContext = null;
 
     if (this.streamingStream) {
-      this.streamingStream.getTracks().forEach((track) => track.stop());
+      this.streamingStream.getTracks().forEach((track) => {
+        track.stop();
+      });
       this.streamingStream = null;
     }
 
