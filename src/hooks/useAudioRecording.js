@@ -93,6 +93,18 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!isStreaming) {
           setPartialTranscript("");
         }
+        window.electronAPI?.sendRecordingOverlayUpdate?.({
+          level: 0,
+          isRecording,
+          isProcessing,
+        });
+      },
+      onAudioLevel: (level) => {
+        window.electronAPI?.sendRecordingOverlayUpdate?.({
+          level,
+          isRecording: true,
+          isProcessing: false,
+        });
       },
       onError: (error) => {
         const title = getRecordingErrorTitle(error, t);
