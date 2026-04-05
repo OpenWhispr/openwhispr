@@ -1390,6 +1390,12 @@
           "title": "已切换到自定义设置"
         }
       },
+      "transcriptionPrompt": {
+        "title": "转录提示词",
+        "description": "Whisper 会模仿此提示词的格式风格 — 包含多样的标点（逗号、破折号、引号）以获得带标点的输出。在\"自动\"模式下，提示词的语言也会影响语言检测。与自定义词典共享令牌预算——提示词越短，留给词典词语的空间越多。",
+        "placeholder": "输入一段标点规范的段落来引导转录风格...",
+        "insertPreset": "插入预设"
+      },
       "gpuDevice": {
         "title": "转录 GPU",
         "description": "用于本地语音识别的 GPU"
