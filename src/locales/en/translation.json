@@ -1446,7 +1446,9 @@
       "gpuDevice": {
         "title": "Transcription GPU",
         "description": "GPU used for local speech-to-text"
-      }
+      },
+      "suppressRepetitionLabel": "Suppress repeated phrases",
+      "suppressRepetitionDescription": "Automatically remove repeated phrases from transcriptions. Helps prevent hallucination loops in longer recordings."
     },
     "intelligence": {
       "gpuDevice": {

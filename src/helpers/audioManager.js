@@ -919,8 +919,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  removeRepetitions(text) {
+    let result = text;
+    let prev;
+    do {
+      prev = result;
+      result = result.replace(/(\b.{10,}?)\s+\1(?=\s|$)/g, '$1');
+    } while (result !== prev);
+    return result.trim();
+  }
+
   async processTranscription(text, source) {
-    const normalizedText = typeof text === "string" ? text.trim() : "";
+    let normalizedText = typeof text === "string" ? text.trim() : "";
+
+    if (normalizedText && getSettings().suppressRepetition) {
+      const before = normalizedText;
+      normalizedText = this.removeRepetitions(normalizedText);
+      if (before !== normalizedText) {
+        logger.debug("Removed repeated phrases from transcription", {
+          beforeLength: before.length,
+          afterLength: normalizedText.length,
+        }, "transcription");
+      }
+    }
 
     if (!normalizedText) {
       logger.logReasoning("TRANSCRIPTION_EMPTY_SKIPPING_REASONING", {

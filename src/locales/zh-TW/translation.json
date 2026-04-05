@@ -1393,7 +1393,9 @@
       "gpuDevice": {
         "title": "轉錄 GPU",
         "description": "用於本機語音辨識的 GPU"
-      }
+      },
+      "suppressRepetitionLabel": "抑制重複短語",
+      "suppressRepetitionDescription": "自動從轉錄中刪除重複的短語。有助於防止長錄音中的幻覺循環。"
     },
     "intelligence": {
       "gpuDevice": {

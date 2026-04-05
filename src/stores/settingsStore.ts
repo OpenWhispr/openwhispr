@@ -66,6 +66,7 @@ const BOOLEAN_SETTINGS = new Set([
   "keepTranscriptionInClipboard",
   "dataRetentionEnabled",
   "noteFilesEnabled",
+  "suppressRepetition",
 ]);
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
@@ -250,6 +251,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cloudReasoningBaseUrl: readString("cloudReasoningBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   customDictionary: readStringArray("customDictionary", []),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
+  suppressRepetition: readBoolean("suppressRepetition", true),
 
   useReasoningModel: readBoolean("useReasoningModel", true),
   reasoningModel: readString("reasoningModel", ""),
@@ -342,6 +344,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCloudReasoningMode: createStringSetter("cloudReasoningMode"),
   setCloudReasoningBaseUrl: createStringSetter("cloudReasoningBaseUrl"),
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
+  setSuppressRepetition: createBooleanSetter("suppressRepetition"),
   setUseReasoningModel: createBooleanSetter("useReasoningModel"),
   setReasoningModel: createStringSetter("reasoningModel"),
   setReasoningProvider: createStringSetter("reasoningProvider"),

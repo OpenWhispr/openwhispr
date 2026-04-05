@@ -1398,7 +1398,9 @@
       "gpuDevice": {
         "title": "Transkriptions-GPU",
         "description": "GPU für lokale Spracherkennung"
-      }
+      },
+      "suppressRepetitionLabel": "Wiederholte Phrasen unterdrücken",
+      "suppressRepetitionDescription": "Automatisch wiederholte Phrasen aus Transkriptionen entfernen. Hilft, Halluzinationsschleifen bei längeren Aufnahmen zu verhindern."
     },
     "intelligence": {
       "gpuDevice": {

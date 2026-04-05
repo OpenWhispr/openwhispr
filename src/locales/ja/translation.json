@@ -1398,7 +1398,9 @@
       "gpuDevice": {
         "title": "文字起こしGPU",
         "description": "ローカル音声認識に使用するGPU"
-      }
+      },
+      "suppressRepetitionLabel": "繰り返しフレーズを抑制",
+      "suppressRepetitionDescription": "文字起こしから繰り返しフレーズを自動的に削除します。長い録音でのハルシネーションループを防ぐのに役立ちます。"
     },
     "intelligence": {
       "gpuDevice": {

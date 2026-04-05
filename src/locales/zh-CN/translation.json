@@ -1393,7 +1393,9 @@
       "gpuDevice": {
         "title": "转录 GPU",
         "description": "用于本地语音识别的 GPU"
-      }
+      },
+      "suppressRepetitionLabel": "抑制重复短语",
+      "suppressRepetitionDescription": "自动从转录中删除重复的短语。有助于防止长录音中的幻觉循环。"
     },
     "intelligence": {
       "gpuDevice": {

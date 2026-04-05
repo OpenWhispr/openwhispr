@@ -1398,7 +1398,9 @@
       "gpuDevice": {
         "title": "GPU trascrizione",
         "description": "GPU usata per la trascrizione locale"
-      }
+      },
+      "suppressRepetitionLabel": "Sopprimi frasi ripetute",
+      "suppressRepetitionDescription": "Rimuovi automaticamente le frasi ripetute dalle trascrizioni. Aiuta a prevenire i loop di allucinazione nelle registrazioni lunghe."
     },
     "intelligence": {
       "gpuDevice": {

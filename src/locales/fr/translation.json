@@ -1398,7 +1398,9 @@
       "gpuDevice": {
         "title": "GPU de transcription",
         "description": "GPU pour la transcription locale"
-      }
+      },
+      "suppressRepetitionLabel": "Supprimer les phrases répétées",
+      "suppressRepetitionDescription": "Supprime automatiquement les phrases répétées des transcriptions. Aide à prévenir les boucles d'hallucination lors d'enregistrements longs."
     },
     "intelligence": {
       "gpuDevice": {

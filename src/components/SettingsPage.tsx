@@ -183,6 +183,8 @@ interface TranscriptionSectionProps {
   setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl: (url: string) => void;
+  suppressRepetition: boolean;
+  setSuppressRepetition: (value: boolean) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -218,6 +220,8 @@ function TranscriptionSection({
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
   setCloudTranscriptionBaseUrl,
+  suppressRepetition,
+  setSuppressRepetition,
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
@@ -398,6 +402,18 @@ function TranscriptionSection({
         />
       )}
       <GpuDeviceSelector purpose="transcription" />
+
+      {/* Suppress Repetition */}
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.suppressRepetitionLabel")}
+            description={t("settingsPage.transcription.suppressRepetitionDescription")}
+          >
+            <Toggle checked={suppressRepetition} onChange={setSuppressRepetition} />
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
     </div>
   );
 }
@@ -791,6 +807,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setNoteFilesEnabled,
     noteFilesPath,
     setNoteFilesPath,
+    suppressRepetition,
+    setSuppressRepetition,
   } = useSettings();
 
   const agentKey = useSettingsStore((s) => s.agentKey);
@@ -3043,6 +3061,8 @@ EOF`,
             setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
             cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
             setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+            suppressRepetition={suppressRepetition}
+            setSuppressRepetition={setSuppressRepetition}
             toast={toast}
           />
         );

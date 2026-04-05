@@ -1398,7 +1398,9 @@
       "gpuDevice": {
         "title": "GPU транскрипции",
         "description": "GPU для локального распознавания речи"
-      }
+      },
+      "suppressRepetitionLabel": "Подавление повторов",
+      "suppressRepetitionDescription": "Автоматически удалять повторяющиеся фразы из транскрипции. Помогает предотвратить зацикливание при длинных записях."
     },
     "intelligence": {
       "gpuDevice": {

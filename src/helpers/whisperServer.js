@@ -238,7 +238,13 @@ class WhisperServerManager extends EventEmitter {
       spawnEnv.CUDA_VISIBLE_DEVICES = process.env.TRANSCRIPTION_GPU_INDEX;
     }
 
-    const args = ["--model", modelPath, "--host", "127.0.0.1", "--port", String(this.port)];
+    const args = [
+      "--model", modelPath,
+      "--host", "127.0.0.1",
+      "--port", String(this.port),
+      "--max-context", "128",
+      "--entropy-thold", "2.8",
+    ];
 
     // FFmpeg is required for pre-converting audio to 16kHz mono WAV
     this.canConvert = !!ffmpegPath;

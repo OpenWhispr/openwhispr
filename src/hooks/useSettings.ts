@@ -20,6 +20,7 @@ export interface TranscriptionSettings {
   cloudTranscriptionMode: string;
   customDictionary: string[];
   assemblyAiStreaming: boolean;
+  suppressRepetition: boolean;
 }
 
 export interface ReasoningSettings {
@@ -181,6 +182,8 @@ function useSettingsInternal() {
     customDictionary: store.customDictionary,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
+    suppressRepetition: store.suppressRepetition,
+    setSuppressRepetition: store.setSuppressRepetition,
     useReasoningModel: store.useReasoningModel,
     reasoningModel: store.reasoningModel,
     reasoningProvider: store.reasoningProvider,
