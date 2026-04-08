@@ -5,17 +5,21 @@
  * Accepts a virtual key code as command line argument.
  * Outputs "KEY_DOWN" and "KEY_UP" to stdout.
  *
- * Compile with: cl /O2 windows-key-listener.c /Fe:windows-key-listener.exe user32.lib
- * Or with MinGW: gcc -O2 windows-key-listener.c -o windows-key-listener.exe -luser32
+ * Compile with: cl /O2 windows-key-listener.c /Fe:windows-key-listener.exe user32.lib wtsapi32.lib
+ * Or with MinGW: gcc -O2 windows-key-listener.c -o windows-key-listener.exe -luser32 -lwtsapi32
  */
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <wtsapi32.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#pragma comment(lib, "wtsapi32.lib")
+
 static HHOOK g_hook = NULL;
+static HWND g_hwnd = NULL;
 static DWORD g_targetVk = 0;
 static BOOL g_isKeyDown = FALSE;
 
@@ -80,8 +84,45 @@ static BOOL IsRequiredModifierEvent(DWORD vkCode) {
            (g_requireWin && IsWinVk(vkCode));
 }
 
-// Track modifier state inside the hook instead of using GetAsyncKeyState().
-// For low-level hooks, async state is not yet updated for the current event.
+static void ClearAllModifierState(void) {
+    g_ctrlDown = FALSE;
+    g_altDown = FALSE;
+    g_shiftDown = FALSE;
+    g_leftWinDown = FALSE;
+    g_rightWinDown = FALSE;
+    if (g_isKeyDown) {
+        g_isKeyDown = FALSE;
+        printf("KEY_UP\n");
+        fflush(stdout);
+    }
+}
+
+// Resync modifier state for keys other than the one that triggered this callback.
+// GetAsyncKeyState is not yet updated for the current event's key, but is valid
+// for all other keys. If it reports a modifier as released that we think is held,
+// clear our internal flag — covers desync from lock screen, UAC, RDP, hook timeout.
+static void ResyncModifierState(DWORD currentVkCode) {
+    static const struct { DWORD vk; BOOL *flag; } modifiers[] = {
+        { VK_LCONTROL, &g_ctrlDown },
+        { VK_RCONTROL, &g_ctrlDown },
+        { VK_LMENU,    &g_altDown },
+        { VK_RMENU,    &g_altDown },
+        { VK_LSHIFT,   &g_shiftDown },
+        { VK_RSHIFT,   &g_shiftDown },
+        { VK_LWIN,     &g_leftWinDown },
+        { VK_RWIN,     &g_rightWinDown },
+    };
+
+    for (int i = 0; i < sizeof(modifiers) / sizeof(modifiers[0]); i++) {
+        if (modifiers[i].vk == currentVkCode) continue;
+        if (*modifiers[i].flag && !(GetAsyncKeyState(modifiers[i].vk) & 0x8000)) {
+            *modifiers[i].flag = FALSE;
+        }
+    }
+}
+
+// Track modifier state inside the hook, with GetAsyncKeyState resync for
+// non-current-event keys to recover from missed key-up events.
 static BOOL AreRequiredModifiersPressed(void) {
     if (g_requireCtrl && !g_ctrlDown) return FALSE;
     if (g_requireAlt && !g_altDown) return FALSE;
@@ -185,6 +226,8 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             UpdateModifierState(kbd->vkCode, isKeyDown);
         }
 
+        ResyncModifierState(kbd->vkCode);
+
         // Stop an active press as soon as one of its required modifiers is released.
         if (g_isKeyDown && isKeyUp && IsRequiredModifierEvent(kbd->vkCode) &&
             !AreRequiredModifiersPressed()) {
@@ -232,8 +275,38 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
     return CallNextHookEx(g_hook, nCode, wParam, lParam);
 }
 
+static LRESULT CALLBACK SessionWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_WTSSESSION_CHANGE) {
+        if (wParam == WTS_SESSION_LOCK || wParam == WTS_SESSION_UNLOCK) {
+            ClearAllModifierState();
+        }
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+static HWND CreateSessionWindow(void) {
+    WNDCLASSA wc = {0};
+    wc.lpfnWndProc = SessionWndProc;
+    wc.hInstance = GetModuleHandle(NULL);
+    wc.lpszClassName = "OpenWhisprKeyListener";
+    RegisterClassA(&wc);
+
+    HWND hwnd = CreateWindowExA(0, wc.lpszClassName, NULL, 0,
+                                0, 0, 0, 0, HWND_MESSAGE, NULL, wc.hInstance, NULL);
+    if (hwnd) {
+        WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION);
+    }
+    return hwnd;
+}
+
 BOOL WINAPI ConsoleHandler(DWORD signal) {
     if (signal == CTRL_C_EVENT || signal == CTRL_BREAK_EVENT || signal == CTRL_CLOSE_EVENT) {
+        if (g_hwnd) {
+            WTSUnRegisterSessionNotification(g_hwnd);
+            DestroyWindow(g_hwnd);
+            g_hwnd = NULL;
+        }
         if (g_hook) {
             UnhookWindowsHookEx(g_hook);
             g_hook = NULL;
@@ -331,17 +404,23 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    g_hwnd = CreateSessionWindow();
+
     // Signal that we're ready
     printf("READY\n");
     fflush(stdout);
 
-    // Message loop - required for low-level hooks to work
+    // Message loop - required for low-level hooks and session notifications
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0) > 0) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
 
+    if (g_hwnd) {
+        WTSUnRegisterSessionNotification(g_hwnd);
+        DestroyWindow(g_hwnd);
+    }
     UnhookWindowsHookEx(g_hook);
     return 0;
 }

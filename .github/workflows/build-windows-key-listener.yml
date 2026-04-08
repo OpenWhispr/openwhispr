@@ -32,7 +32,7 @@ jobs:
 
       - name: Compile Windows Key Listener
         run: |
-          cl /O2 /nologo resources/windows-key-listener.c /Fe:windows-key-listener.exe user32.lib
+          cl /O2 /nologo resources/windows-key-listener.c /Fe:windows-key-listener.exe user32.lib wtsapi32.lib
         shell: cmd
 
       - name: Verify binary
