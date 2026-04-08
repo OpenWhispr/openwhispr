@@ -2021,6 +2021,14 @@
       "nameLabel": "Nome della chiave",
       "namePlaceholder": "es. La mia integrazione",
       "scopesLabel": "Permessi",
+      "expiryLabel": "Scadenza",
+      "expiryOptions": {
+        "never": "Non scade mai",
+        "30days": "30 giorni",
+        "60days": "60 giorni",
+        "90days": "90 giorni",
+        "1year": "1 anno"
+      },
       "submit": "Crea",
       "cancel": "Annulla"
     },
@@ -2032,10 +2040,10 @@
       "done": "Fatto"
     },
     "scopes": {
-      "notes:read": "Leggi note",
-      "notes:write": "Crea e modifica note",
-      "transcriptions:read": "Leggi trascrizioni",
-      "usage:read": "Visualizza utilizzo"
+      "notesRead": "Leggi note",
+      "notesWrite": "Crea e modifica note",
+      "transcriptionsRead": "Leggi trascrizioni",
+      "usageRead": "Visualizza utilizzo"
     },
     "revoke": {
       "button": "Revoca",

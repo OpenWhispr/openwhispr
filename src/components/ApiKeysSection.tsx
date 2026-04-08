@@ -15,14 +15,20 @@ import {
   DialogFooter,
   ConfirmDialog,
 } from "./ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { SectionHeader, SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
 import { ApiKeysService } from "../services/ApiKeysService";
 import type { ApiKey } from "../services/ApiKeysService";
+import {
+  API_SCOPES,
+  API_SCOPE_I18N_KEY,
+  API_KEY_EXPIRY_OPTIONS,
+  MAX_API_KEYS,
+  type ApiScope,
+} from "../constants/apiKeys";
 
-const MAX_KEYS = 5;
 const MAX_NAME_LENGTH = 100;
-
-const ALL_SCOPES = ["notes:read", "notes:write", "transcriptions:read", "usage:read"] as const;
+const DEFAULT_EXPIRY_VALUE = "never";
 
 function formatRelativeTime(dateString: string): string {
   const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
@@ -89,7 +95,7 @@ export default function ApiKeysSection() {
           title={t("apiKeysSection.title")}
           description={t("apiKeysSection.description")}
         />
-        {!isLoading && keys.length > 0 && keys.length < MAX_KEYS && (
+        {!isLoading && keys.length > 0 && keys.length < MAX_API_KEYS && (
           <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             {t("apiKeysSection.createButton")}
@@ -141,7 +147,9 @@ export default function ApiKeysSection() {
                   <div className="flex items-center gap-1.5 flex-wrap">
                     {apiKey.scopes.map((scope) => (
                       <Badge key={scope} variant="outline" className="text-[10px] px-1.5 py-0">
-                        {t(`apiKeysSection.scopes.${scope}`)}
+                        {t(
+                          `apiKeysSection.scopes.${API_SCOPE_I18N_KEY[scope as ApiScope] ?? scope}`
+                        )}
                       </Badge>
                     ))}
                     <span className="text-[10px] text-muted-foreground/50 ml-1">
@@ -165,10 +173,10 @@ export default function ApiKeysSection() {
             </SettingsPanelRow>
           ))}
 
-          {keys.length >= MAX_KEYS && (
+          {keys.length >= MAX_API_KEYS && (
             <SettingsPanelRow>
               <p className="text-[10px] text-muted-foreground/50 text-center">
-                {t("apiKeysSection.maxKeysReached", { max: MAX_KEYS })}
+                {t("apiKeysSection.maxKeysReached", { max: MAX_API_KEYS })}
               </p>
             </SettingsPanelRow>
           )}
@@ -211,14 +219,16 @@ function CreateKeyDialog({
   const { toast } = useToast();
 
   const [name, setName] = useState("");
-  const [scopes, setScopes] = useState<Set<string>>(() => new Set(ALL_SCOPES));
+  const [scopes, setScopes] = useState<Set<ApiScope>>(() => new Set(API_SCOPES));
+  const [expiry, setExpiry] = useState<string>(DEFAULT_EXPIRY_VALUE);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rawKey, setRawKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const resetForm = () => {
     setName("");
-    setScopes(new Set(ALL_SCOPES));
+    setScopes(new Set(API_SCOPES));
+    setExpiry(DEFAULT_EXPIRY_VALUE);
     setIsSubmitting(false);
     setRawKey(null);
     setCopied(false);
@@ -236,7 +246,12 @@ function CreateKeyDialog({
     if (!name.trim() || scopes.size === 0) return;
     setIsSubmitting(true);
     try {
-      const result = await ApiKeysService.create(name.trim(), Array.from(scopes));
+      const expiresInDays = API_KEY_EXPIRY_OPTIONS.find((o) => o.value === expiry)?.days ?? null;
+      const result = await ApiKeysService.create({
+        name: name.trim(),
+        scopes: Array.from(scopes),
+        expiresInDays,
+      });
       setRawKey(result.key);
       await onCreated();
     } catch {
@@ -264,7 +279,7 @@ function CreateKeyDialog({
     }
   };
 
-  const toggleScope = (scope: string) => {
+  const toggleScope = (scope: ApiScope) => {
     setScopes((prev) => {
       const next = new Set(prev);
       if (next.has(scope)) {
@@ -356,7 +371,7 @@ function CreateKeyDialog({
                   {t("apiKeysSection.create.scopesLabel")}
                 </label>
                 <div className="space-y-1">
-                  {ALL_SCOPES.map((scope) => (
+                  {API_SCOPES.map((scope) => (
                     <label
                       key={scope}
                       className="flex items-center gap-2.5 rounded-md px-2.5 py-1.5 cursor-pointer hover:bg-muted/50 dark:hover:bg-surface-raised/30 transition-colors"
@@ -368,11 +383,29 @@ function CreateKeyDialog({
                         className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
                       />
                       <span className="text-xs text-foreground">
-                        {t(`apiKeysSection.scopes.${scope}`)}
+                        {t(`apiKeysSection.scopes.${API_SCOPE_I18N_KEY[scope]}`)}
                       </span>
                     </label>
                   ))}
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-foreground">
+                  {t("apiKeysSection.create.expiryLabel")}
+                </label>
+                <Select value={expiry} onValueChange={setExpiry}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {API_KEY_EXPIRY_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value} className="text-xs">
+                        {t(`apiKeysSection.create.expiryOptions.${option.value}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

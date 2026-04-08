@@ -609,6 +609,14 @@
       "nameLabel": "Nombre de la clave",
       "namePlaceholder": "ej. Mi Integración",
       "scopesLabel": "Permisos",
+      "expiryLabel": "Caducidad",
+      "expiryOptions": {
+        "never": "Nunca caduca",
+        "30days": "30 días",
+        "60days": "60 días",
+        "90days": "90 días",
+        "1year": "1 año"
+      },
       "submit": "Crear",
       "cancel": "Cancelar"
     },
@@ -620,10 +628,10 @@
       "done": "Listo"
     },
     "scopes": {
-      "notes:read": "Leer notas",
-      "notes:write": "Crear y editar notas",
-      "transcriptions:read": "Leer transcripciones",
-      "usage:read": "Ver uso"
+      "notesRead": "Leer notas",
+      "notesWrite": "Crear y editar notas",
+      "transcriptionsRead": "Leer transcripciones",
+      "usageRead": "Ver uso"
     },
     "revoke": {
       "button": "Revocar",

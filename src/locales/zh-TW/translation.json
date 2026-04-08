@@ -2021,6 +2021,14 @@
       "nameLabel": "金鑰名稱",
       "namePlaceholder": "例如：我的整合",
       "scopesLabel": "權限",
+      "expiryLabel": "有效期限",
+      "expiryOptions": {
+        "never": "永不過期",
+        "30days": "30 天",
+        "60days": "60 天",
+        "90days": "90 天",
+        "1year": "1 年"
+      },
       "submit": "建立",
       "cancel": "取消"
     },
@@ -2032,10 +2040,10 @@
       "done": "完成"
     },
     "scopes": {
-      "notes:read": "讀取筆記",
-      "notes:write": "建立與編輯筆記",
-      "transcriptions:read": "讀取轉錄",
-      "usage:read": "檢視使用情況"
+      "notesRead": "讀取筆記",
+      "notesWrite": "建立與編輯筆記",
+      "transcriptionsRead": "讀取轉錄",
+      "usageRead": "檢視使用情況"
     },
     "revoke": {
       "button": "撤銷",

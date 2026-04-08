@@ -657,6 +657,14 @@
       "nameLabel": "Key Name",
       "namePlaceholder": "e.g. My Integration",
       "scopesLabel": "Permissions",
+      "expiryLabel": "Expiration",
+      "expiryOptions": {
+        "never": "Never expires",
+        "30days": "30 days",
+        "60days": "60 days",
+        "90days": "90 days",
+        "1year": "1 year"
+      },
       "submit": "Create",
       "cancel": "Cancel"
     },
@@ -668,10 +676,10 @@
       "done": "Done"
     },
     "scopes": {
-      "notes:read": "Read notes",
-      "notes:write": "Create & edit notes",
-      "transcriptions:read": "Read transcriptions",
-      "usage:read": "View usage"
+      "notesRead": "Read notes",
+      "notesWrite": "Create & edit notes",
+      "transcriptionsRead": "Read transcriptions",
+      "usageRead": "View usage"
     },
     "revoke": {
       "button": "Revoke",

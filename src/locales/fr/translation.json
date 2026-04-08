@@ -609,6 +609,14 @@
       "nameLabel": "Nom de la clé",
       "namePlaceholder": "ex. Mon intégration",
       "scopesLabel": "Autorisations",
+      "expiryLabel": "Expiration",
+      "expiryOptions": {
+        "never": "N'expire jamais",
+        "30days": "30 jours",
+        "60days": "60 jours",
+        "90days": "90 jours",
+        "1year": "1 an"
+      },
       "submit": "Créer",
       "cancel": "Annuler"
     },
@@ -620,10 +628,10 @@
       "done": "Terminé"
     },
     "scopes": {
-      "notes:read": "Lire les notes",
-      "notes:write": "Créer et modifier les notes",
-      "transcriptions:read": "Lire les transcriptions",
-      "usage:read": "Voir l'utilisation"
+      "notesRead": "Lire les notes",
+      "notesWrite": "Créer et modifier les notes",
+      "transcriptionsRead": "Lire les transcriptions",
+      "usageRead": "Voir l'utilisation"
     },
     "revoke": {
       "button": "Révoquer",

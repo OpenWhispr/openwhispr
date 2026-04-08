@@ -2021,6 +2021,14 @@
       "nameLabel": "密钥名称",
       "namePlaceholder": "例如：我的集成",
       "scopesLabel": "权限",
+      "expiryLabel": "有效期",
+      "expiryOptions": {
+        "never": "永不过期",
+        "30days": "30 天",
+        "60days": "60 天",
+        "90days": "90 天",
+        "1year": "1 年"
+      },
       "submit": "创建",
       "cancel": "取消"
     },
@@ -2032,10 +2040,10 @@
       "done": "完成"
     },
     "scopes": {
-      "notes:read": "读取笔记",
-      "notes:write": "创建和编辑笔记",
-      "transcriptions:read": "读取转录",
-      "usage:read": "查看使用情况"
+      "notesRead": "读取笔记",
+      "notesWrite": "创建和编辑笔记",
+      "transcriptionsRead": "读取转录",
+      "usageRead": "查看使用情况"
     },
     "revoke": {
       "button": "撤销",

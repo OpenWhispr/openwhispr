@@ -2021,6 +2021,14 @@
       "nameLabel": "Schlüsselname",
       "namePlaceholder": "z. B. Meine Integration",
       "scopesLabel": "Berechtigungen",
+      "expiryLabel": "Ablauf",
+      "expiryOptions": {
+        "never": "Läuft nicht ab",
+        "30days": "30 Tage",
+        "60days": "60 Tage",
+        "90days": "90 Tage",
+        "1year": "1 Jahr"
+      },
       "submit": "Erstellen",
       "cancel": "Abbrechen"
     },
@@ -2032,10 +2040,10 @@
       "done": "Fertig"
     },
     "scopes": {
-      "notes:read": "Notizen lesen",
-      "notes:write": "Notizen erstellen und bearbeiten",
-      "transcriptions:read": "Transkriptionen lesen",
-      "usage:read": "Nutzung anzeigen"
+      "notesRead": "Notizen lesen",
+      "notesWrite": "Notizen erstellen und bearbeiten",
+      "transcriptionsRead": "Transkriptionen lesen",
+      "usageRead": "Nutzung anzeigen"
     },
     "revoke": {
       "button": "Widerrufen",

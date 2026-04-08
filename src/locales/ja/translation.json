@@ -2021,6 +2021,14 @@
       "nameLabel": "キー名",
       "namePlaceholder": "例: マイインテグレーション",
       "scopesLabel": "権限",
+      "expiryLabel": "有効期限",
+      "expiryOptions": {
+        "never": "無期限",
+        "30days": "30日間",
+        "60days": "60日間",
+        "90days": "90日間",
+        "1year": "1年"
+      },
       "submit": "作成",
       "cancel": "キャンセル"
     },
@@ -2032,10 +2040,10 @@
       "done": "完了"
     },
     "scopes": {
-      "notes:read": "ノートの読み取り",
-      "notes:write": "ノートの作成と編集",
-      "transcriptions:read": "文字起こしの読み取り",
-      "usage:read": "使用状況の表示"
+      "notesRead": "ノートの読み取り",
+      "notesWrite": "ノートの作成と編集",
+      "transcriptionsRead": "文字起こしの読み取り",
+      "usageRead": "使用状況の表示"
     },
     "revoke": {
       "button": "取り消し",
