@@ -575,6 +575,19 @@ async function startApp() {
     environmentManager.savePanelStartPosition(position);
   });
 
+  // Recording overlay
+  ipcMain.on("recording-overlay-update", (_event, data) => {
+    windowManager.sendRecordingOverlayUpdate(data);
+  });
+
+  ipcMain.handle("recording-overlay-cancel", async () => {
+    windowManager.sendStopDictation();
+  });
+
+  ipcMain.on("recording-overlay-enabled-changed", (_event, enabled) => {
+    windowManager.setRecordingOverlayEnabled(enabled);
+  });
+
   if (process.platform === "darwin") {
     app.setActivationPolicy("regular");
   }
@@ -591,6 +604,9 @@ async function startApp() {
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
+
+  // Create recording overlay (hidden) for instant show on hotkey
+  await windowManager.createRecordingOverlay();
 
   // Create agent window (hidden) and set up agent hotkey
   await windowManager.createAgentWindow();
