@@ -70,6 +70,12 @@ import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/Toast";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "./ui/dropdown-menu";
 import { useTheme } from "../hooks/useTheme";
 import type { GpuDevice, LocalTranscriptionProvider } from "../types/electron";
 import logger from "../utils/logger";
@@ -83,6 +89,72 @@ import { useSettingsStore } from "../stores/settingsStore";
 
 const formatAmount = (cents: number, currency: string) =>
   (cents / 100).toLocaleString(undefined, { style: "currency", currency });
+
+/** Estimate Whisper token count — CJK chars ≈ 2.2 tokens, Cyrillic ≈ 0.5, Latin ≈ 0.25 */
+function estimateTokens(text: string): number {
+  let tokens = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0)!;
+    if (
+      (code >= 0x3000 && code <= 0x9fff) ||
+      (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xff00 && code <= 0xffef)
+    ) {
+      tokens += 2.2; // CJK ideographs
+    } else if (code >= 0x0400 && code <= 0x04ff) {
+      tokens += 0.5; // Cyrillic
+    } else {
+      tokens += 0.25; // Latin / other
+    }
+  }
+  return Math.round(tokens);
+}
+
+/** ~half of Whisper's 224-token initial_prompt window, leaving room for Custom Dictionary */
+const TOKEN_BUDGET = 112;
+
+const TRANSCRIPTION_PROMPT_PRESETS: Record<string, { label: string; prompt: string }> = {
+  en: {
+    label: "English",
+    prompt: 'Hello! How are you? He said: "Let\'s do this today — while we have time." Of course, it\'s not that simple.',
+  },
+  es: {
+    label: "Español",
+    prompt: '¡Hola! ¿Cómo estás? Él dijo: "Hagámoslo hoy — mientras tengamos tiempo." Claro, no es tan sencillo.',
+  },
+  fr: {
+    label: "Français",
+    prompt: 'Bonjour ! Comment allez-vous ? Il a dit : « Faisons-le aujourd\'hui — tant qu\'on a le temps. » Ce n\'est pas si simple.',
+  },
+  de: {
+    label: "Deutsch",
+    prompt: 'Hallo! Wie geht es Ihnen? Er sagte: „Machen wir es heute — solange wir Zeit haben." So einfach ist es nicht.',
+  },
+  pt: {
+    label: "Português",
+    prompt: 'Olá! Como você está? Ele disse: "Vamos fazer isso hoje — enquanto temos tempo." Não é tão simples.',
+  },
+  it: {
+    label: "Italiano",
+    prompt: 'Ciao! Come stai? Ha detto: "Facciamolo oggi — finché abbiamo tempo." Non è così semplice.',
+  },
+  ru: {
+    label: "Русский",
+    prompt: 'Привет! Как дела? Он сказал: «Сделаем это сегодня — пока есть время». Конечно, не всё так просто; нужно учесть погоду.',
+  },
+  ja: {
+    label: "日本語",
+    prompt: 'こんにちは！元気ですか？「今日やりましょう。」もちろん、簡単ではない。',
+  },
+  "zh-CN": {
+    label: "中文（简体）",
+    prompt: '你好！你怎么样？他说："今天就做吧。"当然，事情没那么简单。',
+  },
+  "zh-TW": {
+    label: "中文（繁體）",
+    prompt: '你好！你怎麼樣？他說：「今天就做吧。」當然，事情沒那麼簡單。',
+  },
+};
 
 export type SettingsSectionType =
   | "account"
@@ -183,6 +255,8 @@ interface TranscriptionSectionProps {
   setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl: (url: string) => void;
+  customTranscriptionPrompt: string;
+  setCustomTranscriptionPrompt: (value: string) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -218,6 +292,8 @@ function TranscriptionSection({
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
   setCloudTranscriptionBaseUrl,
+  customTranscriptionPrompt,
+  setCustomTranscriptionPrompt,
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
@@ -398,6 +474,77 @@ function TranscriptionSection({
         />
       )}
       <GpuDeviceSelector purpose="transcription" />
+
+      {/* Transcription Prompt */}
+      <SectionHeader
+        title={t("settingsPage.transcription.transcriptionPrompt.title")}
+        description={t("settingsPage.transcription.transcriptionPrompt.description")}
+      />
+      <SettingsPanel>
+        <textarea
+          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-y"
+          rows={4}
+          value={customTranscriptionPrompt}
+          onChange={(e) => {
+            if (estimateTokens(e.target.value) <= TOKEN_BUDGET) {
+              setCustomTranscriptionPrompt(e.target.value);
+            }
+          }}
+          placeholder={t("settingsPage.transcription.transcriptionPrompt.placeholder")}
+        />
+        <div className="flex items-center justify-between mt-1.5">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                {t("settingsPage.transcription.transcriptionPrompt.insertPreset")}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {Object.entries(TRANSCRIPTION_PROMPT_PRESETS).map(([code, { label }]) => (
+                <DropdownMenuItem
+                  key={code}
+                  onClick={() =>
+                    setCustomTranscriptionPrompt(TRANSCRIPTION_PROMPT_PRESETS[code].prompt)
+                  }
+                >
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {(() => {
+            const pct = Math.min(
+              Math.round((estimateTokens(customTranscriptionPrompt) / TOKEN_BUDGET) * 100),
+              100,
+            );
+            return (
+              <div className="flex items-center gap-2 min-w-[120px]">
+                <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
+                  <div
+                    className={cn(
+                      "h-full rounded-full transition-all",
+                      pct < 80
+                        ? "bg-muted-foreground/40"
+                        : pct < 95
+                          ? "bg-yellow-500"
+                          : "bg-destructive",
+                    )}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <span
+                  className={cn(
+                    "text-xs tabular-nums text-muted-foreground/70 w-8 text-right",
+                    pct >= 95 && "text-destructive",
+                  )}
+                >
+                  {pct}%
+                </span>
+              </div>
+            );
+          })()}
+        </div>
+      </SettingsPanel>
     </div>
   );
 }
@@ -787,6 +934,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setDataRetentionEnabled,
     customDictionary,
     setCustomDictionary,
+    customTranscriptionPrompt,
+    setCustomTranscriptionPrompt,
     noteFilesEnabled,
     setNoteFilesEnabled,
     noteFilesPath,
@@ -3043,6 +3192,8 @@ EOF`,
             setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
             cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
             setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+            customTranscriptionPrompt={customTranscriptionPrompt}
+            setCustomTranscriptionPrompt={setCustomTranscriptionPrompt}
             toast={toast}
           />
         );

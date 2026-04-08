@@ -1395,6 +1395,12 @@
           "title": "Zu benutzerdefinierter Einrichtung gewechselt"
         }
       },
+      "transcriptionPrompt": {
+        "title": "Transkriptions-Prompt",
+        "description": "Whisper ahmt den Formatierungsstil dieses Prompts nach — verwenden Sie vielfältige Zeichensetzung (Kommas, Gedankenstriche, Anführungszeichen), um interpunktierten Text zu erhalten. Im \"auto\"-Modus beeinflusst die Prompt-Sprache auch die Spracherkennung. Teilt das Token-Budget mit dem benutzerdefinierten Wörterbuch — ein kürzerer Prompt lässt mehr Platz für Wörterbuch-Wörter.",
+        "placeholder": "Geben Sie einen gut interpunktierten Absatz ein, um den Transkriptionsstil zu steuern...",
+        "insertPreset": "Vorlage einfügen"
+      },
       "gpuDevice": {
         "title": "Transkriptions-GPU",
         "description": "GPU für lokale Spracherkennung"

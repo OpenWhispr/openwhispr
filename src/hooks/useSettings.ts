@@ -19,6 +19,7 @@ export interface TranscriptionSettings {
   cloudTranscriptionBaseUrl?: string;
   cloudTranscriptionMode: string;
   customDictionary: string[];
+  customTranscriptionPrompt: string;
   assemblyAiStreaming: boolean;
 }
 
@@ -179,8 +180,10 @@ function useSettingsInternal() {
     cloudTranscriptionMode: store.cloudTranscriptionMode,
     cloudReasoningMode: store.cloudReasoningMode,
     customDictionary: store.customDictionary,
+    customTranscriptionPrompt: store.customTranscriptionPrompt,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
+    setCustomTranscriptionPrompt: store.setCustomTranscriptionPrompt,
     useReasoningModel: store.useReasoningModel,
     reasoningModel: store.reasoningModel,
     reasoningProvider: store.reasoningProvider,

@@ -1395,6 +1395,12 @@
           "title": "Basculé vers la configuration personnalisée"
         }
       },
+      "transcriptionPrompt": {
+        "title": "Prompt de transcription",
+        "description": "Whisper imite le style de formatage de ce prompt — incluez une ponctuation variée (virgules, tirets, guillemets) pour obtenir un texte ponctué. En mode « auto », la langue du prompt influence aussi la détection de langue. Partage le budget de tokens avec le dictionnaire personnalisé — un prompt plus court laisse plus de place aux mots du dictionnaire.",
+        "placeholder": "Entrez un paragraphe bien ponctué pour guider le style de transcription...",
+        "insertPreset": "Insérer un modèle"
+      },
       "gpuDevice": {
         "title": "GPU de transcription",
         "description": "GPU pour la transcription locale"

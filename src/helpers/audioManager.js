@@ -161,6 +161,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return words.length > 0 ? words.join(", ") : null;
   }
 
+  /**
+   * Build a combined transcription prompt: custom dictionary words + user's transcription prompt.
+   * @returns {string|null}
+   */
+  buildTranscriptionPrompt() {
+    const parts = [];
+
+    // Dictionary words FIRST — truncated first by Whisper's 224-token window
+    const dict = this.getCustomDictionaryPrompt();
+    if (dict) parts.push(dict);
+
+    // Custom prompt LAST — Whisper truncates initial_prompt from the LEFT (keeps rightmost tokens),
+    // so the custom prompt at the end survives truncation. See: whisper.cpp tokenize logic.
+    const customPrompt = (getSettings().customTranscriptionPrompt || "").trim().replace(/\s+/g, " ");
+    if (customPrompt) parts.push(customPrompt);
+
+    return parts.length > 0 ? parts.join(" ") : null;
+  }
+
   setCallbacks({
     onStateChange,
     onError,
@@ -585,10 +604,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         options.language = language;
       }
 
-      // Add custom dictionary as initial prompt to help Whisper recognize specific words
-      const dictionaryPrompt = this.getCustomDictionaryPrompt();
-      if (dictionaryPrompt) {
-        options.initialPrompt = dictionaryPrompt;
+      // Add custom dictionary + transcription prompt as initial prompt
+      const transcriptionPrompt = this.buildTranscriptionPrompt();
+      if (transcriptionPrompt) {
+        options.initialPrompt = transcriptionPrompt;
       }
 
       logger.debug(
@@ -1182,8 +1201,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       opts.sendLogs = "false";
     }
 
-    const dictionaryPrompt = this.getCustomDictionaryPrompt();
-    if (dictionaryPrompt) opts.prompt = dictionaryPrompt;
+    const transcriptionPrompt = this.buildTranscriptionPrompt();
+    if (transcriptionPrompt) opts.prompt = transcriptionPrompt;
 
     // Use withSessionRefresh to handle AUTH_EXPIRED automatically
     const transcriptionStart = performance.now();
@@ -1342,28 +1361,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("language", language);
       }
 
-      // Add custom dictionary as prompt hint for cloud transcription
+      // Add custom dictionary + transcription prompt as prompt hint
       // Groq Whisper API limits prompt to 896 chars; OpenAI ~900 chars.
       // Truncate at last comma boundary so we never send a partial word.
       const MAX_PROMPT_CHARS = provider === "groq" ? 896 : 900;
-      let dictionaryPrompt = this.getCustomDictionaryPrompt();
-      if (dictionaryPrompt) {
-        if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
-          const originalLength = dictionaryPrompt.length;
-          const truncated = dictionaryPrompt.slice(0, MAX_PROMPT_CHARS);
+      let transcriptionPrompt = this.buildTranscriptionPrompt();
+      if (transcriptionPrompt) {
+        if (transcriptionPrompt.length > MAX_PROMPT_CHARS) {
+          const originalLength = transcriptionPrompt.length;
+          const truncated = transcriptionPrompt.slice(0, MAX_PROMPT_CHARS);
           const lastComma = truncated.lastIndexOf(",");
-          dictionaryPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
+          transcriptionPrompt = lastComma > 0 ? truncated.slice(0, lastComma) : truncated;
           logger.debug(
-            "Custom dictionary prompt truncated",
+            "Transcription prompt truncated",
             {
               originalLength,
-              truncatedLength: dictionaryPrompt.length,
+              truncatedLength: transcriptionPrompt.length,
               maxChars: MAX_PROMPT_CHARS,
             },
             "transcription"
           );
         }
-        formData.append("prompt", dictionaryPrompt);
+        formData.append("prompt", transcriptionPrompt);
       }
 
       const shouldStream = this.shouldStreamTranscription(model, provider);
@@ -1385,8 +1404,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const proxyData = { audioBuffer, model, language };
 
-        if (dictionaryPrompt) {
-          const tokens = dictionaryPrompt
+        if (transcriptionPrompt) {
+          const tokens = transcriptionPrompt
             .split(",")
             .flatMap((entry) => entry.trim().split(/\s+/))
             .filter(Boolean)
