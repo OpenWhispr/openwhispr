@@ -1402,13 +1402,8 @@
       "diarization": {
         "title": "Speaker Identification",
         "description": "Identify individual speakers in meeting recordings",
-        "toggle": "Identify speakers in meetings",
-        "downloadModels": "Download Models",
-        "downloadModelsSize": "Download Models (~35 MB)",
         "modelsReady": "Models Ready",
-        "downloading": "Downloading...",
-        "deleteModels": "Delete Models",
-        "requiresModels": "Download speaker identification models to enable this feature"
+        "deleteModels": "Delete Models"
       }
     },
     "intelligence": {

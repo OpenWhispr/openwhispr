@@ -688,6 +688,15 @@ async function startApp() {
     });
   }
 
+  // Auto-download diarization models if binary is available
+  if (diarizationManager.getBinaryPath() && !diarizationManager.isModelDownloaded()) {
+    diarizationManager.downloadModels().catch((err) => {
+      debugLogger.debug("Diarization model auto-download error (non-fatal)", {
+        error: err.message,
+      });
+    });
+  }
+
   const QdrantManager = require("./src/helpers/qdrantManager");
   qdrantManager = new QdrantManager();
   if (qdrantManager.isAvailable()) {
