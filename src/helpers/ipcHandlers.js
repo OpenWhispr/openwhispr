@@ -3061,10 +3061,16 @@ class IPCHandlers {
 
         if (result?.success && result.text?.trim()) {
           this.windowManager.appendTranscriptionPreview(result.text.trim());
+        } else if (result && !result.success) {
+          debugLogger.warn("Dictation preview chunk returned failure", {
+            error: result.error || result.message,
+            provider: dictationPreviewProvider,
+          });
         }
       } catch (error) {
         debugLogger.error("Dictation preview transcription chunk failed", {
           error: error.message,
+          provider: dictationPreviewProvider,
         });
       } finally {
         dictationPreviewTranscribing = false;

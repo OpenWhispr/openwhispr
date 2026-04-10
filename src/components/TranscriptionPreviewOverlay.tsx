@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { X } from "lucide-react";
 
 export default function TranscriptionPreviewOverlay() {
   const [text, setText] = useState("");
@@ -42,14 +43,24 @@ export default function TranscriptionPreviewOverlay() {
           isVisible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
         ].join(" ")}
       >
-        {text ? (
-          <p className="text-[12px] text-foreground leading-snug line-clamp-3">{text}</p>
-        ) : (
-          <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            <p className="text-[11px] text-muted-foreground">Listening...</p>
+        <div className="flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            {text ? (
+              <p className="text-[12px] text-foreground leading-snug">{text}</p>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                <p className="text-[11px] text-muted-foreground">Listening...</p>
+              </div>
+            )}
           </div>
-        )}
+          <button
+            onClick={() => window.electronAPI?.stopDictationPreview?.()}
+            className="shrink-0 text-muted-foreground/60 hover:text-foreground transition-colors p-0.5"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -122,7 +122,7 @@ const NOTIFICATION_WINDOW_CONFIG = {
 
 const TRANSCRIPTION_PREVIEW_CONFIG = {
   width: 380,
-  height: 100,
+  height: 200,
   frame: false,
   transparent: true,
   alwaysOnTop: true,
@@ -131,6 +131,7 @@ const TRANSCRIPTION_PREVIEW_CONFIG = {
   focusable: false,
   hasShadow: false,
   show: false,
+  acceptsFirstMouse: true,
   webPreferences: {
     preload: path.join(__dirname, "..", "..", "preload.js"),
     nodeIntegration: false,
@@ -175,7 +176,7 @@ class WindowPositionUtil {
 
   static getTranscriptionPreviewPosition(display, mainWindowBounds) {
     const width = 380;
-    const height = 100;
+    const height = 200;
     const GAP = 8;
     const workArea = display.workArea || display.bounds;
 
