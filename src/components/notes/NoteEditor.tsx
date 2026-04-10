@@ -78,6 +78,7 @@ interface NoteEditorProps {
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   isMeetingRecording?: boolean;
+  diarizationSessionId?: string | null;
   meetingTranscript?: string;
   meetingSegments?: TranscriptSegment[];
   meetingMicPartial?: string;
@@ -106,6 +107,7 @@ export default function NoteEditor({
   actionProcessingState,
   actionName,
   isMeetingRecording,
+  diarizationSessionId,
   meetingTranscript,
   meetingSegments,
   meetingMicPartial,
@@ -240,28 +242,19 @@ export default function NoteEditor({
     }
   }, [note.title]);
 
-  // Track meeting recording stop to activate diarization loading state
   const prevMeetingRecordingRef = useRef(false);
-  const diarizationNoteIdRef = useRef<number | null>(null);
   useEffect(() => {
-    if (prevMeetingRecordingRef.current && !isMeetingRecording) {
-      diarizationNoteIdRef.current = note.id;
+    if (prevMeetingRecordingRef.current && !isMeetingRecording && diarizationSessionId) {
       setIsDiarizing(true);
     }
     prevMeetingRecordingRef.current = !!isMeetingRecording;
-  }, [isMeetingRecording, note.id]);
+  }, [isMeetingRecording, diarizationSessionId]);
 
-  // Listen for diarization results from main process
   useEffect(() => {
+    const expectedSession = diarizationSessionId;
     const cleanup = window.electronAPI?.onMeetingDiarizationComplete?.((data) => {
-      // Ignore if user navigated away from the recording note
-      if (diarizationNoteIdRef.current !== note.id) {
-        setIsDiarizing(false);
-        diarizationNoteIdRef.current = null;
-        return;
-      }
+      if (!expectedSession || data?.sessionId !== expectedSession) return;
 
-      diarizationNoteIdRef.current = null;
       setIsDiarizing(false);
 
       if (!data?.segments?.length) return;
@@ -272,7 +265,6 @@ export default function NoteEditor({
       }));
       setDiarizedSegments(enriched);
 
-      // Persist enriched transcript to the note
       const serialized = JSON.stringify(
         enriched.map((s: TranscriptSegment) => ({
           text: s.text,
@@ -284,7 +276,7 @@ export default function NoteEditor({
       window.electronAPI.updateNote(note.id, { transcript: serialized });
     });
     return () => cleanup?.();
-  }, [note.id]);
+  }, [note.id, diarizationSessionId]);
 
   const handleTitleInput = useCallback(() => {
     if (titleRef.current) {

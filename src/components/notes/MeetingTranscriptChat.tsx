@@ -40,8 +40,7 @@ const SPEAKER_BORDER_COLORS = [
   "border-l-red-400/50",
 ];
 
-const getSpeakerKey = (segment: TranscriptSegment) =>
-  segment.speaker || segment.source;
+const getSpeakerKey = (segment: TranscriptSegment) => segment.speaker || segment.source;
 
 const getSpeakerColorIndex = (speaker: string): number => {
   const match = speaker.match(/speaker_(\d+)/);

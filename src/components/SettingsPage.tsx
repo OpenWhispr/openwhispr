@@ -478,9 +478,7 @@ function DiarizationSection() {
       <SettingsPanel>
         {modelsDownloaded ? (
           <SettingsPanelRow>
-            <SettingsRow
-              label={t("settingsPage.transcription.diarization.modelsReady")}
-            >
+            <SettingsRow label={t("settingsPage.transcription.diarization.modelsReady")}>
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5 text-xs text-success">
                   <Check size={14} />

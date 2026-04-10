@@ -1296,6 +1296,7 @@ declare global {
       meetingTranscriptionStop?: () => Promise<{
         success: boolean;
         transcript?: string;
+        diarizationSessionId?: string;
         error?: string;
       }>;
       onMeetingTranscriptionSegment?: (
@@ -1314,10 +1315,15 @@ declare global {
         modelsDownloaded: boolean;
       }>;
       deleteDiarizationModels?: () => Promise<{ success: boolean }>;
-      cancelDiarizationDownload?: () => Promise<{ success: boolean; message?: string; error?: string }>;
+      cancelDiarizationDownload?: () => Promise<{
+        success: boolean;
+        message?: string;
+        error?: string;
+      }>;
       onDiarizationDownloadProgress?: (callback: (data: any) => void) => () => void;
       onMeetingDiarizationComplete?: (
         callback: (data: {
+          sessionId?: string;
           segments: Array<{
             id: string;
             text: string;

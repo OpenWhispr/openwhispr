@@ -2,12 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
-const {
-  downloadFile,
-  findBinaryInDir,
-  parseArgs,
-  setExecutable,
-} = require("./lib/download-utils");
+const { downloadFile, findBinaryInDir, parseArgs, setExecutable } = require("./lib/download-utils");
 
 const SHERPA_ONNX_VERSION = "1.12.23";
 const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}`;
@@ -148,7 +143,9 @@ async function downloadBinary(platformArch, config, isForce = false) {
       setExecutable(diarizeOutputPath);
       console.log(`  ${platformArch}: Extracted to ${config.diarizeOutputName}`);
     } else {
-      console.error(`  ${platformArch}: Diarization binary '${diarizeBinaryName}' not found in archive`);
+      console.error(
+        `  ${platformArch}: Diarization binary '${diarizeBinaryName}' not found in archive`
+      );
       return false;
     }
 

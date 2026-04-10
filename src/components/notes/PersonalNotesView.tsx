@@ -114,8 +114,9 @@ export default function PersonalNotesView({
     isRecording: isTranscribing,
     transcript: realtimeTranscript,
     segments: realtimeSegments,
-    micPartial: micPartial,
-    systemPartial: systemPartial,
+    micPartial,
+    systemPartial,
+    diarizationSessionId,
     prepareTranscription,
     startTranscription,
     stopTranscription,
@@ -883,6 +884,7 @@ export default function PersonalNotesView({
                   : undefined
               }
               isMeetingRecording={isTranscribing && isMeetingModeRef.current}
+              diarizationSessionId={diarizationSessionId}
               meetingTranscript={realtimeTranscript}
               meetingSegments={realtimeSegments}
               meetingMicPartial={micPartial}

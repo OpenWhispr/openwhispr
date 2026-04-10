@@ -2970,9 +2970,10 @@ class IPCHandlers {
       return Buffer.concat([header, pcmBuffer]);
     };
 
-    let meetingDiarizationStream = null; // WriteStream for system audio PCM (disk spooling)
-    let meetingDiarizationPath = null; // temp file path for spooled PCM
-    let meetingDiarizationSegments = []; // final transcript segments for post-recording speaker merge
+    const fs = require("fs");
+    let meetingDiarizationStream = null;
+    let meetingDiarizationPath = null;
+    let meetingDiarizationSegments = [];
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
@@ -3303,7 +3304,7 @@ class IPCHandlers {
           await this.audioTapManager.stop();
         }
 
-        // Capture diarization state before any reset
+        const diarizationSessionId = `diar-${Date.now()}`;
         const diarizationPcmPath = meetingDiarizationPath;
         const diarizationSegments = meetingDiarizationSegments;
         if (meetingDiarizationStream) {
@@ -3328,21 +3329,18 @@ class IPCHandlers {
           resetMeetingLocalState();
 
           // Fire-and-forget background diarization (or notify skip)
-          this._startOrSkipDiarization(diarizationPcmPath, diarizationSegments, diarizationWin);
+          this._startOrSkipDiarization(diarizationSessionId, diarizationPcmPath, diarizationSegments, diarizationWin);
 
-          return { success: true, transcript };
+          return { success: true, transcript, diarizationSessionId };
         }
 
         const results = await disconnectMeetingStreaming();
         const transcript = [results[0]?.text, results[1]?.text].filter(Boolean).join(" ");
 
         // Fire-and-forget background diarization (or notify skip)
-        this._startOrSkipDiarization(diarizationPcmPath, diarizationSegments, diarizationWin);
+        this._startOrSkipDiarization(diarizationSessionId, diarizationPcmPath, diarizationSegments, diarizationWin);
 
-        return {
-          success: true,
-          transcript,
-        };
+        return { success: true, transcript, diarizationSessionId };
       } catch (error) {
         debugLogger.error("Meeting transcription stop error", { error: error.message });
         return { success: false, error: error.message };
@@ -5088,13 +5086,15 @@ class IPCHandlers {
     });
   }
 
-  _startOrSkipDiarization(rawPcmPath, transcriptSegments, win) {
-    const canRun = this.diarizationManager?.isAvailable() && rawPcmPath;
-
-    if (!canRun) {
+  _startOrSkipDiarization(sessionId, rawPcmPath, transcriptSegments, win) {
+    const send = (payload) => {
       if (win && !win.isDestroyed()) {
-        win.webContents.send("meeting-diarization-complete", { segments: [] });
+        win.webContents.send("meeting-diarization-complete", { sessionId, ...payload });
       }
+    };
+
+    if (!this.diarizationManager?.isAvailable() || !rawPcmPath) {
+      send({ segments: [] });
       return;
     }
 
@@ -5124,16 +5124,11 @@ class IPCHandlers {
           diarizationSegments
         );
 
-        if (win && !win.isDestroyed()) {
-          win.webContents.send("meeting-diarization-complete", { segments: enrichedSegments });
-        }
+        send({ segments: enrichedSegments });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
-        if (win && !win.isDestroyed()) {
-          win.webContents.send("meeting-diarization-complete", { segments: [] });
-        }
+        send({ segments: [] });
       } finally {
-        // Clean up both the raw PCM spool file and the converted WAV
         try { fs.unlinkSync(rawPcmPath); } catch (_) {}
         if (tmpWav) {
           try { fs.unlinkSync(tmpWav); } catch (_) {}

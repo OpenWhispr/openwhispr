@@ -19,6 +19,7 @@ interface UseMeetingTranscriptionReturn {
   micPartial: string;
   systemPartial: string;
   error: string | null;
+  diarizationSessionId: string | null;
   prepareTranscription: () => Promise<void>;
   startTranscription: () => Promise<void>;
   stopTranscription: () => Promise<void>;
@@ -240,6 +241,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const [micPartial, setMicPartial] = useState("");
   const [systemPartial, setSystemPartial] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [diarizationSessionId, setDiarizationSessionId] = useState<string | null>(null);
 
   const micContextRef = useRef<AudioContext | null>(null);
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -288,6 +290,9 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
 
     try {
       const result = await window.electronAPI?.meetingTranscriptionStop?.();
+      if (result?.diarizationSessionId) {
+        setDiarizationSessionId(result.diarizationSessionId);
+      }
       if (result?.success && result.transcript) {
         setTranscript(result.transcript);
       } else if (result?.error) {
@@ -588,6 +593,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
     micPartial,
     systemPartial,
     error,
+    diarizationSessionId,
     prepareTranscription,
     startTranscription,
     stopTranscription,
