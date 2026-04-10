@@ -1082,11 +1082,12 @@ class IPCHandlers {
     // OpenClaw database handlers
     ipcMain.handle(
       "db-upsert-openclaw-conversation",
-      async (event, { remoteSessionKey, title, originChannel }) => {
+      async (event, { remoteSessionKey, title, originChannel, lastActivity }) => {
         return this.databaseManager.upsertOpenClawConversation({
           remoteSessionKey,
           title,
           originChannel,
+          lastActivity,
         });
       }
     );

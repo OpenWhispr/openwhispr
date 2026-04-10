@@ -1519,20 +1519,23 @@ class DatabaseManager {
     }
   }
 
-  upsertOpenClawConversation({ remoteSessionKey, title, originChannel }) {
+  upsertOpenClawConversation({ remoteSessionKey, title, originChannel, lastActivity }) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const updatedAt = lastActivity
+        ? new Date(typeof lastActivity === "number" ? lastActivity : lastActivity).toISOString()
+        : null;
       this.db
         .prepare(
-          `INSERT INTO openclaw_conversations (remote_session_key, title, origin_channel, last_synced_at)
-           VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+          `INSERT INTO openclaw_conversations (remote_session_key, title, origin_channel, last_synced_at, updated_at)
+           VALUES (?, ?, ?, CURRENT_TIMESTAMP, COALESCE(?, CURRENT_TIMESTAMP))
            ON CONFLICT(remote_session_key) DO UPDATE SET
              title = COALESCE(excluded.title, openclaw_conversations.title),
              origin_channel = COALESCE(excluded.origin_channel, openclaw_conversations.origin_channel),
              last_synced_at = CURRENT_TIMESTAMP,
-             updated_at = CURRENT_TIMESTAMP`
+             updated_at = COALESCE(?, openclaw_conversations.updated_at)`
         )
-        .run(remoteSessionKey, title || "Untitled", originChannel || null);
+        .run(remoteSessionKey, title || "Untitled", originChannel || null, updatedAt, updatedAt);
       return this.db
         .prepare("SELECT * FROM openclaw_conversations WHERE remote_session_key = ?")
         .get(remoteSessionKey);

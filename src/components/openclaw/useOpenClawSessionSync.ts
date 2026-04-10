@@ -26,6 +26,7 @@ export function useOpenClawSessionSync({ status, onSync }: UseOpenClawSessionSyn
           remoteSessionKey: session.sessionKey,
           title: session.title,
           originChannel: session.channel ?? parseOpenClawChannel(session.sessionKey),
+          lastActivity: session.lastActivity,
         });
       }
       if (!cancelled) onSyncRef.current();

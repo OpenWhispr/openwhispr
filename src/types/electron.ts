@@ -1455,6 +1455,7 @@ declare global {
         remoteSessionKey: string;
         title?: string;
         originChannel?: string;
+        lastActivity?: string | number;
       }) => Promise<{ id: number }>;
       findOpenClawConversationBySessionKey?: (
         remoteSessionKey: string

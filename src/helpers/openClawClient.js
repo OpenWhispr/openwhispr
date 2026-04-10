@@ -9,7 +9,6 @@ const PROTOCOL_VERSION = 3;
 const CONNECT_TIMEOUT_MS = 15000;
 const REQUEST_TIMEOUT_MS = 30000;
 const BACKOFF_STEPS_MS = [1000, 2000, 4000, 8000, 16000, 30000];
-const SENT_MESSAGE_TTL_MS = 10000;
 
 function extractChatText(message) {
   if (!message) return "";
@@ -34,7 +33,7 @@ class OpenClawClient extends EventEmitter {
     this.reconnectAttempt = 0;
     this.userInitiatedDisconnect = false;
     this.activeSessionKey = null;
-    this.recentSends = new Map();
+    this.pendingRunIds = new Set();
     this.runTextBuffers = new Map();
     this._challengeWaiter = null;
   }
@@ -333,7 +332,14 @@ class OpenClawClient extends EventEmitter {
           const accumulated = this.runTextBuffers.get(runId) || "";
           this.runTextBuffers.delete(runId);
           const content = fullText || accumulated;
-          if (this._isProactive(sessionKey)) {
+          if (this._isOurRun(runId)) {
+            this._completeRun(runId);
+            this.emit("message-done", {
+              sessionKey,
+              messageId: runId,
+              content,
+            });
+          } else {
             this.emit("proactive-message", {
               sessionKey,
               messageId: runId,
@@ -341,17 +347,12 @@ class OpenClawClient extends EventEmitter {
               content,
               channel: payload.channel,
             });
-          } else {
-            this.emit("message-done", {
-              sessionKey,
-              messageId: runId,
-              content,
-            });
           }
           return;
         }
         if (state === "error") {
           this.runTextBuffers.delete(runId);
+          this._completeRun(runId);
           this.emit("message-done", {
             sessionKey,
             messageId: runId,
@@ -366,19 +367,12 @@ class OpenClawClient extends EventEmitter {
     }
   }
 
-  _isProactive(sessionKey) {
-    if (!sessionKey) return false;
-    const sentAt = this.recentSends.get(sessionKey);
-    if (!sentAt) return true;
-    return Date.now() - sentAt > SENT_MESSAGE_TTL_MS;
+  _isOurRun(runId) {
+    return this.pendingRunIds.has(runId);
   }
 
-  _trackSend(sessionKey) {
-    this.recentSends.set(sessionKey, Date.now());
-    const cutoff = Date.now() - SENT_MESSAGE_TTL_MS;
-    for (const [key, ts] of this.recentSends) {
-      if (ts < cutoff) this.recentSends.delete(key);
-    }
+  _completeRun(runId) {
+    this.pendingRunIds.delete(runId);
   }
 
   _failAllPending(err) {
@@ -451,13 +445,14 @@ class OpenClawClient extends EventEmitter {
   }
 
   async sendMessage(sessionKey, text) {
-    this._trackSend(sessionKey);
+    const runId = crypto.randomUUID();
+    this.pendingRunIds.add(runId);
     const payload = await this._sendRequest("chat.send", {
       sessionKey,
       message: text,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: runId,
     });
-    return { messageId: payload?.messageId || payload?.message_id };
+    return { messageId: payload?.messageId || payload?.message_id || runId };
   }
 
   async abort(sessionKey) {
