@@ -385,15 +385,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       } = getSettings();
       if (showTranscriptionPreview && useLocalWhisper) {
         try {
-          const previewCtx = await this.getOrCreateAudioContext();
-          this._previewSource = previewCtx.createMediaStreamSource(micStream);
+          this._previewAudioContext = new AudioContext({ sampleRate: 16000 });
+          this._previewSource = this._previewAudioContext.createMediaStreamSource(micStream);
+          await this._previewAudioContext.audioWorklet.addModule(this.getWorkletBlobUrl());
 
-          if (!this.workletModuleLoaded) {
-            await previewCtx.audioWorklet.addModule(this.getWorkletBlobUrl());
-            this.workletModuleLoaded = true;
-          }
-
-          this._previewProcessor = new AudioWorkletNode(previewCtx, "pcm-streaming-processor");
+          this._previewProcessor = new AudioWorkletNode(
+            this._previewAudioContext,
+            "pcm-streaming-processor"
+          );
           this._previewProcessor.port.onmessage = (event) => {
             window.electronAPI?.sendDictationPreviewAudio?.(event.data);
           };
@@ -2570,6 +2569,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this._previewSource) {
       this._previewSource.disconnect();
       this._previewSource = null;
+    }
+    if (this._previewAudioContext) {
+      this._previewAudioContext.close().catch(() => {});
+      this._previewAudioContext = null;
     }
     window.electronAPI?.stopDictationPreview?.();
   }
