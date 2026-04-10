@@ -1442,7 +1442,9 @@
       "gpuDevice": {
         "title": "文字起こしGPU",
         "description": "ローカル音声認識に使用するGPU"
-      }
+      },
+      "transcriptionPreview": "リアルタイム文字起こしプレビュー",
+      "transcriptionPreviewDescription": "補正前にフローティングウィンドウで文字起こしを表示"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2159,5 +2161,8 @@
     "close": "チャットを閉じる",
     "newChat": "新しいチャット",
     "conversationSelector": "会話を切り替え"
+  },
+  "transcriptionPreview": {
+    "label": "プレビュー"
   }
 }

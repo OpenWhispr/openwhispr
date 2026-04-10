@@ -344,6 +344,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._silenceCtx = null;
         this._silenceAnalyser = null;
 
+        this.cleanupPreview({ showCleanup: this.shouldShowPreviewCleanupState() });
+
         this.isRecording = false;
         this.isProcessing = true;
         this.onStateChange?.({ isRecording: false, isProcessing: true });
@@ -373,6 +375,36 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.mediaRecorder.start();
       this.isRecording = true;
       this.onStateChange?.({ isRecording: true, isProcessing: false });
+
+      const {
+        showTranscriptionPreview,
+        useLocalWhisper,
+        localTranscriptionProvider,
+        whisperModel,
+        parakeetModel,
+      } = getSettings();
+      if (showTranscriptionPreview && useLocalWhisper) {
+        try {
+          this._previewAudioContext = new AudioContext({ sampleRate: 16000 });
+          this._previewSource = this._previewAudioContext.createMediaStreamSource(micStream);
+          await this._previewAudioContext.audioWorklet.addModule(this.getWorkletBlobUrl());
+
+          this._previewProcessor = new AudioWorkletNode(
+            this._previewAudioContext,
+            "pcm-streaming-processor"
+          );
+          this._previewProcessor.port.onmessage = (event) => {
+            window.electronAPI?.sendDictationPreviewAudio?.(event.data);
+          };
+          this._previewSource.connect(this._previewProcessor);
+
+          const provider = localTranscriptionProvider === "nvidia" ? "nvidia" : "whisper";
+          const model = provider === "nvidia" ? parakeetModel : whisperModel;
+          window.electronAPI?.startDictationPreview?.({ provider, model });
+        } catch (e) {
+          logger.warn("Preview worklet setup failed", { error: e.message }, "audio");
+        }
+      }
 
       return true;
     } catch (error) {
@@ -411,6 +443,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   cancelRecording() {
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
       this.mediaRecorder.onstop = () => {
+        this.cleanupPreview({ dismiss: true });
         this.isRecording = false;
         this.isProcessing = false;
         this.audioChunks = [];
@@ -2525,6 +2558,34 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     return true;
+  }
+
+  shouldShowPreviewCleanupState() {
+    const settings = getSettings();
+    return !!settings.useReasoningModel && !this.skipReasoning;
+  }
+
+  cleanupPreview(options = {}) {
+    const { dismiss = false, showCleanup = false } = options;
+
+    if (this._previewProcessor) {
+      this._previewProcessor.port.postMessage("stop");
+      this._previewProcessor.disconnect();
+      this._previewProcessor = null;
+    }
+    if (this._previewSource) {
+      this._previewSource.disconnect();
+      this._previewSource = null;
+    }
+    if (this._previewAudioContext) {
+      this._previewAudioContext.close().catch(() => {});
+      this._previewAudioContext = null;
+    }
+    if (dismiss) {
+      window.electronAPI?.dismissDictationPreview?.();
+      return;
+    }
+    window.electronAPI?.stopDictationPreview?.({ showCleanup });
   }
 
   cleanupStreamingAudio() {

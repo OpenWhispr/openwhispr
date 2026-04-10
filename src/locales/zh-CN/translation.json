@@ -1437,7 +1437,9 @@
       "gpuDevice": {
         "title": "转录 GPU",
         "description": "用于本地语音识别的 GPU"
-      }
+      },
+      "transcriptionPreview": "实时转录预览",
+      "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行优化"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2154,5 +2156,8 @@
     "close": "关闭聊天",
     "newChat": "新对话",
     "conversationSelector": "切换对话"
+  },
+  "transcriptionPreview": {
+    "label": "预览"
   }
 }

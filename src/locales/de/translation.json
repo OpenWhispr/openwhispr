@@ -1442,7 +1442,9 @@
       "gpuDevice": {
         "title": "Transkriptions-GPU",
         "description": "GPU für lokale Spracherkennung"
-      }
+      },
+      "transcriptionPreview": "Live-Transkriptionsvorschau",
+      "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2159,5 +2161,8 @@
     "close": "Chat schließen",
     "newChat": "Neuer Chat",
     "conversationSelector": "Unterhaltung wechseln"
+  },
+  "transcriptionPreview": {
+    "label": "Vorschau"
   }
 }

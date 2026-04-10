@@ -1437,7 +1437,9 @@
       "gpuDevice": {
         "title": "轉錄 GPU",
         "description": "用於本機語音辨識的 GPU"
-      }
+      },
+      "transcriptionPreview": "即時轉錄預覽",
+      "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行校正"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2154,5 +2156,8 @@
     "close": "關閉聊天",
     "newChat": "新對話",
     "conversationSelector": "切換對話"
+  },
+  "transcriptionPreview": {
+    "label": "預覽"
   }
 }

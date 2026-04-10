@@ -24,6 +24,7 @@ const AgentOverlay = React.lazy(agentOverlayImport);
 
 import MeetingNotificationOverlay from "./components/MeetingNotificationOverlay.tsx";
 import UpdateNotificationOverlay from "./components/UpdateNotificationOverlay.tsx";
+import TranscriptionPreviewOverlay from "./components/TranscriptionPreviewOverlay.tsx";
 
 let root = null;
 
@@ -284,6 +285,10 @@ function AppRouter() {
 
   if (params.includes("update-notification=true")) {
     return <UpdateNotificationOverlay />;
+  }
+
+  if (params.includes("transcription-preview=true")) {
+    return <TranscriptionPreviewOverlay />;
   }
 
   return <MainApp />;

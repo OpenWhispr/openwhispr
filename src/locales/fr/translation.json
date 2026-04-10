@@ -1442,7 +1442,9 @@
       "gpuDevice": {
         "title": "GPU de transcription",
         "description": "GPU pour la transcription locale"
-      }
+      },
+      "transcriptionPreview": "Aperçu en direct",
+      "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2159,5 +2161,8 @@
     "close": "Fermer le chat",
     "newChat": "Nouvelle discussion",
     "conversationSelector": "Changer de conversation"
+  },
+  "transcriptionPreview": {
+    "label": "Aperçu"
   }
 }

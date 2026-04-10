@@ -609,6 +609,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAgentWindowBounds: () => ipcRenderer.invoke("get-agent-window-bounds"),
   setAgentWindowBounds: (x, y, width, height) =>
     ipcRenderer.invoke("set-agent-window-bounds", x, y, width, height),
+  onPreviewText: registerListener("preview-text", (callback) => (_event, text) => callback(text)),
+  onPreviewAppend: registerListener(
+    "preview-append",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onPreviewHold: registerListener(
+    "preview-hold",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  onPreviewResult: registerListener(
+    "preview-result",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  onPreviewHide: registerListener("preview-hide", (callback) => () => callback()),
+  startDictationPreview: (opts) => ipcRenderer.invoke("start-dictation-preview", opts),
+  stopDictationPreview: (opts) => ipcRenderer.invoke("stop-dictation-preview", opts),
+  dismissDictationPreview: () => ipcRenderer.invoke("dismiss-dictation-preview"),
+  completeDictationPreview: (payload) => ipcRenderer.invoke("complete-dictation-preview", payload),
+  hideDictationPreview: () => ipcRenderer.invoke("hide-dictation-preview"),
+  resizeTranscriptionPreviewWindow: (width, height) =>
+    ipcRenderer.invoke("resize-transcription-preview-window", width, height),
+  sendDictationPreviewAudio: (data) => ipcRenderer.send("dictation-preview-audio", data),
   acquireRecordingLock: (pipeline) => ipcRenderer.invoke("acquire-recording-lock", pipeline),
   releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
 

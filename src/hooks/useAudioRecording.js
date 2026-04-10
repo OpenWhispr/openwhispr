@@ -95,6 +95,9 @@ export const useAudioRecording = (toast, options = {}) => {
         }
       },
       onError: (error) => {
+        if (error?.title !== "Paste Error") {
+          window.electronAPI?.hideDictationPreview?.();
+        }
         const title = getRecordingErrorTitle(error, t);
         toast({
           title,
@@ -118,10 +121,12 @@ export const useAudioRecording = (toast, options = {}) => {
           const transcribedText = result.text?.trim();
 
           if (!transcribedText) {
+            window.electronAPI?.hideDictationPreview?.();
             return;
           }
 
           setTranscript(result.text);
+          window.electronAPI?.completeDictationPreview?.({ text: result.text });
 
           const isStreaming = result.source?.includes("streaming");
           const { keepTranscriptionInClipboard } = getSettings();

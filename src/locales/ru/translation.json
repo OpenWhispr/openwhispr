@@ -1442,7 +1442,9 @@
       "gpuDevice": {
         "title": "GPU транскрипции",
         "description": "GPU для локального распознавания речи"
-      }
+      },
+      "transcriptionPreview": "Предпросмотр транскрипции",
+      "transcriptionPreviewDescription": "Показывать транскрипцию в плавающем окне перед обработкой"
     },
     "intelligence": {
       "gpuDevice": {
@@ -2159,5 +2161,8 @@
     "close": "Закрыть чат",
     "newChat": "Новый чат",
     "conversationSelector": "Сменить беседу"
+  },
+  "transcriptionPreview": {
+    "label": "Предпросмотр"
   }
 }
