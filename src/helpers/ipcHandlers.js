@@ -14,6 +14,29 @@ const AudioStorageManager = require("./audioStorage");
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
+function openClawConfigFromSettings(settings, localPort) {
+  const rawUrl = settings.gatewayUrl || "ws://127.0.0.1:18789";
+  let url = rawUrl;
+  try {
+    const parsed = new URL(rawUrl);
+    parsed.port = String(localPort);
+    parsed.hostname = "127.0.0.1";
+    url = parsed.toString().replace(/\/$/, "");
+  } catch {
+    url = `ws://127.0.0.1:${localPort}`;
+  }
+  const ssh = settings.sshEnabled
+    ? {
+        host: settings.sshHost || "",
+        port: Number(settings.sshPort) || 22,
+        user: settings.sshUser || "",
+        keyPath: settings.sshKeyPath || "",
+        remotePort: Number(settings.sshRemotePort) || 18789,
+      }
+    : null;
+  return { url, token: settings.gatewayToken || "", ssh };
+}
+
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
 
@@ -105,6 +128,7 @@ class IPCHandlers {
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
     this.audioTapManager = managers.audioTapManager;
     this.openClawClient = managers.openClawClient || null;
+    this.openClawTunnel = managers.openClawTunnel || null;
     this.openClawNotifier = managers.openClawNotifier || null;
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
@@ -152,7 +176,7 @@ class IPCHandlers {
     forward("tool-call", "openclaw-tool-call");
     forward("tool-result", "openclaw-tool-result");
     forward("proactive-message", "openclaw-proactive-message");
-    forward("error", "openclaw-error");
+    forward("connection-error", "openclaw-error");
   }
 
   _asyncVectorUpsert(note) {
@@ -973,12 +997,78 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("openclaw-test-connection", async (event, config) => {
+    ipcMain.handle("openclaw-test-connection", async (event, settings) => {
       const OpenClawClient = require("./openClawClient");
-      const tester = new OpenClawClient(config || {});
+      const OpenClawTunnel = require("./openClawTunnel");
+      const net = require("net");
+      const ephemeralPort = await new Promise((resolve, reject) => {
+        const srv = net.createServer();
+        srv.unref();
+        srv.on("error", reject);
+        srv.listen(0, "127.0.0.1", () => {
+          const port = srv.address().port;
+          srv.close(() => resolve(port));
+        });
+      });
+      const clientConfig = openClawConfigFromSettings(settings || {}, ephemeralPort);
+      const tunnel = new OpenClawTunnel({ ...(clientConfig.ssh || {}), localPort: ephemeralPort });
+      const tester = new OpenClawClient(clientConfig);
       try {
+        if (clientConfig.ssh) {
+          await tunnel.ensure();
+        }
         await tester.connect();
-        await tester.disconnect();
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err.message };
+      } finally {
+        try {
+          await tester.disconnect();
+        } catch {}
+        try {
+          await tunnel.close();
+        } catch {}
+      }
+    });
+
+    ipcMain.handle("openclaw-reconfigure", async (event, settings) => {
+      const clientConfig = openClawConfigFromSettings(settings || {}, 18789);
+      try {
+        process.env.OPENCLAW_ENABLED = "true";
+        process.env.OPENCLAW_GATEWAY_URL = settings?.gatewayUrl ?? "ws://127.0.0.1:18789";
+        process.env.OPENCLAW_GATEWAY_TOKEN = settings?.gatewayToken ?? "";
+        process.env.OPENCLAW_SSH_ENABLED = settings?.sshEnabled ? "true" : "false";
+        process.env.OPENCLAW_SSH_HOST = settings?.sshHost ?? "";
+        process.env.OPENCLAW_SSH_USER = settings?.sshUser ?? "";
+        process.env.OPENCLAW_SSH_KEY_PATH = settings?.sshKeyPath ?? "";
+        process.env.OPENCLAW_SSH_REMOTE_PORT = String(settings?.sshRemotePort ?? 18789);
+        this.environmentManager?.saveAllKeysToEnvFile?.().catch(() => {});
+        if (!this.openClawClient) {
+          const OpenClawClient = require("./openClawClient");
+          const OpenClawTunnel = require("./openClawTunnel");
+          const OpenClawNotifier = require("./openClawNotifier");
+          this.openClawClient = new OpenClawClient(clientConfig);
+          this.openClawTunnel = new OpenClawTunnel({
+            ...(clientConfig.ssh || {}),
+            localPort: 18789,
+          });
+          this.openClawNotifier = new OpenClawNotifier({
+            client: this.openClawClient,
+            databaseManager: this.databaseManager,
+            meetingDetectionEngine: this.meetingDetectionEngine,
+            windowManager: this.windowManager,
+          });
+          this._setupOpenClawForwarding();
+        } else {
+          await this.openClawClient.disconnect();
+          await this.openClawTunnel.close();
+          this.openClawTunnel.updateConfig({ ...(clientConfig.ssh || {}), localPort: 18789 });
+          this.openClawClient.updateConfig(clientConfig);
+        }
+        if (clientConfig.ssh) {
+          await this.openClawTunnel.ensure();
+        }
+        await this.openClawClient.connect();
         return { success: true };
       } catch (err) {
         return { success: false, error: err.message };

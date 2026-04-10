@@ -1375,7 +1375,7 @@ declare global {
             preview?: string;
           }>
         >;
-        createSession: (opts?: { title?: string }) => Promise<{ sessionKey: string }>;
+        createSession: (opts?: { label?: string; key?: string }) => Promise<string>;
         setActiveSession: (sessionKey: string | null) => Promise<void>;
         getHistory: (
           sessionKey: string,
@@ -1385,7 +1385,8 @@ declare global {
         }>;
         sendMessage: (sessionKey: string, text: string) => Promise<{ messageId: string }>;
         abort: (sessionKey: string) => Promise<void>;
-        testConnection: (config: unknown) => Promise<{ ok: boolean; error?: string }>;
+        testConnection: (config: unknown) => Promise<{ success: boolean; error?: string }>;
+        reconfigure: (config: unknown) => Promise<{ success: boolean; error?: string }>;
         tabActive: (active: boolean) => void;
         onStatusChange: (
           callback: (

@@ -735,6 +735,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("openclaw-send-message", { sessionKey, text }),
     abort: (sessionKey) => ipcRenderer.invoke("openclaw-abort", sessionKey),
     testConnection: (config) => ipcRenderer.invoke("openclaw-test-connection", config),
+    reconfigure: (config) => ipcRenderer.invoke("openclaw-reconfigure", config),
     tabActive: (active) => ipcRenderer.send("openclaw-tab-active", active),
     onStatusChange: registerListener(
       "openclaw-status-change",

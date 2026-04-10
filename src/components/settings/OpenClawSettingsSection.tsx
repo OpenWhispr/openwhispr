@@ -43,15 +43,8 @@ export default function OpenClawSettingsSection() {
     try {
       const api = window.electronAPI as unknown as {
         openclaw?: {
-          testConnection?: (settings: {
-            gatewayUrl: string;
-            gatewayToken: string;
-            sshEnabled: boolean;
-            sshHost: string;
-            sshUser: string;
-            sshKeyPath: string;
-            sshRemotePort: number;
-          }) => Promise<{ success: boolean; error?: string }>;
+          testConnection?: (settings: unknown) => Promise<{ success: boolean; error?: string }>;
+          reconfigure?: (settings: unknown) => Promise<{ success: boolean; error?: string }>;
         };
       };
 
@@ -63,7 +56,7 @@ export default function OpenClawSettingsSection() {
         return;
       }
 
-      const result = await api.openclaw.testConnection({
+      const config = {
         gatewayUrl: openClawGatewayUrl,
         gatewayToken: openClawGatewayToken,
         sshEnabled: openClawSshEnabled,
@@ -71,10 +64,20 @@ export default function OpenClawSettingsSection() {
         sshUser: openClawSshUser,
         sshKeyPath: openClawSshKeyPath,
         sshRemotePort: openClawSshRemotePort,
-      });
+      };
+
+      const result = await api.openclaw.testConnection(config);
 
       if (result.success) {
-        setTestState({ status: "success" });
+        const reconfigureResult = await api.openclaw.reconfigure?.(config);
+        if (reconfigureResult && !reconfigureResult.success) {
+          setTestState({
+            status: "error",
+            message: reconfigureResult.error ?? t("settings.openclaw.testFailed"),
+          });
+        } else {
+          setTestState({ status: "success" });
+        }
       } else {
         setTestState({
           status: "error",

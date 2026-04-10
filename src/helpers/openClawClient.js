@@ -3,12 +3,23 @@ const crypto = require("crypto");
 const WebSocket = require("ws");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
+const { loadOrCreateDeviceIdentity, buildDeviceAuthBlock } = require("./openClawIdentity");
 
 const PROTOCOL_VERSION = 3;
 const CONNECT_TIMEOUT_MS = 15000;
 const REQUEST_TIMEOUT_MS = 30000;
 const BACKOFF_STEPS_MS = [1000, 2000, 4000, 8000, 16000, 30000];
 const SENT_MESSAGE_TTL_MS = 10000;
+
+function extractChatText(message) {
+  if (!message) return "";
+  if (typeof message.content === "string") return message.content;
+  if (!Array.isArray(message.content)) return "";
+  return message.content
+    .filter((part) => part?.type === "text" && typeof part.text === "string")
+    .map((part) => part.text)
+    .join("");
+}
 
 class OpenClawClient extends EventEmitter {
   constructor(config = {}) {
@@ -24,9 +35,8 @@ class OpenClawClient extends EventEmitter {
     this.userInitiatedDisconnect = false;
     this.activeSessionKey = null;
     this.recentSends = new Map();
-    this._connectResolve = null;
-    this._connectReject = null;
-    this._connectTimeout = null;
+    this.runTextBuffers = new Map();
+    this._challengeWaiter = null;
   }
 
   updateConfig(config = {}) {
@@ -90,7 +100,7 @@ class OpenClawClient extends EventEmitter {
         ws = new WebSocket(this.url);
       } catch (err) {
         this._setStatus("error");
-        this.emit("error", { code: "ws-open-failed", message: err.message });
+        this.emit("connection-error", { code: "ws-open-failed", message: err.message });
         settleErr(err);
         this._scheduleReconnect();
         return;
@@ -104,7 +114,7 @@ class OpenClawClient extends EventEmitter {
         } catch {}
         const err = new Error("OpenClaw connect timeout");
         this._setStatus("error");
-        this.emit("error", { code: "connect-timeout", message: err.message });
+        this.emit("connection-error", { code: "connect-timeout", message: err.message });
         settleErr(err);
         this._scheduleReconnect();
       }, CONNECT_TIMEOUT_MS);
@@ -119,7 +129,7 @@ class OpenClawClient extends EventEmitter {
         } catch (err) {
           clearTimeout(connectTimeout);
           this._setStatus("error");
-          this.emit("error", { code: "handshake-failed", message: err.message });
+          this.emit("connection-error", { code: "handshake-failed", message: err.message });
           try {
             ws.close();
           } catch {}
@@ -134,7 +144,7 @@ class OpenClawClient extends EventEmitter {
 
       ws.on("error", (err) => {
         debugLogger.debug("OpenClaw WebSocket error", { error: err.message }, "openclaw");
-        this.emit("error", { code: "ws-error", message: err.message });
+        this.emit("connection-error", { code: "ws-error", message: err.message });
       });
 
       ws.on("close", (code, reason) => {
@@ -147,6 +157,7 @@ class OpenClawClient extends EventEmitter {
           { code, reason: reason?.toString(), wasConnected },
           "openclaw"
         );
+        settleErr(new Error(`Connection closed (code ${code})`));
         if (this.userInitiatedDisconnect) {
           this._setStatus("disconnected");
           return;
@@ -156,25 +167,60 @@ class OpenClawClient extends EventEmitter {
     });
   }
 
-  _performHandshake() {
+  async _performHandshake() {
+    const challenge = await this._waitForChallenge(CONNECT_TIMEOUT_MS);
+    const clientId = "cli";
+    const clientMode = "cli";
+    const role = "operator";
+    const scopes = ["operator.read", "operator.write"];
+    const platform = process.platform;
+    const identity = loadOrCreateDeviceIdentity();
+    const device = buildDeviceAuthBlock({
+      identity,
+      clientId,
+      clientMode,
+      role,
+      scopes,
+      token: this.token,
+      platform,
+      deviceFamily: "desktop",
+      nonce: challenge.nonce,
+      signedAtMs: challenge.ts,
+    });
     const params = {
       minProtocol: PROTOCOL_VERSION,
       maxProtocol: PROTOCOL_VERSION,
       client: {
-        id: "openwhispr",
+        id: clientId,
+        displayName: "OpenWhispr",
         version: app.getVersion(),
-        platform: process.platform,
-        mode: "desktop",
+        platform,
+        deviceFamily: "desktop",
+        mode: clientMode,
       },
-      role: "operator",
-      scopes: ["operator.read", "operator.write"],
+      role,
+      scopes,
       auth: { token: this.token },
+      device,
     };
-    return this._sendRequest("connect", params, CONNECT_TIMEOUT_MS).then((payload) => {
-      if (!payload || payload.type !== "hello-ok") {
-        throw new Error("Unexpected handshake response");
-      }
-      return payload;
+    const payload = await this._sendRequest("connect", params, CONNECT_TIMEOUT_MS);
+    if (!payload || payload.type !== "hello-ok") {
+      throw new Error("Unexpected handshake response");
+    }
+    return payload;
+  }
+
+  _waitForChallenge(timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this._challengeWaiter = null;
+        reject(new Error("Timed out waiting for connect challenge"));
+      }, timeoutMs);
+      this._challengeWaiter = (challenge) => {
+        clearTimeout(timer);
+        this._challengeWaiter = null;
+        resolve(challenge);
+      };
     });
   }
 
@@ -233,12 +279,21 @@ class OpenClawClient extends EventEmitter {
     const payload = frame.payload || {};
     const sessionKey = payload.sessionKey || payload.session_key || null;
 
+    if (eventName === "connect.challenge") {
+      const waiter = this._challengeWaiter;
+      if (waiter) {
+        waiter({ nonce: payload.nonce, ts: payload.ts });
+      }
+      return;
+    }
+
     switch (eventName) {
       case "sessions.changed":
-      case "presence":
+        this.emit("sessions-changed");
+        return;
       case "tick":
       case "health":
-        this.emit("sessions-changed");
+      case "presence":
         return;
       case "session.tool": {
         const messageId = payload.messageId || payload.message_id;
@@ -261,31 +316,47 @@ class OpenClawClient extends EventEmitter {
       }
       case "session.message":
       case "chat": {
-        const messageId = payload.messageId || payload.message_id;
-        const delta = payload.delta;
-        const content = payload.content;
-        const role = payload.role || "assistant";
-        if (typeof delta === "string" && delta.length > 0) {
-          this.emit("message-chunk", { sessionKey, messageId, delta });
+        const runId = payload.runId || payload.messageId || payload.message_id;
+        const state = payload.state;
+        const fullText = extractChatText(payload.message);
+        const role = payload.message?.role || "assistant";
+        if (state === "delta") {
+          const previous = this.runTextBuffers.get(runId) || "";
+          const delta = fullText.slice(previous.length);
+          if (delta.length > 0) {
+            this.runTextBuffers.set(runId, fullText);
+            this.emit("message-chunk", { sessionKey, messageId: runId, delta });
+          }
           return;
         }
-        if (payload.done || typeof content === "string") {
+        if (state === "final" || state === "aborted") {
+          const accumulated = this.runTextBuffers.get(runId) || "";
+          this.runTextBuffers.delete(runId);
+          const content = fullText || accumulated;
           if (this._isProactive(sessionKey)) {
             this.emit("proactive-message", {
               sessionKey,
-              messageId,
+              messageId: runId,
               role,
-              content: content ?? "",
+              content,
               channel: payload.channel,
             });
           } else {
             this.emit("message-done", {
               sessionKey,
-              messageId,
-              content: content ?? "",
-              toolCalls: payload.toolCalls || payload.tool_calls,
+              messageId: runId,
+              content,
             });
           }
+          return;
+        }
+        if (state === "error") {
+          this.runTextBuffers.delete(runId);
+          this.emit("message-done", {
+            sessionKey,
+            messageId: runId,
+            content: payload.errorMessage || "Error",
+          });
           return;
         }
         return;
@@ -344,13 +415,26 @@ class OpenClawClient extends EventEmitter {
   }
 
   async listSessions() {
-    const payload = await this._sendRequest("sessions.list");
-    return payload?.sessions || [];
+    const payload = await this._sendRequest("sessions.list", {
+      includeDerivedTitles: true,
+      includeLastMessage: true,
+    });
+    const rows = payload?.sessions || [];
+    return rows.map((row) => ({
+      sessionKey: row.key,
+      title: row.label || row.derivedTitle || row.displayName || row.key,
+      channel: row.deliveryContext?.channel || row.origin?.channel,
+      lastActivity: row.updatedAt,
+      preview: row.lastMessagePreview,
+    }));
   }
 
-  async createSession({ title } = {}) {
-    const payload = await this._sendRequest("sessions.create", { title });
-    return payload?.sessionKey || payload?.session_key;
+  async createSession({ label, key } = {}) {
+    const requestedKey = key || `openwhispr-${crypto.randomUUID()}`;
+    const params = { key: requestedKey };
+    if (label) params.label = label;
+    const result = await this._sendRequest("sessions.create", params);
+    return result?.key || requestedKey;
   }
 
   setActiveSession(sessionKey) {
@@ -368,7 +452,11 @@ class OpenClawClient extends EventEmitter {
 
   async sendMessage(sessionKey, text) {
     this._trackSend(sessionKey);
-    const payload = await this._sendRequest("chat.send", { sessionKey, text });
+    const payload = await this._sendRequest("chat.send", {
+      sessionKey,
+      message: text,
+      idempotencyKey: crypto.randomUUID(),
+    });
     return { messageId: payload?.messageId || payload?.message_id };
   }
 

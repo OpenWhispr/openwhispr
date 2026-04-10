@@ -342,6 +342,7 @@ function initializeCoreManagers() {
     meetingDetectionEngine,
     audioTapManager,
     openClawClient,
+    openClawTunnel,
     openClawNotifier,
     getTrayManager: () => trayManager,
   });
@@ -1248,14 +1249,11 @@ if (gotSingleInstanceLock) {
     if (qdrantManager) {
       qdrantManager.stop().catch(() => {});
     }
-    if (openClawNotifier) {
-      openClawNotifier.dispose();
-    }
-    if (openClawClient) {
-      openClawClient.disconnect().catch(() => {});
-    }
-    if (openClawTunnel) {
-      openClawTunnel.close().catch(() => {});
-    }
+    const notifier = ipcHandlers?.openClawNotifier ?? openClawNotifier;
+    const client = ipcHandlers?.openClawClient ?? openClawClient;
+    const tunnel = ipcHandlers?.openClawTunnel ?? openClawTunnel;
+    if (notifier) notifier.dispose();
+    if (client) client.disconnect().catch(() => {});
+    if (tunnel) tunnel.close().catch(() => {});
   });
 }

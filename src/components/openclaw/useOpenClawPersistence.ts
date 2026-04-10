@@ -15,11 +15,6 @@ export interface OpenClawPersistence {
   saveUserMessage: (text: string) => Promise<void>;
   saveAssistantMessage: (content: string, toolCalls?: ToolCallInfo[]) => Promise<void>;
   handleNewChat: () => void;
-  upsertSession: (opts: {
-    remoteSessionKey: string;
-    title?: string;
-    originChannel?: string;
-  }) => Promise<number | null>;
 }
 
 export function useOpenClawPersistence(
@@ -31,8 +26,8 @@ export function useOpenClawPersistence(
 
   const createConversation = useCallback(
     async (title: string): Promise<number> => {
-      const session = await window.electronAPI?.openclaw?.createSession?.({ title });
-      const sessionKey = session?.sessionKey ?? "";
+      const sessionKey = await window.electronAPI?.openclaw?.createSession?.({ label: title });
+      if (!sessionKey) throw new Error("Failed to create OpenClaw session");
       const row = await window.electronAPI?.upsertOpenClawConversation?.({
         remoteSessionKey: sessionKey,
         title,
@@ -40,7 +35,7 @@ export function useOpenClawPersistence(
       });
       const id = row?.id ?? 0;
       conversationIdRef.current = id;
-      sessionKeyRef.current = sessionKey || null;
+      sessionKeyRef.current = sessionKey;
       options.onConversationCreated?.(id, title, sessionKey);
       return id;
     },
@@ -87,14 +82,6 @@ export function useOpenClawPersistence(
     []
   );
 
-  const upsertSession = useCallback(
-    async (opts: { remoteSessionKey: string; title?: string; originChannel?: string }) => {
-      const row = await window.electronAPI?.upsertOpenClawConversation?.(opts);
-      return row?.id ?? null;
-    },
-    []
-  );
-
   const handleNewChat = useCallback(() => {
     setMessages([]);
     conversationIdRef.current = null;
@@ -110,7 +97,6 @@ export function useOpenClawPersistence(
     saveUserMessage,
     saveAssistantMessage,
     handleNewChat,
-    upsertSession,
   };
 }
 

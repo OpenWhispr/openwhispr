@@ -61,17 +61,18 @@ export function useOpenClawStreaming({
           m.id === assistantId
             ? {
                 ...m,
-                content: payload.content,
+                content: payload.content || m.content,
                 isStreaming: false,
                 ...(payload.toolCalls?.length ? { toolCalls: payload.toolCalls } : {}),
               }
             : m
         )
       );
+      const finalContent = payload.content || "";
       setAgentState("idle");
       setToolStatus("");
       setActiveToolName("");
-      onStreamCompleteRef.current?.(assistantId, payload.content, payload.toolCalls);
+      onStreamCompleteRef.current?.(assistantId, finalContent, payload.toolCalls);
     });
 
     const unsubToolCall = api.onToolCall?.((_event, payload) => {

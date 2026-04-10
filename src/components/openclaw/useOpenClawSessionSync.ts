@@ -21,6 +21,7 @@ export function useOpenClawSessionSync({ status, onSync }: UseOpenClawSessionSyn
       const sessions = await api.listSessions?.();
       if (cancelled || !sessions) return;
       for (const session of sessions) {
+        if (!session.sessionKey) continue;
         await window.electronAPI?.upsertOpenClawConversation?.({
           remoteSessionKey: session.sessionKey,
           title: session.title,
