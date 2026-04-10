@@ -155,16 +155,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     checkHotkeyMode();
   }, [setActivationMode]);
 
-  // Update wizard state when backend falls back to a different hotkey
+  // Update wizard UI when backend falls back to a different hotkey.
+  // Only update local state — don't persist to localStorage so the app
+  // retries the preferred key on next launch.
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onHotkeyFallbackUsed?.((data: { fallback: string }) => {
       if (data?.fallback) {
         setHotkey(data.fallback);
-        setDictationKey(data.fallback);
       }
     });
     return () => unsubscribe?.();
-  }, [setDictationKey]);
+  }, []);
 
   useEffect(() => {
     const modelToCheck = localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel;

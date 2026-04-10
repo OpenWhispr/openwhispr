@@ -296,6 +296,13 @@ class GnomeShortcutManager {
     const { path: keybindingPath } = getSlotConfig(slotName);
 
     try {
+      const existing = this.getExistingKeybindings();
+      const conflict = this.findConflictingBinding(shortcut, existing, keybindingPath);
+      if (conflict) {
+        debugLogger.log(`[GnomeShortcut] Shortcut conflict on update — "${shortcut}" already used by "${conflict}"`);
+        return false;
+      }
+
       execFileSync(
         "gsettings",
         ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding", shortcut],

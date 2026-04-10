@@ -1009,9 +1009,16 @@ class HotkeyManager {
 
       if (this.useKDE && this.kdeManager) {
         debugLogger.log(`[HotkeyManager] Updating KDE hotkey to "${hotkey}"`);
+        const previousHotkey = this.currentHotkey;
         await this.kdeManager.unregisterKeybinding("dictation");
         const result = await this.kdeManager.registerKeybinding(hotkey, "dictation", callback);
         if (result !== true) {
+          if (previousHotkey) {
+            const restored = await this.kdeManager.registerKeybinding(previousHotkey, "dictation", callback);
+            if (restored === true) {
+              debugLogger.log(`[HotkeyManager] Restored previous KDE hotkey "${previousHotkey}"`);
+            }
+          }
           const reason = KDE_FAILURE_REASONS[result]?.(hotkey) || i18nMain.t("hotkey.errors.registrationFailed", { hotkey });
           return { success: false, message: reason };
         }
