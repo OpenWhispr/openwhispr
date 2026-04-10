@@ -1390,63 +1390,61 @@ declare global {
         tabActive: (active: boolean) => void;
         onStatusChange: (
           callback: (
-            event: unknown,
             status: "disconnected" | "connecting" | "connected" | "reconnecting" | "error"
           ) => void
         ) => () => void;
-        onSessionsChanged: (callback: (event: unknown) => void) => () => void;
+        onSessionsChanged: (callback: () => void) => () => void;
         onMessageChunk: (
-          callback: (
-            event: unknown,
-            payload: { sessionKey: string; messageId: string; delta: string }
-          ) => void
+          callback: (payload: {
+            sessionKey: string;
+            messageId: string;
+            delta: string;
+          }) => void
         ) => () => void;
         onMessageDone: (
-          callback: (
-            event: unknown,
-            payload: {
-              sessionKey: string;
-              messageId: string;
-              content: string;
-              toolCalls?: Array<{
-                id: string;
-                name: string;
-                arguments: string;
-                status: "executing" | "completed" | "error";
-                result?: string;
-              }>;
-            }
-          ) => void
+          callback: (payload: {
+            sessionKey: string;
+            messageId: string;
+            content: string;
+            toolCalls?: Array<{
+              id: string;
+              name: string;
+              arguments: string;
+              status: "executing" | "completed" | "error";
+              result?: string;
+            }>;
+          }) => void
         ) => () => void;
         onToolCall: (
-          callback: (
-            event: unknown,
-            payload: { sessionKey: string; messageId: string; tool: string; input: unknown }
-          ) => void
+          callback: (payload: {
+            sessionKey: string;
+            messageId: string;
+            tool: string;
+            input: unknown;
+          }) => void
         ) => () => void;
         onToolResult: (
-          callback: (
-            event: unknown,
-            payload: { sessionKey: string; messageId: string; tool: string; output: string }
-          ) => void
+          callback: (payload: {
+            sessionKey: string;
+            messageId: string;
+            tool: string;
+            output: string;
+          }) => void
         ) => () => void;
         onProactiveMessage: (
-          callback: (
-            event: unknown,
-            payload: {
-              sessionKey: string;
-              messageId: string;
-              role: string;
-              content: string;
-              channel?: string;
-            }
-          ) => void
+          callback: (payload: {
+            sessionKey: string;
+            messageId: string;
+            role: string;
+            content: string;
+            channel?: string;
+          }) => void
         ) => () => void;
         onError: (
-          callback: (event: unknown, payload: { code: string; message: string }) => void
+          callback: (payload: { code: string; message: string }) => void
         ) => () => void;
         onOpenConversation: (
-          callback: (event: unknown, payload: { conversationId: number; sessionKey: string }) => void
+          callback: (payload: { conversationId: number; sessionKey: string }) => void
         ) => () => void;
       };
 

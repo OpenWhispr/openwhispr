@@ -15,7 +15,7 @@ export function useOpenClawStatus(): OpenClawStatus {
     window.electronAPI?.openclaw?.status?.().then((s) => {
       if (!cancelled) setStatus(s as OpenClawStatus);
     });
-    const unsubscribe = window.electronAPI?.openclaw?.onStatusChange?.((_event, next) => {
+    const unsubscribe = window.electronAPI?.openclaw?.onStatusChange?.((next) => {
       setStatus(next as OpenClawStatus);
     });
     return () => {

@@ -42,7 +42,7 @@ export function useOpenClawStreaming({
       return assistantId;
     };
 
-    const unsubChunk = api.onMessageChunk?.((_event, payload) => {
+    const unsubChunk = api.onMessageChunk?.((payload) => {
       if (payload.sessionKey !== getSessionKeyRef.current()) return;
       const assistantId = ensureAssistantMessage(payload.messageId);
       setMessages((prev) =>
@@ -52,7 +52,7 @@ export function useOpenClawStreaming({
       );
     });
 
-    const unsubDone = api.onMessageDone?.((_event, payload) => {
+    const unsubDone = api.onMessageDone?.((payload) => {
       if (payload.sessionKey !== getSessionKeyRef.current()) return;
       const assistantId = ensureAssistantMessage(payload.messageId);
       assistantIdByMessageIdRef.current.delete(payload.messageId);
@@ -75,7 +75,7 @@ export function useOpenClawStreaming({
       onStreamCompleteRef.current?.(assistantId, finalContent, payload.toolCalls);
     });
 
-    const unsubToolCall = api.onToolCall?.((_event, payload) => {
+    const unsubToolCall = api.onToolCall?.((payload) => {
       if (payload.sessionKey !== getSessionKeyRef.current()) return;
       const assistantId = ensureAssistantMessage(payload.messageId);
       setAgentState("tool-executing");
@@ -103,7 +103,7 @@ export function useOpenClawStreaming({
       );
     });
 
-    const unsubToolResult = api.onToolResult?.((_event, payload) => {
+    const unsubToolResult = api.onToolResult?.((payload) => {
       if (payload.sessionKey !== getSessionKeyRef.current()) return;
       const assistantId = assistantIdByMessageIdRef.current.get(payload.messageId);
       if (!assistantId) return;
