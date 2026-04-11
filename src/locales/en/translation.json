@@ -759,6 +759,8 @@
     "searchPlaceholder": "Search..."
   },
   "microphoneSettings": {
+    "auto": "Auto (best input)",
+    "autoDescription": "Automatically probes all microphones and selects the one with the strongest input signal.",
     "builtIn": "(Built-in)",
     "errors": {
       "unableToAccess": "Unable to access microphone. Please check permissions."

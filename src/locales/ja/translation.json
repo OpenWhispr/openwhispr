@@ -711,6 +711,8 @@
     "searchPlaceholder": "検索..."
   },
   "microphoneSettings": {
+    "auto": "自動（最良入力）",
+    "autoDescription": "すべてのマイクを自動的にテストし、入力信号が最も強いものを選択します。",
     "builtIn": "（内蔵）",
     "errors": {
       "unableToAccess": "マイクにアクセスできません。権限を確認してください。"
