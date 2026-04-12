@@ -1086,6 +1086,16 @@
       "description": "整理轉錄文字、處理指令、修正錯誤，同時保留你的語調。",
       "enableTextCleanup": "啟用文字整理",
       "enableTextCleanupDescription": "AI 自動提升轉錄品質",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "雲端供應商",
+        "local": "本機",
+        "selfHosted": "自架主機",
+        "openwhisprDesc": "即開即用，無需設定。",
+        "providersDesc": "使用你自己的 API Key。",
+        "localDesc": "裝置端模型，完全私密。",
+        "selfHostedDesc": "你的伺服器，在你的網路上。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "即開即用，無需設定。",
       "title": "AI 文字增強",
@@ -1097,6 +1107,18 @@
         "switchedCustom": {
           "description": "設定你自己的供應商和 API Key。",
           "title": "已切換至自訂設定"
+        },
+        "switchedProviders": {
+          "title": "雲端供應商",
+          "description": "使用你自己的 API Key。"
+        },
+        "switchedLocal": {
+          "title": "本機執行",
+          "description": "AI 在你的裝置上本機執行。"
+        },
+        "switchedSelfHosted": {
+          "title": "自架主機",
+          "description": "使用你自己的伺服器。"
         }
       }
     },
@@ -1377,6 +1399,16 @@
       "customSetup": "自訂設定",
       "customSetupDescription": "使用你自己的供應商和 API Key。",
       "description": "選擇 OpenWhispr 轉錄語音的方式",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "雲端供應商",
+        "local": "本機",
+        "selfHosted": "自架主機",
+        "openwhisprDesc": "即開即用，無需設定。",
+        "providersDesc": "使用你自己的 API Key。",
+        "localDesc": "裝置端模型，完全私密。",
+        "selfHostedDesc": "你的伺服器，在你的網路上。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "即開即用，無需設定。",
       "title": "語音轉文字",
@@ -1388,6 +1420,18 @@
         "switchedCustom": {
           "description": "設定你自己的供應商和 API Key。",
           "title": "已切換至自訂設定"
+        },
+        "switchedProviders": {
+          "title": "雲端供應商",
+          "description": "使用你自己的 API Key。"
+        },
+        "switchedLocal": {
+          "title": "本機執行",
+          "description": "轉錄在你的裝置上本機執行。"
+        },
+        "switchedSelfHosted": {
+          "title": "自架主機",
+          "description": "使用你自己的伺服器。"
         }
       },
       "gpuDevice": {
@@ -1402,6 +1446,12 @@
         "title": "Intelligence GPU",
         "description": "用於本機 AI 處理的 GPU"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "端點 URL",
+      "serverUrl": "伺服器 URL",
+      "apiKeyOptional": "API Key（選填）",
+      "lanHint": "音訊留在你的網路中 — 不會離開你的 LAN。"
     }
   },
   "models": {
@@ -1897,6 +1947,16 @@
       "systemPrompt": "系統提示詞",
       "systemPromptDescription": "助手的自訂指令",
       "systemPromptPlaceholder": "輸入自訂系統提示詞...",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "雲端供應商",
+        "local": "本機",
+        "selfHosted": "自架主機",
+        "openwhisprDesc": "即開即用，無需設定。",
+        "providersDesc": "使用自己的 API 金鑰。",
+        "localDesc": "裝置端模型，完全私密。",
+        "selfHostedDesc": "你自己網路上的伺服器。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "使用 OpenWhispr 的雲端 AI 進行助手對話",
       "customSetup": "自訂配置 (BYOK)",

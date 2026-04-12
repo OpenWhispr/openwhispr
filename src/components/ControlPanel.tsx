@@ -399,6 +399,9 @@ export default function ControlPanel() {
           cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
           parakeetModel: s.parakeetModel,
           whisperModel: s.whisperModel,
+          transcriptionMode: s.transcriptionMode,
+          remoteTranscriptionType: s.remoteTranscriptionType,
+          remoteTranscriptionUrl: s.remoteTranscriptionUrl,
         });
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;

@@ -1091,6 +1091,16 @@
       "description": "Corrige transcripciones, gestiona comandos y soluciona errores preservando tu tono.",
       "enableTextCleanup": "Activar corrección de texto",
       "enableTextCleanupDescription": "La IA mejora la calidad de transcripción",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "Proveedores en la nube",
+        "local": "Local",
+        "selfHosted": "Autoalojado",
+        "openwhisprDesc": "Funciona sin configurar nada.",
+        "providersDesc": "Usa tu propia clave API.",
+        "localDesc": "Modelos en el dispositivo. Privado.",
+        "selfHostedDesc": "Tu servidor en tu red."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Funciona de inmediato. Sin configuración necesaria.",
       "title": "Mejora de texto con IA",
@@ -1102,6 +1112,18 @@
         "switchedCustom": {
           "description": "Configura tu propio proveedor y clave API.",
           "title": "Cambiado a configuración personalizada"
+        },
+        "switchedProviders": {
+          "title": "Proveedores en la nube",
+          "description": "Usando tus propias claves API."
+        },
+        "switchedLocal": {
+          "title": "En dispositivo",
+          "description": "La IA se ejecuta localmente en tu máquina."
+        },
+        "switchedSelfHosted": {
+          "title": "Autoalojado",
+          "description": "Usando tu propio servidor."
         }
       }
     },
@@ -1382,6 +1404,16 @@
       "customSetup": "Configuración personalizada",
       "customSetupDescription": "Usa tu propio proveedor y clave API.",
       "description": "Elige cómo OpenWhispr transcribe tu voz",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "Proveedores en la nube",
+        "local": "Local",
+        "selfHosted": "Autoalojado",
+        "openwhisprDesc": "Funciona sin configurar nada.",
+        "providersDesc": "Usa tu propia clave API.",
+        "localDesc": "Modelos en el dispositivo. Privado.",
+        "selfHostedDesc": "Tu servidor en tu red."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Funciona de inmediato. Sin configuración necesaria.",
       "title": "Voz a texto",
@@ -1393,6 +1425,18 @@
         "switchedCustom": {
           "description": "Configura tu propio proveedor y clave API.",
           "title": "Cambiado a configuración personalizada"
+        },
+        "switchedProviders": {
+          "title": "Proveedores en la nube",
+          "description": "Usando tus propias claves API."
+        },
+        "switchedLocal": {
+          "title": "En dispositivo",
+          "description": "La transcripción se ejecuta localmente en tu máquina."
+        },
+        "switchedSelfHosted": {
+          "title": "Autoalojado",
+          "description": "Usando tu propio servidor."
         }
       },
       "gpuDevice": {
@@ -1407,6 +1451,12 @@
         "title": "Intelligence GPU",
         "description": "GPU usado para procesamiento IA local"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "URL del endpoint",
+      "serverUrl": "URL del servidor",
+      "apiKeyOptional": "API Key (opcional)",
+      "lanHint": "El audio permanece en tu red — nada sale de tu LAN."
     }
   },
   "models": {
@@ -1902,6 +1952,16 @@
       "systemPrompt": "Prompt del Sistema",
       "systemPromptDescription": "Instrucciones personalizadas para el agente",
       "systemPromptPlaceholder": "Introduce un prompt de sistema personalizado...",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "Proveedores Cloud",
+        "local": "Local",
+        "selfHosted": "Autoalojado",
+        "openwhisprDesc": "Funciona de inmediato. Sin configuración.",
+        "providersDesc": "Trae tu propia clave API.",
+        "localDesc": "Modelos en el dispositivo. Totalmente privado.",
+        "selfHostedDesc": "Tu propio servidor en tu red."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Usar la IA en la nube de OpenWhispr para conversaciones del agente",
       "customSetup": "Configuración personalizada (BYOK)",

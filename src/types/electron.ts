@@ -1,5 +1,9 @@
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
+export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted";
+
+export type SelfHostedType = "openai-compatible" | "lan";
+
 export type TranscriptionStatus = "completed" | "failed" | "pending";
 
 export interface TranscriptionItem {
@@ -366,6 +370,9 @@ declare global {
           cloudTranscriptionBaseUrl?: string;
           parakeetModel: string;
           whisperModel: string;
+          transcriptionMode?: InferenceMode;
+          remoteTranscriptionType?: SelfHostedType;
+          remoteTranscriptionUrl?: string;
         }
       ) => Promise<{ success: boolean; transcription?: TranscriptionItem; error?: string }>;
       updateTranscriptionText: (

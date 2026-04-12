@@ -1139,6 +1139,16 @@
       "description": "Clean up transcriptions, handle commands, and fix errors while preserving your tone.",
       "enableTextCleanup": "Enable text cleanup",
       "enableTextCleanupDescription": "AI improves transcription quality",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "Cloud Providers",
+        "local": "Local",
+        "selfHosted": "Self-Hosted",
+        "openwhisprDesc": "Just works. No setup needed.",
+        "providersDesc": "Bring your own API key.",
+        "localDesc": "On-device models. Fully private.",
+        "selfHostedDesc": "Your own server on your network."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Just works. No configuration needed.",
       "title": "AI Text Enhancement",
@@ -1150,6 +1160,18 @@
         "switchedCustom": {
           "description": "Configure your own provider and API key.",
           "title": "Switched to Custom Setup"
+        },
+        "switchedProviders": {
+          "title": "Cloud Providers",
+          "description": "Using your own API keys."
+        },
+        "switchedLocal": {
+          "title": "On Device",
+          "description": "AI runs locally on your machine."
+        },
+        "switchedSelfHosted": {
+          "title": "Self-Hosted",
+          "description": "Using your own server."
         }
       }
     },
@@ -1430,6 +1452,16 @@
       "customSetup": "Custom Setup",
       "customSetupDescription": "Use your own provider and API key.",
       "description": "Choose how OpenWhispr transcribes your voice",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "Cloud Providers",
+        "local": "Local",
+        "selfHosted": "Self-Hosted",
+        "openwhisprDesc": "Just works. No setup needed.",
+        "providersDesc": "Bring your own API key.",
+        "localDesc": "On-device models. Fully private.",
+        "selfHostedDesc": "Your own server on your network."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Just works. No configuration needed.",
       "title": "Speech to Text",
@@ -1441,6 +1473,18 @@
         "switchedCustom": {
           "description": "Configure your own provider and API key.",
           "title": "Switched to Custom Setup"
+        },
+        "switchedProviders": {
+          "title": "Cloud Providers",
+          "description": "Using your own API keys."
+        },
+        "switchedLocal": {
+          "title": "On Device",
+          "description": "Transcription runs locally on your machine."
+        },
+        "switchedSelfHosted": {
+          "title": "Self-Hosted",
+          "description": "Using your own server."
         }
       },
       "gpuDevice": {
@@ -1455,6 +1499,12 @@
         "title": "Intelligence GPU",
         "description": "GPU used for local AI processing"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "Endpoint URL",
+      "serverUrl": "Server URL",
+      "apiKeyOptional": "API Key (optional)",
+      "lanHint": "Audio stays on your network — nothing leaves your LAN."
     }
   },
   "models": {
@@ -1950,6 +2000,16 @@
       "systemPrompt": "System Prompt",
       "systemPromptDescription": "Custom instructions for the agent",
       "systemPromptPlaceholder": "Enter custom system prompt...",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "Cloud Providers",
+        "local": "Local",
+        "selfHosted": "Self-Hosted",
+        "openwhisprDesc": "Just works. No setup needed.",
+        "providersDesc": "Bring your own API key.",
+        "localDesc": "On-device models. Fully private.",
+        "selfHostedDesc": "Your own server on your network."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Use OpenWhispr's cloud AI for agent conversations",
       "customSetup": "Custom Setup (BYOK)",

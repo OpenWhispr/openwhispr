@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useRef } from
 import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
-import type { LocalTranscriptionProvider } from "../types/electron";
+import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -18,9 +18,11 @@ export interface TranscriptionSettings {
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl?: string;
   cloudTranscriptionMode: string;
+  transcriptionMode: InferenceMode;
+  remoteTranscriptionType: SelfHostedType;
+  remoteTranscriptionUrl: string;
   customDictionary: string[];
   assemblyAiStreaming: boolean;
-  showTranscriptionPreview: boolean;
 }
 
 export interface ReasoningSettings {
@@ -29,6 +31,9 @@ export interface ReasoningSettings {
   reasoningProvider: string;
   cloudReasoningBaseUrl?: string;
   cloudReasoningMode: string;
+  reasoningMode: InferenceMode;
+  remoteReasoningType: SelfHostedType;
+  remoteReasoningUrl: string;
 }
 
 export interface HotkeySettings {
@@ -70,6 +75,8 @@ export interface AgentModeSettings {
   agentSystemPrompt: string;
   agentEnabled: boolean;
   cloudAgentMode: string;
+  agentInferenceMode: InferenceMode;
+  remoteAgentUrl: string;
 }
 
 function useSettingsInternal() {
@@ -180,11 +187,15 @@ function useSettingsInternal() {
     cloudReasoningBaseUrl: store.cloudReasoningBaseUrl,
     cloudTranscriptionMode: store.cloudTranscriptionMode,
     cloudReasoningMode: store.cloudReasoningMode,
+    transcriptionMode: store.transcriptionMode,
+    remoteTranscriptionType: store.remoteTranscriptionType,
+    remoteTranscriptionUrl: store.remoteTranscriptionUrl,
+    reasoningMode: store.reasoningMode,
+    remoteReasoningType: store.remoteReasoningType,
+    remoteReasoningUrl: store.remoteReasoningUrl,
     customDictionary: store.customDictionary,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
-    showTranscriptionPreview: store.showTranscriptionPreview,
-    setShowTranscriptionPreview: store.setShowTranscriptionPreview,
     useReasoningModel: store.useReasoningModel,
     reasoningModel: store.reasoningModel,
     reasoningProvider: store.reasoningProvider,
@@ -211,6 +222,12 @@ function useSettingsInternal() {
     setCloudReasoningBaseUrl: store.setCloudReasoningBaseUrl,
     setCloudTranscriptionMode: store.setCloudTranscriptionMode,
     setCloudReasoningMode: store.setCloudReasoningMode,
+    setTranscriptionMode: store.setTranscriptionMode,
+    setRemoteTranscriptionType: store.setRemoteTranscriptionType,
+    setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,
+    setReasoningMode: store.setReasoningMode,
+    setRemoteReasoningType: store.setRemoteReasoningType,
+    setRemoteReasoningUrl: store.setRemoteReasoningUrl,
     setCustomDictionary: store.setCustomDictionary,
     setUseReasoningModel: store.setUseReasoningModel,
     setReasoningModel: store.setReasoningModel,

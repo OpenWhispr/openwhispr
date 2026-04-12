@@ -2812,7 +2812,28 @@ class IPCHandlers {
       try {
         let result;
 
-        if (settings?.useLocalWhisper) {
+        if (
+          settings?.transcriptionMode === "self-hosted" &&
+          settings?.remoteTranscriptionType === "lan" &&
+          settings?.remoteTranscriptionUrl
+        ) {
+          try {
+            const lanResult = await this.whisperManager.transcribeViaLan(
+              buffer,
+              settings.remoteTranscriptionUrl,
+              { language: settings.language || null }
+            );
+            if (lanResult?.success && lanResult.text) {
+              result = { text: lanResult.text, source: "lan", model: "remote" };
+            }
+          } catch (lanError) {
+            debugLogger.warn("LAN whisper-server failed, falling back", {
+              error: lanError.message,
+            });
+          }
+        }
+
+        if (!result && settings?.useLocalWhisper) {
           if (settings.localTranscriptionProvider === "nvidia") {
             const model =
               settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
@@ -2822,7 +2843,7 @@ class IPCHandlers {
               model: settings.whisperModel,
             });
           }
-        } else if (settings?.cloudTranscriptionMode === "openwhispr") {
+        } else if (!result && settings?.cloudTranscriptionMode === "openwhispr") {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
             const cookieHeader = await getSessionCookiesFromWindow(win);
@@ -2844,7 +2865,7 @@ class IPCHandlers {
               }
             }
           }
-        } else {
+        } else if (!result) {
           const provider = settings?.cloudTranscriptionProvider || "openai";
           const model = this._resolveByokModel(provider, settings?.cloudTranscriptionModel);
 

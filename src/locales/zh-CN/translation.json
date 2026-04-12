@@ -1086,6 +1086,16 @@
       "description": "整理转录文本、处理指令、修正错误，同时保留你的语气风格。",
       "enableTextCleanup": "启用文本整理",
       "enableTextCleanupDescription": "AI 提升转录质量",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "云服务商",
+        "local": "本地",
+        "selfHosted": "自托管",
+        "openwhisprDesc": "开箱即用，无需设置。",
+        "providersDesc": "使用你自己的 API Key。",
+        "localDesc": "设备端模型，完全私密。",
+        "selfHostedDesc": "你的服务器，在你的网络上。"
+      },
       "openwhisprCloud": "OpenWhispr 云端",
       "openwhisprCloudDescription": "开箱即用，无需配置。",
       "title": "AI 文本增强",
@@ -1097,6 +1107,18 @@
         "switchedCustom": {
           "description": "请配置你的服务商和 API Key。",
           "title": "已切换到自定义设置"
+        },
+        "switchedProviders": {
+          "title": "云服务商",
+          "description": "使用你自己的 API Key。"
+        },
+        "switchedLocal": {
+          "title": "本地运行",
+          "description": "AI 在你的设备上本地运行。"
+        },
+        "switchedSelfHosted": {
+          "title": "自托管",
+          "description": "使用你自己的服务器。"
         }
       }
     },
@@ -1377,6 +1399,16 @@
       "customSetup": "自定义设置",
       "customSetupDescription": "使用你自己的服务商和 API Key。",
       "description": "选择 OpenWhispr 转录语音的方式",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "云服务商",
+        "local": "本地",
+        "selfHosted": "自托管",
+        "openwhisprDesc": "开箱即用，无需设置。",
+        "providersDesc": "使用你自己的 API Key。",
+        "localDesc": "设备端模型，完全私密。",
+        "selfHostedDesc": "你的服务器，在你的网络上。"
+      },
       "openwhisprCloud": "OpenWhispr 云端",
       "openwhisprCloudDescription": "开箱即用，无需配置。",
       "title": "语音转文字",
@@ -1388,6 +1420,18 @@
         "switchedCustom": {
           "description": "请配置你的服务商和 API Key。",
           "title": "已切换到自定义设置"
+        },
+        "switchedProviders": {
+          "title": "云服务商",
+          "description": "使用你自己的 API Key。"
+        },
+        "switchedLocal": {
+          "title": "本地运行",
+          "description": "转录在你的设备上本地运行。"
+        },
+        "switchedSelfHosted": {
+          "title": "自托管",
+          "description": "使用你自己的服务器。"
         }
       },
       "gpuDevice": {
@@ -1402,6 +1446,12 @@
         "title": "Intelligence GPU",
         "description": "用于本地 AI 处理的 GPU"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "端点 URL",
+      "serverUrl": "服务器 URL",
+      "apiKeyOptional": "API Key（可选）",
+      "lanHint": "音频留在你的网络中 — 不会离开你的 LAN。"
     }
   },
   "models": {
@@ -1897,6 +1947,16 @@
       "systemPrompt": "系统提示词",
       "systemPromptDescription": "助手的自定义指令",
       "systemPromptPlaceholder": "输入自定义系统提示词...",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "云服务商",
+        "local": "本地",
+        "selfHosted": "自托管",
+        "openwhisprDesc": "开箱即用，无需设置。",
+        "providersDesc": "使用自己的 API 密钥。",
+        "localDesc": "设备端模型，完全私密。",
+        "selfHostedDesc": "你自己网络上的服务器。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "使用 OpenWhispr 的云端 AI 进行助手对话",
       "customSetup": "自定义配置 (BYOK)",

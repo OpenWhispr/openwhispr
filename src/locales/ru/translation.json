@@ -1091,6 +1091,16 @@
       "description": "Очищайте транскрипции, обрабатывайте команды и исправляйте ошибки, сохраняя вашу манеру речи.",
       "enableTextCleanup": "Включить очистку текста",
       "enableTextCleanupDescription": "ИИ улучшает качество транскрипции",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "Облачные провайдеры",
+        "local": "Локально",
+        "selfHosted": "Свой сервер",
+        "openwhisprDesc": "Работает сразу. Без настройки.",
+        "providersDesc": "Используйте свой API-ключ.",
+        "localDesc": "Модели на устройстве. Полная приватность.",
+        "selfHostedDesc": "Свой сервер в вашей сети."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Просто работает. Настройка не требуется.",
       "title": "ИИ-улучшение текста",
@@ -1102,6 +1112,18 @@
         "switchedCustom": {
           "description": "Настройте собственного провайдера и API-ключ.",
           "title": "Переключено на пользовательскую настройку"
+        },
+        "switchedProviders": {
+          "title": "Облачные провайдеры",
+          "description": "Используются ваши собственные API-ключи."
+        },
+        "switchedLocal": {
+          "title": "На устройстве",
+          "description": "ИИ работает локально на вашем компьютере."
+        },
+        "switchedSelfHosted": {
+          "title": "Свой сервер",
+          "description": "Используется ваш собственный сервер."
         }
       }
     },
@@ -1382,6 +1404,16 @@
       "customSetup": "Пользовательская настройка",
       "customSetupDescription": "Используйте собственного провайдера и API-ключ.",
       "description": "Выберите, как OpenWhispr будет транскрибировать вашу речь",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "Облачные провайдеры",
+        "local": "Локально",
+        "selfHosted": "Свой сервер",
+        "openwhisprDesc": "Работает сразу. Без настройки.",
+        "providersDesc": "Используйте свой API-ключ.",
+        "localDesc": "Модели на устройстве. Полная приватность.",
+        "selfHostedDesc": "Свой сервер в вашей сети."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Просто работает. Настройка не требуется.",
       "title": "Распознавание речи",
@@ -1393,6 +1425,18 @@
         "switchedCustom": {
           "description": "Настройте собственного провайдера и API-ключ.",
           "title": "Переключено на пользовательскую настройку"
+        },
+        "switchedProviders": {
+          "title": "Облачные провайдеры",
+          "description": "Используются ваши собственные API-ключи."
+        },
+        "switchedLocal": {
+          "title": "На устройстве",
+          "description": "Транскрипция выполняется локально на вашем компьютере."
+        },
+        "switchedSelfHosted": {
+          "title": "Свой сервер",
+          "description": "Используется ваш собственный сервер."
         }
       },
       "gpuDevice": {
@@ -1407,6 +1451,12 @@
         "title": "Intelligence GPU",
         "description": "GPU для локальной обработки ИИ"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "URL эндпоинта",
+      "serverUrl": "URL сервера",
+      "apiKeyOptional": "API-ключ (необязательно)",
+      "lanHint": "Аудио остаётся в вашей сети — ничего не покидает вашу LAN."
     }
   },
   "models": {
@@ -1902,6 +1952,16 @@
       "systemPrompt": "Системный промпт",
       "systemPromptDescription": "Пользовательские инструкции для агента",
       "systemPromptPlaceholder": "Введите пользовательский системный промпт...",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "Облачные провайдеры",
+        "local": "Локально",
+        "selfHosted": "Свой сервер",
+        "openwhisprDesc": "Просто работает. Настройка не нужна.",
+        "providersDesc": "Свой API-ключ.",
+        "localDesc": "Модели на устройстве. Полная приватность.",
+        "selfHostedDesc": "Ваш сервер в вашей сети."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Использовать облачный ИИ OpenWhispr для разговоров с агентом",
       "customSetup": "Своя настройка (BYOK)",

@@ -1091,6 +1091,16 @@
       "description": "文字起こしのクリーンアップ、コマンド処理、エラー修正を行いながら、あなたの話し方を維持します。",
       "enableTextCleanup": "テキスト補正を有効にする",
       "enableTextCleanupDescription": "AI が文字起こしの品質を向上",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "クラウドプロバイダー",
+        "local": "ローカル",
+        "selfHosted": "セルフホスト",
+        "openwhisprDesc": "設定不要ですぐ使える。",
+        "providersDesc": "自分のAPIキーを使用。",
+        "localDesc": "端末上のモデル。完全プライベート。",
+        "selfHostedDesc": "自前サーバーをネットワーク上に。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "設定不要ですぐに使えます。",
       "title": "AI テキスト補正",
@@ -1102,6 +1112,18 @@
         "switchedCustom": {
           "description": "独自のプロバイダーと API キーを設定してください。",
           "title": "カスタム設定に切り替えました"
+        },
+        "switchedProviders": {
+          "title": "クラウドプロバイダー",
+          "description": "独自の API キーを使用します。"
+        },
+        "switchedLocal": {
+          "title": "デバイス上",
+          "description": "AI はお使いのマシン上でローカルに実行されます。"
+        },
+        "switchedSelfHosted": {
+          "title": "セルフホスト",
+          "description": "独自のサーバーを使用します。"
         }
       }
     },
@@ -1382,6 +1404,16 @@
       "customSetup": "カスタム設定",
       "customSetupDescription": "独自のプロバイダーと API キーを使用。",
       "description": "OpenWhispr の音声文字起こし方法を選択",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "クラウドプロバイダー",
+        "local": "ローカル",
+        "selfHosted": "セルフホスト",
+        "openwhisprDesc": "設定不要ですぐ使える。",
+        "providersDesc": "自分のAPIキーを使用。",
+        "localDesc": "端末上のモデル。完全プライベート。",
+        "selfHostedDesc": "自前サーバーをネットワーク上に。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "設定不要ですぐに使えます。",
       "title": "音声テキスト変換",
@@ -1393,6 +1425,18 @@
         "switchedCustom": {
           "description": "独自のプロバイダーと API キーを設定してください。",
           "title": "カスタム設定に切り替えました"
+        },
+        "switchedProviders": {
+          "title": "クラウドプロバイダー",
+          "description": "独自の API キーを使用します。"
+        },
+        "switchedLocal": {
+          "title": "デバイス上",
+          "description": "文字起こしはお使いのマシン上でローカルに実行されます。"
+        },
+        "switchedSelfHosted": {
+          "title": "セルフホスト",
+          "description": "独自のサーバーを使用します。"
         }
       },
       "gpuDevice": {
@@ -1407,6 +1451,12 @@
         "title": "Intelligence GPU",
         "description": "ローカルAI処理に使用するGPU"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "エンドポイント URL",
+      "serverUrl": "サーバー URL",
+      "apiKeyOptional": "API キー（任意）",
+      "lanHint": "音声はネットワーク内に留まります — LAN の外には出ません。"
     }
   },
   "models": {
@@ -1902,6 +1952,16 @@
       "systemPrompt": "システムプロンプト",
       "systemPromptDescription": "エージェントへのカスタム指示",
       "systemPromptPlaceholder": "カスタムシステムプロンプトを入力...",
+      "modes": {
+        "openwhispr": "OpenWhispr",
+        "providers": "クラウドプロバイダー",
+        "local": "ローカル",
+        "selfHosted": "セルフホスト",
+        "openwhisprDesc": "設定不要ですぐに使えます。",
+        "providersDesc": "独自のAPIキーを使用。",
+        "localDesc": "デバイス上のモデル。完全プライベート。",
+        "selfHostedDesc": "ネットワーク上の自分のサーバー。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "OpenWhisprのクラウドAIをエージェント会話に使用する",
       "customSetup": "カスタム設定 (BYOK)",
