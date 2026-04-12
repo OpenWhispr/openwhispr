@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../components/ui/Toast";
+import { useToast } from "../components/ui/useToast";
 import logger from "../utils/logger";
 import type { FolderItem } from "../types/electron";
 import { findDefaultFolder } from "../components/notes/shared";
@@ -111,7 +111,7 @@ export function useFolderManagement(): UseFolderManagementReturn {
     return () => {
       isMountedRef.current = false;
     };
-  }, []);
+  }, [loadFolders]);
 
   // Re-initialize notes when active folder changes
   useEffect(() => {

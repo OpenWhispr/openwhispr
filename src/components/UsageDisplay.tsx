@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useUsage } from "../hooks/useUsage";
-import { useToast } from "./ui/Toast";
+import { useToast } from "./ui/useToast";
 import { Badge } from "./ui/badge";
 import { Progress } from "./ui/progress";
 import { Button } from "./ui/button";

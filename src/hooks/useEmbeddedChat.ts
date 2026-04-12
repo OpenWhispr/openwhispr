@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useChatPersistence } from "../components/chat/useChatPersistence";
 import { useChatStreaming } from "../components/chat/useChatStreaming";
 import type { Message, AgentState } from "../components/chat/types";
@@ -48,21 +48,24 @@ export function useEmbeddedChat({
     },
   });
 
-  const noteContextRef = useRef("");
-  noteContextRef.current = [
-    `Note ID: ${noteId}`,
-    folderId != null ? `Folder ID: ${folderId}` : "",
-    `Title: ${noteTitle}`,
-    `Content:\n${noteContent}`,
-    noteTranscript ? `\nTranscript:\n${noteTranscript}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const noteContext = useMemo(
+    () =>
+      [
+        `Note ID: ${noteId}`,
+        folderId != null ? `Folder ID: ${folderId}` : "",
+        `Title: ${noteTitle}`,
+        `Content:\n${noteContent}`,
+        noteTranscript ? `\nTranscript:\n${noteTranscript}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    [folderId, noteContent, noteId, noteTitle, noteTranscript]
+  );
 
   const streaming = useChatStreaming({
     messages: persistence.messages,
     setMessages: persistence.setMessages,
-    noteContext: noteContextRef.current,
+    noteContext,
     onStreamComplete: (_id, content, toolCalls) => {
       persistence.saveAssistantMessage(content, toolCalls);
     },

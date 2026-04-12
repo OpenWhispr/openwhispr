@@ -284,7 +284,7 @@ export default function AuthenticationStep({
         setIsSubmitting(false);
       }
     },
-    [authMode, email, password, onAuthComplete, onNeedsVerification, t]
+    [authMode, email, fullName, password, onAuthComplete, onNeedsVerification, t]
   );
 
   const handleBack = useCallback(() => {

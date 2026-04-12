@@ -2,9 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-
-const SettingsLayoutContext = React.createContext({ isCompact: false });
-export const useSettingsLayout = () => React.useContext(SettingsLayoutContext);
+import { SettingsLayoutProvider } from "./useSettingsLayout";
 
 export interface SidebarItem<T extends string> {
   id: T;
@@ -225,9 +223,9 @@ export default function SidebarModal<T extends string>({
 
               {/* Main Content */}
               <div className="flex-1 overflow-y-auto bg-background dark:bg-surface-1">
-                <SettingsLayoutContext.Provider value={{ isCompact }}>
+                <SettingsLayoutProvider value={{ isCompact }}>
                   <div className={isCompact ? "p-4" : "p-6"}>{children}</div>
-                </SettingsLayoutContext.Provider>
+                </SettingsLayoutProvider>
               </div>
             </div>
           </div>

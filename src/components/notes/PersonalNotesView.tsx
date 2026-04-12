@@ -31,7 +31,7 @@ import {
   SelectSeparator,
 } from "../ui/select";
 import { Input } from "../ui/input";
-import { useToast } from "../ui/Toast";
+import { useToast } from "../ui/useToast";
 import NoteListItem from "./NoteListItem";
 import NoteEditor from "./NoteEditor";
 import ActionPicker from "./ActionPicker";
@@ -285,7 +285,7 @@ export default function PersonalNotesView({
       setActiveNoteId(result.note.id);
       loadFolders();
     }
-  }, [activeFolderId, loadFolders]);
+  }, [activeFolderId, loadFolders, t]);
 
   const handleOpenNewNoteDialog = useCallback(() => {
     const personal = findDefaultFolder(folders);
@@ -330,7 +330,7 @@ export default function PersonalNotesView({
       loadFolders();
     }
     setShowNewNoteDialog(false);
-  }, [newNoteFolderId, loadFolders]);
+  }, [newNoteFolderId, loadFolders, t]);
 
   const handleNotesAdded = useCallback(async () => {
     if (activeFolderId) {

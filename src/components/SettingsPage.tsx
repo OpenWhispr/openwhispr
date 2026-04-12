@@ -69,12 +69,12 @@ import AgentModeSettings from "./settings/AgentModeSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
-import { useToast } from "./ui/Toast";
+import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
 import type { GpuDevice, LocalTranscriptionProvider } from "../types/electron";
 import logger from "../utils/logger";
 import { SettingsRow } from "./ui/SettingsSection";
-import { useSettingsLayout } from "./ui/SidebarModal";
+import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
 import { startMigration, useMigration } from "../stores/noteStore.js";
@@ -827,7 +827,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
 
   const migration = useMigration();
 
-  const whisperHook = useWhisper();
+  const { checkWhisperInstallation } = useWhisper();
   const permissionsHook = usePermissions(showAlertDialog);
   const systemAudio = useSystemAudioPermission();
   useClipboard(showAlertDialog);
@@ -1077,7 +1077,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
       if (version && mounted) setCurrentVersion(version);
 
       if (mounted) {
-        whisperHook.checkWhisperInstallation();
+        checkWhisperInstallation();
       }
     }, 100);
 
@@ -1085,7 +1085,7 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
       mounted = false;
       clearTimeout(timer);
     };
-  }, [whisperHook.checkWhisperInstallation, getAppVersion]);
+  }, [checkWhisperInstallation, getAppVersion]);
 
   useEffect(() => {
     const checkHotkeyMode = async () => {

@@ -1,5 +1,5 @@
 import React from "react";
-import { useSettingsLayout } from "./SidebarModal";
+import { useSettingsLayout } from "./useSettingsLayout";
 
 interface SettingsSectionProps {
   title: string;

@@ -2,9 +2,9 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { FolderOpen, Copy, Check } from "lucide-react";
-import { useToast } from "./ui/Toast";
+import { useToast } from "./ui/useToast";
 import { Toggle } from "./ui/toggle";
-import { useSettingsLayout } from "./ui/SidebarModal";
+import { useSettingsLayout } from "./ui/useSettingsLayout";
 import logger from "../utils/logger";
 
 export default function DeveloperSection() {

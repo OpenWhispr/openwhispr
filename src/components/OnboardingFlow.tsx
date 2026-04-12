@@ -221,7 +221,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
         // Get platform-appropriate default hotkey from backend (accounts for
         // X11 modifier-only and GNOME gsettings limitations)
-        const defaultHotkey = await window.electronAPI?.getEffectiveDefaultHotkey?.() || getDefaultHotkey();
+        const defaultHotkey =
+          (await window.electronAPI?.getEffectiveDefaultHotkey?.()) || getDefaultHotkey();
         const platform = window.electronAPI?.getPlatform?.() ?? "darwin";
 
         // Only auto-register if no hotkey is currently set
@@ -243,7 +244,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     };
 
     void autoRegisterDefaultHotkey();
-  }, [currentStep, hotkey, registerHotkey, activationStepIndex]);
+  }, [currentStep, hotkey, registerHotkey, activationStepIndex, setDictationKey]);
 
   const ensureHotkeyRegistered = useCallback(async () => {
     if (!window.electronAPI?.updateHotkey) {
@@ -303,6 +304,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     ensureHotkeyRegistered,
     isSignedIn,
     useLocalWhisper,
+    skipAuth,
     updateTranscriptionSettings,
   ]);
 

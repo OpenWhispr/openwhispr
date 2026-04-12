@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Send, Mail, Copy, Check, Link, UserPlus, Gift, CheckCircle2, User } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
-import { useToast } from "./ui/Toast";
+import { useToast } from "./ui/useToast";
 import { cn } from "./lib/utils";
 import { SpectrogramCard } from "./referral-cards/SpectrogramCard";
 import logger from "../utils/logger";

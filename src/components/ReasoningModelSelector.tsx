@@ -32,6 +32,8 @@ type CloudModelOption = {
   invertInDark?: boolean;
 };
 
+const CLOUD_PROVIDER_IDS = ["openai", "anthropic", "gemini", "groq", "custom"];
+
 interface ReasoningModelSelectorProps {
   reasoningModel: string;
   setReasoningModel: (model: string) => void;
@@ -492,8 +494,7 @@ export default function ReasoningModelSelector({
     return customModelOptions;
   }, [isCustomBaseDirty, customModelOptions]);
 
-  const cloudProviderIds = ["openai", "anthropic", "gemini", "groq", "custom"];
-  const cloudProviders = cloudProviderIds.map((id) => ({
+  const cloudProviders = CLOUD_PROVIDER_IDS.map((id) => ({
     id,
     name:
       id === "custom"
@@ -589,7 +590,7 @@ export default function ReasoningModelSelector({
     if (localProviderIds.includes(localReasoningProvider)) {
       setSelectedMode("local");
       setSelectedLocalProvider(localReasoningProvider);
-    } else if (cloudProviderIds.includes(localReasoningProvider)) {
+    } else if (CLOUD_PROVIDER_IDS.includes(localReasoningProvider)) {
       setSelectedMode("cloud");
       setSelectedCloudProvider(localReasoningProvider);
     }

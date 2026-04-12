@@ -164,7 +164,7 @@ export default function NoteEditor({
     } catch {
       return [];
     }
-  }, [note.id, note.participants]);
+  }, [note.participants]);
 
   const updateSegmentIndicator = useCallback(() => {
     const container = segmentContainerRef.current;
