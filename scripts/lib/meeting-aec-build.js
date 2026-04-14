@@ -352,7 +352,9 @@ function getLinkOptions(targetPlatform) {
 }
 
 function quoteCmake(value) {
-  return `"${String(value).replace(/\\/g, "/").replace(/"/g, "\\\"")}"`;
+  return `"${String(value)
+    .replace(/\\/g, "/")
+    .replace(/(["\\])/g, "\\$1")}"`;
 }
 
 function writeCmakeManifest(manifest, outputPath) {
