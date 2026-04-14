@@ -174,7 +174,7 @@
       "microphoneRequired": "Se requiere acceso al micrófono",
       "openSystemSettings": "Abrir Ajustes del Sistema",
       "systemAudioTitle": "Audio del Sistema",
-      "systemAudioDescription": "Captura el audio de otros participantes en llamadas y reuniones. Nunca grabamos tu pantalla.",
+      "systemAudioDescription": "Transcribe reuniones, llamadas, clases, podcasts y otros audios del sistema.",
       "optional": "Opcional",
       "recommended": "Recomendado",
       "accessibilityTroubleshooting": "¿No detectado? Elimina OpenWhispr de Accesibilidad en Configuración del Sistema, vuelve a añadirlo y actívalo. Puedes omitir esto y continuar — el texto se copiará al portapapeles en lugar de pegarse automáticamente."
@@ -1369,7 +1369,7 @@
       },
       "optional": "Opcional",
       "systemAudioTitle": "Audio del Sistema",
-      "systemAudioDescription": "Captura el audio de otros participantes en llamadas y reuniones",
+      "systemAudioDescription": "Transcribe reuniones, llamadas, clases, podcasts y otros audios del sistema.",
       "grantAccess": "Conceder acceso",
       "test": "Probar",
       "testAndGrant": "Probar y conceder",

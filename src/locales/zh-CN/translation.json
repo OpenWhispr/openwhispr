@@ -174,7 +174,7 @@
       "microphoneRequired": "需要麦克风访问权限",
       "openSystemSettings": "打开系统设置",
       "systemAudioTitle": "系统音频",
-      "systemAudioDescription": "录制通话和会议中其他参与者的音频。我们绝不会录制您的屏幕。",
+      "systemAudioDescription": "转录会议、通话、讲座、播客和其他系统音频。",
       "optional": "可选",
       "recommended": "推荐",
       "accessibilityTroubleshooting": "未检测到？请在系统设置的辅助功能中移除 OpenWhispr，然后重新添加并开启。您可以跳过此步继续 — 文本将复制到剪贴板而非自动粘贴。"
@@ -1364,7 +1364,7 @@
       },
       "optional": "可选",
       "systemAudioTitle": "系统音频",
-      "systemAudioDescription": "录制通话和会议中其他参与者的音频",
+      "systemAudioDescription": "转录会议、通话、讲座、播客和其他系统音频。",
       "grantAccess": "授予访问权限",
       "test": "测试",
       "testAndGrant": "测试并授权",

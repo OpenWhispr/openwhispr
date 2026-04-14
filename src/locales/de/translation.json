@@ -174,7 +174,7 @@
       "microphoneRequired": "Mikrofonzugriff erforderlich",
       "openSystemSettings": "Systemeinstellungen öffnen",
       "systemAudioTitle": "Systemaudio",
-      "systemAudioDescription": "Nimmt den Ton anderer Teilnehmer aus Anrufen und Meetings auf. Wir nehmen Ihren Bildschirm nie auf.",
+      "systemAudioDescription": "Transkribiert Meetings, Anrufe, Vorträge, Podcasts und andere Systemaudios.",
       "optional": "Optional",
       "recommended": "Empfohlen",
       "accessibilityTroubleshooting": "Nicht erkannt? Entferne OpenWhispr aus den Bedienungshilfen in den Systemeinstellungen, füge es erneut hinzu und aktiviere es. Du kannst dies überspringen — Text wird nur in die Zwischenablage kopiert statt automatisch eingefügt."
@@ -1369,7 +1369,7 @@
       },
       "optional": "Optional",
       "systemAudioTitle": "Systemaudio",
-      "systemAudioDescription": "Nimmt den Ton anderer Teilnehmer aus Anrufen und Meetings auf",
+      "systemAudioDescription": "Transkribiert Meetings, Anrufe, Vorträge, Podcasts und andere Systemaudios.",
       "grantAccess": "Zugriff gewähren",
       "test": "Testen",
       "testAndGrant": "Testen & erteilen",

@@ -174,7 +174,7 @@
       "microphoneRequired": "Microphone access required",
       "openSystemSettings": "Open System Settings",
       "systemAudioTitle": "System Audio",
-      "systemAudioDescription": "Captures other participants' audio from calls and meetings. We never record your screen.",
+      "systemAudioDescription": "Transcribe meetings, calls, lectures, podcasts, and other system audio.",
       "optional": "Optional",
       "recommended": "Recommended",
       "accessibilityTroubleshooting": "Not detected? Try removing OpenWhispr from Accessibility in System Settings, then re-add it and toggle it on. You can skip this and continue — text will copy to clipboard instead of auto-pasting."
@@ -1417,7 +1417,7 @@
       },
       "optional": "Optional",
       "systemAudioTitle": "System Audio",
-      "systemAudioDescription": "Captures other participants' audio from calls and meetings",
+      "systemAudioDescription": "Transcribe meetings, calls, lectures, podcasts, and other system audio.",
       "grantAccess": "Grant Access",
       "test": "Test",
       "testAndGrant": "Test & Grant",
