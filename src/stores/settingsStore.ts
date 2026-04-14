@@ -479,7 +479,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCloudReasoningBaseUrl: createStringSetter("cloudReasoningBaseUrl"),
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
   setUseReasoningModel: createBooleanSetter("useReasoningModel"),
-  setReasoningModel: createStringSetter("reasoningModel"),
   setReasoningProvider: (value: string) => {
     const mode = inferenceModeForProvider(value);
     if (isBrowser) {
@@ -489,6 +488,23 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
     useSettingsStore.setState({
       reasoningProvider: value,
+      reasoningMode: mode,
+      cloudReasoningMode: "byok",
+    });
+  },
+  setReasoningModel: (value: string) => {
+    if (isBrowser) localStorage.setItem("reasoningModel", value);
+    if (!value) {
+      useSettingsStore.setState({ reasoningModel: value });
+      return;
+    }
+    const mode = inferenceModeForProvider(useSettingsStore.getState().reasoningProvider);
+    if (isBrowser) {
+      localStorage.setItem("reasoningMode", mode);
+      localStorage.setItem("cloudReasoningMode", "byok");
+    }
+    useSettingsStore.setState({
+      reasoningModel: value,
       reasoningMode: mode,
       cloudReasoningMode: "byok",
     });
@@ -662,7 +678,23 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ isSignedIn: value });
   },
 
-  setAgentModel: createStringSetter("agentModel"),
+  setAgentModel: (value: string) => {
+    if (isBrowser) localStorage.setItem("agentModel", value);
+    if (!value) {
+      useSettingsStore.setState({ agentModel: value });
+      return;
+    }
+    const mode = inferenceModeForProvider(useSettingsStore.getState().agentProvider);
+    if (isBrowser) {
+      localStorage.setItem("agentInferenceMode", mode);
+      localStorage.setItem("cloudAgentMode", "byok");
+    }
+    useSettingsStore.setState({
+      agentModel: value,
+      agentInferenceMode: mode,
+      cloudAgentMode: "byok",
+    });
+  },
   setAgentProvider: (value: string) => {
     const mode = inferenceModeForProvider(value);
     if (isBrowser) {
