@@ -23,7 +23,7 @@ export const updateNoteTool: ToolDefinition = {
       },
       folder: {
         type: "string",
-        description: "Folder name to move the note to (optional)",
+        description: "Folder name to move the note to. Created automatically if it does not exist.",
       },
     },
     required: ["id"],
@@ -55,12 +55,14 @@ export const updateNoteTool: ToolDefinition = {
       if (title) updates.title = title;
       if (content) updates.content = content;
 
+      let folderCreated = false;
       if (folderName) {
-        const resolved = await resolveFolderId(folderName);
+        const resolved = await resolveFolderId(folderName, { createIfMissing: true });
         if (resolved.error) {
           return { success: false, data: null, displayText: resolved.error };
         }
         updates.folder_id = resolved.folderId;
+        folderCreated = resolved.created;
       }
 
       const result = await window.electronAPI.updateNote(id, updates);
@@ -71,10 +73,11 @@ export const updateNoteTool: ToolDefinition = {
 
       syncNoteUpdateToCloud(note, updates).catch(() => {});
 
+      const suffix = folderCreated ? ` (moved to new folder "${folderName}")` : "";
       return {
         success: true,
         data: { id, title: title || note.title },
-        displayText: `Updated note: "${title || note.title}"`,
+        displayText: `Updated note: "${title || note.title}"${suffix}`,
       };
     } catch (error) {
       return {
