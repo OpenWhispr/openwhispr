@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -37,7 +37,7 @@ import { getPlatform } from "../utils/platform";
 import logger from "../utils/logger";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
-import { areRequiredPermissionsMet } from "../utils/permissions";
+import { ACCESSIBILITY_SKIPPED_KEY, areRequiredPermissionsMet } from "../utils/permissions";
 
 interface OnboardingFlowProps {
   onComplete: () => void;
@@ -63,6 +63,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         if (parsed > maxStep) return maxStep;
         return parsed;
       },
+    }
+  );
+  const [accessibilitySkipped, setAccessibilitySkipped] = useLocalStorage(
+    ACCESSIBILITY_SKIPPED_KEY,
+    false,
+    {
+      serialize: String,
+      deserialize: (value) => value === "true",
     }
   );
 
@@ -124,20 +132,33 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const systemAudio = useSystemAudioPermission();
 
-  // For signed-in users, merge setup and permissions into one step
-  const steps =
-    isSignedIn && !skipAuth
-      ? [
-          { title: t("onboarding.steps.welcome"), icon: UserCircle },
-          { title: t("onboarding.steps.setup"), icon: Settings },
-          { title: t("onboarding.steps.activation"), icon: Command },
-        ]
-      : [
-          { title: t("onboarding.steps.welcome"), icon: UserCircle },
-          { title: t("onboarding.steps.setup"), icon: Settings },
-          { title: t("onboarding.steps.permissions"), icon: Shield },
-          { title: t("onboarding.steps.activation"), icon: Command },
-        ];
+  useEffect(() => {
+    if (permissionsHook.accessibilityPermissionGranted && accessibilitySkipped) {
+      setAccessibilitySkipped(false);
+    }
+  }, [
+    permissionsHook.accessibilityPermissionGranted,
+    accessibilitySkipped,
+    setAccessibilitySkipped,
+  ]);
+
+  // For signed-in users, permissions are folded into the "setup" step.
+  const steps = useMemo(
+    () =>
+      isSignedIn && !skipAuth
+        ? [
+            { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
+            { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
+            { id: "activation", title: t("onboarding.steps.activation"), icon: Command },
+          ]
+        : [
+            { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
+            { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
+            { id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield },
+            { id: "activation", title: t("onboarding.steps.activation"), icon: Command },
+          ],
+    [isSignedIn, skipAuth, t]
+  );
 
   // Only show progress for signed-up users after account creation step
   const showProgress = currentStep > 0;
@@ -315,6 +336,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       return;
     }
 
+    const currentStepId = steps[currentStep]?.id;
+    const isPermissionsGate =
+      currentStepId === "permissions" || (currentStepId === "setup" && isSignedIn && !skipAuth);
+    if (
+      getPlatform() === "darwin" &&
+      isPermissionsGate &&
+      !permissionsHook.accessibilityPermissionGranted
+    ) {
+      setAccessibilitySkipped(true);
+    }
+
     const newStep = currentStep + 1;
     setCurrentStep(newStep);
 
@@ -324,7 +356,16 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         window.electronAPI.showDictationPanel();
       }
     }
-  }, [currentStep, setCurrentStep, steps.length, activationStepIndex]);
+  }, [
+    currentStep,
+    setCurrentStep,
+    steps,
+    activationStepIndex,
+    isSignedIn,
+    skipAuth,
+    permissionsHook.accessibilityPermissionGranted,
+    setAccessibilitySkipped,
+  ]);
 
   const prevStep = useCallback(() => {
     if (currentStep > 0) {

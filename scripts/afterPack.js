@@ -121,6 +121,36 @@ exec -a "$0" "$HERE/${binaryName}-app" "\${FLAGS[@]}" "$@"
   fs.writeFileSync(binaryPath, wrapper, { mode: 0o755 });
 }
 
+function verifyMeetingAecHelper(context) {
+  const platform = context.electronPlatformName;
+  const archName = Arch[context.arch];
+
+  if (!["darwin", "linux", "win32"].includes(platform)) {
+    return;
+  }
+
+  const binaryName = `meeting-aec-helper-${platform}-${archName}${platform === "win32" ? ".exe" : ""}`;
+  const resourcesDir =
+    platform === "darwin"
+      ? path.join(
+          context.appOutDir,
+          `${context.packager.appInfo.productFilename}.app`,
+          "Contents",
+          "Resources"
+        )
+      : path.join(context.appOutDir, "resources");
+  const binaryPath = path.join(resourcesDir, "bin", binaryName);
+
+  if (!fs.existsSync(binaryPath)) {
+    console.warn(`  afterPack: missing optional meeting AEC helper (${binaryName})`);
+    return;
+  }
+
+  if (platform !== "win32") {
+    fs.chmodSync(binaryPath, 0o755);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
@@ -128,4 +158,5 @@ exec -a "$0" "$HERE/${binaryName}-app" "\${FLAGS[@]}" "$@"
 exports.default = async function (context) {
   stripOnnxruntimeBinaries(context);
   wrapLinuxBinary(context);
+  verifyMeetingAecHelper(context);
 };

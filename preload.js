@@ -249,6 +249,32 @@ contextBridge.exposeInMainWorld("electronAPI", {
   parakeetServerStop: () => ipcRenderer.invoke("parakeet-server-stop"),
   parakeetServerStatus: () => ipcRenderer.invoke("parakeet-server-status"),
 
+  // Diarization (speaker identification) functions
+  downloadDiarizationModels: () => ipcRenderer.invoke("download-diarization-models"),
+  getDiarizationModelStatus: () => ipcRenderer.invoke("get-diarization-model-status"),
+  deleteDiarizationModels: () => ipcRenderer.invoke("delete-diarization-models"),
+  cancelDiarizationDownload: () => ipcRenderer.invoke("cancel-diarization-download"),
+  onDiarizationDownloadProgress: registerListener(
+    "diarization-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingDiarizationComplete: registerListener(
+    "meeting-diarization-complete",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Speaker name mapping
+  getSpeakerMappings: (noteId) => ipcRenderer.invoke("get-speaker-mappings", noteId),
+  setSpeakerMapping: (noteId, speakerId, displayName, email, profileId) =>
+    ipcRenderer.invoke("set-speaker-mapping", noteId, speakerId, displayName, email, profileId),
+  removeSpeakerMapping: (noteId, speakerId) =>
+    ipcRenderer.invoke("remove-speaker-mapping", noteId, speakerId),
+  getSpeakerProfiles: () => ipcRenderer.invoke("get-speaker-profiles"),
+  attachSpeakerEmail: (profileId, email) =>
+    ipcRenderer.invoke("attach-speaker-email", profileId, email),
+  saveNoteSpeakerEmbeddings: (noteId, embeddings) =>
+    ipcRenderer.invoke("save-note-speaker-embeddings", noteId, embeddings),
+
   // Window control functions
   windowMinimize: () => ipcRenderer.invoke("window-minimize"),
   windowMaximize: () => ipcRenderer.invoke("window-maximize"),
@@ -498,6 +524,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-transcription-segment",
     (callback) => (_event, data) => callback(data)
   ),
+  onMeetingSpeakerIdentified: registerListener(
+    "meeting-speaker-identified",
+    (callback) => (_event, data) => callback(data)
+  ),
   onMeetingTranscriptionError: registerListener(
     "meeting-transcription-error",
     (callback) => (_event, data) => callback(data)
@@ -740,6 +770,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   meetingNotificationReady: () => ipcRenderer.invoke("meeting-notification-ready"),
   meetingNotificationRespond: (detectionId, action) =>
     ipcRenderer.invoke("meeting-notification-respond", detectionId, action),
+  joinCalendarMeeting: (eventId) => ipcRenderer.invoke("join-calendar-meeting", eventId),
   onNavigateToMeetingNote: registerListener(
     "navigate-to-meeting-note",
     (callback) => (_event, data) => callback(data)

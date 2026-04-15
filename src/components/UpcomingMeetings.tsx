@@ -201,7 +201,10 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
                             <Button
                               size="icon"
                               variant="ghost"
-                              onClick={() => openJoinUrl(joinUrl)}
+                              onClick={() => {
+                                openJoinUrl(joinUrl);
+                                window.electronAPI?.joinCalendarMeeting?.(event.id);
+                              }}
                               title={t("upcoming.join")}
                               className="h-6 w-6 rounded-sm text-muted-foreground hover:text-foreground hover:bg-foreground/10"
                             >

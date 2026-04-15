@@ -174,7 +174,7 @@
       "microphoneRequired": "Mikrofonzugriff erforderlich",
       "openSystemSettings": "Systemeinstellungen öffnen",
       "systemAudioTitle": "Systemaudio",
-      "systemAudioDescription": "Nimmt den Ton anderer Teilnehmer aus Anrufen und Meetings auf. Wir nehmen Ihren Bildschirm nie auf.",
+      "systemAudioDescription": "Transkribiert Meetings, Anrufe, Vorträge, Podcasts und andere Systemaudios.",
       "optional": "Optional",
       "recommended": "Empfohlen",
       "accessibilityTroubleshooting": "Nicht erkannt? Entferne OpenWhispr aus den Bedienungshilfen in den Systemeinstellungen, füge es erneut hinzu und aktiviere es. Du kannst dies überspringen — Text wird nur in die Zwischenablage kopiert statt automatisch eingefügt."
@@ -987,7 +987,7 @@
           "features": [
             "Unbegrenzte Meeting-Aufnahmen",
             "Agentenmodus",
-            "Chat über Ihre Daten (demnächst verfügbar)",
+            "Chat über Ihre Daten",
             "Prioritäts-Support"
           ],
           "cta": "Jetzt starten",
@@ -1095,17 +1095,17 @@
       "enableTextCleanup": "Textbereinigung aktivieren",
       "enableTextCleanupDescription": "KI verbessert die Transkriptionsqualität",
       "modes": {
-        "openwhispr": "OpenWhispr",
+        "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud-Anbieter",
         "local": "Lokal",
         "selfHosted": "Selbst gehostet",
-        "openwhisprDesc": "Sofort einsatzbereit.",
+        "openwhisprDesc": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
         "providersDesc": "Eigenen API-Schlüssel nutzen.",
         "localDesc": "Modelle auf dem Gerät. Voll privat.",
         "selfHostedDesc": "Eigener Server in Ihrem Netzwerk."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Funktioniert sofort. Keine Konfiguration nötig.",
+      "openwhisprCloudDescription": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
       "title": "KI-Textverbesserung",
       "toasts": {
         "switchedCloud": {
@@ -1369,7 +1369,7 @@
       },
       "optional": "Optional",
       "systemAudioTitle": "Systemaudio",
-      "systemAudioDescription": "Nimmt den Ton anderer Teilnehmer aus Anrufen und Meetings auf",
+      "systemAudioDescription": "Transkribiert Meetings, Anrufe, Vorträge, Podcasts und andere Systemaudios.",
       "grantAccess": "Zugriff gewähren",
       "test": "Testen",
       "testAndGrant": "Testen & erteilen",
@@ -1408,17 +1408,17 @@
       "customSetupDescription": "Verwenden Sie Ihren eigenen Anbieter und API-Schlüssel.",
       "description": "Wählen Sie, wie OpenWhispr Ihre Stimme transkribiert",
       "modes": {
-        "openwhispr": "OpenWhispr",
+        "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud-Anbieter",
         "local": "Lokal",
         "selfHosted": "Selbst gehostet",
-        "openwhisprDesc": "Sofort einsatzbereit.",
+        "openwhisprDesc": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
         "providersDesc": "Eigenen API-Schlüssel nutzen.",
         "localDesc": "Modelle auf dem Gerät. Voll privat.",
         "selfHostedDesc": "Eigener Server in Ihrem Netzwerk."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Funktioniert sofort. Keine Konfiguration nötig.",
+      "openwhisprCloudDescription": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
       "title": "Sprache-zu-Text",
       "toasts": {
         "switchedCloud": {
@@ -1445,6 +1445,12 @@
       "gpuDevice": {
         "title": "Transkriptions-GPU",
         "description": "GPU für lokale Spracherkennung"
+      },
+      "diarization": {
+        "title": "Speaker Identification",
+        "description": "Identify individual speakers in meeting recordings",
+        "modelsReady": "Models Ready",
+        "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "Live-Transkriptionsvorschau",
       "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen"
@@ -1534,6 +1540,10 @@
         "gemma_gemma_4_e2b_it_q4_k_m": "Kompaktes Gemma 4 von Google, schnell und effizient",
         "gemma_gemma_3_12b_it_q4_k_m": "Googles Mittelklasse-Modell, starkes Reasoning",
         "gemma_gemma_3_1b_it_q4_k_m": "Ultraschnelles Google-Modell, ideal für kurze Diktat-Bereinigung"
+      },
+      "diarization": {
+        "segmentation": "Speech boundary detection for speaker diarization",
+        "embedding_en": "Speaker voice fingerprinting for identification"
       }
     }
   },
@@ -1799,7 +1809,33 @@
     },
     "speaker": {
       "you": "Du",
-      "them": "Gegenüber"
+      "them": "Gegenüber",
+      "label": "Sprecher {{n}}",
+      "identifyingSpeakers": "Sprecher werden identifiziert...",
+      "liveAccuracyHint": "Sprecher werden noch identifiziert. Die Genauigkeit der Beschriftung verbessert sich, sobald das Gespräch endet.",
+      "speakersIdentified": "Sprecher identifiziert",
+      "typeNamePlaceholder": "Namen eingeben",
+      "knownSpeakers": "Bekannte Sprecher",
+      "meetingAttendees": "Meeting-Teilnehmer",
+      "assignName": "Name zuweisen",
+      "isThisPerson": "Ist das {{name}}?",
+      "selected": "{{n}} ausgewählt",
+      "assignTo": "Zuweisen zu…",
+      "deselectAll": "Alle abwählen",
+      "confirmed": "Bestätigt",
+      "nameAssigned": "Name zugewiesen",
+      "state": {
+        "provisional": "Vorläufig",
+        "confirmed": "Bestätigt",
+        "suggested": "Vorgeschlagen",
+        "locked": "Fixiert"
+      },
+      "createNewPrefix": "Erstellen",
+      "emailPlaceholder": "name@beispiel.de",
+      "nameOrEmailPlaceholder": "Name oder E-Mail eingeben",
+      "addContact": "Kontakt hinzufügen",
+      "save": "Speichern",
+      "cancel": "Abbrechen"
     }
   },
   "dictionary": {
@@ -1956,17 +1992,17 @@
       "systemPromptDescription": "Benutzerdefinierte Anweisungen für den Agenten",
       "systemPromptPlaceholder": "Benutzerdefinierten System-Prompt eingeben...",
       "modes": {
-        "openwhispr": "OpenWhispr",
+        "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud-Anbieter",
         "local": "Lokal",
         "selfHosted": "Selbst gehostet",
-        "openwhisprDesc": "Funktioniert sofort. Keine Einrichtung nötig.",
+        "openwhisprDesc": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
         "providersDesc": "Eigenen API-Schlüssel verwenden.",
         "localDesc": "Modelle auf dem Gerät. Vollständig privat.",
         "selfHostedDesc": "Eigener Server in Ihrem Netzwerk."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "OpenWhisprs Cloud-KI für Agent-Unterhaltungen verwenden",
+      "openwhisprCloudDescription": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
       "customSetup": "Eigene Konfiguration (BYOK)",
       "customSetupDescription": "Eigene API-Schlüssel verwenden und bevorzugtes Modell auswählen"
     },
@@ -2022,7 +2058,8 @@
     "description": "Verbinde Dienste, um deinen Workflow zu verbessern",
     "googleCalendar": {
       "title": "Google Calendar",
-      "description": "Verbinde deinen Kalender, um Meetings automatisch zu erkennen und Transkriptionen aufzuzeichnen.",
+      "optional": "Optional",
+      "description": "Meeting-Titel und Teilnehmer automatisch aus deinem Kalender übernehmen.",
       "connect": "Google Calendar verbinden",
       "connecting": "Verbinde...",
       "connected": "Verbunden",
@@ -2044,13 +2081,6 @@
       "pro": "Pro",
       "proLimit": "Unbegrenzt",
       "upgrade": "Upgrade"
-    },
-    "beta": {
-      "title": "Meeting-Aufnahme ist in der Beta-Phase",
-      "description": "Wir arbeiten noch daran, wie wir diese Funktion am besten ins Produkt integrieren. Feedback ist sehr willkommen!",
-      "freeTier": "Kostenloser Plan: 5 Stunden / Monat",
-      "proTier": "Pro-Plan: 20 Stunden / Monat",
-      "feedback": "Mehr als 20 Stunden benötigt? Kontaktieren Sie gabe@openwhispr.com"
     },
     "notABot": {
       "title": "OpenWhispr ist ein Meeting-Rekorder, kein Bot",

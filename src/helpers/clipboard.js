@@ -40,8 +40,9 @@ const getLinuxSessionInfo = () => {
   const isGnome = isWayland && isGnomeDesktop(desktopEnv);
   const isKde = isWayland && isKdeDesktop(desktopEnv);
   const isWlroots = isWayland && isWlrootsCompositor(desktopEnv);
+  const isHyprland = isWayland && !!process.env.HYPRLAND_INSTANCE_SIGNATURE;
 
-  return { isWayland, xwaylandAvailable, desktopEnv, isGnome, isKde, isWlroots };
+  return { isWayland, xwaylandAvailable, desktopEnv, isGnome, isKde, isWlroots, isHyprland };
 };
 
 const PASTE_DELAYS = {
@@ -505,6 +506,19 @@ class ClipboardManager {
     return null;
   }
 
+  _detectHyprlandWindowClass() {
+    if (!this.commandExists("hyprctl")) return null;
+    try {
+      const result = spawnSync("hyprctl", ["activewindow", "-j"], { timeout: 1000 });
+      if (result.status !== 0) return null;
+      const win = JSON.parse(result.stdout.toString());
+      return win.class?.toLowerCase() || null;
+    } catch (err) {
+      debugLogger.warn("hyprctl window detection failed", { error: err?.message }, "clipboard");
+      return null;
+    }
+  }
+
   _saveClipboard() {
     const formats = clipboard.availableFormats();
     if (formats.some((f) => f.startsWith("image/"))) {
@@ -571,6 +585,7 @@ class ClipboardManager {
     const platform = process.platform;
     let method = "unknown";
     const webContents = options.webContents;
+    const allowClipboardFallback = options.allowClipboardFallback === true;
 
     try {
       const shouldRestore = options.restoreClipboard !== false;
@@ -589,10 +604,14 @@ class ClipboardManager {
       if (platform === "darwin") {
         method = this.resolveFastPasteBinary() ? "cgevent" : "applescript";
         this.safeLog("🔍 Checking accessibility permissions for paste operation...");
-        const hasPermissions = await this.checkAccessibilityPermissions();
+        const hasPermissions = await this.checkAccessibilityPermissions(allowClipboardFallback);
 
         if (!hasPermissions) {
           this.safeLog("⚠️ No accessibility permissions - text copied to clipboard only");
+          if (allowClipboardFallback) {
+            this.safeLog("✅ Clipboard fallback used (manual paste required)");
+            return;
+          }
           const errorMsg =
             "Accessibility permissions required for automatic pasting. Text has been copied to clipboard - please paste manually with Cmd+V.";
           throw new Error(errorMsg);
@@ -1014,7 +1033,8 @@ class ClipboardManager {
   }
 
   async pasteLinux(originalClipboard, options = {}) {
-    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots } = getLinuxSessionInfo();
+    const { isWayland, xwaylandAvailable, isGnome, isKde, isWlroots, isHyprland } =
+      getLinuxSessionInfo();
     const webContents = options.webContents;
     const xdotoolExists = this.commandExists("xdotool");
     const wtypeExists = this.commandExists("wtype");
@@ -1114,6 +1134,13 @@ class ClipboardManager {
       detectedWindowClass = this._detectKdeWindowClass();
       if (detectedWindowClass) {
         debugLogger.debug("KDE window class detected", { detectedWindowClass }, "clipboard");
+      }
+    }
+
+    if (!detectedWindowClass && isHyprland) {
+      detectedWindowClass = this._detectHyprlandWindowClass();
+      if (detectedWindowClass) {
+        debugLogger.debug("Hyprland window class detected", { detectedWindowClass }, "clipboard");
       }
     }
 
@@ -1718,7 +1745,7 @@ Would you like to open System Settings now?`;
       return;
     }
     if (process.platform !== "darwin") return;
-    this.checkAccessibilityPermissions().catch(() => {});
+    this.checkAccessibilityPermissions(true).catch(() => {});
     this.resolveFastPasteBinary();
   }
 

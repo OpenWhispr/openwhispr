@@ -23,6 +23,7 @@ import ControlPanelSidebar, { type ControlPanelView } from "./ControlPanelSideba
 import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
+import { isAccessibilitySkipped } from "../utils/permissions";
 import { setActiveNoteId, setActiveFolderId, initializeNotes } from "../stores/noteStore";
 import HistoryView from "./HistoryView";
 
@@ -233,7 +234,10 @@ export default function ControlPanel() {
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onNavigateToNote?.((data) => {
-      if (data.folderId) setActiveFolderId(data.folderId);
+      if (data.folderId) {
+        setActiveFolderId(data.folderId);
+        initializeNotes(null, 50, data.folderId);
+      }
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
     });
@@ -250,6 +254,9 @@ export default function ControlPanel() {
   // When accessibility is missing on macOS, open the permissions settings page
   useEffect(() => {
     const cleanup = window.electronAPI?.onAccessibilityMissing?.(() => {
+      if (isAccessibilitySkipped()) {
+        return;
+      }
       setSettingsSection("privacyData");
       setShowSettings(true);
       toast({

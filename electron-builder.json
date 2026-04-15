@@ -105,11 +105,13 @@
         "llama-server-*",
         "sherpa-onnx-*",
         "qdrant-*",
+        "meeting-aec-helper-*",
         "windows-key-listener*",
         "windows-mic-listener*",
         "windows-text-monitor*",
         "windows-fast-paste*",
         "all-MiniLM-L6-v2/**/*",
+        "diarization-models/**/*",
         "*.dylib",
         "*.dll",
         "*.so*"

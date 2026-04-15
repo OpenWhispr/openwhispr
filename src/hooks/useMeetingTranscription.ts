@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getSettings } from "../stores/settingsStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
-import { getCachedPlatform } from "../utils/platform";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
 import {
   DEFAULT_SYSTEM_AUDIO_ACCESS,
@@ -10,12 +9,40 @@ import {
   isRendererSystemAudioStrategy,
 } from "../utils/systemAudioAccess";
 import logger from "../utils/logger";
+import {
+  lockTranscriptSpeaker,
+  normalizeTranscriptSegment,
+  type TranscriptSpeakerLockSource,
+  type TranscriptSpeakerStatus,
+} from "../utils/transcriptSpeakerState";
 
 export interface TranscriptSegment {
   id: string;
   text: string;
   source: "mic" | "system";
   timestamp?: number;
+  speaker?: string;
+  speakerName?: string;
+  speakerIsPlaceholder?: boolean;
+  suggestedName?: string;
+  suggestedProfileId?: number;
+  speakerStatus?: TranscriptSpeakerStatus;
+  speakerLocked?: boolean;
+  speakerLockSource?: TranscriptSpeakerLockSource;
+}
+
+interface SpeakerIdentification {
+  speakerId: string;
+  displayName?: string | null;
+  startTime: number;
+  endTime: number;
+}
+
+interface RecentSystemSpeaker {
+  speakerId: string;
+  speakerName: string | null;
+  speakerIsPlaceholder: boolean;
+  updatedAt: number;
 }
 
 interface UseMeetingTranscriptionReturn {
@@ -25,16 +52,54 @@ interface UseMeetingTranscriptionReturn {
   segments: TranscriptSegment[];
   micPartial: string;
   systemPartial: string;
+  systemPartialSpeakerId: string | null;
+  systemPartialSpeakerName: string | null;
   error: string | null;
+  diarizationSessionId: string | null;
   prepareTranscription: () => Promise<void>;
-  startTranscription: (options?: { allowSystemAudio?: boolean }) => Promise<void>;
+  startTranscription: (_options?: { seedSegments?: TranscriptSegment[] }) => Promise<void>;
   stopTranscription: () => Promise<void>;
+  lockSpeaker: (speakerId: string, displayName: string) => void;
 }
 
 const MEETING_AUDIO_BUFFER_SIZE = 800;
 const MEETING_STOP_FLUSH_TIMEOUT_MS = 50;
+const MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS = {
+  echoCancellation: true,
+  noiseSuppression: false,
+  autoGainControl: false,
+} as const;
 
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
+const SPEAKER_IDENTIFICATION_RETENTION_MS = 30_000;
+const SYSTEM_SPEAKER_CARRY_FORWARD_MS = 2_500;
+const buildTranscriptText = (segments: TranscriptSegment[]) =>
+  segments
+    .map((segment) => segment.text)
+    .join(" ")
+    .trim();
+
+const getSpeakerNumericIndex = (speakerId?: string): number | null => {
+  if (!speakerId) {
+    return null;
+  }
+
+  const match = speakerId.match(/speaker_(\d+)/);
+  return match ? Number(match[1]) : null;
+};
+
+const isSegmentWithinIdentificationWindow = (
+  segment: TranscriptSegment,
+  identification: SpeakerIdentification
+) => {
+  if (segment.source !== "system" || segment.timestamp == null) {
+    return false;
+  }
+
+  return (
+    segment.timestamp >= identification.startTime && segment.timestamp <= identification.endTime
+  );
+};
 
 const getMeetingTranscriptionOptions = () => {
   const {
@@ -125,18 +190,15 @@ const prepareMeetingSystemAudioCapture = (initialSystemAudioAccess: SystemAudioA
 };
 
 const ensureRendererSystemAudioCapture = async ({
-  allowSystemAudio,
   initialDisplayCaptureStrategy,
   systemAudioStrategy,
   systemCaptureResult,
 }: {
-  allowSystemAudio: boolean;
   initialDisplayCaptureStrategy: "loopback" | "browser-portal" | null;
   systemAudioStrategy: SystemAudioStrategy;
   systemCaptureResult: { stream: MediaStream | null; error: Error | null };
 }) => {
   if (
-    !allowSystemAudio ||
     systemCaptureResult.stream ||
     systemCaptureResult.error ||
     !isRendererSystemAudioStrategy(systemAudioStrategy) ||
@@ -200,11 +262,6 @@ registerProcessor("meeting-pcm-processor", MeetingPCMProcessor);
 
 const getMeetingMicConstraints = async (): Promise<MediaStreamConstraints> => {
   const { preferBuiltInMic, selectedMicDeviceId } = getSettings();
-  const micProcessing = {
-    echoCancellation: true,
-    noiseSuppression: false,
-    autoGainControl: false,
-  };
 
   if (preferBuiltInMic) {
     try {
@@ -217,7 +274,7 @@ const getMeetingMicConstraints = async (): Promise<MediaStreamConstraints> => {
         return {
           audio: {
             deviceId: { exact: builtInMic.deviceId },
-            ...micProcessing,
+            ...MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
           },
         };
       }
@@ -234,23 +291,21 @@ const getMeetingMicConstraints = async (): Promise<MediaStreamConstraints> => {
     return {
       audio: {
         deviceId: { exact: selectedMicDeviceId },
-        ...micProcessing,
+        ...MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
       },
     };
   }
 
-  return { audio: micProcessing };
+  return { audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS };
 };
 
 const createAudioPipeline = async ({
   stream,
   context,
-  label,
   onChunk,
 }: {
   stream: MediaStream;
   context: AudioContext;
-  label: string;
   onChunk: (chunk: ArrayBuffer) => void;
 }) => {
   if (context.state === "suspended") {
@@ -261,33 +316,18 @@ const createAudioPipeline = async ({
 
   const source = context.createMediaStreamSource(stream);
   const processor = new AudioWorkletNode(context, "meeting-pcm-processor");
-  let chunkCount = 0;
+  const silentGain = context.createGain();
+  silentGain.gain.value = 0;
 
   processor.port.onmessage = (event) => {
     const chunk = event.data;
     if (!(chunk instanceof ArrayBuffer)) return;
-
-    if (chunkCount < 10 || chunkCount % 50 === 0) {
-      const samples = new Int16Array(chunk);
-      let maxAmplitude = 0;
-      for (let i = 0; i < samples.length; i++) {
-        const normalized = Math.abs(samples[i]) / 0x7fff;
-        if (normalized > maxAmplitude) maxAmplitude = normalized;
-      }
-
-      logger.debug(
-        `${label} audio chunk`,
-        { maxAmplitude: maxAmplitude.toFixed(6), samples: samples.length },
-        "meeting"
-      );
-    }
-
-    chunkCount++;
     onChunk(chunk);
   };
 
   source.connect(processor);
-  processor.connect(context.destination);
+  processor.connect(silentGain);
+  silentGain.connect(context.destination);
 
   return { source, processor };
 };
@@ -329,7 +369,10 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   const [micPartial, setMicPartial] = useState("");
   const [systemPartial, setSystemPartial] = useState("");
+  const [systemPartialSpeakerId, setSystemPartialSpeakerId] = useState<string | null>(null);
+  const [systemPartialSpeakerName, setSystemPartialSpeakerName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [diarizationSessionId, setDiarizationSessionId] = useState<string | null>(null);
 
   const micContextRef = useRef<AudioContext | null>(null);
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -342,9 +385,152 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const isRecordingRef = useRef(false);
   const isStartingRef = useRef(false);
   const isPreparedRef = useRef(false);
+  const segmentsRef = useRef<TranscriptSegment[]>([]);
   const preparePromiseRef = useRef<Promise<void> | null>(null);
   const ipcCleanupsRef = useRef<Array<() => void>>([]);
   const pendingCleanupRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speakerIdentificationsRef = useRef<SpeakerIdentification[]>([]);
+  const nextPlaceholderSpeakerIndexRef = useRef(0);
+  const systemPartialSpeakerIdRef = useRef<string | null>(null);
+  const recentSystemSpeakerRef = useRef<RecentSystemSpeaker | null>(null);
+  const speakerLocksRef = useRef<Map<string, string>>(new Map());
+
+  const setSystemPartialSpeakerIdentity = useCallback(
+    (speakerId: string | null, speakerName: string | null) => {
+      systemPartialSpeakerIdRef.current = speakerId;
+      setSystemPartialSpeakerId(speakerId);
+      setSystemPartialSpeakerName(speakerName);
+    },
+    []
+  );
+
+  const applySpeakerIdentification = useCallback(
+    (segment: TranscriptSegment, identification: SpeakerIdentification): TranscriptSegment => {
+      if (
+        segment.source !== "system" ||
+        !isSegmentWithinIdentificationWindow(segment, identification) ||
+        (segment.speaker &&
+          !segment.speakerIsPlaceholder &&
+          segment.speakerStatus !== "provisional") ||
+        segment.speakerLocked
+      ) {
+        return segment;
+      }
+
+      return normalizeTranscriptSegment({
+        ...segment,
+        speaker: identification.speakerId,
+        speakerName: identification.displayName ?? segment.speakerName,
+        speakerIsPlaceholder: false,
+        speakerStatus: "confirmed",
+      });
+    },
+    []
+  );
+
+  const rememberSystemSpeaker = useCallback(
+    (
+      speakerId: string | null,
+      speakerName: string | null,
+      speakerIsPlaceholder: boolean,
+      updatedAt = Date.now()
+    ) => {
+      recentSystemSpeakerRef.current = speakerId
+        ? {
+            speakerId,
+            speakerName,
+            speakerIsPlaceholder,
+            updatedAt,
+          }
+        : null;
+    },
+    []
+  );
+
+  const getRecentSystemSpeaker = useCallback((nowMs: number) => {
+    const candidate = recentSystemSpeakerRef.current;
+    if (!candidate) {
+      return null;
+    }
+
+    return nowMs - candidate.updatedAt <= SYSTEM_SPEAKER_CARRY_FORWARD_MS ? candidate : null;
+  }, []);
+
+  const reserveSpeakerIndex = useCallback((speakerId?: string) => {
+    const idx = getSpeakerNumericIndex(speakerId);
+    if (idx == null) {
+      return;
+    }
+
+    nextPlaceholderSpeakerIndexRef.current = Math.max(
+      nextPlaceholderSpeakerIndexRef.current,
+      idx + 1
+    );
+  }, []);
+
+  const assignProvisionalSpeaker = useCallback(
+    (segment: TranscriptSegment) => {
+      if (segment.source !== "system" || segment.speaker) {
+        return segment;
+      }
+
+      const nowMs = segment.timestamp ?? Date.now();
+      const partialSpeakerId = systemPartialSpeakerIdRef.current;
+      if (partialSpeakerId) {
+        reserveSpeakerIndex(partialSpeakerId);
+        return normalizeTranscriptSegment({
+          ...segment,
+          speaker: partialSpeakerId,
+          speakerIsPlaceholder: true,
+          speakerStatus: "provisional",
+        });
+      }
+
+      const recentSystemSpeaker = getRecentSystemSpeaker(nowMs);
+      if (recentSystemSpeaker?.speakerId) {
+        reserveSpeakerIndex(recentSystemSpeaker.speakerId);
+        return normalizeTranscriptSegment({
+          ...segment,
+          speaker: recentSystemSpeaker.speakerId,
+          speakerName: recentSystemSpeaker.speakerName ?? undefined,
+          speakerIsPlaceholder: recentSystemSpeaker.speakerIsPlaceholder,
+          speakerStatus: "provisional",
+        });
+      }
+
+      const previousSystemSegment = [...segmentsRef.current]
+        .reverse()
+        .find(
+          (candidate) =>
+            candidate.source === "system" &&
+            candidate.speaker &&
+            candidate.timestamp != null &&
+            nowMs - candidate.timestamp <= SYSTEM_SPEAKER_CARRY_FORWARD_MS
+        );
+
+      if (previousSystemSegment?.speaker && previousSystemSegment.speakerIsPlaceholder) {
+        reserveSpeakerIndex(previousSystemSegment.speaker);
+        return normalizeTranscriptSegment({
+          ...segment,
+          speaker: previousSystemSegment.speaker,
+          speakerName: previousSystemSegment.speakerName,
+          speakerIsPlaceholder: true,
+          speakerStatus: "provisional",
+        });
+      }
+
+      const speakerId = `speaker_${nextPlaceholderSpeakerIndexRef.current}`;
+      nextPlaceholderSpeakerIndexRef.current += 1;
+
+      return normalizeTranscriptSegment({
+        ...segment,
+        speaker: speakerId,
+        speakerIsPlaceholder: true,
+        speakerStatus: "provisional",
+      });
+    },
+    [getRecentSystemSpeaker, reserveSpeakerIndex]
+  );
 
   const cleanup = useCallback(async () => {
     await flushAndDisconnectProcessor(micProcessorRef.current);
@@ -369,9 +555,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
     systemSourceRef.current?.disconnect();
     systemSourceRef.current = null;
 
-    try {
-      systemStreamRef.current?.getTracks().forEach((t) => t.stop());
-    } catch {}
+    stopMediaStream(systemStreamRef.current);
     systemStreamRef.current = null;
 
     try {
@@ -389,7 +573,6 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const stopTranscription = useCallback(async () => {
     if (!isRecordingRef.current) return;
 
-    // Signal stop immediately so in-flight startTranscription can abort
     isRecordingRef.current = false;
     isStartingRef.current = false;
     setIsRecording(false);
@@ -398,6 +581,9 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
 
     try {
       const result = await window.electronAPI?.meetingTranscriptionStop?.();
+      if (result?.diarizationSessionId) {
+        setDiarizationSessionId(result.diarizationSessionId);
+      }
       if (result?.success && result.transcript) {
         setTranscript(result.transcript);
       } else if (result?.error) {
@@ -417,7 +603,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
 
   const prepareTranscription = useCallback(async () => {
     if (isPreparedRef.current || isRecordingRef.current || isStartingRef.current) return;
-    if (preparePromiseRef.current) return; // already preparing
+    if (preparePromiseRef.current) return;
 
     logger.info("Meeting transcription preparing (pre-warming WebSockets)...", {}, "meeting");
 
@@ -453,35 +639,40 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   }, []);
 
   const startTranscription = useCallback(
-    async (options?: { allowSystemAudio?: boolean }) => {
+    async (_options?: { seedSegments?: TranscriptSegment[] }) => {
       if (isRecordingRef.current || isStartingRef.current) return;
       isStartingRef.current = true;
-      const allowSystemAudio = options?.allowSystemAudio ?? true;
-      const systemAudioAccessPromise = allowSystemAudio
-        ? window.electronAPI?.checkSystemAudioAccess?.()
-        : Promise.resolve(DEFAULT_SYSTEM_AUDIO_ACCESS);
-
-      if (!allowSystemAudio && getCachedPlatform() === "linux") {
-        logger.info(
-          "Linux system audio skipped for non-user-initiated start, continuing with mic only",
-          {},
-          "meeting"
-        );
-      }
+      const systemAudioAccessPromise =
+        window.electronAPI?.checkSystemAudioAccess?.() ??
+        Promise.resolve(DEFAULT_SYSTEM_AUDIO_ACCESS);
 
       logger.info("Meeting transcription starting...", {}, "meeting");
-      setTranscript("");
+      const seed = _options?.seedSegments ?? [];
+      const locks = new Map<string, string>();
+      let maxSpeakerIndex = -1;
+      for (const s of seed) {
+        const idx = getSpeakerNumericIndex(s.speaker);
+        if (idx != null && idx > maxSpeakerIndex) maxSpeakerIndex = idx;
+        if (s.speakerLocked && s.speaker && s.speakerName) {
+          locks.set(s.speaker, s.speakerName);
+        }
+      }
+      setTranscript(buildTranscriptText(seed));
       setPartialTranscript("");
-      setSegments([]);
+      setSegments(seed);
+      segmentsRef.current = seed;
       setMicPartial("");
       setSystemPartial("");
+      setSystemPartialSpeakerIdentity(null, null);
       setError(null);
+      speakerIdentificationsRef.current = [];
+      nextPlaceholderSpeakerIndexRef.current = maxSpeakerIndex + 1;
+      recentSystemSpeakerRef.current = null;
+      speakerLocksRef.current = locks;
 
-      // Set recording state immediately for instant UI feedback
       isRecordingRef.current = true;
       setIsRecording(true);
 
-      // Wait for in-flight prepare to reuse the warm connection
       if (preparePromiseRef.current) {
         logger.debug("Waiting for in-flight prepare to finish...", {}, "meeting");
         await preparePromiseRef.current;
@@ -495,26 +686,48 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
           prepareMeetingSystemAudioCapture(initialSystemAudioAccess);
 
         const [startResult, micResult, initialSystemCaptureResult] = await Promise.all([
-          window.electronAPI?.meetingTranscriptionStart?.({
-            ...getMeetingTranscriptionOptions(),
-            allowSystemAudio,
-          }),
-          getMeetingMicConstraints().then((constraints) =>
-            navigator.mediaDevices.getUserMedia(constraints).catch((err) => {
+          window.electronAPI?.meetingTranscriptionStart?.(getMeetingTranscriptionOptions()),
+          getMeetingMicConstraints().then(async (constraints) => {
+            try {
+              return await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (err) {
+              const hasExactDevice =
+                typeof constraints.audio === "object" &&
+                constraints.audio !== null &&
+                "deviceId" in constraints.audio;
+              if (hasExactDevice) {
+                try {
+                  const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                    audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
+                  });
+                  logger.info(
+                    "Meeting mic capture recovered using default device",
+                    { error: (err as Error).message },
+                    "meeting"
+                  );
+                  return fallbackStream;
+                } catch (fallbackErr) {
+                  logger.error(
+                    "Meeting mic capture failed, continuing with system audio only",
+                    { error: (fallbackErr as Error).message },
+                    "meeting"
+                  );
+                  return null;
+                }
+              }
               logger.error(
-                "Mic capture failed, continuing with system audio only",
-                { error: (err as Error).message },
+                "Meeting mic capture failed, continuing with system audio only",
+                { error: (err as Error).message, constraints },
                 "meeting"
               );
               return null;
-            })
-          ),
+            }
+          }),
           systemCapturePromise,
         ]);
         let systemCaptureResult = initialSystemCaptureResult;
 
         const streamsMs = performance.now() - startTime;
-        // Abort if stop was called during setup
         if (!isRecordingRef.current) {
           logger.info("Meeting transcription aborted during setup (stop called)", {}, "meeting");
           stopMediaStream(micResult);
@@ -539,17 +752,19 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
         }
 
         const systemAudioMode = startResult.systemAudioMode || initialSystemAudioAccess.mode;
-        let systemAudioStrategy = startResult.systemAudioStrategy || initialSystemAudioStrategy;
+        const systemAudioStrategy = startResult.systemAudioStrategy || initialSystemAudioStrategy;
         systemCaptureResult = await ensureRendererSystemAudioCapture({
-          allowSystemAudio,
           initialDisplayCaptureStrategy,
           systemAudioStrategy,
           systemCaptureResult,
         });
-
         const systemAudioHandledInMain =
           systemAudioMode !== "unsupported" && !isRendererSystemAudioStrategy(systemAudioStrategy);
         const systemCaptureError = systemAudioHandledInMain ? null : systemCaptureResult.error;
+
+        if (!micResult && (systemAudioHandledInMain || systemCaptureResult.stream)) {
+          setError("Microphone capture failed. Continuing with system audio only.");
+        }
 
         if (!micResult && !systemCaptureResult.stream && !systemAudioHandledInMain) {
           logger.error("Meeting transcription has no available audio source", {}, "meeting");
@@ -572,46 +787,109 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
           (data: {
             text: string;
             source: "mic" | "system";
-            type: "partial" | "final";
+            type: "partial" | "final" | "retract";
             timestamp?: number;
           }) => {
-            logger.debug(
-              "Meeting segment received in renderer",
-              {
-                source: data.source,
-                type: data.type,
-                text: data.text?.slice(0, 80),
-              },
-              "meeting"
-            );
             const setPartialForSource = partialSetters[data.source];
+
+            if (data.type === "retract") {
+              setSegments((prev) => {
+                const next = prev.filter(
+                  (seg) =>
+                    !(
+                      seg.source === data.source &&
+                      seg.timestamp === data.timestamp &&
+                      seg.text === data.text
+                    )
+                );
+                segmentsRef.current = next;
+                setTranscript(buildTranscriptText(next));
+                return next;
+              });
+              return;
+            }
 
             if (data.type === "partial") {
               setPartialForSource(data.text);
               setPartialTranscript(data.text);
+              if (data.source === "system" && !systemPartialSpeakerIdRef.current) {
+                const speakerId = `speaker_${nextPlaceholderSpeakerIndexRef.current}`;
+                nextPlaceholderSpeakerIndexRef.current += 1;
+                setSystemPartialSpeakerIdentity(speakerId, null);
+              }
             } else {
-              const seg: TranscriptSegment = {
+              let rawSegment: TranscriptSegment = normalizeTranscriptSegment({
                 id: `seg-${++segmentCounter}`,
                 text: data.text,
                 source: data.source,
                 timestamp: data.timestamp,
-              };
+              });
+
+              for (let i = speakerIdentificationsRef.current.length - 1; i >= 0; i -= 1) {
+                rawSegment = applySpeakerIdentification(
+                  rawSegment,
+                  speakerIdentificationsRef.current[i]
+                );
+              }
+
+              const provisional = assignProvisionalSpeaker(rawSegment);
+              reserveSpeakerIndex(provisional.speaker);
+              const lockedName = provisional.speaker
+                ? speakerLocksRef.current.get(provisional.speaker)
+                : undefined;
+              const seg = lockedName
+                ? lockTranscriptSpeaker(provisional, {
+                    speakerName: lockedName,
+                    speakerIsPlaceholder: false,
+                    suggestedName: undefined,
+                    suggestedProfileId: undefined,
+                  })
+                : provisional;
               setSegments((prev) => {
-                // Insert in chronological order — scan from the end since most
-                // segments arrive in order and this is O(1) in the common case.
                 const ts = seg.timestamp ?? Infinity;
                 let i = prev.length;
                 while (i > 0 && (prev[i - 1].timestamp ?? 0) > ts) i--;
-                if (i === prev.length) return [...prev, seg];
-                return [...prev.slice(0, i), seg, ...prev.slice(i)];
+                const next =
+                  i === prev.length ? [...prev, seg] : [...prev.slice(0, i), seg, ...prev.slice(i)];
+                segmentsRef.current = next;
+                setTranscript(buildTranscriptText(next));
+                return next;
               });
+              if (data.source === "system" && seg.speaker) {
+                rememberSystemSpeaker(
+                  seg.speaker,
+                  seg.speakerName ?? null,
+                  !!seg.speakerIsPlaceholder,
+                  seg.timestamp ?? Date.now()
+                );
+              }
               setPartialForSource("");
-              setTranscript((prev) => (prev ? prev + " " + data.text : data.text));
+              if (data.source === "system") {
+                setSystemPartialSpeakerIdentity(null, null);
+              }
               setPartialTranscript("");
             }
           }
         );
         if (segmentCleanup) ipcCleanupsRef.current.push(segmentCleanup);
+
+        const speakerCleanup = window.electronAPI?.onMeetingSpeakerIdentified?.((data) => {
+          reserveSpeakerIndex(data.speakerId);
+          setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
+          rememberSystemSpeaker(data.speakerId, data.displayName ?? null, false, data.endTime);
+          speakerIdentificationsRef.current = [
+            ...speakerIdentificationsRef.current.filter(
+              (id) => id.endTime >= data.endTime - SPEAKER_IDENTIFICATION_RETENTION_MS
+            ),
+            data,
+          ];
+          setSegments((prev) => {
+            const next = prev.map((segment) => applySpeakerIdentification(segment, data));
+            segmentsRef.current = next;
+            return next;
+          });
+        });
+        if (speakerCleanup) ipcCleanupsRef.current.push(speakerCleanup);
 
         const errorCleanup = window.electronAPI?.onMeetingTranscriptionError?.((err) => {
           setError(err);
@@ -633,7 +911,6 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
           micPipelinePromise = createAudioPipeline({
             stream: micResult,
             context: micContext,
-            label: "Meeting mic",
             onChunk: (chunk) => {
               if (!isRecordingRef.current) return;
               if (socketReady) {
@@ -673,7 +950,6 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
           await createAudioPipeline({
             stream: systemStream,
             context: systemContext,
-            label: "Meeting system",
             onChunk: (chunk) => {
               if (!isRecordingRef.current) return;
               if (socketReady) {
@@ -702,7 +978,6 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
           }
         }
 
-        // Abort if stop was called during pipeline setup
         if (!isRecordingRef.current) {
           logger.info(
             "Meeting transcription aborted during pipeline setup (stop called)",
@@ -751,7 +1026,47 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
         await cleanup();
       }
     },
-    [cleanup]
+    [
+      applySpeakerIdentification,
+      assignProvisionalSpeaker,
+      cleanup,
+      rememberSystemSpeaker,
+      reserveSpeakerIndex,
+      setSystemPartialSpeakerIdentity,
+    ]
+  );
+
+  const lockSpeaker = useCallback(
+    (speakerId: string, displayName: string) => {
+      if (!speakerId || !displayName) return;
+      speakerLocksRef.current.set(speakerId, displayName);
+      setSegments((prev) => {
+        const next = prev.map((s) =>
+          s.speaker === speakerId
+            ? lockTranscriptSpeaker(s, {
+                speakerName: displayName,
+                speakerIsPlaceholder: false,
+                suggestedName: undefined,
+                suggestedProfileId: undefined,
+              })
+            : s
+        );
+        segmentsRef.current = next;
+        return next;
+      });
+      const recent = recentSystemSpeakerRef.current;
+      if (recent?.speakerId === speakerId) {
+        recentSystemSpeakerRef.current = {
+          ...recent,
+          speakerName: displayName,
+          speakerIsPlaceholder: false,
+        };
+      }
+      if (systemPartialSpeakerIdRef.current === speakerId) {
+        setSystemPartialSpeakerIdentity(speakerId, displayName);
+      }
+    },
+    [setSystemPartialSpeakerIdentity]
   );
 
   useEffect(() => {
@@ -759,16 +1074,12 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   }, []);
 
   useEffect(() => {
-    // Cancel any pending cleanup from a previous StrictMode unmount — the component remounted,
-    // so the in-flight startTranscription from the prior mount should keep running.
     if (pendingCleanupRef.current) {
       clearTimeout(pendingCleanupRef.current);
       pendingCleanupRef.current = null;
     }
 
     return () => {
-      // Defer cleanup to next tick so StrictMode remount can cancel it.
-      // On real unmount, the timeout fires and tears everything down.
       pendingCleanupRef.current = setTimeout(() => {
         pendingCleanupRef.current = null;
         void cleanup();
@@ -783,9 +1094,13 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
     segments,
     micPartial,
     systemPartial,
+    systemPartialSpeakerId,
+    systemPartialSpeakerName,
     error,
+    diarizationSessionId,
     prepareTranscription,
     startTranscription,
     stopTranscription,
+    lockSpeaker,
   };
 }

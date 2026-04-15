@@ -52,6 +52,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - 📅 **Google Calendar Integration**: Connect multiple Google accounts, view upcoming meetings in the sidebar, and receive auto-detection prompts
 - 🎙️ **Live Meeting Transcription**: Record and transcribe meetings in real-time via OpenAI Realtime API with automatic meeting detection (Zoom, Teams, FaceTime)
+- 🗣️ **Speaker Diarization**: Live speaker labels during recording, refined into stable speaker clusters on post-processing — plus one-click reassignment and attendee-aware speaker picker
+- 🔗 **Voice Fingerprint Linking**: Attach voice profiles to contacts so a recognized speaker carries their name and color across meetings
+- 🎧 **Meeting Echo Cancellation**: Native WebRTC AEC3 sidecar removes mic echo from captured system audio, with a JS fallback when the helper is unavailable
 - ⚡ **WebSocket Streaming for BYOK**: Real-time OpenAI Realtime API streaming for standard dictation mode, not just meetings — unified streaming path for all transcription
 - ⌨️ **Meeting Hotkey**: Dedicated hotkey to start/stop meeting transcription independently from dictation
 - 🔍 **Smart Detection**: Combines process monitoring, sustained audio detection, and calendar awareness to detect meetings automatically

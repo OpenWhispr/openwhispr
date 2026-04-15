@@ -335,7 +335,14 @@ declare global {
   interface Window {
     electronAPI: {
       // Basic window operations
-      pasteText: (text: string, options?: { fromStreaming?: boolean }) => Promise<void>;
+      pasteText: (
+        text: string,
+        options?: {
+          fromStreaming?: boolean;
+          restoreClipboard?: boolean;
+          allowClipboardFallback?: boolean;
+        }
+      ) => Promise<void>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       onToggleDictation: (callback: () => void) => () => void;
@@ -1341,13 +1348,11 @@ declare global {
         provider?: string;
         model?: string;
         language?: string;
-        allowSystemAudio?: boolean;
       }) => Promise<{ success: boolean; alreadyPrepared?: boolean; error?: string }>;
       meetingTranscriptionStart?: (options: {
         provider?: string;
         model?: string;
         language?: string;
-        allowSystemAudio?: boolean;
       }) => Promise<{
         success: boolean;
         error?: string;
@@ -1358,16 +1363,105 @@ declare global {
       meetingTranscriptionStop?: () => Promise<{
         success: boolean;
         transcript?: string;
+        diarizationSessionId?: string;
         error?: string;
       }>;
       onMeetingTranscriptionSegment?: (
         callback: (data: {
           text: string;
           source: "mic" | "system";
-          type: "partial" | "final";
+          type: "partial" | "final" | "retract";
+          timestamp?: number;
+        }) => void
+      ) => () => void;
+      onMeetingSpeakerIdentified?: (
+        callback: (data: {
+          speakerId: string;
+          displayName?: string | null;
+          startTime: number;
+          endTime: number;
         }) => void
       ) => () => void;
       onMeetingTranscriptionError?: (callback: (error: string) => void) => () => void;
+
+      // Speaker diarization
+      downloadDiarizationModels?: () => Promise<{ success: boolean; error?: string }>;
+      getDiarizationModelStatus?: () => Promise<{
+        available: boolean;
+        modelsDownloaded: boolean;
+      }>;
+      deleteDiarizationModels?: () => Promise<{ success: boolean }>;
+      cancelDiarizationDownload?: () => Promise<{
+        success: boolean;
+        message?: string;
+        error?: string;
+      }>;
+      onDiarizationDownloadProgress?: (callback: (data: any) => void) => () => void;
+      onMeetingDiarizationComplete?: (
+        callback: (data: {
+          sessionId?: string;
+          segments: Array<{
+            id: string;
+            text: string;
+            source: "mic" | "system";
+            timestamp?: number;
+            speaker?: string;
+            speakerName?: string;
+            speakerIsPlaceholder?: boolean;
+            suggestedName?: string;
+            suggestedProfileId?: number;
+            speakerStatus?: "provisional" | "confirmed" | "suggested" | "locked";
+            speakerLocked?: boolean;
+            speakerLockSource?: "user" | "diarization" | "suggestion";
+          }>;
+          speakerEmbeddings?: Record<string, number[]> | null;
+        }) => void
+      ) => () => void;
+
+      // Speaker name mapping
+      getSpeakerMappings?: (noteId: number) => Promise<
+        Array<{
+          note_id: number;
+          speaker_id: string;
+          profile_id: number | null;
+          display_name: string;
+        }>
+      >;
+      setSpeakerMapping?: (
+        noteId: number,
+        speakerId: string,
+        displayName: string,
+        email?: string | null,
+        profileId?: number | null
+      ) => Promise<{ success: boolean; profileId: number | null }>;
+      removeSpeakerMapping?: (noteId: number, speakerId: string) => Promise<{ success: boolean }>;
+      getSpeakerProfiles?: () => Promise<
+        Array<{
+          id: number;
+          display_name: string;
+          email: string | null;
+          sample_count: number;
+          created_at: string;
+          updated_at: string;
+        }>
+      >;
+      attachSpeakerEmail?: (
+        profileId: number,
+        email: string | null
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        profile?: {
+          id: number;
+          display_name: string;
+          email: string | null;
+          sample_count: number;
+        };
+      }>;
+      saveNoteSpeakerEmbeddings?: (
+        noteId: number,
+        embeddings: Record<string, number[]>
+      ) => Promise<{ success: boolean }>;
 
       // Dictation realtime streaming
       dictationRealtimeWarmup?: (options: {
@@ -1405,6 +1499,7 @@ declare global {
         detectionId: string,
         action: string
       ) => Promise<{ success: boolean }>;
+      joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
       onNavigateToMeetingNote?: (
         callback: (data: { noteId: number; folderId: number; event: any }) => void
       ) => () => void;

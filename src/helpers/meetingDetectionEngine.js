@@ -230,8 +230,14 @@ class MeetingDetectionEngine {
   }
 
   async startManualMeeting() {
-    this._meetingModeActive = true;
     debugLogger.info("Starting manual meeting", {}, "meeting");
+
+    const activeEvents = this.databaseManager.getActiveEvents();
+    if (activeEvents?.length > 0) {
+      return this.joinCalendarMeeting(activeEvents[0].id);
+    }
+
+    this._meetingModeActive = true;
 
     const event = {
       id: `manual-${Date.now()}`,
@@ -256,6 +262,7 @@ class MeetingDetectionEngine {
         { noteId: noteResult?.note?.id, folderId: meetingsFolder?.id },
         "meeting"
       );
+      this._meetingModeActive = false;
       return;
     }
 
@@ -268,6 +275,48 @@ class MeetingDetectionEngine {
       noteId: noteResult.note.id,
       folderId: meetingsFolder.id,
       event,
+    });
+  }
+
+  async joinCalendarMeeting(eventId) {
+    this._meetingModeActive = true;
+    debugLogger.info("Joining calendar meeting", { eventId }, "meeting");
+
+    const calEvent = this.databaseManager.getCalendarEventById(eventId);
+    if (!calEvent) {
+      debugLogger.error("Calendar event not found", { eventId }, "meeting");
+      this._meetingModeActive = false;
+      return;
+    }
+
+    const noteResult = this.databaseManager.saveNote(calEvent.summary || "New note", "", "meeting");
+    const meetingsFolder = this.databaseManager.getMeetingsFolder();
+
+    if (!noteResult?.note?.id || !meetingsFolder?.id) {
+      debugLogger.error(
+        "Join calendar meeting failed — missing note or folder",
+        { noteId: noteResult?.note?.id, folderId: meetingsFolder?.id },
+        "meeting"
+      );
+      this._meetingModeActive = false;
+      return;
+    }
+
+    const updates = { calendar_event_id: calEvent.id };
+    if (calEvent.attendees) {
+      updates.participants = calEvent.attendees;
+    }
+    const updateResult = this.databaseManager.updateNote(noteResult.note.id, updates);
+
+    this.broadcastToWindows("note-added", updateResult?.note || noteResult.note);
+
+    await this.windowManager.createControlPanelWindow();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    this.windowManager.snapControlPanelToMeetingMode();
+    this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
+      noteId: noteResult.note.id,
+      folderId: meetingsFolder.id,
+      event: calEvent,
     });
   }
 

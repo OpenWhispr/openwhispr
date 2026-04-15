@@ -174,7 +174,7 @@
       "microphoneRequired": "需要麥克風存取權限",
       "openSystemSettings": "打開系統設定",
       "systemAudioTitle": "系統音訊",
-      "systemAudioDescription": "錄製通話和會議中其他參與者的音訊。我們絕不會錄製您的螢幕。",
+      "systemAudioDescription": "轉錄會議、通話、講座、播客和其他系統音訊。",
       "optional": "可選",
       "recommended": "建議",
       "accessibilityTroubleshooting": "未偵測到？請在系統設定的輔助使用中移除 OpenWhispr，然後重新加入並開啟。您可以跳過此步驟繼續 — 文字將複製到剪貼簿而非自動貼上。"
@@ -1004,7 +1004,7 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最熱門",
-          "features": ["無限會議錄製", "代理模式", "與您的資料對話（即將推出）", "優先支援"],
+          "features": ["無限會議錄製", "代理模式", "與您的資料對話", "優先支援"],
           "cta": "開始使用",
           "switchToAnnual": "切換為年付"
         },
@@ -1090,17 +1090,17 @@
       "enableTextCleanup": "啟用文字整理",
       "enableTextCleanupDescription": "AI 自動提升轉錄品質",
       "modes": {
-        "openwhispr": "OpenWhispr",
+        "openwhispr": "OpenWhispr Cloud",
         "providers": "雲端供應商",
         "local": "本機",
         "selfHosted": "自架主機",
-        "openwhisprDesc": "即開即用，無需設定。",
+        "openwhisprDesc": "準確可靠，無需設定。",
         "providersDesc": "使用你自己的 API Key。",
         "localDesc": "裝置端模型，完全私密。",
         "selfHostedDesc": "你的伺服器，在你的網路上。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "即開即用，無需設定。",
+      "openwhisprCloudDescription": "準確可靠，無需設定。",
       "title": "AI 文字增強",
       "toasts": {
         "switchedCloud": {
@@ -1364,7 +1364,7 @@
       },
       "optional": "可選",
       "systemAudioTitle": "系統音訊",
-      "systemAudioDescription": "錄製通話和會議中其他參與者的音訊",
+      "systemAudioDescription": "轉錄會議、通話、講座、播客和其他系統音訊。",
       "grantAccess": "授予存取權限",
       "test": "測試",
       "testAndGrant": "測試並授權",
@@ -1403,17 +1403,17 @@
       "customSetupDescription": "使用你自己的供應商和 API Key。",
       "description": "選擇 OpenWhispr 轉錄語音的方式",
       "modes": {
-        "openwhispr": "OpenWhispr",
+        "openwhispr": "OpenWhispr Cloud",
         "providers": "雲端供應商",
         "local": "本機",
         "selfHosted": "自架主機",
-        "openwhisprDesc": "即開即用，無需設定。",
+        "openwhisprDesc": "準確可靠，無需設定。",
         "providersDesc": "使用你自己的 API Key。",
         "localDesc": "裝置端模型，完全私密。",
         "selfHostedDesc": "你的伺服器，在你的網路上。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "即開即用，無需設定。",
+      "openwhisprCloudDescription": "準確可靠，無需設定。",
       "title": "語音轉文字",
       "toasts": {
         "switchedCloud": {
@@ -1440,6 +1440,12 @@
       "gpuDevice": {
         "title": "轉錄 GPU",
         "description": "用於本機語音辨識的 GPU"
+      },
+      "diarization": {
+        "title": "Speaker Identification",
+        "description": "Identify individual speakers in meeting recordings",
+        "modelsReady": "Models Ready",
+        "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "即時轉錄預覽",
       "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行校正"
@@ -1529,6 +1535,10 @@
         "gemma_gemma_4_e2b_it_q4_k_m": "Google 緊湊型 Gemma 4，快速高效",
         "gemma_gemma_3_12b_it_q4_k_m": "Google 中型模型，強推理能力",
         "gemma_gemma_3_1b_it_q4_k_m": "超快 Google 模型，最適合短語音清理"
+      },
+      "diarization": {
+        "segmentation": "Speech boundary detection for speaker diarization",
+        "embedding_en": "Speaker voice fingerprinting for identification"
       }
     }
   },
@@ -1794,7 +1804,33 @@
     },
     "speaker": {
       "you": "你",
-      "them": "對方"
+      "them": "對方",
+      "label": "發言者 {{n}}",
+      "identifyingSpeakers": "正在辨識發言者...",
+      "liveAccuracyHint": "仍在辨識發言者。通話結束後，標籤準確度會提升。",
+      "speakersIdentified": "已辨識發言者",
+      "typeNamePlaceholder": "輸入姓名",
+      "knownSpeakers": "已知發言者",
+      "meetingAttendees": "會議參與者",
+      "assignName": "指派姓名",
+      "isThisPerson": "這是{{name}}嗎？",
+      "selected": "已選 {{n}} 個",
+      "assignTo": "指派給…",
+      "deselectAll": "取消全選",
+      "confirmed": "已確認",
+      "nameAssigned": "姓名已指派",
+      "state": {
+        "provisional": "暫定",
+        "confirmed": "已確認",
+        "suggested": "建議",
+        "locked": "鎖定"
+      },
+      "createNewPrefix": "建立",
+      "emailPlaceholder": "name@example.com",
+      "nameOrEmailPlaceholder": "輸入姓名或電子郵件",
+      "addContact": "新增聯絡人",
+      "save": "儲存",
+      "cancel": "取消"
     }
   },
   "dictionary": {
@@ -1951,17 +1987,17 @@
       "systemPromptDescription": "助手的自訂指令",
       "systemPromptPlaceholder": "輸入自訂系統提示詞...",
       "modes": {
-        "openwhispr": "OpenWhispr",
+        "openwhispr": "OpenWhispr Cloud",
         "providers": "雲端供應商",
         "local": "本機",
         "selfHosted": "自架主機",
-        "openwhisprDesc": "即開即用，無需設定。",
+        "openwhisprDesc": "準確可靠，無需設定。",
         "providersDesc": "使用自己的 API 金鑰。",
         "localDesc": "裝置端模型，完全私密。",
         "selfHostedDesc": "你自己網路上的伺服器。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "使用 OpenWhispr 的雲端 AI 進行助手對話",
+      "openwhisprCloudDescription": "準確可靠，無需設定。",
       "customSetup": "自訂配置 (BYOK)",
       "customSetupDescription": "使用自己的 API 金鑰並選擇偏好的模型"
     },
@@ -2017,7 +2053,8 @@
     "description": "連接服務以增強您的工作流程",
     "googleCalendar": {
       "title": "Google 日曆",
-      "description": "連接日曆以自動偵測會議並錄製轉錄。",
+      "optional": "可選",
+      "description": "從日曆自動填入會議名稱和參與者。",
       "connect": "連接 Google 日曆",
       "connecting": "連接中...",
       "connected": "已連接",
@@ -2039,13 +2076,6 @@
       "pro": "Pro",
       "proLimit": "無限",
       "upgrade": "升級"
-    },
-    "beta": {
-      "title": "會議錄製功能正在測試中",
-      "description": "我們仍在探索將此功能更好地融入產品的方式，非常歡迎您的回饋！",
-      "freeTier": "免費方案：每月 5 小時",
-      "proTier": "Pro 方案：每月 20 小時",
-      "feedback": "需要超過 20 小時？請聯繫 gabe@openwhispr.com"
     },
     "notABot": {
       "title": "OpenWhispr 是會議錄製工具，不是機器人",
