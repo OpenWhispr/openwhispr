@@ -800,6 +800,16 @@ declare global {
         contextBias?: string[];
       }) => Promise<{ text: string }>;
 
+      // Deepgram API key management
+      getDeepgramKey: () => Promise<string | null>;
+      saveDeepgramKey: (key: string) => Promise<void>;
+      transcribeAudioFileDeepgram?: (options: {
+        filePath: string;
+        apiKey: string;
+        model?: string;
+        baseUrl?: string;
+      }) => Promise<{ success: boolean; text?: string; error?: string }>;
+
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;

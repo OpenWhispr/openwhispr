@@ -159,6 +159,25 @@
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
         }
       ]
+    },
+    {
+      "id": "deepgram",
+      "name": "Deepgram",
+      "baseUrl": "https://api.deepgram.com/v1",
+      "models": [
+        {
+          "id": "nova-3",
+          "name": "Nova 3",
+          "description": "Latest high-accuracy multilingual model",
+          "descriptionKey": "models.descriptions.transcription.deepgram_nova_3"
+        },
+        {
+          "id": "nova-2",
+          "name": "Nova 2",
+          "description": "Fast and reliable multilingual model",
+          "descriptionKey": "models.descriptions.transcription.deepgram_nova_2"
+        }
+      ]
     }
   ],
   "cloudProviders": [

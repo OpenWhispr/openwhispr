@@ -211,12 +211,15 @@ class IPCHandlers {
       const isGroq = trimmed.startsWith("whisper-large-v3");
       const isOpenAI = trimmed.startsWith("gpt-4o") || trimmed === "whisper-1";
       const isMistral = trimmed.startsWith("voxtral-");
+      const isDeepgram = trimmed.startsWith("nova-");
       if (provider === "groq" && isGroq) return trimmed;
       if (provider === "openai" && isOpenAI) return trimmed;
       if (provider === "mistral" && isMistral) return trimmed;
+      if (provider === "deepgram" && isDeepgram) return trimmed;
     }
     if (provider === "groq") return "whisper-large-v3-turbo";
     if (provider === "mistral") return "voxtral-mini-latest";
+    if (provider === "deepgram") return "nova-3";
     return "gpt-4o-mini-transcribe";
   }
 
@@ -1959,6 +1962,14 @@ class IPCHandlers {
       return this.environmentManager.saveMistralKey(key);
     });
 
+    ipcMain.handle("get-deepgram-key", async () => {
+      return this.environmentManager.getDeepgramKey();
+    });
+
+    ipcMain.handle("save-deepgram-key", async (event, key) => {
+      return this.environmentManager.saveDeepgramKey(key);
+    });
+
     ipcMain.handle(
       "proxy-mistral-transcription",
       async (event, { audioBuffer, model, language, contextBias }) => {
@@ -2916,6 +2927,8 @@ class IPCHandlers {
           } else if (provider === "mistral") {
             apiKey = this.environmentManager.getMistralKey();
             endpoint = MISTRAL_TRANSCRIPTION_URL;
+          } else if (provider === "deepgram") {
+            apiKey = this.environmentManager.getDeepgramKey();
           } else if (provider === "custom") {
             apiKey = this.environmentManager.getCustomTranscriptionKey();
             const base = (settings?.cloudTranscriptionBaseUrl || "").trim();
@@ -2934,28 +2947,62 @@ class IPCHandlers {
             throw err;
           }
 
-          const formData = new FormData();
-          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
-          formData.append("model", model);
-          const headers = {};
-          if (provider === "mistral") {
-            headers["x-api-key"] = apiKey;
-          } else if (apiKey) {
-            headers.Authorization = `Bearer ${apiKey}`;
-          }
+          if (provider === "deepgram") {
+            // Deepgram uses its native REST API (raw audio body, not multipart)
+            const lang = settings?.preferredLanguage;
+            const params = new URLSearchParams({
+              model: model,
+              smart_format: "true",
+            });
+            if (lang && lang !== "auto") params.set("language", lang);
+            const baseUrl = (settings?.cloudTranscriptionBaseUrl || "").trim() || "https://api.deepgram.com/v1";
+            const dgUrl = `${baseUrl.replace(/\/+$/, "")}/listen?${params}`;
+            const dgResponse = await fetch(dgUrl, {
+              method: "POST",
+              headers: {
+                Authorization: `Token ${apiKey}`,
+                "Content-Type": "audio/webm",
+              },
+              body: Buffer.from(buffer),
+            });
+            if (!dgResponse.ok) {
+              const errorText = await dgResponse.text();
+              const err = new Error(`Deepgram API Error: ${dgResponse.status} ${errorText}`);
+              if (dgResponse.status === 401 || dgResponse.status === 403) err.code = "INVALID_KEY";
+              else if (dgResponse.status === 429) err.code = "LIMIT_REACHED";
+              else if (dgResponse.status >= 500) err.code = "SERVER_ERROR";
+              throw err;
+            }
+            const dgData = await dgResponse.json();
+            const transcript = dgData?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+            if (!transcript || !transcript.trim()) {
+              throw new Error("Deepgram returned empty transcription");
+            }
+            result = { text: transcript, source: "deepgram", model };
+          } else {
+            const formData = new FormData();
+            formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+            formData.append("model", model);
+            const headers = {};
+            if (provider === "mistral") {
+              headers["x-api-key"] = apiKey;
+            } else if (apiKey) {
+              headers.Authorization = `Bearer ${apiKey}`;
+            }
 
-          const response = await fetch(endpoint, { method: "POST", headers, body: formData });
-          if (!response.ok) {
-            const errorText = await response.text();
-            const err = new Error(`${provider} API Error: ${response.status} ${errorText}`);
-            if (response.status === 401) err.code = "INVALID_KEY";
-            else if (response.status === 429) err.code = "LIMIT_REACHED";
-            else if (response.status >= 500) err.code = "SERVER_ERROR";
-            throw err;
-          }
-          const data = await response.json();
-          if (data?.text) {
-            result = { text: data.text, source: provider, model };
+            const response = await fetch(endpoint, { method: "POST", headers, body: formData });
+            if (!response.ok) {
+              const errorText = await response.text();
+              const err = new Error(`${provider} API Error: ${response.status} ${errorText}`);
+              if (response.status === 401) err.code = "INVALID_KEY";
+              else if (response.status === 429) err.code = "LIMIT_REACHED";
+              else if (response.status >= 500) err.code = "SERVER_ERROR";
+              throw err;
+            }
+            const data = await response.json();
+            if (data?.text) {
+              result = { text: data.text, source: provider, model };
+            }
           }
         }
 
@@ -4463,6 +4510,72 @@ class IPCHandlers {
           return { success: true, text: data.data.text };
         } catch (error) {
           debugLogger.error("BYOK audio file transcription error", { error: error.message });
+          return { success: false, error: error.message };
+        }
+      }
+    );
+
+    ipcMain.handle(
+      "transcribe-audio-file-deepgram",
+      async (event, { filePath, apiKey, model, baseUrl }) => {
+        const fs = require("fs");
+        const DEEPGRAM_FILE_SIZE_LIMIT = 2000 * 1024 * 1024; // 2 GB (Deepgram's limit)
+        try {
+          if (!apiKey) throw new Error("No Deepgram API key configured. Add your key in Settings.");
+
+          const fileSize = fs.statSync(filePath).size;
+          if (fileSize > DEEPGRAM_FILE_SIZE_LIMIT) {
+            return {
+              success: false,
+              error: "File too large. Maximum size for Deepgram is 2 GB.",
+            };
+          }
+
+          const audioBuffer = fs.readFileSync(filePath);
+          const ext = path.extname(filePath).toLowerCase().replace(".", "");
+          const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
+
+          const params = new URLSearchParams({
+            model: model || "nova-3",
+            smart_format: "true",
+          });
+
+          const dgBaseUrl = (baseUrl || "").trim() || "https://api.deepgram.com/v1";
+          const url = `${dgBaseUrl.replace(/\/+$/, "")}/listen?${params}`;
+
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              Authorization: `Token ${apiKey}`,
+              "Content-Type": contentType,
+            },
+            body: audioBuffer,
+          });
+
+          if (response.status === 401 || response.status === 403) {
+            return { success: false, error: "Invalid Deepgram API key. Check your key in Settings." };
+          }
+          if (response.status === 429) {
+            return { success: false, error: "Rate limit exceeded. Please try again later." };
+          }
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(
+              `Deepgram API error: ${response.status} ${errorText}`
+            );
+          }
+
+          const data = await response.json();
+          const transcript =
+            data?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+
+          if (!transcript) {
+            return { success: false, error: "Deepgram returned empty transcription." };
+          }
+
+          return { success: true, text: transcript };
+        } catch (error) {
+          debugLogger.error("Deepgram audio file transcription error", { error: error.message });
           return { success: false, error: error.message };
         }
       }

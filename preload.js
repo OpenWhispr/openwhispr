@@ -324,6 +324,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
 
+  // Deepgram API
+  getDeepgramKey: () => ipcRenderer.invoke("get-deepgram-key"),
+  saveDeepgramKey: (key) => ipcRenderer.invoke("save-deepgram-key", key),
+  transcribeAudioFileDeepgram: (options) =>
+    ipcRenderer.invoke("transcribe-audio-file-deepgram", options),
+
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),

@@ -223,6 +223,7 @@ export interface SettingsState
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
+  setDeepgramApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCustomReasoningApiKey: (key: string) => void;
 
@@ -350,6 +351,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   geminiApiKey: readString("geminiApiKey", ""),
   groqApiKey: readString("groqApiKey", ""),
   mistralApiKey: readString("mistralApiKey", ""),
+  deepgramApiKey: readString("deepgramApiKey", ""),
   customTranscriptionApiKey: readString("customTranscriptionApiKey", ""),
   customReasoningApiKey: readString("customReasoningApiKey", ""),
 
@@ -531,6 +533,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ mistralApiKey: key });
     window.electronAPI?.saveMistralKey?.(key);
     invalidateApiKeyCaches("mistral");
+  },
+  setDeepgramApiKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("deepgramApiKey", key);
+    set({ deepgramApiKey: key });
+    window.electronAPI?.saveDeepgramKey?.(key);
+    debouncedPersistToEnv();
   },
   setCustomTranscriptionApiKey: (key: string) => {
     if (isBrowser) localStorage.setItem("customTranscriptionApiKey", key);
@@ -739,6 +747,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
+    if (keys.deepgramApiKey !== undefined) s.setDeepgramApiKey(keys.deepgramApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.customReasoningApiKey !== undefined)
@@ -824,6 +833,10 @@ export async function initializeSettings(): Promise<void> {
       if (!state.mistralApiKey) {
         const envKey = await window.electronAPI.getMistralKey?.();
         if (envKey) createStringSetter("mistralApiKey")(envKey);
+      }
+      if (!state.deepgramApiKey) {
+        const envKey = await window.electronAPI.getDeepgramKey?.();
+        if (envKey) createStringSetter("deepgramApiKey")(envKey);
       }
       if (!state.customTranscriptionApiKey) {
         const envKey = await window.electronAPI.getCustomTranscriptionKey?.();

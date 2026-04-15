@@ -197,6 +197,8 @@ interface TranscriptionModelPickerProps {
   setGroqApiKey: (key: string) => void;
   mistralApiKey: string;
   setMistralApiKey: (key: string) => void;
+  deepgramApiKey?: string;
+  setDeepgramApiKey?: (key: string) => void;
   customTranscriptionApiKey?: string;
   setCustomTranscriptionApiKey?: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
@@ -210,6 +212,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq", recommended: true },
   { id: "mistral", name: "Mistral" },
+  { id: "deepgram", name: "Deepgram" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -273,6 +276,8 @@ export default function TranscriptionModelPicker({
   setGroqApiKey,
   mistralApiKey,
   setMistralApiKey,
+  deepgramApiKey = "",
+  setDeepgramApiKey,
   customTranscriptionApiKey = "",
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl = "",
@@ -881,6 +886,7 @@ export default function TranscriptionModelPicker({
                           groq: "https://console.groq.com/keys",
                           mistral: "https://console.mistral.ai/api-keys",
                           openai: "https://platform.openai.com/api-keys",
+                          deepgram: "https://console.deepgram.com/",
                         }[selectedCloudProvider] || "https://platform.openai.com/api-keys"
                       )}
                       className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
@@ -890,14 +896,20 @@ export default function TranscriptionModelPicker({
                   </div>
                   <ApiKeyInput
                     apiKey={
-                      { groq: groqApiKey, mistral: mistralApiKey, openai: openaiApiKey }[
-                        selectedCloudProvider
-                      ] || openaiApiKey
+                      {
+                        groq: groqApiKey,
+                        mistral: mistralApiKey,
+                        openai: openaiApiKey,
+                        deepgram: deepgramApiKey,
+                      }[selectedCloudProvider] || openaiApiKey
                     }
                     setApiKey={
-                      { groq: setGroqApiKey, mistral: setMistralApiKey, openai: setOpenaiApiKey }[
-                        selectedCloudProvider
-                      ] || setOpenaiApiKey
+                      {
+                        groq: setGroqApiKey,
+                        mistral: setMistralApiKey,
+                        openai: setOpenaiApiKey,
+                        deepgram: setDeepgramApiKey || (() => {}),
+                      }[selectedCloudProvider] || setOpenaiApiKey
                     }
                     label=""
                     helpText=""

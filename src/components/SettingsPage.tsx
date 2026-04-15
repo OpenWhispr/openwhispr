@@ -186,6 +186,8 @@ interface TranscriptionSectionProps {
   setGroqApiKey: (key: string) => void;
   mistralApiKey: string;
   setMistralApiKey: (key: string) => void;
+  deepgramApiKey: string;
+  setDeepgramApiKey: (key: string) => void;
   customTranscriptionApiKey: string;
   setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
@@ -225,6 +227,8 @@ function TranscriptionSection({
   setGroqApiKey,
   mistralApiKey,
   setMistralApiKey,
+  deepgramApiKey,
+  setDeepgramApiKey,
   customTranscriptionApiKey,
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
@@ -323,6 +327,8 @@ function TranscriptionSection({
       setGroqApiKey={setGroqApiKey}
       mistralApiKey={mistralApiKey}
       setMistralApiKey={setMistralApiKey}
+      deepgramApiKey={deepgramApiKey}
+      setDeepgramApiKey={setDeepgramApiKey}
       customTranscriptionApiKey={customTranscriptionApiKey}
       setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
       cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
@@ -668,6 +674,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setGeminiApiKey,
     setGroqApiKey,
     setMistralApiKey,
+    deepgramApiKey,
+    setDeepgramApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
     customReasoningApiKey,
@@ -2974,6 +2982,8 @@ EOF`,
             setGroqApiKey={setGroqApiKey}
             mistralApiKey={mistralApiKey}
             setMistralApiKey={setMistralApiKey}
+            deepgramApiKey={deepgramApiKey}
+            setDeepgramApiKey={setDeepgramApiKey}
             customTranscriptionApiKey={customTranscriptionApiKey}
             setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
             cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}

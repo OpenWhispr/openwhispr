@@ -118,6 +118,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setMistralApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
+    deepgramApiKey,
+    setDeepgramApiKey,
     updateTranscriptionSettings,
   } = useSettings();
 
@@ -199,7 +201,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 ? groqApiKey
                 : cloudTranscriptionProvider === "mistral"
                   ? mistralApiKey
-                  : customTranscriptionApiKey;
+                  : cloudTranscriptionProvider === "deepgram"
+                    ? deepgramApiKey
+                    : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -231,6 +235,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     openaiApiKey,
     groqApiKey,
     mistralApiKey,
+    deepgramApiKey,
     customTranscriptionApiKey,
   ]);
 
@@ -256,6 +261,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return groqApiKey;
       case "mistral":
         return mistralApiKey;
+      case "deepgram":
+        return deepgramApiKey;
       case "custom":
         return customTranscriptionApiKey || "";
       default:
@@ -367,6 +374,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         res = await window.electronAPI.transcribeAudioFile(file.path, {
           provider: localTranscriptionProvider as "whisper" | "nvidia",
           model: localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel,
+        });
+      } else if (cloudTranscriptionProvider === "deepgram") {
+        res = await window.electronAPI.transcribeAudioFileDeepgram!({
+          filePath: file.path,
+          apiKey: getActiveApiKey(),
+          model: cloudTranscriptionModel,
+          baseUrl: cloudTranscriptionBaseUrl || "",
         });
       } else {
         res = await window.electronAPI.transcribeAudioFileByok!({
@@ -532,6 +546,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setGroqApiKey={setGroqApiKey}
         mistralApiKey={mistralApiKey}
         setMistralApiKey={setMistralApiKey}
+        deepgramApiKey={deepgramApiKey}
+        setDeepgramApiKey={setDeepgramApiKey}
         customTranscriptionApiKey={customTranscriptionApiKey}
         setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
         cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}

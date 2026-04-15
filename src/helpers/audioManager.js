@@ -835,6 +835,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "deepgram") {
+      apiKey = s.deepgramApiKey;
+      if (!isValidApiKey(apiKey, "deepgram")) {
+        apiKey = await window.electronAPI.getDeepgramKey?.();
+      }
+      if (!isValidApiKey(apiKey, "deepgram")) {
+        const err = new Error(
+          "Deepgram API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else {
       // Default to OpenAI
       // Prefer store value (user-entered via UI) over main process (.env)
@@ -1456,6 +1468,60 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw new Error("No text transcribed - Mistral response was empty");
       }
 
+      // Deepgram uses native REST API (raw audio body, not multipart form)
+      if (provider === "deepgram") {
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const params = new URLSearchParams({
+          model: model,
+          smart_format: "true",
+        });
+        if (language && language !== "auto") params.set("language", language);
+        const keyterms = this.getKeyterms();
+        if (keyterms && keyterms.length > 0) {
+          // Nova-3 uses "keyterm", older models use "keywords"
+          const paramName = model.startsWith("nova-3") ? "keyterm" : "keywords";
+          for (const term of keyterms.slice(0, 100)) {
+            params.append(paramName, term);
+          }
+        }
+        const dgBaseUrl = (apiSettings.cloudTranscriptionBaseUrl || "").trim() || "https://api.deepgram.com/v1";
+        const dgEndpoint = `${dgBaseUrl.replace(/\/+$/, "")}/listen?${params}`;
+
+        const dgResponse = await fetch(dgEndpoint, {
+          method: "POST",
+          headers: {
+            Authorization: `Token ${apiKey}`,
+            "Content-Type": optimizedAudio.type || "audio/webm",
+          },
+          body: audioBuffer,
+        });
+
+        if (!dgResponse.ok) {
+          const errorText = await dgResponse.text();
+          const err = new Error(`Deepgram API Error: ${dgResponse.status} ${errorText}`);
+          if (dgResponse.status === 401 || dgResponse.status === 403) err.code = "INVALID_KEY";
+          else if (dgResponse.status === 429) err.code = "LIMIT_REACHED";
+          else if (dgResponse.status >= 500) err.code = "SERVER_ERROR";
+          throw err;
+        }
+
+        const dgData = await dgResponse.json();
+        const dgText = dgData?.results?.channels?.[0]?.alternatives?.[0]?.transcript;
+
+        if (dgText && dgText.trim().length > 0) {
+          timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+          const rawText = dgText;
+          const reasoningStart = performance.now();
+          const text = await this.processTranscription(dgText, "deepgram");
+          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+          const source = (await this.isReasoningAvailable()) ? "deepgram-reasoned" : "deepgram";
+          return { success: true, text, rawText, source, timings };
+        }
+
+        throw new Error("No text transcribed - Deepgram response was empty");
+      }
+
       logger.debug(
         "Making transcription API request",
         {
@@ -1678,6 +1744,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const isGroqModel = trimmedModel.startsWith("whisper-large-v3");
         const isOpenAIModel = trimmedModel.startsWith("gpt-4o") || trimmedModel === "whisper-1";
         const isMistralModel = trimmedModel.startsWith("voxtral-");
+        const isDeepgramModel = trimmedModel.startsWith("nova-");
 
         if (provider === "groq" && isGroqModel) {
           return trimmedModel;
@@ -1688,12 +1755,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (provider === "mistral" && isMistralModel) {
           return trimmedModel;
         }
+        if (provider === "deepgram" && isDeepgramModel) {
+          return trimmedModel;
+        }
         // Model doesn't match provider - fall through to default
       }
 
       // Return provider-appropriate default
       if (provider === "groq") return "whisper-large-v3-turbo";
       if (provider === "mistral") return "voxtral-mini-latest";
+      if (provider === "deepgram") return "nova-3";
       return "gpt-4o-mini-transcribe";
     } catch (error) {
       return "gpt-4o-mini-transcribe";
