@@ -190,6 +190,8 @@ build/
 
 # Generated Globe listener binary
 resources/bin/
+native/meeting-aec-helper/build/
+native/meeting-aec-helper/third_party/
 
 # macOS
 .DS_Store

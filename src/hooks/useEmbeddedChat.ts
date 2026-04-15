@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useChatPersistence } from "../components/chat/useChatPersistence";
 import { useChatStreaming } from "../components/chat/useChatStreaming";
 import type { Message, AgentState } from "../components/chat/types";
@@ -40,6 +40,7 @@ export function useEmbeddedChat({
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [noteConversations, setNoteConversations] = useState<NoteConversationItem[]>([]);
   const noteIdRef = useRef(noteId);
+  const [prevNoteId, setPrevNoteId] = useState(noteId);
 
   const persistence = useChatPersistence({
     conversationId,
@@ -48,21 +49,24 @@ export function useEmbeddedChat({
     },
   });
 
-  const noteContextRef = useRef("");
-  noteContextRef.current = [
-    `Note ID: ${noteId}`,
-    folderId != null ? `Folder ID: ${folderId}` : "",
-    `Title: ${noteTitle}`,
-    `Content:\n${noteContent}`,
-    noteTranscript ? `\nTranscript:\n${noteTranscript}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const noteContext = useMemo(
+    () =>
+      [
+        `Note ID: ${noteId}`,
+        folderId != null ? `Folder ID: ${folderId}` : "",
+        `Title: ${noteTitle}`,
+        `Content:\n${noteContent}`,
+        noteTranscript ? `\nTranscript:\n${noteTranscript}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    [folderId, noteContent, noteId, noteTitle, noteTranscript]
+  );
 
   const streaming = useChatStreaming({
     messages: persistence.messages,
     setMessages: persistence.setMessages,
-    noteContext: noteContextRef.current,
+    noteContext,
     onStreamComplete: (_id, content, toolCalls) => {
       persistence.saveAssistantMessage(content, toolCalls);
     },
@@ -76,15 +80,18 @@ export function useEmbeddedChat({
     return conversations ?? [];
   }, [noteId]);
 
-  // Load conversations when noteId changes
-  useEffect(() => {
-    noteIdRef.current = noteId;
+  if (noteId !== prevNoteId) {
+    setPrevNoteId(noteId);
     if (!noteId) {
       persistence.handleNewChat();
       setConversationId(null);
       setNoteConversations([]);
-      return;
     }
+  }
+
+  useEffect(() => {
+    noteIdRef.current = noteId;
+    if (!noteId) return;
 
     let stale = false;
     (async () => {

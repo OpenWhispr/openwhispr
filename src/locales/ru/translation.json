@@ -174,7 +174,7 @@
       "microphoneRequired": "Требуется доступ к микрофону",
       "openSystemSettings": "Открыть Системные настройки",
       "systemAudioTitle": "Системное аудио",
-      "systemAudioDescription": "Записывает аудио других участников звонков и совещаний. Мы никогда не записываем ваш экран.",
+      "systemAudioDescription": "Транскрибируйте совещания, звонки, лекции, подкасты и другое системное аудио.",
       "optional": "Необязательно",
       "recommended": "Рекомендуется",
       "accessibilityTroubleshooting": "Не обнаружено? Удалите OpenWhispr из раздела Универсальный доступ в Системных настройках, добавьте его снова и включите. Вы можете пропустить это — текст будет копироваться в буфер обмена вместо автоматической вставки."
@@ -251,6 +251,9 @@
       "failedCtaSettings": "Настройте провайдер транскрипции",
       "failedCtaAndRetry": "затем нажмите повторить",
       "failedCtaSettingsOnly": "Настройте провайдер транскрипции в Настройках",
+      "failedCtaSignIn": "Войти снова",
+      "failedLimitReached": "Дневной лимит достигнут",
+      "failedOffline": "Нет подключения",
       "clearAll": "Очистить все",
       "clearAllTitle": "Очистить все транскрипции",
       "clearAllDescription": "Все транскрипции и аудиофайлы будут безвозвратно удалены.",
@@ -1004,7 +1007,7 @@
           "features": [
             "Безлимитные записи встреч",
             "Режим агента",
-            "Чат с вашими данными (скоро)",
+            "Чат с вашими данными",
             "Приоритетная поддержка"
           ],
           "cta": "Начать",
@@ -1091,8 +1094,18 @@
       "description": "Очищайте транскрипции, обрабатывайте команды и исправляйте ошибки, сохраняя вашу манеру речи.",
       "enableTextCleanup": "Включить очистку текста",
       "enableTextCleanupDescription": "ИИ улучшает качество транскрипции",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "Облачные провайдеры",
+        "local": "Локально",
+        "selfHosted": "Свой сервер",
+        "openwhisprDesc": "Надёжные результаты. Без настройки.",
+        "providersDesc": "Используйте свой API-ключ.",
+        "localDesc": "Модели на устройстве. Полная приватность.",
+        "selfHostedDesc": "Свой сервер в вашей сети."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Просто работает. Настройка не требуется.",
+      "openwhisprCloudDescription": "Надёжные результаты. Без настройки.",
       "title": "ИИ-улучшение текста",
       "toasts": {
         "switchedCloud": {
@@ -1102,6 +1115,18 @@
         "switchedCustom": {
           "description": "Настройте собственного провайдера и API-ключ.",
           "title": "Переключено на пользовательскую настройку"
+        },
+        "switchedProviders": {
+          "title": "Облачные провайдеры",
+          "description": "Используются ваши собственные API-ключи."
+        },
+        "switchedLocal": {
+          "title": "На устройстве",
+          "description": "ИИ работает локально на вашем компьютере."
+        },
+        "switchedSelfHosted": {
+          "title": "Свой сервер",
+          "description": "Используется ваш собственный сервер."
         }
       }
     },
@@ -1349,7 +1374,7 @@
       },
       "optional": "Необязательно",
       "systemAudioTitle": "Системное аудио",
-      "systemAudioDescription": "Записывает аудио других участников звонков и совещаний",
+      "systemAudioDescription": "Транскрибируйте совещания, звонки, лекции, подкасты и другое системное аудио.",
       "grantAccess": "Предоставить доступ",
       "test": "Тест",
       "testAndGrant": "Проверить и предоставить",
@@ -1387,8 +1412,18 @@
       "customSetup": "Пользовательская настройка",
       "customSetupDescription": "Используйте собственного провайдера и API-ключ.",
       "description": "Выберите, как OpenWhispr будет транскрибировать вашу речь",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "Облачные провайдеры",
+        "local": "Локально",
+        "selfHosted": "Свой сервер",
+        "openwhisprDesc": "Надёжные результаты. Без настройки.",
+        "providersDesc": "Используйте свой API-ключ.",
+        "localDesc": "Модели на устройстве. Полная приватность.",
+        "selfHostedDesc": "Свой сервер в вашей сети."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Просто работает. Настройка не требуется.",
+      "openwhisprCloudDescription": "Надёжные результаты. Без настройки.",
       "title": "Распознавание речи",
       "toasts": {
         "switchedCloud": {
@@ -1398,11 +1433,29 @@
         "switchedCustom": {
           "description": "Настройте собственного провайдера и API-ключ.",
           "title": "Переключено на пользовательскую настройку"
+        },
+        "switchedProviders": {
+          "title": "Облачные провайдеры",
+          "description": "Используются ваши собственные API-ключи."
+        },
+        "switchedLocal": {
+          "title": "На устройстве",
+          "description": "Транскрипция выполняется локально на вашем компьютере."
+        },
+        "switchedSelfHosted": {
+          "title": "Свой сервер",
+          "description": "Используется ваш собственный сервер."
         }
       },
       "gpuDevice": {
         "title": "GPU транскрипции",
         "description": "GPU для локального распознавания речи"
+      },
+      "diarization": {
+        "title": "Speaker Identification",
+        "description": "Identify individual speakers in meeting recordings",
+        "modelsReady": "Models Ready",
+        "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "Предпросмотр транскрипции",
       "transcriptionPreviewDescription": "Показывать транскрипцию в плавающем окне перед обработкой"
@@ -1412,6 +1465,12 @@
         "title": "Intelligence GPU",
         "description": "GPU для локальной обработки ИИ"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "URL эндпоинта",
+      "serverUrl": "URL сервера",
+      "apiKeyOptional": "API-ключ (необязательно)",
+      "lanHint": "Аудио остаётся в вашей сети — ничего не покидает вашу LAN."
     }
   },
   "models": {
@@ -1486,6 +1545,10 @@
         "gemma_gemma_4_e2b_it_q4_k_m": "Компактная Gemma 4 от Google, быстрая и эффективная",
         "gemma_gemma_3_12b_it_q4_k_m": "Средняя модель Google, сильное рассуждение",
         "gemma_gemma_3_1b_it_q4_k_m": "Сверхбыстрая модель Google, лучшая для очистки коротких диктовок"
+      },
+      "diarization": {
+        "segmentation": "Speech boundary detection for speaker diarization",
+        "embedding_en": "Speaker voice fingerprinting for identification"
       }
     }
   },
@@ -1751,7 +1814,33 @@
     },
     "speaker": {
       "you": "Вы",
-      "them": "Собеседник"
+      "them": "Собеседник",
+      "label": "Участник {{n}}",
+      "identifyingSpeakers": "Определение участников...",
+      "liveAccuracyHint": "Ещё определяем участников. Точность меток улучшится после завершения звонка.",
+      "speakersIdentified": "Участники определены",
+      "typeNamePlaceholder": "Введите имя",
+      "knownSpeakers": "Известные собеседники",
+      "meetingAttendees": "Участники встречи",
+      "assignName": "Назначить имя",
+      "isThisPerson": "Это {{name}}?",
+      "selected": "Выбрано: {{n}}",
+      "assignTo": "Назначить…",
+      "deselectAll": "Снять выделение",
+      "confirmed": "Подтверждено",
+      "nameAssigned": "Имя назначено",
+      "state": {
+        "provisional": "Временный",
+        "confirmed": "Подтверждено",
+        "suggested": "Предложен",
+        "locked": "Закреплён"
+      },
+      "createNewPrefix": "Создать",
+      "emailPlaceholder": "name@example.com",
+      "nameOrEmailPlaceholder": "Введите имя или email",
+      "addContact": "Добавить контакт",
+      "save": "Сохранить",
+      "cancel": "Отмена"
     }
   },
   "dictionary": {
@@ -1907,8 +1996,18 @@
       "systemPrompt": "Системный промпт",
       "systemPromptDescription": "Пользовательские инструкции для агента",
       "systemPromptPlaceholder": "Введите пользовательский системный промпт...",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "Облачные провайдеры",
+        "local": "Локально",
+        "selfHosted": "Свой сервер",
+        "openwhisprDesc": "Надёжные результаты. Без настройки.",
+        "providersDesc": "Свой API-ключ.",
+        "localDesc": "Модели на устройстве. Полная приватность.",
+        "selfHostedDesc": "Ваш сервер в вашей сети."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Использовать облачный ИИ OpenWhispr для разговоров с агентом",
+      "openwhisprCloudDescription": "Надёжные результаты. Без настройки.",
       "customSetup": "Своя настройка (BYOK)",
       "customSetupDescription": "Используйте собственные API-ключи и выберите предпочтительную модель"
     },
@@ -1964,7 +2063,8 @@
     "description": "Подключите сервисы для улучшения рабочего процесса",
     "googleCalendar": {
       "title": "Google Calendar",
-      "description": "Подключите календарь для автоматического обнаружения встреч и записи транскрипций.",
+      "optional": "Необязательно",
+      "description": "Автоматически подставляйте названия встреч и участников из вашего календаря.",
       "connect": "Подключить Google Calendar",
       "connecting": "Подключение...",
       "connected": "Подключено",
@@ -1986,13 +2086,6 @@
       "pro": "Pro",
       "proLimit": "Безлимитно",
       "upgrade": "Улучшить"
-    },
-    "beta": {
-      "title": "Запись встреч в бета-версии",
-      "description": "Мы всё ещё работаем над тем, как лучше интегрировать эту функцию. Будем рады вашим отзывам!",
-      "freeTier": "Бесплатный план: 5 часов / месяц",
-      "proTier": "Pro-план: 20 часов / месяц",
-      "feedback": "Нужно больше 20 часов? Напишите на gabe@openwhispr.com"
     },
     "notABot": {
       "title": "OpenWhispr — это запись встреч, а не бот",
@@ -2110,6 +2203,12 @@
     "conversationSelector": "Сменить беседу"
   },
   "transcriptionPreview": {
-    "label": "Предпросмотр"
+    "label": "Предпросмотр",
+    "listening": "Слушаю...",
+    "polishing": "Полирую...",
+    "ready": "Готово",
+    "copy": "Копировать",
+    "copied": "Скопировано",
+    "waitingForInput": "Скажите что-нибудь..."
   }
 }

@@ -94,7 +94,9 @@ export function useChatStreaming({
       setAgentState("thinking");
 
       const settings = getSettings();
-      const isCloudAgent = settings.isSignedIn && settings.cloudAgentMode === "openwhispr";
+      const agentMode = settings.agentInferenceMode || "openwhispr";
+      const isCloudAgent = agentMode === "openwhispr" && settings.isSignedIn;
+      const isLanAgent = agentMode === "self-hosted" && !!settings.remoteAgentUrl;
       const isLocalProvider = !["openai", "groq", "custom", "anthropic", "gemini"].includes(
         settings.agentProvider
       );
@@ -187,7 +189,7 @@ export function useChatStreaming({
             llmMessages,
             settings.agentModel,
             settings.agentProvider,
-            { systemPrompt },
+            { systemPrompt, lanUrl: isLanAgent ? settings.remoteAgentUrl : undefined },
             aiTools
           );
         }

@@ -4,12 +4,12 @@ import PermissionCard from "./PermissionCard";
 import MicPermissionWarning from "./MicPermissionWarning";
 import PasteToolsInfo from "./PasteToolsInfo";
 import type { UsePermissionsReturn } from "../../hooks/usePermissions";
+import type { SystemAudioAccessResult } from "../../types/electron";
+import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 
 interface PermissionsSectionProps {
   permissions: UsePermissionsReturn;
-  systemAudio: {
-    granted: boolean;
-    mode: "native" | "unsupported";
+  systemAudio: Pick<SystemAudioAccessResult, "granted" | "mode" | "supportsOnboardingGrant"> & {
     request: () => Promise<boolean>;
   };
 }
@@ -18,6 +18,7 @@ export default function PermissionsSection({ permissions, systemAudio }: Permiss
   const { t } = useTranslation();
   const platform = permissions.pasteToolsInfo?.platform;
   const isMacOS = platform === "darwin";
+  const shouldShowSystemAudioPermission = canManageSystemAudioInApp(systemAudio);
 
   return (
     <>
@@ -32,33 +33,32 @@ export default function PermissionsSection({ permissions, systemAudio }: Permiss
         />
 
         {isMacOS && (
-          <>
-            <PermissionCard
-              icon={Shield}
-              title={t("onboarding.permissions.accessibilityTitle")}
-              description={t("onboarding.permissions.accessibilityDescription")}
-              granted={permissions.accessibilityPermissionGranted}
-              onRequest={permissions.requestAccessibilityPermission}
-              buttonText={t("onboarding.permissions.grantAccess")}
-              badge={t("onboarding.permissions.recommended")}
-              hint={
-                permissions.accessibilityTroubleshooting
-                  ? t("onboarding.permissions.accessibilityTroubleshooting")
-                  : undefined
-              }
-            />
-            {systemAudio.mode === "native" && (
-              <PermissionCard
-                icon={Monitor}
-                title={t("onboarding.permissions.systemAudioTitle")}
-                description={t("onboarding.permissions.systemAudioDescription")}
-                granted={systemAudio.granted}
-                onRequest={systemAudio.request}
-                buttonText={t("onboarding.permissions.grantAccess")}
-                badge={t("onboarding.permissions.optional")}
-              />
-            )}
-          </>
+          <PermissionCard
+            icon={Shield}
+            title={t("onboarding.permissions.accessibilityTitle")}
+            description={t("onboarding.permissions.accessibilityDescription")}
+            granted={permissions.accessibilityPermissionGranted}
+            onRequest={permissions.requestAccessibilityPermission}
+            buttonText={t("onboarding.permissions.grantAccess")}
+            badge={t("onboarding.permissions.recommended")}
+            hint={
+              permissions.accessibilityTroubleshooting
+                ? t("onboarding.permissions.accessibilityTroubleshooting")
+                : undefined
+            }
+          />
+        )}
+
+        {shouldShowSystemAudioPermission && (
+          <PermissionCard
+            icon={Monitor}
+            title={t("onboarding.permissions.systemAudioTitle")}
+            description={t("onboarding.permissions.systemAudioDescription")}
+            granted={systemAudio.granted}
+            onRequest={systemAudio.request}
+            buttonText={t("onboarding.permissions.grantAccess")}
+            badge={t("onboarding.permissions.optional")}
+          />
         )}
       </div>
 

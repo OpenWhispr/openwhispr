@@ -16,6 +16,7 @@ import { useDialogs } from "../../hooks/useDialogs";
 import { AlertDialog } from "../ui/dialog";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 import { useSystemAudioPermission } from "../../hooks/useSystemAudioPermission";
+import { canManageSystemAudioInApp } from "../../utils/systemAudioAccess";
 
 interface NotesOnboardingProps {
   onComplete: () => void;
@@ -54,10 +55,14 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const {
     granted: systemAudioGranted,
     mode: systemAudioMode,
+    supportsOnboardingGrant: systemAudioSupportsOnboardingGrant,
     request: requestSystemAudio,
-    isMacOS,
   } = useSystemAudioPermission();
   const [isRequestingSystemAudio, setIsRequestingSystemAudio] = useState(false);
+  const shouldShowSystemAudioPermission = canManageSystemAudioInApp({
+    mode: systemAudioMode,
+    supportsOnboardingGrant: systemAudioSupportsOnboardingGrant,
+  });
 
   const handleGrantSystemAudio = useCallback(async () => {
     setIsRequestingSystemAudio(true);
@@ -185,8 +190,8 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
           </div>
         )}
 
-        {/* System Audio Permission — macOS only */}
-        {isMacOS && systemAudioMode === "native" && (
+        {/* System Audio Permission */}
+        {shouldShowSystemAudioPermission && (
           <div
             className={cn(
               "rounded-lg border transition-colors duration-200",
@@ -211,7 +216,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 </div>
               </div>
               {systemAudioGranted ? (
-                <span className="text-xs text-success/60 font-medium shrink-0">
+                <span className="text-xs font-medium text-success/60 shrink-0">
                   {t("notes.onboarding.systemAudio.enabled")}
                 </span>
               ) : (

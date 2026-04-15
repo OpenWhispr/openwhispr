@@ -7,6 +7,7 @@ import type { CalendarEvent } from "../types/calendar";
 import { formatUpcomingDateGroup } from "../utils/dateFormatting";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettingsStore } from "../stores/settingsStore";
+import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 
 interface UpcomingMeetingsProps {
   events: CalendarEvent[];
@@ -41,6 +42,7 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
   const [hoveredEventId, setHoveredEventId] = useState<string | null>(null);
   const systemAudio = useSystemAudioPermission();
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const needsSystemAudioGrant = !systemAudio.granted && canManageSystemAudioInApp(systemAudio);
 
   const now = useMemo(() => new Date(), []);
 
@@ -104,7 +106,7 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
       {/* Empty state */}
       {!isLoading && events.length === 0 && (
         <div className="flex flex-col items-center justify-center py-8 px-3">
-          {systemAudio.mode === "native" && !systemAudio.granted ? (
+          {needsSystemAudioGrant ? (
             <>
               <Monitor size={24} className="text-muted-foreground/30 mb-2.5" />
               <p className="text-xs text-muted-foreground/60 text-center mb-3">
@@ -116,7 +118,9 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
                 onClick={() => systemAudio.request()}
                 className="text-xs h-7"
               >
-                {t("upcoming.openSettings")}
+                {systemAudio.mode === "native"
+                  ? t("upcoming.openSettings")
+                  : t("onboarding.permissions.grantAccess")}
               </Button>
             </>
           ) : !isSignedIn ? (
@@ -197,7 +201,10 @@ export default function UpcomingMeetings({ events, isLoading }: UpcomingMeetings
                             <Button
                               size="icon"
                               variant="ghost"
-                              onClick={() => openJoinUrl(joinUrl)}
+                              onClick={() => {
+                                openJoinUrl(joinUrl);
+                                window.electronAPI?.joinCalendarMeeting?.(event.id);
+                              }}
                               title={t("upcoming.join")}
                               className="h-6 w-6 rounded-sm text-muted-foreground hover:text-foreground hover:bg-foreground/10"
                             >

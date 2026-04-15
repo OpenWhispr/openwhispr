@@ -174,7 +174,7 @@
       "microphoneRequired": "Accès microphone requis",
       "openSystemSettings": "Ouvrir les Réglages Système",
       "systemAudioTitle": "Audio Système",
-      "systemAudioDescription": "Capture l'audio des autres participants lors d'appels et de réunions. Nous n'enregistrons jamais votre écran.",
+      "systemAudioDescription": "Transcrivez réunions, appels, conférences, podcasts et autres audios système.",
       "optional": "Facultatif",
       "recommended": "Recommandé",
       "accessibilityTroubleshooting": "Non détecté ? Supprimez OpenWhispr de l'Accessibilité dans les Réglages Système, ajoutez-le à nouveau et activez-le. Vous pouvez ignorer cette étape — le texte sera copié dans le presse-papiers au lieu d'être collé automatiquement."
@@ -251,6 +251,9 @@
       "failedCtaSettings": "Configurez votre fournisseur de transcription",
       "failedCtaAndRetry": "puis cliquez sur réessayer",
       "failedCtaSettingsOnly": "Configurez votre fournisseur de transcription dans les Paramètres",
+      "failedCtaSignIn": "Se reconnecter",
+      "failedLimitReached": "Limite quotidienne atteinte",
+      "failedOffline": "Hors ligne",
       "clearAll": "Tout effacer",
       "clearAllTitle": "Effacer toutes les transcriptions",
       "clearAllDescription": "Toutes les transcriptions et fichiers audio seront définitivement supprimés.",
@@ -984,7 +987,7 @@
           "features": [
             "Enregistrements de réunions illimités",
             "Mode agent",
-            "Discutez avec vos données (bientôt disponible)",
+            "Discutez avec vos données",
             "Support prioritaire"
           ],
           "cta": "Commencer",
@@ -1091,8 +1094,18 @@
       "description": "Corrige les transcriptions, gère les commandes et corrige les erreurs tout en préservant votre ton.",
       "enableTextCleanup": "Activer la correction de texte",
       "enableTextCleanupDescription": "L'IA améliore la qualité de transcription",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "Fournisseurs cloud",
+        "local": "Local",
+        "selfHosted": "Auto-hébergé",
+        "openwhisprDesc": "Résultats fiables. Aucune configuration requise.",
+        "providersDesc": "Utilisez votre propre clé API.",
+        "localDesc": "Modèles sur l'appareil. 100 % privé.",
+        "selfHostedDesc": "Votre serveur sur votre réseau."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Fonctionne directement. Aucune configuration requise.",
+      "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",
       "title": "Amélioration du texte par IA",
       "toasts": {
         "switchedCloud": {
@@ -1102,6 +1115,18 @@
         "switchedCustom": {
           "description": "Configurez votre propre fournisseur et clé API.",
           "title": "Basculé vers la configuration personnalisée"
+        },
+        "switchedProviders": {
+          "title": "Fournisseurs cloud",
+          "description": "Utilisation de vos propres clés API."
+        },
+        "switchedLocal": {
+          "title": "Sur l'appareil",
+          "description": "L'IA s'exécute localement sur votre machine."
+        },
+        "switchedSelfHosted": {
+          "title": "Auto-hébergé",
+          "description": "Utilisation de votre propre serveur."
         }
       }
     },
@@ -1349,7 +1374,7 @@
       },
       "optional": "Facultatif",
       "systemAudioTitle": "Audio Système",
-      "systemAudioDescription": "Capture l'audio des autres participants lors d'appels et de réunions",
+      "systemAudioDescription": "Transcrivez réunions, appels, conférences, podcasts et autres audios système.",
       "grantAccess": "Accorder l'accès",
       "test": "Tester",
       "testAndGrant": "Tester et autoriser",
@@ -1387,8 +1412,18 @@
       "customSetup": "Configuration personnalisée",
       "customSetupDescription": "Utilisez votre propre fournisseur et clé API.",
       "description": "Choisissez comment OpenWhispr transcrit votre voix",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "Fournisseurs cloud",
+        "local": "Local",
+        "selfHosted": "Auto-hébergé",
+        "openwhisprDesc": "Résultats fiables. Aucune configuration requise.",
+        "providersDesc": "Utilisez votre propre clé API.",
+        "localDesc": "Modèles sur l'appareil. 100 % privé.",
+        "selfHostedDesc": "Votre serveur sur votre réseau."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Fonctionne directement. Aucune configuration requise.",
+      "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",
       "title": "Reconnaissance vocale",
       "toasts": {
         "switchedCloud": {
@@ -1398,11 +1433,29 @@
         "switchedCustom": {
           "description": "Configurez votre propre fournisseur et clé API.",
           "title": "Basculé vers la configuration personnalisée"
+        },
+        "switchedProviders": {
+          "title": "Fournisseurs cloud",
+          "description": "Utilisation de vos propres clés API."
+        },
+        "switchedLocal": {
+          "title": "Sur l'appareil",
+          "description": "La transcription s'exécute localement sur votre machine."
+        },
+        "switchedSelfHosted": {
+          "title": "Auto-hébergé",
+          "description": "Utilisation de votre propre serveur."
         }
       },
       "gpuDevice": {
         "title": "GPU de transcription",
         "description": "GPU pour la transcription locale"
+      },
+      "diarization": {
+        "title": "Speaker Identification",
+        "description": "Identify individual speakers in meeting recordings",
+        "modelsReady": "Models Ready",
+        "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "Aperçu en direct",
       "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction"
@@ -1412,6 +1465,12 @@
         "title": "Intelligence GPU",
         "description": "GPU utilisé pour le traitement IA local"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "URL du point d'accès",
+      "serverUrl": "URL du serveur",
+      "apiKeyOptional": "Clé API (facultative)",
+      "lanHint": "L'audio reste sur votre réseau — rien ne quitte votre LAN."
     }
   },
   "models": {
@@ -1486,6 +1545,10 @@
         "gemma_gemma_4_e2b_it_q4_k_m": "Gemma 4 compact de Google, rapide et efficace",
         "gemma_gemma_3_12b_it_q4_k_m": "Modèle milieu de gamme de Google, raisonnement solide",
         "gemma_gemma_3_1b_it_q4_k_m": "Modèle Google ultra-rapide, idéal pour le nettoyage de courtes dictées"
+      },
+      "diarization": {
+        "segmentation": "Speech boundary detection for speaker diarization",
+        "embedding_en": "Speaker voice fingerprinting for identification"
       }
     }
   },
@@ -1812,7 +1875,33 @@
     },
     "speaker": {
       "you": "Vous",
-      "them": "Eux"
+      "them": "Eux",
+      "label": "Intervenant {{n}}",
+      "identifyingSpeakers": "Identification des intervenants...",
+      "liveAccuracyHint": "Identification des intervenants en cours. La précision des étiquettes s'améliorera à la fin de l'appel.",
+      "speakersIdentified": "Intervenants identifiés",
+      "typeNamePlaceholder": "Saisir un nom",
+      "knownSpeakers": "Interlocuteurs connus",
+      "meetingAttendees": "Participants à la réunion",
+      "assignName": "Attribuer un nom",
+      "isThisPerson": "Est-ce {{name}} ?",
+      "selected": "{{n}} sélectionné(s)",
+      "assignTo": "Assigner à…",
+      "deselectAll": "Tout désélectionner",
+      "confirmed": "Confirmé",
+      "nameAssigned": "Nom attribué",
+      "state": {
+        "provisional": "Provisoire",
+        "confirmed": "Confirmé",
+        "suggested": "Suggéré",
+        "locked": "Verrouillé"
+      },
+      "createNewPrefix": "Créer",
+      "emailPlaceholder": "nom@exemple.com",
+      "nameOrEmailPlaceholder": "Tapez un nom ou un e-mail",
+      "addContact": "Ajouter un contact",
+      "save": "Enregistrer",
+      "cancel": "Annuler"
     }
   },
   "dictionary": {
@@ -1907,8 +1996,18 @@
       "systemPrompt": "Prompt système",
       "systemPromptDescription": "Instructions personnalisées pour l'agent",
       "systemPromptPlaceholder": "Entrez un prompt système personnalisé...",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "Fournisseurs Cloud",
+        "local": "Local",
+        "selfHosted": "Auto-hébergé",
+        "openwhisprDesc": "Résultats fiables. Aucune configuration requise.",
+        "providersDesc": "Apportez votre propre clé API.",
+        "localDesc": "Modèles sur l'appareil. Entièrement privé.",
+        "selfHostedDesc": "Votre propre serveur sur votre réseau."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Utiliser l'IA cloud d'OpenWhispr pour les conversations agent",
+      "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",
       "customSetup": "Configuration personnalisée (BYOK)",
       "customSetupDescription": "Utiliser vos propres clés API et choisir votre modèle préféré"
     },
@@ -1964,7 +2063,8 @@
     "description": "Connectez des services pour booster votre productivité",
     "googleCalendar": {
       "title": "Google Calendar",
-      "description": "Connectez votre calendrier pour détecter automatiquement les réunions et enregistrer les transcriptions.",
+      "optional": "Facultatif",
+      "description": "Remplissez automatiquement les titres et participants des réunions depuis votre calendrier.",
       "connect": "Connecter Google Calendar",
       "connecting": "Connexion...",
       "connected": "Connecté",
@@ -1986,13 +2086,6 @@
       "pro": "Pro",
       "proLimit": "Illimité",
       "upgrade": "Passer au supérieur"
-    },
-    "beta": {
-      "title": "L'enregistrement de réunions est en bêta",
-      "description": "Nous travaillons encore sur la meilleure façon d'intégrer cette fonctionnalité. Vos retours sont les bienvenus !",
-      "freeTier": "Plan gratuit : 5 heures / mois",
-      "proTier": "Plan Pro : 20 heures / mois",
-      "feedback": "Besoin de plus de 20 heures ? Contactez gabe@openwhispr.com"
     },
     "notABot": {
       "title": "OpenWhispr est un enregistreur de réunions, pas un bot",
@@ -2110,6 +2203,12 @@
     "conversationSelector": "Changer de conversation"
   },
   "transcriptionPreview": {
-    "label": "Aperçu"
+    "label": "Aperçu",
+    "listening": "Écoute...",
+    "polishing": "Finalisation...",
+    "ready": "Prêt",
+    "copy": "Copier",
+    "copied": "Copié",
+    "waitingForInput": "Dites quelque chose..."
   }
 }

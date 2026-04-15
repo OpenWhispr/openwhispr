@@ -39,6 +39,26 @@
       "descriptionKey": "models.descriptions.parakeet.parakeet_tdt_0_6b_v3"
     }
   },
+  "diarizationModels": {
+    "sherpa-onnx-pyannote-segmentation-3-0": {
+      "name": "Pyannote Segmentation 3.0",
+      "description": "Speech boundary detection for speaker diarization",
+      "size": "6.6 MB",
+      "sizeMb": 6.6,
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2",
+      "extractDir": "sherpa-onnx-pyannote-segmentation-3-0",
+      "descriptionKey": "models.descriptions.diarization.segmentation"
+    },
+    "3dspeaker-campplus-en": {
+      "name": "CAM++ Speaker Embedding (English)",
+      "description": "Speaker voice fingerprinting for identification",
+      "size": "28.2 MB",
+      "sizeMb": 28.2,
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+      "fileName": "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx",
+      "descriptionKey": "models.descriptions.diarization.embedding_en"
+    }
+  },
   "whisperModels": {
     "tiny": {
       "name": "Tiny",

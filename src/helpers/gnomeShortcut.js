@@ -213,7 +213,11 @@ class GnomeShortcutManager {
 
     const { path: keybindingPath, name: keybindingName } = getSlotConfig(slotName);
 
-    const SLOT_DBUS_METHOD = { dictation: "Toggle", agent: "ToggleAgent", meeting: "ToggleMeeting" };
+    const SLOT_DBUS_METHOD = {
+      dictation: "Toggle",
+      agent: "ToggleAgent",
+      meeting: "ToggleMeeting",
+    };
     const dbusMethod = SLOT_DBUS_METHOD[slotName] || "Toggle";
     const command = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;
 
@@ -229,10 +233,13 @@ class GnomeShortcutManager {
       });
       const conflict = this.findConflictingBinding(shortcut, existing, keybindingPath);
       if (conflict) {
-        debugLogger.log(`[GnomeShortcut] Shortcut conflict — "${shortcut}" already used by "${conflict}"`, {
-          slot: slotName,
-          conflictPath: conflict,
-        });
+        debugLogger.log(
+          `[GnomeShortcut] Shortcut conflict — "${shortcut}" already used by "${conflict}"`,
+          {
+            slot: slotName,
+            conflictPath: conflict,
+          }
+        );
         return false;
       }
 
@@ -299,7 +306,9 @@ class GnomeShortcutManager {
       const existing = this.getExistingKeybindings();
       const conflict = this.findConflictingBinding(shortcut, existing, keybindingPath);
       if (conflict) {
-        debugLogger.log(`[GnomeShortcut] Shortcut conflict on update — "${shortcut}" already used by "${conflict}"`);
+        debugLogger.log(
+          `[GnomeShortcut] Shortcut conflict on update — "${shortcut}" already used by "${conflict}"`
+        );
         return false;
       }
 
@@ -390,7 +399,9 @@ class GnomeShortcutManager {
           "gsettings",
           ["get", `${KEYBINDING_SCHEMA}:${path}`, "binding"],
           { encoding: "utf-8" }
-        ).trim().replace(/^'|'$/g, "");
+        )
+          .trim()
+          .replace(/^'|'$/g, "");
         if (normalize(binding) === normalizedShortcut) return path;
       } catch {}
     }

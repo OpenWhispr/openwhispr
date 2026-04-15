@@ -52,6 +52,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - 📅 **Google Calendar Integration**: Connect multiple Google accounts, view upcoming meetings in the sidebar, and receive auto-detection prompts
 - 🎙️ **Live Meeting Transcription**: Record and transcribe meetings in real-time via OpenAI Realtime API with automatic meeting detection (Zoom, Teams, FaceTime)
+- 🗣️ **Speaker Diarization**: Live speaker labels during recording, refined into stable speaker clusters on post-processing — plus one-click reassignment and attendee-aware speaker picker
+- 🔗 **Voice Fingerprint Linking**: Attach voice profiles to contacts so a recognized speaker carries their name and color across meetings
+- 🎧 **Meeting Echo Cancellation**: Native WebRTC AEC3 sidecar removes mic echo from captured system audio, with a JS fallback when the helper is unavailable
 - ⚡ **WebSocket Streaming for BYOK**: Real-time OpenAI Realtime API streaming for standard dictation mode, not just meetings — unified streaming path for all transcription
 - ⌨️ **Meeting Hotkey**: Dedicated hotkey to start/stop meeting transcription independently from dictation
 - 🔍 **Smart Detection**: Combines process monitoring, sustained audio detection, and calendar awareness to detect meetings automatically
@@ -394,7 +397,7 @@ npm run build:linux  # Linux
 2. **Grant Permissions**:
    - **Microphone Access**: Required for voice recording
    - **Accessibility Permissions**: Required for automatic text pasting (macOS)
-   - **Screen Recording** (optional, macOS): Required for meeting audio capture — prompted during onboarding if you want meeting features
+   - **Screen Recording / System Audio**: macOS prompts during onboarding for meeting capture. On Linux, system audio is shared through the desktop portal when recording starts
 
 3. **Name Your Agent**: Give your AI assistant a personal name (e.g., "Assistant", "Jarvis", "Alex")
    - Makes interactions feel more natural and conversational
@@ -494,6 +497,7 @@ Automatically detect and transcribe meetings with Google Calendar integration:
 3. **Auto-Detection**: When a meeting starts (Zoom, Teams, FaceTime), a notification appears asking to record
 4. **Live Transcription**: Meeting audio is transcribed in real-time via OpenAI Realtime API
 5. **Review**: Meeting transcriptions are saved as notes for later review and AI enhancement
+6. **Linux system audio**: Uses the standard desktop portal chooser today, with runtime capability detection and fallback handling for future persistent portal support
 
 ### Processing Options
 

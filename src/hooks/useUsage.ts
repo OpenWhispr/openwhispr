@@ -113,7 +113,11 @@ export function useUsage(): UseUsageResult | null {
   const pendingRefetchRef = useRef(false);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
+    if (!isLoaded || !isSignedIn) {
+      lastFetchRef.current = 0;
+      setData(null);
+      return;
+    }
 
     const shouldFetch = Date.now() - lastFetchRef.current > USAGE_CACHE_TTL;
     if (shouldFetch) {

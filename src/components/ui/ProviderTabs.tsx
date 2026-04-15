@@ -1,4 +1,4 @@
-import { ReactNode, useRef, useState, useEffect, useCallback } from "react";
+import { ReactNode, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ProviderIcon } from "./ProviderIcon";
 import type { ColorScheme as BaseColorScheme } from "../../utils/modelPickerStyles";
@@ -31,17 +31,16 @@ export function ProviderTabs({
 }: ProviderTabsProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({
-    opacity: 0,
-  });
+  const indicatorRef = useRef<HTMLDivElement>(null);
 
   const updateIndicator = useCallback(() => {
     const container = containerRef.current;
-    if (!container) return;
+    const indicator = indicatorRef.current;
+    if (!container || !indicator) return;
 
     const selectedIndex = providers.findIndex((p) => p.id === selectedId);
     if (selectedIndex === -1) {
-      setIndicatorStyle({ opacity: 0 });
+      indicator.style.opacity = "0";
       return;
     }
 
@@ -52,15 +51,13 @@ export function ProviderTabs({
     const containerRect = container.getBoundingClientRect();
     const buttonRect = selectedButton.getBoundingClientRect();
 
-    setIndicatorStyle({
-      width: buttonRect.width,
-      height: buttonRect.height,
-      transform: `translateX(${buttonRect.left - containerRect.left}px)`,
-      opacity: 1,
-    });
+    indicator.style.width = `${buttonRect.width}px`;
+    indicator.style.height = `${buttonRect.height}px`;
+    indicator.style.transform = `translateX(${buttonRect.left - containerRect.left}px)`;
+    indicator.style.opacity = "1";
   }, [providers, selectedId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     updateIndicator();
   }, [updateIndicator]);
 
@@ -77,8 +74,9 @@ export function ProviderTabs({
     >
       {/* Sliding indicator - frosted glass treatment */}
       <div
+        ref={indicatorRef}
         className="absolute top-0.5 left-0 rounded-md bg-card border border-border dark:border-border-subtle shadow-sm dark:shadow-(--shadow-card) transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
-        style={indicatorStyle}
+        style={{ opacity: 0 }}
       />
 
       {providers.map((provider) => {

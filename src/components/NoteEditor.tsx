@@ -31,12 +31,14 @@ export default function NoteEditor({ note, cloudEnabled, onDelete, onUpdate }: N
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [prevNoteId, setPrevNoteId] = useState(note.id);
 
-  useEffect(() => {
+  if (note.id !== prevNoteId) {
+    setPrevNoteId(note.id);
     setTitle(note.title);
     setContent(note.content);
     setSaveState("idle");
-  }, [note.id]);
+  }
 
   const autoResize = useCallback(() => {
     const ta = textareaRef.current;

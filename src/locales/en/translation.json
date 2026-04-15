@@ -174,7 +174,7 @@
       "microphoneRequired": "Microphone access required",
       "openSystemSettings": "Open System Settings",
       "systemAudioTitle": "System Audio",
-      "systemAudioDescription": "Captures other participants' audio from calls and meetings. We never record your screen.",
+      "systemAudioDescription": "Transcribe meetings, calls, lectures, podcasts, and other system audio.",
       "optional": "Optional",
       "recommended": "Recommended",
       "accessibilityTroubleshooting": "Not detected? Try removing OpenWhispr from Accessibility in System Settings, then re-add it and toggle it on. You can skip this and continue — text will copy to clipboard instead of auto-pasting."
@@ -263,6 +263,9 @@
       "failedCtaSettings": "Set up your transcription provider",
       "failedCtaAndRetry": "then click retry",
       "failedCtaSettingsOnly": "Set up your transcription provider in Settings",
+      "failedCtaSignIn": "Sign in again",
+      "failedLimitReached": "Daily limit reached",
+      "failedOffline": "You're offline",
       "rawTranscript": "Raw Transcript",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear All Transcriptions",
@@ -1032,7 +1035,7 @@
           "features": [
             "Unlimited meeting recordings",
             "Agent mode",
-            "Chat over your data (Coming Soon)",
+            "Chat over your data",
             "Priority support"
           ],
           "cta": "Get Started",
@@ -1139,8 +1142,18 @@
       "description": "Clean up transcriptions, handle commands, and fix errors while preserving your tone.",
       "enableTextCleanup": "Enable text cleanup",
       "enableTextCleanupDescription": "AI improves transcription quality",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "Cloud Providers",
+        "local": "Local",
+        "selfHosted": "Self-Hosted",
+        "openwhisprDesc": "Reliable accuracy. No setup needed.",
+        "providersDesc": "Bring your own API key.",
+        "localDesc": "On-device models. Fully private.",
+        "selfHostedDesc": "Your own server on your network."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Just works. No configuration needed.",
+      "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
       "title": "AI Text Enhancement",
       "toasts": {
         "switchedCloud": {
@@ -1150,6 +1163,18 @@
         "switchedCustom": {
           "description": "Configure your own provider and API key.",
           "title": "Switched to Custom Setup"
+        },
+        "switchedProviders": {
+          "title": "Cloud Providers",
+          "description": "Using your own API keys."
+        },
+        "switchedLocal": {
+          "title": "On Device",
+          "description": "AI runs locally on your machine."
+        },
+        "switchedSelfHosted": {
+          "title": "Self-Hosted",
+          "description": "Using your own server."
         }
       }
     },
@@ -1397,7 +1422,7 @@
       },
       "optional": "Optional",
       "systemAudioTitle": "System Audio",
-      "systemAudioDescription": "Captures other participants' audio from calls and meetings",
+      "systemAudioDescription": "Transcribe meetings, calls, lectures, podcasts, and other system audio.",
       "grantAccess": "Grant Access",
       "test": "Test",
       "testAndGrant": "Test & Grant",
@@ -1435,8 +1460,18 @@
       "customSetup": "Custom Setup",
       "customSetupDescription": "Use your own provider and API key.",
       "description": "Choose how OpenWhispr transcribes your voice",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "Cloud Providers",
+        "local": "Local",
+        "selfHosted": "Self-Hosted",
+        "openwhisprDesc": "Reliable accuracy. No setup needed.",
+        "providersDesc": "Bring your own API key.",
+        "localDesc": "On-device models. Fully private.",
+        "selfHostedDesc": "Your own server on your network."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Just works. No configuration needed.",
+      "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
       "title": "Speech to Text",
       "toasts": {
         "switchedCloud": {
@@ -1446,11 +1481,29 @@
         "switchedCustom": {
           "description": "Configure your own provider and API key.",
           "title": "Switched to Custom Setup"
+        },
+        "switchedProviders": {
+          "title": "Cloud Providers",
+          "description": "Using your own API keys."
+        },
+        "switchedLocal": {
+          "title": "On Device",
+          "description": "Transcription runs locally on your machine."
+        },
+        "switchedSelfHosted": {
+          "title": "Self-Hosted",
+          "description": "Using your own server."
         }
       },
       "gpuDevice": {
         "title": "Transcription GPU",
         "description": "GPU used for local speech-to-text"
+      },
+      "diarization": {
+        "title": "Speaker Identification",
+        "description": "Identify individual speakers in meeting recordings",
+        "modelsReady": "Models Ready",
+        "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "Live Transcription Preview",
       "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup"
@@ -1460,12 +1513,22 @@
         "title": "Intelligence GPU",
         "description": "GPU used for local AI processing"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "Endpoint URL",
+      "serverUrl": "Server URL",
+      "apiKeyOptional": "API Key (optional)",
+      "lanHint": "Audio stays on your network — nothing leaves your LAN."
     }
   },
   "models": {
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)"
+      },
+      "diarization": {
+        "segmentation": "Speech boundary detection for speaker diarization",
+        "embedding_en": "Speaker voice fingerprinting for identification"
       },
       "whisper": {
         "tiny": "Fastest, lower quality",
@@ -1860,7 +1923,33 @@
     },
     "speaker": {
       "you": "You",
-      "them": "Them"
+      "them": "Them",
+      "label": "Speaker {{n}}",
+      "identifyingSpeakers": "Identifying speakers...",
+      "liveAccuracyHint": "Still identifying speakers. Labeling accuracy will improve once the call ends.",
+      "speakersIdentified": "Speakers identified",
+      "typeNamePlaceholder": "Type a name",
+      "nameOrEmailPlaceholder": "Type a name or email",
+      "knownSpeakers": "Known speakers",
+      "meetingAttendees": "Meeting attendees",
+      "createNewPrefix": "Create",
+      "addContact": "Add contact",
+      "emailPlaceholder": "name@example.com",
+      "save": "Save",
+      "cancel": "Cancel",
+      "assignName": "Assign name",
+      "isThisPerson": "Is this {{name}}?",
+      "selected": "{{n}} selected",
+      "assignTo": "Assign to…",
+      "deselectAll": "Deselect all",
+      "confirmed": "Confirmed",
+      "nameAssigned": "Name assigned",
+      "state": {
+        "provisional": "Provisional",
+        "confirmed": "Confirmed",
+        "suggested": "Suggested",
+        "locked": "Locked"
+      }
     }
   },
   "dictionary": {
@@ -1955,8 +2044,18 @@
       "systemPrompt": "System Prompt",
       "systemPromptDescription": "Custom instructions for the agent",
       "systemPromptPlaceholder": "Enter custom system prompt...",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "Cloud Providers",
+        "local": "Local",
+        "selfHosted": "Self-Hosted",
+        "openwhisprDesc": "Reliable accuracy. No setup needed.",
+        "providersDesc": "Bring your own API key.",
+        "localDesc": "On-device models. Fully private.",
+        "selfHostedDesc": "Your own server on your network."
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "Use OpenWhispr's cloud AI for agent conversations",
+      "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
       "customSetup": "Custom Setup (BYOK)",
       "customSetupDescription": "Use your own API keys and choose your preferred model"
     },
@@ -2012,7 +2111,8 @@
     "description": "Connect services to supercharge your workflow",
     "googleCalendar": {
       "title": "Google Calendar",
-      "description": "Connect your calendar to auto-detect meetings and record transcriptions.",
+      "optional": "Optional",
+      "description": "Auto-fill meeting titles and attendees from your calendar.",
       "connect": "Connect Google Calendar",
       "connecting": "Connecting...",
       "connected": "Connected",
@@ -2034,13 +2134,6 @@
       "pro": "Pro",
       "proLimit": "Unlimited",
       "upgrade": "Upgrade"
-    },
-    "beta": {
-      "title": "Meeting recording is in beta",
-      "description": "We're still working on how best to build this into the product. Feedback is very welcome!",
-      "freeTier": "Free plan: 5 hours / month",
-      "proTier": "Pro plan: 20 hours / month",
-      "feedback": "Need more than 20 hours? Contact gabe@openwhispr.com"
     },
     "notABot": {
       "title": "OpenWhispr is a meeting recorder, not a bot",

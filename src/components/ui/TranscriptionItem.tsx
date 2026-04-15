@@ -3,7 +3,10 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./button";
 import { Tooltip } from "./tooltip";
 import { Copy, Trash2, FileText, FolderOpen, RotateCcw, Loader2, AlertCircle } from "lucide-react";
-import type { TranscriptionItem as TranscriptionItemType } from "../../types/electron";
+import type {
+  TranscriptionItem as TranscriptionItemType,
+  TranscriptionErrorCode,
+} from "../../types/electron";
 import { cn } from "../lib/utils";
 import { getCachedPlatform } from "../../utils/platform";
 
@@ -61,6 +64,15 @@ export default function TranscriptionItem({
   const hasAudio = item.has_audio === 1;
   const showUtilityGroup = hasRawText || hasAudio;
 
+  const errorCode = item.error_code as TranscriptionErrorCode;
+  const isConfigError =
+    errorCode === "API_KEY_MISSING" ||
+    errorCode === "INVALID_KEY" ||
+    errorCode === "MODEL_NOT_AVAILABLE";
+  const isAuthError = errorCode === "AUTH_EXPIRED" || errorCode === "AUTH_REQUIRED";
+  const isLimitError = errorCode === "LIMIT_REACHED";
+  const isOfflineError = errorCode === "OFFLINE";
+
   return (
     <div
       className={cn(
@@ -91,26 +103,48 @@ export default function TranscriptionItem({
                   {item.error_message}
                 </p>
               )}
-              <p className="text-xs text-muted-foreground mt-1">
-                {hasAudio ? (
-                  <>
+              {isConfigError && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {hasAudio ? (
+                    <>
+                      <button
+                        onClick={() => onOpenSettings?.()}
+                        className="text-primary hover:underline cursor-pointer"
+                      >
+                        {t("controlPanel.history.failedCtaSettings")}
+                      </button>{" "}
+                      {t("controlPanel.history.failedCtaAndRetry")}
+                    </>
+                  ) : (
                     <button
                       onClick={() => onOpenSettings?.()}
                       className="text-primary hover:underline cursor-pointer"
                     >
-                      {t("controlPanel.history.failedCtaSettings")}
-                    </button>{" "}
-                    {t("controlPanel.history.failedCtaAndRetry")}
-                  </>
-                ) : (
+                      {t("controlPanel.history.failedCtaSettingsOnly")}
+                    </button>
+                  )}
+                </p>
+              )}
+              {isAuthError && (
+                <p className="text-xs text-muted-foreground mt-1">
                   <button
                     onClick={() => onOpenSettings?.()}
                     className="text-primary hover:underline cursor-pointer"
                   >
-                    {t("controlPanel.history.failedCtaSettingsOnly")}
+                    {t("controlPanel.history.failedCtaSignIn")}
                   </button>
-                )}
-              </p>
+                </p>
+              )}
+              {isLimitError && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t("controlPanel.history.failedLimitReached")}
+                </p>
+              )}
+              {isOfflineError && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {t("controlPanel.history.failedOffline")}
+                </p>
+              )}
             </div>
           </div>
         ) : (

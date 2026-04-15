@@ -74,6 +74,9 @@ export default function CommandSearch({
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchVersionRef = useRef(0);
   const isConversationsMode = mode === "conversations";
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [prevNotes, setPrevNotes] = useState(notes);
+  const [prevQuery, setPrevQuery] = useState(query);
 
   useEffect(() => {
     if (isConversationsMode) return;
@@ -83,10 +86,16 @@ export default function CommandSearch({
       .catch(() => {});
   }, [isConversationsMode]);
 
-  useEffect(() => {
-    if (!open) return;
+  if (open && !prevOpen) {
+    setPrevOpen(open);
     setQuery("");
     setSelectedIndex(0);
+  } else if (open !== prevOpen) {
+    setPrevOpen(open);
+  }
+
+  useEffect(() => {
+    if (!open) return;
     if (isConversationsMode) {
       window.electronAPI?.getAgentConversationsWithPreview?.(20, 0, false).then((r) => {
         if (r)
@@ -167,9 +176,11 @@ export default function CommandSearch({
     };
   }, [query, isConversationsMode]);
 
-  useEffect(() => {
+  if (notes !== prevNotes || query !== prevQuery) {
+    setPrevNotes(notes);
+    setPrevQuery(query);
     setSelectedIndex(0);
-  }, [notes, query]);
+  }
 
   const folderMap = useMemo(() => new Map(folders.map((f) => [f.id, f])), [folders]);
 

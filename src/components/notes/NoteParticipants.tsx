@@ -91,7 +91,7 @@ export default function NoteParticipants({ noteId, participants }: NoteParticipa
         return next;
       });
     });
-  }, [localParticipants]);
+  }, [localParticipants, gravatarHashes]);
 
   useEffect(() => {
     if (!open) return;

@@ -30,12 +30,13 @@ export default function ActionPicker({
 }: ActionPickerProps) {
   const { t } = useTranslation();
   const actions = useActions();
-  const [lastUsedId, setLastUsedId] = useState<number | null>(null);
+  const [lastUsedId, setLastUsedId] = useState<number | null>(() => {
+    const stored = localStorage.getItem("lastUsedActionId");
+    return stored ? Number(stored) : null;
+  });
 
   useEffect(() => {
     initializeActions();
-    const stored = localStorage.getItem("lastUsedActionId");
-    if (stored) setLastUsedId(Number(stored));
   }, []);
 
   const activeAction = actions.find((a) => a.id === lastUsedId) ?? actions[0] ?? null;

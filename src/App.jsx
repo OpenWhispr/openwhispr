@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import "./index.css";
 import { X } from "lucide-react";
-import { useToast } from "./components/ui/Toast";
+import { useToast } from "./components/ui/useToast";
 import { LoadingDots } from "./components/ui/LoadingDots";
 import { useHotkey } from "./hooks/useHotkey";
 import { formatHotkeyLabel } from "./utils/hotkeys";
@@ -108,7 +108,10 @@ export default function App() {
     const unsubscribeFallback = window.electronAPI?.onHotkeyFallbackUsed?.((data) => {
       toast({
         title: t("app.toasts.hotkeyChanged.title"),
-        description: t("app.toasts.hotkeyChanged.description", { original: data.original, fallback: data.fallback }),
+        description: t("app.toasts.hotkeyChanged.description", {
+          original: data.original,
+          fallback: data.fallback,
+        }),
         duration: 8000,
       });
     });
@@ -204,7 +207,10 @@ export default function App() {
   }, []);
 
   const isRecordingRef = useRef(isRecording);
-  isRecordingRef.current = isRecording;
+
+  useLayoutEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onCancelHotkeyPressed?.(() => {

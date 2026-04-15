@@ -6,7 +6,7 @@ import UpgradePrompt from "./UpgradePrompt";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useHotkey } from "../hooks/useHotkey";
-import { useToast } from "./ui/Toast";
+import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
@@ -23,6 +23,7 @@ import ControlPanelSidebar, { type ControlPanelView } from "./ControlPanelSideba
 import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
+import { isAccessibilitySkipped } from "../utils/permissions";
 import { setActiveNoteId, setActiveFolderId, initializeNotes } from "../stores/noteStore";
 import HistoryView from "./HistoryView";
 
@@ -102,7 +103,7 @@ export default function ControlPanel() {
 
   useEffect(() => {
     loadTranscriptions();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -233,7 +234,10 @@ export default function ControlPanel() {
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onNavigateToNote?.((data) => {
-      if (data.folderId) setActiveFolderId(data.folderId);
+      if (data.folderId) {
+        setActiveFolderId(data.folderId);
+        initializeNotes(null, 50, data.folderId);
+      }
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
     });
@@ -250,6 +254,9 @@ export default function ControlPanel() {
   // When accessibility is missing on macOS, open the permissions settings page
   useEffect(() => {
     const cleanup = window.electronAPI?.onAccessibilityMissing?.(() => {
+      if (isAccessibilitySkipped()) {
+        return;
+      }
       setSettingsSection("privacyData");
       setShowSettings(true);
       toast({
@@ -399,6 +406,9 @@ export default function ControlPanel() {
           cloudTranscriptionBaseUrl: s.cloudTranscriptionBaseUrl,
           parakeetModel: s.parakeetModel,
           whisperModel: s.whisperModel,
+          transcriptionMode: s.transcriptionMode,
+          remoteTranscriptionType: s.remoteTranscriptionType,
+          remoteTranscriptionUrl: s.remoteTranscriptionUrl,
         });
         if (result.success && result.transcription) {
           const rawText = result.transcription.text;

@@ -20,7 +20,7 @@ const GNOME_NATIVE_SLOTS = new Set(["agent", "meeting"]);
 
 // KDE registration failure reasons — reuse existing i18n keys
 const KDE_FAILURE_REASONS = {
-  "conflict": (hotkey) => i18nMain.t("hotkey.errors.alreadyRegistered", { hotkey }),
+  conflict: (hotkey) => i18nMain.t("hotkey.errors.alreadyRegistered", { hotkey }),
   "modifier-only": (hotkey) => i18nMain.t("hotkey.errors.osReserved", { hotkey }),
 };
 
@@ -171,7 +171,10 @@ class HotkeyManager {
         debugLogger.log(
           `[HotkeyManager] Could not convert hotkey "${hotkey}" to GNOME format for slot "${slotName}"`
         );
-        return { success: false, error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }) };
+        return {
+          success: false,
+          error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+        };
       }
 
       if (slotName === "agent") {
@@ -213,7 +216,9 @@ class HotkeyManager {
 
       const result = await this.kdeManager.registerKeybinding(hotkey, slotName, callback);
       if (result !== true) {
-        const reason = KDE_FAILURE_REASONS[result]?.(hotkey) || i18nMain.t("hotkey.errors.registrationFailed", { hotkey });
+        const reason =
+          KDE_FAILURE_REASONS[result]?.(hotkey) ||
+          i18nMain.t("hotkey.errors.registrationFailed", { hotkey });
         debugLogger.log(
           `[HotkeyManager] KDE keybinding registration failed for slot "${slotName}" ("${hotkey}")`,
           { reason: result }
@@ -495,10 +500,7 @@ class HotkeyManager {
   }
 
   async initializeKDEShortcuts(callback) {
-    if (
-      process.platform !== "linux" ||
-      !KDEShortcutManager.isKDE()
-    ) {
+    if (process.platform !== "linux" || !KDEShortcutManager.isKDE()) {
       return false;
     }
 
@@ -613,11 +615,14 @@ class HotkeyManager {
         this.isInitialized = true;
         return;
       }
-
     }
 
     // Try Hyprland native shortcuts (Wayland only, non-GNOME)
-    if (process.platform === "linux" && HyprlandShortcutManager.isWayland() && HyprlandShortcutManager.isHyprland()) {
+    if (
+      process.platform === "linux" &&
+      HyprlandShortcutManager.isWayland() &&
+      HyprlandShortcutManager.isHyprland()
+    ) {
       const hyprlandOk = await this.initializeHyprlandShortcuts(callback);
 
       if (hyprlandOk) {
@@ -673,11 +678,15 @@ class HotkeyManager {
               debugLogger.log(`[HotkeyManager] KDE hotkey "${hotkey}" registered successfully`);
             } else if (result === "conflict" || result === "modifier-only") {
               const ok = await this.tryNativeFallbacks(hotkey, "KDE", (fb) =>
-                this.kdeManager.registerKeybinding(fb, "dictation", callback).then((r) => r === true)
+                this.kdeManager
+                  .registerKeybinding(fb, "dictation", callback)
+                  .then((r) => r === true)
               );
               if (!ok) {
                 this.currentHotkey = hotkey;
-                this.notifyHotkeyFailure(hotkey, { error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }) });
+                this.notifyHotkeyFailure(hotkey, {
+                  error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+                });
               }
             } else {
               debugLogger.log(
@@ -860,7 +869,10 @@ class HotkeyManager {
         );
         if (lsKey && lsKey.trim() !== "") return lsKey;
       } catch (err) {
-        debugLogger.log("[HotkeyManager] Failed to read dictationKey from localStorage:", err.message);
+        debugLogger.log(
+          "[HotkeyManager] Failed to read dictationKey from localStorage:",
+          err.message
+        );
       }
     }
 
@@ -912,7 +924,9 @@ class HotkeyManager {
       const success = await registerFn(fallback);
       if (success) {
         this.currentHotkey = fallback;
-        debugLogger.log(`[HotkeyManager] ${backend} fallback hotkey "${fallback}" registered successfully`);
+        debugLogger.log(
+          `[HotkeyManager] ${backend} fallback hotkey "${fallback}" registered successfully`
+        );
         // Persist to .env only, not localStorage (preserves user's preferred key for retry on next launch).
         await this._persistHotkeyToEnvFile(fallback);
         this.notifyActiveHotkey(fallback);
@@ -1014,12 +1028,18 @@ class HotkeyManager {
         const result = await this.kdeManager.registerKeybinding(hotkey, "dictation", callback);
         if (result !== true) {
           if (previousHotkey) {
-            const restored = await this.kdeManager.registerKeybinding(previousHotkey, "dictation", callback);
+            const restored = await this.kdeManager.registerKeybinding(
+              previousHotkey,
+              "dictation",
+              callback
+            );
             if (restored === true) {
               debugLogger.log(`[HotkeyManager] Restored previous KDE hotkey "${previousHotkey}"`);
             }
           }
-          const reason = KDE_FAILURE_REASONS[result]?.(hotkey) || i18nMain.t("hotkey.errors.registrationFailed", { hotkey });
+          const reason =
+            KDE_FAILURE_REASONS[result]?.(hotkey) ||
+            i18nMain.t("hotkey.errors.registrationFailed", { hotkey });
           return { success: false, message: reason };
         }
         this.currentHotkey = hotkey;

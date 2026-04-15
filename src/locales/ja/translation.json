@@ -174,7 +174,7 @@
       "microphoneRequired": "マイクへのアクセスが必要です",
       "openSystemSettings": "システム設定を開く",
       "systemAudioTitle": "システムオーディオ",
-      "systemAudioDescription": "通話や会議で他の参加者の音声を録音します。画面を録画することはありません。",
+      "systemAudioDescription": "会議、通話、講義、ポッドキャストなど、システム音声を文字起こしします。",
       "optional": "任意",
       "recommended": "推奨",
       "accessibilityTroubleshooting": "検出されませんか？システム設定のアクセシビリティからOpenWhisprを削除し、再度追加してオンに切り替えてください。スキップして続行することもできます — テキストは自動貼り付けではなくクリップボードにコピーされます。"
@@ -251,6 +251,9 @@
       "failedCtaSettings": "文字起こしプロバイダーを設定してください",
       "failedCtaAndRetry": "その後、再試行をクリックしてください",
       "failedCtaSettingsOnly": "設定で文字起こしプロバイダーを設定してください",
+      "failedCtaSignIn": "もう一度サインインしてください",
+      "failedLimitReached": "1日の上限に達しました",
+      "failedOffline": "オフラインです",
       "clearAll": "すべて削除",
       "clearAllTitle": "すべての文字起こしを削除",
       "clearAllDescription": "すべての文字起こしと音声ファイルが完全に削除されます。",
@@ -984,7 +987,7 @@
           "features": [
             "無制限の会議録音",
             "エージェントモード",
-            "データとチャット（近日公開）",
+            "データとチャット",
             "優先サポート"
           ],
           "cta": "始める",
@@ -1091,8 +1094,18 @@
       "description": "文字起こしのクリーンアップ、コマンド処理、エラー修正を行いながら、あなたの話し方を維持します。",
       "enableTextCleanup": "テキスト補正を有効にする",
       "enableTextCleanupDescription": "AI が文字起こしの品質を向上",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "クラウドプロバイダー",
+        "local": "ローカル",
+        "selfHosted": "セルフホスト",
+        "openwhisprDesc": "信頼できる精度。設定不要。",
+        "providersDesc": "自分のAPIキーを使用。",
+        "localDesc": "端末上のモデル。完全プライベート。",
+        "selfHostedDesc": "自前サーバーをネットワーク上に。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "設定不要ですぐに使えます。",
+      "openwhisprCloudDescription": "信頼できる精度。設定不要。",
       "title": "AI テキスト補正",
       "toasts": {
         "switchedCloud": {
@@ -1102,6 +1115,18 @@
         "switchedCustom": {
           "description": "独自のプロバイダーと API キーを設定してください。",
           "title": "カスタム設定に切り替えました"
+        },
+        "switchedProviders": {
+          "title": "クラウドプロバイダー",
+          "description": "独自の API キーを使用します。"
+        },
+        "switchedLocal": {
+          "title": "デバイス上",
+          "description": "AI はお使いのマシン上でローカルに実行されます。"
+        },
+        "switchedSelfHosted": {
+          "title": "セルフホスト",
+          "description": "独自のサーバーを使用します。"
         }
       }
     },
@@ -1349,7 +1374,7 @@
       },
       "optional": "任意",
       "systemAudioTitle": "システムオーディオ",
-      "systemAudioDescription": "通話や会議で他の参加者の音声を録音します",
+      "systemAudioDescription": "会議、通話、講義、ポッドキャストなど、システム音声を文字起こしします。",
       "grantAccess": "アクセスを許可",
       "test": "テスト",
       "testAndGrant": "テストして許可",
@@ -1387,8 +1412,18 @@
       "customSetup": "カスタム設定",
       "customSetupDescription": "独自のプロバイダーと API キーを使用。",
       "description": "OpenWhispr の音声文字起こし方法を選択",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "クラウドプロバイダー",
+        "local": "ローカル",
+        "selfHosted": "セルフホスト",
+        "openwhisprDesc": "信頼できる精度。設定不要。",
+        "providersDesc": "自分のAPIキーを使用。",
+        "localDesc": "端末上のモデル。完全プライベート。",
+        "selfHostedDesc": "自前サーバーをネットワーク上に。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "設定不要ですぐに使えます。",
+      "openwhisprCloudDescription": "信頼できる精度。設定不要。",
       "title": "音声テキスト変換",
       "toasts": {
         "switchedCloud": {
@@ -1398,11 +1433,29 @@
         "switchedCustom": {
           "description": "独自のプロバイダーと API キーを設定してください。",
           "title": "カスタム設定に切り替えました"
+        },
+        "switchedProviders": {
+          "title": "クラウドプロバイダー",
+          "description": "独自の API キーを使用します。"
+        },
+        "switchedLocal": {
+          "title": "デバイス上",
+          "description": "文字起こしはお使いのマシン上でローカルに実行されます。"
+        },
+        "switchedSelfHosted": {
+          "title": "セルフホスト",
+          "description": "独自のサーバーを使用します。"
         }
       },
       "gpuDevice": {
         "title": "文字起こしGPU",
         "description": "ローカル音声認識に使用するGPU"
+      },
+      "diarization": {
+        "title": "Speaker Identification",
+        "description": "Identify individual speakers in meeting recordings",
+        "modelsReady": "Models Ready",
+        "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "リアルタイム文字起こしプレビュー",
       "transcriptionPreviewDescription": "補正前にフローティングウィンドウで文字起こしを表示"
@@ -1412,6 +1465,12 @@
         "title": "Intelligence GPU",
         "description": "ローカルAI処理に使用するGPU"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "エンドポイント URL",
+      "serverUrl": "サーバー URL",
+      "apiKeyOptional": "API キー（任意）",
+      "lanHint": "音声はネットワーク内に留まります — LAN の外には出ません。"
     }
   },
   "models": {
@@ -1486,6 +1545,10 @@
         "gemma_gemma_4_e2b_it_q4_k_m": "Google のコンパクトな Gemma 4、高速で効率的",
         "gemma_gemma_3_12b_it_q4_k_m": "Google の中型モデル、強力な推論",
         "gemma_gemma_3_1b_it_q4_k_m": "超高速 Google モデル、短い口述のクリーンアップに最適"
+      },
+      "diarization": {
+        "segmentation": "Speech boundary detection for speaker diarization",
+        "embedding_en": "Speaker voice fingerprinting for identification"
       }
     }
   },
@@ -1679,7 +1742,33 @@
     },
     "speaker": {
       "you": "あなた",
-      "them": "相手"
+      "them": "相手",
+      "label": "話者 {{n}}",
+      "identifyingSpeakers": "話者を識別中...",
+      "liveAccuracyHint": "話者を識別中です。通話終了後にラベルの精度が向上します。",
+      "speakersIdentified": "話者を識別しました",
+      "typeNamePlaceholder": "名前を入力",
+      "knownSpeakers": "登録済みの話者",
+      "meetingAttendees": "会議の参加者",
+      "assignName": "名前を割り当て",
+      "isThisPerson": "{{name}}さんですか？",
+      "selected": "{{n}}件選択中",
+      "assignTo": "割り当て…",
+      "deselectAll": "すべて選択解除",
+      "confirmed": "確認済み",
+      "nameAssigned": "名前を割り当てました",
+      "state": {
+        "provisional": "仮",
+        "confirmed": "確認済み",
+        "suggested": "候補",
+        "locked": "固定"
+      },
+      "createNewPrefix": "作成",
+      "emailPlaceholder": "name@example.com",
+      "nameOrEmailPlaceholder": "名前またはメールを入力",
+      "addContact": "連絡先を追加",
+      "save": "保存",
+      "cancel": "キャンセル"
     }
   },
   "dictionary": {
@@ -1907,8 +1996,18 @@
       "systemPrompt": "システムプロンプト",
       "systemPromptDescription": "エージェントへのカスタム指示",
       "systemPromptPlaceholder": "カスタムシステムプロンプトを入力...",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "クラウドプロバイダー",
+        "local": "ローカル",
+        "selfHosted": "セルフホスト",
+        "openwhisprDesc": "信頼できる精度。設定不要。",
+        "providersDesc": "独自のAPIキーを使用。",
+        "localDesc": "デバイス上のモデル。完全プライベート。",
+        "selfHostedDesc": "ネットワーク上の自分のサーバー。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "OpenWhisprのクラウドAIをエージェント会話に使用する",
+      "openwhisprCloudDescription": "信頼できる精度。設定不要。",
       "customSetup": "カスタム設定 (BYOK)",
       "customSetupDescription": "自分のAPIキーを使用してお好みのモデルを選択する"
     },
@@ -1964,7 +2063,8 @@
     "description": "サービスを接続してワークフローを強化",
     "googleCalendar": {
       "title": "Google カレンダー",
-      "description": "カレンダーを接続して、会議を自動検出し文字起こしを録音します。",
+      "optional": "任意",
+      "description": "カレンダーから会議名と参加者を自動で入力します。",
       "connect": "Google カレンダーを接続",
       "connecting": "接続中...",
       "connected": "接続済み",
@@ -1986,13 +2086,6 @@
       "pro": "Pro",
       "proLimit": "無制限",
       "upgrade": "アップグレード"
-    },
-    "beta": {
-      "title": "会議録音はベータ版です",
-      "description": "この機能を製品にどう組み込むか、まだ検討中です。フィードバックをお待ちしています！",
-      "freeTier": "無料プラン：月5時間",
-      "proTier": "Proプラン：月20時間",
-      "feedback": "20時間以上必要ですか？ gabe@openwhispr.com までご連絡ください"
     },
     "notABot": {
       "title": "OpenWhispr はミーティング録音ツールであり、ボットではありません",
@@ -2110,6 +2203,12 @@
     "conversationSelector": "会話を切り替え"
   },
   "transcriptionPreview": {
-    "label": "プレビュー"
+    "label": "プレビュー",
+    "listening": "聞き取り中...",
+    "polishing": "整えています...",
+    "ready": "準備完了",
+    "copy": "コピー",
+    "copied": "コピー済み",
+    "waitingForInput": "何か話してください..."
   }
 }

@@ -99,6 +99,16 @@
 
 OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → renderer `navigator.clipboard` → X11 fallback.
 
+### Linux System Audio Portal Issues
+
+**Symptoms:** The Linux share dialog keeps appearing, system audio does not stay granted, or onboarding does not show a system-audio grant step.
+
+**Fix:**
+1. Update `xdg-desktop-portal` and the matching desktop backend for your session (`xdg-desktop-portal-gnome`, `xdg-desktop-portal-kde`, `xdg-desktop-portal-wlr`, etc.)
+2. Sign out and back in after updating portal packages
+3. Re-run system audio capture and complete the chooser again
+4. Expect the chooser to appear on Linux while OpenWhispr is using the standard browser portal path; some desktops may support more persistent portal behavior later, but fallback capture should still work
+
 ### Meeting Transcription Issues
 
 **Symptoms:** Meeting detection not working, no transcription, audio not captured

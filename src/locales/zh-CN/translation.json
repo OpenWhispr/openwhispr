@@ -174,7 +174,7 @@
       "microphoneRequired": "需要麦克风访问权限",
       "openSystemSettings": "打开系统设置",
       "systemAudioTitle": "系统音频",
-      "systemAudioDescription": "录制通话和会议中其他参与者的音频。我们绝不会录制您的屏幕。",
+      "systemAudioDescription": "转录会议、通话、讲座、播客和其他系统音频。",
       "optional": "可选",
       "recommended": "推荐",
       "accessibilityTroubleshooting": "未检测到？请在系统设置的辅助功能中移除 OpenWhispr，然后重新添加并开启。您可以跳过此步继续 — 文本将复制到剪贴板而非自动粘贴。"
@@ -251,6 +251,9 @@
       "failedCtaSettings": "设置您的转录服务商",
       "failedCtaAndRetry": "然后点击重试",
       "failedCtaSettingsOnly": "在设置中配置您的转录服务商",
+      "failedCtaSignIn": "重新登录",
+      "failedLimitReached": "已达每日限额",
+      "failedOffline": "离线",
       "clearAll": "全部清除",
       "clearAllTitle": "清除所有转录",
       "clearAllDescription": "所有转录和音频文件将被永久删除。",
@@ -1001,7 +1004,7 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": ["无限会议录制", "代理模式", "与您的数据对话（即将推出）", "优先支持"],
+          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1086,8 +1089,18 @@
       "description": "整理转录文本、处理指令、修正错误，同时保留你的语气风格。",
       "enableTextCleanup": "启用文本整理",
       "enableTextCleanupDescription": "AI 提升转录质量",
-      "openwhisprCloud": "OpenWhispr 云端",
-      "openwhisprCloudDescription": "开箱即用，无需配置。",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "云服务商",
+        "local": "本地",
+        "selfHosted": "自托管",
+        "openwhisprDesc": "准确可靠，无需设置。",
+        "providersDesc": "使用你自己的 API Key。",
+        "localDesc": "设备端模型，完全私密。",
+        "selfHostedDesc": "你的服务器，在你的网络上。"
+      },
+      "openwhisprCloud": "OpenWhispr Cloud",
+      "openwhisprCloudDescription": "准确可靠，无需设置。",
       "title": "AI 文本增强",
       "toasts": {
         "switchedCloud": {
@@ -1097,6 +1110,18 @@
         "switchedCustom": {
           "description": "请配置你的服务商和 API Key。",
           "title": "已切换到自定义设置"
+        },
+        "switchedProviders": {
+          "title": "云服务商",
+          "description": "使用你自己的 API Key。"
+        },
+        "switchedLocal": {
+          "title": "本地运行",
+          "description": "AI 在你的设备上本地运行。"
+        },
+        "switchedSelfHosted": {
+          "title": "自托管",
+          "description": "使用你自己的服务器。"
         }
       }
     },
@@ -1344,7 +1369,7 @@
       },
       "optional": "可选",
       "systemAudioTitle": "系统音频",
-      "systemAudioDescription": "录制通话和会议中其他参与者的音频",
+      "systemAudioDescription": "转录会议、通话、讲座、播客和其他系统音频。",
       "grantAccess": "授予访问权限",
       "test": "测试",
       "testAndGrant": "测试并授权",
@@ -1382,8 +1407,18 @@
       "customSetup": "自定义设置",
       "customSetupDescription": "使用你自己的服务商和 API Key。",
       "description": "选择 OpenWhispr 转录语音的方式",
-      "openwhisprCloud": "OpenWhispr 云端",
-      "openwhisprCloudDescription": "开箱即用，无需配置。",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "云服务商",
+        "local": "本地",
+        "selfHosted": "自托管",
+        "openwhisprDesc": "准确可靠，无需设置。",
+        "providersDesc": "使用你自己的 API Key。",
+        "localDesc": "设备端模型，完全私密。",
+        "selfHostedDesc": "你的服务器，在你的网络上。"
+      },
+      "openwhisprCloud": "OpenWhispr Cloud",
+      "openwhisprCloudDescription": "准确可靠，无需设置。",
       "title": "语音转文字",
       "toasts": {
         "switchedCloud": {
@@ -1393,11 +1428,29 @@
         "switchedCustom": {
           "description": "请配置你的服务商和 API Key。",
           "title": "已切换到自定义设置"
+        },
+        "switchedProviders": {
+          "title": "云服务商",
+          "description": "使用你自己的 API Key。"
+        },
+        "switchedLocal": {
+          "title": "本地运行",
+          "description": "转录在你的设备上本地运行。"
+        },
+        "switchedSelfHosted": {
+          "title": "自托管",
+          "description": "使用你自己的服务器。"
         }
       },
       "gpuDevice": {
         "title": "转录 GPU",
         "description": "用于本地语音识别的 GPU"
+      },
+      "diarization": {
+        "title": "Speaker Identification",
+        "description": "Identify individual speakers in meeting recordings",
+        "modelsReady": "Models Ready",
+        "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "实时转录预览",
       "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行优化"
@@ -1407,6 +1460,12 @@
         "title": "Intelligence GPU",
         "description": "用于本地 AI 处理的 GPU"
       }
+    },
+    "selfHosted": {
+      "endpointUrl": "端点 URL",
+      "serverUrl": "服务器 URL",
+      "apiKeyOptional": "API Key（可选）",
+      "lanHint": "音频留在你的网络中 — 不会离开你的 LAN。"
     }
   },
   "models": {
@@ -1481,6 +1540,10 @@
         "gemma_gemma_4_e2b_it_q4_k_m": "Google 紧凑型 Gemma 4，快速高效",
         "gemma_gemma_3_12b_it_q4_k_m": "Google 中型模型，强推理能力",
         "gemma_gemma_3_1b_it_q4_k_m": "超快谷歌模型，最适合短听写清理"
+      },
+      "diarization": {
+        "segmentation": "Speech boundary detection for speaker diarization",
+        "embedding_en": "Speaker voice fingerprinting for identification"
       }
     }
   },
@@ -1746,7 +1809,33 @@
     },
     "speaker": {
       "you": "你",
-      "them": "对方"
+      "them": "对方",
+      "label": "发言者 {{n}}",
+      "identifyingSpeakers": "正在识别发言者...",
+      "liveAccuracyHint": "正在识别发言者。通话结束后，标签准确性会提升。",
+      "speakersIdentified": "已识别发言者",
+      "typeNamePlaceholder": "输入姓名",
+      "knownSpeakers": "已知说话者",
+      "meetingAttendees": "会议参与者",
+      "assignName": "分配姓名",
+      "isThisPerson": "这是{{name}}吗？",
+      "selected": "已选 {{n}} 个",
+      "assignTo": "分配给…",
+      "deselectAll": "取消全选",
+      "confirmed": "已确认",
+      "nameAssigned": "姓名已分配",
+      "state": {
+        "provisional": "临时",
+        "confirmed": "已确认",
+        "suggested": "建议",
+        "locked": "锁定"
+      },
+      "createNewPrefix": "创建",
+      "emailPlaceholder": "name@example.com",
+      "nameOrEmailPlaceholder": "输入姓名或邮箱",
+      "addContact": "添加联系人",
+      "save": "保存",
+      "cancel": "取消"
     }
   },
   "dictionary": {
@@ -1902,8 +1991,18 @@
       "systemPrompt": "系统提示词",
       "systemPromptDescription": "助手的自定义指令",
       "systemPromptPlaceholder": "输入自定义系统提示词...",
+      "modes": {
+        "openwhispr": "OpenWhispr Cloud",
+        "providers": "云服务商",
+        "local": "本地",
+        "selfHosted": "自托管",
+        "openwhisprDesc": "准确可靠，无需设置。",
+        "providersDesc": "使用自己的 API 密钥。",
+        "localDesc": "设备端模型，完全私密。",
+        "selfHostedDesc": "你自己网络上的服务器。"
+      },
       "openwhisprCloud": "OpenWhispr Cloud",
-      "openwhisprCloudDescription": "使用 OpenWhispr 的云端 AI 进行助手对话",
+      "openwhisprCloudDescription": "准确可靠，无需设置。",
       "customSetup": "自定义配置 (BYOK)",
       "customSetupDescription": "使用自己的 API 密钥并选择偏好的模型"
     },
@@ -1959,7 +2058,8 @@
     "description": "连接服务以增强您的工作流程",
     "googleCalendar": {
       "title": "Google 日历",
-      "description": "连接日历以自动检测会议并录制转录。",
+      "optional": "可选",
+      "description": "从日历自动填充会议名称和参与者。",
       "connect": "连接 Google 日历",
       "connecting": "连接中...",
       "connected": "已连接",
@@ -1981,13 +2081,6 @@
       "pro": "Pro",
       "proLimit": "无限",
       "upgrade": "升级"
-    },
-    "beta": {
-      "title": "会议录制功能正在测试中",
-      "description": "我们仍在探索将此功能更好地融入产品的方式，非常欢迎您的反馈！",
-      "freeTier": "免费计划：每月 5 小时",
-      "proTier": "Pro 计划：每月 20 小时",
-      "feedback": "需要超过 20 小时？请联系 gabe@openwhispr.com"
     },
     "notABot": {
       "title": "OpenWhispr 是会议录制工具，不是机器人",
@@ -2105,6 +2198,12 @@
     "conversationSelector": "切换对话"
   },
   "transcriptionPreview": {
-    "label": "预览"
+    "label": "预览",
+    "listening": "正在聆听...",
+    "polishing": "正在润色...",
+    "ready": "就绪",
+    "copy": "复制",
+    "copied": "已复制",
+    "waitingForInput": "说点什么..."
   }
 }

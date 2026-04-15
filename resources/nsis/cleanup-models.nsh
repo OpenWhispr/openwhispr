@@ -1,3 +1,7 @@
+!macro customHeader
+  ManifestDPIAware true
+!macroend
+
 !macro customUnInstall
   ${ifNot} ${isUpdated}
     StrCpy $0 "$PROFILE\.cache\openwhispr\models"

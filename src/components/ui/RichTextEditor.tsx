@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, type RefObject } from "react";
+import { useEffect, useRef, useCallback, type MutableRefObject } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
@@ -13,7 +13,7 @@ interface RichTextEditorProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
-  editorRef?: RefObject<Editor | null>;
+  editorRef?: MutableRefObject<Editor | null>;
 }
 
 export function RichTextEditor({
@@ -62,15 +62,10 @@ export function RichTextEditor({
     },
   });
 
-  // Expose editor to parent via ref
   useEffect(() => {
-    if (editorRef && "current" in editorRef) {
-      (editorRef as React.MutableRefObject<Editor | null>).current = editor;
-    }
+    if (editorRef) editorRef.current = editor;
     return () => {
-      if (editorRef && "current" in editorRef) {
-        (editorRef as React.MutableRefObject<Editor | null>).current = null;
-      }
+      if (editorRef) editorRef.current = null;
     };
   }, [editor, editorRef]);
 

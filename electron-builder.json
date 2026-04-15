@@ -98,6 +98,7 @@
     "resources/bin/macos-text-monitor",
     "resources/bin/macos-media-remote",
     "resources/bin/linux-fast-paste",
+    "resources/bin/linux-system-audio-helper",
     "resources/bin/linux-text-monitor",
     {
       "from": "resources/bin/",
@@ -109,11 +110,13 @@
         "sherpa-onnx-*",
         "qdrant-*",
         "linux-key-listener*",
+        "meeting-aec-helper-*",
         "windows-key-listener*",
         "windows-mic-listener*",
         "windows-text-monitor*",
         "windows-fast-paste*",
         "all-MiniLM-L6-v2/**/*",
+        "diarization-models/**/*",
         "*.dylib",
         "*.dll",
         "*.so*"

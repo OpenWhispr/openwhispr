@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { FolderOpen, Copy, Check } from "lucide-react";
-import { useToast } from "./ui/Toast";
+import { useToast } from "./ui/useToast";
 import { Toggle } from "./ui/toggle";
-import { useSettingsLayout } from "./ui/SidebarModal";
+import { useSettingsLayout } from "./ui/useSettingsLayout";
 import logger from "../utils/logger";
 
 export default function DeveloperSection() {
@@ -17,11 +17,7 @@ export default function DeveloperSection() {
   const [copiedPath, setCopiedPath] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadDebugState();
-  }, []);
-
-  const loadDebugState = async () => {
+  const loadDebugState = useCallback(async () => {
     try {
       setIsLoading(true);
       const state = await window.electronAPI.getDebugState();
@@ -37,7 +33,11 @@ export default function DeveloperSection() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [t, toast]);
+
+  useEffect(() => {
+    loadDebugState();
+  }, [loadDebugState]);
 
   const handleToggleDebug = async () => {
     if (isToggling) return;

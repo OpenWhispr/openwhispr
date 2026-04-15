@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.8] - 2026-04-14
+
+### Added
+
+- **Speaker Diarization**: Live speaker identification during meeting recording with post-processing refinement when the call ends (auto-downloaded sherpa-onnx pyannote + voxceleb models)
+- **Speaker Reassignment UI**: Click any bubble to assign it to a known speaker, calendar attendee, or contact — with attendee-aware picker and bulk-select reassignment
+- **Voice Fingerprint Linking**: Attach voice profiles to contact emails from the speaker picker
+- **Meeting AEC Helper**: Native WebRTC AEC3 sidecar for mic echo cancellation when system audio is captured, with graceful fallback to the JS echo leak detector
+- **Transcript-Level Dedupe**: Retract events drop mic duplicates once system audio confirms the same speech, cleaning both the live view and the saved transcript
+- **Live Accuracy Hint**: Subtle in-view hint during recording indicating that speaker labels will sharpen once the call ends
+
+### Changed
+
+- **Meeting AEC Helper is Prebuilt**: Binaries are built on CI and downloaded like whisper-cpp / qdrant — contributors no longer need cmake, Python 3, or a C++ toolchain for a normal build
+
+### Fixed
+
+- **Speaker Reassignment for Own Bubbles**: Reassigning a left-side (mic) bubble now correctly flips side, name, and color instead of staying locked as "You"
+- **Live Speaker Lock Persistence**: Live-assigned speaker names survive across the session and through diarization merge
+- **Meeting System Audio Handling**: Restore system audio handling after transcription path refactor
+- **Local Whisper Speech Gate**: Stricter silence gate with peak-amplitude fallback to prevent dropped chunks on quiet but non-silent audio
+- **Transcript Merge**: Preserve prior transcript when diarization merge arrives
+
+### Security
+
+- **CMake Quoter Escape**: Single-pass backslash + quote escape in `quoteCmake` resolves a CodeQL incomplete-escape warning
+
 ## [1.6.7] - 2026-04-02
 
 ### Added

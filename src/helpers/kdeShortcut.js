@@ -219,7 +219,7 @@ class KDEShortcutManager {
     // Modifier-only shortcuts (e.g. Control+Super) don't work on X11 —
     // XGrabKey requires an actual key code, not just modifiers.
     // On Wayland, KWin handles modifier-only natively, so allow them.
-    const QT_MODIFIER_MASK = 0xFE000000;
+    const QT_MODIFIER_MASK = 0xfe000000;
     if (!KDEShortcutManager.isWayland() && (qtKey & ~QT_MODIFIER_MASK) === 0) {
       debugLogger.log("[KDEShortcut] Modifier-only shortcut not supported on X11", {
         slot: slotName,
@@ -262,12 +262,17 @@ class KDEShortcutManager {
         }
       } catch (checkErr) {
         // globalShortcutsByKey may not exist on older KDE — proceed without check
-        debugLogger.log("[KDEShortcut] Could not check for conflicts, proceeding:", checkErr.message);
+        debugLogger.log(
+          "[KDEShortcut] Could not check for conflicts, proceeding:",
+          checkErr.message
+        );
       }
 
       // Clear stale registration, then register with flag 0x02 (SetPresent).
       // Flag 0x02 overwrites any saved binding; flag 0 preserves stale values.
-      try { await this.kglobalaccel.unRegister(actionId); } catch {}
+      try {
+        await this.kglobalaccel.unRegister(actionId);
+      } catch {}
       await this.kglobalaccel.doRegister(actionId);
       const result = await this.kglobalaccel.setShortcut(actionId, [qtKey], 0x02);
 
@@ -280,7 +285,9 @@ class KDEShortcutManager {
           requested: `0x${qtKey.toString(16)}`,
           assigned: `0x${assignedKey.toString(16)}`,
         });
-        try { await this.kglobalaccel.unRegister(actionId); } catch {}
+        try {
+          await this.kglobalaccel.unRegister(actionId);
+        } catch {}
         return "conflict";
       }
 
@@ -293,7 +300,9 @@ class KDEShortcutManager {
         debugLogger.log(
           `[KDEShortcut] Keybinding registered but listener failed for "${slotName}", unregistering`
         );
-        try { await this.kglobalaccel.unRegister(actionId); } catch {}
+        try {
+          await this.kglobalaccel.unRegister(actionId);
+        } catch {}
         return false;
       }
 

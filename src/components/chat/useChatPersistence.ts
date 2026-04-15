@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import type { Message, ToolCallInfo } from "./types";
 
 interface UseChatPersistenceOptions {
@@ -19,13 +19,20 @@ export interface ChatPersistence {
 
 export function useChatPersistence(options: UseChatPersistenceOptions = {}): ChatPersistence {
   const [messages, setMessages] = useState<Message[]>([]);
-  const conversationIdRef = useRef<number | null>(options.conversationId ?? null);
+  const [conversationId, setConversationId] = useState<number | null>(
+    options.conversationId ?? null
+  );
+  const conversationIdRef = useRef(conversationId);
+
+  useEffect(() => {
+    conversationIdRef.current = conversationId;
+  }, [conversationId]);
 
   const createConversation = useCallback(
     async (title: string, noteId?: number | null): Promise<number> => {
       const conv = await window.electronAPI?.createAgentConversation?.(title, noteId ?? undefined);
       const id = conv?.id ?? 0;
-      conversationIdRef.current = id;
+      setConversationId(id);
       options.onConversationCreated?.(id, title);
       return id;
     },
@@ -35,7 +42,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   const loadConversation = useCallback(async (id: number) => {
     const conv = await window.electronAPI?.getAgentConversation?.(id);
     if (!conv) return;
-    conversationIdRef.current = id;
+    setConversationId(id);
     const loaded: Message[] = conv.messages.map((m) => {
       const parsed = m.metadata ? tryParseMetadata(m.metadata) : undefined;
       const toolCalls = parsed?.toolCalls as ToolCallInfo[] | undefined;
@@ -69,13 +76,13 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
 
   const handleNewChat = useCallback(() => {
     setMessages([]);
-    conversationIdRef.current = null;
+    setConversationId(null);
   }, []);
 
   return {
     messages,
     setMessages,
-    conversationId: conversationIdRef.current,
+    conversationId,
     createConversation,
     loadConversation,
     saveUserMessage,

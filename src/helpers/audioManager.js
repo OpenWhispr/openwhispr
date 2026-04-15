@@ -6,6 +6,11 @@ import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/neonAuth";
 import { getBaseLanguageCode, validateLanguageForModel } from "../utils/languageSupport";
 import {
+  createLocalSpeechGateState,
+  getLocalSpeechGateDecision,
+  recordLocalSpeechWindow,
+} from "./localSpeechGate";
+import {
   getSettings,
   getEffectiveReasoningModel,
   isCloudReasoningMode,
@@ -110,6 +115,7 @@ class AudioManager {
     this.sttConfig = null;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
+    this._localSpeechGateState = null;
   }
 
   getWorkletBlobUrl() {
@@ -301,28 +307,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
 
-      // Silence detection: observe audio energy via AnalyserNode
       try {
         this._silenceCtx = new AudioContext();
         this._silenceAnalyser = this._silenceCtx.createAnalyser();
         this._silenceAnalyser.fftSize = 2048;
         const sourceNode = this._silenceCtx.createMediaStreamSource(micStream);
         sourceNode.connect(this._silenceAnalyser);
-        this._peakRms = 0;
+        this._localSpeechGateState = createLocalSpeechGateState();
         const dataArray = new Uint8Array(this._silenceAnalyser.fftSize);
         this._silenceInterval = setInterval(() => {
           this._silenceAnalyser.getByteTimeDomainData(dataArray);
           let sum = 0;
+          let peak = 0;
           for (let i = 0; i < dataArray.length; i++) {
             const v = (dataArray[i] - 128) / 128;
             sum += v * v;
+            const abs = Math.abs(v);
+            if (abs > peak) peak = abs;
           }
           const rms = Math.sqrt(sum / dataArray.length);
-          if (rms > this._peakRms) this._peakRms = rms;
+          recordLocalSpeechWindow(this._localSpeechGateState, rms, peak);
         }, 100);
       } catch (e) {
-        logger.warn("Silence detection setup failed, skipping", { error: e.message }, "audio");
-        this._peakRms = 1; // assume speech if detection fails
+        logger.warn("Audio level gate setup failed, skipping", { error: e.message }, "audio");
+        this._localSpeechGateState = null;
       }
 
       this.mediaRecorder = new MediaRecorder(micStream);
@@ -335,7 +343,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       };
 
       this.mediaRecorder.onstop = async () => {
-        // Clean up silence detection
         if (this._silenceInterval) {
           clearInterval(this._silenceInterval);
           this._silenceInterval = null;
@@ -473,32 +480,43 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async processAudio(audioBlob, metadata = {}) {
     const pipelineStart = performance.now();
+    const settings = getSettings();
+    const speechGateDecision = getLocalSpeechGateDecision(this._localSpeechGateState);
+    this._localSpeechGateState = null;
 
-    // Skip transcription if recording was silence
-    const SILENCE_THRESHOLD = 0.002;
-    if (this._peakRms != null && this._peakRms < SILENCE_THRESHOLD) {
+    const shouldUseStrongLocalWhisperGate =
+      settings.useLocalWhisper && settings.localTranscriptionProvider === "whisper";
+    if (
+      speechGateDecision.skip &&
+      (speechGateDecision.reason === "silence" || shouldUseStrongLocalWhisperGate)
+    ) {
       logger.info(
-        "Silence detected, skipping transcription",
-        { peakRms: this._peakRms.toFixed(4), threshold: SILENCE_THRESHOLD },
+        "Speech gate skipped transcription",
+        {
+          reason: speechGateDecision.reason,
+          useLocalWhisper: settings.useLocalWhisper,
+          localProvider: settings.localTranscriptionProvider,
+          peakRms: speechGateDecision.peakRms?.toFixed(4),
+          peakAmplitude: speechGateDecision.peakAmplitude?.toFixed(4),
+          speechWindowCount: speechGateDecision.speechWindowCount,
+          maxConsecutiveSpeechWindows: speechGateDecision.maxConsecutiveSpeechWindows,
+        },
         "audio"
       );
-      this._peakRms = null;
       this.isProcessing = false;
       this.onStateChange?.({ isRecording: false, isProcessing: false });
       this.onTranscriptionComplete?.({ success: true, text: "" });
       return;
     }
-    this._peakRms = null;
 
     try {
-      const s = getSettings();
-      const useLocalWhisper = s.useLocalWhisper;
-      const localProvider = s.localTranscriptionProvider;
-      const whisperModel = s.whisperModel;
-      const parakeetModel = s.parakeetModel || "parakeet-tdt-0.6b-v3";
+      const useLocalWhisper = settings.useLocalWhisper;
+      const localProvider = settings.localTranscriptionProvider;
+      const whisperModel = settings.whisperModel;
+      const parakeetModel = settings.parakeetModel || "parakeet-tdt-0.6b-v3";
 
-      const cloudTranscriptionMode = s.cloudTranscriptionMode;
-      const isSignedIn = s.isSignedIn;
+      const cloudTranscriptionMode = settings.cloudTranscriptionMode;
+      const isSignedIn = settings.isSignedIn;
 
       const isOpenWhisprCloudMode = !useLocalWhisper && cloudTranscriptionMode === "openwhispr";
       const useCloud = isOpenWhisprCloudMode && isSignedIn;
@@ -594,7 +612,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
         // Save failed transcription with audio so the user can retry later
         if (this.lastAudioBlob) {
-          this.saveFailedTranscription(error.message, metadata);
+          this.saveFailedTranscription(error.message, error.code || null, metadata);
         }
       }
     } finally {
@@ -816,7 +834,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         apiKey = await window.electronAPI.getMistralKey?.();
       }
       if (!isValidApiKey(apiKey, "mistral")) {
-        throw new Error("Mistral API key not found. Please set your API key in the Control Panel.");
+        const err = new Error(
+          "Mistral API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
       }
     } else if (provider === "groq") {
       // Prefer store value (user-entered via UI) over main process (.env)
@@ -825,7 +847,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         apiKey = await window.electronAPI.getGroqKey?.();
       }
       if (!isValidApiKey(apiKey, "groq")) {
-        throw new Error("Groq API key not found. Please set your API key in the Control Panel.");
+        const err = new Error(
+          "Groq API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
       }
     } else {
       // Default to OpenAI
@@ -836,9 +862,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         apiKey = await window.electronAPI.getOpenAIKey();
       }
       if (!isValidApiKey(apiKey, "openai")) {
-        throw new Error(
+        const err = new Error(
           "OpenAI API key not found. Please set your API key in the .env file or Control Panel."
         );
+        err.code = "API_KEY_MISSING";
+        throw err;
       }
     }
 
@@ -1511,7 +1539,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           },
           "transcription"
         );
-        throw new Error(`API Error: ${response.status} ${errorText}`);
+        const err = new Error(`API Error: ${response.status} ${errorText}`);
+        if (response.status === 401) err.code = "INVALID_KEY";
+        else if (response.status === 429) err.code = "LIMIT_REACHED";
+        else if (response.status >= 500) err.code = "SERVER_ERROR";
+        throw err;
       }
 
       let result;
@@ -1860,7 +1892,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async saveFailedTranscription(errorMessage, metadata = {}) {
+  async saveFailedTranscription(errorMessage, errorCode = null, metadata = {}) {
     if (!getSettings().dataRetentionEnabled) {
       logger.debug("Skipping failed transcription save — data retention disabled", {}, "audio");
       this.lastAudioBlob = null;
@@ -1872,6 +1904,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const result = await window.electronAPI.saveTranscription("", null, {
         status: "failed",
         errorMessage,
+        errorCode,
       });
 
       if (result?.id && this.lastAudioBlob) {

@@ -149,7 +149,7 @@ export interface HotkeyInputProps {
   validate?: (hotkey: string) => string | null | undefined;
 }
 
-export function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
+function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
   if (MODIFIER_CODES.has(e.code)) {
     return null;
   }

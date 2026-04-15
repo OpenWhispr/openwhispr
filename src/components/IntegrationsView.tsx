@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { FlaskConical, Info, Loader2, Mail, Plus, Unlink } from "lucide-react";
+import { Info, Loader2, Mail, Plus, Unlink } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
 import { ConfirmDialog } from "./ui/dialog";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
+import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import googleCalendarIcon from "../assets/icons/google-calendar.svg";
 
 export default function IntegrationsView() {
@@ -17,7 +18,9 @@ export default function IntegrationsView() {
   const [confirmDisconnectEmail, setConfirmDisconnectEmail] = useState<string | null>(null);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const systemAudio = useSystemAudioPermission();
+  const { request: requestSystemAudioAccess } = systemAudio;
   const hasAccounts = gcalAccounts.length > 0;
+  const needsSystemAudioGrant = !systemAudio.granted && canManageSystemAudioInApp(systemAudio);
 
   const startOAuth = useCallback(async () => {
     setIsConnecting(true);
@@ -36,15 +39,15 @@ export default function IntegrationsView() {
   }, [setGcalAccounts]);
 
   const handleConnect = useCallback(async () => {
-    if (systemAudio.mode === "native" && !systemAudio.granted) {
-      const granted = await systemAudio.request();
+    if (needsSystemAudioGrant) {
+      const granted = await requestSystemAudioAccess();
       if (!granted) {
         setShowPermissionDialog(true);
         return;
       }
     }
     await startOAuth();
-  }, [systemAudio.mode, systemAudio.granted, systemAudio.request, startOAuth]);
+  }, [needsSystemAudioGrant, requestSystemAudioAccess, startOAuth]);
 
   const handleDisconnect = useCallback(
     async (email: string) => {
@@ -95,9 +98,14 @@ export default function IntegrationsView() {
               <img src={googleCalendarIcon} alt="" className="w-5 h-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-foreground">
-                {t("integrations.googleCalendar.title")}
-              </p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-xs font-semibold text-foreground">
+                  {t("integrations.googleCalendar.title")}
+                </p>
+                <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                  {t("integrations.googleCalendar.optional")}
+                </Badge>
+              </div>
               <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
                 {t("integrations.googleCalendar.description")}
               </p>
@@ -180,23 +188,6 @@ export default function IntegrationsView() {
         </div>
       )}
 
-      <div className="rounded-lg border border-border/40 dark:border-border-subtle/40 bg-muted/20 dark:bg-surface-2/30 p-4 flex items-start gap-3">
-        <FlaskConical size={15} className="text-primary/60 shrink-0 mt-0.5" />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-foreground/80">{t("integrations.beta.title")}</p>
-          <p className="text-xs text-muted-foreground/60 mt-0.5 leading-relaxed">
-            {t("integrations.beta.description")}
-          </p>
-          <div className="mt-2 space-y-1">
-            <p className="text-xs text-muted-foreground/60">{t("integrations.beta.freeTier")}</p>
-            <p className="text-xs text-muted-foreground/60">{t("integrations.beta.proTier")}</p>
-          </div>
-          <p className="text-xs text-muted-foreground/50 mt-2 leading-relaxed">
-            {t("integrations.beta.feedback")}
-          </p>
-        </div>
-      </div>
-
       <ConfirmDialog
         open={!!confirmDisconnectEmail}
         onOpenChange={(open) => {
@@ -218,8 +209,12 @@ export default function IntegrationsView() {
         onOpenChange={setShowPermissionDialog}
         title={t("integrations.googleCalendar.systemAudioRequired")}
         description={t("integrations.googleCalendar.systemAudioDescription")}
-        confirmText={t("integrations.googleCalendar.openSettings")}
-        onConfirm={systemAudio.openSettings}
+        confirmText={
+          systemAudio.mode === "native"
+            ? t("integrations.googleCalendar.openSettings")
+            : t("onboarding.permissions.grantAccess")
+        }
+        onConfirm={systemAudio.mode === "native" ? systemAudio.openSettings : systemAudio.request}
       />
     </div>
   );

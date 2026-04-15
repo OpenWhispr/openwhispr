@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
-import { MeetingTranscriptChat } from "./MeetingTranscriptChat";
+import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
 import type { TranscriptSegment } from "../../hooks/useMeetingTranscription";
 import {
   DropdownMenu,
@@ -34,6 +34,12 @@ import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import { normalizeDbDate } from "../../utils/dateFormatting";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
+import {
+  applyTranscriptSpeakerPatch,
+  lockTranscriptSpeaker,
+  mergeTranscriptSegments,
+  serializeTranscriptSegments,
+} from "../../utils/transcriptSpeakerState";
 import NoteParticipants from "./NoteParticipants";
 import type { CalendarAttendee } from "../../types/calendar";
 
@@ -78,11 +84,15 @@ interface NoteEditorProps {
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   isMeetingRecording?: boolean;
+  diarizationSessionId?: string | null;
   meetingTranscript?: string;
   meetingSegments?: TranscriptSegment[];
   meetingMicPartial?: string;
   meetingSystemPartial?: string;
+  meetingSystemPartialSpeakerId?: string | null;
+  meetingSystemPartialSpeakerName?: string | null;
   onStopMeetingRecording?: () => void;
+  onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
   liveTranscript?: string;
   folderName?: string | null;
   calendarEventName?: string | null;
@@ -106,11 +116,15 @@ export default function NoteEditor({
   actionProcessingState,
   actionName,
   isMeetingRecording,
+  diarizationSessionId,
   meetingTranscript,
   meetingSegments,
   meetingMicPartial,
   meetingSystemPartial,
+  meetingSystemPartialSpeakerId,
+  meetingSystemPartialSpeakerName,
   onStopMeetingRecording,
+  onLiveSpeakerLock,
   liveTranscript,
   folderName,
   calendarEventName,
@@ -124,7 +138,14 @@ export default function NoteEditor({
   const [folderSearch, setFolderSearch] = useState("");
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
+  const [isDiarizing, setIsDiarizing] = useState(false);
+  const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
+  const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
+  const [speakerProfiles, setSpeakerProfiles] = useState<
+    Array<{ id: number; display_name: string; email: string | null }>
+  >([]);
   const editorRef = useRef<Editor | null>(null);
+  const displaySegmentsRef = useRef<TranscriptSegment[]>([]);
 
   const embeddedChat = useEmbeddedChat({
     noteId: note.id,
@@ -139,6 +160,10 @@ export default function NoteEditor({
 
   const segmentContainerRef = useRef<HTMLDivElement>(null);
   const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ opacity: 0 });
+  const scheduleUiUpdate = useCallback((callback: () => void) => {
+    const frameId = window.requestAnimationFrame(callback);
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
 
   const effectiveTranscript = liveTranscript || meetingTranscript || note.transcript || "";
   const hasMeetingTranscript = !isMeetingRecording && !!effectiveTranscript;
@@ -152,11 +177,40 @@ export default function NoteEditor({
   );
 
   const displaySegments = useMemo<TranscriptSegment[]>(() => {
+    if (isMeetingRecording) {
+      return meetingSegments ?? [];
+    }
+    if (diarizedSegments && diarizedSegments.length > 0) return diarizedSegments;
     if (meetingSegments && meetingSegments.length > 0) return meetingSegments;
     return parseTranscriptSegments(note.transcript || "");
-  }, [meetingSegments, note.transcript]);
+  }, [diarizedSegments, isMeetingRecording, meetingSegments, note.transcript]);
+
+  useEffect(() => {
+    displaySegmentsRef.current = displaySegments;
+  }, [displaySegments]);
 
   const hasChatSegments = displaySegments.length > 0;
+
+  const knownSpeakers = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Array<{ id?: number; display_name: string; email: string | null }> = [];
+    for (const p of speakerProfiles) {
+      const key = p.display_name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push(p);
+    }
+    for (const segment of displaySegments) {
+      if (!segment.speaker) continue;
+      const name = speakerMappings[segment.speaker] || segment.speakerName;
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push({ display_name: name, email: null });
+    }
+    return list;
+  }, [displaySegments, speakerMappings, speakerProfiles]);
 
   const parsedParticipants = useMemo<CalendarAttendee[]>(() => {
     try {
@@ -164,7 +218,19 @@ export default function NoteEditor({
     } catch {
       return [];
     }
-  }, [note.id, note.participants]);
+  }, [note.participants]);
+
+  const refreshSpeakerProfiles = useCallback(() => {
+    window.electronAPI?.getSpeakerProfiles?.().then((profiles) => {
+      setSpeakerProfiles(
+        (profiles || []).map((profile) => ({
+          id: profile.id,
+          display_name: profile.display_name,
+          email: profile.email,
+        }))
+      );
+    });
+  }, []);
 
   const updateSegmentIndicator = useCallback(() => {
     const container = segmentContainerRef.current;
@@ -196,28 +262,45 @@ export default function NoteEditor({
 
   const prevProcessingStateRef = useRef(actionProcessingState);
   useEffect(() => {
+    let cancelScheduledUpdate: (() => void) | undefined;
+
     if (prevProcessingStateRef.current === "processing" && actionProcessingState === "success") {
-      setViewMode("enhanced");
+      cancelScheduledUpdate = scheduleUiUpdate(() => setViewMode("enhanced"));
     }
     prevProcessingStateRef.current = actionProcessingState;
-  }, [actionProcessingState]);
+
+    return cancelScheduledUpdate;
+  }, [actionProcessingState, scheduleUiUpdate]);
 
   useEffect(() => {
     if (note.id !== prevNoteIdRef.current) {
       prevNoteIdRef.current = note.id;
       autoShowDoneRef.current = false;
-      setChatMode("hidden");
-      if (!isMeetingRecording) {
-        setViewMode("raw");
-      }
-      if (titleRef.current && titleRef.current.textContent !== note.title) {
-        titleRef.current.textContent = note.title || "";
-      }
-      editorRef.current?.commands.focus();
+      return scheduleUiUpdate(() => {
+        setChatMode("hidden");
+        setDiarizedSegments(null);
+        setIsDiarizing(false);
+        setSpeakerMappings({});
+        if (!isMeetingRecording) {
+          setViewMode("raw");
+        }
+        if (titleRef.current && titleRef.current.textContent !== note.title) {
+          titleRef.current.textContent = note.title || "";
+        }
+        editorRef.current?.commands.focus();
+      });
     }
-  }, [note.id, isMeetingRecording]);
+  }, [isMeetingRecording, note.id, note.title, scheduleUiUpdate]);
 
-  // Auto-show chat when hook loads an existing conversation with messages
+  useEffect(() => {
+    window.electronAPI?.getSpeakerMappings?.(note.id).then((mappings) => {
+      const map: Record<string, string> = {};
+      for (const m of mappings || []) map[m.speaker_id] = m.display_name;
+      setSpeakerMappings(map);
+    });
+    refreshSpeakerProfiles();
+  }, [note.id, refreshSpeakerProfiles]);
+
   useEffect(() => {
     if (
       !autoShowDoneRef.current &&
@@ -225,15 +308,206 @@ export default function NoteEditor({
       embeddedChat.messages.length > 0
     ) {
       autoShowDoneRef.current = true;
-      setChatMode("floating");
+      return scheduleUiUpdate(() => setChatMode("floating"));
     }
-  }, [embeddedChat.activeConversationId, embeddedChat.messages.length]);
+  }, [embeddedChat.activeConversationId, embeddedChat.messages.length, scheduleUiUpdate]);
 
   useEffect(() => {
     if (titleRef.current && titleRef.current.textContent !== note.title) {
       titleRef.current.textContent = note.title || "";
     }
   }, [note.title]);
+
+  const prevMeetingRecordingRef = useRef(false);
+  useEffect(() => {
+    if (prevMeetingRecordingRef.current && !isMeetingRecording && diarizationSessionId) {
+      const cancelScheduledUpdate = scheduleUiUpdate(() => setIsDiarizing(true));
+      prevMeetingRecordingRef.current = !!isMeetingRecording;
+      return cancelScheduledUpdate;
+    }
+    prevMeetingRecordingRef.current = !!isMeetingRecording;
+  }, [diarizationSessionId, isMeetingRecording, scheduleUiUpdate]);
+
+  useEffect(() => {
+    const expectedSession = diarizationSessionId;
+    const cleanup = window.electronAPI?.onMeetingDiarizationComplete?.(async (data) => {
+      if (!expectedSession || data?.sessionId !== expectedSession) return;
+
+      setIsDiarizing(false);
+
+      if (!data?.segments?.length) return;
+
+      const persisted = await window.electronAPI?.getNote?.(note.id);
+      const existing = persisted?.transcript
+        ? parseTranscriptSegments(persisted.transcript)
+        : displaySegmentsRef.current;
+
+      const enriched = mergeTranscriptSegments(
+        existing,
+        data.segments.map((s: any, i: number) => ({
+          ...s,
+          id: s.id || `diarized-${i}`,
+        }))
+      );
+      setDiarizedSegments(enriched);
+
+      window.electronAPI.updateNote(note.id, { transcript: serializeTranscriptSegments(enriched) });
+
+      if (data.speakerEmbeddings) {
+        window.electronAPI?.saveNoteSpeakerEmbeddings?.(note.id, data.speakerEmbeddings);
+      }
+
+      const autoMappings: Record<string, string> = {};
+      for (const s of enriched) {
+        if (s.speakerName && s.speaker) autoMappings[s.speaker] = s.speakerName;
+      }
+      if (Object.keys(autoMappings).length > 0) {
+        setSpeakerMappings((prev) => ({ ...autoMappings, ...prev }));
+      }
+    });
+    return () => cleanup?.();
+  }, [note.id, diarizationSessionId]);
+
+  const persistDisplaySegments = useCallback(
+    async (nextSegments: TranscriptSegment[], updateOverlay = true) => {
+      if (updateOverlay) {
+        setDiarizedSegments(nextSegments);
+      }
+      await window.electronAPI?.updateNote(note.id, {
+        transcript: serializeTranscriptSegments(nextSegments),
+      });
+    },
+    [note.id]
+  );
+
+  const handleMapSpeaker = useCallback(
+    async (
+      speakerId: string,
+      displayName: string,
+      email?: string | null,
+      profileId?: number | null
+    ) => {
+      setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
+      await window.electronAPI?.setSpeakerMapping?.(
+        note.id,
+        speakerId,
+        displayName,
+        email,
+        profileId
+      );
+
+      if (isRecording) {
+        onLiveSpeakerLock?.(speakerId, displayName);
+        refreshSpeakerProfiles();
+        return;
+      }
+
+      const currentSegments = displaySegments.map((s) =>
+        s.speaker === speakerId
+          ? lockTranscriptSpeaker(s, {
+              speakerName: displayName,
+              speaker: speakerId,
+              speakerIsPlaceholder: false,
+              suggestedName: undefined,
+              suggestedProfileId: undefined,
+            })
+          : s
+      );
+      await persistDisplaySegments(currentSegments, !!diarizedSegments || !isMeetingRecording);
+
+      refreshSpeakerProfiles();
+    },
+    [
+      diarizedSegments,
+      displaySegments,
+      isMeetingRecording,
+      isRecording,
+      note.id,
+      onLiveSpeakerLock,
+      persistDisplaySegments,
+      refreshSpeakerProfiles,
+    ]
+  );
+
+  const handleConfirmSuggestion = useCallback(
+    async (speakerId: string, suggestedName: string, profileId: number) => {
+      await handleMapSpeaker(speakerId, suggestedName, null, profileId);
+    },
+    [handleMapSpeaker]
+  );
+
+  const handleAttachSpeakerEmail = useCallback(
+    async (profileId: number, email: string | null) => {
+      const result = await window.electronAPI?.attachSpeakerEmail?.(profileId, email);
+      if (result?.success) {
+        refreshSpeakerProfiles();
+      }
+    },
+    [refreshSpeakerProfiles]
+  );
+
+  const handleDismissSuggestion = useCallback(
+    async (speakerId: string) => {
+      const currentSegments = displaySegments.map((s) =>
+        s.speaker === speakerId
+          ? applyTranscriptSpeakerPatch(s, {
+              suggestedName: undefined,
+              suggestedProfileId: undefined,
+            })
+          : s
+      );
+      await persistDisplaySegments(currentSegments, !!diarizedSegments || !isMeetingRecording);
+    },
+    [displaySegments, diarizedSegments, isMeetingRecording, persistDisplaySegments]
+  );
+
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
+  const [selectionNoteId, setSelectionNoteId] = useState(note.id);
+  if (selectionNoteId !== note.id) {
+    setSelectionNoteId(note.id);
+    setSelectedSegmentIds(new Set());
+  }
+
+  const handleToggleSelect = useCallback((segmentId: string) => {
+    setSelectedSegmentIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(segmentId)) next.delete(segmentId);
+      else next.add(segmentId);
+      return next;
+    });
+  }, []);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedSegmentIds(new Set());
+  }, []);
+
+  useEffect(() => {
+    if (selectedSegmentIds.size === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleClearSelection();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedSegmentIds.size, handleClearSelection]);
+
+  const handleBulkAssignName = useCallback(
+    async (displayName: string, _email?: string | null, profileId?: number) => {
+      if (!selectedSegmentIds.size) return;
+      const nextSegments = displaySegments.map((segment) =>
+        selectedSegmentIds.has(segment.id)
+          ? lockTranscriptSpeaker(segment, {
+              speakerName: displayName,
+              speakerIsPlaceholder: false,
+              suggestedName: undefined,
+              suggestedProfileId: profileId ?? undefined,
+            })
+          : segment
+      );
+      await persistDisplaySegments(nextSegments);
+      handleClearSelection();
+    },
+    [displaySegments, selectedSegmentIds, persistDisplaySegments, handleClearSelection]
+  );
 
   const handleTitleInput = useCallback(() => {
     if (titleRef.current) {
@@ -255,23 +529,26 @@ export default function NoteEditor({
     document.execCommand("insertText", false, text);
   }, []);
 
-  // Auto-switch to transcript view after recording stops and transcript is ready
   const prevRecordingRef = useRef(false);
   const pendingTranscriptSwitchRef = useRef(false);
 
   useEffect(() => {
     if (isRecording && !prevRecordingRef.current) {
-      pendingTranscriptSwitchRef.current = true;
+      if (isMeetingRecording) {
+        scheduleUiUpdate(() => setViewMode("transcript"));
+      } else {
+        pendingTranscriptSwitchRef.current = true;
+      }
     }
     prevRecordingRef.current = isRecording;
-  }, [isRecording]);
+  }, [isRecording, isMeetingRecording, scheduleUiUpdate]);
 
   useEffect(() => {
     if (!isRecording && !isProcessing && pendingTranscriptSwitchRef.current && liveTranscript) {
       pendingTranscriptSwitchRef.current = false;
-      setViewMode("transcript");
+      return scheduleUiUpdate(() => setViewMode("transcript"));
     }
-  }, [isRecording, isProcessing, liveTranscript]);
+  }, [isRecording, isProcessing, liveTranscript, scheduleUiUpdate]);
 
   const handleContentChange = useCallback(
     (newValue: string) => {
@@ -322,7 +599,6 @@ export default function NoteEditor({
             role="textbox"
             aria-label={t("notes.editor.noteTitle")}
           />
-          {/* Metadata + toolbar row */}
           <div className="flex items-center gap-2 mt-1.5">
             {shortDate && (
               <span
@@ -543,6 +819,23 @@ export default function NoteEditor({
                 segments={displaySegments}
                 micPartial={isMeetingRecording ? meetingMicPartial : undefined}
                 systemPartial={isMeetingRecording ? meetingSystemPartial : undefined}
+                systemPartialSpeakerId={
+                  isMeetingRecording ? meetingSystemPartialSpeakerId : undefined
+                }
+                systemPartialSpeakerName={
+                  isMeetingRecording ? meetingSystemPartialSpeakerName : undefined
+                }
+                speakerMappings={speakerMappings}
+                speakerProfiles={knownSpeakers}
+                participants={parsedParticipants}
+                isRecording={isMeetingRecording}
+                isDiarizing={isDiarizing}
+                onMapSpeaker={handleMapSpeaker}
+                onConfirmSuggestion={handleConfirmSuggestion}
+                onDismissSuggestion={handleDismissSuggestion}
+                onAttachSpeakerEmail={handleAttachSpeakerEmail}
+                selectedSegmentIds={!isMeetingRecording ? selectedSegmentIds : undefined}
+                onToggleSelect={!isMeetingRecording ? handleToggleSelect : undefined}
               />
             ) : viewMode === "transcript" && hasMeetingTranscript ? (
               <RichTextEditor value={effectiveTranscript} disabled />
@@ -568,6 +861,18 @@ export default function NoteEditor({
               background: "linear-gradient(to bottom, transparent, var(--color-background))",
             }}
           />
+          {!isMeetingRecording && selectedSegmentIds.size > 0 && (
+            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+              <SelectionBar
+                count={selectedSegmentIds.size}
+                onClear={handleClearSelection}
+                speakerProfiles={knownSpeakers}
+                participants={parsedParticipants}
+                onAssignName={handleBulkAssignName}
+                t={t}
+              />
+            </div>
+          )}
           <NoteBottomBar
             isRecording={isRecording || !!isMeetingRecording}
             isProcessing={isProcessing}

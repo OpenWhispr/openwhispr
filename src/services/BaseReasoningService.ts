@@ -6,6 +6,7 @@ export interface ReasoningConfig {
   temperature?: number;
   contextSize?: number;
   systemPrompt?: string;
+  lanUrl?: string;
 }
 
 export abstract class BaseReasoningService {
