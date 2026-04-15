@@ -626,7 +626,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           } else if (cloudTranscriptionProvider === "mistral") {
             return mistralApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "deepgram") {
-            return deepgramApiKey.trim().length > 0;
+            // Accept the custom-transcription slot too (migration from pre-BYOK
+            // builds or users who entered their Deepgram key in the generic
+            // custom form). Matches the getDeepgramKey() fallback in main.
+            return (
+              deepgramApiKey.trim().length > 0 ||
+              customTranscriptionApiKey.trim().length > 0
+            );
           } else if (cloudTranscriptionProvider === "custom") {
             // Custom can work without API key for local endpoints
             return true;
