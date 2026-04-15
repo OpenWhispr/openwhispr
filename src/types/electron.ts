@@ -699,6 +699,7 @@ declare global {
         isUsingGnome: boolean;
         isUsingHyprland: boolean;
         isUsingNativeShortcut: boolean;
+        supportsPushToTalk: boolean;
       }>;
 
       // Wayland paste diagnostics
@@ -728,6 +729,7 @@ declare global {
       ) => () => void;
       onSettingUpdated?: (callback: (data: { key: string; value: unknown }) => void) => () => void;
       onDictationKeyActive?: (callback: (key: string) => void) => () => void;
+      onLinuxPttPermissionDenied?: (callback: () => void) => () => void;
 
       // Settings shortcut (Cmd+, / Ctrl+,)
       onShowSettings?: (callback: () => void) => () => void;

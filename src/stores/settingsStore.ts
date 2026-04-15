@@ -438,7 +438,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) localStorage.setItem("activationMode", mode);
     set({ activationMode: mode });
     if (isBrowser) {
-      window.electronAPI?.notifyActivationModeChanged?.(effective);
+      window.electronAPI?.notifyActivationModeChanged?.(mode);
     }
   },
 
