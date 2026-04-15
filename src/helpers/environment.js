@@ -113,7 +113,10 @@ class EnvironmentManager {
   }
 
   getDeepgramKey() {
-    return this._getKey("DEEPGRAM_API_KEY");
+    // Fallback to the custom-transcription slot so users who entered their
+    // Deepgram key under the generic "custom provider" form (or carried one
+    // over from a pre-BYOK build) don't hit "Deepgram API key not configured".
+    return this._getKey("DEEPGRAM_API_KEY") || this._getKey("CUSTOM_TRANSCRIPTION_API_KEY");
   }
 
   saveDeepgramKey(key) {
