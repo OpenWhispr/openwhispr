@@ -234,7 +234,10 @@ export default function ControlPanel() {
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onNavigateToNote?.((data) => {
-      if (data.folderId) setActiveFolderId(data.folderId);
+      if (data.folderId) {
+        setActiveFolderId(data.folderId);
+        initializeNotes(null, 50, data.folderId);
+      }
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
     });

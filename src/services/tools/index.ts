@@ -3,6 +3,7 @@ import { createSearchNotesTool } from "./searchNotesTool";
 import { getNoteTool } from "./getNoteTool";
 import { createNoteTool } from "./createNoteTool";
 import { updateNoteTool } from "./updateNoteTool";
+import { listFoldersTool } from "./listFoldersTool";
 import { clipboardTool } from "./clipboardTool";
 import { webSearchTool } from "./webSearchTool";
 import { calendarTool } from "./calendarTool";
@@ -24,6 +25,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   registry.register(getNoteTool);
   registry.register(createNoteTool);
   registry.register(updateNoteTool);
+  registry.register(listFoldersTool);
   registry.register(clipboardTool);
 
   if (settings.isSignedIn) {
