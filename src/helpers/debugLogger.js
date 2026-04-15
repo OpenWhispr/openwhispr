@@ -139,7 +139,12 @@ class DebugLogger {
   formatArgs(args) {
     return args
       .map((arg) => {
-        if (typeof arg === "object") {
+        // Error objects have non-enumerable message/stack, so JSON.stringify
+        // produces "{}". Format them explicitly so errors are readable.
+        if (arg instanceof Error) {
+          return arg.stack ? `${arg.message}\n${arg.stack}` : arg.message;
+        }
+        if (arg !== null && typeof arg === "object") {
           try {
             return JSON.stringify(arg, null, 2);
           } catch (error) {
@@ -154,6 +159,9 @@ class DebugLogger {
   formatMeta(meta) {
     if (meta === undefined) return "";
     if (typeof meta === "string") return meta;
+    if (meta instanceof Error) {
+      return meta.stack ? `${meta.message}\n${meta.stack}` : meta.message;
+    }
     try {
       return JSON.stringify(meta, null, 2);
     } catch (error) {
