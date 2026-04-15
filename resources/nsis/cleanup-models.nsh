@@ -1,4 +1,4 @@
-!macro customInit
+!macro customHeader
   ManifestDPIAware true
 !macroend
 
