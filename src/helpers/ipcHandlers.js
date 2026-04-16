@@ -3431,6 +3431,7 @@ class IPCHandlers {
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
     let meetingLiveSpeakerStartedAt = null;
+    let meetingReclusterTimer = null;
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
@@ -3561,6 +3562,11 @@ class IPCHandlers {
         return null;
       }
 
+      if (meetingReclusterTimer) {
+        clearInterval(meetingReclusterTimer);
+        meetingReclusterTimer = null;
+      }
+
       meetingLiveSpeakerActive = false;
       meetingLiveSpeakerState = await liveSpeakerIdentifier.stop();
       return meetingLiveSpeakerState;
@@ -3620,6 +3626,23 @@ class IPCHandlers {
 
       if (started) {
         meetingLiveSpeakerActive = true;
+        meetingReclusterTimer = setInterval(async () => {
+          if (!meetingLiveSpeakerActive || !win || win.isDestroyed()) return;
+
+          const merges = await liveSpeakerIdentifier.recluster();
+          if (!merges.length) return;
+
+          for (const { keep, remove, displayName } of merges) {
+            for (const seg of meetingDiarizationSegments) {
+              if (seg.speaker === remove) {
+                seg.speaker = keep;
+                if (displayName) seg.speakerName = displayName;
+              }
+            }
+          }
+
+          win.webContents.send("meeting-speakers-merged", merges);
+        }, 30_000);
       } else {
         meetingLiveSpeakerStartedAt = null;
       }
@@ -3809,6 +3832,10 @@ class IPCHandlers {
       if (meetingLocalTimer) {
         clearInterval(meetingLocalTimer);
         meetingLocalTimer = null;
+      }
+      if (meetingReclusterTimer) {
+        clearInterval(meetingReclusterTimer);
+        meetingReclusterTimer = null;
       }
       void stopLiveSpeakerIdentification();
       meetingLiveSpeakerState = null;
@@ -6318,7 +6345,7 @@ class IPCHandlers {
 
             for (const spk of speakerIds) {
               const segs = diarizationSegments.filter((s) => s.speaker === spk);
-              const sorted = segs.sort((a, b) => (b.end - b.start) - (a.end - a.start)).slice(0, 3);
+              const sorted = segs.sort((a, b) => b.end - b.start - (a.end - a.start)).slice(0, 3);
               const embeddings = [];
               for (const seg of sorted) {
                 if (seg.end - seg.start < 1.5) continue;

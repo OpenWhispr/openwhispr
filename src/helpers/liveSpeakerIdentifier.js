@@ -183,6 +183,94 @@ class LiveSpeakerIdentifier {
     return transientState;
   }
 
+  recluster() {
+    return new Promise((resolve) => {
+      this.queue = this.queue
+        .then(() => resolve(this._performRecluster()))
+        .catch(() => resolve([]));
+    });
+  }
+
+  _performRecluster() {
+    const speakers = [...this.transientEmbeddings.entries()];
+    if (speakers.length < 2) return [];
+
+    const merges = [];
+    const removed = new Set();
+
+    for (let i = 0; i < speakers.length; i += 1) {
+      if (removed.has(speakers[i][0])) continue;
+      for (let j = i + 1; j < speakers.length; j += 1) {
+        if (removed.has(speakers[j][0])) continue;
+
+        const similarity = speakerEmbeddings.cosineSimilarity(speakers[i][1], speakers[j][1]);
+        if (similarity < MATCH_THRESHOLD) continue;
+
+        const countI = this.transientCounts.get(speakers[i][0]) || 1;
+        const countJ = this.transientCounts.get(speakers[j][0]) || 1;
+        const hasNameI = !!this.transientDisplayNames.get(speakers[i][0]);
+        const hasNameJ = !!this.transientDisplayNames.get(speakers[j][0]);
+        const keepFirst =
+          hasNameI && !hasNameJ ? true : hasNameJ && !hasNameI ? false : countI >= countJ;
+        const [keepId, removeId] = keepFirst
+          ? [speakers[i][0], speakers[j][0]]
+          : [speakers[j][0], speakers[i][0]];
+        const keepCount = this.transientCounts.get(keepId) || 1;
+        const removeCount = this.transientCounts.get(removeId) || 1;
+        const keepEmb = this.transientEmbeddings.get(keepId);
+        const removeEmb = this.transientEmbeddings.get(removeId);
+        const totalCount = keepCount + removeCount;
+
+        const merged = new Float32Array(keepEmb.length);
+        for (let k = 0; k < keepEmb.length; k += 1) {
+          merged[k] = (keepEmb[k] * keepCount + removeEmb[k] * removeCount) / totalCount;
+        }
+
+        this.transientEmbeddings.set(keepId, merged);
+        this.transientCounts.set(keepId, totalCount);
+        this.transientEmbeddings.delete(removeId);
+        this.transientCounts.delete(removeId);
+
+        if (!this.transientDisplayNames.get(keepId) && this.transientDisplayNames.get(removeId)) {
+          this.transientDisplayNames.set(keepId, this.transientDisplayNames.get(removeId));
+        }
+        this.transientDisplayNames.delete(removeId);
+
+        if (!this.transientProfileIds.get(keepId) && this.transientProfileIds.get(removeId)) {
+          this.transientProfileIds.set(keepId, this.transientProfileIds.get(removeId));
+        }
+        this.transientProfileIds.delete(removeId);
+
+        if (!this.transientNoteIds.get(keepId) && this.transientNoteIds.get(removeId)) {
+          this.transientNoteIds.set(keepId, this.transientNoteIds.get(removeId));
+        }
+        this.transientNoteIds.delete(removeId);
+
+        if (this.currentSegmentSpeakerId === removeId) {
+          this.currentSegmentSpeakerId = keepId;
+        }
+
+        removed.add(removeId);
+        merges.push({
+          keep: keepId,
+          remove: removeId,
+          displayName: this.transientDisplayNames.get(keepId) || null,
+          similarity,
+        });
+
+        debugLogger.info("Speaker recluster merge", {
+          keep: keepId,
+          remove: removeId,
+          similarity: similarity.toFixed(3),
+          keepCount,
+          removeCount,
+        });
+      }
+    }
+
+    return merges;
+  }
+
   feedAudio(pcmBuffer) {
     if (!this.running || !pcmBuffer?.length) {
       return Promise.resolve();

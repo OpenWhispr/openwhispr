@@ -1372,6 +1372,16 @@ declare global {
           endTime: number;
         }) => void
       ) => () => void;
+      onMeetingSpeakersMerged?: (
+        callback: (
+          merges: Array<{
+            keep: string;
+            remove: string;
+            displayName?: string | null;
+            similarity: number;
+          }>
+        ) => void
+      ) => () => void;
       onMeetingTranscriptionError?: (callback: (error: string) => void) => () => void;
 
       // Speaker diarization

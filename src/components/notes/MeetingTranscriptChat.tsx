@@ -602,6 +602,7 @@ export function MeetingTranscriptChat({
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
+  const [hintDismissed, setHintDismissed] = useState(false);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -668,149 +669,159 @@ export function MeetingTranscriptChat({
   };
 
   return (
-    <div
-      ref={scrollRef}
-      className="h-full overflow-y-auto px-4 pt-3 pb-24 flex flex-col gap-1.5 agent-chat-scroll"
-    >
-      {(isRecording || isDiarizing) && (
-        <div className="flex items-center justify-center gap-1.5 pb-2">
+    <div className="h-full relative">
+      {(isRecording || isDiarizing) && !hintDismissed && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1 rounded-md border border-border/20 bg-surface-2/95 backdrop-blur shadow-sm">
           {isDiarizing ? (
-            <Loader2 size={10} className="animate-spin text-foreground/40" />
+            <Loader2 size={11} className="animate-spin text-foreground/50" />
           ) : (
-            <Sparkles size={10} className="text-foreground/40" />
+            <Sparkles size={11} className="text-foreground/50" />
           )}
-          <span className="text-[11px] text-foreground/50">
+          <span className="text-[11px] text-foreground/60">
             {isDiarizing
               ? t("notes.speaker.identifyingSpeakers")
               : t("notes.speaker.liveAccuracyHint")}
           </span>
+          {!isDiarizing && (
+            <button
+              onClick={() => setHintDismissed(true)}
+              className="ml-0.5 text-foreground/30 hover:text-foreground/60 transition-colors"
+            >
+              <X size={11} />
+            </button>
+          )}
         </div>
       )}
-      {segments.map((segment, i) => {
-        const selfSide = isSelfSide(segment);
-        const prevSegment = i > 0 ? segments[i - 1] : null;
-        const sameSpeaker = prevSegment
-          ? getSpeakerKey(prevSegment) === getSpeakerKey(segment)
-          : false;
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto px-4 pt-3 pb-24 flex flex-col gap-1.5 agent-chat-scroll"
+      >
+        {segments.map((segment, i) => {
+          const selfSide = isSelfSide(segment);
+          const prevSegment = i > 0 ? segments[i - 1] : null;
+          const sameSpeaker = prevSegment
+            ? getSpeakerKey(prevSegment) === getSpeakerKey(segment)
+            : false;
 
-        const hasSpeaker = !!segment.speaker;
-        const isOriginallyYou = segment.speaker === "you";
-        const isSystemSpeaker = hasSpeaker && !selfSide;
-        const effectiveKey = getEffectiveSpeakerKey(segment, speakerMappings);
-        const colorIdx = isSystemSpeaker ? (colorByKey.get(effectiveKey) ?? 0) : 0;
-        const isSelected = selectedSegmentIds?.has(segment.id) ?? false;
-        const selectable = !!onToggleSelect;
+          const hasSpeaker = !!segment.speaker;
+          const isOriginallyYou = segment.speaker === "you";
+          const isSystemSpeaker = hasSpeaker && !selfSide;
+          const effectiveKey = getEffectiveSpeakerKey(segment, speakerMappings);
+          const colorIdx = isSystemSpeaker ? (colorByKey.get(effectiveKey) ?? 0) : 0;
+          const isSelected = selectedSegmentIds?.has(segment.id) ?? false;
+          const selectable = !!onToggleSelect;
 
-        const activeName = speakerMappings?.[segment.speaker!] || segment.speakerName;
-        const matchedProfile =
-          activeName && speakerProfiles
-            ? speakerProfiles.find((p) => p.id != null && p.display_name === activeName)
-            : undefined;
-        const canAddContact =
-          !!matchedProfile &&
-          matchedProfile.id != null &&
-          !matchedProfile.email &&
-          !!onAttachSpeakerEmail;
+          const activeName = speakerMappings?.[segment.speaker!] || segment.speakerName;
+          const matchedProfile =
+            activeName && speakerProfiles
+              ? speakerProfiles.find((p) => p.id != null && p.display_name === activeName)
+              : undefined;
+          const canAddContact =
+            !!matchedProfile &&
+            matchedProfile.id != null &&
+            !matchedProfile.email &&
+            !!onAttachSpeakerEmail;
 
-        const labelElement = hasSpeaker && (
-          <div className="flex items-center gap-1">
-            <SpeakerLabel
-              speakerId={segment.speaker!}
-              segment={segment}
-              mappedName={speakerMappings?.[segment.speaker!]}
-              speakerProfiles={speakerProfiles}
-              participants={participants}
-              colorIdx={colorIdx}
-              isOriginallyYou={isOriginallyYou}
-              onMap={onMapSpeaker}
-              onConfirm={onConfirmSuggestion}
-              onDismiss={onDismissSuggestion}
-              t={t}
-            />
-            {canAddContact && matchedProfile && matchedProfile.id != null && (
-              <AddContactButton
-                profile={{ id: matchedProfile.id, display_name: matchedProfile.display_name }}
-                onAttachEmail={onAttachSpeakerEmail!}
+          const labelElement = hasSpeaker && (
+            <div className="flex items-center gap-1">
+              <SpeakerLabel
+                speakerId={segment.speaker!}
+                segment={segment}
+                mappedName={speakerMappings?.[segment.speaker!]}
+                speakerProfiles={speakerProfiles}
+                participants={participants}
+                colorIdx={colorIdx}
+                isOriginallyYou={isOriginallyYou}
+                onMap={onMapSpeaker}
+                onConfirm={onConfirmSuggestion}
+                onDismiss={onDismissSuggestion}
                 t={t}
               />
-            )}
-          </div>
-        );
-
-        return (
-          <div
-            key={segment.id}
-            className={cn(
-              "group flex flex-col",
-              selfSide ? "items-start" : "items-end",
-              !sameSpeaker && i > 0 && "mt-2",
-              selectable && (selfSide ? "pl-6" : "pr-6")
-            )}
-            style={{ animation: "agent-message-in 200ms ease-out both" }}
-          >
-            {labelElement && !sameSpeaker && labelElement}
-            {labelElement && sameSpeaker && (
-              <div
-                className={cn(
-                  "grid grid-rows-[0fr] opacity-0 pointer-events-none transition-[grid-template-rows,opacity] duration-150 ease-out",
-                  "group-hover:grid-rows-[1fr] group-hover:opacity-100 group-hover:pointer-events-auto"
-                )}
-              >
-                <div className="overflow-hidden">{labelElement}</div>
-              </div>
-            )}
-            <div className="relative max-w-[80%]">
-              <div
-                className={cn(
-                  "px-3 py-1.5 cursor-default transition-colors",
-                  "text-[13px] leading-relaxed",
-                  selfSide
-                    ? cn(
-                        "bg-primary/90 text-primary-foreground",
-                        sameSpeaker ? "rounded-lg rounded-tl-sm" : "rounded-lg rounded-bl-sm"
-                      )
-                    : cn(
-                        "bg-surface-2 border border-border/30 text-foreground",
-                        sameSpeaker ? "rounded-lg rounded-tr-sm" : "rounded-lg rounded-br-sm",
-                        isSystemSpeaker && cn("border-l-2", SPEAKER_BORDER_COLORS[colorIdx])
-                      ),
-                  isSelected && "ring-2 ring-primary/60"
-                )}
-              >
-                {segment.text}
-              </div>
-              {selectable && (
-                <SelectCheckbox
-                  isSelected={isSelected}
-                  onToggle={() => onToggleSelect?.(segment.id)}
-                  className={cn("absolute top-1.5", selfSide ? "-left-6" : "-right-6")}
+              {canAddContact && matchedProfile && matchedProfile.id != null && (
+                <AddContactButton
+                  profile={{ id: matchedProfile.id, display_name: matchedProfile.display_name }}
+                  onAttachEmail={onAttachSpeakerEmail!}
+                  t={t}
                 />
               )}
             </div>
-          </div>
-        );
-      })}
+          );
 
-      {[
-        { text: micPartial, source: "mic" as const, speakerLabel: undefined },
-        {
-          text: systemPartial,
-          source: "system" as const,
-          speakerLabel: systemPartialSpeakerLabel,
-        },
-      ].map(
-        ({ text, source, speakerLabel }) =>
-          text && (
-            <PartialBubble
-              key={source}
-              text={text}
-              source={source}
-              speakerLabel={speakerLabel}
-              speakerState={source === "system" ? systemPartialSpeakerState : undefined}
-              t={t}
-            />
-          )
-      )}
+          return (
+            <div
+              key={segment.id}
+              className={cn(
+                "group flex flex-col",
+                selfSide ? "items-start" : "items-end",
+                !sameSpeaker && i > 0 && "mt-2",
+                selectable && (selfSide ? "pl-6" : "pr-6")
+              )}
+              style={{ animation: "agent-message-in 200ms ease-out both" }}
+            >
+              {labelElement && !sameSpeaker && labelElement}
+              {labelElement && sameSpeaker && (
+                <div
+                  className={cn(
+                    "grid grid-rows-[0fr] opacity-0 pointer-events-none transition-[grid-template-rows,opacity] duration-150 ease-out",
+                    "group-hover:grid-rows-[1fr] group-hover:opacity-100 group-hover:pointer-events-auto"
+                  )}
+                >
+                  <div className="overflow-hidden">{labelElement}</div>
+                </div>
+              )}
+              <div className="relative max-w-[80%]">
+                <div
+                  className={cn(
+                    "px-3 py-1.5 cursor-default transition-colors",
+                    "text-[13px] leading-relaxed",
+                    selfSide
+                      ? cn(
+                          "bg-primary/90 text-primary-foreground",
+                          sameSpeaker ? "rounded-lg rounded-tl-sm" : "rounded-lg rounded-bl-sm"
+                        )
+                      : cn(
+                          "bg-surface-2 border border-border/30 text-foreground",
+                          sameSpeaker ? "rounded-lg rounded-tr-sm" : "rounded-lg rounded-br-sm",
+                          isSystemSpeaker && cn("border-l-2", SPEAKER_BORDER_COLORS[colorIdx])
+                        ),
+                    isSelected && "ring-2 ring-primary/60"
+                  )}
+                >
+                  {segment.text}
+                </div>
+                {selectable && (
+                  <SelectCheckbox
+                    isSelected={isSelected}
+                    onToggle={() => onToggleSelect?.(segment.id)}
+                    className={cn("absolute top-1.5", selfSide ? "-left-6" : "-right-6")}
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {[
+          { text: micPartial, source: "mic" as const, speakerLabel: undefined },
+          {
+            text: systemPartial,
+            source: "system" as const,
+            speakerLabel: systemPartialSpeakerLabel,
+          },
+        ].map(
+          ({ text, source, speakerLabel }) =>
+            text && (
+              <PartialBubble
+                key={source}
+                text={text}
+                source={source}
+                speakerLabel={speakerLabel}
+                speakerState={source === "system" ? systemPartialSpeakerState : undefined}
+                t={t}
+              />
+            )
+        )}
+      </div>
     </div>
   );
 }

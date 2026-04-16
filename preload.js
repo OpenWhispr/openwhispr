@@ -522,6 +522,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-speaker-identified",
     (callback) => (_event, data) => callback(data)
   ),
+  onMeetingSpeakersMerged: registerListener(
+    "meeting-speakers-merged",
+    (callback) => (_event, data) => callback(data)
+  ),
   onMeetingTranscriptionError: registerListener(
     "meeting-transcription-error",
     (callback) => (_event, data) => callback(data)

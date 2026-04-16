@@ -303,7 +303,7 @@ class DiarizationManager {
   }
 
   async diarize(wavPath, options = {}) {
-    const { numSpeakers = -1, threshold = 0.35 } = options;
+    const { numSpeakers = -1, threshold = 0.55 } = options;
 
     const binaryPath = this.getBinaryPath();
     if (!binaryPath) {
@@ -440,7 +440,7 @@ class DiarizationManager {
       return null;
     };
 
-    let fallbackSpeakerIndex = 0;
+    let fallbackSpeakerIndex = speakerSet.size;
 
     return deduped.map((seg, index) => {
       const enriched = { ...seg };
