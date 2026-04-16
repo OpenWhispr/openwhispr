@@ -70,12 +70,11 @@ export function ProviderTabs({
   return (
     <div
       ref={containerRef}
-      className={`relative flex p-0.5 rounded-md bg-surface-raised dark:bg-surface-1 ${scrollable ? "overflow-x-auto" : ""}`}
+      className={`relative inline-flex items-center gap-0.5 p-0.5 ${scrollable ? "overflow-x-auto" : ""}`}
     >
-      {/* Sliding indicator - frosted glass treatment */}
       <div
         ref={indicatorRef}
-        className="absolute top-0.5 left-0 rounded-md bg-card border border-border dark:border-border-subtle shadow-sm dark:shadow-(--shadow-card) transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
+        className="absolute top-0.5 left-0 rounded-full bg-primary/10 dark:bg-primary/15 ring-1 ring-primary/30 dark:ring-primary/25 transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
         style={{ opacity: 0 }}
       />
 
@@ -87,14 +86,16 @@ export function ProviderTabs({
             key={provider.id}
             data-tab-button
             onClick={() => onSelect(provider.id)}
-            className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md font-medium text-xs transition-colors duration-150 ${
+            className={`relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs transition-colors duration-150 ${
               scrollable ? "whitespace-nowrap" : ""
-            } ${isSelected ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            } ${isSelected ? "text-foreground [&_svg]:text-primary" : "text-muted-foreground ring-1 ring-border/60 dark:ring-white/10 hover:text-foreground hover:bg-foreground/4 dark:hover:bg-white/5"}`}
           >
             {renderIcon ? renderIcon(provider.id) : <ProviderIcon provider={provider.id} />}
             <span>{provider.name}</span>
             {provider.recommended && (
-              <span className="text-xs text-primary/70 font-medium">{t("common.recommended")}</span>
+              <span className="text-[10px] text-primary/70 font-medium">
+                {t("common.recommended")}
+              </span>
             )}
           </button>
         );

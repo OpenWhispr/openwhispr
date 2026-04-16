@@ -1453,7 +1453,7 @@
         "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "リアルタイム文字起こしプレビュー",
-      "transcriptionPreviewDescription": "補正前にフローティングウィンドウで文字起こしを表示"
+      "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示"
     },
     "intelligence": {
       "gpuDevice": {

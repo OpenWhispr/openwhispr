@@ -1448,7 +1448,7 @@
         "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "实时转录预览",
-      "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行优化"
+      "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理"
     },
     "intelligence": {
       "gpuDevice": {

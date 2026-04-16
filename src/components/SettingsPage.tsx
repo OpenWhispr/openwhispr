@@ -194,6 +194,8 @@ interface TranscriptionSectionProps {
   setTranscriptionMode: (mode: InferenceMode) => void;
   remoteTranscriptionUrl: string;
   setRemoteTranscriptionUrl: (url: string) => void;
+  showTranscriptionPreview: boolean;
+  setShowTranscriptionPreview: (value: boolean) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -233,6 +235,8 @@ function TranscriptionSection({
   setTranscriptionMode,
   remoteTranscriptionUrl,
   setRemoteTranscriptionUrl,
+  showTranscriptionPreview,
+  setShowTranscriptionPreview,
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
@@ -296,6 +300,19 @@ function TranscriptionSection({
     [localTranscriptionProvider, setParakeetModel, setWhisperModel]
   );
 
+  const renderPreviewToggle = () => (
+    <SettingsPanel>
+      <SettingsPanelRow>
+        <SettingsRow
+          label={t("settingsPage.transcription.transcriptionPreview")}
+          description={t("settingsPage.transcription.transcriptionPreviewDescription")}
+        >
+          <Toggle checked={showTranscriptionPreview} onChange={setShowTranscriptionPreview} />
+        </SettingsRow>
+      </SettingsPanelRow>
+    </SettingsPanel>
+  );
+
   const renderTranscriptionPicker = (mode?: "cloud" | "local") => (
     <TranscriptionModelPicker
       selectedCloudProvider={cloudTranscriptionProvider}
@@ -347,7 +364,12 @@ function TranscriptionSection({
           />
 
           {transcriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-          {transcriptionMode === "local" && renderTranscriptionPicker("local")}
+          {transcriptionMode === "local" && (
+            <>
+              {renderTranscriptionPicker("local")}
+              {renderPreviewToggle()}
+            </>
+          )}
 
           {transcriptionMode === "self-hosted" && (
             <SelfHostedPanel
@@ -358,7 +380,10 @@ function TranscriptionSection({
           )}
         </>
       ) : (
-        renderTranscriptionPicker()
+        <>
+          {renderTranscriptionPicker()}
+          {useLocalWhisper && renderPreviewToggle()}
+        </>
       )}
 
       <GpuDeviceSelector purpose="transcription" />
@@ -695,6 +720,8 @@ export default function SettingsPage({ activeSection = "general" }: SettingsPage
     setAudioCuesEnabled,
     pauseMediaOnDictation,
     setPauseMediaOnDictation,
+    showTranscriptionPreview,
+    setShowTranscriptionPreview,
     keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard,
     floatingIconAutoHide,
@@ -2982,6 +3009,8 @@ EOF`,
             setTranscriptionMode={setTranscriptionMode}
             remoteTranscriptionUrl={remoteTranscriptionUrl}
             setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+            showTranscriptionPreview={showTranscriptionPreview}
+            setShowTranscriptionPreview={setShowTranscriptionPreview}
             toast={toast}
           />
         );

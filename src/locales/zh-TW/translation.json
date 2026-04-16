@@ -1448,7 +1448,7 @@
         "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "即時轉錄預覽",
-      "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行校正"
+      "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行文字整理"
     },
     "intelligence": {
       "gpuDevice": {

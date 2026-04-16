@@ -196,24 +196,20 @@ export default function TranscriptionPreviewOverlay() {
     try {
       const result = await window.electronAPI?.writeClipboard?.(textToCopy);
       if (result?.success === false) throw new Error("clipboard-write-failed");
-      setCopied(true);
-      resetCopyState();
-      if (phaseRef.current === "final") {
-        startHideTimer(FINAL_HIDE_DURATION_MS);
-        setCountdownKey((k) => k + 1);
-      }
     } catch {
       try {
         await navigator.clipboard.writeText(textToCopy);
-        setCopied(true);
-        resetCopyState();
-        if (phaseRef.current === "final") {
-          startHideTimer(FINAL_HIDE_DURATION_MS);
-          setCountdownKey((k) => k + 1);
-        }
       } catch {
         setCopied(false);
+        return;
       }
+    }
+
+    setCopied(true);
+    resetCopyState();
+    if (phaseRef.current === "final") {
+      startHideTimer(FINAL_HIDE_DURATION_MS);
+      setCountdownKey((k) => k + 1);
     }
   }, [activeText, resetCopyState, startHideTimer]);
 

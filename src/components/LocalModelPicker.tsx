@@ -155,7 +155,7 @@ export default function LocalModelPicker({
   }, [downloadingModel, downloadProgress, models]);
 
   return (
-    <div className={`${styles.container} ${className}`}>
+    <div className={className}>
       <ProviderTabs
         providers={providers}
         selectedId={selectedProvider}
@@ -166,7 +166,7 @@ export default function LocalModelPicker({
 
       {progressDisplay}
 
-      <div className="p-3">
+      <div className="mt-2">
         <h5 className={`${styles.header} mb-2`}>{t("common.availableModels")}</h5>
 
         <ModelCardList

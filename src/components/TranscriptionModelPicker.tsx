@@ -88,10 +88,7 @@ function LocalModelCard({
         isSelected ? cardStyles.modelCard.selected : cardStyles.modelCard.default
       } ${isDownloaded && !isSelected ? "cursor-pointer" : ""}`}
     >
-      {isSelected && (
-        <div className="absolute left-0 top-0 bottom-0 w-1 bg-linear-to-b from-primary via-primary to-primary/80 rounded-l-md" />
-      )}
-      <div className="flex items-center gap-1.5 p-2 pl-2.5">
+      <div className="flex items-center gap-1.5 p-2">
         <div className="shrink-0">
           {isDownloaded ? (
             <div
@@ -208,7 +205,7 @@ interface TranscriptionModelPickerProps {
 
 const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
-  { id: "groq", name: "Groq", recommended: true },
+  { id: "groq", name: "Groq" },
   { id: "mistral", name: "Mistral" },
   { id: "custom", name: "Custom" },
 ];
@@ -216,8 +213,8 @@ const CLOUD_PROVIDER_TABS = [
 const VALID_CLOUD_PROVIDER_IDS = CLOUD_PROVIDER_TABS.map((p) => p.id);
 
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
-  { id: "whisper", name: "OpenAI Whisper" },
-  { id: "nvidia", name: "NVIDIA Parakeet" },
+  { id: "whisper", name: "OpenAI" },
+  { id: "nvidia", name: "NVIDIA" },
 ];
 
 interface ModeToggleProps {
@@ -754,12 +751,6 @@ export default function TranscriptionModelPicker({
     [showConfirmDialog, deleteParakeetModel, t]
   );
 
-  const getParakeetLanguageLabel = (language: string) => {
-    return language === "multilingual"
-      ? t("transcription.parakeet.multilingual")
-      : t("transcription.parakeet.english");
-  };
-
   const renderParakeetModels = () => {
     const modelsToRender =
       parakeetModels.length === 0
@@ -796,7 +787,6 @@ export default function TranscriptionModelPicker({
               isCancelling={isCancellingParakeet}
               recommended={info.recommended}
               provider="nvidia"
-              languageLabel={getParakeetLanguageLabel(info.language)}
               onSelect={() => handleParakeetModelSelect(modelId)}
               onDelete={() => handleParakeetDelete(modelId)}
               onDownload={() =>
@@ -821,18 +811,16 @@ export default function TranscriptionModelPicker({
       {!mode && <ModeToggle useLocalWhisper={effectiveLocal} onModeChange={handleModeChange} />}
 
       {!effectiveLocal ? (
-        <div className={styles.container}>
-          <div className="p-2 pb-0">
-            <ProviderTabs
-              providers={cloudProviderTabs}
-              selectedId={selectedCloudProvider}
-              onSelect={handleCloudProviderChange}
-              colorScheme="purple"
-              scrollable
-            />
-          </div>
+        <>
+          <ProviderTabs
+            providers={cloudProviderTabs}
+            selectedId={selectedCloudProvider}
+            onSelect={handleCloudProviderChange}
+            colorScheme="purple"
+            scrollable
+          />
 
-          <div className="p-2">
+          <div>
             {selectedCloudProvider === "custom" ? (
               <div className="space-y-2">
                 <div className="space-y-1.5">
@@ -916,17 +904,15 @@ export default function TranscriptionModelPicker({
               </div>
             )}
           </div>
-        </div>
+        </>
       ) : (
-        <div className={styles.container}>
-          <div className="p-2 pb-0">
-            <ProviderTabs
-              providers={LOCAL_PROVIDER_TABS}
-              selectedId={internalLocalProvider}
-              onSelect={handleLocalProviderChange}
-              colorScheme="purple"
-            />
-          </div>
+        <>
+          <ProviderTabs
+            providers={LOCAL_PROVIDER_TABS}
+            selectedId={internalLocalProvider}
+            onSelect={handleLocalProviderChange}
+            colorScheme="purple"
+          />
 
           {progressDisplay}
 
@@ -949,7 +935,7 @@ export default function TranscriptionModelPicker({
             !cudaDownloading &&
             getCachedPlatform() !== "darwin" &&
             cudaStatus?.gpuInfo.hasNvidiaGpu && (
-              <div className="mx-2 mt-2 rounded-md border border-border bg-surface-1 p-2.5">
+              <div className="rounded-md border border-border bg-surface-1 p-2.5">
                 {cudaStatus.downloaded ? (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
@@ -994,11 +980,11 @@ export default function TranscriptionModelPicker({
               </div>
             )}
 
-          <div className="p-2">
+          <div>
             {internalLocalProvider === "whisper" && renderLocalModels()}
             {internalLocalProvider === "nvidia" && renderParakeetModels()}
           </div>
-        </div>
+        </>
       )}
 
       <ConfirmDialog

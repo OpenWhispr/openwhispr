@@ -110,15 +110,10 @@ export default function ModelCardList({
           <div
             key={model.value}
             onClick={handleCardClick}
-            className={`relative w-full p-2 pl-2.5 rounded-md border text-left transition-colors duration-200 group overflow-hidden ${
+            className={`relative w-full p-2 rounded-md border text-left transition-colors duration-200 group overflow-hidden ${
               isSelected ? styles.selected : styles.default
             } ${!isLocalMode || (isDownloaded && !isSelected) ? "cursor-pointer" : ""}`}
           >
-            {/* Left accent bar for selected */}
-            {isSelected && (
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-linear-to-b from-primary via-primary to-primary/80 rounded-l-md" />
-            )}
-
             <div className="flex items-center gap-1.5">
               {/* Status dot with LED glow */}
               <div

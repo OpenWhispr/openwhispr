@@ -1425,7 +1425,7 @@
         "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "Pré-visualização ao vivo",
-      "transcriptionPreviewDescription": "Mostrar transcrição em janela flutuante antes da correção"
+      "transcriptionPreviewDescription": "Mostrar transcrição em janela flutuante antes da limpeza"
     },
     "intelligence": {
       "gpuDevice": {

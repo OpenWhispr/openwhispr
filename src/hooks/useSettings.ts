@@ -23,6 +23,7 @@ export interface TranscriptionSettings {
   remoteTranscriptionUrl: string;
   customDictionary: string[];
   assemblyAiStreaming: boolean;
+  showTranscriptionPreview: boolean;
 }
 
 export interface ReasoningSettings {
@@ -262,6 +263,8 @@ function useSettingsInternal() {
     setSelectedMicDeviceId: store.setSelectedMicDeviceId,
     autoLearnCorrections,
     setAutoLearnCorrections,
+    showTranscriptionPreview: store.showTranscriptionPreview,
+    setShowTranscriptionPreview: store.setShowTranscriptionPreview,
     keepTranscriptionInClipboard: store.keepTranscriptionInClipboard,
     setKeepTranscriptionInClipboard: store.setKeepTranscriptionInClipboard,
     noteFilesEnabled: store.noteFilesEnabled,

@@ -3836,6 +3836,84 @@ class IPCHandlers {
       meetingEchoLeakDetector.reset();
     };
 
+    let dictationPreviewMode = false;
+    let dictationPreviewBuffer = [];
+    let dictationPreviewTimer = null;
+    let dictationPreviewTranscribing = false;
+    let dictationPreviewProvider = null;
+    let dictationPreviewModel = null;
+    let dictationPreviewSessionActive = false;
+    let dictationPreviewChunkCount = 0;
+
+    const resetDictationPreviewState = ({ preserveSession = false } = {}) => {
+      if (dictationPreviewTimer) {
+        clearInterval(dictationPreviewTimer);
+        dictationPreviewTimer = null;
+      }
+      dictationPreviewMode = false;
+      if (!preserveSession) {
+        dictationPreviewSessionActive = false;
+      }
+      dictationPreviewBuffer = [];
+      dictationPreviewTranscribing = false;
+      dictationPreviewProvider = null;
+      dictationPreviewModel = null;
+    };
+
+    const transcribeDictationPreviewChunk = async () => {
+      if (dictationPreviewTranscribing) return;
+      if (!dictationPreviewBuffer.length) return;
+
+      dictationPreviewTranscribing = true;
+      try {
+        const pcm = Buffer.concat(dictationPreviewBuffer);
+        dictationPreviewBuffer = [];
+
+        const samples = new Int16Array(pcm.buffer, pcm.byteOffset, pcm.length / 2);
+        let sumSq = 0;
+        for (let i = 0; i < samples.length; i++) {
+          const n = samples[i] / 0x7fff;
+          sumSq += n * n;
+        }
+        const rms = Math.sqrt(sumSq / samples.length);
+        debugLogger.debug("Dictation preview chunk", {
+          pcmBytes: pcm.length,
+          rms: rms.toFixed(6),
+          samples: samples.length,
+        });
+        if (rms < 0.002) return;
+
+        const wav = pcm16ToWav(pcm);
+
+        let result;
+        if (dictationPreviewProvider === "nvidia") {
+          result = await this.parakeetManager.transcribeLocalParakeet(wav, {
+            model: dictationPreviewModel,
+          });
+        } else {
+          result = await this.whisperManager.transcribeLocalWhisper(wav, {
+            model: dictationPreviewModel,
+          });
+        }
+
+        if (result?.success && result.text?.trim()) {
+          this.windowManager.appendTranscriptionPreview(result.text.trim());
+        } else if (result && !result.success) {
+          debugLogger.warn("Dictation preview chunk returned failure", {
+            error: result.error || result.message,
+            provider: dictationPreviewProvider,
+          });
+        }
+      } catch (error) {
+        debugLogger.error("Dictation preview transcription chunk failed", {
+          error: error.message,
+          provider: dictationPreviewProvider,
+        });
+      } finally {
+        dictationPreviewTranscribing = false;
+      }
+    };
+
     const resetMeetingStreamingState = () => {
       this._meetingMicStreaming = null;
       this._meetingSystemStreaming = null;
@@ -4271,6 +4349,80 @@ class IPCHandlers {
       const result = await this._dictationStreaming.disconnect().catch(() => ({ text: "" }));
       this._dictationStreaming = null;
       return { success: true, text: result.text || "" };
+    });
+
+    ipcMain.handle("start-dictation-preview", async (_event, { provider, model }) => {
+      resetDictationPreviewState();
+      dictationPreviewMode = true;
+      dictationPreviewSessionActive = true;
+      dictationPreviewProvider = provider;
+      dictationPreviewModel = model;
+      dictationPreviewChunkCount = 0;
+      this.windowManager.showTranscriptionPreview("");
+      dictationPreviewTimer = setInterval(() => transcribeDictationPreviewChunk(), 1500);
+      return { success: true };
+    });
+
+    ipcMain.on("dictation-preview-audio", (_event, audioBuffer) => {
+      if (!dictationPreviewMode) return;
+      dictationPreviewChunkCount++;
+      if (dictationPreviewChunkCount <= 3 || dictationPreviewChunkCount % 50 === 0) {
+        debugLogger.debug("Dictation preview audio received", {
+          bytes: audioBuffer?.byteLength || audioBuffer?.length,
+          count: dictationPreviewChunkCount,
+          bufferSize: dictationPreviewBuffer.length,
+        });
+      }
+      dictationPreviewBuffer.push(
+        Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer)
+      );
+    });
+
+    ipcMain.handle("dismiss-dictation-preview", async () => {
+      resetDictationPreviewState();
+      this.windowManager.hideTranscriptionPreview();
+      return { success: true };
+    });
+
+    ipcMain.handle("complete-dictation-preview", async (_event, { text } = {}) => {
+      if (!dictationPreviewSessionActive) {
+        return { success: true };
+      }
+      if (typeof text === "string" && text.trim()) {
+        this.windowManager.completeTranscriptionPreview(text);
+      } else {
+        resetDictationPreviewState();
+        this.windowManager.hideTranscriptionPreview();
+      }
+      return { success: true };
+    });
+
+    ipcMain.handle("hide-dictation-preview", async () => {
+      resetDictationPreviewState();
+      this.windowManager.hideTranscriptionPreview();
+      return { success: true };
+    });
+
+    ipcMain.handle("resize-transcription-preview-window", async (_event, width, height) => {
+      if (!dictationPreviewSessionActive) {
+        return { success: false, error: "Preview session not active" };
+      }
+      return this.windowManager.resizeTranscriptionPreview(width, height);
+    });
+
+    ipcMain.handle("stop-dictation-preview", async (_event, options = {}) => {
+      if (!dictationPreviewMode && !dictationPreviewSessionActive) {
+        return { success: true };
+      }
+      clearInterval(dictationPreviewTimer);
+      dictationPreviewTimer = null;
+      await transcribeDictationPreviewChunk();
+      resetDictationPreviewState({ preserveSession: true });
+      if (!dictationPreviewSessionActive) {
+        return { success: true };
+      }
+      this.windowManager.holdTranscriptionPreview(options);
+      return { success: true };
     });
 
     ipcMain.handle("update-transcription-text", async (_event, id, text, rawText) => {

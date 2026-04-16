@@ -1453,7 +1453,7 @@
         "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "Предпросмотр транскрипции",
-      "transcriptionPreviewDescription": "Показывать транскрипцию в плавающем окне перед обработкой"
+      "transcriptionPreviewDescription": "Показывать транскрипцию в плавающем окне перед очисткой"
     },
     "intelligence": {
       "gpuDevice": {
