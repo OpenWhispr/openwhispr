@@ -21,11 +21,12 @@ interface CreateApiKeyOptions {
 }
 
 async function listApiKeys(): Promise<{ keys: ApiKey[] }> {
-  const res = await fetch(`${OPENWHISPR_API_URL}/api/api-keys/list`, {
+  const res = await fetch(`${OPENWHISPR_API_URL}/api/v1/keys/list`, {
     credentials: "include",
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<{ keys: ApiKey[] }>;
+  const json = await res.json();
+  return json.data as { keys: ApiKey[] };
 }
 
 async function createApiKey(options: CreateApiKeyOptions): Promise<CreateApiKeyResponse> {
@@ -37,25 +38,25 @@ async function createApiKey(options: CreateApiKeyOptions): Promise<CreateApiKeyR
     body.expires_in_days = options.expiresInDays;
   }
 
-  const res = await fetch(`${OPENWHISPR_API_URL}/api/api-keys/create`, {
+  const res = await fetch(`${OPENWHISPR_API_URL}/api/v1/keys/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<CreateApiKeyResponse>;
+  const json = await res.json();
+  return json.data as CreateApiKeyResponse;
 }
 
 async function revokeApiKey(id: string): Promise<{ revoked: true }> {
-  const res = await fetch(`${OPENWHISPR_API_URL}/api/api-keys/revoke`, {
+  const res = await fetch(`${OPENWHISPR_API_URL}/api/v1/keys/${id}/revoke`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ id }),
   });
   if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<{ revoked: true }>;
+  const json = await res.json();
+  return json.data as { revoked: true };
 }
 
 export { listApiKeys, createApiKey, revokeApiKey };
