@@ -42,8 +42,7 @@ function formatSrtTimestamp(seconds) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
 }
 
-function formatTxt(note, segments, speakerMappings) {
-  const merged = mergeSegments(segments);
+function extractMetadata(note) {
   const title = note.title || "Untitled";
   const noteDate = new Date(note.created_at);
   const dateStr =
@@ -56,6 +55,13 @@ function formatTxt(note, segments, speakerMappings) {
     const parsed = JSON.parse(note.participants || "[]");
     participants = parsed.map((p) => p.name).filter(Boolean);
   } catch {}
+
+  return { title, dateStr, participants };
+}
+
+function formatTxt(note, segments, speakerMappings) {
+  const merged = mergeSegments(segments);
+  const { title, dateStr, participants } = extractMetadata(note);
 
   const lines = [title, dateStr];
   if (participants.length) lines.push(`Participants: ${participants.join(", ")}`);
@@ -84,12 +90,7 @@ function formatSrt(segments, speakerMappings) {
 
 function formatJson(note, segments, speakerMappings) {
   const merged = mergeSegments(segments);
-  const title = note.title || "Untitled";
-  const noteDate = new Date(note.created_at);
-  const dateStr =
-    noteDate.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" }) +
-    " " +
-    noteDate.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const { title, dateStr } = extractMetadata(note);
 
   const speakersSet = new Set();
   for (const seg of merged) speakersSet.add(resolveSpeaker(seg, speakerMappings));
@@ -116,4 +117,18 @@ function formatJson(note, segments, speakerMappings) {
   );
 }
 
-module.exports = { formatTxt, formatSrt, formatJson };
+function formatMd(note, segments, speakerMappings) {
+  const merged = mergeSegments(segments);
+  const { title, dateStr, participants } = extractMetadata(note);
+
+  const lines = [`# ${title}`, "", `**Date:** ${dateStr}`];
+  if (participants.length) lines.push(`**Participants:** ${participants.join(", ")}`);
+  lines.push("", "---", "");
+  for (const seg of merged) {
+    lines.push(`**${resolveSpeaker(seg, speakerMappings)}** \`${formatTimestamp(seg.timestamp)}\``);
+    lines.push(`${seg.text}`, "");
+  }
+  return lines.join("\n");
+}
+
+module.exports = { formatTxt, formatSrt, formatJson, formatMd };

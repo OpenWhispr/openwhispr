@@ -1679,6 +1679,7 @@
       "asTranscriptText": "Als Textdatei (.txt)",
       "asSubtitles": "Als Untertitel (.srt)",
       "asJson": "Als JSON (.json)",
+      "asTranscriptMarkdown": "Als Markdown (.md)",
       "raw": "Roh",
       "enhanced": "Verbessert",
       "saving": "Wird gespeichert",

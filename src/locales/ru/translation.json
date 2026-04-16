@@ -1679,6 +1679,7 @@
       "asTranscriptText": "Как текстовый файл (.txt)",
       "asSubtitles": "Как субтитры (.srt)",
       "asJson": "Как JSON (.json)",
+      "asTranscriptMarkdown": "Как Markdown (.md)",
       "raw": "Исходный",
       "enhanced": "Улучшенный",
       "saving": "Сохранение",

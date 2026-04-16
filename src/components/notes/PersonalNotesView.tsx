@@ -459,7 +459,7 @@ export default function PersonalNotesView({
   );
 
   const handleExportTranscript = useCallback(
-    async (format: "txt" | "srt" | "json") => {
+    async (format: "txt" | "srt" | "json" | "md") => {
       if (!activeNoteId) return;
       await window.electronAPI.exportTranscript(activeNoteId, format);
     },

@@ -1597,6 +1597,7 @@
       "asTranscriptText": "プレーンテキスト (.txt)",
       "asSubtitles": "字幕ファイル (.srt)",
       "asJson": "JSON (.json)",
+      "asTranscriptMarkdown": "Markdown (.md)",
       "raw": "元のテキスト",
       "enhanced": "強化済み",
       "saving": "保存中",

@@ -1727,6 +1727,7 @@
       "asTranscriptText": "Como texto plano (.txt)",
       "asSubtitles": "Como subtítulos (.srt)",
       "asJson": "Como JSON (.json)",
+      "asTranscriptMarkdown": "Como Markdown (.md)",
       "raw": "Sin procesar",
       "enhanced": "Mejorado",
       "saving": "Guardando",

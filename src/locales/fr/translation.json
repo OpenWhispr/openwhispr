@@ -1788,6 +1788,7 @@
       "asTranscriptText": "En texte brut (.txt)",
       "asSubtitles": "En sous-titres (.srt)",
       "asJson": "En JSON (.json)",
+      "asTranscriptMarkdown": "En Markdown (.md)",
       "raw": "Brut",
       "enhanced": "Amélioré",
       "saving": "Enregistrement",

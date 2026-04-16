@@ -1076,7 +1076,8 @@ class IPCHandlers {
 
         const { dialog } = require("electron");
         const fs = require("fs");
-        const ext = format === "srt" ? "srt" : format === "json" ? "json" : "txt";
+        const extMap = { srt: "srt", json: "json", md: "md" };
+        const ext = extMap[format] || "txt";
         const safeName = (note.title || "Untitled").replace(/[/\\?%*:|"<>]/g, "-");
 
         const result = await dialog.showSaveDialog({
@@ -1085,6 +1086,7 @@ class IPCHandlers {
             { name: "Text", extensions: ["txt"] },
             { name: "SubRip Subtitles", extensions: ["srt"] },
             { name: "JSON", extensions: ["json"] },
+            { name: "Markdown", extensions: ["md"] },
           ],
         });
 
@@ -1096,6 +1098,8 @@ class IPCHandlers {
           exportContent = transcriptFormatter.formatTxt(note, segments, speakerMappings);
         } else if (format === "srt") {
           exportContent = transcriptFormatter.formatSrt(segments, speakerMappings);
+        } else if (format === "md") {
+          exportContent = transcriptFormatter.formatMd(note, segments, speakerMappings);
         } else {
           exportContent = transcriptFormatter.formatJson(note, segments, speakerMappings);
         }

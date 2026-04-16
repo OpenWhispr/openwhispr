@@ -1674,6 +1674,7 @@
       "asTranscriptText": "导出为纯文本 (.txt)",
       "asSubtitles": "导出为字幕 (.srt)",
       "asJson": "导出为 JSON (.json)",
+      "asTranscriptMarkdown": "导出为 Markdown (.md)",
       "raw": "原始内容",
       "enhanced": "增强内容",
       "saving": "保存中",

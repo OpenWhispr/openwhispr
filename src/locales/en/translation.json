@@ -1836,6 +1836,7 @@
       "asTranscriptText": "As Plain Text (.txt)",
       "asSubtitles": "As Subtitles (.srt)",
       "asJson": "As JSON (.json)",
+      "asTranscriptMarkdown": "As Markdown (.md)",
       "raw": "Raw",
       "enhanced": "Enhanced",
       "saving": "Saving",

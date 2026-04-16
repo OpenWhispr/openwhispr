@@ -79,7 +79,7 @@ interface NoteEditorProps {
   onStartRecording: () => void;
   onStopRecording: () => void;
   onExportNote?: (format: "md" | "txt") => void;
-  onExportTranscript?: (format: "txt" | "srt" | "json") => void;
+  onExportTranscript?: (format: "txt" | "srt" | "json" | "md") => void;
   enhancement?: Enhancement;
   actionPicker?: React.ReactNode;
   actionProcessingState?: ActionProcessingState;
@@ -794,6 +794,13 @@ export default function NoteEditor({
                         >
                           <FileText size={13} className="text-foreground/40" />
                           {t("notes.editor.asSubtitles")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => onExportTranscript("md")}
+                          className="text-xs gap-2"
+                        >
+                          <FileText size={13} className="text-foreground/40" />
+                          {t("notes.editor.asTranscriptMarkdown")}
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => onExportTranscript("json")}

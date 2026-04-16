@@ -467,7 +467,7 @@ declare global {
       ) => Promise<{ success: boolean; error?: string }>;
       exportTranscript: (
         noteId: number,
-        format: "txt" | "srt" | "json"
+        format: "txt" | "srt" | "json" | "md"
       ) => Promise<{ success: boolean; error?: string }>;
       searchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
       semanticSearchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
