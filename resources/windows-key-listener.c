@@ -80,8 +80,23 @@ static BOOL IsRequiredModifierEvent(DWORD vkCode) {
            (g_requireWin && IsWinVk(vkCode));
 }
 
-// Track modifier state inside the hook instead of using GetAsyncKeyState().
-// For low-level hooks, async state is not yet updated for the current event.
+// Sync tracked modifier state with actual key state for keys that are NOT
+// the current hook event. GetAsyncKeyState() is unreliable for the key that
+// triggered the current hook callback, but accurate for all other keys.
+// This corrects stale state caused by missed key-up events (e.g. Win+L lock).
+static void SyncModifierState(DWORD currentVkCode) {
+    if (!IsCtrlVk(currentVkCode))
+        g_ctrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    if (!IsAltVk(currentVkCode))
+        g_altDown = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    if (!IsShiftVk(currentVkCode))
+        g_shiftDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    if (currentVkCode != VK_LWIN)
+        g_leftWinDown = (GetAsyncKeyState(VK_LWIN) & 0x8000) != 0;
+    if (currentVkCode != VK_RWIN)
+        g_rightWinDown = (GetAsyncKeyState(VK_RWIN) & 0x8000) != 0;
+}
+
 static BOOL AreRequiredModifiersPressed(void) {
     if (g_requireCtrl && !g_ctrlDown) return FALSE;
     if (g_requireAlt && !g_altDown) return FALSE;
@@ -183,6 +198,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 
         if ((isKeyDown || isKeyUp) && isModifierEvent) {
             UpdateModifierState(kbd->vkCode, isKeyDown);
+            SyncModifierState(kbd->vkCode);
         }
 
         // Stop an active press as soon as one of its required modifiers is released.
