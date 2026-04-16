@@ -2309,6 +2309,14 @@ class IPCHandlers {
       return this.environmentManager.saveDictationKey(key);
     });
 
+    ipcMain.handle("get-active-dictation-key", async () => {
+      return this.windowManager?.hotkeyManager?.currentHotkey ?? null;
+    });
+
+    ipcMain.handle("get-effective-default-hotkey", async () => {
+      return this.windowManager?.hotkeyManager?.getEffectiveDefaultHotkey() ?? null;
+    });
+
     ipcMain.handle("get-activation-mode", async () => {
       return this.environmentManager.getActivationMode();
     });
