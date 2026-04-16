@@ -14,7 +14,7 @@
 
 <p align="center">
   Free, open-source voice-to-text dictation app with AI agents, meeting transcription, and notes.<br/>
-  Privacy-first alternative to Dragon, SuperWhisper, and Otter. Cross-platform for macOS, Windows, and Linux.
+  Privacy-first alternative to WisprFlow, Granola, and Otter. Cross-platform for macOS, Windows, and Linux.
 </p>
 
 <p align="center">
