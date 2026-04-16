@@ -56,15 +56,12 @@ export default function ApiKeysSection() {
     try {
       const { keys: fetched } = await ApiKeysService.list();
       setKeys(fetched);
-    } catch {
-      toast({
-        title: t("apiKeysSection.errors.loadFailed"),
-        variant: "destructive",
-      });
+    } catch (err) {
+      console.error("Failed to load API keys:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [t, toast]);
+  }, []);
 
   useEffect(() => {
     fetchKeys();
