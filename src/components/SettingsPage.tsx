@@ -2178,7 +2178,7 @@ export default function SettingsPage({
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={() => onNavigateToSection?.("account")}
+                        onClick={() => onNavigateToSection?.("plansBilling")}
                       >
                         {t("settingsPage.apiKeys.viewPlans")}
                       </Button>
