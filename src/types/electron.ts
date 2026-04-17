@@ -1038,6 +1038,7 @@ declare global {
         apiKey: string;
         baseUrl: string;
         model: string;
+        provider?: string;
       }) => Promise<{
         success: boolean;
         text?: string;

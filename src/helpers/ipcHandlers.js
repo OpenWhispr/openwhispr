@@ -5559,12 +5559,11 @@ class IPCHandlers {
 
     ipcMain.handle(
       "transcribe-audio-file-byok",
-      async (event, { filePath, apiKey, baseUrl, model }) => {
+      async (event, { filePath, apiKey, baseUrl, model, provider }) => {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
-          if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
           const fileSize = fs.statSync(filePath).size;
           if (fileSize > BYOK_FILE_SIZE_LIMIT) {
@@ -5573,6 +5572,24 @@ class IPCHandlers {
               error: "File too large. Maximum size for bring-your-own-key is 25 MB.",
             };
           }
+
+          if (provider === "gladia") {
+            const { GladiaClient } = require("@gladiaio/sdk");
+            const client = new GladiaClient({ apiKey });
+            const audioBuffer = fs.readFileSync(filePath);
+            const fileName = path.basename(filePath);
+            const ext = path.extname(filePath).toLowerCase().replace(".", "");
+            const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
+            const blob = new Blob([audioBuffer], { type: contentType });
+            const file = new File([blob], fileName, { type: contentType });
+            const config = {};
+            if (model && model !== "solaria-1") config.model = model;
+            const result = await client.preRecordedV2().transcribe(file, config);
+            const text = result?.result?.transcription?.full_transcript || "";
+            return { success: true, text };
+          }
+
+          if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
           const audioBuffer = fs.readFileSync(filePath);
           const ext = path.extname(filePath).toLowerCase().replace(".", "");
