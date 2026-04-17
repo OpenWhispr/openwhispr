@@ -178,6 +178,19 @@
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
         }
       ]
+    },
+    {
+      "id": "gladia",
+      "name": "Gladia",
+      "baseUrl": "https://api.gladia.io",
+      "models": [
+        {
+          "id": "solaria-1",
+          "name": "Solaria-1",
+          "description": "Real-time multilingual speech recognition",
+          "descriptionKey": "models.descriptions.transcription.gladia_solaria_1"
+        }
+      ]
     }
   ],
   "cloudProviders": [

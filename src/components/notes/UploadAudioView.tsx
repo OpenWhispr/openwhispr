@@ -116,6 +116,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setGroqApiKey,
     mistralApiKey,
     setMistralApiKey,
+    gladiaApiKey,
+    setGladiaApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
     updateTranscriptionSettings,
@@ -199,7 +201,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 ? groqApiKey
                 : cloudTranscriptionProvider === "mistral"
                   ? mistralApiKey
-                  : customTranscriptionApiKey;
+                  : cloudTranscriptionProvider === "gladia"
+                    ? gladiaApiKey
+                    : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -231,6 +235,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     openaiApiKey,
     groqApiKey,
     mistralApiKey,
+    gladiaApiKey,
     customTranscriptionApiKey,
   ]);
 
@@ -256,6 +261,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return groqApiKey;
       case "mistral":
         return mistralApiKey;
+      case "gladia":
+        return gladiaApiKey;
       case "custom":
         return customTranscriptionApiKey || "";
       default:
@@ -532,6 +539,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setGroqApiKey={setGroqApiKey}
         mistralApiKey={mistralApiKey}
         setMistralApiKey={setMistralApiKey}
+        gladiaApiKey={gladiaApiKey}
+        setGladiaApiKey={setGladiaApiKey}
         customTranscriptionApiKey={customTranscriptionApiKey}
         setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
         cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}

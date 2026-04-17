@@ -1515,7 +1515,8 @@
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
-        "mistral_voxtral_mini_latest": "高速多言語文字起こし"
+        "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "gladia_solaria_1": "リアルタイム多言語音声認識"
       },
       "cloud": {
         "openai_gpt_5_4": "複雑な推論のためのフロンティアモデル",

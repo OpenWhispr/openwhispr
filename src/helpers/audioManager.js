@@ -66,6 +66,18 @@ const STREAMING_PROVIDERS = {
     onError: (cb) => window.electronAPI.onDictationRealtimeError(cb),
     onSessionEnd: (cb) => window.electronAPI.onDictationRealtimeSessionEnd(cb),
   },
+  gladia: {
+    warmup: (opts) => window.electronAPI.gladiaStreamingWarmup(opts),
+    start: (opts) => window.electronAPI.gladiaStreamingStart(opts),
+    send: (buf) => window.electronAPI.gladiaStreamingSend(buf),
+    finalize: () => {},
+    stop: () => window.electronAPI.gladiaStreamingStop(),
+    status: () => window.electronAPI.gladiaStreamingStatus(),
+    onPartial: (cb) => window.electronAPI.onGladiaPartialTranscript(cb),
+    onFinal: (cb) => window.electronAPI.onGladiaFinalTranscript(cb),
+    onError: (cb) => window.electronAPI.onGladiaError(cb),
+    onSessionEnd: (cb) => window.electronAPI.onGladiaSessionEnd(cb),
+  },
 };
 
 class AudioManager {
@@ -194,7 +206,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getStreamingProvider() {
-    const { cloudTranscriptionModel } = getSettings();
+    const { cloudTranscriptionModel, cloudTranscriptionProvider } = getSettings();
+    if (cloudTranscriptionProvider === "gladia") {
+      return STREAMING_PROVIDERS["gladia"];
+    }
     if (REALTIME_MODELS.has(cloudTranscriptionModel)) {
       return STREAMING_PROVIDERS["openai-realtime"];
     }
@@ -204,6 +219,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getStreamingProviderName() {
+    const { cloudTranscriptionProvider } = getSettings();
+    if (cloudTranscriptionProvider === "gladia") return "gladia";
     const defaultProvider = this.context === "notes" ? "deepgram" : "openai-realtime";
     return this.sttConfig?.streamingProvider || defaultProvider;
   }
@@ -1953,6 +1970,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   shouldUseStreaming(isSignedInOverride) {
     const s = getSettings();
     if (s.useLocalWhisper) return false;
+
+    if (s.cloudTranscriptionProvider === "gladia") {
+      return !!s.gladiaApiKey;
+    }
 
     // For dictation/agent: respect sttConfig mode from the API — this allows
     // batch mode even for realtime-capable models (e.g. gpt-4o-mini-transcribe).

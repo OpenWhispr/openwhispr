@@ -112,6 +112,7 @@ const getMeetingTranscriptionOptions = () => {
     parakeetModel,
     cloudTranscriptionMode,
     cloudTranscriptionModel,
+    cloudTranscriptionProvider,
     openaiApiKey,
   } = getSettings();
 
@@ -124,6 +125,10 @@ const getMeetingTranscriptionOptions = () => {
           ? parakeetModel || "parakeet-tdt-0.6b-v3"
           : whisperModel || "base",
     };
+  }
+
+  if (cloudTranscriptionProvider === "gladia") {
+    return { provider: "gladia-async" as const };
   }
 
   const model = REALTIME_MODELS.has(cloudTranscriptionModel)
