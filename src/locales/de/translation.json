@@ -297,8 +297,10 @@
     "mode": {
       "cloud": "Cloud",
       "local": "Lokal",
+      "enterprise": "Enterprise",
       "localDescription": "Läuft auf Ihrem Gerät. Volle Privatsphäre, funktioniert offline.",
-      "cloudDescription": "Leistungsstarke Modelle über API. Schnell und leistungsfähig, erfordert Internet."
+      "cloudDescription": "Leistungsstarke Modelle über API. Schnell und leistungsfähig, erfordert Internet.",
+      "enterpriseDescription": "Nutzen Sie die Cloud-Anbieter-Zugangsdaten Ihrer Organisation."
     },
     "custom": {
       "endpointWithProtocol": "Geben Sie eine vollständige Basis-URL mit Protokoll ein (z. B. https://server/v1).",
@@ -323,7 +325,45 @@
     },
     "getApiKey": "API-Schlüssel holen ->",
     "selectModel": "Modell auswählen",
-    "availableModels": "Verfügbare Modelle"
+    "availableModels": "Verfügbare Modelle",
+    "enterprise": {
+      "title": "Enterprise-Anbieter",
+      "description": "Verbinden Sie sich mit Cloud-Anbietern über die Zugangsdaten Ihrer Organisation.",
+      "testConnection": "Verbindung testen",
+      "testing": "Wird getestet…",
+      "testSuccess": "Verbunden",
+      "testFailed": "Verbindung fehlgeschlagen",
+      "authMode": "Authentifizierung",
+      "ssoProfile": "SSO-Profil",
+      "accessKeys": "Zugriffsschlüssel",
+      "adc": "Application Default Credentials",
+      "apiKeyMode": "API-Schlüssel",
+      "region": "Region",
+      "profile": "Profilname",
+      "accessKeyId": "Access Key ID",
+      "secretAccessKey": "Secret Access Key",
+      "sessionToken": "Session Token (optional)",
+      "endpoint": "Endpoint-URL",
+      "deploymentName": "Deployment-Name",
+      "apiVersion": "API-Version",
+      "projectId": "Projekt-ID",
+      "location": "Standort",
+      "customModelId": "Eigene Modell-ID",
+      "customModelPlaceholder": "Modell-ID oder Deployment-Name eingeben",
+      "suggestedModels": "Empfohlene Modelle",
+      "bedrock": {
+        "ssoHelp": "Verwendet Ihre AWS-CLI-SSO-Konfiguration. Stellen Sie sicher, dass Sie 'aws sso login' ausgeführt haben.",
+        "keysHelp": "Geben Sie Ihre AWS-IAM-Zugriffsschlüssel ein."
+      },
+      "azure": {
+        "endpointHelp": "Endpoint-URL Ihrer Azure-OpenAI-Ressource (z. B. https://myresource.openai.azure.com).",
+        "deploymentHelp": "Name Ihres Modell-Deployments in Azure OpenAI."
+      },
+      "vertex": {
+        "adcHelp": "Verwendet Application Default Credentials. Führen Sie aus: gcloud auth application-default login",
+        "apikeyHelp": "API-Schlüssel für Vertex AI Express Mode aus Google AI Studio."
+      }
+    }
   },
   "transcription": {
     "deleteModel": {
@@ -391,8 +431,8 @@
         "rateLimited": "Download-Server begrenzt Anfragen. Bitte warten Sie einige Minuten und versuchen Sie es erneut.",
         "server": "Serverfehler ({{error}}). Bitte versuchen Sie es später erneut.",
         "generic": "Download fehlgeschlagen: {{error}}",
-        "extractionFailed": "Modell heruntergeladen, aber Installation fehlgeschlagen. Klicken Sie auf \u201EHerunterladen\u201C, um die Installation ohne erneuten Download zu wiederholen.",
-        "tlsError": "Zertifikatsfehler \u2014 Ihr Netzwerk verwendet m\u00F6glicherweise SSL-Inspektion, die Downloads blockiert. Versuchen Sie es \u00FCber ein anderes Netzwerk.",
+        "extractionFailed": "Modell heruntergeladen, aber Installation fehlgeschlagen. Klicken Sie auf „Herunterladen“, um die Installation ohne erneuten Download zu wiederholen.",
+        "tlsError": "Zertifikatsfehler — Ihr Netzwerk verwendet möglicherweise SSL-Inspektion, die Downloads blockiert. Versuchen Sie es über ein anderes Netzwerk.",
         "unknown": "Unbekannter Fehler"
       },
       "downloadFailed": {
@@ -1118,7 +1158,9 @@
         "openwhisprDesc": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
         "providersDesc": "Eigenen API-Schlüssel nutzen.",
         "localDesc": "Modelle auf dem Gerät. Voll privat.",
-        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk."
+        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk.",
+        "enterprise": "Enterprise",
+        "enterpriseDesc": "Nutzen Sie das Cloud-Konto Ihrer Organisation (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
@@ -1143,6 +1185,10 @@
         "switchedSelfHosted": {
           "title": "Selbst gehostet",
           "description": "Verwendung Ihres eigenen Servers."
+        },
+        "switchedEnterprise": {
+          "title": "Enterprise",
+          "description": "Verwendet das Cloud-Konto Ihrer Organisation."
         }
       }
     },
@@ -1540,6 +1586,14 @@
         "groq_compound": "Groqs Compound-System, 450 T/s",
         "groq_compound_mini": "Schnelles Compound-System, 3x niedrigere Latenz",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, 256K Kontext"
+      },
+      "enterprise": {
+        "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",
+        "bedrock_claude_sonnet_4_6": "Ausgewogen. Empfohlener Standard für den Agent-Modus.",
+        "bedrock_claude_opus_4_7": "Höchste Intelligenz. Für komplexe Aufgaben im Agent-Modus.",
+        "bedrock_nova_lite": "Günstigste Option. Nativ in AWS, ideal für hohe Volumen.",
+        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
+        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Leistungsstarkes Hybridmodell",
@@ -2033,7 +2087,9 @@
         "openwhisprDesc": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",
         "providersDesc": "Eigenen API-Schlüssel verwenden.",
         "localDesc": "Modelle auf dem Gerät. Vollständig privat.",
-        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk."
+        "selfHostedDesc": "Eigener Server in Ihrem Netzwerk.",
+        "enterprise": "Enterprise",
+        "enterpriseDesc": "Nutzen Sie das Cloud-Konto Ihrer Organisation (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Zuverlässige Ergebnisse. Keine Einrichtung nötig.",

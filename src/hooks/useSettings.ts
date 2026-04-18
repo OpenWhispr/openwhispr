@@ -58,6 +58,26 @@ export interface ApiKeySettings {
   customReasoningApiKey: string;
 }
 
+export interface EnterpriseProviderSettings {
+  // AWS Bedrock
+  bedrockAuthMode: "sso" | "keys";
+  bedrockRegion: string;
+  bedrockProfile: string;
+  bedrockAccessKeyId: string;
+  bedrockSecretAccessKey: string;
+  bedrockSessionToken: string;
+  // Azure OpenAI
+  azureEndpoint: string;
+  azureApiKey: string;
+  azureDeploymentName: string;
+  azureApiVersion: string;
+  // GCP Vertex AI
+  vertexAuthMode: "adc" | "apikey";
+  vertexProject: string;
+  vertexLocation: string;
+  vertexApiKey: string;
+}
+
 export interface PrivacySettings {
   cloudBackupEnabled: boolean;
   telemetryEnabled: boolean;

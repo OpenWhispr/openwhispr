@@ -297,8 +297,10 @@
     "mode": {
       "cloud": "Nube",
       "local": "Local",
+      "enterprise": "Empresarial",
       "localDescription": "Se ejecuta en tu dispositivo. Privacidad total y funciona sin internet.",
-      "cloudDescription": "Modelos avanzados por API. Rápido y potente, requiere internet."
+      "cloudDescription": "Modelos avanzados por API. Rápido y potente, requiere internet.",
+      "enterpriseDescription": "Usa las credenciales de tu organización en proveedores de nube."
     },
     "custom": {
       "endpointWithProtocol": "Introduce una URL base completa con protocolo (por ejemplo, https://server/v1).",
@@ -323,7 +325,45 @@
     },
     "getApiKey": "Obtener clave API ->",
     "selectModel": "Seleccionar modelo",
-    "availableModels": "Modelos disponibles"
+    "availableModels": "Modelos disponibles",
+    "enterprise": {
+      "title": "Proveedores empresariales",
+      "description": "Conecta con proveedores de nube usando las credenciales de tu organización.",
+      "testConnection": "Probar conexión",
+      "testing": "Probando…",
+      "testSuccess": "Conectado",
+      "testFailed": "Conexión fallida",
+      "authMode": "Autenticación",
+      "ssoProfile": "Perfil SSO",
+      "accessKeys": "Claves de acceso",
+      "adc": "Application Default Credentials",
+      "apiKeyMode": "Clave API",
+      "region": "Región",
+      "profile": "Nombre del perfil",
+      "accessKeyId": "Access Key ID",
+      "secretAccessKey": "Secret Access Key",
+      "sessionToken": "Session Token (opcional)",
+      "endpoint": "URL del endpoint",
+      "deploymentName": "Nombre del deployment",
+      "apiVersion": "Versión de la API",
+      "projectId": "ID del proyecto",
+      "location": "Ubicación",
+      "customModelId": "ID de modelo personalizado",
+      "customModelPlaceholder": "Introduce un ID de modelo o nombre de deployment",
+      "suggestedModels": "Modelos sugeridos",
+      "bedrock": {
+        "ssoHelp": "Usa tu configuración SSO de AWS CLI. Asegúrate de haber ejecutado 'aws sso login'.",
+        "keysHelp": "Introduce tus claves de acceso de AWS IAM."
+      },
+      "azure": {
+        "endpointHelp": "El endpoint de tu recurso Azure OpenAI (por ejemplo, https://myresource.openai.azure.com).",
+        "deploymentHelp": "Nombre del deployment de tu modelo en Azure OpenAI."
+      },
+      "vertex": {
+        "adcHelp": "Usa Application Default Credentials. Ejecuta: gcloud auth application-default login",
+        "apikeyHelp": "Clave API de Vertex AI Express Mode obtenida en Google AI Studio."
+      }
+    }
   },
   "transcription": {
     "deleteModel": {
@@ -1166,7 +1206,9 @@
         "openwhisprDesc": "Resultados fiables. Sin configuración.",
         "providersDesc": "Usa tu propia clave API.",
         "localDesc": "Modelos en el dispositivo. Privado.",
-        "selfHostedDesc": "Tu servidor en tu red."
+        "selfHostedDesc": "Tu servidor en tu red.",
+        "enterprise": "Empresarial",
+        "enterpriseDesc": "Usa la cuenta cloud de tu organización (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Resultados fiables. Sin configuración.",
@@ -1191,6 +1233,10 @@
         "switchedSelfHosted": {
           "title": "Autoalojado",
           "description": "Usando tu propio servidor."
+        },
+        "switchedEnterprise": {
+          "title": "Empresarial",
+          "description": "Usando la cuenta cloud de tu organización."
         }
       }
     },
@@ -1588,6 +1634,14 @@
         "groq_compound": "Sistema compound de Groq, 450 T/seg",
         "groq_compound_mini": "Sistema compound rápido, 3x menor latencia",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexto 256K"
+      },
+      "enterprise": {
+        "bedrock_claude_haiku_4_5": "Rápido y económico. Ideal para limpiar texto.",
+        "bedrock_claude_sonnet_4_6": "Equilibrado. Opción por defecto para el Modo Agente.",
+        "bedrock_claude_opus_4_7": "Máxima inteligencia. Para tareas complejas del Modo Agente.",
+        "bedrock_nova_lite": "La opción más económica. Nativo de AWS, ideal para alto volumen.",
+        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
+        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Modelo híbrido potente",
@@ -2081,7 +2135,9 @@
         "openwhisprDesc": "Resultados fiables. Sin configuración.",
         "providersDesc": "Trae tu propia clave API.",
         "localDesc": "Modelos en el dispositivo. Totalmente privado.",
-        "selfHostedDesc": "Tu propio servidor en tu red."
+        "selfHostedDesc": "Tu propio servidor en tu red.",
+        "enterprise": "Empresarial",
+        "enterpriseDesc": "Usa la cuenta cloud de tu organización (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Resultados fiables. Sin configuración.",

@@ -297,8 +297,10 @@
     "mode": {
       "cloud": "Облако",
       "local": "Локально",
+      "enterprise": "Корпоративный",
       "localDescription": "Работает на вашем устройстве. Полная приватность, работает офлайн.",
-      "cloudDescription": "Продвинутые модели через API. Быстро и мощно, требуется интернет."
+      "cloudDescription": "Продвинутые модели через API. Быстро и мощно, требуется интернет.",
+      "enterpriseDescription": "Используйте учётные данные облачного провайдера вашей организации."
     },
     "custom": {
       "endpointWithProtocol": "Введите полный базовый URL, включая протокол (например, https://server/v1).",
@@ -323,7 +325,45 @@
     },
     "getApiKey": "Получить API-ключ ->",
     "selectModel": "Выберите модель",
-    "availableModels": "Доступные модели"
+    "availableModels": "Доступные модели",
+    "enterprise": {
+      "title": "Корпоративные провайдеры",
+      "description": "Подключайтесь к облачным провайдерам с учётными данными вашей организации.",
+      "testConnection": "Проверить соединение",
+      "testing": "Проверка…",
+      "testSuccess": "Подключено",
+      "testFailed": "Ошибка подключения",
+      "authMode": "Аутентификация",
+      "ssoProfile": "Профиль SSO",
+      "accessKeys": "Ключи доступа",
+      "adc": "Application Default Credentials",
+      "apiKeyMode": "API-ключ",
+      "region": "Регион",
+      "profile": "Имя профиля",
+      "accessKeyId": "Access Key ID",
+      "secretAccessKey": "Secret Access Key",
+      "sessionToken": "Session Token (необязательно)",
+      "endpoint": "Endpoint URL",
+      "deploymentName": "Имя развёртывания",
+      "apiVersion": "Версия API",
+      "projectId": "ID проекта",
+      "location": "Расположение",
+      "customModelId": "Пользовательский ID модели",
+      "customModelPlaceholder": "Введите ID модели или имя развёртывания",
+      "suggestedModels": "Рекомендуемые модели",
+      "bedrock": {
+        "ssoHelp": "Использует настройки SSO из AWS CLI. Убедитесь, что выполнили 'aws sso login'.",
+        "keysHelp": "Введите ключи доступа AWS IAM."
+      },
+      "azure": {
+        "endpointHelp": "Endpoint вашего ресурса Azure OpenAI (например, https://myresource.openai.azure.com).",
+        "deploymentHelp": "Имя развёртывания модели в Azure OpenAI."
+      },
+      "vertex": {
+        "adcHelp": "Использует Application Default Credentials. Выполните: gcloud auth application-default login",
+        "apikeyHelp": "API-ключ Vertex AI Express Mode из Google AI Studio."
+      }
+    }
   },
   "transcription": {
     "deleteModel": {
@@ -1118,7 +1158,9 @@
         "openwhisprDesc": "Надёжные результаты. Без настройки.",
         "providersDesc": "Используйте свой API-ключ.",
         "localDesc": "Модели на устройстве. Полная приватность.",
-        "selfHostedDesc": "Свой сервер в вашей сети."
+        "selfHostedDesc": "Свой сервер в вашей сети.",
+        "enterprise": "Корпоративный",
+        "enterpriseDesc": "Используйте облачный аккаунт вашей организации (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Надёжные результаты. Без настройки.",
@@ -1143,6 +1185,10 @@
         "switchedSelfHosted": {
           "title": "Свой сервер",
           "description": "Используется ваш собственный сервер."
+        },
+        "switchedEnterprise": {
+          "title": "Корпоративный",
+          "description": "Используется облачный аккаунт вашей организации."
         }
       }
     },
@@ -1540,6 +1586,14 @@
         "groq_compound": "Система Compound от Groq, 450 т/с",
         "groq_compound_mini": "Быстрая система Compound, 3x ниже задержка",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, контекст 256K"
+      },
+      "enterprise": {
+        "bedrock_claude_haiku_4_5": "Быстрая и дешёвая. Отлично подходит для очистки текста.",
+        "bedrock_claude_sonnet_4_6": "Сбалансированная. Лучший выбор для режима агента.",
+        "bedrock_claude_opus_4_7": "Максимальный интеллект. Для сложных задач в режиме агента.",
+        "bedrock_nova_lite": "Самая дешёвая. Нативная для AWS, идеальна для больших объёмов.",
+        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
+        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Мощная гибридная модель",
@@ -2033,7 +2087,9 @@
         "openwhisprDesc": "Надёжные результаты. Без настройки.",
         "providersDesc": "Свой API-ключ.",
         "localDesc": "Модели на устройстве. Полная приватность.",
-        "selfHostedDesc": "Ваш сервер в вашей сети."
+        "selfHostedDesc": "Ваш сервер в вашей сети.",
+        "enterprise": "Корпоративный",
+        "enterpriseDesc": "Используйте облачный аккаунт вашей организации (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Надёжные результаты. Без настройки.",

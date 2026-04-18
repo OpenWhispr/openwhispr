@@ -2391,6 +2391,129 @@ class IPCHandlers {
       return this.environmentManager.saveCustomReasoningKey(key);
     });
 
+    // Enterprise provider key handlers
+    ipcMain.handle("get-bedrock-access-key-id", async () => {
+      return this.environmentManager.getBedrockAccessKeyId();
+    });
+    ipcMain.handle("save-bedrock-access-key-id", async (event, key) => {
+      return this.environmentManager.saveBedrockAccessKeyId(key);
+    });
+    ipcMain.handle("get-bedrock-secret-access-key", async () => {
+      return this.environmentManager.getBedrockSecretAccessKey();
+    });
+    ipcMain.handle("save-bedrock-secret-access-key", async (event, key) => {
+      return this.environmentManager.saveBedrockSecretAccessKey(key);
+    });
+    ipcMain.handle("get-bedrock-session-token", async () => {
+      return this.environmentManager.getBedrockSessionToken();
+    });
+    ipcMain.handle("save-bedrock-session-token", async (event, key) => {
+      return this.environmentManager.saveBedrockSessionToken(key);
+    });
+    ipcMain.handle("get-azure-api-key", async () => {
+      return this.environmentManager.getAzureApiKey();
+    });
+    ipcMain.handle("save-azure-api-key", async (event, key) => {
+      return this.environmentManager.saveAzureApiKey(key);
+    });
+    ipcMain.handle("get-vertex-api-key", async () => {
+      return this.environmentManager.getVertexApiKey();
+    });
+    ipcMain.handle("save-vertex-api-key", async (event, key) => {
+      return this.environmentManager.saveVertexApiKey(key);
+    });
+
+    // Enterprise provider test connection
+    ipcMain.handle("test-enterprise-connection", async (event, provider, config) => {
+      const {
+        mapEnterpriseError,
+        pickEnterpriseConfig,
+        validateEnterpriseEndpoint,
+      } = require("./enterpriseProviderErrors");
+      try {
+        validateEnterpriseEndpoint(config.azureEndpoint);
+
+        const { generateText } = require("ai");
+        const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
+
+        const model = getEnterpriseAIModel(
+          provider,
+          config.model || "test",
+          config.apiKey || "",
+          pickEnterpriseConfig(config)
+        );
+
+        await generateText({
+          model,
+          prompt: "Say hello in one word.",
+          maxOutputTokens: 10,
+        });
+
+        return { success: true };
+      } catch (err) {
+        const mapped = mapEnterpriseError(provider, err, config);
+        return {
+          success: false,
+          error: mapped.message,
+          action: mapped.action,
+          copyCommand: mapped.copyCommand,
+          retryable: mapped.retryable,
+        };
+      }
+    });
+
+    ipcMain.handle(
+      "process-enterprise-reasoning",
+      async (event, text, modelId, _agentName, config) => {
+        const {
+          isEnterpriseProvider,
+          mapEnterpriseError,
+          pickEnterpriseConfig,
+          validateEnterpriseEndpoint,
+        } = require("./enterpriseProviderErrors");
+        const provider = config?.provider;
+        try {
+          if (!isEnterpriseProvider(provider)) {
+            throw new Error(`Unsupported enterprise provider: ${provider}`);
+          }
+          if (!modelId) {
+            throw new Error("No model specified for enterprise reasoning");
+          }
+
+          validateEnterpriseEndpoint(config?.azureEndpoint);
+
+          const { generateText } = require("ai");
+          const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
+
+          const model = getEnterpriseAIModel(
+            provider,
+            modelId,
+            config.apiKey || "",
+            pickEnterpriseConfig(config)
+          );
+
+          const timeoutMs = config?.timeoutMs || 60000;
+          // Opus 4.7 / GPT-5 / o-series dropped `temperature`; renderer
+          // derives support from the model registry and we honor that here.
+          const useTemperature = config?.supportsTemperature !== false;
+          const { text: generated } = await generateText({
+            model,
+            system: config?.systemPrompt || "",
+            prompt: text,
+            maxOutputTokens: config?.maxTokens || 4096,
+            ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
+            abortSignal: AbortSignal.timeout(timeoutMs),
+          });
+
+          return { success: true, text: (generated || "").trim() };
+        } catch (err) {
+          debugLogger.error("Enterprise reasoning error:", err);
+          const mapped = mapEnterpriseError(provider, err, config || {});
+          return { success: false, error: mapped.message, retryable: mapped.retryable };
+        }
+      }
+    );
+
     ipcMain.handle("get-dictation-key", async () => {
       return this.environmentManager.getDictationKey();
     });

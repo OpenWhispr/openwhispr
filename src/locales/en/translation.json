@@ -297,8 +297,10 @@
     "mode": {
       "cloud": "Cloud",
       "local": "Local",
+      "enterprise": "Enterprise",
       "localDescription": "Runs on your device. Complete privacy, works offline.",
-      "cloudDescription": "Advanced models via API. Fast and capable, requires internet."
+      "cloudDescription": "Advanced models via API. Fast and capable, requires internet.",
+      "enterpriseDescription": "Use your organization's own cloud provider credentials."
     },
     "custom": {
       "endpointWithProtocol": "Enter a full base URL including protocol (for example, https://server/v1).",
@@ -323,7 +325,45 @@
     },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
-    "availableModels": "Available Models"
+    "availableModels": "Available Models",
+    "enterprise": {
+      "title": "Enterprise Providers",
+      "description": "Connect to cloud providers using your organization's credentials.",
+      "testConnection": "Test Connection",
+      "testing": "Testing...",
+      "testSuccess": "Connected",
+      "testFailed": "Connection failed",
+      "authMode": "Authentication",
+      "ssoProfile": "SSO Profile",
+      "accessKeys": "Access Keys",
+      "adc": "Application Default Credentials",
+      "apiKeyMode": "API Key",
+      "region": "Region",
+      "profile": "Profile Name",
+      "accessKeyId": "Access Key ID",
+      "secretAccessKey": "Secret Access Key",
+      "sessionToken": "Session Token (optional)",
+      "endpoint": "Endpoint URL",
+      "deploymentName": "Deployment Name",
+      "apiVersion": "API Version",
+      "projectId": "Project ID",
+      "location": "Location",
+      "customModelId": "Custom Model ID",
+      "customModelPlaceholder": "Enter model ID or deployment name",
+      "suggestedModels": "Suggested Models",
+      "bedrock": {
+        "ssoHelp": "Uses your AWS CLI SSO configuration. Ensure you have run 'aws sso login'.",
+        "keysHelp": "Enter your AWS IAM access keys."
+      },
+      "azure": {
+        "endpointHelp": "Your Azure OpenAI resource endpoint (e.g., https://myresource.openai.azure.com).",
+        "deploymentHelp": "The name of your model deployment in Azure OpenAI."
+      },
+      "vertex": {
+        "adcHelp": "Uses Application Default Credentials. Run: gcloud auth application-default login",
+        "apikeyHelp": "Vertex AI Express Mode API key from Google AI Studio."
+      }
+    }
   },
   "transcription": {
     "deleteModel": {
@@ -1211,10 +1251,12 @@
         "providers": "Cloud Providers",
         "local": "Local",
         "selfHosted": "Self-Hosted",
+        "enterprise": "Enterprise",
         "openwhisprDesc": "Reliable accuracy. No setup needed.",
         "providersDesc": "Bring your own API key.",
         "localDesc": "On-device models. Fully private.",
-        "selfHostedDesc": "Your own server on your network."
+        "selfHostedDesc": "Your own server on your network.",
+        "enterpriseDesc": "Use your organization's cloud account (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",
@@ -1239,6 +1281,10 @@
         "switchedSelfHosted": {
           "title": "Self-Hosted",
           "description": "Using your own server."
+        },
+        "switchedEnterprise": {
+          "title": "Enterprise",
+          "description": "Using your organization's cloud account."
         }
       }
     },
@@ -1640,6 +1686,14 @@
         "groq_compound": "Groq's compound system, 450 T/sec",
         "groq_compound_mini": "Fast compound system, 3x lower latency",
         "groq_kimi_k2_0905": "Moonshot AI's 1T MoE, 256K context"
+      },
+      "enterprise": {
+        "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
+        "bedrock_claude_sonnet_4_6": "Balanced workhorse. Best default for Agent Mode.",
+        "bedrock_claude_opus_4_7": "Max intelligence. Best for complex Agent Mode tasks.",
+        "bedrock_nova_lite": "Cheapest option. AWS-native, ideal for high volume.",
+        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
+        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Powerful hybrid model",
@@ -2126,10 +2180,12 @@
         "providers": "Cloud Providers",
         "local": "Local",
         "selfHosted": "Self-Hosted",
+        "enterprise": "Enterprise",
         "openwhisprDesc": "Reliable accuracy. No setup needed.",
         "providersDesc": "Bring your own API key.",
         "localDesc": "On-device models. Fully private.",
-        "selfHostedDesc": "Your own server on your network."
+        "selfHostedDesc": "Your own server on your network.",
+        "enterpriseDesc": "Use your organization's cloud account (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Reliable accuracy. No setup needed.",

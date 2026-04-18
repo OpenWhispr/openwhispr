@@ -297,8 +297,10 @@
     "mode": {
       "cloud": "クラウド",
       "local": "ローカル",
+      "enterprise": "エンタープライズ",
       "localDescription": "デバイス上で動作。完全なプライバシー保護、オフライン対応。",
-      "cloudDescription": "API 経由の高度なモデル。高速・高機能、インターネット接続が必要。"
+      "cloudDescription": "API 経由の高度なモデル。高速・高機能、インターネット接続が必要。",
+      "enterpriseDescription": "組織のクラウド認証情報を使用します。"
     },
     "custom": {
       "endpointWithProtocol": "プロトコルを含む完全なベース URL を入力してください（例: https://server/v1）。",
@@ -323,7 +325,45 @@
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
-    "availableModels": "利用可能なモデル"
+    "availableModels": "利用可能なモデル",
+    "enterprise": {
+      "title": "エンタープライズプロバイダー",
+      "description": "組織のクラウドプロバイダー認証情報を使用して接続します。",
+      "testConnection": "接続をテスト",
+      "testing": "テスト中…",
+      "testSuccess": "接続成功",
+      "testFailed": "接続失敗",
+      "authMode": "認証",
+      "ssoProfile": "SSO プロファイル",
+      "accessKeys": "アクセスキー",
+      "adc": "Application Default Credentials",
+      "apiKeyMode": "API キー",
+      "region": "リージョン",
+      "profile": "プロファイル名",
+      "accessKeyId": "Access Key ID",
+      "secretAccessKey": "Secret Access Key",
+      "sessionToken": "Session Token（任意）",
+      "endpoint": "エンドポイント URL",
+      "deploymentName": "デプロイメント名",
+      "apiVersion": "API バージョン",
+      "projectId": "プロジェクト ID",
+      "location": "ロケーション",
+      "customModelId": "カスタムモデル ID",
+      "customModelPlaceholder": "モデル ID またはデプロイメント名を入力",
+      "suggestedModels": "推奨モデル",
+      "bedrock": {
+        "ssoHelp": "AWS CLI の SSO 設定を使用します。'aws sso login' を実行済みであることを確認してください。",
+        "keysHelp": "AWS IAM のアクセスキーを入力してください。"
+      },
+      "azure": {
+        "endpointHelp": "Azure OpenAI リソースのエンドポイント（例: https://myresource.openai.azure.com）。",
+        "deploymentHelp": "Azure OpenAI 内のモデルデプロイメント名。"
+      },
+      "vertex": {
+        "adcHelp": "Application Default Credentials を使用します。次を実行してください: gcloud auth application-default login",
+        "apikeyHelp": "Google AI Studio で取得した Vertex AI Express Mode の API キー。"
+      }
+    }
   },
   "transcription": {
     "deleteModel": {
@@ -1118,7 +1158,9 @@
         "openwhisprDesc": "信頼できる精度。設定不要。",
         "providersDesc": "自分のAPIキーを使用。",
         "localDesc": "端末上のモデル。完全プライベート。",
-        "selfHostedDesc": "自前サーバーをネットワーク上に。"
+        "selfHostedDesc": "自前サーバーをネットワーク上に。",
+        "enterprise": "エンタープライズ",
+        "enterpriseDesc": "組織のクラウドアカウントを使用 (AWS, Azure, GCP)。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "信頼できる精度。設定不要。",
@@ -1143,6 +1185,10 @@
         "switchedSelfHosted": {
           "title": "セルフホスト",
           "description": "独自のサーバーを使用します。"
+        },
+        "switchedEnterprise": {
+          "title": "エンタープライズ",
+          "description": "組織のクラウドアカウントを使用しています。"
         }
       }
     },
@@ -1540,6 +1586,14 @@
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト"
+      },
+      "enterprise": {
+        "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
+        "bedrock_claude_sonnet_4_6": "バランス型。エージェントモードの既定モデルに最適です。",
+        "bedrock_claude_opus_4_7": "最高性能。複雑なエージェントモードのタスクに最適です。",
+        "bedrock_nova_lite": "最も安価。AWS ネイティブで大量処理に最適です。",
+        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
+        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "強力なハイブリッドモデル",
@@ -2033,7 +2087,9 @@
         "openwhisprDesc": "信頼できる精度。設定不要。",
         "providersDesc": "独自のAPIキーを使用。",
         "localDesc": "デバイス上のモデル。完全プライベート。",
-        "selfHostedDesc": "ネットワーク上の自分のサーバー。"
+        "selfHostedDesc": "ネットワーク上の自分のサーバー。",
+        "enterprise": "エンタープライズ",
+        "enterpriseDesc": "組織のクラウドアカウントを使用 (AWS, Azure, GCP)。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "信頼できる精度。設定不要。",

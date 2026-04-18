@@ -359,6 +359,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getCustomReasoningKey: () => ipcRenderer.invoke("get-custom-reasoning-key"),
   saveCustomReasoningKey: (key) => ipcRenderer.invoke("save-custom-reasoning-key", key),
 
+  // Enterprise provider key management
+  getBedrockAccessKeyId: () => ipcRenderer.invoke("get-bedrock-access-key-id"),
+  saveBedrockAccessKeyId: (key) => ipcRenderer.invoke("save-bedrock-access-key-id", key),
+  getBedrockSecretAccessKey: () => ipcRenderer.invoke("get-bedrock-secret-access-key"),
+  saveBedrockSecretAccessKey: (key) => ipcRenderer.invoke("save-bedrock-secret-access-key", key),
+  getBedrockSessionToken: () => ipcRenderer.invoke("get-bedrock-session-token"),
+  saveBedrockSessionToken: (key) => ipcRenderer.invoke("save-bedrock-session-token", key),
+  getAzureApiKey: () => ipcRenderer.invoke("get-azure-api-key"),
+  saveAzureApiKey: (key) => ipcRenderer.invoke("save-azure-api-key", key),
+  getVertexApiKey: () => ipcRenderer.invoke("get-vertex-api-key"),
+  saveVertexApiKey: (key) => ipcRenderer.invoke("save-vertex-api-key", key),
+  testEnterpriseConnection: (provider, config) =>
+    ipcRenderer.invoke("test-enterprise-connection", provider, config),
+
   // Dictation key persistence (file-based for reliable startup)
   getDictationKey: () => ipcRenderer.invoke("get-dictation-key"),
   getActiveDictationKey: () => ipcRenderer.invoke("get-active-dictation-key"),
@@ -380,6 +394,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Anthropic reasoning
   processAnthropicReasoning: (text, modelId, agentName, config) =>
     ipcRenderer.invoke("process-anthropic-reasoning", text, modelId, agentName, config),
+
+  // Enterprise reasoning (Bedrock, Azure, Vertex) — runs in main process so
+  // Node-only SDKs (AWS/Azure/Google credential providers) can resolve.
+  processEnterpriseReasoning: (text, modelId, agentName, config) =>
+    ipcRenderer.invoke("process-enterprise-reasoning", text, modelId, agentName, config),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),

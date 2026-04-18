@@ -48,6 +48,10 @@ export interface CloudProviderData {
   models: CloudModelDefinition[];
 }
 
+export interface EnterpriseProviderData extends CloudProviderData {
+  allowCustomModelId: boolean;
+}
+
 export interface TranscriptionModelDefinition {
   id: string;
   name: string;
@@ -101,6 +105,7 @@ interface ModelRegistryData {
   whisperModels: WhisperModelsMap;
   transcriptionProviders: TranscriptionProviderData[];
   cloudProviders: CloudProviderData[];
+  enterpriseProviders: EnterpriseProviderData[];
   localProviders: LocalProviderData[];
 }
 
@@ -163,6 +168,10 @@ class ModelRegistry {
     return modelData.cloudProviders;
   }
 
+  getEnterpriseProviders(): EnterpriseProviderData[] {
+    return modelData.enterpriseProviders;
+  }
+
   getTranscriptionProviders(): TranscriptionProviderData[] {
     return modelData.transcriptionProviders;
   }
@@ -203,6 +212,12 @@ export interface ReasoningProvider {
 
 export type ReasoningProviders = Record<string, ReasoningProvider>;
 
+export type EnterpriseProvider = "bedrock" | "azure" | "vertex";
+export const ENTERPRISE_PROVIDERS: readonly EnterpriseProvider[] = ["bedrock", "azure", "vertex"];
+export function isEnterpriseProvider(value: unknown): value is EnterpriseProvider {
+  return typeof value === "string" && (ENTERPRISE_PROVIDERS as readonly string[]).includes(value);
+}
+
 function buildReasoningProviders(): ReasoningProviders {
   const providers: ReasoningProviders = {};
 
@@ -210,6 +225,18 @@ function buildReasoningProviders(): ReasoningProviders {
     providers[cloudProvider.id] = {
       name: cloudProvider.name,
       models: cloudProvider.models.map((m) => ({
+        value: m.id,
+        label: m.name,
+        description: m.description,
+        descriptionKey: m.descriptionKey,
+      })),
+    };
+  }
+
+  for (const ep of modelRegistry.getEnterpriseProviders()) {
+    providers[ep.id] = {
+      name: ep.name,
+      models: ep.models.map((m) => ({
         value: m.id,
         label: m.name,
         description: m.description,
@@ -258,8 +285,14 @@ export function getModelProvider(modelId: string): string {
     return "openwhispr";
   }
 
-  if (getSettings().reasoningProvider === "custom") {
+  const storedProvider = getSettings().reasoningProvider;
+
+  if (storedProvider === "custom") {
     return "custom";
+  }
+
+  if (isEnterpriseProvider(storedProvider)) {
+    return storedProvider;
   }
 
   const model = getAllReasoningModels().find((m) => m.value === modelId);
@@ -323,6 +356,10 @@ export const WHISPER_MODEL_INFO = modelData.whisperModels;
 
 export function getCloudModel(modelId: string): CloudModelDefinition | undefined {
   for (const provider of modelData.cloudProviders) {
+    const model = provider.models.find((m) => m.id === modelId);
+    if (model) return model;
+  }
+  for (const provider of modelData.enterpriseProviders) {
     const model = provider.models.find((m) => m.id === modelId);
     if (model) return model;
   }
