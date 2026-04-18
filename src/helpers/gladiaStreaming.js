@@ -1,5 +1,6 @@
 const { GladiaClient } = require("@gladiaio/sdk");
 const debugLogger = require("./debugLogger");
+const packageJson = require("../../package.json");
 
 const CONNECT_TIMEOUT_MS = 30000;
 const STOP_TIMEOUT_MS = 5000;
@@ -14,8 +15,9 @@ function buildSessionConfig(options = {}) {
     channels: 1,
     endpointing: 0.3,
     maximum_duration_without_endpointing: 40,
-    pre_processing: {speech_threshold: 0.75},
+    pre_processing: { speech_threshold: 0.75 },
     messages_config: { receive_partial_transcripts: true },
+    custom_metadata: { openwhispr: packageJson.version },
   };
   if (lang) {
     config.language_config = { languages: [lang], code_switching: false };
@@ -47,7 +49,7 @@ class GladiaStreaming {
   }
 
   _createSession(apiKey, options) {
-    const client = new GladiaClient({ apiKey });
+    const client = new GladiaClient({ apiKey, httpHeaders: { "x-api-key": apiKey } });
     return client.liveV2().startSession(buildSessionConfig(options));
   }
 

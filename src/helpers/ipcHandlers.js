@@ -4485,7 +4485,9 @@ class IPCHandlers {
         }
 
         const connect =
-          options.provider === "gladia-realtime" ? connectGladiaStreaming : connectRealtimeStreaming;
+          options.provider === "gladia-realtime"
+            ? connectGladiaStreaming
+            : connectRealtimeStreaming;
         await connect(event, options);
         const realtimeWin = BrowserWindow.fromWebContents(event.sender);
         await startLiveSpeakerIdentification(realtimeWin, systemAudioMode);
