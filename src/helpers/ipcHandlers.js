@@ -126,6 +126,8 @@ class IPCHandlers {
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
     this._dictationStreaming = null;
+    this._dictationConnectPromise = null;
+    this._dictationIdleTimer = null;
     this._meetingMicStreaming = null;
     this._meetingSystemStreaming = null;
     this._autoLearnEnabled = true; // Default on, synced from renderer
@@ -4292,21 +4294,57 @@ class IPCHandlers {
         event.sender.send("dictation-realtime-session-end", data || {});
     };
 
+    const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
+    const clearDictationIdleTimer = () => {
+      if (this._dictationIdleTimer) {
+        clearTimeout(this._dictationIdleTimer);
+        this._dictationIdleTimer = null;
+      }
+    };
+
+    const startDictationIdleTimer = () => {
+      clearDictationIdleTimer();
+      this._dictationIdleTimer = setTimeout(() => {
+        if (this._dictationStreaming) {
+          debugLogger.debug("Closing idle dictation warmup connection");
+          this._dictationStreaming.disconnect().catch(() => {});
+          this._dictationStreaming = null;
+        }
+      }, DICTATION_IDLE_TIMEOUT_MS);
+    };
+
     const connectDictationStreaming = async (event, options) => {
+      if (this._dictationConnectPromise) {
+        await this._dictationConnectPromise.catch(() => {});
+      }
+
+      clearDictationIdleTimer();
+
       if (this._dictationStreaming) {
         await this._dictationStreaming.disconnect().catch(() => {});
         this._dictationStreaming = null;
       }
-      const isCloud = options.mode !== "byok";
-      const apiKey = await fetchRealtimeToken(event, { mode: options.mode });
-      const streaming = new OpenAIRealtimeStreaming();
-      setupDictationCallbacks(streaming, event);
-      await streaming.connect({
-        apiKey,
-        model: options.model || "gpt-4o-mini-transcribe",
-        preconfigured: isCloud,
-      });
-      this._dictationStreaming = streaming;
+
+      const connectInner = async () => {
+        const isCloud = options.mode !== "byok";
+        const apiKey = await fetchRealtimeToken(event, { mode: options.mode });
+        const streaming = new OpenAIRealtimeStreaming();
+        setupDictationCallbacks(streaming, event);
+        await streaming.connect({
+          apiKey,
+          model: options.model || "gpt-4o-mini-transcribe",
+          preconfigured: isCloud,
+        });
+        this._dictationStreaming = streaming;
+      };
+
+      this._dictationConnectPromise = connectInner();
+      try {
+        await this._dictationConnectPromise;
+      } finally {
+        this._dictationConnectPromise = null;
+      }
     };
 
     // Pre-warm: fetch tokens + connect WebSockets before user hits record
@@ -4665,6 +4703,7 @@ class IPCHandlers {
     ipcMain.handle("dictation-realtime-warmup", async (event, options = {}) => {
       try {
         await connectDictationStreaming(event, options);
+        startDictationIdleTimer();
         return { success: true };
       } catch (err) {
         return { success: false, error: err.message };
@@ -4673,6 +4712,7 @@ class IPCHandlers {
 
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
       try {
+        clearDictationIdleTimer();
         if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
         return { success: true };
       } catch (err) {
@@ -4685,6 +4725,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-stop", async () => {
+      clearDictationIdleTimer();
       if (!this._dictationStreaming) {
         return { success: true, text: "" };
       }
