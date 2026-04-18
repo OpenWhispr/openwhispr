@@ -209,6 +209,15 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
             fflush(stdout);
         }
 
+        // Self-heal a missed target-key KEY_UP. GetAsyncKeyState is only reliable
+        // for keys other than the one in the current callback, so verify here.
+        if (g_isKeyDown && !g_useModifiersOnly && kbd->vkCode != g_targetVk &&
+            !(GetAsyncKeyState(g_targetVk) & 0x8000)) {
+            g_isKeyDown = FALSE;
+            printf("KEY_UP\n");
+            fflush(stdout);
+        }
+
         if (g_useModifiersOnly) {
             if (isKeyDown) {
                 if (!g_isKeyDown && AreRequiredModifiersPressed()) {

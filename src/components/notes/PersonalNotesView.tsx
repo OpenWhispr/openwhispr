@@ -172,7 +172,7 @@ export default function PersonalNotesView({
     recordingNoteIdRef.current = activeNoteRef.current;
     const note = notes.find((n) => n.id === activeNoteRef.current);
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    await startTranscription({ seedSegments });
+    await startTranscription({ seedSegments, noteId: activeNoteRef.current });
   }, [notes, startTranscription]);
 
   const stopRecording = useCallback(async () => {
@@ -478,7 +478,7 @@ export default function PersonalNotesView({
     recordingNoteIdRef.current = meetingRecordingRequest.noteId;
     const note = notes.find((n) => n.id === meetingRecordingRequest.noteId);
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    startTranscription({ seedSegments });
+    startTranscription({ seedSegments, noteId: meetingRecordingRequest.noteId });
     onMeetingRecordingRequestHandled?.();
   }, [
     meetingRecordingRequest,

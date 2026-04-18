@@ -406,7 +406,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setState("complete");
       } else {
         setProgress(0);
-        setError(res.error || t("notes.upload.transcriptionFailed"));
+        setError(
+          res.code === "NO_SPEECH_DETECTED"
+            ? t("notes.upload.noSpeechDetected")
+            : res.error || t("notes.upload.transcriptionFailed")
+        );
         setState("error");
       }
     } catch (err) {

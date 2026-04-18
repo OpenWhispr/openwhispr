@@ -525,10 +525,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, data) => callback(data)
   ),
 
-  // Meeting chain transcription (BaseTen)
-  meetingTranscribeChain: (blobUrl, opts) =>
-    ipcRenderer.invoke("meeting-transcribe-chain", blobUrl, opts),
-
   // Meeting transcription (streaming, dual-channel)
   meetingTranscriptionPrepare: (options) =>
     ipcRenderer.invoke("meeting-transcription-prepare", options),

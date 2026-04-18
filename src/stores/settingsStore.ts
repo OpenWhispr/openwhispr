@@ -328,15 +328,6 @@ function createBooleanSetter(key: string) {
   };
 }
 
-const LOCAL_PROVIDERS = new Set(["qwen", "llama", "mistral", "openai-oss", "gemma"]);
-const ENTERPRISE_PROVIDERS = new Set(["bedrock", "azure", "vertex"]);
-
-function inferenceModeForProvider(provider: string): Exclude<InferenceMode, "openwhispr"> {
-  if (provider === "custom") return "self-hosted";
-  if (ENTERPRISE_PROVIDERS.has(provider)) return "enterprise";
-  if (LOCAL_PROVIDERS.has(provider)) return "local";
-  return "providers";
-}
 
 let envPersistTimer: ReturnType<typeof setTimeout> | null = null;
 function debouncedPersistToEnv() {
@@ -562,34 +553,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
   setUseReasoningModel: createBooleanSetter("useReasoningModel"),
   setReasoningProvider: (value: string) => {
-    const mode = inferenceModeForProvider(value);
-    if (isBrowser) {
-      localStorage.setItem("reasoningProvider", value);
-      localStorage.setItem("reasoningMode", mode);
-      localStorage.setItem("cloudReasoningMode", "byok");
-    }
-    useSettingsStore.setState({
-      reasoningProvider: value,
-      reasoningMode: mode,
-      cloudReasoningMode: "byok",
-    });
+    if (isBrowser) localStorage.setItem("reasoningProvider", value);
+    useSettingsStore.setState({ reasoningProvider: value });
   },
   setReasoningModel: (value: string) => {
     if (isBrowser) localStorage.setItem("reasoningModel", value);
-    if (!value) {
-      useSettingsStore.setState({ reasoningModel: value });
-      return;
-    }
-    const mode = inferenceModeForProvider(useSettingsStore.getState().reasoningProvider);
-    if (isBrowser) {
-      localStorage.setItem("reasoningMode", mode);
-      localStorage.setItem("cloudReasoningMode", "byok");
-    }
-    useSettingsStore.setState({
-      reasoningModel: value,
-      reasoningMode: mode,
-      cloudReasoningMode: "byok",
-    });
+    useSettingsStore.setState({ reasoningModel: value });
   },
 
   setCustomDictionary: (words: string[]) => {
@@ -837,33 +806,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setAgentModel: (value: string) => {
     if (isBrowser) localStorage.setItem("agentModel", value);
-    if (!value) {
-      useSettingsStore.setState({ agentModel: value });
-      return;
-    }
-    const mode = inferenceModeForProvider(useSettingsStore.getState().agentProvider);
-    if (isBrowser) {
-      localStorage.setItem("agentInferenceMode", mode);
-      localStorage.setItem("cloudAgentMode", "byok");
-    }
-    useSettingsStore.setState({
-      agentModel: value,
-      agentInferenceMode: mode,
-      cloudAgentMode: "byok",
-    });
+    useSettingsStore.setState({ agentModel: value });
   },
   setAgentProvider: (value: string) => {
-    const mode = inferenceModeForProvider(value);
-    if (isBrowser) {
-      localStorage.setItem("agentProvider", value);
-      localStorage.setItem("agentInferenceMode", mode);
-      localStorage.setItem("cloudAgentMode", "byok");
-    }
-    useSettingsStore.setState({
-      agentProvider: value,
-      agentInferenceMode: mode,
-      cloudAgentMode: "byok",
-    });
+    if (isBrowser) localStorage.setItem("agentProvider", value);
+    useSettingsStore.setState({ agentProvider: value });
   },
   setAgentKey: (key: string) => {
     if (!isBrowser) {

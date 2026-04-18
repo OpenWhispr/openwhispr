@@ -57,7 +57,10 @@ interface UseMeetingTranscriptionReturn {
   error: string | null;
   diarizationSessionId: string | null;
   prepareTranscription: () => Promise<void>;
-  startTranscription: (_options?: { seedSegments?: TranscriptSegment[] }) => Promise<void>;
+  startTranscription: (_options?: {
+    seedSegments?: TranscriptSegment[];
+    noteId?: number | null;
+  }) => Promise<void>;
   stopTranscription: () => Promise<void>;
   lockSpeaker: (speakerId: string, displayName: string) => void;
 }
@@ -639,7 +642,7 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   }, []);
 
   const startTranscription = useCallback(
-    async (_options?: { seedSegments?: TranscriptSegment[] }) => {
+    async (_options?: { seedSegments?: TranscriptSegment[]; noteId?: number | null }) => {
       if (isRecordingRef.current || isStartingRef.current) return;
       isStartingRef.current = true;
       const systemAudioAccessPromise =
@@ -686,7 +689,10 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
           prepareMeetingSystemAudioCapture(initialSystemAudioAccess);
 
         const [startResult, micResult, initialSystemCaptureResult] = await Promise.all([
-          window.electronAPI?.meetingTranscriptionStart?.(getMeetingTranscriptionOptions()),
+          window.electronAPI?.meetingTranscriptionStart?.({
+            ...getMeetingTranscriptionOptions(),
+            noteId: _options?.noteId ?? null,
+          }),
           getMeetingMicConstraints().then(async (constraints) => {
             try {
               return await navigator.mediaDevices.getUserMedia(constraints);
@@ -932,6 +938,19 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
           logger.error("Meeting transcription stream error", { error: err }, "meeting");
         });
         if (errorCleanup) ipcCleanupsRef.current.push(errorCleanup);
+
+        if (startResult.oneOnOneAttendee) {
+          const synthetic: SpeakerIdentification = {
+            speakerId: "speaker_0",
+            displayName: startResult.oneOnOneAttendee.displayName,
+            startTime: 0,
+            endTime: Number.MAX_SAFE_INTEGER,
+          };
+          reserveSpeakerIndex(synthetic.speakerId);
+          setSystemPartialSpeakerIdentity(synthetic.speakerId, synthetic.displayName);
+          rememberSystemSpeaker(synthetic.speakerId, synthetic.displayName, false, Date.now());
+          speakerIdentificationsRef.current.push(synthetic);
+        }
 
         const pendingMicChunks: ArrayBuffer[] = [];
         const pendingSystemChunks: ArrayBuffer[] = [];

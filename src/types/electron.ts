@@ -1367,24 +1367,6 @@ declare global {
       }) => Promise<{ success: boolean }>;
       getMD5Hash: (text: string) => Promise<string>;
 
-      // Meeting chain transcription (BaseTen)
-      meetingTranscribeChain?: (
-        blobUrl: string,
-        opts?: {
-          skipCleanup?: boolean;
-          agentName?: string;
-          customDictionary?: string[];
-        }
-      ) => Promise<{
-        success: boolean;
-        text?: string;
-        rawText?: string;
-        cleanedText?: string;
-        processingDurationSec?: number;
-        speedupFactor?: number;
-        error?: string;
-      }>;
-
       // Meeting transcription (streaming, dual-channel)
       meetingTranscriptionPrepare?: (options: {
         provider?: string;
@@ -1395,11 +1377,13 @@ declare global {
         provider?: string;
         model?: string;
         language?: string;
+        noteId?: number | null;
       }) => Promise<{
         success: boolean;
         error?: string;
         systemAudioMode?: SystemAudioMode;
         systemAudioStrategy?: SystemAudioStrategy;
+        oneOnOneAttendee?: { displayName: string; email: string | null } | null;
       }>;
       meetingTranscriptionSend?: (buffer: ArrayBuffer, source: "mic" | "system") => void;
       meetingTranscriptionStop?: () => Promise<{
