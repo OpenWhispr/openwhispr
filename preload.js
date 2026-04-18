@@ -353,6 +353,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
 
+  // Gladia API
+  getGladiaKey: () => ipcRenderer.invoke("get-gladia-key"),
+  saveGladiaKey: (key) => ipcRenderer.invoke("save-gladia-key", key),
+
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
@@ -503,6 +507,29 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onDeepgramSessionEnd: registerListener(
     "deepgram-session-end",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Gladia Streaming
+  gladiaStreamingWarmup: (options) => ipcRenderer.invoke("gladia-streaming-warmup", options),
+  gladiaStreamingStart: (options) => ipcRenderer.invoke("gladia-streaming-start", options),
+  gladiaStreamingSend: (audioBuffer) => ipcRenderer.send("gladia-streaming-send", audioBuffer),
+  gladiaStreamingStop: () => ipcRenderer.invoke("gladia-streaming-stop"),
+  gladiaStreamingStatus: () => ipcRenderer.invoke("gladia-streaming-status"),
+  onGladiaPartialTranscript: registerListener(
+    "gladia-partial-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onGladiaFinalTranscript: registerListener(
+    "gladia-final-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onGladiaError: registerListener(
+    "gladia-error",
+    (callback) => (_event, error) => callback(error)
+  ),
+  onGladiaSessionEnd: registerListener(
+    "gladia-session-end",
     (callback) => (_event, data) => callback(data)
   ),
 

@@ -227,6 +227,7 @@ export interface SettingsState
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
+  setGladiaApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCustomReasoningApiKey: (key: string) => void;
 
@@ -364,6 +365,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   geminiApiKey: readString("geminiApiKey", ""),
   groqApiKey: readString("groqApiKey", ""),
   mistralApiKey: readString("mistralApiKey", ""),
+  gladiaApiKey: readString("gladiaApiKey", ""),
   customTranscriptionApiKey: readString("customTranscriptionApiKey", ""),
   customReasoningApiKey: readString("customReasoningApiKey", ""),
 
@@ -575,6 +577,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ mistralApiKey: key });
     window.electronAPI?.saveMistralKey?.(key);
     invalidateApiKeyCaches("mistral");
+  },
+  setGladiaApiKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("gladiaApiKey", key);
+    set({ gladiaApiKey: key });
+    window.electronAPI?.saveGladiaKey?.(key);
+    invalidateApiKeyCaches("gladia");
   },
   setCustomTranscriptionApiKey: (key: string) => {
     if (isBrowser) localStorage.setItem("customTranscriptionApiKey", key);
@@ -813,6 +821,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
+    if (keys.gladiaApiKey !== undefined) s.setGladiaApiKey(keys.gladiaApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.customReasoningApiKey !== undefined)
@@ -898,6 +907,10 @@ export async function initializeSettings(): Promise<void> {
       if (!state.mistralApiKey) {
         const envKey = await window.electronAPI.getMistralKey?.();
         if (envKey) createStringSetter("mistralApiKey")(envKey);
+      }
+      if (!state.gladiaApiKey) {
+        const envKey = await window.electronAPI.getGladiaKey?.();
+        if (envKey) createStringSetter("gladiaApiKey")(envKey);
       }
       if (!state.customTranscriptionApiKey) {
         const envKey = await window.electronAPI.getCustomTranscriptionKey?.();

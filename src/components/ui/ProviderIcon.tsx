@@ -6,7 +6,7 @@ interface ProviderIconProps {
   className?: string;
 }
 
-const MONOCHROME_PROVIDERS = ["openai", "whisper", "anthropic", "openai-oss"];
+const MONOCHROME_PROVIDERS = ["openai", "whisper", "anthropic", "openai-oss", "gladia"];
 
 export function ProviderIcon({ provider, className = "w-5 h-5" }: ProviderIconProps) {
   if (provider === "custom") {
