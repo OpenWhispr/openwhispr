@@ -202,6 +202,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq" },
   { id: "mistral", name: "Mistral" },
+  { id: "smallest", name: "Smallest AI" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -273,6 +274,8 @@ export default function TranscriptionModelPicker({
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const smallestAiApiKey = useSettingsStore((s) => s.smallestAiApiKey);
+  const setSmallestAiApiKey = useSettingsStore((s) => s.setSmallestAiApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
@@ -871,6 +874,7 @@ export default function TranscriptionModelPicker({
                           groq: "https://console.groq.com/keys",
                           mistral: "https://console.mistral.ai/api-keys",
                           openai: "https://platform.openai.com/api-keys",
+                          smallest: "https://waves.smallest.ai/",
                         }[selectedCloudProvider] || "https://platform.openai.com/api-keys"
                       )}
                       className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
@@ -880,14 +884,20 @@ export default function TranscriptionModelPicker({
                   </div>
                   <ApiKeyInput
                     apiKey={
-                      { groq: groqApiKey, mistral: mistralApiKey, openai: openaiApiKey }[
-                        selectedCloudProvider
-                      ] || openaiApiKey
+                      {
+                        groq: groqApiKey,
+                        mistral: mistralApiKey,
+                        openai: openaiApiKey,
+                        smallest: smallestAiApiKey,
+                      }[selectedCloudProvider] || openaiApiKey
                     }
                     setApiKey={
-                      { groq: setGroqApiKey, mistral: setMistralApiKey, openai: setOpenaiApiKey }[
-                        selectedCloudProvider
-                      ] || setOpenaiApiKey
+                      {
+                        groq: setGroqApiKey,
+                        mistral: setMistralApiKey,
+                        openai: setOpenaiApiKey,
+                        smallest: setSmallestAiApiKey,
+                      }[selectedCloudProvider] || setOpenaiApiKey
                     }
                     label=""
                     helpText=""

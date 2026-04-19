@@ -311,6 +311,14 @@ class EnvironmentManager {
     return this._saveKey("DEEPGRAM_API_KEY", key);
   }
 
+  getSmallestAiKey() {
+    return this._getKey("SMALLEST_AI_API_KEY");
+  }
+
+  saveSmallestAiKey(key) {
+    return this._saveKey("SMALLEST_AI_API_KEY", key);
+  }
+
   getCustomTranscriptionKey() {
     return this._getKey("CUSTOM_TRANSCRIPTION_API_KEY");
   }

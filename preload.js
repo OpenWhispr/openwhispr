@@ -358,6 +358,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
 
+  // Smallest AI API
+  getSmallestAiKey: () => ipcRenderer.invoke("get-smallest-ai-key"),
+  saveSmallestAiKey: (key) => ipcRenderer.invoke("save-smallest-ai-key", key),
+
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
