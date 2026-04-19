@@ -96,16 +96,16 @@ export default function PersonalNotesView({
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const enhancedSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const activeNoteRef = useRef<number | null>(null);
-  const [lastSyncedNoteId, setLastSyncedNoteId] = useState<number | null>(null);
+  const [syncedNoteId, setSyncedNoteIdState] = useState<number | null>(null);
   const localContentRef = useRef(localContent);
   const localTitleRef = useRef(localTitle);
   useEffect(() => {
     localContentRef.current = localContent;
     localTitleRef.current = localTitle;
-  });
-  const setActiveNoteId = (id: number | null) => {
+  }, [localContent, localTitle]);
+  const markNoteAsSynced = (id: number | null) => {
     activeNoteRef.current = id;
-    setLastSyncedNoteId(id);
+    setSyncedNoteIdState(id);
   };
   const { toast } = useToast();
   const isCloudMode = useSettingsStore(selectIsCloudReasoningMode);
@@ -208,7 +208,7 @@ export default function PersonalNotesView({
           clearTimeout(enhancedSaveTimeoutRef.current);
           enhancedSaveTimeoutRef.current = null;
         }
-        setActiveNoteId(activeNote.id);
+        markNoteAsSynced(activeNote.id);
         setLocalTitle(activeNote.title);
         setLocalContent(activeNote.content);
         setLocalEnhancedContent(activeNote.enhanced_content ?? null);
@@ -229,7 +229,7 @@ export default function PersonalNotesView({
           clearTimeout(enhancedSaveTimeoutRef.current);
           enhancedSaveTimeoutRef.current = null;
         }
-        setActiveNoteId(null);
+        markNoteAsSynced(null);
         setLocalTitle("");
         setLocalContent("");
         setLocalEnhancedContent(null);
@@ -536,7 +536,7 @@ export default function PersonalNotesView({
     return () => clearInterval(interval);
   }, [isTranscribing, realtimeSegments]);
 
-  const isLocalSynced = lastSyncedNoteId === activeNote?.id;
+  const isLocalSynced = syncedNoteId === activeNote?.id;
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
   const editorNote = activeNote
     ? {
