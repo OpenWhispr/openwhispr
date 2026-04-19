@@ -110,7 +110,7 @@
     "vite": "^8.0.7"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.58",
+    "@ai-sdk/anthropic": "^3.0.71",
     "@ai-sdk/google": "^3.0.43",
     "@ai-sdk/groq": "^3.0.29",
     "@ai-sdk/openai": "^3.0.41",
