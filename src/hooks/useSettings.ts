@@ -60,6 +60,7 @@ export interface ApiKeySettings {
   groqApiKey: string;
   xaiApiKey: string;
   mistralApiKey: string;
+  smallestAiApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
   customTranscriptionApiKey: string;
@@ -227,6 +228,7 @@ function useSettingsInternal() {
     groqApiKey: store.groqApiKey,
     xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
+    smallestAiApiKey: store.smallestAiApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,
@@ -263,6 +265,7 @@ function useSettingsInternal() {
     setGeminiApiKey: store.setGeminiApiKey,
     setGroqApiKey: store.setGroqApiKey,
     setMistralApiKey: store.setMistralApiKey,
+    setSmallestAiApiKey: store.setSmallestAiApiKey,
     customTranscriptionApiKey: store.customTranscriptionApiKey,
     setCustomTranscriptionApiKey: store.setCustomTranscriptionApiKey,
     cleanupCustomApiKey: store.cleanupCustomApiKey,
