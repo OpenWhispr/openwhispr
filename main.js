@@ -137,18 +137,53 @@ function shouldRegisterProtocolWithAppArg() {
   return Boolean(process.defaultApp) || isElectronBinaryExec();
 }
 
+function getDefaultHtmlHandler() {
+  try {
+    const { execFileSync } = require("child_process");
+    return execFileSync("xdg-mime", ["query", "default", "text/html"], {
+      encoding: "utf8",
+      timeout: 3000,
+    }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function restoreHtmlHandlerIfChanged(original) {
+  try {
+    const { execFileSync } = require("child_process");
+    const current = execFileSync("xdg-mime", ["query", "default", "text/html"], {
+      encoding: "utf8",
+      timeout: 3000,
+    }).trim();
+    if (current && current !== original) {
+      execFileSync("xdg-mime", ["default", original, "text/html"], { timeout: 3000 });
+    }
+  } catch {
+    // xdg-mime unavailable or failed
+  }
+}
+
 // Register custom protocol for OAuth callbacks.
 // In development, always include the app path argument so macOS/Windows/Linux
 // can launch the project app instead of opening bare Electron.
 function registerOpenWhisprProtocol() {
   const protocol = OAUTH_PROTOCOL;
+  const htmlHandler = process.platform === "linux" ? getDefaultHtmlHandler() : null;
 
+  let result;
   if (shouldRegisterProtocolWithAppArg()) {
     const appArg = process.argv[1] ? path.resolve(process.argv[1]) : path.resolve(".");
-    return app.setAsDefaultProtocolClient(protocol, process.execPath, [appArg]);
+    result = app.setAsDefaultProtocolClient(protocol, process.execPath, [appArg]);
+  } else {
+    result = app.setAsDefaultProtocolClient(protocol);
   }
 
-  return app.setAsDefaultProtocolClient(protocol);
+  if (htmlHandler) {
+    restoreHtmlHandlerIfChanged(htmlHandler);
+  }
+
+  return result;
 }
 
 const protocolRegistered = registerOpenWhisprProtocol();
