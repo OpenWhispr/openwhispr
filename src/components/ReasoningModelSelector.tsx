@@ -754,7 +754,7 @@ export default function ReasoningModelSelector({
         </div>
       )}
 
-      {effectiveMode === "cloud" ? (
+      {effectiveMode === "cloud" && (
         <div className="space-y-2">
           <ProviderTabs
             providers={cloudProviders}
@@ -982,7 +982,9 @@ export default function ReasoningModelSelector({
             )}
           </div>
         </div>
-      ) : (
+      )}
+
+      {effectiveMode === "local" && (
         <>
           <LocalModelPicker
             providers={localProviders}

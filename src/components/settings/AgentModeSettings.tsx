@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Cloud, Key, Cpu, Network } from "lucide-react";
+import { Cloud, Key, Cpu, Network, Building2 } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { HotkeyInput } from "../ui/HotkeyInput";
 import { Toggle } from "../ui/toggle";
@@ -13,6 +13,7 @@ import {
 } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import ReasoningModelSelector from "../ReasoningModelSelector";
+import EnterpriseSection from "../EnterpriseSection";
 import SelfHostedPanel from "../SelfHostedPanel";
 import { validateHotkeyForSlot } from "../../utils/hotkeyValidation";
 import type { InferenceMode } from "../../types/electron";
@@ -100,6 +101,12 @@ export default function AgentModeSettings() {
       description: t("agentMode.settings.modes.selfHostedDesc"),
       icon: <Network className="w-4 h-4" />,
     },
+    {
+      id: "enterprise",
+      label: t("agentMode.settings.modes.enterprise"),
+      description: t("agentMode.settings.modes.enterpriseDesc"),
+      icon: <Building2 className="w-4 h-4" />,
+    },
   ];
 
   const handleAgentModeSelect = (mode: InferenceMode) => {
@@ -110,7 +117,7 @@ export default function AgentModeSettings() {
     if (mode === agentInferenceMode) return;
     setAgentInferenceMode(mode);
     setCloudAgentMode(mode === "openwhispr" ? "openwhispr" : "byok");
-    if (mode === "openwhispr" || mode === "self-hosted") {
+    if (mode === "openwhispr" || mode === "self-hosted" || mode === "enterprise") {
       window.electronAPI?.llamaServerStop?.();
     }
   };
@@ -179,6 +186,15 @@ export default function AgentModeSettings() {
               service="reasoning"
               url={remoteAgentUrl}
               onUrlChange={setRemoteAgentUrl}
+            />
+          )}
+
+          {agentInferenceMode === "enterprise" && (
+            <EnterpriseSection
+              currentProvider={agentProvider}
+              reasoningModel={agentModel}
+              setReasoningModel={setAgentModel}
+              setLocalReasoningProvider={setAgentProvider}
             />
           )}
 
