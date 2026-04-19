@@ -23,11 +23,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install platform-specific native binaries
+        run: npm install @rollup/rollup-linux-x64-gnu lightningcss-linux-x64-gnu @tailwindcss/oxide-linux-x64-gnu --no-save
 
       - name: Cache native binaries
         uses: actions/cache@v4
@@ -50,6 +53,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
+      - name: Download Qdrant binary
+        run: node scripts/download-qdrant.js --current
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Download meeting AEC helper
+        run: node scripts/download-meeting-aec-helper.js --current
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
       - name: Cache Electron
         uses: actions/cache@v4
         with:
@@ -57,10 +70,15 @@ jobs:
           key: linux-electron-${{ hashFiles('**/package-lock.json') }}
           restore-keys: linux-electron-
 
-      - name: Install Linux packaging dependencies
+      - name: Install Linux build and packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm
+          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev
+
+      - name: Create runtime env
+        run: |
+          echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
+          echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
 
       - name: Build Application
         run: npm run build:linux -- --publish always
@@ -78,11 +96,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install platform-specific native binaries
+        run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --no-save
 
       - name: Cache native binaries
         uses: actions/cache@v4
@@ -105,6 +126,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
+      - name: Download Qdrant binary
+        run: node scripts/download-qdrant.js --current
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Download meeting AEC helper
+        run: node scripts/download-meeting-aec-helper.js --current
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
       - name: Download nircmd.exe
         run: node scripts/download-nircmd.js
         env:
@@ -120,6 +151,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
+      - name: Download windows-mic-listener.exe
+        run: node scripts/download-windows-mic-listener.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
       - name: Cache Electron
         uses: actions/cache@v4
         with:
@@ -127,13 +163,22 @@ jobs:
           key: windows-electron-${{ hashFiles('**/package-lock.json') }}
           restore-keys: windows-electron-
 
-      - name: Build Application
+      - name: Create runtime env
+        shell: bash
+        run: |
+          echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
+          echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
+
+      - name: Build and Sign Application
         run: npm run build:win -- --publish always
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           VITE_NEON_AUTH_URL: ${{ vars.VITE_NEON_AUTH_URL }}
           VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
           VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
 
   build-macos:
     runs-on: macos-latest
@@ -147,7 +192,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
 
       - name: Install dependencies
@@ -155,7 +200,9 @@ jobs:
 
       - name: Install ffmpeg-static for target architecture
         if: matrix.arch == 'x64'
-        run: npm_config_arch=x64 node node_modules/ffmpeg-static/install.js
+        run: |
+          rm -f node_modules/ffmpeg-static/ffmpeg
+          npm_config_arch=x64 node node_modules/ffmpeg-static/install.js
 
       - name: Cache native binaries
         uses: actions/cache@v4
@@ -175,6 +222,16 @@ jobs:
 
       - name: Download sherpa-onnx binaries
         run: node scripts/download-sherpa-onnx.js --current --platform darwin --arch ${{ matrix.arch }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Download Qdrant binary
+        run: node scripts/download-qdrant.js --current --platform darwin --arch ${{ matrix.arch }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Download meeting AEC helper
+        run: node scripts/download-meeting-aec-helper.js --current --platform darwin --arch ${{ matrix.arch }}
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
@@ -208,6 +265,11 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "runner" $KEYCHAIN_PATH
 
           echo "APPLE_API_KEY=$API_KEY_PATH" >> $GITHUB_ENV
+
+      - name: Create runtime env
+        run: |
+          echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
+          echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
 
       - name: Build Application (${{ matrix.arch }})
         run: npm run build:mac -- --${{ matrix.arch }} --publish always

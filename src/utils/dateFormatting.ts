@@ -3,6 +3,19 @@ export function normalizeDbDate(dateStr: string): Date {
   return new Date(source);
 }
 
+export function formatUpcomingDateGroup(date: Date | string, t: (key: string) => string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+  if (target.getTime() === today.getTime()) return t("controlPanel.history.dateGroups.today");
+  if (target.getTime() === tomorrow.getTime()) return t("upcoming.tomorrow");
+  return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+}
+
 export function formatDateGroup(date: Date | string, t: (key: string) => string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   const now = new Date();

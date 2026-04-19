@@ -167,11 +167,13 @@
   }
 
   /* Make dictation window (App) transparent, but keep control panel solid */
-  body:has(.dictation-window) {
+  body:has(.dictation-window),
+  body:has(.meeting-notification-window) {
     background: transparent;
   }
 
-  body:has(.dictation-window) #root {
+  body:has(.dictation-window) #root,
+  body:has(.meeting-notification-window) #root {
     background: transparent;
   }
 }
@@ -239,8 +241,8 @@ a svg:hover,
 }
 
 /* Premium input styling with subtle depth */
-input,
-textarea {
+input:not(.input-inline),
+textarea:not(.input-inline) {
   border-radius: var(--radius);
   transition:
     background-color 0.2s ease,
@@ -251,34 +253,32 @@ textarea {
   box-shadow: inset 0 1px 2px oklch(from var(--color-foreground) l c h / 0.06);
 }
 
-/* Light mode inputs - embossed parchment */
-:root input,
-:root textarea {
-  background-color: var(--color-parchment-bg);
-  border: 1px solid var(--color-parchment-border);
-  color: var(--color-parchment-text);
+/* Light mode inputs */
+:root input:not(.input-inline),
+:root textarea:not(.input-inline) {
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  color: var(--color-foreground);
 }
 
-:root input:focus,
-:root textarea:focus {
-  border-color: var(--color-parchment-accent);
-  box-shadow:
-    0 0 0 2px oklch(from var(--color-parchment-accent) l c h / 0.2),
-    inset 0 1px 3px oklch(from var(--color-parchment-text) l c h / var(--opacity-subtle));
+:root input:not(.input-inline):focus,
+:root textarea:not(.input-inline):focus {
+  border-color: var(--color-border-active);
+  box-shadow: 0 0 0 2px oklch(from var(--color-ring) l c h / 0.15);
   background-color: var(--color-background);
 }
 
 /* Dark mode inputs — flat, no embossed shadow */
-.dark input,
-.dark textarea {
+.dark input:not(.input-inline),
+.dark textarea:not(.input-inline) {
   background-color: var(--color-input);
   border: 1px solid var(--color-border);
   color: var(--color-foreground);
   box-shadow: none;
 }
 
-.dark input:focus,
-.dark textarea:focus {
+.dark input:not(.input-inline):focus,
+.dark textarea:not(.input-inline):focus {
   border-color: var(--color-border-active);
   box-shadow: 0 0 0 2px oklch(from var(--color-ring) l c h / 0.15);
 }
@@ -792,4 +792,297 @@ a:hover {
 
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* ---- Agent Overlay ---- */
+
+body:has(.agent-overlay-window) {
+  background: transparent;
+}
+
+body:has(.agent-overlay-window) #root {
+  background: transparent;
+}
+
+@keyframes agent-message-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes agent-cursor-blink {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes tool-step-shimmer {
+  0% {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      oklch(0.65 0.2 260 / 0.04) 50%,
+      transparent 100%
+    );
+    background-position: -100% 0;
+    background-size: 200% 100%;
+  }
+  100% {
+    background-position: 100% 0;
+    background-size: 200% 100%;
+  }
+}
+
+@keyframes tool-check-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  70% {
+    transform: scale(1.3);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes tool-status-sweep {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes thinking-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.thinking-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    oklch(0.65 0.01 260) 0%,
+    oklch(0.85 0.02 240) 40%,
+    oklch(0.65 0.01 260) 60%,
+    oklch(0.78 0.015 250) 100%
+  );
+  background-size: 200% 100%;
+  animation: thinking-shimmer 2s ease-in-out infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes agent-loading-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.agent-chat-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.agent-chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.agent-chat-scroll::-webkit-scrollbar-thumb {
+  background: oklch(0.5 0 0 / 0.2);
+  border-radius: 2px;
+}
+
+.agent-chat-scroll::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.5 0 0 / 0.3);
+}
+
+/* ── TipTap / ProseMirror Rich Text Editor ── */
+
+.rich-text-editor-content {
+  outline: none;
+  padding: 0.75rem 1.25rem 5rem;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--color-foreground);
+  caret-color: var(--color-foreground);
+}
+
+.rich-text-editor-content h1 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin-top: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.rich-text-editor-content h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.rich-text-editor-content h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+  margin-bottom: 0.125rem;
+}
+
+.rich-text-editor-content p {
+  margin-bottom: 0.25rem;
+}
+
+.rich-text-editor-content ul,
+.rich-text-editor-content ol {
+  padding-left: 1.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.rich-text-editor-content ul {
+  list-style-type: disc;
+}
+
+.rich-text-editor-content ul ul {
+  list-style-type: circle;
+}
+
+.rich-text-editor-content ul ul ul {
+  list-style-type: square;
+}
+
+.rich-text-editor-content ol {
+  list-style-type: decimal;
+}
+
+.rich-text-editor-content li {
+  margin-bottom: 0.125rem;
+}
+
+.rich-text-editor-content li::marker {
+  color: oklch(0.5 0 0 / 0.4);
+}
+
+.rich-text-editor-content blockquote {
+  border-left: 2px solid oklch(0.5 0 0 / 0.15);
+  padding-left: 0.75rem;
+  color: oklch(0.5 0 0 / 0.6);
+  font-style: italic;
+  margin: 0.375rem 0;
+}
+
+.rich-text-editor-content code {
+  background: oklch(0.5 0 0 / 0.06);
+  border-radius: 2px;
+  padding: 1px 3px;
+  font-size: 0.8125rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
+.rich-text-editor-content hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 0.75rem 0;
+}
+
+.rich-text-editor-content ::selection {
+  background: oklch(0.62 0.22 260 / 0.15);
+}
+
+/* Task list (checkboxes) */
+.rich-text-editor-content ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.rich-text-editor-content ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+}
+
+.rich-text-editor-content ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 0.25rem;
+}
+
+.rich-text-editor-content ul[data-type="taskList"] li > label input[type="checkbox"] {
+  appearance: none;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1.5px solid oklch(0.5 0 0 / 0.25);
+  border-radius: 3px;
+  cursor: pointer;
+  transition:
+    background-color 100ms,
+    border-color 100ms;
+}
+
+.rich-text-editor-content ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e");
+  background-size: 100% 100%;
+}
+
+.rich-text-editor-content ul[data-type="taskList"] li[data-checked="true"] > div {
+  text-decoration: line-through;
+  color: oklch(0.5 0 0 / 0.4);
+}
+
+/* Placeholder */
+.rich-text-editor-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: oklch(0.5 0 0 / 0.2);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+
+/* Dark mode adjustments */
+.dark .rich-text-editor-content li::marker {
+  color: oklch(0.7 0 0 / 0.4);
+}
+
+.dark .rich-text-editor-content blockquote {
+  border-left-color: oklch(0.7 0 0 / 0.2);
+  color: oklch(0.7 0 0 / 0.6);
+}
+
+.dark .rich-text-editor-content code {
+  background: oklch(0.8 0 0 / 0.08);
+}
+
+.dark .rich-text-editor-content ul[data-type="taskList"] li > label input[type="checkbox"] {
+  border-color: oklch(0.7 0 0 / 0.3);
+}
+
+.dark .rich-text-editor-content ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: oklch(0.7 0 0 / 0.4);
+}
+
+.dark .rich-text-editor-content p.is-editor-empty:first-child::before {
+  color: oklch(0.7 0 0 / 0.2);
 }

@@ -1,0 +1,62 @@
+name: Build Linux Text Monitor
+
+on:
+  push:
+    paths:
+      - 'resources/linux-text-monitor.c'
+      - '.github/workflows/build-linux-text-monitor.yml'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., 1.0.0)'
+        required: false
+        default: '1.0.0'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y libatspi2.0-dev libglib2.0-dev pkg-config
+
+      - name: Compile Linux Text Monitor
+        run: |
+          gcc -O2 resources/linux-text-monitor.c -o linux-text-monitor $(pkg-config --cflags --libs atspi-2)
+
+      - name: Verify binary
+        run: |
+          file linux-text-monitor
+          test -f linux-text-monitor || { echo "Binary not found"; exit 1; }
+
+      - name: Create tar.gz archive
+        run: |
+          tar -czf linux-text-monitor-linux-x64.tar.gz linux-text-monitor
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-text-monitor
+          path: linux-text-monitor-linux-x64.tar.gz
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: linux-text-monitor-v${{ inputs.version || '1.0.0' }}
+          name: Linux Text Monitor v${{ inputs.version || '1.0.0' }}
+          body: |
+            Prebuilt Linux text monitor binary for auto-learn correction monitoring.
+
+            This binary uses AT-SPI2 to detect text field changes after paste.
+          files: linux-text-monitor-linux-x64.tar.gz
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

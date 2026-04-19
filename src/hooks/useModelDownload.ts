@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useDialogs } from "./useDialogs";
-import { useToast } from "../components/ui/Toast";
+import { useToast } from "../components/ui/useToast";
 import type { WhisperDownloadProgressData } from "../types/electron";
 import "../types/electron";
 
@@ -41,6 +41,8 @@ export function formatETA(seconds: number): string {
 function getDownloadErrorMessage(t: TFunction, error: string, code?: string): string {
   if (code === "EXTRACTION_FAILED" || error.includes("installation failed"))
     return t("hooks.modelDownload.errors.extractionFailed");
+  if (code === "TLS_ERROR" || error.includes("certificate") || error.includes("issuer"))
+    return t("hooks.modelDownload.errors.tlsError");
   if (code === "ETIMEDOUT" || error.includes("timeout") || error.includes("stalled"))
     return t("hooks.modelDownload.errors.timeout");
   if (code === "ENOTFOUND" || error.includes("ENOTFOUND"))

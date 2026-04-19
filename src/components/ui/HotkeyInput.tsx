@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle } from "lucide-react";
-import { formatHotkeyLabel } from "../../utils/hotkeys";
+import { formatHotkeyLabel, isGlobeLikeHotkey } from "../../utils/hotkeys";
 import { getPlatform } from "../../utils/platform";
 
 const CODE_TO_KEY: Record<string, string> = {
@@ -149,7 +149,7 @@ export interface HotkeyInputProps {
   validate?: (hotkey: string) => string | null | undefined;
 }
 
-export function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
+function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
   if (MODIFIER_CODES.has(e.code)) {
     return null;
   }
@@ -455,7 +455,7 @@ export function HotkeyInput({
   }, [isCapturing, isMac, finalizeCapture]);
 
   const displayValue = formatHotkeyLabel(value);
-  const isGlobe = value === "GLOBE";
+  const isGlobe = isGlobeLikeHotkey(value);
   const hotkeyParts = value?.includes("+") ? displayValue.split("+") : [];
 
   // Hero variant: large centered key display for onboarding
@@ -466,6 +466,7 @@ export function HotkeyInput({
         tabIndex={disabled ? -1 : 0}
         role="button"
         aria-label={t("hotkeyInput.ariaLabel")}
+        data-capturing={isCapturing || undefined}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
         onFocus={handleFocus}
@@ -569,6 +570,7 @@ export function HotkeyInput({
       tabIndex={disabled ? -1 : 0}
       role="button"
       aria-label={t("hotkeyInput.ariaLabel")}
+      data-capturing={isCapturing || undefined}
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
       onFocus={handleFocus}

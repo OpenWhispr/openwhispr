@@ -2,13 +2,19 @@ const { Menu } = require("electron");
 const { i18nMain } = require("./i18nMain");
 
 class MenuManager {
-  static setupMainMenu() {
+  static setupMainMenu(onOpenSettings) {
     if (process.platform === "darwin") {
       const template = [
         {
           label: i18nMain.t("menu.appLabel"),
           submenu: [
             { role: "about" },
+            { type: "separator" },
+            {
+              label: i18nMain.t("menu.settings"),
+              accelerator: "Command+,",
+              click: () => onOpenSettings?.(),
+            },
             { type: "separator" },
             { role: "services" },
             { type: "separator" },
@@ -25,7 +31,7 @@ class MenuManager {
     }
   }
 
-  static setupControlPanelMenu(controlPanelWindow) {
+  static setupControlPanelMenu(controlPanelWindow, onOpenSettings) {
     if (process.platform === "darwin") {
       // On macOS, create a proper application menu
       const template = [
@@ -33,6 +39,12 @@ class MenuManager {
           label: i18nMain.t("menu.appLabel"),
           submenu: [
             { role: "about" },
+            { type: "separator" },
+            {
+              label: i18nMain.t("menu.settings"),
+              accelerator: "Command+,",
+              click: () => onOpenSettings?.(),
+            },
             { type: "separator" },
             { role: "services" },
             { type: "separator" },
@@ -108,7 +120,15 @@ class MenuManager {
       const template = [
         {
           label: i18nMain.t("menu.file"),
-          submenu: [{ role: "close", label: i18nMain.t("menu.closeWindow") }],
+          submenu: [
+            {
+              label: i18nMain.t("menu.settings"),
+              accelerator: "Ctrl+,",
+              click: () => onOpenSettings?.(),
+            },
+            { type: "separator" },
+            { role: "close", label: i18nMain.t("menu.closeWindow") },
+          ],
         },
         {
           label: "Edit",

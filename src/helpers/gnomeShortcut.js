@@ -5,26 +5,56 @@ const DBUS_SERVICE_NAME = "com.openwhispr.App";
 const DBUS_OBJECT_PATH = "/com/openwhispr/App";
 const DBUS_INTERFACE = "com.openwhispr.App";
 
-const KEYBINDING_PATH =
-  "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr/";
+// Per-slot gsettings paths and display names
+const SLOT_CONFIG = {
+  dictation: {
+    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr/",
+    name: "OpenWhispr Toggle",
+  },
+  agent: {
+    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-agent/",
+    name: "OpenWhispr Agent",
+  },
+  meeting: {
+    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-meeting/",
+    name: "OpenWhispr Meeting",
+  },
+};
+
 const KEYBINDING_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
 
-// Valid pattern for GNOME shortcut format (e.g., "<Alt>r", "<Control><Shift>space")
-// Supports: letters/digits, function keys (F1-F24), navigation, and special keys
+// Valid pattern for GNOME shortcut format using X11 keysym names (case-sensitive).
+// Modifiers are case-insensitive (GTK normalizes them), keysyms are exact.
 const VALID_SHORTCUT_PATTERN =
-  /^(<(Control|Alt|Shift|Super)>)*(F([1-9]|1[0-9]|2[0-4])|[a-z0-9]|space|escape|tab|backspace|grave|pause|scroll_lock|insert|delete|home|end|page_up|page_down|up|down|left|right|return|print)$/i;
+  /^(<(Control|Alt|Shift|Super)>)*(F([1-9]|1[0-9]|2[0-4])|[a-z0-9]|space|Escape|Tab|BackSpace|grave|Pause|Scroll_Lock|Insert|Delete|Home|End|Page_Up|Page_Down|Up|Down|Left|Right|Return|Print)$/;
 
-// Map Electron key names to GNOME keysym names
+// Map Electron key names (lowercased) to X11 keysym names (case-sensitive).
+// Source: X11/keysymdef.h, lookup via XStringToKeysym(3).
 const ELECTRON_TO_GNOME_KEY_MAP = {
-  pageup: "page_up",
-  pagedown: "page_down",
-  scrolllock: "scroll_lock",
-  printscreen: "print",
-  enter: "return",
-  arrowup: "up",
-  arrowdown: "down",
-  arrowleft: "left",
-  arrowright: "right",
+  space: "space",
+  tab: "Tab",
+  escape: "Escape",
+  backspace: "BackSpace",
+  delete: "Delete",
+  return: "Return",
+  enter: "Return",
+  home: "Home",
+  end: "End",
+  insert: "Insert",
+  pause: "Pause",
+  print: "Print",
+  printscreen: "Print",
+  pageup: "Page_Up",
+  pagedown: "Page_Down",
+  scrolllock: "Scroll_Lock",
+  arrowup: "Up",
+  arrowdown: "Down",
+  arrowleft: "Left",
+  arrowright: "Right",
+  up: "Up",
+  down: "Down",
+  left: "Left",
+  right: "Right",
 };
 
 let dbus = null;
@@ -40,11 +70,22 @@ function getDBus() {
   }
 }
 
+function getSlotConfig(slotName) {
+  const config = SLOT_CONFIG[slotName];
+  if (!config) {
+    throw new Error(`[GnomeShortcut] Unknown slot: "${slotName}"`);
+  }
+  return config;
+}
+
 class GnomeShortcutManager {
   constructor() {
     this.bus = null;
-    this.callback = null;
-    this.isRegistered = false;
+    this.dictationCallback = null;
+    this.agentCallback = null;
+    this.meetingCallback = null;
+    // Track which slots have been registered in gsettings
+    this.registeredSlots = new Set();
   }
 
   static isGnome() {
@@ -60,8 +101,29 @@ class GnomeShortcutManager {
     return process.env.XDG_SESSION_TYPE === "wayland";
   }
 
-  async initDBusService(callback) {
-    this.callback = callback;
+  /**
+   * Set or update the agent callback after initial D-Bus service initialisation.
+   * This supports the case where the dictation hotkey is set up first and the
+   * agent callback is only available later (after agent window creation).
+   */
+  setAgentCallback(callback) {
+    this.agentCallback = callback;
+    if (this._ifaceRef) {
+      this._ifaceRef._agentCallback = callback;
+    }
+    debugLogger.log("[GnomeShortcut] Agent callback registered");
+  }
+
+  setMeetingCallback(callback) {
+    this.meetingCallback = callback;
+    if (this._ifaceRef) {
+      this._ifaceRef._meetingCallback = callback;
+    }
+    debugLogger.log("[GnomeShortcut] Meeting callback registered");
+  }
+
+  async initDBusService(dictationCallback) {
+    this.dictationCallback = dictationCallback;
 
     const dbusModule = getDBus();
     if (!dbusModule) {
@@ -72,8 +134,10 @@ class GnomeShortcutManager {
       this.bus = dbusModule.sessionBus();
       await this.bus.requestName(DBUS_SERVICE_NAME, 0);
 
-      const InterfaceClass = this._createInterfaceClass(dbusModule, callback);
-      const iface = new InterfaceClass();
+      const InterfaceClass = this._createInterfaceClass(dbusModule);
+      const iface = new InterfaceClass(dictationCallback, this.agentCallback, this.meetingCallback);
+      // Keep a reference so setAgentCallback() can update it later
+      this._ifaceRef = iface;
       this.bus.export(DBUS_OBJECT_PATH, iface);
 
       debugLogger.log("[GnomeShortcut] D-Bus service initialized successfully");
@@ -88,16 +152,30 @@ class GnomeShortcutManager {
     }
   }
 
-  _createInterfaceClass(dbusModule, callback) {
+  _createInterfaceClass(dbusModule) {
     class OpenWhisprInterface extends dbusModule.interface.Interface {
-      constructor() {
+      constructor(dictationCallback, agentCallback, meetingCallback) {
         super(DBUS_INTERFACE);
-        this._callback = callback;
+        this._dictationCallback = dictationCallback;
+        this._agentCallback = agentCallback || null;
+        this._meetingCallback = meetingCallback || null;
       }
 
       Toggle() {
-        if (this._callback) {
-          this._callback();
+        if (this._dictationCallback) {
+          this._dictationCallback();
+        }
+      }
+
+      ToggleAgent() {
+        if (this._agentCallback) {
+          this._agentCallback();
+        }
+      }
+
+      ToggleMeeting() {
+        if (this._meetingCallback) {
+          this._meetingCallback();
         }
       }
     }
@@ -105,6 +183,8 @@ class GnomeShortcutManager {
     OpenWhisprInterface.configureMembers({
       methods: {
         Toggle: { inSignature: "", outSignature: "" },
+        ToggleAgent: { inSignature: "", outSignature: "" },
+        ToggleMeeting: { inSignature: "", outSignature: "" },
       },
     });
 
@@ -118,41 +198,69 @@ class GnomeShortcutManager {
     return VALID_SHORTCUT_PATTERN.test(shortcut);
   }
 
-  async registerKeybinding(shortcut = "<Alt>r") {
+  async registerKeybinding(shortcut = "<Alt>r", slotName = "dictation") {
     if (!GnomeShortcutManager.isGnome()) {
       debugLogger.log("[GnomeShortcut] Not running on GNOME, skipping registration");
       return false;
     }
 
     if (!GnomeShortcutManager.isValidShortcut(shortcut)) {
-      debugLogger.log(`[GnomeShortcut] Invalid shortcut format: "${shortcut}"`);
+      debugLogger.log(
+        `[GnomeShortcut] Invalid shortcut format: "${shortcut}" for slot "${slotName}"`
+      );
       return false;
     }
 
+    const { path: keybindingPath, name: keybindingName } = getSlotConfig(slotName);
+
+    const SLOT_DBUS_METHOD = {
+      dictation: "Toggle",
+      agent: "ToggleAgent",
+      meeting: "ToggleMeeting",
+    };
+    const dbusMethod = SLOT_DBUS_METHOD[slotName] || "Toggle";
+    const command = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;
+
     try {
       const existing = this.getExistingKeybindings();
-      const alreadyRegistered = existing.includes(KEYBINDING_PATH);
+      const alreadyRegistered = existing.includes(keybindingPath);
 
-      const command = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.Toggle`;
+      // Check if another custom shortcut already uses this binding
+      debugLogger.log("[GnomeShortcut] Checking for conflicts", {
+        shortcut,
+        existingPaths: existing,
+        ownPath: keybindingPath,
+      });
+      const conflict = this.findConflictingBinding(shortcut, existing, keybindingPath);
+      if (conflict) {
+        debugLogger.log(
+          `[GnomeShortcut] Shortcut conflict — "${shortcut}" already used by "${conflict}"`,
+          {
+            slot: slotName,
+            conflictPath: conflict,
+          }
+        );
+        return false;
+      }
 
       execFileSync(
         "gsettings",
-        ["set", `${KEYBINDING_SCHEMA}:${KEYBINDING_PATH}`, "name", "OpenWhispr Toggle"],
+        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "name", keybindingName],
         { stdio: "pipe" }
       );
       execFileSync(
         "gsettings",
-        ["set", `${KEYBINDING_SCHEMA}:${KEYBINDING_PATH}`, "binding", shortcut],
+        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding", shortcut],
         { stdio: "pipe" }
       );
       execFileSync(
         "gsettings",
-        ["set", `${KEYBINDING_SCHEMA}:${KEYBINDING_PATH}`, "command", command],
+        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "command", command],
         { stdio: "pipe" }
       );
 
       if (!alreadyRegistered) {
-        const newBindings = [...existing, KEYBINDING_PATH];
+        const newBindings = [...existing, keybindingPath];
         const bindingsStr = "['" + newBindings.join("', '") + "']";
         execFileSync(
           "gsettings",
@@ -166,43 +274,66 @@ class GnomeShortcutManager {
         );
       }
 
-      this.isRegistered = true;
-      debugLogger.log(`[GnomeShortcut] Keybinding "${shortcut}" registered successfully`);
+      this.registeredSlots.add(slotName);
+      debugLogger.log(
+        `[GnomeShortcut] Keybinding "${shortcut}" registered for slot "${slotName}" successfully`
+      );
       return true;
     } catch (err) {
-      debugLogger.log("[GnomeShortcut] Failed to register keybinding:", err.message);
+      debugLogger.log(
+        `[GnomeShortcut] Failed to register keybinding for slot "${slotName}":`,
+        err.message
+      );
       return false;
     }
   }
 
-  async updateKeybinding(shortcut) {
-    if (!this.isRegistered) {
-      return this.registerKeybinding(shortcut);
+  async updateKeybinding(shortcut, slotName = "dictation") {
+    if (!this.registeredSlots.has(slotName)) {
+      return this.registerKeybinding(shortcut, slotName);
     }
 
     if (!GnomeShortcutManager.isValidShortcut(shortcut)) {
-      debugLogger.log(`[GnomeShortcut] Invalid shortcut format for update: "${shortcut}"`);
+      debugLogger.log(
+        `[GnomeShortcut] Invalid shortcut format for update: "${shortcut}" (slot "${slotName}")`
+      );
       return false;
     }
 
+    const { path: keybindingPath } = getSlotConfig(slotName);
+
     try {
+      const existing = this.getExistingKeybindings();
+      const conflict = this.findConflictingBinding(shortcut, existing, keybindingPath);
+      if (conflict) {
+        debugLogger.log(
+          `[GnomeShortcut] Shortcut conflict on update — "${shortcut}" already used by "${conflict}"`
+        );
+        return false;
+      }
+
       execFileSync(
         "gsettings",
-        ["set", `${KEYBINDING_SCHEMA}:${KEYBINDING_PATH}`, "binding", shortcut],
+        ["set", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding", shortcut],
         { stdio: "pipe" }
       );
-      debugLogger.log(`[GnomeShortcut] Keybinding updated to "${shortcut}"`);
+      debugLogger.log(`[GnomeShortcut] Keybinding updated to "${shortcut}" for slot "${slotName}"`);
       return true;
     } catch (err) {
-      debugLogger.log("[GnomeShortcut] Failed to update keybinding:", err.message);
+      debugLogger.log(
+        `[GnomeShortcut] Failed to update keybinding for slot "${slotName}":`,
+        err.message
+      );
       return false;
     }
   }
 
-  async unregisterKeybinding() {
+  async unregisterKeybinding(slotName = "dictation") {
+    const { path: keybindingPath } = getSlotConfig(slotName);
+
     try {
       const existing = this.getExistingKeybindings();
-      const filtered = existing.filter((p) => p !== KEYBINDING_PATH);
+      const filtered = existing.filter((p) => p !== keybindingPath);
 
       if (filtered.length === 0) {
         execFileSync(
@@ -224,23 +355,57 @@ class GnomeShortcutManager {
         );
       }
 
-      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${KEYBINDING_PATH}`, "name"], {
+      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "name"], {
         stdio: "pipe",
       });
-      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${KEYBINDING_PATH}`, "binding"], {
+      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "binding"], {
         stdio: "pipe",
       });
-      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${KEYBINDING_PATH}`, "command"], {
+      execFileSync("gsettings", ["reset", `${KEYBINDING_SCHEMA}:${keybindingPath}`, "command"], {
         stdio: "pipe",
       });
 
-      this.isRegistered = false;
-      debugLogger.log("[GnomeShortcut] Keybinding unregistered successfully");
+      this.registeredSlots.delete(slotName);
+      debugLogger.log(
+        `[GnomeShortcut] Keybinding unregistered for slot "${slotName}" successfully`
+      );
       return true;
     } catch (err) {
-      debugLogger.log("[GnomeShortcut] Failed to unregister keybinding:", err.message);
+      debugLogger.log(
+        `[GnomeShortcut] Failed to unregister keybinding for slot "${slotName}":`,
+        err.message
+      );
       return false;
     }
+  }
+
+  findConflictingBinding(shortcut, existingPaths, ownPath) {
+    // Normalize for comparison: <Primary> = <Control>, sort modifiers, case-insensitive
+    const normalize = (s) => {
+      const mods = [];
+      const stripped = s.replace(/<(\w+)>/gi, (_, m) => {
+        mods.push(m.toLowerCase() === "primary" ? "control" : m.toLowerCase());
+        return "";
+      });
+      mods.sort();
+      return mods.map((m) => `<${m}>`).join("") + stripped.toLowerCase();
+    };
+    const normalizedShortcut = normalize(shortcut);
+
+    for (const path of existingPaths) {
+      if (path === ownPath) continue;
+      try {
+        const binding = execFileSync(
+          "gsettings",
+          ["get", `${KEYBINDING_SCHEMA}:${path}`, "binding"],
+          { encoding: "utf-8" }
+        )
+          .trim()
+          .replace(/^'|'$/g, "");
+        if (normalize(binding) === normalizedShortcut) return path;
+      } catch {}
+    }
+    return null;
   }
 
   getExistingKeybindings() {
@@ -292,16 +457,19 @@ class GnomeShortcutManager {
       .filter(Boolean)
       .join("");
 
-    let gnomeKey = key.toLowerCase();
+    const keyLower = key.toLowerCase();
 
-    if (gnomeKey === "`" || gnomeKey === "backquote") {
+    let gnomeKey;
+    if (key === "`" || keyLower === "backquote") {
       gnomeKey = "grave";
-    }
-    if (gnomeKey === " ") {
+    } else if (key === " ") {
       gnomeKey = "space";
-    }
-    if (ELECTRON_TO_GNOME_KEY_MAP[gnomeKey]) {
-      gnomeKey = ELECTRON_TO_GNOME_KEY_MAP[gnomeKey];
+    } else if (ELECTRON_TO_GNOME_KEY_MAP[keyLower]) {
+      gnomeKey = ELECTRON_TO_GNOME_KEY_MAP[keyLower];
+    } else if (/^F\d+$/i.test(key)) {
+      gnomeKey = key.toUpperCase();
+    } else {
+      gnomeKey = keyLower;
     }
 
     return modifiers + gnomeKey;

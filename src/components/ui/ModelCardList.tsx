@@ -1,11 +1,14 @@
-import { Globe, Download, Trash2, X } from "lucide-react";
+import { Globe, Download, Trash2, X, ExternalLink } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { Button } from "./button";
 import type { ColorScheme } from "../../utils/modelPickerStyles";
+import { createExternalLinkHandler } from "../../utils/externalLinks";
 
 export interface ModelCardOption {
   value: string;
   label: string;
   description?: string;
+  specUrl?: string;
   icon?: string;
   invertInDark?: boolean;
   // Local model properties (optional)
@@ -59,6 +62,7 @@ export default function ModelCardList({
   onCancelDownload,
   isCancelling = false,
 }: ModelCardListProps) {
+  const { t } = useTranslation();
   const styles = COLOR_CONFIG[colorScheme];
   const isLocalMode = Boolean(onDownload);
 
@@ -110,15 +114,10 @@ export default function ModelCardList({
           <div
             key={model.value}
             onClick={handleCardClick}
-            className={`relative w-full p-2 pl-2.5 rounded-md border text-left transition-colors duration-200 group overflow-hidden ${
+            className={`relative w-full p-2 rounded-md border text-left transition-colors duration-200 group overflow-hidden ${
               isSelected ? styles.selected : styles.default
             } ${!isLocalMode || (isDownloaded && !isSelected) ? "cursor-pointer" : ""}`}
           >
-            {/* Left accent bar for selected */}
-            {isSelected && (
-              <div className="absolute left-0 top-0 bottom-0 w-1 bg-linear-to-b from-primary via-primary to-primary/80 rounded-l-md" />
-            )}
-
             <div className="flex items-center gap-1.5">
               {/* Status dot with LED glow */}
               <div
@@ -151,6 +150,16 @@ export default function ModelCardList({
                 <span className="text-xs text-muted-foreground/50 tabular-nums shrink-0">
                   {model.description}
                 </span>
+              )}
+              {model.specUrl && (
+                <a
+                  href={model.specUrl}
+                  onClick={createExternalLinkHandler(model.specUrl)}
+                  className="inline-flex items-center gap-0.5 text-xs text-primary/60 hover:text-primary transition-colors shrink-0"
+                >
+                  {t("models.learnMore")}
+                  <ExternalLink size={9} />
+                </a>
               )}
 
               {/* Recommended badge */}

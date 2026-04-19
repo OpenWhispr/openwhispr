@@ -2,13 +2,7 @@
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
-const {
-  downloadFile,
-  findBinaryInDir,
-  parseArgs,
-  setExecutable,
-  cleanupFiles,
-} = require("./lib/download-utils");
+const { downloadFile, findBinaryInDir, parseArgs, setExecutable } = require("./lib/download-utils");
 
 const SHERPA_ONNX_VERSION = "1.12.23";
 const GITHUB_RELEASE_URL = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_ONNX_VERSION}`;
@@ -20,24 +14,32 @@ const BINARIES = {
     archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-darwin-arm64",
+    diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization",
+    diarizeOutputName: "sherpa-onnx-diarize-darwin-arm64",
     libPattern: "*.dylib",
   },
   "darwin-x64": {
     archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-darwin-x64",
+    diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization",
+    diarizeOutputName: "sherpa-onnx-diarize-darwin-x64",
     libPattern: "*.dylib",
   },
   "win32-x64": {
     archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server.exe",
     outputName: "sherpa-onnx-ws-win32-x64.exe",
+    diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization.exe",
+    diarizeOutputName: "sherpa-onnx-diarize-win32-x64.exe",
     libPattern: "*.dll",
   },
   "linux-x64": {
     archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-linux-x64",
+    diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization",
+    diarizeOutputName: "sherpa-onnx-diarize-linux-x64",
     libPattern: "*.so*",
   },
 };
@@ -100,8 +102,9 @@ async function downloadBinary(platformArch, config, isForce = false) {
   }
 
   const outputPath = path.join(BIN_DIR, config.outputName);
+  const diarizeOutputPath = path.join(BIN_DIR, config.diarizeOutputName);
 
-  if (fs.existsSync(outputPath) && !isForce) {
+  if (fs.existsSync(outputPath) && fs.existsSync(diarizeOutputPath) && !isForce) {
     console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
     return true;
   }
@@ -118,7 +121,7 @@ async function downloadBinary(platformArch, config, isForce = false) {
     fs.mkdirSync(extractDir, { recursive: true });
     extractTarBz2(archivePath, extractDir);
 
-    // Find the binary (may be in a subdirectory)
+    // Find the WebSocket server binary (may be in a subdirectory)
     const binaryName = path.basename(config.binaryPath);
     let binaryPath = findBinaryInDir(extractDir, binaryName);
 
@@ -126,47 +129,66 @@ async function downloadBinary(platformArch, config, isForce = false) {
       fs.copyFileSync(binaryPath, outputPath);
       setExecutable(outputPath);
       console.log(`  ${platformArch}: Extracted to ${config.outputName}`);
-
-      // Copy shared libraries
-      if (config.libPattern) {
-        const libraries = findLibrariesInDir(extractDir, config.libPattern);
-
-        // Separate versioned and unversioned libraries to create symlinks where possible
-        // e.g. libonnxruntime.dylib -> libonnxruntime.1.23.2.dylib (saves ~71MB)
-        const versionedLibs = new Map(); // base name -> versioned file name
-
-        for (const libPath of libraries) {
-          const libName = path.basename(libPath);
-          const destPath = path.join(BIN_DIR, libName);
-
-          // Detect versioned dylib pattern: libFoo.X.Y.Z.dylib
-          const versionMatch = libName.match(/^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/);
-          if (versionMatch) {
-            const baseName = `${versionMatch[1]}.${versionMatch[3]}`; // e.g. libonnxruntime.dylib
-            versionedLibs.set(baseName, libName);
-          }
-
-          fs.copyFileSync(libPath, destPath);
-          setExecutable(destPath);
-          console.log(`  ${platformArch}: Copied library ${libName}`);
-        }
-
-        // Replace unversioned copies with symlinks to versioned ones (macOS/Linux only)
-        if (process.platform !== "win32") {
-          for (const [baseName, versionedName] of versionedLibs) {
-            const basePath = path.join(BIN_DIR, baseName);
-            const versionedPath = path.join(BIN_DIR, versionedName);
-            if (fs.existsSync(basePath) && fs.existsSync(versionedPath) && !fs.lstatSync(basePath).isSymbolicLink()) {
-              fs.unlinkSync(basePath);
-              fs.symlinkSync(versionedName, basePath);
-              console.log(`  ${platformArch}: Symlinked ${baseName} -> ${versionedName}`);
-            }
-          }
-        }
-      }
     } else {
       console.error(`  ${platformArch}: Binary '${binaryName}' not found in archive`);
       return false;
+    }
+
+    // Find the diarization binary from the same archive
+    const diarizeBinaryName = path.basename(config.diarizeBinaryPath);
+    let diarizeBinaryPath = findBinaryInDir(extractDir, diarizeBinaryName);
+
+    if (diarizeBinaryPath && fs.existsSync(diarizeBinaryPath)) {
+      fs.copyFileSync(diarizeBinaryPath, diarizeOutputPath);
+      setExecutable(diarizeOutputPath);
+      console.log(`  ${platformArch}: Extracted to ${config.diarizeOutputName}`);
+    } else {
+      console.error(
+        `  ${platformArch}: Diarization binary '${diarizeBinaryName}' not found in archive`
+      );
+      return false;
+    }
+
+    // Copy shared libraries
+    if (config.libPattern) {
+      const libraries = findLibrariesInDir(extractDir, config.libPattern);
+
+      // Separate versioned and unversioned libraries to create symlinks where possible
+      // e.g. libonnxruntime.dylib -> libonnxruntime.1.23.2.dylib (saves ~71MB)
+      const versionedLibs = new Map(); // base name -> versioned file name
+
+      for (const libPath of libraries) {
+        const libName = path.basename(libPath);
+        const destPath = path.join(BIN_DIR, libName);
+
+        // Detect versioned dylib pattern: libFoo.X.Y.Z.dylib
+        const versionMatch = libName.match(/^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/);
+        if (versionMatch) {
+          const baseName = `${versionMatch[1]}.${versionMatch[3]}`; // e.g. libonnxruntime.dylib
+          versionedLibs.set(baseName, libName);
+        }
+
+        fs.copyFileSync(libPath, destPath);
+        setExecutable(destPath);
+        console.log(`  ${platformArch}: Copied library ${libName}`);
+      }
+
+      // Replace unversioned copies with symlinks to versioned ones (macOS/Linux only)
+      if (process.platform !== "win32") {
+        for (const [baseName, versionedName] of versionedLibs) {
+          const basePath = path.join(BIN_DIR, baseName);
+          const versionedPath = path.join(BIN_DIR, versionedName);
+          if (
+            fs.existsSync(basePath) &&
+            fs.existsSync(versionedPath) &&
+            !fs.lstatSync(basePath).isSymbolicLink()
+          ) {
+            fs.unlinkSync(basePath);
+            fs.symlinkSync(versionedName, basePath);
+            console.log(`  ${platformArch}: Symlinked ${baseName} -> ${versionedName}`);
+          }
+        }
+      }
     }
 
     // Cleanup
@@ -203,10 +225,9 @@ async function main() {
     }
 
     // Remove old CLI-style binaries replaced by WS server binaries
-    const oldBinaryName =
-      args.platformArch.startsWith("win32")
-        ? `sherpa-onnx-${args.platformArch}.exe`
-        : `sherpa-onnx-${args.platformArch}`;
+    const oldBinaryName = args.platformArch.startsWith("win32")
+      ? `sherpa-onnx-${args.platformArch}.exe`
+      : `sherpa-onnx-${args.platformArch}`;
     const oldBinaryPath = path.join(BIN_DIR, oldBinaryName);
     if (fs.existsSync(oldBinaryPath)) {
       console.log(`  Removing old CLI binary: ${oldBinaryName}`);
@@ -214,7 +235,16 @@ async function main() {
     }
 
     if (args.shouldCleanup) {
-      cleanupFiles(BIN_DIR, "sherpa-onnx", `sherpa-onnx-ws-${args.platformArch}`);
+      const wsPrefix = `sherpa-onnx-ws-${args.platformArch}`;
+      const diarizePrefix = `sherpa-onnx-diarize-${args.platformArch}`;
+      const files = fs.readdirSync(BIN_DIR).filter((f) => f.startsWith("sherpa-onnx"));
+      files.forEach((file) => {
+        if (!file.startsWith(wsPrefix) && !file.startsWith(diarizePrefix)) {
+          const filePath = path.join(BIN_DIR, file);
+          console.log(`Removing old binary: ${file}`);
+          fs.unlinkSync(filePath);
+        }
+      });
     }
   } else {
     console.log("Downloading binaries for all platforms:");
@@ -234,7 +264,9 @@ async function main() {
     });
   } else {
     console.log("No binaries downloaded yet.");
-    console.log(`\nCheck: https://github.com/k2-fsa/sherpa-onnx/releases/tag/v${SHERPA_ONNX_VERSION}`);
+    console.log(
+      `\nCheck: https://github.com/k2-fsa/sherpa-onnx/releases/tag/v${SHERPA_ONNX_VERSION}`
+    );
   }
 }
 

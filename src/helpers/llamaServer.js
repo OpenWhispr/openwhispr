@@ -11,7 +11,7 @@ const { app } = require("electron");
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8220;
 const STARTUP_TIMEOUT_MS = 60000;
-const VULKAN_STARTUP_TIMEOUT_MS = 15000;
+const VULKAN_STARTUP_TIMEOUT_MS = 10000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
@@ -143,10 +143,9 @@ class LlamaServerManager {
       "127.0.0.1",
       "--port",
       String(this.port),
-      "--ctx-size",
-      String(options.contextSize || 4096),
       "--threads",
       String(options.threads || 4),
+      "--jinja",
     ];
 
     if (process.platform === "darwin") {
@@ -158,7 +157,6 @@ class LlamaServerManager {
         STARTUP_TIMEOUT_MS
       );
       this.activeBackend = "metal";
-      this._saveGpuBackend("metal");
     } else {
       await this._startWithGpuFallback(binaryPaths, baseArgs, options);
     }
@@ -172,11 +170,10 @@ class LlamaServerManager {
   }
 
   async _startWithGpuFallback(binaryPaths, baseArgs, options) {
-    const cached = this._loadGpuBackend();
     const gpuArgs = [...baseArgs, "--n-gpu-layers", "99"];
     const cpuArgs = baseArgs;
 
-    if (cached !== "cpu" && binaryPaths.vulkan) {
+    if (binaryPaths.vulkan) {
       try {
         debugLogger.debug("Attempting Vulkan backend startup");
         await this._startWithBinary(
@@ -186,7 +183,6 @@ class LlamaServerManager {
           VULKAN_STARTUP_TIMEOUT_MS
         );
         this.activeBackend = "vulkan";
-        this._saveGpuBackend("vulkan");
         return;
       } catch (err) {
         debugLogger.warn("Vulkan backend failed, falling back to CPU", { error: err.message });
@@ -205,7 +201,6 @@ class LlamaServerManager {
       STARTUP_TIMEOUT_MS
     );
     this.activeBackend = "cpu";
-    this._saveGpuBackend("cpu");
   }
 
   _buildEnv(binaryPath) {
@@ -218,6 +213,10 @@ class LlamaServerManager {
       env.LD_LIBRARY_PATH = binDir + (env.LD_LIBRARY_PATH ? `:${env.LD_LIBRARY_PATH}` : "");
     } else if (process.platform === "win32") {
       env.PATH = binDir + (env.PATH ? `;${env.PATH}` : "");
+    }
+
+    if (process.env.INTELLIGENCE_GPU_INDEX) {
+      env.CUDA_VISIBLE_DEVICES = process.env.INTELLIGENCE_GPU_INDEX;
     }
 
     return env;
@@ -352,16 +351,6 @@ class LlamaServerManager {
 
     this.process = null;
     this.ready = false;
-  }
-
-  _loadGpuBackend() {
-    const val = process.env.LLAMA_GPU_BACKEND;
-    if (val === "vulkan" || val === "cpu" || val === "metal") return val;
-    return null;
-  }
-
-  _saveGpuBackend(backend) {
-    process.env.LLAMA_GPU_BACKEND = backend;
   }
 
   checkHealth() {
@@ -544,7 +533,6 @@ class LlamaServerManager {
   }
 
   resetGpuDetection() {
-    delete process.env.LLAMA_GPU_BACKEND;
     this.activeBackend = null;
     this.cachedServerBinaryPaths = null;
   }

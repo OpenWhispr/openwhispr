@@ -1,5 +1,5 @@
 import { Button } from "./button";
-import { Check, LucideIcon, Settings } from "lucide-react";
+import { Check, LucideIcon } from "lucide-react";
 import { cn } from "../lib/utils";
 
 interface PermissionCardProps {
@@ -9,7 +9,8 @@ interface PermissionCardProps {
   granted: boolean;
   onRequest: () => void;
   buttonText?: string;
-  onOpenSettings?: () => void;
+  badge?: string;
+  hint?: string;
 }
 
 export default function PermissionCard({
@@ -19,7 +20,8 @@ export default function PermissionCard({
   granted,
   onRequest,
   buttonText = "Grant Access",
-  onOpenSettings,
+  badge,
+  hint,
 }: PermissionCardProps) {
   return (
     <div
@@ -32,7 +34,6 @@ export default function PermissionCard({
       )}
     >
       <div className="flex items-center gap-3">
-        {/* Icon container */}
         <div
           className={cn(
             "w-8 h-8 rounded-md flex items-center justify-center shrink-0 transition-colors duration-150",
@@ -48,26 +49,28 @@ export default function PermissionCard({
           )}
         </div>
 
-        {/* Content */}
         <div className="flex-1 min-w-0">
-          <h3 className="text-xs font-medium text-foreground">{title}</h3>
+          <h3 className="text-xs font-medium text-foreground">
+            {title}
+            {badge && (
+              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded bg-muted text-muted-foreground">
+                {badge}
+              </span>
+            )}
+          </h3>
           <p className="text-xs text-muted-foreground leading-snug mt-0.5">{description}</p>
         </div>
 
-        {/* Actions - only when not granted */}
         {!granted && (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <Button onClick={onRequest} size="sm" className="h-7 px-3 text-xs">
-              {buttonText}
-            </Button>
-            {onOpenSettings && (
-              <Button onClick={onOpenSettings} size="sm" variant="ghost" className="h-7 w-7 p-0">
-                <Settings className="w-3.5 h-3.5" />
-              </Button>
-            )}
-          </div>
+          <Button onClick={onRequest} size="sm" className="h-7 px-3 text-xs shrink-0">
+            {buttonText}
+          </Button>
         )}
       </div>
+
+      {hint && !granted && (
+        <p className="text-[11px] text-warning/80 leading-snug mt-2 pl-11">{hint}</p>
+      )}
     </div>
   );
 }

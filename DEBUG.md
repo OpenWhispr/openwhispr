@@ -38,6 +38,12 @@ OPENWHISPR_LOG_LEVEL=debug
 | Audio Recording | Permission requests, chunk sizes, audio levels |
 | Audio Processing | File creation, Whisper command, process output |
 | IPC | Messages between renderer and main process |
+| Agent Mode | Streaming responses, conversation management, model selection |
+| Meeting Detection | Process monitoring, audio activity, calendar event matching |
+| Meeting Transcription | WebSocket connection, Realtime API session, audio buffering |
+| Google Calendar | OAuth flow, token refresh, event sync |
+| Media Control | Pause/resume events, player detection (MediaRemote/GSMTC/MPRIS2) |
+| Audio Storage | File retention, cleanup cycles, storage usage |
 
 ## Common Issues
 

@@ -30,7 +30,7 @@ function flatten(obj, prefix = "") {
 function getPlaceholders(value) {
   if (typeof value !== "string") return [];
   const matches = value.match(/\{\{\s*([a-zA-Z0-9_.-]+)\s*\}\}/g) || [];
-  return matches.map((match) => match.replace(/\{\{|\}\}/g, "").trim()).sort();
+  return [...new Set(matches.map((match) => match.replace(/\{\{|\}\}/g, "").trim()))].sort();
 }
 
 function arraysEqual(a, b) {

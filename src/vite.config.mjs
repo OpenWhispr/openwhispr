@@ -60,7 +60,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
-      rollupOptions: {
+      rolldownOptions: {
         external: [
           'electron',
           'fs',
@@ -78,14 +78,16 @@ export default defineConfig(({ mode }) => {
           '@aws-sdk/client-s3'
         ],
         output: {
-          manualChunks: {
-            'vendor-radix': [
-              '@radix-ui/react-dialog',
-              '@radix-ui/react-dropdown-menu',
-              '@radix-ui/react-select',
-              '@radix-ui/react-tabs',
-            ],
-            'vendor-icons': ['lucide-react'],
+          manualChunks(id) {
+            if (id.includes('@radix-ui/react-dialog') ||
+                id.includes('@radix-ui/react-dropdown-menu') ||
+                id.includes('@radix-ui/react-select') ||
+                id.includes('@radix-ui/react-tabs')) {
+              return 'vendor-radix';
+            }
+            if (id.includes('lucide-react')) {
+              return 'vendor-icons';
+            }
           },
         },
       }

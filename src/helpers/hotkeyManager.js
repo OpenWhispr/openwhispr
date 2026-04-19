@@ -1,10 +1,28 @@
-const { globalShortcut } = require("electron");
+const { globalShortcut, BrowserWindow } = require("electron");
 const debugLogger = require("./debugLogger");
 const GnomeShortcutManager = require("./gnomeShortcut");
+const HyprlandShortcutManager = require("./hyprlandShortcut");
+const KDEShortcutManager = require("./kdeShortcut");
 const { i18nMain } = require("./i18nMain");
 
 // Delay to ensure localStorage is accessible after window load
 const HOTKEY_REGISTRATION_DELAY_MS = 1000;
+
+// Fallback hotkeys tried when primary hotkey registration fails on startup
+const FALLBACK_HOTKEYS = ["F8", "F9", "Control+Shift+Space"];
+
+// Default hotkey for dictation if no saved value exists
+const DEFAULT_HOTKEY = "Control+Super";
+
+// Slots routed through GNOME native gsettings (not globalShortcut).
+// Temporary slots like "cancel" stay on globalShortcut.
+const GNOME_NATIVE_SLOTS = new Set(["agent", "meeting"]);
+
+// KDE registration failure reasons — reuse existing i18n keys
+const KDE_FAILURE_REASONS = {
+  conflict: (hotkey) => i18nMain.t("hotkey.errors.alreadyRegistered", { hotkey }),
+  "modifier-only": (hotkey) => i18nMain.t("hotkey.errors.osReserved", { hotkey }),
+};
 
 // Right-side single modifiers are handled by native listeners, not globalShortcut
 const RIGHT_SIDE_MODIFIER_PATTERN =
@@ -36,6 +54,10 @@ function isModifierOnlyHotkey(hotkey) {
   return hotkey.split("+").every((part) => MODIFIER_NAMES.has(part.toLowerCase()));
 }
 
+function isGlobeLikeHotkey(hotkey) {
+  return hotkey === "GLOBE" || hotkey === "Fn";
+}
+
 function normalizeToAccelerator(hotkey) {
   let accelerator = hotkey.startsWith("Fn+") ? hotkey.slice(3) : hotkey;
   accelerator = accelerator
@@ -54,12 +76,38 @@ const SUGGESTED_HOTKEYS = {
 
 class HotkeyManager {
   constructor() {
-    this.currentHotkey = process.platform === "darwin" ? "GLOBE" : "Control+Super";
+    this.slots = new Map();
+    const defaultDictation = process.platform === "darwin" ? "GLOBE" : "Control+Super";
+    this.slots.set("dictation", { hotkey: defaultDictation, callback: null, accelerator: null });
     this.isInitialized = false;
     this.isListeningMode = false;
     this.gnomeManager = null;
     this.useGnome = false;
-    this.hotkeyCallback = null;
+    this.hyprlandManager = null;
+    this.useHyprland = false;
+    this.kdeManager = null;
+    this.useKDE = false;
+  }
+
+  // Backward-compatible property accessors
+  get currentHotkey() {
+    return this.slots.get("dictation")?.hotkey ?? null;
+  }
+
+  set currentHotkey(value) {
+    const slot = this.slots.get("dictation") || { hotkey: null, callback: null, accelerator: null };
+    slot.hotkey = value;
+    this.slots.set("dictation", slot);
+  }
+
+  get hotkeyCallback() {
+    return this.slots.get("dictation")?.callback ?? null;
+  }
+
+  set hotkeyCallback(value) {
+    const slot = this.slots.get("dictation") || { hotkey: null, callback: null, accelerator: null };
+    slot.callback = value;
+    this.slots.set("dictation", slot);
   }
 
   setListeningMode(enabled) {
@@ -113,42 +161,173 @@ class HotkeyManager {
     return suggestions.filter((s) => s !== failedHotkey).slice(0, 3);
   }
 
-  setupShortcuts(hotkey = "Control+Super", callback) {
+  async registerSlot(slotName, hotkey, callback) {
+    this.unregisterSlot(slotName);
+
+    // On GNOME (X11 or Wayland), route named slots through native gsettings
+    if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+      const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
+      if (!gnomeHotkey) {
+        debugLogger.log(
+          `[HotkeyManager] Could not convert hotkey "${hotkey}" to GNOME format for slot "${slotName}"`
+        );
+        return {
+          success: false,
+          error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+        };
+      }
+
+      if (slotName === "agent") {
+        this.gnomeManager.setAgentCallback(callback);
+      } else if (slotName === "meeting") {
+        this.gnomeManager.setMeetingCallback(callback);
+      }
+
+      const success = await this.gnomeManager.registerKeybinding(gnomeHotkey, slotName);
+      if (!success) {
+        debugLogger.log(
+          `[HotkeyManager] GNOME keybinding registration failed for slot "${slotName}" ("${hotkey}")`
+        );
+        return {
+          success: false,
+          error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+        };
+      }
+
+      const slot = this.slots.get(slotName) || { hotkey: null, callback: null, accelerator: null };
+      slot.hotkey = hotkey;
+      slot.callback = callback;
+      slot.accelerator = null;
+      this.slots.set(slotName, slot);
+
+      debugLogger.log(
+        `[HotkeyManager] GNOME slot "${slotName}" set to "${hotkey}" (GNOME format: "${gnomeHotkey}")`
+      );
+      return { success: true, hotkey };
+    }
+
+    // On KDE (X11 or Wayland), route persistent slots through KGlobalAccel D-Bus.
+    // Temporary slots like "cancel" stay on globalShortcut to avoid stale
+    // KGlobalAccel registrations after crash (Escape would stop working system-wide).
+    if (this.useKDE && this.kdeManager && slotName !== "cancel") {
+      if (slotName === "agent") {
+        this.kdeManager.setAgentCallback(callback);
+      }
+
+      const result = await this.kdeManager.registerKeybinding(hotkey, slotName, callback);
+      if (result !== true) {
+        const reason =
+          KDE_FAILURE_REASONS[result]?.(hotkey) ||
+          i18nMain.t("hotkey.errors.registrationFailed", { hotkey });
+        debugLogger.log(
+          `[HotkeyManager] KDE keybinding registration failed for slot "${slotName}" ("${hotkey}")`,
+          { reason: result }
+        );
+        return { success: false, error: reason };
+      }
+
+      const slot = this.slots.get(slotName) || { hotkey: null, callback: null, accelerator: null };
+      slot.hotkey = hotkey;
+      slot.callback = callback;
+      slot.accelerator = null;
+      this.slots.set(slotName, slot);
+
+      debugLogger.log(`[HotkeyManager] KDE slot "${slotName}" set to "${hotkey}"`);
+      return { success: true, hotkey };
+    }
+
+    const result = this.setupShortcuts(hotkey, callback, slotName);
+    if (result.success) {
+      const slot = this.slots.get(slotName) || {};
+      slot.callback = callback;
+      this.slots.set(slotName, slot);
+    }
+    return result;
+  }
+
+  unregisterSlot(slotName) {
+    const slot = this.slots.get(slotName);
+    if (!slot || !slot.hotkey) return;
+
+    // On KDE (X11 or Wayland), persistent slots are managed via KGlobalAccel
+    if (this.useKDE && this.kdeManager && slotName !== "cancel") {
+      this.kdeManager.unregisterKeybinding(slotName).catch((err) => {
+        debugLogger.warn(
+          `[HotkeyManager] Error unregistering KDE keybinding for slot "${slotName}":`,
+          err.message
+        );
+      });
+      slot.hotkey = null;
+      slot.accelerator = null;
+      return;
+    }
+
+    // On GNOME, native slots are managed via gsettings, not globalShortcut
+    if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+      this.gnomeManager.unregisterKeybinding(slotName).catch((err) => {
+        debugLogger.warn(
+          `[HotkeyManager] Error unregistering GNOME keybinding for slot "${slotName}":`,
+          err.message
+        );
+      });
+      slot.hotkey = null;
+      slot.accelerator = null;
+      return;
+    }
+
+    const hk = slot.hotkey;
+    if (!isGlobeLikeHotkey(hk) && !isRightSideModifier(hk) && !isModifierOnlyHotkey(hk)) {
+      const accel = normalizeToAccelerator(hk);
+      try {
+        globalShortcut.unregister(accel);
+      } catch {
+        // already unregistered
+      }
+    }
+    slot.hotkey = null;
+    slot.accelerator = null;
+  }
+
+  getSlotHotkey(slotName) {
+    return this.slots.get(slotName)?.hotkey ?? null;
+  }
+
+  setupShortcuts(hotkey = "Control+Super", callback, slotName = "dictation") {
     if (!callback) {
       throw new Error(i18nMain.t("hotkey.errors.callbackRequired"));
     }
 
-    debugLogger.log(`[HotkeyManager] Setting up hotkey: "${hotkey}"`);
-    debugLogger.log(`[HotkeyManager] Platform: ${process.platform}, Arch: ${process.arch}`);
-    debugLogger.log(`[HotkeyManager] Current hotkey: "${this.currentHotkey}"`);
+    const slot = this.slots.get(slotName) || { hotkey: null, callback: null, accelerator: null };
+    this.slots.set(slotName, slot);
 
-    // If we're already using this hotkey AND it's actually registered, return success
-    // Note: We need to check isRegistered because on first run, currentHotkey is set to the
-    // default value but it's not actually registered yet.
+    debugLogger.log(`[HotkeyManager] Setting up hotkey: "${hotkey}" for slot "${slotName}"`);
+    debugLogger.log(`[HotkeyManager] Platform: ${process.platform}, Arch: ${process.arch}`);
+    debugLogger.log(`[HotkeyManager] Current hotkey for slot: "${slot.hotkey}"`);
+
     const checkAccelerator = normalizeToAccelerator(hotkey);
     if (
-      hotkey === this.currentHotkey &&
-      hotkey !== "GLOBE" &&
+      hotkey === slot.hotkey &&
+      !isGlobeLikeHotkey(hotkey) &&
       !isRightSideModifier(hotkey) &&
       !isModifierOnlyHotkey(hotkey) &&
       globalShortcut.isRegistered(checkAccelerator)
     ) {
       debugLogger.log(
-        `[HotkeyManager] Hotkey "${hotkey}" is already the current hotkey and registered, no change needed`
+        `[HotkeyManager] Hotkey "${hotkey}" is already registered for slot "${slotName}", no change needed`
       );
       return { success: true, hotkey };
     }
 
-    const previousHotkey = this.currentHotkey;
+    const previousHotkey = slot.hotkey;
 
-    // Unregister the previous hotkey (skip native-listener-only hotkeys)
+    // Unregister the previous hotkey for this slot (skip native-listener-only hotkeys)
     if (
-      this.currentHotkey &&
-      this.currentHotkey !== "GLOBE" &&
-      !isRightSideModifier(this.currentHotkey) &&
-      !isModifierOnlyHotkey(this.currentHotkey)
+      previousHotkey &&
+      !isGlobeLikeHotkey(previousHotkey) &&
+      !isRightSideModifier(previousHotkey) &&
+      !isModifierOnlyHotkey(previousHotkey)
     ) {
-      const prevAccelerator = normalizeToAccelerator(this.currentHotkey);
+      const prevAccelerator = normalizeToAccelerator(previousHotkey);
       try {
         debugLogger.log(`[HotkeyManager] Unregistering previous hotkey: "${prevAccelerator}"`);
         globalShortcut.unregister(prevAccelerator);
@@ -160,7 +339,10 @@ class HotkeyManager {
     }
 
     try {
-      if (hotkey === "GLOBE") {
+      const conflict = this._findSlotConflict(slotName, hotkey);
+      if (conflict) return conflict;
+
+      if (isGlobeLikeHotkey(hotkey)) {
         if (process.platform !== "darwin") {
           debugLogger.log("[HotkeyManager] GLOBE key rejected - not on macOS");
           return {
@@ -168,23 +350,24 @@ class HotkeyManager {
             error: i18nMain.t("hotkey.errors.globeOnlyMac"),
           };
         }
-        this.currentHotkey = hotkey;
-        debugLogger.log("[HotkeyManager] GLOBE key set successfully");
+        slot.hotkey = hotkey;
+        slot.accelerator = null;
+        debugLogger.log(`[HotkeyManager] GLOBE/Fn key "${hotkey}" set successfully`);
         return { success: true, hotkey };
       }
 
-      // Right-side single modifiers are handled by native listeners (Swift/C), not globalShortcut
       if (isRightSideModifier(hotkey)) {
-        this.currentHotkey = hotkey;
+        slot.hotkey = hotkey;
+        slot.accelerator = null;
         debugLogger.log(
           `[HotkeyManager] Right-side modifier "${hotkey}" set - using native listener`
         );
         return { success: true, hotkey };
       }
 
-      // Modifier-only combos use the native keyboard hook on Windows
       if (isModifierOnlyHotkey(hotkey) && process.platform === "win32") {
-        this.currentHotkey = hotkey;
+        slot.hotkey = hotkey;
+        slot.accelerator = null;
         debugLogger.log(
           `[HotkeyManager] Modifier-only "${hotkey}" set - using Windows native listener`
         );
@@ -206,7 +389,8 @@ class HotkeyManager {
       debugLogger.log(`[HotkeyManager] Registration result for "${hotkey}": ${success}`);
 
       if (success) {
-        this.currentHotkey = hotkey;
+        slot.hotkey = hotkey;
+        slot.accelerator = accelerator;
         debugLogger.log(`[HotkeyManager] Hotkey "${hotkey}" registered successfully`);
         return { success: true, hotkey };
       } else {
@@ -238,10 +422,38 @@ class HotkeyManager {
     }
   }
 
+  _findSlotConflict(slotName, hotkey) {
+    const accelerator =
+      isGlobeLikeHotkey(hotkey) || isRightSideModifier(hotkey) || isModifierOnlyHotkey(hotkey)
+        ? null
+        : normalizeToAccelerator(hotkey);
+
+    for (const [otherSlotName, otherSlot] of this.slots) {
+      if (otherSlotName === slotName) continue;
+      const match =
+        otherSlot.hotkey === hotkey || (accelerator && otherSlot.accelerator === accelerator);
+      if (match) {
+        debugLogger.warn(
+          `[HotkeyManager] Hotkey "${hotkey}" conflicts with slot "${otherSlotName}"`
+        );
+        return {
+          success: false,
+          error: i18nMain.t("hotkey.errors.slotConflict", {
+            slot: otherSlotName,
+            defaultValue: `This hotkey is already used for ${otherSlotName}`,
+          }),
+          reason: "slot_conflict",
+          conflictSlot: otherSlotName,
+        };
+      }
+    }
+    return null;
+  }
+
   _restorePreviousHotkey(previousHotkey, callback) {
     if (
       !previousHotkey ||
-      previousHotkey === "GLOBE" ||
+      isGlobeLikeHotkey(previousHotkey) ||
       isRightSideModifier(previousHotkey) ||
       isModifierOnlyHotkey(previousHotkey)
     ) {
@@ -265,24 +477,89 @@ class HotkeyManager {
   }
 
   async initializeGnomeShortcuts(callback) {
-    if (process.platform !== "linux" || !GnomeShortcutManager.isWayland()) {
+    if (process.platform !== "linux" || !GnomeShortcutManager.isGnome()) {
       return false;
     }
 
-    if (GnomeShortcutManager.isGnome()) {
-      try {
-        this.gnomeManager = new GnomeShortcutManager();
+    try {
+      this.gnomeManager = new GnomeShortcutManager();
 
-        const dbusOk = await this.gnomeManager.initDBusService(callback);
+      const dbusOk = await this.gnomeManager.initDBusService(callback);
+      if (dbusOk) {
+        this.useGnome = true;
+        this.hotkeyCallback = callback;
+        return true;
+      }
+    } catch (err) {
+      debugLogger.log("[HotkeyManager] GNOME shortcut init failed:", err.message);
+      this.gnomeManager = null;
+      this.useGnome = false;
+    }
+
+    return false;
+  }
+
+  async initializeKDEShortcuts(callback) {
+    if (process.platform !== "linux" || !KDEShortcutManager.isKDE()) {
+      return false;
+    }
+
+    try {
+      this.kdeManager = new KDEShortcutManager();
+      const ok = await this.kdeManager.init();
+      if (ok) {
+        this.useKDE = true;
+        this.hotkeyCallback = callback;
+        debugLogger.log("[HotkeyManager] KDE shortcuts initialized via KGlobalAccel D-Bus");
+        return true;
+      }
+    } catch (err) {
+      debugLogger.log("[HotkeyManager] KDE shortcut init failed:", err.message);
+      this.kdeManager = null;
+      this.useKDE = false;
+    }
+
+    return false;
+  }
+
+  async initializeHyprlandShortcuts(callback) {
+    const isLinux = process.platform === "linux";
+    const isWayland = HyprlandShortcutManager.isWayland();
+    const isHyprland = HyprlandShortcutManager.isHyprland();
+
+    debugLogger.log("[HotkeyManager] Hyprland detection", {
+      isLinux,
+      isWayland,
+      isHyprland,
+      XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE || "(unset)",
+      HYPRLAND_INSTANCE_SIGNATURE: process.env.HYPRLAND_INSTANCE_SIGNATURE ? "present" : "(unset)",
+      XDG_CURRENT_DESKTOP: process.env.XDG_CURRENT_DESKTOP || "(unset)",
+    });
+
+    if (!isLinux || !isWayland) {
+      return false;
+    }
+
+    if (isHyprland) {
+      if (!HyprlandShortcutManager.isHyprctlAvailable()) {
+        debugLogger.log("[HotkeyManager] Hyprland detected but hyprctl not available");
+        return false;
+      }
+
+      try {
+        this.hyprlandManager = new HyprlandShortcutManager();
+
+        const dbusOk = await this.hyprlandManager.initDBusService(callback);
+        debugLogger.log("[HotkeyManager] Hyprland D-Bus init result:", dbusOk);
         if (dbusOk) {
-          this.useGnome = true;
+          this.useHyprland = true;
           this.hotkeyCallback = callback;
           return true;
         }
       } catch (err) {
-        debugLogger.log("[HotkeyManager] GNOME shortcut init failed:", err.message);
-        this.gnomeManager = null;
-        this.useGnome = false;
+        debugLogger.log("[HotkeyManager] Hyprland shortcut init failed:", err.message);
+        this.hyprlandManager = null;
+        this.useHyprland = false;
       }
     }
 
@@ -297,30 +574,36 @@ class HotkeyManager {
     this.mainWindow = mainWindow;
     this.hotkeyCallback = callback;
 
-    if (process.platform === "linux" && GnomeShortcutManager.isWayland()) {
+    // Try GNOME native shortcuts on any GNOME session (X11 or Wayland).
+    // On Wayland: required (globalShortcut/XGrabKey doesn't work globally).
+    // On X11: provides conflict detection via gsettings, visible in GNOME Settings.
+    if (process.platform === "linux" && GnomeShortcutManager.isGnome()) {
       const gnomeOk = await this.initializeGnomeShortcuts(callback);
 
       if (gnomeOk) {
         const registerGnomeHotkey = async () => {
           try {
-            const savedHotkey = await mainWindow.webContents.executeJavaScript(`
-              localStorage.getItem("dictationKey") || ""
-            `);
-            const hotkey = savedHotkey && savedHotkey.trim() !== "" ? savedHotkey : "Control+Super";
+            const hotkey = await this.getSavedHotkey();
             const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
 
             const success = await this.gnomeManager.registerKeybinding(gnomeHotkey);
             if (success) {
               this.currentHotkey = hotkey;
+              this.notifyActiveHotkey(hotkey);
               debugLogger.log(`[HotkeyManager] GNOME hotkey "${hotkey}" registered successfully`);
             } else {
-              debugLogger.log("[HotkeyManager] GNOME keybinding failed, falling back to X11");
-              this.useGnome = false;
-              this.loadSavedHotkeyOrDefault(mainWindow, callback);
+              const ok = await this.tryNativeFallbacks(hotkey, "GNOME", async (fb) => {
+                const fbGnome = GnomeShortcutManager.convertToGnomeFormat(fb);
+                return this.gnomeManager.registerKeybinding(fbGnome);
+              });
+              if (!ok) {
+                this.useGnome = false;
+                this.loadSavedHotkeyOrDefault(mainWindow, callback);
+              }
             }
           } catch (err) {
             debugLogger.log(
-              "[HotkeyManager] GNOME keybinding failed, falling back to X11:",
+              "[HotkeyManager] GNOME keybinding failed, falling back to globalShortcut:",
               err.message
             );
             this.useGnome = false;
@@ -334,13 +617,126 @@ class HotkeyManager {
       }
     }
 
+    // Try Hyprland native shortcuts (Wayland only, non-GNOME)
+    if (
+      process.platform === "linux" &&
+      HyprlandShortcutManager.isWayland() &&
+      HyprlandShortcutManager.isHyprland()
+    ) {
+      const hyprlandOk = await this.initializeHyprlandShortcuts(callback);
+
+      if (hyprlandOk) {
+        const registerHyprlandHotkey = async () => {
+          try {
+            const hotkey = await this.getSavedHotkey();
+
+            const success = await this.hyprlandManager.registerKeybinding(hotkey);
+            if (success) {
+              this.currentHotkey = hotkey;
+              this.notifyActiveHotkey(hotkey);
+              debugLogger.log(
+                `[HotkeyManager] Hyprland hotkey "${hotkey}" registered successfully`
+              );
+            } else {
+              const ok = await this.tryNativeFallbacks(hotkey, "Hyprland", (fb) =>
+                this.hyprlandManager.registerKeybinding(fb)
+              );
+              if (!ok) {
+                this.useHyprland = false;
+                this.loadSavedHotkeyOrDefault(mainWindow, callback);
+              }
+            }
+          } catch (err) {
+            debugLogger.log(
+              "[HotkeyManager] Hyprland keybinding failed, falling back to globalShortcut:",
+              err.message
+            );
+            this.useHyprland = false;
+            this.loadSavedHotkeyOrDefault(mainWindow, callback);
+          }
+        };
+
+        setTimeout(registerHyprlandHotkey, HOTKEY_REGISTRATION_DELAY_MS);
+        this.isInitialized = true;
+        return;
+      }
+    }
+    // Falls through to KDE or globalShortcut below when GNOME/Hyprland/KDE are not applicable
+
+    // Try KDE native shortcuts on any KDE session (X11 or Wayland)
+    if (process.platform === "linux" && KDEShortcutManager.isKDE()) {
+      const kdeOk = await this.initializeKDEShortcuts(callback);
+
+      if (kdeOk) {
+        const registerKDEHotkey = async () => {
+          try {
+            const hotkey = await this.getSavedHotkey();
+            const result = await this.kdeManager.registerKeybinding(hotkey, "dictation", callback);
+            if (result === true) {
+              this.currentHotkey = hotkey;
+              this.notifyActiveHotkey(hotkey);
+              debugLogger.log(`[HotkeyManager] KDE hotkey "${hotkey}" registered successfully`);
+            } else if (result === "conflict" || result === "modifier-only") {
+              const ok = await this.tryNativeFallbacks(hotkey, "KDE", (fb) =>
+                this.kdeManager
+                  .registerKeybinding(fb, "dictation", callback)
+                  .then((r) => r === true)
+              );
+              if (!ok) {
+                this.currentHotkey = hotkey;
+                this.notifyHotkeyFailure(hotkey, {
+                  error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
+                });
+              }
+            } else {
+              debugLogger.log(
+                "[HotkeyManager] KDE keybinding failed, falling back to globalShortcut"
+              );
+              this.kdeManager.close();
+              this.kdeManager = null;
+              this.useKDE = false;
+              this.loadSavedHotkeyOrDefault(mainWindow, callback);
+            }
+          } catch (err) {
+            debugLogger.log(
+              "[HotkeyManager] KDE keybinding failed, falling back to globalShortcut:",
+              err.message
+            );
+            this.kdeManager?.close();
+            this.kdeManager = null;
+            this.useKDE = false;
+            this.loadSavedHotkeyOrDefault(mainWindow, callback);
+          }
+        };
+
+        setTimeout(registerKDEHotkey, HOTKEY_REGISTRATION_DELAY_MS);
+        this.isInitialized = true;
+        return;
+      }
+    }
+
     if (process.platform === "linux") {
       globalShortcut.unregisterAll();
     }
 
-    setTimeout(() => {
-      this.loadSavedHotkeyOrDefault(mainWindow, callback);
-    }, HOTKEY_REGISTRATION_DELAY_MS);
+    // Register from env var immediately if available, otherwise wait for page load.
+    const envHotkey = process.env.DICTATION_KEY || "";
+    if (envHotkey) {
+      const result = this.setupShortcuts(envHotkey, callback);
+      if (result.success) {
+        debugLogger.log(`[HotkeyManager] Hotkey "${envHotkey}" registered from env`);
+      } else {
+        debugLogger.log(`[HotkeyManager] Env hotkey "${envHotkey}" failed, waiting for page`);
+        this.loadSavedHotkeyOrDefault(mainWindow, callback);
+      }
+    } else {
+      const loadHotkey = () => this.loadSavedHotkeyOrDefault(mainWindow, callback);
+      if (mainWindow.webContents.isLoading()) {
+        mainWindow.webContents.once("did-finish-load", loadHotkey);
+      } else {
+        loadHotkey();
+      }
+    }
 
     this.isInitialized = true;
   }
@@ -352,9 +748,14 @@ class HotkeyManager {
 
       // Fall back to localStorage if env var is empty
       if (!savedHotkey) {
-        savedHotkey = await mainWindow.webContents.executeJavaScript(`
-          localStorage.getItem("dictationKey") || ""
-        `);
+        try {
+          savedHotkey = await mainWindow.webContents.executeJavaScript(`
+            localStorage.getItem("dictationKey") || ""
+          `);
+        } catch (jsErr) {
+          debugLogger.log(`[HotkeyManager] executeJavaScript failed: ${jsErr.message}`);
+          savedHotkey = "";
+        }
 
         // If we found a hotkey in localStorage but not in env, migrate it to .env file
         if (savedHotkey && savedHotkey.trim() !== "") {
@@ -368,6 +769,7 @@ class HotkeyManager {
       if (savedHotkey && savedHotkey.trim() !== "") {
         const result = this.setupShortcuts(savedHotkey, callback);
         if (result.success) {
+          this.notifyActiveHotkey(savedHotkey);
           debugLogger.log(`[HotkeyManager] Restored saved hotkey: "${savedHotkey}"`);
           return;
         }
@@ -375,7 +777,7 @@ class HotkeyManager {
         this.notifyHotkeyFailure(savedHotkey, result);
       }
 
-      const defaultHotkey = process.platform === "darwin" ? "GLOBE" : "Control+Super";
+      const defaultHotkey = this.getEffectiveDefaultHotkey();
 
       if (defaultHotkey === "GLOBE") {
         this.currentHotkey = "GLOBE";
@@ -395,13 +797,15 @@ class HotkeyManager {
       debugLogger.log(
         `[HotkeyManager] Default hotkey "${defaultHotkey}" failed, trying fallbacks...`
       );
-      const fallbackHotkeys = ["F8", "F9", "Control+Shift+Space"];
-
-      for (const fallback of fallbackHotkeys) {
+      for (const fallback of FALLBACK_HOTKEYS) {
         const fallbackResult = this.setupShortcuts(fallback, callback);
         if (fallbackResult.success) {
           debugLogger.log(`[HotkeyManager] Fallback hotkey "${fallback}" registered successfully`);
-          await this.saveHotkeyToRenderer(fallback);
+          // Only persist to .env (for loadSavedHotkeyOrDefault fallback path).
+          // Do NOT update localStorage — it holds the user's preferred hotkey so the
+          // app retries it on next startup once the conflict is resolved.
+          await this._persistHotkeyToEnvFile(fallback);
+          this.notifyActiveHotkey(fallback);
           this.notifyHotkeyFallback(defaultHotkey, fallback);
           return;
         }
@@ -427,27 +831,118 @@ class HotkeyManager {
   }
 
   async saveHotkeyToRenderer(hotkey) {
-    const escapedHotkey = hotkey.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    // Save via EnvironmentManager (writes to .env file + process.env).
+    // This is the authoritative backend store, read by getSavedHotkey() on next startup.
+    try {
+      const EnvironmentManager = require("./environment");
+      const envManager = new EnvironmentManager();
+      envManager.saveDictationKey(hotkey);
+      debugLogger.log(`[HotkeyManager] Persisted hotkey "${hotkey}" to .env file`);
+    } catch (err) {
+      debugLogger.warn("[HotkeyManager] Failed to save dictation key to env:", err.message);
+    }
 
-    await this._persistHotkeyToEnvFile(hotkey);
-
-    // Also save to localStorage for backwards compatibility
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       try {
-        await this.mainWindow.webContents.executeJavaScript(
-          `localStorage.setItem("dictationKey", "${escapedHotkey}"); true;`
-        );
-        debugLogger.log(`[HotkeyManager] Saved hotkey "${hotkey}" to localStorage`);
+        this.mainWindow.webContents.send("setting-updated", { key: "dictationKey", value: hotkey });
+        debugLogger.log(`[HotkeyManager] Sent dictationKey update to main window`);
         return true;
       } catch (err) {
-        debugLogger.error("[HotkeyManager] Failed to save hotkey to localStorage:", err.message);
+        debugLogger.error("[HotkeyManager] Failed to send dictationKey update:", err.message);
         return false;
       }
     } else {
-      debugLogger.warn(
-        "[HotkeyManager] Main window not available for saving hotkey to localStorage"
-      );
+      debugLogger.warn("[HotkeyManager] Main window not available for setting sync");
       return false;
+    }
+  }
+
+  async getSavedHotkey() {
+    // Read localStorage first (user's preferred hotkey), .env as backup.
+    // localStorage keeps the preference even after a temporary fallback,
+    // so the app retries the preferred hotkey on each startup and only
+    // falls back again if the conflict still exists.
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      try {
+        const lsKey = await this.mainWindow.webContents.executeJavaScript(
+          `localStorage.getItem("dictationKey") || ""`
+        );
+        if (lsKey && lsKey.trim() !== "") return lsKey;
+      } catch (err) {
+        debugLogger.log(
+          "[HotkeyManager] Failed to read dictationKey from localStorage:",
+          err.message
+        );
+      }
+    }
+
+    try {
+      const EnvironmentManager = require("./environment");
+      const envManager = new EnvironmentManager();
+      const envKey = envManager.getDictationKey();
+      if (envKey && envKey.trim() !== "") return envKey;
+    } catch (err) {
+      debugLogger.log("[HotkeyManager] Failed to read dictationKey from .env:", err.message);
+    }
+
+    return DEFAULT_HOTKEY;
+  }
+
+  /**
+   * Returns the effective default hotkey for the current platform.
+   * On platforms where Control+Super doesn't work (X11 modifier-only,
+   * GNOME gsettings requires a regular key), returns the first fallback (F8).
+   */
+  getEffectiveDefaultHotkey() {
+    if (process.platform === "darwin") return "GLOBE";
+    if (process.platform !== "linux") return DEFAULT_HOTKEY;
+
+    const isX11 = !GnomeShortcutManager.isWayland();
+
+    // Modifier-only combos (e.g. Control+Super) don't work on:
+    // - X11: XGrabKey can't capture modifier-only sequences
+    // - GNOME (X11/Wayland): gsettings requires a regular key in the combo
+    if ((isX11 || GnomeShortcutManager.isGnome()) && isModifierOnlyHotkey(DEFAULT_HOTKEY)) {
+      return FALLBACK_HOTKEYS[0];
+    }
+
+    return DEFAULT_HOTKEY;
+  }
+
+  /**
+   * Try fallback hotkeys via a native registration function.
+   * @param {string} hotkey - The original hotkey that failed
+   * @param {string} backend - Backend name for logging (e.g. "GNOME", "KDE", "Hyprland")
+   * @param {(fallback: string) => Promise<boolean>} registerFn - Tries registering a single fallback, returns true on success
+   * @returns {Promise<boolean>} true if a fallback was registered
+   */
+  async tryNativeFallbacks(hotkey, backend, registerFn) {
+    debugLogger.log(
+      `[HotkeyManager] ${backend} keybinding failed for "${hotkey}", trying fallbacks via ${backend} native...`
+    );
+    for (const fallback of FALLBACK_HOTKEYS) {
+      const success = await registerFn(fallback);
+      if (success) {
+        this.currentHotkey = fallback;
+        debugLogger.log(
+          `[HotkeyManager] ${backend} fallback hotkey "${fallback}" registered successfully`
+        );
+        // Persist to .env only, not localStorage (preserves user's preferred key for retry on next launch).
+        await this._persistHotkeyToEnvFile(fallback);
+        this.notifyActiveHotkey(fallback);
+        this.notifyHotkeyFallback(hotkey, fallback);
+        return true;
+      }
+    }
+    debugLogger.log(`[HotkeyManager] All ${backend} fallback hotkeys failed`);
+    return false;
+  }
+
+  notifyActiveHotkey(hotkey) {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) {
+        win.webContents.send("dictation-key-active", hotkey);
+      }
     }
   }
 
@@ -456,7 +951,6 @@ class HotkeyManager {
       this.mainWindow.webContents.send("hotkey-fallback-used", {
         original: originalHotkey,
         fallback: fallbackHotkey,
-        message: `The "${originalHotkey}" key was unavailable. Using "${fallbackHotkey}" instead. You can change this in Settings.`,
       });
     }
   }
@@ -465,7 +959,7 @@ class HotkeyManager {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send("hotkey-registration-failed", {
         hotkey,
-        error: result?.error || `Could not register "${hotkey}"`,
+        error: result?.error || i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
         suggestions: result?.suggestions || ["F8", "F9", "Control+Shift+Space"],
       });
     }
@@ -477,6 +971,11 @@ class HotkeyManager {
     }
 
     try {
+      const conflict = this._findSlotConflict("dictation", hotkey);
+      if (conflict) {
+        return { success: false, message: conflict.error, reason: conflict.reason };
+      }
+
       if (this.useGnome && this.gnomeManager) {
         debugLogger.log(`[HotkeyManager] Updating GNOME hotkey to "${hotkey}"`);
         const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
@@ -497,6 +996,62 @@ class HotkeyManager {
         return {
           success: true,
           message: `Hotkey updated to: ${hotkey} (via GNOME native shortcut)`,
+        };
+      }
+
+      if (this.useHyprland && this.hyprlandManager) {
+        debugLogger.log(`[HotkeyManager] Updating Hyprland hotkey to "${hotkey}"`);
+        const success = await this.hyprlandManager.updateKeybinding(hotkey);
+        if (!success) {
+          return {
+            success: false,
+            message: `Failed to update Hyprland hotkey to "${hotkey}". Check the format is valid.`,
+          };
+        }
+        this.currentHotkey = hotkey;
+        const saved = await this.saveHotkeyToRenderer(hotkey);
+        if (!saved) {
+          debugLogger.warn(
+            "[HotkeyManager] Hyprland hotkey registered but failed to persist to localStorage"
+          );
+        }
+        return {
+          success: true,
+          message: `Hotkey updated to: ${hotkey} (via Hyprland native shortcut)`,
+        };
+      }
+
+      if (this.useKDE && this.kdeManager) {
+        debugLogger.log(`[HotkeyManager] Updating KDE hotkey to "${hotkey}"`);
+        const previousHotkey = this.currentHotkey;
+        await this.kdeManager.unregisterKeybinding("dictation");
+        const result = await this.kdeManager.registerKeybinding(hotkey, "dictation", callback);
+        if (result !== true) {
+          if (previousHotkey) {
+            const restored = await this.kdeManager.registerKeybinding(
+              previousHotkey,
+              "dictation",
+              callback
+            );
+            if (restored === true) {
+              debugLogger.log(`[HotkeyManager] Restored previous KDE hotkey "${previousHotkey}"`);
+            }
+          }
+          const reason =
+            KDE_FAILURE_REASONS[result]?.(hotkey) ||
+            i18nMain.t("hotkey.errors.registrationFailed", { hotkey });
+          return { success: false, message: reason };
+        }
+        this.currentHotkey = hotkey;
+        const saved = await this.saveHotkeyToRenderer(hotkey);
+        if (!saved) {
+          debugLogger.warn(
+            "[HotkeyManager] KDE hotkey registered but failed to persist to localStorage"
+          );
+        }
+        return {
+          success: true,
+          message: `Hotkey updated to: ${hotkey} (via KDE D-Bus shortcut)`,
         };
       }
 
@@ -531,12 +1086,48 @@ class HotkeyManager {
 
   unregisterAll() {
     if (this.gnomeManager) {
-      this.gnomeManager.unregisterKeybinding().catch((err) => {
-        debugLogger.warn("[HotkeyManager] Error unregistering GNOME keybinding:", err.message);
-      });
+      // Unregister every slot that was registered via GNOME
+      const gnomeSlots = [...this.gnomeManager.registeredSlots];
+      for (const slotName of gnomeSlots) {
+        this.gnomeManager.unregisterKeybinding(slotName).catch((err) => {
+          debugLogger.warn(
+            `[HotkeyManager] Error unregistering GNOME keybinding for slot "${slotName}":`,
+            err.message
+          );
+        });
+      }
       this.gnomeManager.close();
       this.gnomeManager = null;
       this.useGnome = false;
+    }
+    if (this.kdeManager) {
+      const kdeSlots = [...this.kdeManager.registeredSlots];
+      for (const slotName of kdeSlots) {
+        this.kdeManager.unregisterKeybinding(slotName).catch((err) => {
+          debugLogger.warn(
+            `[HotkeyManager] Error unregistering KDE keybinding for slot "${slotName}":`,
+            err.message
+          );
+        });
+      }
+      this.kdeManager.close();
+      this.kdeManager = null;
+      this.useKDE = false;
+    }
+    if (this.hyprlandManager) {
+      this.hyprlandManager.unregisterKeybinding().catch((err) => {
+        debugLogger.warn("[HotkeyManager] Error unregistering Hyprland keybinding:", err.message);
+      });
+      this.hyprlandManager.close();
+      this.hyprlandManager = null;
+      this.useHyprland = false;
+    }
+    for (const slotName of this.slots.keys()) {
+      const slot = this.slots.get(slotName);
+      if (slot) {
+        slot.hotkey = null;
+        slot.accelerator = null;
+      }
     }
     globalShortcut.unregisterAll();
   }
@@ -545,11 +1136,24 @@ class HotkeyManager {
     return this.useGnome;
   }
 
+  isUsingHyprland() {
+    return this.useHyprland;
+  }
+
+  isUsingKDE() {
+    return this.useKDE;
+  }
+
+  isUsingNativeShortcut() {
+    return this.useGnome || this.useHyprland || this.useKDE;
+  }
+
   isHotkeyRegistered(hotkey) {
     return globalShortcut.isRegistered(hotkey);
   }
 }
 
 module.exports = HotkeyManager;
+module.exports.isGlobeLikeHotkey = isGlobeLikeHotkey;
 module.exports.isModifierOnlyHotkey = isModifierOnlyHotkey;
 module.exports.isRightSideModifier = isRightSideModifier;

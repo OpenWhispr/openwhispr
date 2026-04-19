@@ -1,5 +1,6 @@
 {
   "appId": "com.herotools.openwispr",
+  "afterPack": "scripts/afterPack.js",
   "productName": "OpenWhispr",
   "protocols": {
     "name": "OpenWhispr Protocol",
@@ -82,13 +83,24 @@
     "!**/node_modules/**/CHANGELOG*",
     "!**/node_modules/**/.github/**"
   ],
-  "asarUnpack": ["**/node_modules/ffmpeg-static/**/*", "**/node_modules/better-sqlite3/**/*"],
+  "asarUnpack": [
+    "**/node_modules/ffmpeg-static/**/*",
+    "**/node_modules/better-sqlite3/**/*",
+    "**/node_modules/onnxruntime-node/**/*"
+  ],
   "extraResources": [
+    ".env",
     "src/assets/**/*",
+    "resources/bin/macos-audio-tap",
     "resources/bin/macos-globe-listener",
     "resources/bin/macos-context-capture",
     "resources/bin/macos-fast-paste",
+    "resources/bin/macos-mic-listener",
+    "resources/bin/macos-text-monitor",
+    "resources/bin/macos-media-remote",
     "resources/bin/linux-fast-paste",
+    "resources/bin/linux-system-audio-helper",
+    "resources/bin/linux-text-monitor",
     {
       "from": "resources/bin/",
       "to": "bin/",
@@ -97,9 +109,16 @@
         "whisper-server-*",
         "llama-server-*",
         "sherpa-onnx-*",
+        "qdrant-*",
+        "linux-key-listener*",
+        "meeting-aec-helper-*",
         "windows-key-listener*",
+        "windows-mic-listener*",
+        "windows-text-monitor*",
         "windows-fast-paste*",
         "windows-context-capture*",
+        "all-MiniLM-L6-v2/**/*",
+        "diarization-models/**/*",
         "*.dylib",
         "*.dll",
         "*.so*"
@@ -116,15 +135,29 @@
     "entitlementsInherit": "resources/mac/entitlements.mac.plist",
     "identity": "HeroTools Inc. (9R85XFMH59)",
     "notarize": true,
+    "extraResources": [
+      {
+        "from": "src/assets/Assets.car",
+        "to": "Assets.car"
+      }
+    ],
     "extendInfo": {
       "LSUIElement": false,
-      "NSMicrophoneUsageDescription": "OpenWhispr needs microphone access for speech-to-text transcription.",
+      "CFBundleIconName": "openwhispr",
+      "NSMicrophoneUsageDescription": "OpenWhispr uses the microphone to capture your voice for transcription.",
+      "NSAudioCaptureUsageDescription": "OpenWhispr uses system audio to capture other participants' audio from calls and meetings.",
       "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications."
     }
   },
   "win": {
     "target": ["nsis", "portable"],
     "icon": "src/assets/icon.ico",
+    "azureSignOptions": {
+      "endpoint": "https://eus.codesigning.azure.net/",
+      "certificateProfileName": "openwhispr-release",
+      "codeSigningAccountName": "OpenWhispr",
+      "publisherName": "CN=Gizmo Labs Inc., O=Gizmo Labs Inc., L=Wilmington, S=Delaware, C=US"
+    },
     "extraResources": [
       {
         "from": "resources/bin/nircmd.exe",
@@ -158,24 +191,42 @@
     ]
   },
   "deb": {
+    "afterInstall": "resources/linux/after-install.sh",
     "afterRemove": "resources/linux/after-remove.sh",
+    "depends": ["ydotool"],
     "fpm": [
+      "--deb-recommends",
+      "ydotoold",
       "--deb-suggests",
       "xdotool",
       "--deb-suggests",
       "wtype",
       "--deb-recommends",
-      "wl-clipboard"
+      "wl-clipboard",
+      "--deb-recommends",
+      "xclip",
+      "--deb-suggests",
+      "xsel"
     ]
   },
   "rpm": {
     "fpm": [
+      "--after-install",
+      "resources/linux/after-install.sh",
+      "--rpm-rpmbuild-define",
+      "_build_id_links none",
+      "--rpm-tag",
+      "Requires: ydotool",
       "--rpm-tag",
       "Suggests: xdotool",
       "--rpm-tag",
       "Suggests: wtype",
       "--rpm-tag",
-      "Recommends: wl-clipboard"
+      "Recommends: wl-clipboard",
+      "--rpm-tag",
+      "Recommends: xclip",
+      "--rpm-tag",
+      "Suggests: xsel"
     ]
   },
   "nsis": {

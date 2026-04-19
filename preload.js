@@ -37,13 +37,41 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
 
   // Database functions
-  saveTranscription: (text) => ipcRenderer.invoke("db-save-transcription", text),
+  saveTranscription: (text, rawText, options) =>
+    ipcRenderer.invoke("db-save-transcription", text, rawText, options),
   getTranscriptions: (limit) => ipcRenderer.invoke("db-get-transcriptions", limit),
   clearTranscriptions: () => ipcRenderer.invoke("db-clear-transcriptions"),
   deleteTranscription: (id) => ipcRenderer.invoke("db-delete-transcription", id),
+
+  // Audio storage functions
+  saveTranscriptionAudio: (id, audioBuffer, metadata) =>
+    ipcRenderer.invoke("save-transcription-audio", id, audioBuffer, metadata),
+  getAudioPath: (id) => ipcRenderer.invoke("get-audio-path", id),
+  showAudioInFolder: (id) => ipcRenderer.invoke("show-audio-in-folder", id),
+  getAudioBuffer: (id) => ipcRenderer.invoke("get-audio-buffer", id),
+  deleteTranscriptionAudio: (id) => ipcRenderer.invoke("delete-transcription-audio", id),
+  getAudioStorageUsage: () => ipcRenderer.invoke("get-audio-storage-usage"),
+  deleteAllAudio: () => ipcRenderer.invoke("delete-all-audio"),
+  retryTranscription: (id, settings) => ipcRenderer.invoke("retry-transcription", id, settings),
+  updateTranscriptionText: (id, text, rawText) =>
+    ipcRenderer.invoke("update-transcription-text", id, text, rawText),
+  getTranscriptionById: (id) => ipcRenderer.invoke("get-transcription-by-id", id),
+
   // Dictionary functions
   getDictionary: () => ipcRenderer.invoke("db-get-dictionary"),
   setDictionary: (words) => ipcRenderer.invoke("db-set-dictionary", words),
+  onDictionaryUpdated: (callback) => {
+    const listener = (_event, words) => callback?.(words);
+    ipcRenderer.on("dictionary-updated", listener);
+    return () => ipcRenderer.removeListener("dictionary-updated", listener);
+  },
+  setAutoLearnEnabled: (enabled) => ipcRenderer.send("auto-learn-changed", enabled),
+  onCorrectionsLearned: (callback) => {
+    const listener = (_event, words) => callback?.(words);
+    ipcRenderer.on("corrections-learned", listener);
+    return () => ipcRenderer.removeListener("corrections-learned", listener);
+  },
+  undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
   saveNote: (title, content, noteType, sourceFile, audioDuration, folderId) =>
@@ -62,6 +90,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   updateNote: (id, updates) => ipcRenderer.invoke("db-update-note", id, updates),
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
+  exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
+  searchNotes: (query, limit) => ipcRenderer.invoke("db-search-notes", query, limit),
+  semanticSearchNotes: (query, limit) =>
+    ipcRenderer.invoke("db-semantic-search-notes", query, limit),
+  semanticReindexAll: () => ipcRenderer.invoke("db-semantic-reindex-all"),
+  onSemanticReindexProgress: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("semantic-reindex-progress", listener);
+    return () => ipcRenderer.removeListener("semantic-reindex-progress", listener);
+  },
+  updateNoteCloudId: (id, cloudId) => ipcRenderer.invoke("db-update-note-cloud-id", id, cloudId),
 
   // Folder functions
   getFolders: () => ipcRenderer.invoke("db-get-folders"),
@@ -69,6 +108,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteFolder: (id) => ipcRenderer.invoke("db-delete-folder", id),
   renameFolder: (id, name) => ipcRenderer.invoke("db-rename-folder", id, name),
   getFolderNoteCounts: () => ipcRenderer.invoke("db-get-folder-note-counts"),
+
+  // Note files (markdown mirror) functions
+  noteFilesSetEnabled: (enabled, customPath) =>
+    ipcRenderer.invoke("note-files-set-enabled", enabled, customPath),
+  noteFilesSetPath: (path) => ipcRenderer.invoke("note-files-set-path", path),
+  noteFilesRebuild: () => ipcRenderer.invoke("note-files-rebuild"),
+  noteFilesGetDefaultPath: () => ipcRenderer.invoke("note-files-get-default-path"),
+  noteFilesPickFolder: () => ipcRenderer.invoke("note-files-pick-folder"),
+  showNoteFile: (noteId) => ipcRenderer.invoke("show-note-file", noteId),
+  showFolderInExplorer: (folderName) => ipcRenderer.invoke("show-folder-in-explorer", folderName),
 
   // Action functions
   getActions: () => ipcRenderer.invoke("db-get-actions"),
@@ -80,6 +129,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Audio file operations
   selectAudioFile: () => ipcRenderer.invoke("select-audio-file"),
+  getFileSize: (filePath) => ipcRenderer.invoke("get-file-size", filePath),
   transcribeAudioFile: (filePath, options) =>
     ipcRenderer.invoke("transcribe-audio-file", filePath, options),
   getPathForFile: (file) => webUtils.getPathForFile(file),
@@ -131,6 +181,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("transcriptions-cleared", listener);
     return () => ipcRenderer.removeListener("transcriptions-cleared", listener);
   },
+  onTranscriptionUpdated: (callback) => {
+    const listener = (_event, transcription) => callback?.(transcription);
+    ipcRenderer.on("transcription-updated", listener);
+    return () => ipcRenderer.removeListener("transcription-updated", listener);
+  },
 
   // Environment variables
   getOpenAIKey: () => ipcRenderer.invoke("get-openai-key"),
@@ -138,7 +193,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   createProductionEnvFile: (key) => ipcRenderer.invoke("create-production-env-file", key),
 
   // Clipboard functions
-  checkAccessibilityPermission: () => ipcRenderer.invoke("check-accessibility-permission"),
+  checkAccessibilityPermission: (silent) =>
+    ipcRenderer.invoke("check-accessibility-permission", silent),
+  promptAccessibilityPermission: () => ipcRenderer.invoke("prompt-accessibility-permission"),
   readClipboard: () => ipcRenderer.invoke("read-clipboard"),
   writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
   checkPasteTools: () => ipcRenderer.invoke("check-paste-tools"),
@@ -163,6 +220,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   whisperServerStatus: () => ipcRenderer.invoke("whisper-server-status"),
 
   // CUDA GPU acceleration
+  listGpus: () => ipcRenderer.invoke("list-gpus"),
+  setGpuDeviceIndex: (purpose, index) => ipcRenderer.invoke("set-gpu-device-index", purpose, index),
+  getGpuDeviceIndex: (purpose) => ipcRenderer.invoke("get-gpu-device-index", purpose),
   detectGpu: () => ipcRenderer.invoke("detect-gpu"),
   getCudaWhisperStatus: () => ipcRenderer.invoke("get-cuda-whisper-status"),
   downloadCudaWhisperBinary: () => ipcRenderer.invoke("download-cuda-whisper-binary"),
@@ -196,11 +256,38 @@ contextBridge.exposeInMainWorld("electronAPI", {
   parakeetServerStop: () => ipcRenderer.invoke("parakeet-server-stop"),
   parakeetServerStatus: () => ipcRenderer.invoke("parakeet-server-status"),
 
+  // Diarization (speaker identification) functions
+  downloadDiarizationModels: () => ipcRenderer.invoke("download-diarization-models"),
+  getDiarizationModelStatus: () => ipcRenderer.invoke("get-diarization-model-status"),
+  deleteDiarizationModels: () => ipcRenderer.invoke("delete-diarization-models"),
+  cancelDiarizationDownload: () => ipcRenderer.invoke("cancel-diarization-download"),
+  onDiarizationDownloadProgress: registerListener(
+    "diarization-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingDiarizationComplete: registerListener(
+    "meeting-diarization-complete",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Speaker name mapping
+  getSpeakerMappings: (noteId) => ipcRenderer.invoke("get-speaker-mappings", noteId),
+  setSpeakerMapping: (noteId, speakerId, displayName, email, profileId) =>
+    ipcRenderer.invoke("set-speaker-mapping", noteId, speakerId, displayName, email, profileId),
+  removeSpeakerMapping: (noteId, speakerId) =>
+    ipcRenderer.invoke("remove-speaker-mapping", noteId, speakerId),
+  getSpeakerProfiles: () => ipcRenderer.invoke("get-speaker-profiles"),
+  attachSpeakerEmail: (profileId, email) =>
+    ipcRenderer.invoke("attach-speaker-email", profileId, email),
+  saveNoteSpeakerEmbeddings: (noteId, embeddings) =>
+    ipcRenderer.invoke("save-note-speaker-embeddings", noteId, embeddings),
+
   // Window control functions
   windowMinimize: () => ipcRenderer.invoke("window-minimize"),
   windowMaximize: () => ipcRenderer.invoke("window-maximize"),
   windowClose: () => ipcRenderer.invoke("window-close"),
   windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
+  restoreFromMeetingMode: () => ipcRenderer.invoke("restore-from-meeting-mode"),
   getPlatform: () => process.platform,
   appQuit: () => ipcRenderer.invoke("app-quit"),
 
@@ -214,6 +301,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   stopWindowDrag: () => ipcRenderer.invoke("stop-window-drag"),
   setMainWindowInteractivity: (interactive) =>
     ipcRenderer.invoke("set-main-window-interactivity", interactive),
+  setNotificationInteractivity: (interactive) =>
+    ipcRenderer.invoke("set-notification-interactivity", interactive),
   resizeMainWindow: (sizeKey) => ipcRenderer.invoke("resize-main-window", sizeKey),
 
   // Update functions
@@ -233,6 +322,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Audio event listeners
   onNoAudioDetected: registerListener("no-audio-detected"),
+  onCancelHotkeyPressed: registerListener("cancel-hotkey-pressed", (cb) => () => cb()),
+  registerCancelHotkey: (key) => ipcRenderer.invoke("register-cancel-hotkey", key),
+  unregisterCancelHotkey: () => ipcRenderer.invoke("unregister-cancel-hotkey"),
 
   // External link opener
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
@@ -273,8 +365,38 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getCustomReasoningKey: () => ipcRenderer.invoke("get-custom-reasoning-key"),
   saveCustomReasoningKey: (key) => ipcRenderer.invoke("save-custom-reasoning-key", key),
 
+  // Enterprise provider key management
+  getBedrockRegion: () => ipcRenderer.invoke("get-bedrock-region"),
+  saveBedrockRegion: (value) => ipcRenderer.invoke("save-bedrock-region", value),
+  getBedrockProfile: () => ipcRenderer.invoke("get-bedrock-profile"),
+  saveBedrockProfile: (value) => ipcRenderer.invoke("save-bedrock-profile", value),
+  getBedrockAccessKeyId: () => ipcRenderer.invoke("get-bedrock-access-key-id"),
+  saveBedrockAccessKeyId: (key) => ipcRenderer.invoke("save-bedrock-access-key-id", key),
+  getBedrockSecretAccessKey: () => ipcRenderer.invoke("get-bedrock-secret-access-key"),
+  saveBedrockSecretAccessKey: (key) => ipcRenderer.invoke("save-bedrock-secret-access-key", key),
+  getBedrockSessionToken: () => ipcRenderer.invoke("get-bedrock-session-token"),
+  saveBedrockSessionToken: (key) => ipcRenderer.invoke("save-bedrock-session-token", key),
+  getAzureEndpoint: () => ipcRenderer.invoke("get-azure-endpoint"),
+  saveAzureEndpoint: (value) => ipcRenderer.invoke("save-azure-endpoint", value),
+  getAzureApiKey: () => ipcRenderer.invoke("get-azure-api-key"),
+  saveAzureApiKey: (key) => ipcRenderer.invoke("save-azure-api-key", key),
+  getAzureDeployment: () => ipcRenderer.invoke("get-azure-deployment"),
+  saveAzureDeployment: (value) => ipcRenderer.invoke("save-azure-deployment", value),
+  getAzureApiVersion: () => ipcRenderer.invoke("get-azure-api-version"),
+  saveAzureApiVersion: (value) => ipcRenderer.invoke("save-azure-api-version", value),
+  getVertexProject: () => ipcRenderer.invoke("get-vertex-project"),
+  saveVertexProject: (value) => ipcRenderer.invoke("save-vertex-project", value),
+  getVertexLocation: () => ipcRenderer.invoke("get-vertex-location"),
+  saveVertexLocation: (value) => ipcRenderer.invoke("save-vertex-location", value),
+  getVertexApiKey: () => ipcRenderer.invoke("get-vertex-api-key"),
+  saveVertexApiKey: (key) => ipcRenderer.invoke("save-vertex-api-key", key),
+  testEnterpriseConnection: (provider, config) =>
+    ipcRenderer.invoke("test-enterprise-connection", provider, config),
+
   // Dictation key persistence (file-based for reliable startup)
   getDictationKey: () => ipcRenderer.invoke("get-dictation-key"),
+  getActiveDictationKey: () => ipcRenderer.invoke("get-active-dictation-key"),
+  getEffectiveDefaultHotkey: () => ipcRenderer.invoke("get-effective-default-hotkey"),
   saveDictationKey: (key) => ipcRenderer.invoke("save-dictation-key", key),
 
   // Activation mode persistence (file-based for reliable startup)
@@ -292,6 +414,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Anthropic reasoning
   processAnthropicReasoning: (text, modelId, agentName, config) =>
     ipcRenderer.invoke("process-anthropic-reasoning", text, modelId, agentName, config),
+
+  // Enterprise reasoning (Bedrock, Azure, Vertex) — runs in main process so
+  // Node-only SDKs (AWS/Azure/Google credential providers) can resolve.
+  processEnterpriseReasoning: (text, modelId, agentName, config) =>
+    ipcRenderer.invoke("process-enterprise-reasoning", text, modelId, agentName, config),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),
@@ -318,6 +445,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getLogLevel: () => ipcRenderer.invoke("get-log-level"),
   log: (entry) => ipcRenderer.invoke("app-log", entry),
 
+  // ydotool status check
+  getYdotoolStatus: () => ipcRenderer.invoke("get-ydotool-status"),
+
   // Debug logging management
   getDebugState: () => ipcRenderer.invoke("get-debug-state"),
   setDebugLogging: (enabled) => ipcRenderer.invoke("set-debug-logging", enabled),
@@ -325,9 +455,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // System settings helpers for microphone/audio permissions
   requestMicrophoneAccess: () => ipcRenderer.invoke("request-microphone-access"),
+  checkMicrophoneAccess: () => ipcRenderer.invoke("check-microphone-access"),
+  checkSystemAudioAccess: () => ipcRenderer.invoke("check-system-audio-access"),
+  requestSystemAudioAccess: () => ipcRenderer.invoke("request-system-audio-access"),
   openMicrophoneSettings: () => ipcRenderer.invoke("open-microphone-settings"),
   openSoundInputSettings: () => ipcRenderer.invoke("open-sound-input-settings"),
   openAccessibilitySettings: () => ipcRenderer.invoke("open-accessibility-settings"),
+  openSystemAudioSettings: () => ipcRenderer.invoke("open-system-audio-settings"),
+  toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
+  pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
+  resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
   openWhisperModelsFolder: () => ipcRenderer.invoke("open-whisper-models-folder"),
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),
 
@@ -337,13 +474,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cloudStreamingUsage: (text, audioDurationSeconds, opts) =>
     ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
-  cloudCheckout: (plan) => ipcRenderer.invoke("cloud-checkout", plan),
+  cloudCheckout: (opts) => ipcRenderer.invoke("cloud-checkout", opts),
   cloudBillingPortal: () => ipcRenderer.invoke("cloud-billing-portal"),
+  cloudSwitchPlan: (opts) => ipcRenderer.invoke("cloud-switch-plan", opts),
+  cloudPreviewSwitch: (opts) => ipcRenderer.invoke("cloud-preview-switch", opts),
+  cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
+  getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
 
   // Cloud audio file transcription
   transcribeAudioFileCloud: (filePath) =>
     ipcRenderer.invoke("transcribe-audio-file-cloud", filePath),
   transcribeAudioFileByok: (options) => ipcRenderer.invoke("transcribe-audio-file-byok", options),
+  onUploadTranscriptionProgress: registerListener(
+    "upload-transcription-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
 
   // Referral stats
   getReferralStats: () => ipcRenderer.invoke("get-referral-stats"),
@@ -400,6 +545,53 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, data) => callback(data)
   ),
 
+  // Meeting transcription (streaming, dual-channel)
+  meetingTranscriptionPrepare: (options) =>
+    ipcRenderer.invoke("meeting-transcription-prepare", options),
+  meetingTranscriptionStart: (options) =>
+    ipcRenderer.invoke("meeting-transcription-start", options),
+  meetingTranscriptionSend: (buffer, source) =>
+    ipcRenderer.send("meeting-transcription-send", buffer, source),
+  meetingTranscriptionStop: () => ipcRenderer.invoke("meeting-transcription-stop"),
+  onMeetingTranscriptionSegment: registerListener(
+    "meeting-transcription-segment",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingSpeakerIdentified: registerListener(
+    "meeting-speaker-identified",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingSpeakersMerged: registerListener(
+    "meeting-speakers-merged",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingTranscriptionError: registerListener(
+    "meeting-transcription-error",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Dictation realtime streaming
+  dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),
+  dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
+  dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
+  dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
+  onDictationRealtimePartial: registerListener(
+    "dictation-realtime-partial",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onDictationRealtimeFinal: registerListener(
+    "dictation-realtime-final",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onDictationRealtimeError: registerListener(
+    "dictation-realtime-error",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onDictationRealtimeSessionEnd: registerListener(
+    "dictation-realtime-session-end",
+    (callback) => (_event, data) => callback(data)
+  ),
+
   // Usage limit events (for showing UpgradePrompt in ControlPanel)
   notifyLimitReached: (data) => ipcRenderer.send("limit-reached", data),
   onLimitReached: registerListener("limit-reached", (callback) => (_event, data) => callback(data)),
@@ -427,11 +619,37 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("hotkey-registration-failed", listener);
     return () => ipcRenderer.removeListener("hotkey-registration-failed", listener);
   },
+  onSettingUpdated: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("setting-updated", listener);
+    return () => ipcRenderer.removeListener("setting-updated", listener);
+  },
+  onDictationKeyActive: (callback) => {
+    const listener = (_event, key) => callback?.(key);
+    ipcRenderer.on("dictation-key-active", listener);
+    return () => ipcRenderer.removeListener("dictation-key-active", listener);
+  },
   onWindowsPushToTalkUnavailable: registerListener("windows-ptt-unavailable"),
+  onLinuxPttPermissionDenied: registerListener(
+    "linux-ptt-permission-denied",
+    (callback) => () => callback()
+  ),
+
+  // Settings shortcut (Cmd+, / Ctrl+,)
+  onShowSettings: registerListener("show-settings", (callback) => () => callback()),
+
+  // Accessibility permission events (macOS)
+  onAccessibilityMissing: (callback) => {
+    const listener = () => callback?.();
+    ipcRenderer.on("accessibility-missing", listener);
+    return () => ipcRenderer.removeListener("accessibility-missing", listener);
+  },
+  checkAccessibilityTrusted: () => ipcRenderer.invoke("check-accessibility-trusted"),
 
   // Notify main process of activation mode changes (for Windows Push-to-Talk)
   notifyActivationModeChanged: (mode) => ipcRenderer.send("activation-mode-changed", mode),
   notifyHotkeyChanged: (hotkey) => ipcRenderer.send("hotkey-changed", hotkey),
+  registerMeetingHotkey: (hotkey) => ipcRenderer.invoke("register-meeting-hotkey", hotkey),
 
   // Floating icon auto-hide
   notifyFloatingIconAutoHideChanged: (enabled) =>
@@ -444,7 +662,209 @@ contextBridge.exposeInMainWorld("electronAPI", {
   notifyContextAwarenessChanged: (enabled) =>
     ipcRenderer.send("context-awareness-changed", enabled),
 
+  // Panel start position
+  notifyPanelStartPositionChanged: (position) =>
+    ipcRenderer.send("panel-start-position-changed", position),
+
+  // Start minimized
+  notifyStartMinimizedChanged: (enabled) => ipcRenderer.send("start-minimized-changed", enabled),
+
   // Auto-start management
   getAutoStartEnabled: () => ipcRenderer.invoke("get-auto-start-enabled"),
   setAutoStartEnabled: (enabled) => ipcRenderer.invoke("set-auto-start-enabled", enabled),
+
+  // Agent mode
+  updateAgentHotkey: (hotkey) => ipcRenderer.invoke("update-agent-hotkey", hotkey),
+  getAgentKey: () => ipcRenderer.invoke("get-agent-key"),
+  saveAgentKey: (key) => ipcRenderer.invoke("save-agent-key", key),
+  onAgentStartRecording: registerListener("agent-start-recording", (callback) => () => callback()),
+  onAgentStopRecording: registerListener("agent-stop-recording", (callback) => () => callback()),
+  onAgentToggleRecording: registerListener(
+    "agent-toggle-recording",
+    (callback) => () => callback()
+  ),
+  toggleAgentOverlay: () => ipcRenderer.invoke("toggle-agent-overlay"),
+  hideAgentOverlay: () => ipcRenderer.invoke("hide-agent-overlay"),
+  resizeAgentWindow: (width, height) => ipcRenderer.invoke("resize-agent-window", width, height),
+  getAgentWindowBounds: () => ipcRenderer.invoke("get-agent-window-bounds"),
+  setAgentWindowBounds: (x, y, width, height) =>
+    ipcRenderer.invoke("set-agent-window-bounds", x, y, width, height),
+  onPreviewText: registerListener("preview-text", (callback) => (_event, text) => callback(text)),
+  onPreviewAppend: registerListener(
+    "preview-append",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onPreviewHold: registerListener(
+    "preview-hold",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  onPreviewResult: registerListener(
+    "preview-result",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  onPreviewHide: registerListener("preview-hide", (callback) => () => callback()),
+  startDictationPreview: (opts) => ipcRenderer.invoke("start-dictation-preview", opts),
+  stopDictationPreview: (opts) => ipcRenderer.invoke("stop-dictation-preview", opts),
+  dismissDictationPreview: () => ipcRenderer.invoke("dismiss-dictation-preview"),
+  completeDictationPreview: (payload) => ipcRenderer.invoke("complete-dictation-preview", payload),
+  hideDictationPreview: () => ipcRenderer.invoke("hide-dictation-preview"),
+  resizeTranscriptionPreviewWindow: (width, height) =>
+    ipcRenderer.invoke("resize-transcription-preview-window", width, height),
+  sendDictationPreviewAudio: (data) => ipcRenderer.send("dictation-preview-audio", data),
+  acquireRecordingLock: (pipeline) => ipcRenderer.invoke("acquire-recording-lock", pipeline),
+  releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
+
+  // Agent cloud streaming (event-based for real-time chunks)
+  startAgentStream: (messages, opts) =>
+    ipcRenderer.send("cloud-agent-stream-start", messages, opts),
+  onAgentStreamChunk: registerListener(
+    "cloud-agent-stream-chunk",
+    (callback) => (_event, chunk) => callback(chunk)
+  ),
+  onAgentStreamError: registerListener(
+    "cloud-agent-stream-error",
+    (callback) => (_event, error) => callback(error)
+  ),
+  onAgentStreamEnd: registerListener("cloud-agent-stream-end", (callback) => () => callback()),
+
+  // Agent cloud tools
+  agentWebSearch: (query, numResults) => ipcRenderer.invoke("agent-web-search", query, numResults),
+  agentOpenNote: (noteId) => ipcRenderer.invoke("agent-open-note", noteId),
+
+  // Agent conversation persistence
+  createAgentConversation: (title, noteId) =>
+    ipcRenderer.invoke("db-create-agent-conversation", title, noteId),
+  getAgentConversations: (limit) => ipcRenderer.invoke("db-get-agent-conversations", limit),
+  getAgentConversation: (id) => ipcRenderer.invoke("db-get-agent-conversation", id),
+  deleteAgentConversation: (id) => ipcRenderer.invoke("db-delete-agent-conversation", id),
+  updateAgentConversationTitle: (id, title) =>
+    ipcRenderer.invoke("db-update-agent-conversation-title", id, title),
+  addAgentMessage: (conversationId, role, content, metadata) =>
+    ipcRenderer.invoke("db-add-agent-message", conversationId, role, content, metadata),
+  getAgentMessages: (conversationId) => ipcRenderer.invoke("db-get-agent-messages", conversationId),
+  getAgentConversationsWithPreview: (limit, offset, includeArchived) =>
+    ipcRenderer.invoke("db-get-agent-conversations-with-preview", limit, offset, includeArchived),
+  searchAgentConversations: (query, limit) =>
+    ipcRenderer.invoke("db-search-agent-conversations", query, limit),
+  getConversationsForNote: (noteId, limit) =>
+    ipcRenderer.invoke("db-get-conversations-for-note", noteId, limit),
+  archiveAgentConversation: (id) => ipcRenderer.invoke("db-archive-agent-conversation", id),
+  unarchiveAgentConversation: (id) => ipcRenderer.invoke("db-unarchive-agent-conversation", id),
+  updateAgentConversationCloudId: (id, cloudId) =>
+    ipcRenderer.invoke("db-update-agent-conversation-cloud-id", id, cloudId),
+  semanticSearchConversations: (query, limit) =>
+    ipcRenderer.invoke("db-semantic-search-conversations", query, limit),
+
+  // Sync operations
+  getPendingNotes: () => ipcRenderer.invoke("db-get-pending-notes"),
+  getPendingNoteDeletes: () => ipcRenderer.invoke("db-get-pending-note-deletes"),
+  getNoteByClientId: (clientNoteId) => ipcRenderer.invoke("db-get-note-by-client-id", clientNoteId),
+  upsertNoteFromCloud: (cloudNote, localFolderId) =>
+    ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId),
+  markNoteSynced: (id, cloudId) => ipcRenderer.invoke("db-mark-note-synced", id, cloudId),
+  markNoteSyncError: (id) => ipcRenderer.invoke("db-mark-note-sync-error", id),
+  hardDeleteNote: (id) => ipcRenderer.invoke("db-hard-delete-note", id),
+
+  getPendingFolders: () => ipcRenderer.invoke("db-get-pending-folders"),
+  getFolderByClientId: (clientFolderId) =>
+    ipcRenderer.invoke("db-get-folder-by-client-id", clientFolderId),
+  upsertFolderFromCloud: (cloudFolder) =>
+    ipcRenderer.invoke("db-upsert-folder-from-cloud", cloudFolder),
+  markFolderSynced: (id, cloudId) => ipcRenderer.invoke("db-mark-folder-synced", id, cloudId),
+  getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
+
+  getPendingConversations: () => ipcRenderer.invoke("db-get-pending-conversations"),
+  getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),
+  getConversationByClientId: (clientId) =>
+    ipcRenderer.invoke("db-get-conversation-by-client-id", clientId),
+  upsertConversationFromCloud: (cloudConv, messages) =>
+    ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages),
+  markConversationSynced: (id, cloudId) =>
+    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId),
+  hardDeleteConversation: (id) => ipcRenderer.invoke("db-hard-delete-conversation", id),
+
+  getPendingTranscriptions: () => ipcRenderer.invoke("db-get-pending-transcriptions"),
+  getTranscriptionByClientId: (clientId) =>
+    ipcRenderer.invoke("db-get-transcription-by-client-id", clientId),
+  upsertTranscriptionFromCloud: (cloudTranscription) =>
+    ipcRenderer.invoke("db-upsert-transcription-from-cloud", cloudTranscription),
+  markTranscriptionSynced: (id, cloudId) =>
+    ipcRenderer.invoke("db-mark-transcription-synced", id, cloudId),
+
+  // Google Calendar
+  gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),
+  gcalDisconnect: () => ipcRenderer.invoke("gcal-disconnect"),
+  gcalGetConnectionStatus: () => ipcRenderer.invoke("gcal-get-connection-status"),
+  gcalGetCalendars: () => ipcRenderer.invoke("gcal-get-calendars"),
+  gcalSetCalendarSelection: (calendarId, isSelected) =>
+    ipcRenderer.invoke("gcal-set-calendar-selection", calendarId, isSelected),
+  gcalSyncEvents: () => ipcRenderer.invoke("gcal-sync-events"),
+  gcalGetUpcomingEvents: (windowMinutes) =>
+    ipcRenderer.invoke("gcal-get-upcoming-events", windowMinutes),
+  gcalGetEvent: (eventId) => ipcRenderer.invoke("gcal-get-event", eventId),
+
+  // Contacts
+  searchContacts: (query) => ipcRenderer.invoke("search-contacts", query),
+  upsertContact: (contact) => ipcRenderer.invoke("upsert-contact", contact),
+  getMD5Hash: (text) => ipcRenderer.invoke("get-md5-hash", text),
+
+  // Google Calendar event listeners
+  onGcalMeetingStarting: registerListener(
+    "gcal-meeting-starting",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onGcalMeetingEnded: registerListener(
+    "gcal-meeting-ended",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onGcalStartRecording: registerListener(
+    "gcal-start-recording",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onGcalConnectionChanged: registerListener(
+    "gcal-connection-changed",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onGcalEventsSynced: registerListener(
+    "gcal-events-synced",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Meeting detection
+  meetingDetectionGetPreferences: () => ipcRenderer.invoke("meeting-detection-get-preferences"),
+  meetingDetectionSetPreferences: (prefs) =>
+    ipcRenderer.invoke("meeting-detection-set-preferences", prefs),
+  onMeetingDetected: registerListener(
+    "meeting-detected",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingDetectedStartRecording: registerListener(
+    "meeting-detected-start-recording",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onMeetingNotificationData: registerListener(
+    "meeting-notification-data",
+    (callback) => (_event, data) => callback(data)
+  ),
+  getMeetingNotificationData: () => ipcRenderer.invoke("get-meeting-notification-data"),
+  meetingNotificationReady: () => ipcRenderer.invoke("meeting-notification-ready"),
+  meetingNotificationRespond: (detectionId, action) =>
+    ipcRenderer.invoke("meeting-notification-respond", detectionId, action),
+  joinCalendarMeeting: (eventId) => ipcRenderer.invoke("join-calendar-meeting", eventId),
+  onNavigateToMeetingNote: registerListener(
+    "navigate-to-meeting-note",
+    (callback) => (_event, data) => callback(data)
+  ),
+  onNavigateToNote: registerListener(
+    "navigate-to-note",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  onUpdateNotificationData: registerListener(
+    "update-notification-data",
+    (callback) => (_event, data) => callback(data)
+  ),
+  getUpdateNotificationData: () => ipcRenderer.invoke("get-update-notification-data"),
+  updateNotificationReady: () => ipcRenderer.invoke("update-notification-ready"),
+  updateNotificationRespond: (action) => ipcRenderer.invoke("update-notification-respond", action),
 });

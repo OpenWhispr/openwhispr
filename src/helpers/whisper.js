@@ -314,6 +314,51 @@ class WhisperManager {
     return this.parseWhisperResult(result);
   }
 
+  async transcribeViaLan(audioBlob, url, options = {}) {
+    debugLogger.info("Transcription mode: LAN", { url, language: options.language || "auto" });
+
+    await this.serverManager.connectRemote(url);
+
+    let audioBuffer;
+    if (Buffer.isBuffer(audioBlob)) {
+      audioBuffer = audioBlob;
+    } else if (ArrayBuffer.isView(audioBlob)) {
+      audioBuffer = Buffer.from(audioBlob.buffer, audioBlob.byteOffset, audioBlob.byteLength);
+    } else if (audioBlob instanceof ArrayBuffer) {
+      audioBuffer = Buffer.from(audioBlob);
+    } else if (typeof audioBlob === "string") {
+      audioBuffer = Buffer.from(audioBlob, "base64");
+    } else if (audioBlob && audioBlob.buffer && typeof audioBlob.byteLength === "number") {
+      audioBuffer = Buffer.from(audioBlob.buffer, audioBlob.byteOffset || 0, audioBlob.byteLength);
+    } else {
+      throw new Error(`Unsupported audio data type: ${typeof audioBlob}`);
+    }
+
+    if (!audioBuffer || audioBuffer.length === 0) {
+      throw new Error("Audio buffer is empty - no audio data received");
+    }
+
+    debugLogger.logWhisperPipeline("transcribeViaLan - sending to server", {
+      bufferSize: audioBuffer.length,
+      url,
+      language: options.language,
+    });
+
+    const startTime = Date.now();
+    const result = await this.serverManager.transcribe(audioBuffer, {
+      language: options.language || null,
+      initialPrompt: options.initialPrompt || null,
+    });
+    const elapsed = Date.now() - startTime;
+
+    debugLogger.logWhisperPipeline("transcribeViaLan - completed", {
+      elapsed,
+      resultKeys: Object.keys(result),
+    });
+
+    return this.parseWhisperResult(result);
+  }
+
   // Normalize whitespace: replace newlines with spaces and collapse multiple spaces
   // whisper.cpp returns text with \n between audio segments which causes formatting issues
   normalizeWhitespace(text) {

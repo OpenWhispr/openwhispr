@@ -59,6 +59,16 @@ const buttonVariants = cva(
           "transition-[background-color,border-color,color,transform] duration-200 ease-out",
         ].join(" "),
 
+        // Outline flat — transparent with thin border, no fill or shadow
+        "outline-flat": [
+          "font-medium",
+          "text-muted-foreground/70 bg-transparent",
+          "border border-border/50",
+          "hover:text-foreground/80 hover:border-border hover:bg-foreground/3",
+          "active:scale-[0.98]",
+          "dark:border-white/10 dark:hover:bg-white/5 dark:hover:border-white/15",
+        ].join(" "),
+
         // Secondary — uses design tokens
         secondary: [
           "relative font-medium",
@@ -133,4 +143,4 @@ function Button({
   );
 }
 
-export { Button, buttonVariants };
+export { Button };

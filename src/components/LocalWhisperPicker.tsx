@@ -76,11 +76,22 @@ export default function LocalWhisperPicker({
   }, [validateAndSelectModel]);
 
   useEffect(() => {
-    if (!hasLoadedRef.current) {
-      hasLoadedRef.current = true;
-      loadModels();
-    }
-  }, [loadModels]);
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+
+    window.electronAPI
+      ?.listWhisperModels()
+      .then((result) => {
+        if (result?.success) {
+          setModels(result.models);
+          validateAndSelectModel(result.models);
+        }
+      })
+      .catch((error) => {
+        console.error("[LocalWhisperPicker] Failed to load models:", error);
+        setModels([]);
+      });
+  }, [validateAndSelectModel]);
 
   const {
     downloadingModel,

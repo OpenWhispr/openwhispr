@@ -1,7 +1,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
-import { HelpCircle, Mail, Bug } from "lucide-react";
+import { HelpCircle, Mail, Bug, BookOpen } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -54,6 +54,10 @@ export default function SupportDropdown({ className, trigger }: SupportDropdownP
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => openExternal("https://docs.openwhispr.com")}>
+          <BookOpen className="mr-2 h-4 w-4" />
+          {t("support.documentation")}
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => openExternal("https://discord.gg/yZWC9WTtX7")}>
           <DiscordIcon className="mr-2 h-4 w-4" />
           {t("support.joinDiscord")}

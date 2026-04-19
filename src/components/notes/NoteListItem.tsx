@@ -1,6 +1,14 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { MoreHorizontal, FolderOpen, Trash2, Check, Plus, Search } from "lucide-react";
+import {
+  MoreHorizontal,
+  FolderOpen,
+  Trash2,
+  Check,
+  Plus,
+  Search,
+  ExternalLink,
+} from "lucide-react";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -38,6 +46,7 @@ interface NoteListItemProps {
     onDragEnd: () => void;
   };
   isDragging?: boolean;
+  noteFilesEnabled?: boolean;
 }
 
 function stripMarkdown(text: string): string {
@@ -81,12 +90,19 @@ export default function NoteListItem({
   onCreateFolderAndMove,
   dragHandlers,
   isDragging,
+  noteFilesEnabled,
 }: NoteListItemProps) {
   const { t } = useTranslation();
   const preview = stripMarkdown(note.content);
   const [folderSearch, setFolderSearch] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  const fileManagerName = navigator.platform.startsWith("Mac")
+    ? "Finder"
+    : navigator.platform.startsWith("Win")
+      ? "Explorer"
+      : "Files";
 
   const filteredFolders = useMemo(
     () =>
@@ -108,9 +124,6 @@ export default function NoteListItem({
         isDragging && "opacity-40 scale-[0.97]"
       )}
     >
-      {isActive && (
-        <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-4 rounded-r-full bg-primary" />
-      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
           <p
@@ -145,6 +158,24 @@ export default function NoteListItem({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={4} className="min-w-40">
+                {noteFilesEnabled && (
+                  <>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.electronAPI?.showNoteFile?.(note.id);
+                      }}
+                      className="text-xs gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer focus:bg-foreground/5"
+                    >
+                      <ExternalLink
+                        size={12}
+                        className="text-muted-foreground/80 dark:text-muted-foreground/60"
+                      />
+                      {t("notes.context.showInFileManager", { manager: fileManagerName })}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger className="text-xs gap-2 rounded-lg px-2.5 py-1.5 cursor-pointer focus:bg-foreground/5 data-[state=open]:bg-foreground/5">
                     <FolderOpen
@@ -159,18 +190,17 @@ export default function NoteListItem({
                   >
                     {folders.length > 5 && (
                       <>
-                        <div className="relative px-2 py-1.5">
+                        <div className="relative px-1.5 py-0.5">
                           <Search
                             size={9}
-                            className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
+                            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-foreground/15 pointer-events-none"
                           />
                           <input
                             value={folderSearch}
                             onChange={(e) => setFolderSearch(e.target.value)}
                             onKeyDown={(e) => e.stopPropagation()}
                             placeholder={t("notes.context.searchFolders")}
-                            style={{ background: "none" }}
-                            className="w-full pl-5 pr-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
+                            className="input-inline w-full pl-4.5 pr-1 py-0.5 text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
                           />
                         </div>
                         <DropdownMenuSeparator />
@@ -202,7 +232,7 @@ export default function NoteListItem({
                     </div>
                     <DropdownMenuSeparator />
                     {isCreating ? (
-                      <div className="px-2 py-1">
+                      <div className="px-1">
                         <input
                           autoFocus
                           value={newFolderName}
@@ -220,7 +250,7 @@ export default function NoteListItem({
                             }
                           }}
                           placeholder={t("notes.folders.folderName")}
-                          className="w-full bg-transparent text-xs text-foreground placeholder:text-foreground/15 outline-none border-none appearance-none"
+                          className="input-inline w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/20 outline-none border-none appearance-none"
                         />
                       </div>
                     ) : (

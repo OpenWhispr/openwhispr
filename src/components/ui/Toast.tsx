@@ -1,32 +1,7 @@
 import * as React from "react";
 import { X, Copy, Check } from "lucide-react";
 import { cn } from "../lib/utils";
-
-export interface ToastProps {
-  id?: string;
-  title?: string;
-  description?: string;
-  action?: React.ReactNode;
-  variant?: "default" | "destructive" | "success";
-  duration?: number;
-  onClose?: () => void;
-}
-
-export interface ToastContextType {
-  toast: (props: Omit<ToastProps, "id">) => void;
-  dismiss: (id?: string) => void;
-  toastCount: number;
-}
-
-const ToastContext = React.createContext<ToastContextType | undefined>(undefined);
-
-export const useToast = () => {
-  const context = React.useContext(ToastContext);
-  if (!context) {
-    throw new Error("useToast must be used within a ToastProvider");
-  }
-  return context;
-};
+import { ToastContext, type ToastProps } from "./useToast";
 
 interface ToastState extends ToastProps {
   id: string;
@@ -223,9 +198,7 @@ const Toast: React.FC<
       await navigator.clipboard.writeText(description);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Silently fail
-    }
+    } catch {}
   };
 
   const message = title || description;
@@ -234,7 +207,7 @@ const Toast: React.FC<
   return (
     <div
       className={cn(
-        "group toast-surface pointer-events-auto relative flex w-75 overflow-hidden",
+        "group toast-surface pointer-events-auto relative flex w-75",
         "rounded-[5px]",
         "transition-[opacity,transform] duration-200 ease-out",
         isExiting
@@ -246,7 +219,7 @@ const Toast: React.FC<
     >
       <div className={cn("w-0.5 shrink-0", config.accentClass)} />
 
-      <div className="flex items-start gap-2 flex-1 min-w-0 px-2.5 py-2 pr-7">
+      <div className="flex items-start gap-2 flex-1 min-w-0 px-2.5 py-2">
         <div className="flex-1 min-w-0">
           {message && (
             <div className="text-xs font-medium leading-tight text-white/90">{message}</div>
@@ -288,11 +261,13 @@ const Toast: React.FC<
         <button
           onClick={onClose}
           className={cn(
-            "absolute right-1 top-1 p-1 rounded-[3px]",
-            "text-white/0 group-hover:text-white/50 hover:!text-white/80",
-            "hover:bg-white/6",
-            "transition-colors duration-150",
-            "focus:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
+            "absolute -left-2 -top-2 size-6 rounded-full",
+            "flex items-center justify-center",
+            "bg-white/10 backdrop-blur-sm border border-white/10",
+            "text-white/70 hover:text-white hover:bg-white/20",
+            "opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100",
+            "transition-all duration-150",
+            "focus:outline-none focus-visible:ring-1 focus-visible:ring-white/30"
           )}
         >
           <X className="size-3" />
@@ -312,19 +287,4 @@ const Toast: React.FC<
       )}
     </div>
   );
-};
-
-export const toast = {
-  success: (message: string) => ({
-    title: message,
-    variant: "success" as const,
-  }),
-  error: (message: string) => ({
-    title: message,
-    variant: "destructive" as const,
-  }),
-  info: (message: string) => ({
-    title: message,
-    variant: "default" as const,
-  }),
 };

@@ -20,8 +20,10 @@ class WhisperServerManager extends EventEmitter {
   constructor() {
     super();
     this.process = null;
+    this.hostname = "127.0.0.1";
     this.port = null;
     this.ready = false;
+    this.isRemote = false;
     this.modelPath = null;
     this.startupPromise = null;
     this.healthCheckInterval = null;
@@ -173,6 +175,48 @@ class WhisperServerManager extends EventEmitter {
     return this.getServerBinaryPath() !== null;
   }
 
+  async connectRemote(url) {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname;
+    const port = parseInt(parsed.port, 10) || (parsed.protocol === "https:" ? 443 : 80);
+
+    debugLogger.debug("Connecting to remote whisper-server", { hostname, port });
+
+    const reachable = await new Promise((resolve) => {
+      const req = http.request(
+        { hostname, port, path: "/", method: "GET", timeout: HEALTH_CHECK_TIMEOUT_MS },
+        (res) => {
+          resolve(true);
+          res.resume();
+        }
+      );
+      req.on("error", () => resolve(false));
+      req.on("timeout", () => {
+        req.destroy();
+        resolve(false);
+      });
+      req.end();
+    });
+
+    if (!reachable) {
+      throw new Error(`Remote whisper-server unreachable at ${hostname}:${port}`);
+    }
+
+    if (this.process) {
+      await this.stop();
+    }
+
+    this.hostname = hostname;
+    this.port = port;
+    this.ready = true;
+    this.isRemote = true;
+    this.canConvert = !!this.getFFmpegPath();
+
+    this.startHealthCheck();
+
+    debugLogger.info("Connected to remote whisper-server", { hostname, port });
+  }
+
   async findAvailablePort() {
     for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
       if (await this.isPortAvailable(port)) return port;
@@ -195,12 +239,14 @@ class WhisperServerManager extends EventEmitter {
   async start(modelPath, options = {}) {
     if (this.startupPromise) return this.startupPromise;
 
-    if (this.ready && this.modelPath === modelPath) return;
+    if (this.ready && this.modelPath === modelPath && !this.isRemote) return;
 
-    if (this.process) {
+    if (this.process || this.isRemote) {
       await this.stop();
     }
 
+    this.isRemote = false;
+    this.hostname = "127.0.0.1";
     this.startupPromise = this._doStart(modelPath, options);
     try {
       await this.startupPromise;
@@ -233,6 +279,10 @@ class WhisperServerManager extends EventEmitter {
     // Add the whisper-server directory to PATH so any companion DLLs are found
     const serverBinaryDir = path.dirname(serverBinary);
     spawnEnv.PATH = serverBinaryDir + pathSep + (process.env.PATH || "");
+
+    if (usingCuda && process.env.TRANSCRIPTION_GPU_INDEX) {
+      spawnEnv.CUDA_VISIBLE_DEVICES = process.env.TRANSCRIPTION_GPU_INDEX;
+    }
 
     const args = ["--model", modelPath, "--host", "127.0.0.1", "--port", String(this.port)];
 
@@ -355,7 +405,7 @@ class WhisperServerManager extends EventEmitter {
     return new Promise((resolve) => {
       const req = http.request(
         {
-          hostname: "127.0.0.1",
+          hostname: this.hostname,
           port: this.port,
           path: "/",
           method: "GET",
@@ -379,7 +429,7 @@ class WhisperServerManager extends EventEmitter {
   startHealthCheck() {
     this.stopHealthCheck();
     this.healthCheckInterval = setInterval(async () => {
-      if (!this.process) {
+      if (!this.isRemote && !this.process) {
         this.stopHealthCheck();
         return;
       }
@@ -398,7 +448,7 @@ class WhisperServerManager extends EventEmitter {
   }
 
   async transcribe(audioBuffer, options = {}) {
-    if (!this.ready || !this.process) {
+    if (!this.ready || (!this.process && !this.isRemote)) {
       throw new Error("whisper-server is not running");
     }
 
@@ -467,7 +517,7 @@ class WhisperServerManager extends EventEmitter {
 
       const req = http.request(
         {
-          hostname: "127.0.0.1",
+          hostname: this.hostname,
           port: this.port,
           path: "/inference",
           method: "POST",
@@ -541,6 +591,15 @@ class WhisperServerManager extends EventEmitter {
   async stop() {
     this.stopHealthCheck();
 
+    if (this.isRemote) {
+      debugLogger.debug("Disconnecting from remote whisper-server");
+      this.ready = false;
+      this.isRemote = false;
+      this.hostname = "127.0.0.1";
+      this.port = null;
+      return;
+    }
+
     if (!this.process) {
       this.ready = false;
       return;
@@ -582,8 +641,10 @@ class WhisperServerManager extends EventEmitter {
   getStatus() {
     return {
       available: this.isAvailable(),
-      running: this.ready && this.process !== null,
+      running: this.ready && (this.process !== null || this.isRemote),
       port: this.port,
+      hostname: this.hostname,
+      isRemote: this.isRemote,
       modelPath: this.modelPath,
       modelName: this.modelPath ? path.basename(this.modelPath, ".bin").replace("ggml-", "") : null,
     };

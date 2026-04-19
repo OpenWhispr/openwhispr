@@ -37,8 +37,27 @@ interface UseUsageResult {
   error: string | null;
   checkoutLoading: boolean;
   refetch: () => Promise<void>;
-  openCheckout: (plan?: "monthly" | "annual") => Promise<{ success: boolean; error?: string }>;
+  openCheckout: (opts?: {
+    plan?: "monthly" | "annual";
+    tier?: "pro" | "business";
+  }) => Promise<{ success: boolean; error?: string }>;
   openBillingPortal: () => Promise<{ success: boolean; error?: string }>;
+  switchPlan: (opts: {
+    plan: "monthly" | "annual";
+    tier: "pro" | "business";
+  }) => Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }>;
+  previewSwitchPlan: (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => Promise<{
+    success: boolean;
+    immediateAmount?: number;
+    currency?: string;
+    currentPriceAmount?: number;
+    currentInterval?: string;
+    newPriceAmount?: number;
+    newInterval?: string;
+    nextBillingDate?: string;
+    alreadyOnPlan?: boolean;
+    error?: string;
+  }>;
 }
 
 const USAGE_CACHE_TTL = CACHE_CONFIG.API_KEY_TTL; // 1 hour
@@ -77,6 +96,7 @@ export function useUsage(): UseUsageResult | null {
             resetAt: result.resetAt ?? "rolling",
           });
           lastFetchRef.current = Date.now();
+          localStorage.setItem("isSubscribed", String(result.isSubscribed ?? false));
         } else {
           const error: any = new Error(result.error || "Failed to fetch usage");
           error.code = result.code;
@@ -94,7 +114,11 @@ export function useUsage(): UseUsageResult | null {
   const pendingRefetchRef = useRef(false);
 
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
+    if (!isLoaded || !isSignedIn) {
+      lastFetchRef.current = 0;
+      setData(null);
+      return;
+    }
 
     const shouldFetch = Date.now() - lastFetchRef.current > USAGE_CACHE_TTL;
     if (shouldFetch) {
@@ -115,16 +139,33 @@ export function useUsage(): UseUsageResult | null {
       lastFetchRef.current = 0;
       fetchUsage();
     };
+    const handleUpgradeSuccess = async () => {
+      lastFetchRef.current = 0;
+      await fetchUsage();
+      // Retry if webhook hasn't updated DB yet
+      for (let i = 0; i < 3; i++) {
+        const result = await window.electronAPI.cloudUsage();
+        if (result.success && result.isSubscribed) break;
+        await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+        lastFetchRef.current = 0;
+        await fetchUsage();
+      }
+    };
     window.addEventListener("focus", handleFocus);
     window.addEventListener("usage-changed", handleUsageChanged);
+    window.addEventListener("upgrade-success", handleUpgradeSuccess);
     return () => {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("usage-changed", handleUsageChanged);
+      window.removeEventListener("upgrade-success", handleUpgradeSuccess);
     };
   }, [isLoaded, isSignedIn, fetchUsage]);
 
   const openCheckout = useCallback(
-    async (plan?: "monthly" | "annual"): Promise<{ success: boolean; error?: string }> => {
+    async (opts?: {
+      plan?: "monthly" | "annual";
+      tier?: "pro" | "business";
+    }): Promise<{ success: boolean; error?: string }> => {
       if (checkoutInFlightRef.current)
         return { success: false, error: "Checkout already in progress" };
       if (!window.electronAPI?.cloudCheckout || !window.electronAPI?.openExternal) {
@@ -133,7 +174,7 @@ export function useUsage(): UseUsageResult | null {
       checkoutInFlightRef.current = true;
       setCheckoutLoading(true);
       try {
-        const result = await window.electronAPI.cloudCheckout(plan);
+        const result = await window.electronAPI.cloudCheckout(opts);
         if (result.success && result.url) {
           pendingRefetchRef.current = true;
           await window.electronAPI.openExternal(result.url);
@@ -169,13 +210,48 @@ export function useUsage(): UseUsageResult | null {
     }
   }, []);
 
+  const switchPlan = useCallback(
+    async (opts: {
+      plan: "monthly" | "annual";
+      tier: "pro" | "business";
+    }): Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }> => {
+      if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
+      if (!window.electronAPI?.cloudSwitchPlan) {
+        return { success: false, error: "App not ready" };
+      }
+      checkoutInFlightRef.current = true;
+      setCheckoutLoading(true);
+      try {
+        const result = await window.electronAPI.cloudSwitchPlan(opts);
+        if (result.success) {
+          await fetchUsage();
+        }
+        return result;
+      } finally {
+        checkoutInFlightRef.current = false;
+        setCheckoutLoading(false);
+      }
+    },
+    [fetchUsage]
+  );
+
+  const previewSwitchPlan = useCallback(
+    async (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => {
+      if (!window.electronAPI?.cloudPreviewSwitch) {
+        return { success: false as const, error: "App not ready" };
+      }
+      return window.electronAPI.cloudPreviewSwitch(opts);
+    },
+    []
+  );
+
   if (!isSignedIn) return null;
 
   const wordsUsed = data?.wordsUsed ?? 0;
   const limit = data?.limit ?? 2000;
   const isSubscribed = data?.isSubscribed ?? false;
   const status = data?.status ?? "active";
-  const isPastDue = data?.plan === "pro" && status === "past_due";
+  const isPastDue = (data?.plan === "pro" || data?.plan === "business") && status === "past_due";
   const isOverLimit = !isSubscribed && limit > 0 && wordsUsed >= limit;
   const isApproachingLimit = !isSubscribed && limit > 0 && wordsUsed >= limit * 0.8 && !isOverLimit;
 
@@ -201,5 +277,7 @@ export function useUsage(): UseUsageResult | null {
     refetch: fetchUsage,
     openCheckout,
     openBillingPortal,
+    switchPlan,
+    previewSwitchPlan,
   };
 }

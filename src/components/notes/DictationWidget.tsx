@@ -22,12 +22,15 @@ export default function DictationWidget({
 }: DictationWidgetProps) {
   const { t } = useTranslation();
   const [elapsed, setElapsed] = useState(0);
+  const [wasRecording, setWasRecording] = useState(isRecording);
+
+  if (isRecording !== wasRecording) {
+    setWasRecording(isRecording);
+    if (!isRecording) setElapsed(0);
+  }
 
   useEffect(() => {
-    if (!isRecording) {
-      setElapsed(0);
-      return;
-    }
+    if (!isRecording) return;
     const id = setInterval(() => setElapsed((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, [isRecording]);

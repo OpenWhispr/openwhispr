@@ -20,10 +20,28 @@ const PERSISTED_KEYS = [
   "LLAMA_GPU_BACKEND",
   "LLAMA_VULKAN_ENABLED",
   "DICTATION_KEY",
+  "AGENT_KEY",
+  "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
+  "PANEL_START_POSITION",
+  "START_MINIMIZED",
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
+  "TRANSCRIPTION_GPU_INDEX",
+  "INTELLIGENCE_GPU_INDEX",
+  "BEDROCK_REGION",
+  "BEDROCK_PROFILE",
+  "BEDROCK_ACCESS_KEY_ID",
+  "BEDROCK_SECRET_ACCESS_KEY",
+  "BEDROCK_SESSION_TOKEN",
+  "AZURE_OPENAI_ENDPOINT",
+  "AZURE_OPENAI_API_KEY",
+  "AZURE_OPENAI_DEPLOYMENT",
+  "AZURE_OPENAI_API_VERSION",
+  "VERTEX_PROJECT",
+  "VERTEX_LOCATION",
+  "VERTEX_API_KEY",
 ];
 
 class EnvironmentManager {
@@ -32,11 +50,12 @@ class EnvironmentManager {
   }
 
   loadEnvironmentVariables() {
-    // Loaded in priority order - dotenv won't override, so first file wins per variable.
+    // App config (.env in userData) takes precedence over system env vars,
+    // so keys saved by the user in Settings always win.
     const userDataEnv = path.join(app.getPath("userData"), ".env");
     try {
       if (fs.existsSync(userDataEnv)) {
-        require("dotenv").config({ path: userDataEnv });
+        require("dotenv").config({ path: userDataEnv, override: true });
       }
     } catch {}
 
@@ -121,12 +140,110 @@ class EnvironmentManager {
     return this._saveKey("CUSTOM_REASONING_API_KEY", key);
   }
 
+  // Enterprise providers — AWS Bedrock
+  getBedrockRegion() {
+    return this._getKey("BEDROCK_REGION");
+  }
+  saveBedrockRegion(value) {
+    return this._saveKey("BEDROCK_REGION", value);
+  }
+  getBedrockProfile() {
+    return this._getKey("BEDROCK_PROFILE");
+  }
+  saveBedrockProfile(value) {
+    return this._saveKey("BEDROCK_PROFILE", value);
+  }
+  getBedrockAccessKeyId() {
+    return this._getKey("BEDROCK_ACCESS_KEY_ID");
+  }
+  saveBedrockAccessKeyId(key) {
+    return this._saveKey("BEDROCK_ACCESS_KEY_ID", key);
+  }
+  getBedrockSecretAccessKey() {
+    return this._getKey("BEDROCK_SECRET_ACCESS_KEY");
+  }
+  saveBedrockSecretAccessKey(key) {
+    return this._saveKey("BEDROCK_SECRET_ACCESS_KEY", key);
+  }
+  getBedrockSessionToken() {
+    return this._getKey("BEDROCK_SESSION_TOKEN");
+  }
+  saveBedrockSessionToken(key) {
+    return this._saveKey("BEDROCK_SESSION_TOKEN", key);
+  }
+
+  // Enterprise providers — Azure OpenAI
+  getAzureEndpoint() {
+    return this._getKey("AZURE_OPENAI_ENDPOINT");
+  }
+  saveAzureEndpoint(value) {
+    return this._saveKey("AZURE_OPENAI_ENDPOINT", value);
+  }
+  getAzureApiKey() {
+    return this._getKey("AZURE_OPENAI_API_KEY");
+  }
+  saveAzureApiKey(key) {
+    return this._saveKey("AZURE_OPENAI_API_KEY", key);
+  }
+  getAzureDeployment() {
+    return this._getKey("AZURE_OPENAI_DEPLOYMENT");
+  }
+  saveAzureDeployment(value) {
+    return this._saveKey("AZURE_OPENAI_DEPLOYMENT", value);
+  }
+  getAzureApiVersion() {
+    return this._getKey("AZURE_OPENAI_API_VERSION");
+  }
+  saveAzureApiVersion(value) {
+    return this._saveKey("AZURE_OPENAI_API_VERSION", value);
+  }
+
+  // Enterprise providers — GCP Vertex AI
+  getVertexProject() {
+    return this._getKey("VERTEX_PROJECT");
+  }
+  saveVertexProject(value) {
+    return this._saveKey("VERTEX_PROJECT", value);
+  }
+  getVertexLocation() {
+    return this._getKey("VERTEX_LOCATION");
+  }
+  saveVertexLocation(value) {
+    return this._saveKey("VERTEX_LOCATION", value);
+  }
+  getVertexApiKey() {
+    return this._getKey("VERTEX_API_KEY");
+  }
+  saveVertexApiKey(key) {
+    return this._saveKey("VERTEX_API_KEY", key);
+  }
+
   getDictationKey() {
     return this._getKey("DICTATION_KEY");
   }
 
   saveDictationKey(key) {
     const result = this._saveKey("DICTATION_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getAgentKey() {
+    return this._getKey("AGENT_KEY");
+  }
+
+  saveAgentKey(key) {
+    const result = this._saveKey("AGENT_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getMeetingKey() {
+    return this._getKey("MEETING_KEY");
+  }
+
+  saveMeetingKey(key) {
+    const result = this._saveKey("MEETING_KEY", key);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }
@@ -159,6 +276,28 @@ class EnvironmentManager {
 
   saveContextAwarenessEnabled(enabled) {
     const result = this._saveKey("CONTEXT_AWARENESS_ENABLED", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getStartMinimized() {
+    return this._getKey("START_MINIMIZED") === "true";
+  }
+
+  saveStartMinimized(enabled) {
+    const result = this._saveKey("START_MINIMIZED", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getPanelStartPosition() {
+    const v = this._getKey("PANEL_START_POSITION");
+    if (v === "bottom-right" || v === "center" || v === "bottom-left") return v;
+    return "bottom-right";
+  }
+
+  savePanelStartPosition(position) {
+    const result = this._saveKey("PANEL_START_POSITION", position);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

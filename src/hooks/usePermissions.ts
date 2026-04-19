@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import type { PasteToolsResult } from "../types/electron";
 import { useLocalStorage } from "./useLocalStorage";
+import logger from "../utils/logger";
 
 export interface UsePermissionsReturn {
   // State
@@ -11,13 +12,13 @@ export interface UsePermissionsReturn {
   micPermissionError: string | null;
   pasteToolsInfo: PasteToolsResult | null;
   isCheckingPasteTools: boolean;
+  accessibilityTroubleshooting: boolean;
 
   requestMicPermission: () => Promise<void>;
-  testAccessibilityPermission: () => Promise<void>;
+  requestAccessibilityPermission: () => Promise<void>;
   checkPasteToolsAvailability: () => Promise<PasteToolsResult | null>;
   openMicPrivacySettings: () => Promise<void>;
   openSoundInputSettings: () => Promise<void>;
-  openAccessibilitySettings: () => Promise<void>;
   setMicPermissionGranted: (granted: boolean) => void;
   setAccessibilityPermissionGranted: (granted: boolean) => void;
 }
@@ -124,6 +125,8 @@ export const usePermissions = (
   );
   const [pasteToolsInfo, setPasteToolsInfo] = useState<PasteToolsResult | null>(null);
   const [isCheckingPasteTools, setIsCheckingPasteTools] = useState(false);
+  const [accessibilityTroubleshooting, setAccessibilityTroubleshooting] = useState(false);
+  const accessibilityPollCount = useRef(0);
 
   const openSystemSettings = useCallback(
     async (
@@ -146,7 +149,7 @@ export const usePermissions = (
           showAlertDialog?.({ title: titles[settingType], description: result.error });
         }
       } catch (error) {
-        console.error(`Failed to open ${settingType} settings:`, error);
+        logger.error(`Failed to open ${settingType} settings:`, error);
         showAlertDialog?.({
           title: titles[settingType],
           description: unableToOpenDescriptions[settingType],
@@ -163,11 +166,6 @@ export const usePermissions = (
 
   const openSoundInputSettings = useCallback(
     () => openSystemSettings("sound", window.electronAPI?.openSoundInputSettings),
-    [openSystemSettings]
-  );
-
-  const openAccessibilitySettings = useCallback(
-    () => openSystemSettings("accessibility", window.electronAPI?.openAccessibilitySettings),
     [openSystemSettings]
   );
 
@@ -203,7 +201,7 @@ export const usePermissions = (
       setMicPermissionGranted(true);
       setMicPermissionError(null);
     } catch (err) {
-      console.error("Microphone permission denied:", err);
+      logger.error("Microphone permission denied:", err);
       const message = describeMicError(err, t);
       setMicPermissionError(message);
       if (showAlertDialog) {
@@ -215,7 +213,7 @@ export const usePermissions = (
         alert(message);
       }
     }
-  }, [showAlertDialog, t]);
+  }, [showAlertDialog, t, setMicPermissionGranted]);
 
   const checkPasteToolsAvailability = useCallback(async (): Promise<PasteToolsResult | null> => {
     setIsCheckingPasteTools(true);
@@ -234,119 +232,93 @@ export const usePermissions = (
       }
       return null;
     } catch (error) {
-      console.error("Failed to check paste tools:", error);
+      logger.error("Failed to check paste tools:", error);
       return null;
     } finally {
       setIsCheckingPasteTools(false);
     }
   }, [setAccessibilityPermissionGranted]);
 
-  // Check paste tools on mount
-  useEffect(() => {
-    checkPasteToolsAvailability();
-  }, [checkPasteToolsAvailability]);
-
-  // On macOS, re-validate accessibility permission on mount to override stale
-  // localStorage values (e.g. after app update changes the code signature).
-  useEffect(() => {
-    if (getPlatform() !== "darwin") return;
-    window.electronAPI?.checkAccessibilityPermission?.().then((granted) => {
-      if (!granted) {
-        setAccessibilityPermissionGranted(false);
-      }
-    });
-  }, [setAccessibilityPermissionGranted]);
-
-  const testAccessibilityPermission = useCallback(async () => {
+  const requestAccessibilityPermission = useCallback(async () => {
     const platform = getPlatform();
 
-    // On macOS, actually test the accessibility permission
     if (platform === "darwin") {
-      try {
-        await window.electronAPI.pasteText(t("hooks.permissions.accessibilityTestText"));
+      // Check if already granted
+      const alreadyGranted = await window.electronAPI?.checkAccessibilityPermission?.(true);
+      if (alreadyGranted) {
         setAccessibilityPermissionGranted(true);
-      } catch (err) {
-        console.error("Accessibility permission test failed:", err);
-        if (showAlertDialog) {
-          showAlertDialog({
-            title: t("hooks.permissions.titles.accessibilityNeeded"),
-            description: t("hooks.permissions.descriptions.accessibilityNeeded"),
-          });
-        } else {
-          alert(t("hooks.permissions.alerts.accessibilityNeeded"));
-        }
+        return;
       }
+
+      // Open System Settings directly — avoids the undismissable macOS TCC dialog
+      // that isTrustedAccessibilityClient(true) would show.
+      await openSystemSettings("accessibility", window.electronAPI?.openAccessibilitySettings);
       return;
     }
 
     // On Windows, PowerShell SendKeys is always available
     if (platform === "win32") {
       setAccessibilityPermissionGranted(true);
-      if (showAlertDialog) {
-        showAlertDialog({
-          title: t("hooks.permissions.titles.readyToGo"),
-          description: t("hooks.permissions.descriptions.windowsReady"),
-        });
-      }
       return;
     }
 
-    // On Linux, check if paste tools are available
+    // On Linux, auto-paste is optional — grant regardless of paste tool availability
     if (platform === "linux") {
-      const result = await checkPasteToolsAvailability();
+      await checkPasteToolsAvailability();
+      setAccessibilityPermissionGranted(true);
+    }
+  }, [openSystemSettings, checkPasteToolsAvailability, setAccessibilityPermissionGranted]);
 
-      if (result?.available) {
-        setAccessibilityPermissionGranted(true);
-        if (showAlertDialog) {
-          const method = result.method || t("hooks.permissions.labels.defaultPasteTool");
-          const methodLabel =
-            result.isWayland && method === "xdotool"
-              ? t("hooks.permissions.labels.xdotoolXwayland")
-              : method;
-          showAlertDialog({
-            title: t("hooks.permissions.titles.readyToGo"),
-            description: t("hooks.permissions.descriptions.linuxReadyWithMethod", {
-              method: methodLabel,
-            }),
-          });
-        }
-      } else {
-        // Don't block, but inform the user
-        const isWayland = result?.isWayland;
-        const xwaylandAvailable = result?.xwaylandAvailable;
-        const recommendedTool = result?.recommendedInstall;
-        const installCmd =
-          recommendedTool === "wtype"
-            ? "sudo dnf install wtype  # Fedora\nsudo apt install wtype  # Debian/Ubuntu"
-            : "sudo apt install xdotool  # Debian/Ubuntu/Mint\nsudo dnf install xdotool  # Fedora";
+  // Check paste tools on mount
+  useEffect(() => {
+    checkPasteToolsAvailability();
+  }, [checkPasteToolsAvailability]);
 
-        if (showAlertDialog) {
-          if (isWayland && !xwaylandAvailable && !recommendedTool) {
-            showAlertDialog({
-              title: t("hooks.permissions.titles.waylandClipboardMode"),
-              description: t("hooks.permissions.descriptions.waylandClipboardMode"),
-            });
-          } else {
-            const waylandNote = isWayland
-              ? recommendedTool === "wtype"
-                ? t("hooks.permissions.notes.waylandWtype")
-                : t("hooks.permissions.notes.waylandXwaylandOnly")
-              : "";
-            showAlertDialog({
-              title: t("hooks.permissions.titles.optionalPasteTool"),
-              description: t("hooks.permissions.descriptions.optionalPasteTool", {
-                tool: recommendedTool || t("hooks.permissions.labels.defaultPasteTool"),
-                installCmd,
-                waylandNote,
-              }),
-            });
+  // On macOS, re-validate microphone permission on mount to override stale
+  // localStorage values (e.g. after TCC reset or app update).
+  useEffect(() => {
+    if (getPlatform() !== "darwin") return;
+    window.electronAPI?.checkMicrophoneAccess?.().then((result) => {
+      if (result) setMicPermissionGranted(result.granted);
+    });
+  }, [setMicPermissionGranted]);
+
+  // On macOS, re-validate accessibility permission on mount to override stale
+  // localStorage values (e.g. after app update changes the code signature).
+  useEffect(() => {
+    if (getPlatform() !== "darwin") return;
+    window.electronAPI?.checkAccessibilityPermission?.(true).then((granted) => {
+      setAccessibilityPermissionGranted(granted);
+    });
+  }, [setAccessibilityPermissionGranted]);
+
+  // Poll for accessibility permission changes on macOS (e.g. user grants in System Settings)
+  useEffect(() => {
+    if (getPlatform() !== "darwin") return;
+    if (accessibilityPermissionGranted) {
+      setAccessibilityTroubleshooting(false);
+      accessibilityPollCount.current = 0;
+      return;
+    }
+
+    const interval = setInterval(() => {
+      window.electronAPI?.checkAccessibilityPermission?.(true).then((granted) => {
+        if (granted) {
+          setAccessibilityPermissionGranted(true);
+          setAccessibilityTroubleshooting(false);
+          accessibilityPollCount.current = 0;
+        } else {
+          accessibilityPollCount.current += 1;
+          // After ~10s of failed polls, show troubleshooting tips
+          if (accessibilityPollCount.current >= 5) {
+            setAccessibilityTroubleshooting(true);
           }
         }
-        // Still allow proceeding - this is optional
-        setAccessibilityPermissionGranted(true);
-      }
-    }
-  }, [showAlertDialog, checkPasteToolsAvailability, setAccessibilityPermissionGranted, t]);
+      });
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [accessibilityPermissionGranted, setAccessibilityPermissionGranted]);
 
   return {
     micPermissionGranted,
@@ -354,12 +326,12 @@ export const usePermissions = (
     micPermissionError,
     pasteToolsInfo,
     isCheckingPasteTools,
+    accessibilityTroubleshooting,
     requestMicPermission,
-    testAccessibilityPermission,
+    requestAccessibilityPermission,
     checkPasteToolsAvailability,
     openMicPrivacySettings,
     openSoundInputSettings,
-    openAccessibilitySettings,
     setMicPermissionGranted,
     setAccessibilityPermissionGranted,
   };

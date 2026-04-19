@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Sliders,
@@ -8,9 +8,11 @@ import {
   Wrench,
   Keyboard,
   CreditCard,
+  Key,
   Shield,
+  MessageSquare,
 } from "lucide-react";
-import SidebarModal, { SidebarItem } from "./ui/SidebarModal";
+import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
 
 export type { SettingsSectionType };
@@ -51,6 +53,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         group: t("settingsModal.groups.account"),
       },
       {
+        id: "apiKeys",
+        label: t("settingsModal.sections.apiKeys.label"),
+        icon: Key,
+        description: t("settingsModal.sections.apiKeys.description"),
+        group: t("settingsModal.groups.account"),
+      },
+      {
         id: "general",
         label: t("settingsModal.sections.general.label"),
         icon: Sliders,
@@ -79,6 +88,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         group: t("settingsModal.groups.speechAi"),
       },
       {
+        id: "agentMode",
+        label: t("settingsModal.sections.agentMode.label"),
+        icon: MessageSquare,
+        description: t("settingsModal.sections.agentMode.description"),
+        group: t("settingsModal.groups.speechAi"),
+      },
+      {
         id: "privacyData",
         label: t("settingsModal.sections.privacyData.label"),
         icon: Shield,
@@ -97,14 +113,15 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
   );
 
   const [activeSection, setActiveSection] = React.useState<SettingsSectionType>("account");
+  const [prevOpen, setPrevOpen] = useState(open);
 
-  // Navigate to initial section when modal opens, resolving legacy aliases
-  useEffect(() => {
-    if (open && initialSection) {
-      const resolved = (SECTION_ALIASES[initialSection] ?? initialSection) as SettingsSectionType;
-      setActiveSection(resolved);
-    }
-  }, [open, initialSection]);
+  if (open && !prevOpen && initialSection) {
+    setPrevOpen(open);
+    const resolved = (SECTION_ALIASES[initialSection] ?? initialSection) as SettingsSectionType;
+    setActiveSection(resolved);
+  } else if (open !== prevOpen) {
+    setPrevOpen(open);
+  }
 
   return (
     <SidebarModal<SettingsSectionType>
@@ -115,7 +132,7 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
       activeSection={activeSection}
       onSectionChange={setActiveSection}
     >
-      <SettingsPage activeSection={activeSection} />
+      <SettingsPage activeSection={activeSection} onNavigateToSection={setActiveSection} />
     </SidebarModal>
   );
 }

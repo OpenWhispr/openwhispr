@@ -7,6 +7,379 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.10] - 2026-04-16
+
+### Added
+
+- **Auto-Label 1-on-1 Speakers**: Automatically label system audio speakers in 1-on-1 meetings when exactly two participants are detected (user + one other), creating voice fingerprint profiles and triggering retroactive mapping across past notes
+
+## [1.6.9] - 2026-04-16
+
+### Added
+
+- **Transcript Export**: Export transcripts to disk as TXT, SRT, or JSON files
+- **Disable Auto-Paste Toggle**: New setting to disable automatic pasting after dictation
+- **Cloud Sync**: Bidirectional cloud sync for notes, folders, conversations, and transcriptions
+- **Linux Push-to-Talk**: Native push-to-talk support on Linux via evdev with permission UX and setup guide
+- **Agent Folder Tools**: Agent can list, create, and auto-create folders with semantic folder matching
+- **API Keys Management UI**: Manage API keys from within Settings
+- **Documentation Link**: Added documentation link to the support dropdown menu
+- **Notification Dismiss Circle**: Hover-reveal dismiss circle on notification overlays
+
+### Changed
+
+- **Electron 41 & Node 24**: Upgraded from Electron 39 to 41 and Node 22 to 24
+- **Dependency Upgrades**: Bumped TipTap packages, Tailwind CSS/Vite, and other major dependencies
+- **Provider Tab Redesign**: Redesigned provider tabs as compact pill buttons
+- **Local Model Spec Links**: Replaced local model descriptions with clickable spec links
+- **llama.cpp Endpoint Detection**: Detect llama.cpp via `/v1/models` and prefer `/chat/completions` over `/v1/responses`
+- **README Overhaul**: Simplified README from 907 to ~130 lines with improved keywords, privacy messaging, and feature parity highlights
+
+### Fixed
+
+- **Windows Hotkey After Lock/Unlock**: Prevent false hotkey activation after Win+L lock/unlock on Windows
+- **Windows Push-to-Talk Stuck Recording**: Prevent stuck recording when push-to-talk key-up is missed; remove timeout cleanup
+- **Speech Gate Thresholds**: Relaxed speech gate thresholds and added no-audio toast for failed transcriptions
+- **Transcription Retry Button**: Show retry button on failed transcriptions
+- **Note Editor Sync**: Sync editor content when a note is updated externally
+- **Speaker Diarization Thresholds**: Tuned thresholds to prevent excessive speaker creation
+- **Live Transcription Preview**: Wired up live transcription preview toggle and restored missing IPC handlers
+- **Speaker Reclustering**: Added periodic speaker reclustering, unified recording modes, and autosave transcript
+- **Floating Icon Position**: Persist floating icon position setting across restarts
+- **TLS/Certificate Errors**: Surface TLS/certificate errors in model download UI
+- **llama.cpp Probe**: Made llama.cpp probe one-shot and removed fragile hasMeta heuristic
+- **Agent Folder Navigation**: Refetch notes when opening a note in a different folder
+- **Notification Window Sizing**: Fixed notification window sizing and dismiss circle visibility
+- **Japanese Translations**: Added missing Japanese translations and reordered handler for consistency
+- **German Locale**: Fixed invalid JSON in German locale file
+- **i18n Spec Links**: Fixed i18n spec link text and renamed to "Learn more"
+
+## [1.6.8] - 2026-04-14
+
+### Added
+
+- **Speaker Diarization**: Live speaker identification during meeting recording with post-processing refinement when the call ends (auto-downloaded sherpa-onnx pyannote + voxceleb models)
+- **Speaker Reassignment UI**: Click any bubble to assign it to a known speaker, calendar attendee, or contact — with attendee-aware picker and bulk-select reassignment
+- **Voice Fingerprint Linking**: Attach voice profiles to contact emails from the speaker picker
+- **Meeting AEC Helper**: Native WebRTC AEC3 sidecar for mic echo cancellation when system audio is captured, with graceful fallback to the JS echo leak detector
+- **Transcript-Level Dedupe**: Retract events drop mic duplicates once system audio confirms the same speech, cleaning both the live view and the saved transcript
+- **Live Accuracy Hint**: Subtle in-view hint during recording indicating that speaker labels will sharpen once the call ends
+
+### Changed
+
+- **Meeting AEC Helper is Prebuilt**: Binaries are built on CI and downloaded like whisper-cpp / qdrant — contributors no longer need cmake, Python 3, or a C++ toolchain for a normal build
+
+### Fixed
+
+- **Speaker Reassignment for Own Bubbles**: Reassigning a left-side (mic) bubble now correctly flips side, name, and color instead of staying locked as "You"
+- **Live Speaker Lock Persistence**: Live-assigned speaker names survive across the session and through diarization merge
+- **Meeting System Audio Handling**: Restore system audio handling after transcription path refactor
+- **Local Whisper Speech Gate**: Stricter silence gate with peak-amplitude fallback to prevent dropped chunks on quiet but non-silent audio
+- **Transcript Merge**: Preserve prior transcript when diarization merge arrives
+
+### Security
+
+- **CMake Quoter Escape**: Single-pass backslash + quote escape in `quoteCmake` resolves a CodeQL incomplete-escape warning
+
+## [1.6.7] - 2026-04-02
+
+### Added
+
+- **Calendar Participants on Meeting Notes**: Automatically link Google Calendar attendees to meeting notes when recording starts from a calendar event, with domain-grouped display and Gravatar avatars
+- **Save Notes as Files**: Export notes to the local filesystem as Markdown files, mirroring folder hierarchy
+- **Responsive Settings Dialog**: Settings dialog adapts to narrow windows — sidebar collapses to icon rail, rows stack vertically, plan grid reflows
+- **Chat Sidebar**: Full sidebar chat tab with conversation history, cloud sync, and semantic search
+- **Chat UX Polish**: Empty state with illustration, shimmer thinking/streaming indicator, stop button, action buttons and search dialog
+- **Local Semantic Search**: Always-on Qdrant vector DB sidecar for offline semantic search across notes — hybrid FTS5 + vector with Reciprocal Rank Fusion
+- **Agent Tool Calling**: Agentic tool-calling system with note management tools (get, create, update, search), cloud agent support with NDJSON streaming, and local model tool calling with RAG context injection
+- **Embedded Chat in Notes**: Embedded chat panel in the note editor with floating and sidebar modes
+- **Per-GPU Device Selector**: Choose a specific GPU for transcription and intelligence processing (#539)
+- **Settings Keyboard Shortcut**: Cmd+, / Ctrl+, keyboard shortcut to open Settings
+- **Notes Actions Button**: Actions sidebar button with redesigned action editor dialog
+- **Notes Folder Picker**: Folder picker in the note metadata row with cleaned-up input styles
+- **Notes Sidebar Buttons**: New note and search notes buttons in the sidebar
+- **Meeting Echo Cancellation**: Echo cancellation on mic input and note metadata chips in meeting view
+- **Linux Wrapper Script**: Wrapper script to force XWayland and support user flags (#507)
+
+### Changed
+
+- **Vercel AI SDK Migration**: Agent mode migrated from raw API calls to Vercel AI SDK
+- **Notes Bottom Bar Redesign**: Redesigned bottom bar with compact action picker
+- **Dialog Design System Alignment**: All dialogs aligned with design system guidelines
+- **Removed Note Word Count**: Removed word count from note editor
+- **Cloud Agent Streaming**: Stream cloud agent responses directly from the renderer via IPC
+
+### Fixed
+
+- **Meeting Auto-Detection**: Fix auto-detection not firing for browser meetings
+- **Meeting Transcription Provider**: Use local transcription provider for notes/meeting recording (#530)
+- **Meeting Partial Transcript Spam**: Prevent partial transcript spam and duplicate final segments
+- **Meeting Notification Timing**: Resolve notification popup timing and detection lifecycle bugs
+- **Folder/Note Race Conditions**: Resolve race conditions when switching folders quickly, prevent meeting view from exiting when changing folder, fix rapid delete/switch state management
+- **Clipboard Preservation**: Preserve images and HTML in clipboard during paste-and-restore (#381)
+- **Transcription Retry Provider**: Retry transcription uses configured provider instead of forcing Parakeet
+- **JSON Parse Validation**: Validate JSON.parse result type before calling .replace() in prompts (#541)
+- **GPU Selector Polish**: Address code review feedback, rename Intelligence GPU label, fix dropdown chevron padding (#539)
+- **Meeting Participant Saves**: Fix calendar attendees not syncing to store and manual participant adds overwriting calendar data
+- **Chat Duplicate Conversations**: Fix duplicate conversations — includeArchived filter returned all instead of only archived
+- **Linux Wayland Fixes**: Force XWayland on KDE/GNOME Wayland, fix hotkey startup race; use uinput before portal on GNOME Wayland (#468, #494)
+- **Mic Permission Gate**: Remove mic permission gate, fix system audio detection
+- **Windows Build Signing**: Fix Windows build signing on PRs, add missing mic-listener download, add missing publisherName to Azure signing config
+- **Dead optimizeAudio Crash**: Remove dead optimizeAudio call that crashes on recordings over 90 seconds (#524)
+- **Download URL Logging**: Remove URL truncation from download log and add failure logging (#540)
+
+### Security
+
+- **Google Calendar Scopes**: Narrow OAuth scope from `calendar.readonly` to `calendar.events.readonly` + `calendar.calendarlist.readonly` for minimal privilege
+- **picomatch**: Bump to 4.0.4
+- **brace-expansion**: Bump to 1.1.13 (security backport)
+- **yaml**: Bump to 2.8.3
+- **tar**: Bump to 7.5.13
+
+## [1.6.6] - 2026-03-19
+
+### Added
+
+- **Native macOS System Audio Tap**: CoreAudio Tap API for direct system audio capture — eliminates the need for screen recording permission on macOS 14.2+
+- **TipTap Rich Text Editor**: Migrated notes editor from plain Markdown to TipTap with Obsidian-style live preview — hides Markdown syntax except on the cursor line, with rich text rendering for enhanced and transcript views
+- **Dual-Channel Meeting Transcription**: Separate mic and system audio channels with chat bubble UI for speaker-differentiated meeting transcripts
+- **Meeting Segment Timestamps**: Persist segment timestamps in saved meeting transcripts with chronological ordering
+- **Meeting-Specific AI Prompts**: Meeting notes generation now uses speaker-aware prompts for better context in generated summaries
+- **KDE Wayland Native Shortcuts**: Native global shortcut support for KDE Plasma on Wayland using D-Bus, matching the existing GNOME and Hyprland approach (#486)
+- **Mistral Nemo 12B and Gemma 3 12B**: Added to local model registry for on-device inference (#483)
+- **Post-Login Permissions Gate**: Returning users now see a permissions check after login to ensure mic and system audio access
+
+### Changed
+
+- **Unified Notes Recording**: All notes now use dual-stream transcription with simplified recording UX — always saves to transcript
+- **Notes Tab Rename**: Renamed "Raw" tab to "Notes" and default to it during meetings
+- **Shared Note Title Generation**: Extracted `generateNoteTitle` utility for consistent auto-titling across meeting and regular notes
+- **Simplified Permission Buttons**: Consolidated permission prompts to a single "Grant Access" action (#490)
+- **screenRecording → systemAudio Rename**: Renamed `screenRecording` references to `systemAudio` across the codebase for clarity
+- **macOS 15+ System Audio Consent**: Trigger the native system audio consent dialog on macOS 15+ instead of the legacy screen recording prompt
+- **Improved Notes Output**: Better generate notes output format and auto-title generation
+- **Update Notification Polish**: Improved update notification transparency, icon, and copy
+- **Permission Re-validation**: Re-validate mic and system audio permissions against the OS on component mount
+
+### Fixed
+
+- **Gemini Agent Streaming**: Route Gemini agent streaming to the correct API endpoint
+- **Windows Mic Volume Mutation**: Disable browser AGC to prevent Windows mic volume being permanently altered (#476)
+- **Linux Mono Transcription**: Request stereo recording to prevent mono transcription failure on Linux
+- **Meeting Bluetooth Audio**: Detach meeting AudioContexts from output device for Bluetooth compatibility; fix system audio loopback silence
+- **Meeting Detection Suppression**: Suppress meeting detection notifications when meeting mode is already active
+- **Windows Paste Modifier Keys**: Release held modifier keys before `SendInput` paste on Windows
+- **Meeting Session Reset**: Reset meeting audio send counts between sessions
+- **Meeting Hotkey Behavior**: Meeting hotkey always opens a new meeting regardless of current view
+- **STT Config Auth Timing**: Retry STT config fetch before recording when auth isn't ready on mount
+- **Hotkey Restore on Failure**: Restore previous hotkey on registration failure
+- **KDE Wayland Hotkeys**: Force XWayland on KDE Wayland to fix hotkey registration
+- **Streaming Dictation Commands**: Use TipTap editor commands for streaming dictation input
+- **Google OAuth Onboarding**: Fix Google OAuth users skipping onboarding flow
+- **Realtime Dictation Default**: Default streaming provider to openai-realtime for dictation; respect sttConfig dictation mode for realtime models
+- **KDE Plasma Overlay**: Fix KDE Plasma hotkey and overlay window behavior — scoped window type changes to KDE only, preserving GNOME behavior (#491)
+- **Cleanup Prompt Refusal**: Fix cleanup prompt refusing to output command-like transcriptions (#478)
+- **KDE Wayland Clipboard Paste**: Replaced busy-wait with sleep and clean up temp file for KDE Wayland paste (#455)
+- **GNOME Agent Hotkey**: Register agent hotkey as independent GNOME Wayland keybinding slot (#436)
+- **Agent Hotkey Conflict Warning**: Show conflict warning when agent hotkey duplicates another mode
+- **Meeting Hotkey Registration**: Await async `registerSlot` for meeting hotkey registration
+- **Media Pause During Dictation**: Prevent paused media from being unpaused during dictation (#419)
+- **Meeting Chat Scroll Overlap**: Fix meeting system audio transcription and chat scroll overlap
+- **macOS Media Remote Bundle**: Include macos-media-remote in extraResources (#487)
+- **NSAudioCaptureUsageDescription**: Restore plist entry and increase audio probe timeout
+
+### Security
+
+- **undici CVE-2026-1526**: Bump undici to 6.24.1 to fix request smuggling vulnerability
+
+## [1.6.5] - 2026-03-17
+
+### Added
+
+- **Data Retention Toggle**: New privacy setting to control whether transcription text is retained in history (Privacy & Data settings)
+
+### Fixed
+
+- **Meeting Detection Reset**: Fix meeting detection not properly resetting after a meeting ends
+
+## [1.6.4] - 2026-03-15
+
+### Added
+
+- **Meeting Mode Hotkey**: Dedicated hotkey to start/stop meeting transcription directly from the keyboard, independent of the dictation hotkey
+- **Account Deletion**: Users can now delete their account from within the app
+- **Qwen3.5 Local Models**: Added Qwen3.5 local models to the model registry; removed sub-1B models that were too small for practical use
+- **Model Descriptions in Picker**: Local model picker now shows model descriptions to help users choose the right model
+- **Meeting Detection Toggle**: New setting to enable/disable automatic meeting detection
+- **Dependabot**: Automated weekly npm dependency updates via Dependabot
+- **CodeQL Static Analysis**: GitHub Actions workflow for automated security scanning
+- **Zod Dependency**: Added Zod for input validation and sanitization
+
+### Changed
+
+- **Multi-Monitor Floating Icon**: The dictation floating icon now appears on the monitor where the cursor is, instead of always on the primary display
+- **Persistent Panel Position**: Panel start position now persists across app restarts
+- **Compact Hotkey Tooltip**: Overlay tooltip uses compact modifier symbols (e.g., ⌘⇧K instead of Cmd+Shift+K), wraps for long combos, and aligns to window edge based on panel position
+- **Cross-Window Settings Sync**: Settings changes now sync across all open windows in real time
+- **Agent Chat Title**: Renamed agent mode window title from "Agent Mode" to "Agent Chat"
+- **Windows Model Preservation**: Local LLM models are now preserved during Windows app updates instead of being deleted
+
+### Fixed
+
+- **Meeting Hotkey Overwrite**: Fixed meeting hotkey accidentally overwriting the dictation hotkey on save
+- **Meeting Snap Timing (macOS)**: Fixed meeting mode snap timing on macOS causing incorrect window positioning
+- **Meeting Detection False Positives**: Reduced false-positive meeting detection notifications
+- **Hotkey Tooltip Display**: Fixed hotkey tooltip not updating after changing the hotkey in settings
+- **Silence Detection Threshold**: Lowered silence detection threshold to avoid rejecting valid speech that was previously considered too quiet (#411)
+
+## [1.6.3] - 2026-03-12
+
+### Changed
+
+- **System Audio Permission Clarity**: Renamed "Screen Recording" to "System Audio" across all permission prompts, onboarding, and settings — makes it clear that OpenWhispr captures other participants' audio, not your screen
+- **Improved Permission Copy**: Microphone permission now reads "Captures your voice for transcription"; System Audio reads "Captures other participants' audio from calls and meetings. We never record your screen."
+- **Electron 39**: Upgraded from Electron 36 to 39, which uses the CoreAudio Tap API by default on macOS 14.2+ — eliminates the purple "screen recording" indicator, the "Your screen is being observed" lock screen message, and the misleading "Screen & System Audio Recording" permission prompt. Users now see "System Audio Recording Only" instead
+- **NSAudioCaptureUsageDescription**: Added the new macOS 14.2+ audio capture usage description to Info.plist, enabling the separate system audio permission dialog
+- **better-sqlite3 12**: Upgraded from v11 to v12 for Electron 39 V8 compatibility
+- **Localized in all 10 languages**: All permission copy changes translated across en, pt, de, es, fr, it, ru, ja, zh-CN, zh-TW
+
+### Added
+
+- **Hyprland Wayland Support**: Native global shortcut support for Hyprland using `hyprctl` keybindings + D-Bus, matching the existing GNOME Wayland approach (#416)
+
+### Fixed
+
+- **Soft Voice Recognition**: Enabled Auto Gain Control (AGC) for dictation microphone input to automatically boost quiet speech — previously disabled, now matches meeting mode behavior
+- **OpenAI Realtime VAD Sensitivity**: Lowered voice activity detection threshold from 0.5 to 0.3 (both client and API) so soft-spoken audio is no longer missed
+- **Speech Onset Clipping**: Increased VAD prefix padding from 300ms to 500ms to capture the quiet beginning of soft speech that was previously cut off
+- **Wayland Clipboard Paste**: Fixed `wl-copy` failing silently due to 1ms `spawnSync` timeout killing the fork before it completed — increased to 50ms (#416)
+- **Streaming Media Resume**: Fixed media staying paused after recording silence with "Pause media on dictation" enabled — streaming path now fires the completion callback even when no speech is detected (#429)
+
+## [1.6.2] - 2026-03-11
+
+### Added
+
+- **System Audio for Notes**: Mix system audio (via getDisplayMedia loopback) with microphone input for note recordings, enabling capture of meeting audio, YouTube lectures, and other system sounds
+- **Event-Driven Meeting Detection**: Replaced polling-based meeting detection with native OS event APIs (CoreAudio on macOS, WASAPI on Windows, pactl on Linux) — reduces background CPU from 5–9% to near-zero (#404)
+- **Notes Onboarding**: Added screen recording permission step to the notes onboarding wizard (macOS) so users can grant permission before their first recording
+
+### Changed
+
+- **Auto-Enable System Audio**: System audio is now automatically enabled when screen recording permission is granted — removed the separate toggle button for a simpler recording experience
+- **Deferred Transcript Display**: Recording transcript is no longer shown live during notes dictation; it appears after recording stops, matching the meeting notes flow for a cleaner experience
+
+### Fixed
+
+- **Windows Hotkey Stability**: Track modifier state in native keyboard hook so modifier-only shortcuts (e.g. Control+Super) are detected reliably on Windows 11; keep floating recorder interactive; prefer compiling current key-listener source over downloaded binaries
+- **macOS Accessibility Permission Prompt**: Detect missing accessibility trust after startup and notify users with auto-opened Privacy settings and toast guidance — fixes silent Globe key failures on fresh installs
+- **Realtime Streaming Warmup**: Fix warmup gating so initial audio is no longer silently dropped; skip redundant session config in cloud mode; handle empty-buffer commit on disconnect gracefully
+- **Custom Dictionary Prompt Truncation**: Truncate custom dictionary to respect Groq's 896-char limit, preventing 400 errors on large dictionaries (#405)
+- **Parakeet bzip2 on Windows 10**: Add JS fallback for bzip2 extraction when native tar fails (#406)
+- **Business Plan Past-Due Check**: Include business plan in past-due subscription check
+
+### Removed
+
+- Removed the Monitor toggle button from the dictation widget (system audio mode is now automatic)
+
+## [1.6.1] - 2026-03-08
+
+### Added
+
+- **WebSocket Streaming for BYOK Dictation**: OpenAI Realtime API streaming now works for standard dictation mode (not just meetings), enabling real-time transcription for Bring Your Own Key users
+- **Unified Streaming Path**: Extended OpenAI Realtime WebSocket streaming to normal dictation, sharing the same streaming infrastructure as meeting transcription
+
+### Fixed
+
+- **Transcript Loss on Disconnect**: Commit audio buffer before closing WebSocket and wait for final transcript before closing, preventing lost transcriptions during disconnects
+- **Dictation IPC Callbacks**: Send plain strings from streaming IPC callbacks instead of objects, fixing downstream consumers
+- **Accessibility Permission Detection (macOS)**: Fix onboarding flow not detecting macOS accessibility permission correctly (#394)
+- **Custom Cloud Provider Classification**: Treat Custom Cloud endpoints as self-hosted rather than third-party (#384)
+- **Blocking `execSync` in Meeting Detection**: Replaced synchronous process detection with async alternative to prevent UI freezes on Windows
+- **BYOK Onboarding Override**: Guard BYOK override for signed-in users and fix missing deps during onboarding (#397)
+- **Windows Media Pause Toggle**: Check audio state before sending media key on Windows (#402)
+- **Linux Wayland Portal Permissions**: Set desktop name on Linux for Wayland portal permissions (#389)
+- **Chrome Sandbox Permissions (Linux)**: Set SUID bit on chrome-sandbox during deb/rpm install
+
+### Changed
+
+- Eliminated duplication and fixed style inconsistencies in dictation streaming helpers
+- Cleaned up meeting detection code after the Windows input fix
+
+## [1.6.0] - 2026-03-06
+
+### Added
+
+- **Agent Mode**: Glassmorphism chat overlay with real-time AI streaming — resizable window (8 edge/corner handles), dedicated hotkey, conversation history stored in SQLite, customizable system prompt, and support for all cloud/local AI providers
+- **Google Calendar Integration**: Connect multiple Google accounts via OAuth 2.0 (PKCE), view upcoming meetings in the sidebar, and receive notifications when meetings are detected
+- **Meeting Recording & Live Transcription**: Automatic meeting detection via process monitoring (Zoom, Teams, FaceTime) and sustained audio activity, with live transcription powered by OpenAI Realtime API over WebSocket
+- **Cloud Notes with Sync**: Local-first note storage with FTS5 full-text search, folder organization, cloud sync, and semantic search — all notes are instantly searchable across title, content, and enhanced content
+- **Audio Retention & Retry**: Transcription audio is now saved locally with configurable retention (default 30 days), enabling playback from history and one-click retry of failed transcriptions through the full pipeline
+- **Cmd+K Command Search**: Global command palette to search across notes, transcripts, and folders with real-time results, keyboard navigation, and type-grouped display
+- **Auto-Pause Media Playback**: Automatically pauses media (Spotify, Apple Music, etc.) during dictation and resumes afterward — uses MediaRemote framework on macOS, GSMTC on Windows, and MPRIS2 on Linux
+- **Screen Recording Permission Flow (macOS)**: Optional onboarding step and in-app prompts for screen recording permission, required for meeting audio capture on macOS
+- **Configurable Recorder Position**: Choose where the voice recorder panel appears on screen (top, bottom, center)
+- **Auto-Paste Toggle**: New toggle in clipboard settings to enable/disable automatic pasting after transcription
+- **Prompt Architecture Overhaul**: Centralized prompt definitions in `src/config/prompts.ts` with customizable agent system prompts
+- **Dynamic Agent Window**: Agent overlay starts at full screen height with drag-to-resize support, persisted window bounds across sessions
+- **Save Failed Transcriptions**: Failed transcriptions are now saved with their audio for later retry instead of being lost
+- **Cloud Backup Toggle**: Unified cloud backup into a single toggle for simpler settings
+
+### Changed
+
+- **Removed Input Monitoring Requirement (macOS)**: Replaced CGEvent tap with NSEvent monitor for Globe/Fn key detection, eliminating the need for Input Monitoring privacy permission
+- **Unified Screen Recording Permission UX**: Consolidated screen recording permission prompts across onboarding, meetings, and integrations into a consistent experience
+
+### Fixed
+
+- **Agent Panel Readability**: Made agent panel fully opaque for better text readability
+- **Local Model Streaming**: Fixed local model support in agent streaming and resolved Metal OOM crash on macOS
+- **Mic Auto-Gain**: Enabled microphone auto-gain and skip silent system audio chunks during meeting recording
+- **Meeting Audio**: Fixed simultaneous system and mic audio capture for meetings
+- **KDE Wayland Paste**: Fixed portal exit code 0 with no token being treated as success on KDE Wayland
+- **Meeting Detection**: Suppressed false meeting detection when no active calendar meeting exists
+- **OpenAI Realtime Session**: Fixed session configuration timing — now sends config after session created event with pcm16 format and VAD
+- **Agent Hotkey Persistence**: Agent hotkey now properly persists to `.env` file across restarts
+- **Sidebar Height**: Fixed sidebar not extending full window height
+- **Empty Transcription Handling**: Silent return on empty transcription instead of pasting fallback string
+- **Command Search Styling**: Fixed input styling, note type icons, sidebar spacing, and added deleted_at column support
+- **Onboarding Accessibility UX**: Show device name in mic settings and improve accessibility permission guidance
+- **Orphaned Trial Note**: Removed orphaned trialNote reference from free plan pricing
+- **Portal-Based Tooltips**: Fixed tooltip positioning and replaced download action with reveal-in-folder
+- **State-Aware Media Pause**: Don't unpause media that was already paused before dictation started
+- **WebSocket Audio Buffering**: Parallelized WebSocket connection and audio capture, buffer early audio to prevent data loss at meeting start
+- **Video Track Loopback**: Keep video tracks alive for loopback audio capture, remove invalid dispose call
+
+## [1.5.5] - 2026-03-01
+
+### Added
+
+- **Mode-Aware File Size Validation**: Upload UI now enforces file size limits per transcription mode — local is unlimited, BYOK and Cloud free are capped at 25 MB, Cloud pro at 500 MB — with contextual messaging and CTA buttons (Create Account, Upgrade, Switch to Cloud)
+- **Large File Chunking**: Files over 25 MB are automatically split via FFmpeg and transcribed in parallel with per-chunk progress reporting
+- **Gemma 3 Local Models**: Added Gemma 3 (1B, 4B, 12B, 27B) to the local model registry with provider icon
+- **Groq Model Updates**: Added new Groq models and removed deprecated ones (Maverick, Kimi K2 Instruct)
+- **Notes Editor Formatting Shortcuts**: Cmd+B (bold), Cmd+I (italic), Cmd+E (code) keyboard shortcuts in the notes editor
+- **Linux Wayland Paste Improvements**: Added ydotool support and improved wl-copy reliability for Wayland paste
+- **Granular Build Scripts**: Added individual build target scripts for more flexible CI/CD
+
+### Fixed
+
+- **Fn/Globe Hotkey**: Fn key now correctly treated as equivalent to Globe key on macOS
+- **GPU Activation**: Fixed GPU activation flow and Vulkan fallback behavior
+- **Groq i18n**: Updated Groq model descriptions and added missing translations across all locales
+
+## [1.5.4] - 2026-02-25
+
+### Added
+
+- **Auto-Learn Correction Monitoring**: Detects user edits after paste and automatically updates the custom dictionary with learned corrections; native text monitor binaries for macOS (AXObserver with PID-based AX targeting), Windows, and Linux (with download-first strategy and CI workflow for prebuilt binaries); undo button on auto-learned dictionary toast; dictionary settings UI with translations across all locales
+- **Config-Driven STT Routing**: STT mode (batch vs streaming) now driven by `/api/stt-config` per context (dictation vs notes); streaming provider adapter map supports Deepgram and AssemblyAI, replacing hardcoded Deepgram IPC calls with a generic interface
+- **Live Toggle in Notes**: "Live" toggle in NoteEditor lets users override between streaming and batch transcription for notes
+
+### Fixed
+
+- **STT Metadata Forwarding**: Forward complete STT metadata (`sttWordCount`, `sttLanguage`, actual Deepgram model, audio bytes, `stt_processing_ms`) and client end-to-end latency (`client_total_ms`) to API logging
+- **BYOK Transcription Logging**: Fixed BYOK reasoning incorrectly suppressing transcribe logs
+
 ## [1.5.3] - 2026-02-24
 
 ### Added

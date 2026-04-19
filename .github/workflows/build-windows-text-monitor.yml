@@ -1,0 +1,72 @@
+name: Build Windows Text Monitor
+
+on:
+  push:
+    paths:
+      - 'resources/windows-text-monitor.c'
+      - '.github/workflows/build-windows-text-monitor.yml'
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., 1.0.0)'
+        required: false
+        default: '1.0.0'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Compile Windows Text Monitor
+        run: |
+          cl /O2 /nologo resources/windows-text-monitor.c /Fe:windows-text-monitor.exe ole32.lib oleaut32.lib
+        shell: cmd
+
+      - name: Verify binary
+        run: |
+          if (Test-Path "windows-text-monitor.exe") {
+            Write-Host "Binary built successfully"
+            Get-Item "windows-text-monitor.exe" | Select-Object Name, Length
+          } else {
+            Write-Error "Binary not found"
+            exit 1
+          }
+        shell: pwsh
+
+      - name: Create zip archive
+        run: |
+          Compress-Archive -Path windows-text-monitor.exe -DestinationPath windows-text-monitor-win32-x64.zip
+        shell: pwsh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-text-monitor
+          path: windows-text-monitor-win32-x64.zip
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: windows-text-monitor-v${{ inputs.version || '1.0.0' }}
+          name: Windows Text Monitor v${{ inputs.version || '1.0.0' }}
+          body: |
+            Prebuilt Windows text monitor binary for auto-learn correction monitoring.
+
+            This binary uses Windows UI Automation to detect text field changes after paste.
+          files: windows-text-monitor-win32-x64.zip
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

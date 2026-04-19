@@ -8,6 +8,7 @@ export interface ReasoningConfig {
   contextSize?: number;
   systemPrompt?: string;
   appContext?: AppContext | null;
+  lanUrl?: string;
 }
 
 export abstract class BaseReasoningService {

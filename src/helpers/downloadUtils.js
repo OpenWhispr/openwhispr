@@ -3,6 +3,7 @@ const { promises: fsPromises } = require("fs");
 const path = require("path");
 const https = require("https");
 const http = require("http");
+const { execFile } = require("child_process");
 const { pipeline } = require("stream");
 const debugLogger = require("./debugLogger");
 
@@ -26,8 +27,24 @@ const RETRYABLE_CODES = new Set([
   "ERR_DOWNLOAD_INCOMPLETE",
 ]);
 
+const TLS_ERROR_CODES = new Set([
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "CERT_HAS_EXPIRED",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+  "CERT_UNTRUSTED",
+]);
+
+function isTlsError(error) {
+  return (
+    TLS_ERROR_CODES.has(error.code) ||
+    (error.message && error.message.includes("unable to get local issuer certificate"))
+  );
+}
+
 function isRetryable(error) {
-  if (error.isAbort || error.isHttpError) return false;
+  if (error.isAbort || error.isHttpError || isTlsError(error)) return false;
   return RETRYABLE_CODES.has(error.code);
 }
 
@@ -218,6 +235,13 @@ function downloadAttempt(url, tempPath, options) {
       cleanup();
       if (signal?.aborted) {
         reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
+      } else if (isTlsError(err)) {
+        reject(
+          Object.assign(new Error(`Certificate error: ${err.message}`), {
+            code: "TLS_ERROR",
+            isTlsError: true,
+          })
+        );
       } else {
         reject(err);
       }
@@ -254,7 +278,7 @@ async function downloadFile(url, destPath, options = {}) {
 
   const tempPath = `${destPath}.tmp`;
 
-  debugLogger.info("Download starting", { url: url.substring(0, 80), destPath });
+  debugLogger.info("Download starting", { url, destPath });
 
   let startOffset = 0;
   try {
@@ -320,6 +344,11 @@ async function downloadFile(url, destPath, options = {}) {
       }
 
       if (!isRetryable(error) || attempt >= maxRetries) {
+        debugLogger.error("Download failed", {
+          url,
+          error: error.message,
+          code: error.code,
+        });
         await fsPromises.unlink(tempPath).catch(() => {});
         throw error;
       }
@@ -332,6 +361,11 @@ async function downloadFile(url, destPath, options = {}) {
     }
   }
 
+  debugLogger.error("Download failed after all retries", {
+    url,
+    error: lastError?.message,
+    code: lastError?.code,
+  });
   await fsPromises.unlink(tempPath).catch(() => {});
   throw lastError;
 }
@@ -402,10 +436,87 @@ async function checkDiskSpace(directory, requiredBytes) {
   }
 }
 
+function extractZipWindows(zipPath, destDir) {
+  return new Promise((resolve, reject) => {
+    execFile("tar", ["-xf", zipPath, "-C", destDir], (error) => {
+      if (error) {
+        debugLogger.info("tar extraction failed, trying PowerShell", { error: error.message });
+        execFile(
+          "powershell",
+          [
+            "-NoProfile",
+            "-Command",
+            `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`,
+          ],
+          (psError) => {
+            if (psError) reject(new Error(`Zip extraction failed: ${psError.message}`));
+            else resolve();
+          }
+        );
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function extractArchive(archivePath, destDir) {
+  if (archivePath.endsWith(".tar.gz") || archivePath.endsWith(".tgz")) {
+    return new Promise((resolve, reject) => {
+      execFile("tar", ["-xzf", archivePath, "-C", destDir], (err) => {
+        err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
+      });
+    });
+  }
+
+  if (process.platform === "win32") {
+    return extractZipWindows(archivePath, destDir);
+  }
+
+  return new Promise((resolve, reject) => {
+    execFile("unzip", ["-o", archivePath, "-d", destDir], (err) => {
+      err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
+    });
+  });
+}
+
+async function findFile(dir, name, maxDepth = 5, depth = 0) {
+  if (depth >= maxDepth) return null;
+  const entries = await fsPromises.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const found = await findFile(full, name, maxDepth, depth + 1);
+      if (found) return found;
+    } else if (entry.name === name) {
+      return full;
+    }
+  }
+  return null;
+}
+
+async function findFiles(dir, pattern, maxDepth = 5, depth = 0) {
+  if (depth >= maxDepth) return [];
+  const results = [];
+  const entries = await fsPromises.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...(await findFiles(full, pattern, maxDepth, depth + 1)));
+    } else if (pattern.test(entry.name)) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
 module.exports = {
   downloadFile,
   createDownloadSignal,
   validateFileSize,
   cleanupStaleDownloads,
   checkDiskSpace,
+  extractArchive,
+  findFile,
+  findFiles,
 };

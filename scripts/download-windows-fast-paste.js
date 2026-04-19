@@ -12,7 +12,12 @@
 
 const fs = require("fs");
 const path = require("path");
-const { downloadFile, extractZip, fetchLatestRelease, setExecutable } = require("./lib/download-utils");
+const {
+  downloadFile,
+  extractZip,
+  fetchLatestRelease,
+  setExecutable,
+} = require("./lib/download-utils");
 
 const REPO = "OpenWhispr/openwhispr";
 const TAG_PREFIX = "windows-fast-paste-v";
@@ -55,7 +60,10 @@ async function main() {
   const zipAsset = release.assets.find((a) => a.name === ZIP_NAME);
   if (!zipAsset) {
     console.error(`[windows-fast-paste] Release ${release.tag} does not contain ${ZIP_NAME}`);
-    console.log("[windows-fast-paste] Available assets:", release.assets.map((a) => a.name).join(", "));
+    console.log(
+      "[windows-fast-paste] Available assets:",
+      release.assets.map((a) => a.name).join(", ")
+    );
     return;
   }
 
@@ -90,7 +98,9 @@ async function main() {
     }
 
     const stats = fs.statSync(outputPath);
-    console.log(`\n[windows-fast-paste] Successfully downloaded ${release.tag} (${Math.round(stats.size / 1024)}KB)`);
+    console.log(
+      `\n[windows-fast-paste] Successfully downloaded ${release.tag} (${Math.round(stats.size / 1024)}KB)`
+    );
   } catch (error) {
     console.error(`\n[windows-fast-paste] Download failed: ${error.message}`);
 

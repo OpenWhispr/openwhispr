@@ -2,7 +2,6 @@ const fs = require("fs");
 const { promises: fsPromises } = require("fs");
 const path = require("path");
 const https = require("https");
-const { execFile } = require("child_process");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const {
@@ -10,6 +9,9 @@ const {
   createDownloadSignal,
   checkDiskSpace,
   cleanupStaleDownloads,
+  extractArchive,
+  findFile,
+  findFiles,
 } = require("./downloadUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 
@@ -38,6 +40,7 @@ class WhisperCudaManager {
   constructor() {
     this._binDir = null;
     this._downloadSignal = null;
+    this._downloading = false;
   }
 
   getCudaBinaryDir() {
@@ -58,6 +61,10 @@ class WhisperCudaManager {
 
   isDownloaded() {
     return !!this.getCudaBinaryPath();
+  }
+
+  isDownloading() {
+    return this._downloading;
   }
 
   async fetchReleaseInfo() {
@@ -81,36 +88,42 @@ class WhisperCudaManager {
   }
 
   async download(progressCallback) {
+    if (this._downloading) throw new Error("Download already in progress");
     if (!isSupportedPlatform()) {
       throw new Error(`CUDA binaries not available for ${process.platform}`);
     }
 
-    const releaseInfo = await this.fetchReleaseInfo();
-    debugLogger.info("CUDA binary download starting", {
-      version: releaseInfo.version,
-      size: releaseInfo.size,
-    });
+    this._downloading = true;
 
-    const binDir = this.getCudaBinaryDir();
-
-    const spaceCheck = await checkDiskSpace(binDir, releaseInfo.size * 2);
-    if (!spaceCheck.ok) {
-      throw new Error(
-        `Not enough disk space. Need ~${Math.round((releaseInfo.size * 2) / 1_000_000)}MB, ` +
-          `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
-      );
-    }
-
-    await cleanupStaleDownloads(binDir);
-
-    const { signal, abort } = createDownloadSignal();
-    this._downloadSignal = { abort };
-
-    const tempDir = getSafeTempDir();
-    const zipPath = path.join(tempDir, `cuda-download-${Date.now()}.zip`);
-    const extractDir = path.join(tempDir, `temp-extract-${Date.now()}`);
+    let zipPath = null;
+    let extractDir = null;
 
     try {
+      const releaseInfo = await this.fetchReleaseInfo();
+      debugLogger.info("CUDA binary download starting", {
+        version: releaseInfo.version,
+        size: releaseInfo.size,
+      });
+
+      const binDir = this.getCudaBinaryDir();
+
+      const spaceCheck = await checkDiskSpace(binDir, releaseInfo.size * 2);
+      if (!spaceCheck.ok) {
+        throw new Error(
+          `Not enough disk space. Need ~${Math.round((releaseInfo.size * 2) / 1_000_000)}MB, ` +
+            `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
+        );
+      }
+
+      await cleanupStaleDownloads(binDir);
+
+      const { signal, abort } = createDownloadSignal();
+      this._downloadSignal = { abort };
+
+      const tempDir = getSafeTempDir();
+      zipPath = path.join(tempDir, `cuda-download-${Date.now()}.zip`);
+      extractDir = path.join(tempDir, `temp-extract-${Date.now()}`);
+
       await downloadFile(releaseInfo.url, zipPath, {
         timeout: 600000,
         signal,
@@ -128,26 +141,29 @@ class WhisperCudaManager {
       });
 
       await fsPromises.mkdir(extractDir, { recursive: true });
-      await this._extractZip(zipPath, extractDir);
+      await extractArchive(zipPath, extractDir);
 
       const binaryName = PLATFORM_BINARY_NAMES[process.platform];
       const companionPattern = COMPANION_PATTERNS[process.platform];
-      const entries = await fsPromises.readdir(extractDir);
 
-      for (const entry of entries) {
-        if (entry === binaryName || companionPattern.test(entry)) {
-          const src = path.join(extractDir, entry);
-          const dest = path.join(binDir, entry);
-          await fsPromises.copyFile(src, dest);
-
-          if (process.platform === "linux") {
-            await fsPromises.chmod(dest, 0o755);
-          }
-        }
+      const binaryPath = await findFile(extractDir, binaryName);
+      if (!binaryPath) {
+        throw new Error(`Extraction completed but binary "${binaryName}" not found in archive`);
       }
 
-      if (!this.getCudaBinaryPath()) {
-        throw new Error(`Extraction completed but binary "${binaryName}" not found in archive`);
+      const dest = path.join(binDir, binaryName);
+      await fsPromises.copyFile(binaryPath, dest);
+      if (process.platform === "linux") {
+        await fsPromises.chmod(dest, 0o755);
+      }
+
+      const libs = await findFiles(extractDir, companionPattern);
+      for (const lib of libs) {
+        const libDest = path.join(binDir, path.basename(lib));
+        await fsPromises.copyFile(lib, libDest);
+        if (process.platform === "linux") {
+          await fsPromises.chmod(libDest, 0o755);
+        }
       }
 
       debugLogger.info("CUDA binary download complete", {
@@ -164,9 +180,11 @@ class WhisperCudaManager {
       }
       throw error;
     } finally {
+      this._downloading = false;
       this._downloadSignal = null;
-      await fsPromises.unlink(zipPath).catch(() => {});
-      await fsPromises.rm(extractDir, { recursive: true, force: true }).catch(() => {});
+      if (zipPath) await fsPromises.unlink(zipPath).catch(() => {});
+      if (extractDir)
+        await fsPromises.rm(extractDir, { recursive: true, force: true }).catch(() => {});
     }
   }
 
@@ -268,32 +286,6 @@ class WhisperCudaManager {
           this.destroy();
           reject(new Error("GitHub API request timed out"));
         });
-    });
-  }
-
-  _extractZip(zipPath, destDir) {
-    if (process.platform === "win32") {
-      return new Promise((resolve, reject) => {
-        execFile(
-          "powershell",
-          [
-            "-NoProfile",
-            "-Command",
-            `Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${destDir}'`,
-          ],
-          (error) => {
-            if (error) reject(new Error(`Zip extraction failed: ${error.message}`));
-            else resolve();
-          }
-        );
-      });
-    }
-
-    return new Promise((resolve, reject) => {
-      execFile("unzip", ["-o", zipPath, "-d", destDir], (error) => {
-        if (error) reject(new Error(`Zip extraction failed: ${error.message}`));
-        else resolve();
-      });
     });
   }
 }

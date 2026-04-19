@@ -67,8 +67,8 @@
 
 **Fix:**
 1. Reinstall dependencies: `rm -rf node_modules && npm ci`
-2. Run `npm run setup` to verify FFmpeg
-3. If using packaged app, try reinstalling
+2. If using packaged app, try reinstalling
+3. **Windows:** check that antivirus / Windows Defender hasn't quarantined the bundled FFmpeg binary
 
 ### whisper.cpp Issues
 
@@ -99,11 +99,71 @@
 
 OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → renderer `navigator.clipboard` → X11 fallback.
 
+### Linux System Audio Portal Issues
+
+**Symptoms:** The Linux share dialog keeps appearing, system audio does not stay granted, or onboarding does not show a system-audio grant step.
+
+**Fix:**
+1. Update `xdg-desktop-portal` and the matching desktop backend for your session (`xdg-desktop-portal-gnome`, `xdg-desktop-portal-kde`, `xdg-desktop-portal-wlr`, etc.)
+2. Sign out and back in after updating portal packages
+3. Re-run system audio capture and complete the chooser again
+4. Expect the chooser to appear on Linux while OpenWhispr is using the standard browser portal path; some desktops may support more persistent portal behavior later, but fallback capture should still work
+
+### Meeting Transcription Issues
+
+**Symptoms:** Meeting detection not working, no transcription, audio not captured
+
+**macOS:**
+1. Grant Screen Recording permission: System Settings → Privacy & Security → Screen Recording → enable OpenWhispr
+2. Restart the app after granting permission
+3. Ensure Google Calendar is connected in Integrations
+
+**All Platforms:**
+1. Check that meeting detection is enabled in settings
+2. Verify your OpenAI API key is valid (required for Realtime API transcription)
+3. Ensure your meeting app (Zoom, Teams, FaceTime) is running — process detection looks for known meeting applications
+4. If auto-detection fails, you can manually start recording from the meeting notification
+
+### Agent Mode Issues
+
+**Symptoms:** Agent overlay not appearing, no AI responses, streaming errors
+
+**Fix:**
+1. Ensure Agent Mode is enabled in Settings → Agent Mode
+2. Check that you have a valid API key for your selected provider
+3. Verify the agent hotkey doesn't conflict with other global shortcuts
+4. For local models: ensure the model is downloaded and llama-server is running
+5. For Metal OOM on macOS: try a smaller local model
+
 ### Windows-Specific Issues
 
-See [WINDOWS_TROUBLESHOOTING.md](WINDOWS_TROUBLESHOOTING.md) for:
-- Window visibility issues
-- FFmpeg permission problems
+**No window appears (process running in Task Manager but invisible):**
+1. Check the system tray (click the `^` caret) for the OpenWhispr icon
+2. Run with debug logging: `OpenWhispr.exe --log-level=debug`
+3. Try disabling GPU acceleration: `OpenWhispr.exe --disable-gpu`
+
+**Antivirus / Windows Defender blocking binaries:**
+
+whisper.cpp and FFmpeg may be quarantined silently. Add OpenWhispr to exclusions: Settings → Virus & threat protection → Exclusions.
+
+**Permission errors:**
+
+Right-click OpenWhispr → Run as administrator (or set permanently in Properties → Compatibility).
+
+**Firewall blocking cloud mode:**
+
+Allow OpenWhispr through Windows Firewall when using cloud transcription providers.
+
+**Complete reset (after uninstalling):**
+
+```batch
+rd /s /q "%APPDATA%\OpenWhispr"
+rd /s /q "%LOCALAPPDATA%\OpenWhispr"
+```
+
+Then reinstall.
+
+**Logs location:** `%APPDATA%\OpenWhispr\logs\`
 
 ## Enable Debug Mode
 

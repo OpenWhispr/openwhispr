@@ -98,6 +98,28 @@ export function isWithinGracePeriod(): boolean {
   return elapsed < GRACE_PERIOD_MS;
 }
 
+export async function deleteAccount(): Promise<{ error?: Error }> {
+  if (!OPENWHISPR_API_URL) {
+    return { error: new Error("API not configured") };
+  }
+
+  try {
+    const res = await fetch(`${OPENWHISPR_API_URL}/api/auth/delete-account`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to delete account");
+    }
+
+    return {};
+  } catch (error) {
+    return { error: error instanceof Error ? error : new Error("Failed to delete account") };
+  }
+}
+
 export async function signOut(): Promise<void> {
   try {
     if (window.electronAPI?.authClearSession) {

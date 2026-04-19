@@ -1,7 +1,6 @@
 const fs = require("fs");
 const { promises: fsPromises } = require("fs");
 const path = require("path");
-const { execFile } = require("child_process");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const {
@@ -9,6 +8,9 @@ const {
   createDownloadSignal,
   checkDiskSpace,
   cleanupStaleDownloads,
+  extractArchive,
+  findFile,
+  findFiles,
 } = require("./downloadUtils");
 
 const GITHUB_RELEASE_URL = "https://api.github.com/repos/ggerganov/llama.cpp/releases/latest";
@@ -110,16 +112,16 @@ class LlamaVulkanManager {
       await fsPromises.mkdir(extractDir, { recursive: true });
 
       try {
-        await this._extract(archivePath, extractDir);
+        await extractArchive(archivePath, extractDir);
 
-        const binaryPath = this._findFile(extractDir, config.binaryName);
+        const binaryPath = await findFile(extractDir, config.binaryName);
         if (!binaryPath) throw new Error(`${config.binaryName} not found in archive`);
 
         const outputPath = path.join(this.binDir, config.outputName);
         await fsPromises.copyFile(binaryPath, outputPath);
         if (process.platform !== "win32") await fsPromises.chmod(outputPath, 0o755);
 
-        const libs = this._findFiles(extractDir, config.libPattern);
+        const libs = await findFiles(extractDir, config.libPattern);
         for (const lib of libs) {
           const dest = path.join(this.binDir, path.basename(lib));
           await fsPromises.copyFile(lib, dest);
@@ -204,62 +206,6 @@ class LlamaVulkanManager {
         })
         .on("error", reject);
     });
-  }
-
-  _extract(archivePath, destDir) {
-    return new Promise((resolve, reject) => {
-      if (archivePath.endsWith(".tar.gz") || archivePath.endsWith(".tgz")) {
-        execFile("tar", ["-xzf", archivePath, "-C", destDir], (err) => {
-          err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
-        });
-      } else if (process.platform === "win32") {
-        execFile(
-          "powershell",
-          [
-            "-NoProfile",
-            "-Command",
-            `Expand-Archive -Force -Path '${archivePath}' -DestinationPath '${destDir}'`,
-          ],
-          (err) => {
-            err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
-          }
-        );
-      } else {
-        execFile("unzip", ["-o", archivePath, "-d", destDir], (err) => {
-          err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
-        });
-      }
-    });
-  }
-
-  _findFile(dir, name, maxDepth = 5, depth = 0) {
-    if (depth >= maxDepth) return null;
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        const found = this._findFile(full, name, maxDepth, depth + 1);
-        if (found) return found;
-      } else if (entry.name === name) {
-        return full;
-      }
-    }
-    return null;
-  }
-
-  _findFiles(dir, pattern, maxDepth = 5, depth = 0) {
-    if (depth >= maxDepth) return [];
-    const results = [];
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        results.push(...this._findFiles(full, pattern, maxDepth, depth + 1));
-      } else if (pattern.test(entry.name)) {
-        results.push(full);
-      }
-    }
-    return results;
   }
 }
 

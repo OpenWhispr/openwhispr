@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useEffect, useRef } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef } from "react";
 import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
-import type { LocalTranscriptionProvider } from "../types/electron";
+import { useLocalStorage } from "./useLocalStorage";
+import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -17,8 +18,12 @@ export interface TranscriptionSettings {
   cloudTranscriptionModel: string;
   cloudTranscriptionBaseUrl?: string;
   cloudTranscriptionMode: string;
+  transcriptionMode: InferenceMode;
+  remoteTranscriptionType: SelfHostedType;
+  remoteTranscriptionUrl: string;
   customDictionary: string[];
   assemblyAiStreaming: boolean;
+  showTranscriptionPreview: boolean;
 }
 
 export interface ReasoningSettings {
@@ -27,10 +32,14 @@ export interface ReasoningSettings {
   reasoningProvider: string;
   cloudReasoningBaseUrl?: string;
   cloudReasoningMode: string;
+  reasoningMode: InferenceMode;
+  remoteReasoningType: SelfHostedType;
+  remoteReasoningUrl: string;
 }
 
 export interface HotkeySettings {
   dictationKey: string;
+  meetingKey: string;
   activationMode: "tap" | "push";
 }
 
@@ -52,14 +61,28 @@ export interface ApiKeySettings {
 export interface PrivacySettings {
   cloudBackupEnabled: boolean;
   telemetryEnabled: boolean;
+  audioRetentionDays: number;
+  dataRetentionEnabled: boolean;
 }
 
 export interface ThemeSettings {
   theme: "light" | "dark" | "auto";
 }
 
+export interface AgentModeSettings {
+  agentModel: string;
+  agentProvider: string;
+  agentKey: string;
+  agentSystemPrompt: string;
+  agentEnabled: boolean;
+  cloudAgentMode: string;
+  agentInferenceMode: InferenceMode;
+  remoteAgentUrl: string;
+}
+
 function useSettingsInternal() {
   const store = useSettingsStore();
+  const { setCustomDictionary } = store;
 
   // One-time initialization: sync API keys, dictation key, activation mode,
   // UI language, and dictionary from the main process / SQLite.
@@ -74,6 +97,41 @@ function useSettingsInternal() {
         "settings"
       );
     });
+  }, []);
+
+  // Listen for dictionary updates from main process (auto-learn corrections)
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.electronAPI?.onDictionaryUpdated) return;
+    const unsubscribe = window.electronAPI.onDictionaryUpdated((words: string[]) => {
+      if (Array.isArray(words)) {
+        setCustomDictionary(words);
+      }
+    });
+    return unsubscribe;
+  }, [setCustomDictionary]);
+
+  // Auto-learn corrections from user edits in external apps
+  const [autoLearnCorrections, setAutoLearnCorrectionsRaw] = useLocalStorage(
+    "autoLearnCorrections",
+    true,
+    {
+      serialize: String,
+      deserialize: (value: string) => value !== "false",
+    }
+  );
+
+  const setAutoLearnCorrections = useCallback(
+    (enabled: boolean) => {
+      setAutoLearnCorrectionsRaw(enabled);
+      window.electronAPI?.setAutoLearnEnabled?.(enabled);
+    },
+    [setAutoLearnCorrectionsRaw]
+  );
+
+  // Sync auto-learn state to main process on mount
+  useEffect(() => {
+    window.electronAPI?.setAutoLearnEnabled?.(autoLearnCorrections);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync startup pre-warming preferences to main process
@@ -130,6 +188,12 @@ function useSettingsInternal() {
     cloudReasoningBaseUrl: store.cloudReasoningBaseUrl,
     cloudTranscriptionMode: store.cloudTranscriptionMode,
     cloudReasoningMode: store.cloudReasoningMode,
+    transcriptionMode: store.transcriptionMode,
+    remoteTranscriptionType: store.remoteTranscriptionType,
+    remoteTranscriptionUrl: store.remoteTranscriptionUrl,
+    reasoningMode: store.reasoningMode,
+    remoteReasoningType: store.remoteReasoningType,
+    remoteReasoningUrl: store.remoteReasoningUrl,
     customDictionary: store.customDictionary,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
@@ -142,6 +206,7 @@ function useSettingsInternal() {
     groqApiKey: store.groqApiKey,
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
+    meetingKey: store.meetingKey,
     theme: store.theme,
     setUseLocalWhisper: store.setUseLocalWhisper,
     setWhisperModel: store.setWhisperModel,
@@ -158,6 +223,12 @@ function useSettingsInternal() {
     setCloudReasoningBaseUrl: store.setCloudReasoningBaseUrl,
     setCloudTranscriptionMode: store.setCloudTranscriptionMode,
     setCloudReasoningMode: store.setCloudReasoningMode,
+    setTranscriptionMode: store.setTranscriptionMode,
+    setRemoteTranscriptionType: store.setRemoteTranscriptionType,
+    setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,
+    setReasoningMode: store.setReasoningMode,
+    setRemoteReasoningType: store.setRemoteReasoningType,
+    setRemoteReasoningUrl: store.setRemoteReasoningUrl,
     setCustomDictionary: store.setCustomDictionary,
     setUseReasoningModel: store.setUseReasoningModel,
     setReasoningModel: store.setReasoningModel,
@@ -172,23 +243,46 @@ function useSettingsInternal() {
     customReasoningApiKey: store.customReasoningApiKey,
     setCustomReasoningApiKey: store.setCustomReasoningApiKey,
     setDictationKey: store.setDictationKey,
+    setMeetingKey: store.setMeetingKey,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
     audioCuesEnabled: store.audioCuesEnabled,
     setAudioCuesEnabled: store.setAudioCuesEnabled,
+    pauseMediaOnDictation: store.pauseMediaOnDictation,
+    setPauseMediaOnDictation: store.setPauseMediaOnDictation,
     floatingIconAutoHide: store.floatingIconAutoHide,
     setFloatingIconAutoHide: store.setFloatingIconAutoHide,
     contextAwarenessEnabled: store.contextAwarenessEnabled,
     setContextAwarenessEnabled: store.setContextAwarenessEnabled,
+    startMinimized: store.startMinimized,
+    setStartMinimized: store.setStartMinimized,
+    panelStartPosition: store.panelStartPosition,
+    setPanelStartPosition: store.setPanelStartPosition,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
     setPreferBuiltInMic: store.setPreferBuiltInMic,
     setSelectedMicDeviceId: store.setSelectedMicDeviceId,
+    autoLearnCorrections,
+    setAutoLearnCorrections,
+    showTranscriptionPreview: store.showTranscriptionPreview,
+    setShowTranscriptionPreview: store.setShowTranscriptionPreview,
+    autoPasteEnabled: store.autoPasteEnabled,
+    setAutoPasteEnabled: store.setAutoPasteEnabled,
+    keepTranscriptionInClipboard: store.keepTranscriptionInClipboard,
+    setKeepTranscriptionInClipboard: store.setKeepTranscriptionInClipboard,
+    noteFilesEnabled: store.noteFilesEnabled,
+    setNoteFilesEnabled: store.setNoteFilesEnabled,
+    noteFilesPath: store.noteFilesPath,
+    setNoteFilesPath: store.setNoteFilesPath,
     cloudBackupEnabled: store.cloudBackupEnabled,
     setCloudBackupEnabled: store.setCloudBackupEnabled,
     telemetryEnabled: store.telemetryEnabled,
     setTelemetryEnabled: store.setTelemetryEnabled,
+    audioRetentionDays: store.audioRetentionDays,
+    setAudioRetentionDays: store.setAudioRetentionDays,
+    dataRetentionEnabled: store.dataRetentionEnabled,
+    setDataRetentionEnabled: store.setDataRetentionEnabled,
     updateTranscriptionSettings: store.updateTranscriptionSettings,
     updateReasoningSettings: store.updateReasoningSettings,
     updateApiKeys: store.updateApiKeys,

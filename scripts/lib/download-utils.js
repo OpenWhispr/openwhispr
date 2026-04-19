@@ -39,12 +39,15 @@ function fetchJson(url, redirectCount = 0) {
 
     https
       .get(url, options, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
-          const redirectUrl = res.headers.location;
-          if (!redirectUrl) {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode)) {
+          const location = res.headers.location;
+          if (!location) {
             reject(new Error("Redirect without location header"));
             return;
           }
+          const redirectUrl = location.startsWith("/")
+            ? new URL(location, url).href
+            : location;
           fetchJson(redirectUrl, redirectCount + 1)
             .then(resolve)
             .catch(reject);
@@ -156,13 +159,16 @@ function downloadFile(url, dest, retryCount = 0) {
       }
 
       activeRequest = https.get(currentUrl, (response) => {
-        if (response.statusCode === 302 || response.statusCode === 301) {
-          const redirectUrl = response.headers.location;
-          if (!redirectUrl) {
+        if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+          const location = response.headers.location;
+          if (!location) {
             cleanup();
             reject(new Error("Redirect without location header"));
             return;
           }
+          const redirectUrl = location.startsWith("/")
+            ? new URL(location, currentUrl).href
+            : location;
           request(redirectUrl, redirectCount + 1);
           return;
         }

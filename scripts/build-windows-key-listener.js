@@ -4,8 +4,8 @@
  *
  * Strategy:
  * 1. If binary exists and is up-to-date, do nothing
- * 2. Try to download prebuilt binary from GitHub releases
- * 3. Fall back to local compilation if download fails
+ * 2. Try to compile locally so source changes are picked up in Windows builds
+ * 3. Fall back to downloading a prebuilt binary if local compilation is unavailable
  *
  * This allows developers without a C compiler to still build the app.
  */
@@ -115,7 +115,8 @@ function tryCompile() {
       check: { command: "gcc", args: ["--version"] },
       useShell: false,
       command: "gcc",
-      args: ["-O2", "-mwindows", cSource, "-o", outputBinary, "-luser32"],
+      // Keep the console subsystem so stdout/stderr remain attached to the parent process.
+      args: ["-O2", cSource, "-o", outputBinary, "-luser32"],
     },
     // Clang (LLVM) - can use shell: false
     {
@@ -179,21 +180,22 @@ async function main() {
     return;
   }
 
-  // Try download first, then compile
-  const downloaded = await tryDownload();
-  if (downloaded) {
+  const compiled = tryCompile();
+  if (compiled) {
     return;
   }
 
-  const compiled = tryCompile();
-  if (compiled) {
+  const downloaded = await tryDownload();
+  if (downloaded) {
     return;
   }
 
   // Neither worked - warn but don't fail
   console.warn("[windows-key-listener] Could not obtain Windows key listener binary.");
   console.warn("[windows-key-listener] Push-to-Talk on Windows will use fallback mode.");
-  console.warn("[windows-key-listener] To compile locally, install Visual Studio Build Tools or MinGW-w64.");
+  console.warn(
+    "[windows-key-listener] To compile locally, install Visual Studio Build Tools or MinGW-w64."
+  );
 }
 
 main().catch((error) => {

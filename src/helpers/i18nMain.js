@@ -42,7 +42,7 @@ function normalizeUiLanguage(language) {
 const i18nMain = i18next.createInstance();
 
 void i18nMain.init({
-  initImmediate: false,
+  initAsync: false,
   resources: {
     en: {
       translation: enTranslation,

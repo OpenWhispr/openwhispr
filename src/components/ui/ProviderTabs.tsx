@@ -1,4 +1,4 @@
-import { ReactNode, useRef, useState, useEffect, useCallback } from "react";
+import { ReactNode, useRef, useEffect, useLayoutEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { ProviderIcon } from "./ProviderIcon";
 import type { ColorScheme as BaseColorScheme } from "../../utils/modelPickerStyles";
@@ -7,6 +7,8 @@ export interface ProviderTabItem {
   id: string;
   name: string;
   recommended?: boolean;
+  disabled?: boolean;
+  disabledLabel?: string;
 }
 
 type ColorScheme = Exclude<BaseColorScheme, "blue"> | "dynamic";
@@ -31,17 +33,16 @@ export function ProviderTabs({
 }: ProviderTabsProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({
-    opacity: 0,
-  });
+  const indicatorRef = useRef<HTMLDivElement>(null);
 
   const updateIndicator = useCallback(() => {
     const container = containerRef.current;
-    if (!container) return;
+    const indicator = indicatorRef.current;
+    if (!container || !indicator) return;
 
     const selectedIndex = providers.findIndex((p) => p.id === selectedId);
     if (selectedIndex === -1) {
-      setIndicatorStyle({ opacity: 0 });
+      indicator.style.opacity = "0";
       return;
     }
 
@@ -52,15 +53,13 @@ export function ProviderTabs({
     const containerRect = container.getBoundingClientRect();
     const buttonRect = selectedButton.getBoundingClientRect();
 
-    setIndicatorStyle({
-      width: buttonRect.width,
-      height: buttonRect.height,
-      transform: `translateX(${buttonRect.left - containerRect.left}px)`,
-      opacity: 1,
-    });
+    indicator.style.width = `${buttonRect.width}px`;
+    indicator.style.height = `${buttonRect.height}px`;
+    indicator.style.transform = `translateX(${buttonRect.left - containerRect.left}px)`;
+    indicator.style.opacity = "1";
   }, [providers, selectedId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     updateIndicator();
   }, [updateIndicator]);
 
@@ -73,30 +72,51 @@ export function ProviderTabs({
   return (
     <div
       ref={containerRef}
-      className={`relative flex p-0.5 rounded-md bg-surface-raised dark:bg-surface-1 ${scrollable ? "overflow-x-auto" : ""}`}
+      className={`relative inline-flex items-center gap-0.5 p-0.5 ${scrollable ? "overflow-x-auto" : ""}`}
     >
-      {/* Sliding indicator - frosted glass treatment */}
       <div
-        className="absolute top-0.5 left-0 rounded-md bg-card border border-border dark:border-border-subtle shadow-sm dark:shadow-(--shadow-card) transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
-        style={indicatorStyle}
+        ref={indicatorRef}
+        className="absolute top-0.5 left-0 rounded-full bg-primary/10 dark:bg-primary/15 ring-1 ring-primary/30 dark:ring-primary/25 transition-[width,height,transform,opacity] duration-200 ease-out pointer-events-none"
+        style={{ opacity: 0 }}
       />
 
       {providers.map((provider) => {
         const isSelected = selectedId === provider.id;
+        const isDisabled = !!provider.disabled;
 
         return (
           <button
             key={provider.id}
             data-tab-button
-            onClick={() => onSelect(provider.id)}
-            className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md font-medium text-xs transition-colors duration-150 ${
+            type="button"
+            disabled={isDisabled}
+            aria-disabled={isDisabled}
+            title={isDisabled ? provider.disabledLabel : undefined}
+            onClick={() => {
+              if (isDisabled) return;
+              onSelect(provider.id);
+            }}
+            className={`relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs transition-colors duration-150 ${
               scrollable ? "whitespace-nowrap" : ""
-            } ${isSelected ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            } ${
+              isDisabled
+                ? "text-muted-foreground/50 cursor-not-allowed ring-1 ring-border/40 dark:ring-white/5"
+                : isSelected
+                  ? "text-foreground [&_svg]:text-primary"
+                  : "text-muted-foreground ring-1 ring-border/60 dark:ring-white/10 hover:text-foreground hover:bg-foreground/4 dark:hover:bg-white/5"
+            }`}
           >
             {renderIcon ? renderIcon(provider.id) : <ProviderIcon provider={provider.id} />}
             <span>{provider.name}</span>
             {provider.recommended && (
-              <span className="text-xs text-primary/70 font-medium">{t("common.recommended")}</span>
+              <span className="text-[10px] text-primary/70 font-medium">
+                {t("common.recommended")}
+              </span>
+            )}
+            {isDisabled && provider.disabledLabel && (
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                {provider.disabledLabel}
+              </span>
             )}
           </button>
         );
