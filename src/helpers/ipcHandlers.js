@@ -4012,6 +4012,35 @@ class IPCHandlers {
       }
     };
 
+    const adoptActiveCalendarEventForNote = (noteId) => {
+      if (!noteId) return;
+      try {
+        const note = this.databaseManager.getNote(noteId);
+        if (!note || note.participants || note.calendar_event_id) return;
+
+        const events = this.databaseManager.getActiveEvents();
+        for (const evt of events) {
+          if (!evt.attendees) continue;
+          if (!this._resolveOneOnOneOtherParticipant(evt.attendees)) continue;
+          if (this.databaseManager.getNoteByCalendarEventId(evt.id, noteId)) continue;
+
+          this.databaseManager.updateNote(noteId, {
+            calendar_event_id: evt.id,
+            participants: evt.attendees,
+          });
+          const updated = this.databaseManager.getNote(noteId);
+          if (updated) this.broadcastToWindows("note-updated", updated);
+          return;
+        }
+      } catch (error) {
+        debugLogger.warn(
+          "Adopt active calendar event failed",
+          { noteId, error: error.message },
+          "meeting"
+        );
+      }
+    };
+
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
       if (!meetingOneOnOneAttendee || meetingOneOnOneProfileBound || !speakerId) return;
       const embedding = liveSpeakerIdentifier.getSpeakerEmbedding(speakerId);
@@ -4701,6 +4730,7 @@ class IPCHandlers {
         const systemAudioPlan = await getMeetingSystemAudioPlan();
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
         meetingEchoLeakDetector.reset();
+        adoptActiveCalendarEventForNote(options.noteId);
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingOneOnOneProfileBound = false;
 

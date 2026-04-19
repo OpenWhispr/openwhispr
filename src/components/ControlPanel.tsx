@@ -103,8 +103,20 @@ export default function ControlPanel() {
   } = useDialogs();
 
   useEffect(() => {
-    loadTranscriptions();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    (async () => {
+      try {
+        setIsLoading(true);
+        await initializeTranscriptions();
+      } catch {
+        showAlertDialog({
+          title: t("controlPanel.history.couldNotLoadTitle"),
+          description: t("controlPanel.history.couldNotLoadDescription"),
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [showAlertDialog, t]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -282,20 +294,6 @@ export default function ControlPanel() {
     setIsMeetingMode(false);
     window.electronAPI?.restoreFromMeetingMode?.();
   }, []);
-
-  const loadTranscriptions = async () => {
-    try {
-      setIsLoading(true);
-      await initializeTranscriptions();
-    } catch (error) {
-      showAlertDialog({
-        title: t("controlPanel.history.couldNotLoadTitle"),
-        description: t("controlPanel.history.couldNotLoadDescription"),
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const copyToClipboard = useCallback(
     async (text: string) => {

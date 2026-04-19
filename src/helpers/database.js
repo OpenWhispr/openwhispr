@@ -1435,6 +1435,24 @@ class DatabaseManager {
     }
   }
 
+  getNoteByCalendarEventId(eventId, excludeNoteId = null) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const base = "SELECT * FROM notes WHERE calendar_event_id = ? AND deleted_at IS NULL";
+      if (excludeNoteId) {
+        return this.db.prepare(`${base} AND id != ? LIMIT 1`).get(eventId, excludeNoteId) || null;
+      }
+      return this.db.prepare(`${base} LIMIT 1`).get(eventId) || null;
+    } catch (error) {
+      debugLogger.error(
+        "Error getting note by calendar event id",
+        { error: error.message },
+        "notes"
+      );
+      return null;
+    }
+  }
+
   upsertContacts(contacts) {
     try {
       if (!this.db) throw new Error("Database not initialized");
