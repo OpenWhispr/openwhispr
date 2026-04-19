@@ -96,10 +96,17 @@ export default function PersonalNotesView({
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const enhancedSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const activeNoteRef = useRef<number | null>(null);
+  const [lastSyncedNoteId, setLastSyncedNoteId] = useState<number | null>(null);
   const localContentRef = useRef(localContent);
-  localContentRef.current = localContent;
   const localTitleRef = useRef(localTitle);
-  localTitleRef.current = localTitle;
+  useEffect(() => {
+    localContentRef.current = localContent;
+    localTitleRef.current = localTitle;
+  });
+  const setActiveNoteId = (id: number | null) => {
+    activeNoteRef.current = id;
+    setLastSyncedNoteId(id);
+  };
   const { toast } = useToast();
   const isCloudMode = useSettingsStore(selectIsCloudReasoningMode);
   const effectiveModelId = useSettingsStore((s) => s.reasoningModel);
@@ -126,6 +133,11 @@ export default function PersonalNotesView({
     lockSpeaker,
   } = useMeetingTranscription();
   const recordingNoteIdRef = useRef<number | null>(null);
+  const [recordingNoteId, setRecordingNoteId] = useState<number | null>(null);
+  const setActiveRecordingNoteId = (id: number | null) => {
+    recordingNoteIdRef.current = id;
+    setRecordingNoteId(id);
+  };
 
   const {
     folders,
@@ -169,7 +181,7 @@ export default function PersonalNotesView({
   }, [activeNote?.calendar_event_id]);
 
   const startRecording = useCallback(async () => {
-    recordingNoteIdRef.current = activeNoteRef.current;
+    setActiveRecordingNoteId(activeNoteRef.current);
     const note = notes.find((n) => n.id === activeNoteRef.current);
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
     await startTranscription({ seedSegments, noteId: activeNoteRef.current });
@@ -196,7 +208,7 @@ export default function PersonalNotesView({
           clearTimeout(enhancedSaveTimeoutRef.current);
           enhancedSaveTimeoutRef.current = null;
         }
-        activeNoteRef.current = activeNote.id;
+        setActiveNoteId(activeNote.id);
         setLocalTitle(activeNote.title);
         setLocalContent(activeNote.content);
         setLocalEnhancedContent(activeNote.enhanced_content ?? null);
@@ -217,7 +229,7 @@ export default function PersonalNotesView({
           clearTimeout(enhancedSaveTimeoutRef.current);
           enhancedSaveTimeoutRef.current = null;
         }
-        activeNoteRef.current = null;
+        setActiveNoteId(null);
         setLocalTitle("");
         setLocalContent("");
         setLocalEnhancedContent(null);
@@ -475,7 +487,7 @@ export default function PersonalNotesView({
 
   useEffect(() => {
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
-    recordingNoteIdRef.current = meetingRecordingRequest.noteId;
+    setActiveRecordingNoteId(meetingRecordingRequest.noteId);
     const note = notes.find((n) => n.id === meetingRecordingRequest.noteId);
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
     startTranscription({ seedSegments, noteId: meetingRecordingRequest.noteId });
@@ -505,7 +517,7 @@ export default function PersonalNotesView({
       if (noteId && transcript) {
         window.electronAPI.updateNote(noteId, { transcript });
       }
-      recordingNoteIdRef.current = null;
+      setActiveRecordingNoteId(null);
     }
     prevTranscribingRef.current = isTranscribing;
   }, [isTranscribing, realtimeTranscript, realtimeSegments]);
@@ -524,8 +536,8 @@ export default function PersonalNotesView({
     return () => clearInterval(interval);
   }, [isTranscribing, realtimeSegments]);
 
-  const isLocalSynced = activeNoteRef.current === activeNote?.id;
-  const isActiveNoteRecording = isTranscribing && recordingNoteIdRef.current === activeNote?.id;
+  const isLocalSynced = lastSyncedNoteId === activeNote?.id;
+  const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
   const editorNote = activeNote
     ? {
         ...activeNote,
