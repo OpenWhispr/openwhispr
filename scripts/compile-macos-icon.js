@@ -59,7 +59,12 @@ try {
 
   const producedCar = path.join(tmpDir, "Assets.car");
   if (!fs.existsSync(producedCar)) {
-    throw new Error("actool did not produce Assets.car");
+    console.warn(
+      "compile-macos-icon: actool ran but did not emit Assets.car " +
+        "(likely a partial Xcode install on the runner). " +
+        "Falling back to icon.icns; no Liquid Glass on macOS 26+."
+    );
+    return;
   }
 
   fs.copyFileSync(producedCar, OUTPUT_CAR);
