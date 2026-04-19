@@ -363,7 +363,15 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCloudBackupEnabled: createBooleanSetter("cloudBackupEnabled"),
   setTelemetryEnabled: createBooleanSetter("telemetryEnabled"),
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
-  setContextAwarenessEnabled: createBooleanSetter("contextAwarenessEnabled"),
+
+  setContextAwarenessEnabled: (enabled: boolean) => {
+    if (get().contextAwarenessEnabled === enabled) return;
+    if (isBrowser) localStorage.setItem("contextAwarenessEnabled", String(enabled));
+    set({ contextAwarenessEnabled: enabled });
+    if (isBrowser) {
+      window.electronAPI?.notifyContextAwarenessChanged?.(enabled);
+    }
+  },
 
   setFloatingIconAutoHide: (enabled: boolean) => {
     if (get().floatingIconAutoHide === enabled) return;

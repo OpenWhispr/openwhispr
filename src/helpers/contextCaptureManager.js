@@ -259,7 +259,7 @@ function parseProjectName(windowTitle, appIdentifier) {
 class ContextCaptureManager {
   constructor() {
     this._linuxStrategy = undefined;
-    this._commandCache = new Map();
+    this._cache = new Map();
   }
 
   captureContext() {
@@ -541,7 +541,7 @@ class ContextCaptureManager {
 
     const cacheKey = `path:${appIdentifier || appName}:${projectName}`;
     const now = Date.now();
-    const cached = this._commandCache.get(cacheKey);
+    const cached = this._cache.get(cacheKey);
     if (cached && now < cached.expiresAt) return cached.value;
 
     const storagePath = this._getStorageJsonPath(appIdentifier, appName);
@@ -551,7 +551,7 @@ class ContextCaptureManager {
     try {
       storageData = JSON.parse(fs.readFileSync(storagePath, "utf-8"));
     } catch {
-      this._commandCache.set(cacheKey, { value: null, expiresAt: now + STORAGE_CACHE_TTL_MS });
+      this._cache.set(cacheKey, { value: null, expiresAt: now + STORAGE_CACHE_TTL_MS });
       return null;
     }
 
@@ -577,7 +577,7 @@ class ContextCaptureManager {
           path.basename(decoded).toLowerCase() === lowerProject &&
           fs.statSync(decoded).isDirectory()
         ) {
-          this._commandCache.set(cacheKey, {
+          this._cache.set(cacheKey, {
             value: decoded,
             expiresAt: now + STORAGE_CACHE_TTL_MS,
           });
@@ -588,7 +588,7 @@ class ContextCaptureManager {
       }
     }
 
-    this._commandCache.set(cacheKey, { value: null, expiresAt: now + STORAGE_CACHE_TTL_MS });
+    this._cache.set(cacheKey, { value: null, expiresAt: now + STORAGE_CACHE_TTL_MS });
     return null;
   }
 
@@ -597,7 +597,7 @@ class ContextCaptureManager {
 
     const cacheKey = `files:${projectPath}`;
     const now = Date.now();
-    const cached = this._commandCache.get(cacheKey);
+    const cached = this._cache.get(cacheKey);
     if (cached && now < cached.expiresAt) return cached.value;
 
     const files = [];
@@ -625,7 +625,7 @@ class ContextCaptureManager {
     files.sort();
 
     const result = files.length > 0 ? files : null;
-    this._commandCache.set(cacheKey, { value: result, expiresAt: now + FILESCAN_CACHE_TTL_MS });
+    this._cache.set(cacheKey, { value: result, expiresAt: now + FILESCAN_CACHE_TTL_MS });
     debugLogger.info("[ContextCapture] Directory scan", { projectPath, fileCount: files.length });
     return result;
   }
@@ -662,16 +662,16 @@ class ContextCaptureManager {
 
   _commandExists(cmd) {
     const now = Date.now();
-    const cached = this._commandCache.get(cmd);
+    const cached = this._cache.get(cmd);
     if (cached && now < cached.expiresAt) return cached.exists;
 
     try {
       const res = spawnSync("sh", ["-c", `command -v ${cmd}`], { stdio: "ignore" });
       const exists = res.status === 0;
-      this._commandCache.set(cmd, { exists, expiresAt: now + COMMAND_CACHE_TTL_MS });
+      this._cache.set(cmd, { exists, expiresAt: now + COMMAND_CACHE_TTL_MS });
       return exists;
     } catch {
-      this._commandCache.set(cmd, { exists: false, expiresAt: now + COMMAND_CACHE_TTL_MS });
+      this._cache.set(cmd, { exists: false, expiresAt: now + COMMAND_CACHE_TTL_MS });
       return false;
     }
   }

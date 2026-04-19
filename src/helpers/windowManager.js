@@ -27,6 +27,7 @@ class WindowManager {
     this.winPushState = null;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
+    this._contextAwarenessEnabled = true;
     this.contextCaptureManager = null;
 
     app.on("before-quit", () => {
@@ -183,9 +184,8 @@ class WindowManager {
       }
       lastToggleTime = now;
 
-      const appContext = this.contextCaptureManager?.captureContext() ?? null;
       this.showDictationPanel();
-      this.mainWindow.webContents.send("toggle-dictation", appContext);
+      this.mainWindow.webContents.send("toggle-dictation", this.captureAppContext());
     };
   }
 
@@ -371,9 +371,15 @@ class WindowManager {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      const appContext = this.contextCaptureManager?.captureContext() ?? null;
       this.showDictationPanel();
-      this.mainWindow.webContents.send("start-dictation", appContext);
+      this.mainWindow.webContents.send("start-dictation", this.captureAppContext());
+    }
+  }
+
+  sendToggleDictation() {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.showDictationPanel();
+      this.mainWindow.webContents.send("toggle-dictation", this.captureAppContext());
     }
   }
 
@@ -384,6 +390,11 @@ class WindowManager {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send("stop-dictation");
     }
+  }
+
+  captureAppContext() {
+    if (!this._contextAwarenessEnabled) return null;
+    return this.contextCaptureManager?.captureContext() ?? null;
   }
 
   getActivationMode() {
@@ -400,6 +411,10 @@ class WindowManager {
 
   setFloatingIconAutoHide(enabled) {
     this._floatingIconAutoHide = Boolean(enabled);
+  }
+
+  setContextAwarenessEnabled(enabled) {
+    this._contextAwarenessEnabled = Boolean(enabled);
   }
 
   setHotkeyListeningMode(enabled) {

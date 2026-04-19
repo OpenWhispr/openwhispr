@@ -182,7 +182,6 @@ let updateManager = null;
 let globeKeyManager = null;
 let windowsKeyManager = null;
 let whisperCudaManager = null;
-let contextCaptureManager = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 
@@ -268,8 +267,7 @@ function initializeDeferredManagers() {
   clipboardManager.preWarmAccessibility();
   trayManager = new TrayManager();
   globeKeyManager = new GlobeKeyManager();
-  contextCaptureManager = new ContextCaptureManager();
-  windowManager.setContextCaptureManager(contextCaptureManager);
+  windowManager.setContextCaptureManager(new ContextCaptureManager());
 
   if (process.platform === "darwin") {
     globeKeyManager.on("error", (error) => {
@@ -462,6 +460,7 @@ async function startApp() {
 
   windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
+  windowManager.setContextAwarenessEnabled(environmentManager.getContextAwarenessEnabled());
 
   ipcMain.on("activation-mode-changed", (_event, mode) => {
     windowManager.setActivationModeCache(mode);
@@ -475,6 +474,11 @@ async function startApp() {
     if (windowManager.mainWindow && !windowManager.mainWindow.isDestroyed()) {
       windowManager.mainWindow.webContents.send("floating-icon-auto-hide-changed", enabled);
     }
+  });
+
+  ipcMain.on("context-awareness-changed", (_event, enabled) => {
+    windowManager.setContextAwarenessEnabled(enabled);
+    environmentManager.saveContextAwarenessEnabled(enabled);
   });
 
   if (process.platform === "darwin") {
@@ -574,9 +578,7 @@ async function startApp() {
               }
             }, MIN_HOLD_DURATION_MS);
           } else {
-            const appCtx = contextCaptureManager?.captureContext() ?? null;
-            windowManager.showDictationPanel();
-            windowManager.mainWindow.webContents.send("toggle-dictation", appCtx);
+            windowManager.sendToggleDictation();
           }
         } else {
           debugLogger?.debug("[Globe] Ignored — mainWindow not live");
@@ -643,9 +645,7 @@ async function startApp() {
           }
         }, MIN_HOLD_DURATION_MS);
       } else {
-        const appCtx = contextCaptureManager?.captureContext() ?? null;
-        windowManager.showDictationPanel();
-        windowManager.mainWindow.webContents.send("toggle-dictation", appCtx);
+        windowManager.sendToggleDictation();
       }
     });
 
@@ -717,9 +717,7 @@ async function startApp() {
       if (activationMode === "push") {
         windowManager.startWindowsPushToTalk();
       } else if (activationMode === "tap") {
-        const appCtx = contextCaptureManager?.captureContext() ?? null;
-        windowManager.showDictationPanel();
-        windowManager.mainWindow.webContents.send("toggle-dictation", appCtx);
+        windowManager.sendToggleDictation();
       }
     });
 

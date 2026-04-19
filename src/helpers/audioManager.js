@@ -758,8 +758,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const startTime = Date.now();
 
     try {
-      const contextEnabled = getSettings().contextAwarenessEnabled !== false;
-      const config = this.appContext && contextEnabled ? { appContext: this.appContext } : {};
+      const config = this.appContext ? { appContext: this.appContext } : {};
       const result = await ReasoningService.processText(text, model, agentName, config);
 
       const processingTime = Date.now() - startTime;

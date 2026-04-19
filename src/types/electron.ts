@@ -671,6 +671,7 @@ declare global {
       notifyHotkeyChanged?: (hotkey: string) => void;
       notifyFloatingIconAutoHideChanged?: (enabled: boolean) => void;
       onFloatingIconAutoHideChanged?: (callback: (enabled: boolean) => void) => () => void;
+      notifyContextAwarenessChanged?: (enabled: boolean) => void;
 
       // Auto-start at login
       getAutoStartEnabled?: () => Promise<boolean>;
