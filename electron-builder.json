@@ -131,7 +131,7 @@
     "hardenedRuntime": true,
     "entitlements": "resources/mac/entitlements.mac.plist",
     "entitlementsInherit": "resources/mac/entitlements.mac.plist",
-    "identity": "HeroTools Inc. (9R85XFMH59)",
+    "identity": "Gizmo Labs Inc. (T832773L2J)",
     "notarize": true,
     "extraResources": [
       {
