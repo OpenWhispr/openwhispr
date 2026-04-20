@@ -88,6 +88,7 @@ class QdrantManager {
     });
 
     this.process = spawn(binaryPath, ["--config-path", configPath], {
+      cwd: STORAGE_DIR,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
     });
