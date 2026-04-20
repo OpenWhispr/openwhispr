@@ -11,6 +11,7 @@ import gemmaIcon from "@/assets/icons/providers/gemma.svg";
 import bedrockIcon from "@/assets/icons/providers/bedrock.svg";
 import azureIcon from "@/assets/icons/providers/azure.svg";
 import vertexIcon from "@/assets/icons/providers/vertex.svg";
+import smallestAiIcon from "@/assets/icons/providers/smallest-ai.png";
 
 export const PROVIDER_ICONS: Record<string, string> = {
   openai: openaiIcon,
@@ -27,6 +28,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   bedrock: bedrockIcon,
   azure: azureIcon,
   vertex: vertexIcon,
+  smallest: smallestAiIcon,
 };
 
 export function getProviderIcon(provider: string): string | undefined {
