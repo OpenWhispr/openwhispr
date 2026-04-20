@@ -776,6 +776,7 @@ export default function SettingsPage({
   } = useSettings();
 
   const agentKey = useSettingsStore((s) => s.agentKey);
+  const setAgentKey = useSettingsStore((s) => s.setAgentKey);
   const meetingAudioDetection = useSettingsStore((s) => s.meetingAudioDetection);
   const setMeetingAudioDetection = useSettingsStore((s) => s.setMeetingAudioDetection);
 
@@ -969,6 +970,19 @@ export default function SettingsPage({
         t
       ),
     [dictationKey, agentKey, t]
+  );
+
+  const validateAgentHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+        },
+        t
+      ),
+    [dictationKey, meetingKey, t]
   );
 
   const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
@@ -3118,6 +3132,23 @@ EOF`,
                       {t("settingsPage.general.meetingHotkey.clear")}
                     </button>
                   )}
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Agent Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("agentMode.settings.hotkey")}
+                description={t("agentMode.settings.hotkeyDescription")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyInput
+                    value={agentKey}
+                    onChange={setAgentKey}
+                    validate={validateAgentHotkey}
+                  />
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>

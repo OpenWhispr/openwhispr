@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2 } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { HotkeyInput } from "../ui/HotkeyInput";
 import { Toggle } from "../ui/toggle";
 import {
   SettingsRow,
@@ -15,7 +14,6 @@ import type { InferenceModeOption } from "../ui/SettingsSection";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
 import SelfHostedPanel from "../SelfHostedPanel";
-import { validateHotkeyForSlot } from "../../utils/hotkeyValidation";
 import type { InferenceMode } from "../../types/electron";
 
 export default function AgentModeSettings() {
@@ -23,10 +21,6 @@ export default function AgentModeSettings() {
   const {
     agentEnabled,
     setAgentEnabled,
-    agentKey,
-    setAgentKey,
-    dictationKey,
-    meetingKey,
     agentModel,
     setAgentModel,
     agentProvider,
@@ -53,19 +47,6 @@ export default function AgentModeSettings() {
     cloudReasoningBaseUrl,
     setCloudReasoningBaseUrl,
   } = useSettingsStore();
-
-  const validateAgentHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-        },
-        t
-      ),
-    [dictationKey, meetingKey, t]
-  );
 
   const startOnboarding = useCallback(() => {
     localStorage.setItem("pendingCloudMigration", "true");
@@ -164,14 +145,6 @@ export default function AgentModeSettings() {
 
       {agentEnabled && (
         <>
-          <div>
-            <SectionHeader
-              title={t("agentMode.settings.hotkey")}
-              description={t("agentMode.settings.hotkeyDescription")}
-            />
-            <HotkeyInput value={agentKey} onChange={setAgentKey} validate={validateAgentHotkey} />
-          </div>
-
           <InferenceModeSelector
             modes={agentModes}
             activeMode={agentInferenceMode}
