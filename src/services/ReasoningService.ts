@@ -624,7 +624,6 @@ class ReasoningService extends BaseReasoningService {
           model,
           textLength: text.length,
           hasApiKey: !!apiKey,
-          apiKeyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : "(none)",
         });
       }
 

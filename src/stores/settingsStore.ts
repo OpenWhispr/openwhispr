@@ -343,6 +343,86 @@ function debouncedPersistToEnv() {
   }, 1000);
 }
 
+type SecretProvider =
+  | "openai"
+  | "anthropic"
+  | "gemini"
+  | "groq"
+  | "mistral"
+  | "customTranscription"
+  | "customReasoning"
+  | "bedrockAccessKeyId"
+  | "bedrockSecretAccessKey"
+  | "bedrockSessionToken"
+  | "azureApiKey"
+  | "vertexApiKey";
+
+function callSecretIpc(provider: SecretProvider, key: string): void {
+  const api = window.electronAPI;
+  if (!api) return;
+  switch (provider) {
+    case "openai":
+      void api.saveOpenAIKey?.(key);
+      return;
+    case "anthropic":
+      void api.saveAnthropicKey?.(key);
+      return;
+    case "gemini":
+      void api.saveGeminiKey?.(key);
+      return;
+    case "groq":
+      void api.saveGroqKey?.(key);
+      return;
+    case "mistral":
+      void api.saveMistralKey?.(key);
+      return;
+    case "customTranscription":
+      void api.saveCustomTranscriptionKey?.(key);
+      return;
+    case "customReasoning":
+      void api.saveCustomReasoningKey?.(key);
+      return;
+    case "bedrockAccessKeyId":
+      void api.saveBedrockAccessKeyId?.(key);
+      return;
+    case "bedrockSecretAccessKey":
+      void api.saveBedrockSecretAccessKey?.(key);
+      return;
+    case "bedrockSessionToken":
+      void api.saveBedrockSessionToken?.(key);
+      return;
+    case "azureApiKey":
+      void api.saveAzureApiKey?.(key);
+      return;
+    case "vertexApiKey":
+      void api.saveVertexApiKey?.(key);
+      return;
+  }
+}
+
+const secretSaveTimers: Partial<Record<SecretProvider, ReturnType<typeof setTimeout>>> = {};
+function debouncedSaveSecret(provider: SecretProvider, key: string) {
+  if (!isBrowser) return;
+  const timer = secretSaveTimers[provider];
+  if (timer) clearTimeout(timer);
+  secretSaveTimers[provider] = setTimeout(() => callSecretIpc(provider, key), 250);
+}
+
+const STALE_SECRET_LOCALSTORAGE_KEYS = [
+  "openaiApiKey",
+  "anthropicApiKey",
+  "geminiApiKey",
+  "groqApiKey",
+  "mistralApiKey",
+  "customTranscriptionApiKey",
+  "customReasoningApiKey",
+  "bedrockAccessKeyId",
+  "bedrockSecretAccessKey",
+  "bedrockSessionToken",
+  "azureApiKey",
+  "vertexApiKey",
+] as const;
+
 function invalidateApiKeyCaches(
   provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom"
 ) {
@@ -380,10 +460,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "cloudTranscriptionBaseUrl",
     API_ENDPOINTS.TRANSCRIPTION_BASE
   ),
-  cloudTranscriptionMode: readString(
-    "cloudTranscriptionMode",
-    hasStoredByokKey() ? "byok" : "openwhispr"
-  ),
+  // Default is promoted to "byok" post-hydration if any secret came back
+  // non-empty from main process (see initializeSettings).
+  cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
   cloudReasoningMode: readString("cloudReasoningMode", "openwhispr"),
   cloudReasoningBaseUrl: readString("cloudReasoningBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   customDictionary: readStringArray("customDictionary", []),
@@ -393,29 +472,30 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   reasoningModel: readString("reasoningModel", ""),
   reasoningProvider: readString("reasoningProvider", "openai"),
 
-  openaiApiKey: readString("openaiApiKey", ""),
-  anthropicApiKey: readString("anthropicApiKey", ""),
-  geminiApiKey: readString("geminiApiKey", ""),
-  groqApiKey: readString("groqApiKey", ""),
-  mistralApiKey: readString("mistralApiKey", ""),
-  customTranscriptionApiKey: readString("customTranscriptionApiKey", ""),
-  customReasoningApiKey: readString("customReasoningApiKey", ""),
+  // Secrets hydrate from main process via initializeSettings — never from localStorage.
+  openaiApiKey: "",
+  anthropicApiKey: "",
+  geminiApiKey: "",
+  groqApiKey: "",
+  mistralApiKey: "",
+  customTranscriptionApiKey: "",
+  customReasoningApiKey: "",
 
   // Enterprise providers
   bedrockAuthMode: readString("bedrockAuthMode", "sso"),
   bedrockRegion: readString("bedrockRegion", "us-east-1"),
   bedrockProfile: readString("bedrockProfile", ""),
-  bedrockAccessKeyId: readString("bedrockAccessKeyId", ""),
-  bedrockSecretAccessKey: readString("bedrockSecretAccessKey", ""),
-  bedrockSessionToken: readString("bedrockSessionToken", ""),
+  bedrockAccessKeyId: "",
+  bedrockSecretAccessKey: "",
+  bedrockSessionToken: "",
   azureEndpoint: readString("azureEndpoint", ""),
-  azureApiKey: readString("azureApiKey", ""),
+  azureApiKey: "",
   azureDeploymentName: readString("azureDeploymentName", ""),
   azureApiVersion: readString("azureApiVersion", "2024-10-21"),
   vertexAuthMode: readString("vertexAuthMode", "adc"),
   vertexProject: readString("vertexProject", ""),
   vertexLocation: readString("vertexLocation", "us-central1"),
-  vertexApiKey: readString("vertexApiKey", ""),
+  vertexApiKey: "",
 
   dictationKey: readString("dictationKey", ""),
   meetingKey: readString("meetingKey", ""),
@@ -589,45 +669,38 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   setOpenaiApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("openaiApiKey", key);
     set({ openaiApiKey: key });
-    window.electronAPI?.saveOpenAIKey?.(key);
+    debouncedSaveSecret("openai", key);
     invalidateApiKeyCaches("openai");
   },
   setAnthropicApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("anthropicApiKey", key);
     set({ anthropicApiKey: key });
-    window.electronAPI?.saveAnthropicKey?.(key);
+    debouncedSaveSecret("anthropic", key);
     invalidateApiKeyCaches("anthropic");
   },
   setGeminiApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("geminiApiKey", key);
     set({ geminiApiKey: key });
-    window.electronAPI?.saveGeminiKey?.(key);
+    debouncedSaveSecret("gemini", key);
     invalidateApiKeyCaches("gemini");
   },
   setGroqApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("groqApiKey", key);
     set({ groqApiKey: key });
-    window.electronAPI?.saveGroqKey?.(key);
+    debouncedSaveSecret("groq", key);
     invalidateApiKeyCaches("groq");
   },
   setMistralApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("mistralApiKey", key);
     set({ mistralApiKey: key });
-    window.electronAPI?.saveMistralKey?.(key);
+    debouncedSaveSecret("mistral", key);
     invalidateApiKeyCaches("mistral");
   },
   setCustomTranscriptionApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("customTranscriptionApiKey", key);
     set({ customTranscriptionApiKey: key });
-    window.electronAPI?.saveCustomTranscriptionKey?.(key);
+    debouncedSaveSecret("customTranscription", key);
     invalidateApiKeyCaches("custom");
   },
   setCustomReasoningApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("customReasoningApiKey", key);
     set({ customReasoningApiKey: key });
-    window.electronAPI?.saveCustomReasoningKey?.(key);
+    debouncedSaveSecret("customReasoning", key);
     invalidateApiKeyCaches("custom");
   },
 
@@ -649,21 +722,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     debouncedPersistToEnv();
   },
   setBedrockAccessKeyId: (key: string) => {
-    if (isBrowser) localStorage.setItem("bedrockAccessKeyId", key);
     set({ bedrockAccessKeyId: key });
-    window.electronAPI?.saveBedrockAccessKeyId?.(key);
+    debouncedSaveSecret("bedrockAccessKeyId", key);
     debouncedPersistToEnv();
   },
   setBedrockSecretAccessKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("bedrockSecretAccessKey", key);
     set({ bedrockSecretAccessKey: key });
-    window.electronAPI?.saveBedrockSecretAccessKey?.(key);
+    debouncedSaveSecret("bedrockSecretAccessKey", key);
     debouncedPersistToEnv();
   },
   setBedrockSessionToken: (key: string) => {
-    if (isBrowser) localStorage.setItem("bedrockSessionToken", key);
     set({ bedrockSessionToken: key });
-    window.electronAPI?.saveBedrockSessionToken?.(key);
+    debouncedSaveSecret("bedrockSessionToken", key);
     debouncedPersistToEnv();
   },
   setAzureEndpoint: (value: string) => {
@@ -673,9 +743,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     debouncedPersistToEnv();
   },
   setAzureApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("azureApiKey", key);
     set({ azureApiKey: key });
-    window.electronAPI?.saveAzureApiKey?.(key);
+    debouncedSaveSecret("azureApiKey", key);
     debouncedPersistToEnv();
   },
   setAzureDeploymentName: (value: string) => {
@@ -707,9 +776,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     debouncedPersistToEnv();
   },
   setVertexApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("vertexApiKey", key);
     set({ vertexApiKey: key });
-    window.electronAPI?.saveVertexApiKey?.(key);
+    debouncedSaveSecret("vertexApiKey", key);
     debouncedPersistToEnv();
   },
 
@@ -978,40 +1046,65 @@ export async function initializeSettings(): Promise<void> {
 
   const state = useSettingsStore.getState();
 
-  // Sync API keys from main process (if localStorage is empty, read from .env via IPC)
+  // Hydrate secrets from main process (encrypted storage is the source of truth).
   if (window.electronAPI) {
     try {
-      if (!state.openaiApiKey) {
-        const envKey = await window.electronAPI.getOpenAIKey?.();
-        if (envKey) createStringSetter("openaiApiKey")(envKey);
+      const [
+        openai,
+        anthropic,
+        gemini,
+        groq,
+        mistral,
+        customTx,
+        customRx,
+        bedrockAccessKeyId,
+        bedrockSecretAccessKey,
+        bedrockSessionToken,
+        azureApiKey,
+        vertexApiKey,
+      ] = await Promise.all([
+        window.electronAPI.getOpenAIKey?.(),
+        window.electronAPI.getAnthropicKey?.(),
+        window.electronAPI.getGeminiKey?.(),
+        window.electronAPI.getGroqKey?.(),
+        window.electronAPI.getMistralKey?.(),
+        window.electronAPI.getCustomTranscriptionKey?.(),
+        window.electronAPI.getCustomReasoningKey?.(),
+        window.electronAPI.getBedrockAccessKeyId?.(),
+        window.electronAPI.getBedrockSecretAccessKey?.(),
+        window.electronAPI.getBedrockSessionToken?.(),
+        window.electronAPI.getAzureApiKey?.(),
+        window.electronAPI.getVertexApiKey?.(),
+      ]);
+
+      useSettingsStore.setState({
+        openaiApiKey: openai || "",
+        anthropicApiKey: anthropic || "",
+        geminiApiKey: gemini || "",
+        groqApiKey: groq || "",
+        mistralApiKey: mistral || "",
+        customTranscriptionApiKey: customTx || "",
+        customReasoningApiKey: customRx || "",
+        bedrockAccessKeyId: bedrockAccessKeyId || "",
+        bedrockSecretAccessKey: bedrockSecretAccessKey || "",
+        bedrockSessionToken: bedrockSessionToken || "",
+        azureApiKey: azureApiKey || "",
+        vertexApiKey: vertexApiKey || "",
+      });
+
+      // Post-hydration BYOK default (must run after keys are loaded because
+      // hasStoredByokKey reads from Zustand state, not localStorage).
+      if (!localStorage.getItem("cloudTranscriptionMode") && hasStoredByokKey()) {
+        useSettingsStore.setState({ cloudTranscriptionMode: "byok" });
       }
-      if (!state.anthropicApiKey) {
-        const envKey = await window.electronAPI.getAnthropicKey?.();
-        if (envKey) createStringSetter("anthropicApiKey")(envKey);
-      }
-      if (!state.geminiApiKey) {
-        const envKey = await window.electronAPI.getGeminiKey?.();
-        if (envKey) createStringSetter("geminiApiKey")(envKey);
-      }
-      if (!state.groqApiKey) {
-        const envKey = await window.electronAPI.getGroqKey?.();
-        if (envKey) createStringSetter("groqApiKey")(envKey);
-      }
-      if (!state.mistralApiKey) {
-        const envKey = await window.electronAPI.getMistralKey?.();
-        if (envKey) createStringSetter("mistralApiKey")(envKey);
-      }
-      if (!state.customTranscriptionApiKey) {
-        const envKey = await window.electronAPI.getCustomTranscriptionKey?.();
-        if (envKey) createStringSetter("customTranscriptionApiKey")(envKey);
-      }
-      if (!state.customReasoningApiKey) {
-        const envKey = await window.electronAPI.getCustomReasoningKey?.();
-        if (envKey) createStringSetter("customReasoningApiKey")(envKey);
+
+      // Self-healing cleanup of stale plaintext secrets from localStorage.
+      for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {
+        localStorage.removeItem(key);
       }
     } catch (err) {
       logger.warn(
-        "Failed to sync API keys on startup",
+        "Failed to hydrate secrets from main process",
         { error: (err as Error).message },
         "settings"
       );
