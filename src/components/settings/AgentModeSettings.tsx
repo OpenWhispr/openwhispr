@@ -176,17 +176,13 @@ export default function AgentModeSettings() {
               title={t("agentMode.settings.systemPrompt")}
               description={t("agentMode.settings.systemPromptDescription")}
             />
-            <SettingsPanel>
-              <SettingsPanelRow>
-                <textarea
-                  value={agentSystemPrompt}
-                  onChange={(e) => setAgentSystemPrompt(e.target.value)}
-                  placeholder={t("agentMode.settings.systemPromptPlaceholder")}
-                  rows={4}
-                  className="w-full text-xs bg-transparent border border-border/50 rounded-md px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary/30 placeholder:text-muted-foreground/50"
-                />
-              </SettingsPanelRow>
-            </SettingsPanel>
+            <textarea
+              value={agentSystemPrompt}
+              onChange={(e) => setAgentSystemPrompt(e.target.value)}
+              placeholder={t("agentMode.settings.systemPromptPlaceholder")}
+              rows={4}
+              className="w-full text-xs bg-transparent border border-border/50 rounded-md px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary/30 placeholder:text-muted-foreground/50"
+            />
           </div>
         </>
       )}
