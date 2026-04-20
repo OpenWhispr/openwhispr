@@ -1934,6 +1934,7 @@
         "toggleAria": "切換此錄音的發言者辨識",
         "incAria": "增加預期發言人數",
         "decAria": "減少預期發言人數",
+        "othersInCall_one": "通話中還有 {{count}} 人",
         "othersInCall_other": "通話中還有 {{count}} 人"
       }
     }

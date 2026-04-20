@@ -1934,6 +1934,7 @@
         "toggleAria": "切换本次录音的发言者识别",
         "incAria": "增加预计发言人数",
         "decAria": "减少预计发言人数",
+        "othersInCall_one": "通话中还有 {{count}} 人",
         "othersInCall_other": "通话中还有 {{count}} 人"
       }
     }
