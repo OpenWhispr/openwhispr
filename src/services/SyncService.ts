@@ -450,13 +450,21 @@ class SyncService {
 
   private async pushTranscriptionDeletes(): Promise<void> {
     const deletes = (await window.electronAPI.getPendingTranscriptionDeletes?.()) ?? [];
-    for (const t of deletes) {
-      if (!t.cloud_id) continue;
+    const withCloudId = deletes.filter((t) => t.cloud_id);
+    if (withCloudId.length === 0) return;
+
+    for (let i = 0; i < withCloudId.length; i += TRANSCRIPTION_BATCH_SIZE) {
+      const chunk = withCloudId.slice(i, i + TRANSCRIPTION_BATCH_SIZE);
       try {
-        await TranscriptionsService.delete(t.cloud_id);
-        await window.electronAPI.hardDeleteTranscription?.(t.id);
+        const { deleted } = await TranscriptionsService.batchDelete(
+          chunk.map((t) => t.cloud_id!)
+        );
+        for (const cloudId of deleted) {
+          const local = chunk.find((t) => t.cloud_id === cloudId);
+          if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
+        }
       } catch (err) {
-        console.error("Transcription delete sync failed:", err);
+        console.error("Transcription batch delete failed:", err);
       }
     }
   }

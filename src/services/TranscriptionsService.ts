@@ -57,11 +57,16 @@ async function deleteTranscription(id: string): Promise<void> {
   await cloudDelete("/api/transcriptions/delete", { id });
 }
 
-export { create, batchCreate, list, deleteTranscription };
+async function batchDelete(ids: string[]): Promise<{ deleted: string[] }> {
+  return cloudPost<{ deleted: string[] }>("/api/transcriptions/batch-delete", { ids });
+}
+
+export { create, batchCreate, list, deleteTranscription, batchDelete };
 
 export const TranscriptionsService = {
   create,
   batchCreate,
   list,
   delete: deleteTranscription,
+  batchDelete,
 };
