@@ -3682,12 +3682,15 @@ class IPCHandlers {
           if (provider === "smallest") {
             const lang = language || "en";
             const params = new URLSearchParams({ language: lang });
+            const smallestHeaders = {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/octet-stream",
+              "X-Source": "openwhispr",
+              "X-Version": app.getVersion(),
+            };
             const smallestResponse = await fetch(`${endpoint}?${params}`, {
               method: "POST",
-              headers: {
-                Authorization: `Bearer ${apiKey}`,
-                "Content-Type": "application/octet-stream",
-              },
+              headers: smallestHeaders,
               body: buffer,
             });
             if (!smallestResponse.ok) {
