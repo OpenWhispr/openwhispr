@@ -363,6 +363,34 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getCustomReasoningKey: () => ipcRenderer.invoke("get-custom-reasoning-key"),
   saveCustomReasoningKey: (key) => ipcRenderer.invoke("save-custom-reasoning-key", key),
 
+  // Enterprise provider key management
+  getBedrockRegion: () => ipcRenderer.invoke("get-bedrock-region"),
+  saveBedrockRegion: (value) => ipcRenderer.invoke("save-bedrock-region", value),
+  getBedrockProfile: () => ipcRenderer.invoke("get-bedrock-profile"),
+  saveBedrockProfile: (value) => ipcRenderer.invoke("save-bedrock-profile", value),
+  getBedrockAccessKeyId: () => ipcRenderer.invoke("get-bedrock-access-key-id"),
+  saveBedrockAccessKeyId: (key) => ipcRenderer.invoke("save-bedrock-access-key-id", key),
+  getBedrockSecretAccessKey: () => ipcRenderer.invoke("get-bedrock-secret-access-key"),
+  saveBedrockSecretAccessKey: (key) => ipcRenderer.invoke("save-bedrock-secret-access-key", key),
+  getBedrockSessionToken: () => ipcRenderer.invoke("get-bedrock-session-token"),
+  saveBedrockSessionToken: (key) => ipcRenderer.invoke("save-bedrock-session-token", key),
+  getAzureEndpoint: () => ipcRenderer.invoke("get-azure-endpoint"),
+  saveAzureEndpoint: (value) => ipcRenderer.invoke("save-azure-endpoint", value),
+  getAzureApiKey: () => ipcRenderer.invoke("get-azure-api-key"),
+  saveAzureApiKey: (key) => ipcRenderer.invoke("save-azure-api-key", key),
+  getAzureDeployment: () => ipcRenderer.invoke("get-azure-deployment"),
+  saveAzureDeployment: (value) => ipcRenderer.invoke("save-azure-deployment", value),
+  getAzureApiVersion: () => ipcRenderer.invoke("get-azure-api-version"),
+  saveAzureApiVersion: (value) => ipcRenderer.invoke("save-azure-api-version", value),
+  getVertexProject: () => ipcRenderer.invoke("get-vertex-project"),
+  saveVertexProject: (value) => ipcRenderer.invoke("save-vertex-project", value),
+  getVertexLocation: () => ipcRenderer.invoke("get-vertex-location"),
+  saveVertexLocation: (value) => ipcRenderer.invoke("save-vertex-location", value),
+  getVertexApiKey: () => ipcRenderer.invoke("get-vertex-api-key"),
+  saveVertexApiKey: (key) => ipcRenderer.invoke("save-vertex-api-key", key),
+  testEnterpriseConnection: (provider, config) =>
+    ipcRenderer.invoke("test-enterprise-connection", provider, config),
+
   // Dictation key persistence (file-based for reliable startup)
   getDictationKey: () => ipcRenderer.invoke("get-dictation-key"),
   getActiveDictationKey: () => ipcRenderer.invoke("get-active-dictation-key"),
@@ -384,6 +412,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Anthropic reasoning
   processAnthropicReasoning: (text, modelId, agentName, config) =>
     ipcRenderer.invoke("process-anthropic-reasoning", text, modelId, agentName, config),
+
+  // Enterprise reasoning (Bedrock, Azure, Vertex) — runs in main process so
+  // Node-only SDKs (AWS/Azure/Google credential providers) can resolve.
+  processEnterpriseReasoning: (text, modelId, agentName, config) =>
+    ipcRenderer.invoke("process-enterprise-reasoning", text, modelId, agentName, config),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),
@@ -524,10 +557,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "gladia-final-transcript",
     (callback) => (_event, text) => callback(text)
   ),
-  onGladiaError: registerListener(
-    "gladia-error",
-    (callback) => (_event, error) => callback(error)
-  ),
+  onGladiaError: registerListener("gladia-error", (callback) => (_event, error) => callback(error)),
   onGladiaSessionEnd: registerListener(
     "gladia-session-end",
     (callback) => (_event, data) => callback(data)

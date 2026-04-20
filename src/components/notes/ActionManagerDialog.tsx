@@ -25,6 +25,13 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
   const [isCreating, setIsCreating] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
+  const resetForm = () => {
+    setName("");
+    setDescription("");
+    setPrompt("");
+    setEditingId(null);
+  };
+
   useEffect(() => {
     if (open) {
       initializeActions();
@@ -46,13 +53,6 @@ export default function ActionManagerDialog({ open, onOpenChange }: ActionManage
       setPrompt(first.prompt);
     }
   }, [open, actions, selectedId, isCreating]);
-
-  const resetForm = () => {
-    setName("");
-    setDescription("");
-    setPrompt("");
-    setEditingId(null);
-  };
 
   const handleSelectAction = (action: ActionItem) => {
     setSelectedId(action.id);

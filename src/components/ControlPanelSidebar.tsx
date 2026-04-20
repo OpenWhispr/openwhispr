@@ -36,7 +36,6 @@ interface ControlPanelSidebarProps {
   onOpenSearch?: () => void;
   onOpenReferrals?: () => void;
   onUpgrade?: () => void;
-  onUpgradeCheckout?: () => void;
   isOverLimit?: boolean;
   userName?: string | null;
   userEmail?: string | null;
@@ -55,7 +54,6 @@ export default function ControlPanelSidebar({
   onOpenSearch,
   onOpenReferrals,
   onUpgrade,
-  onUpgradeCheckout,
   isOverLimit,
   userName,
   userEmail,
@@ -176,10 +174,10 @@ export default function ControlPanelSidebar({
                 {t("sidebar.limitReachedDescription")}
               </p>
               <button
-                onClick={onUpgradeCheckout}
+                onClick={onUpgrade}
                 className="w-full h-7 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
               >
-                {t("sidebar.upgradeToPro")}
+                {t("sidebar.viewPlans")}
               </button>
             </div>
           </div>

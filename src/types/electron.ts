@@ -1,6 +1,6 @@
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
-export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted";
+export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
 export type SelfHostedType = "openai-compatible" | "lan";
 
@@ -697,6 +697,14 @@ declare global {
         config: any
       ) => Promise<{ success: boolean; text?: string; error?: string }>;
 
+      // Enterprise reasoning (Bedrock, Azure, Vertex)
+      processEnterpriseReasoning: (
+        text: string,
+        modelId: string,
+        agentName: string | null,
+        config: any
+      ) => Promise<{ success: boolean; text?: string; error?: string; retryable?: boolean }>;
+
       // llama.cpp management
       llamaCppCheck: () => Promise<{ isInstalled: boolean; version?: string }>;
       llamaCppInstall: () => Promise<{ success: boolean; error?: string }>;
@@ -835,6 +843,36 @@ declare global {
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;
       getCustomReasoningKey?: () => Promise<string | null>;
       saveCustomReasoningKey?: (key: string) => Promise<void>;
+
+      // Enterprise provider key persistence
+      getBedrockRegion?: () => Promise<string | null>;
+      saveBedrockRegion?: (value: string) => Promise<void>;
+      getBedrockProfile?: () => Promise<string | null>;
+      saveBedrockProfile?: (value: string) => Promise<void>;
+      getBedrockAccessKeyId?: () => Promise<string | null>;
+      saveBedrockAccessKeyId?: (key: string) => Promise<void>;
+      getBedrockSecretAccessKey?: () => Promise<string | null>;
+      saveBedrockSecretAccessKey?: (key: string) => Promise<void>;
+      getBedrockSessionToken?: () => Promise<string | null>;
+      saveBedrockSessionToken?: (key: string) => Promise<void>;
+      getAzureEndpoint?: () => Promise<string | null>;
+      saveAzureEndpoint?: (value: string) => Promise<void>;
+      getAzureApiKey?: () => Promise<string | null>;
+      saveAzureApiKey?: (key: string) => Promise<void>;
+      getAzureDeployment?: () => Promise<string | null>;
+      saveAzureDeployment?: (value: string) => Promise<void>;
+      getAzureApiVersion?: () => Promise<string | null>;
+      saveAzureApiVersion?: (value: string) => Promise<void>;
+      getVertexProject?: () => Promise<string | null>;
+      saveVertexProject?: (value: string) => Promise<void>;
+      getVertexLocation?: () => Promise<string | null>;
+      saveVertexLocation?: (value: string) => Promise<void>;
+      getVertexApiKey?: () => Promise<string | null>;
+      saveVertexApiKey?: (key: string) => Promise<void>;
+      testEnterpriseConnection?: (
+        provider: string,
+        config: Record<string, string>
+      ) => Promise<{ success: boolean; error?: string; action?: string; copyCommand?: string }>;
 
       // Dictation key persistence (file-based for reliable startup)
       getDictationKey?: () => Promise<string | null>;
@@ -1377,24 +1415,6 @@ declare global {
         displayName?: string | null;
       }) => Promise<{ success: boolean }>;
       getMD5Hash: (text: string) => Promise<string>;
-
-      // Meeting chain transcription (BaseTen)
-      meetingTranscribeChain?: (
-        blobUrl: string,
-        opts?: {
-          skipCleanup?: boolean;
-          agentName?: string;
-          customDictionary?: string[];
-        }
-      ) => Promise<{
-        success: boolean;
-        text?: string;
-        rawText?: string;
-        cleanedText?: string;
-        processingDurationSec?: number;
-        speedupFactor?: number;
-        error?: string;
-      }>;
 
       // Meeting transcription (streaming, dual-channel)
       meetingTranscriptionPrepare?: (options: {

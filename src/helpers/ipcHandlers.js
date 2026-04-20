@@ -1,5 +1,7 @@
 const { ipcMain, app, shell, BrowserWindow, systemPreferences } = require("electron");
 const path = require("path");
+const fs = require("fs");
+const os = require("os");
 const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
@@ -41,6 +43,10 @@ const AUDIO_MIME_TYPES = {
   flac: "audio/flac",
   aac: "audio/aac",
 };
+
+const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
+const CLOUD_CHUNK_CONCURRENCY = 5;
+const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   const boundary = `----OpenWhispr${Date.now()}`;
@@ -103,6 +109,146 @@ function postMultipart(url, body, boundary, headers = {}) {
   });
 }
 
+function interpretTranscribeResponse(data) {
+  if (data.statusCode === 401) {
+    throw Object.assign(new Error("Session expired"), { code: "AUTH_EXPIRED" });
+  }
+  if (data.statusCode === 503) {
+    throw Object.assign(new Error("Request timed out"), { code: "SERVER_ERROR" });
+  }
+  if (data.statusCode === 429) {
+    throw Object.assign(new Error("Daily word limit reached"), {
+      code: "LIMIT_REACHED",
+      ...data.data,
+    });
+  }
+  if (data.statusCode === 422 && data.data?.code === "NO_SPEECH_DETECTED") {
+    throw Object.assign(new Error(data.data.error || "No speech detected in audio"), {
+      code: "NO_SPEECH_DETECTED",
+    });
+  }
+  if (data.statusCode !== 200) {
+    throw new Error(data.data?.error || `API error: ${data.statusCode}`);
+  }
+  return data.data;
+}
+
+async function chunkedCloudTranscribe({
+  buffer = null,
+  filePath = null,
+  apiUrl,
+  cookieHeader,
+  multipartFields = {},
+  onProgress,
+  concurrencyLimit = CLOUD_CHUNK_CONCURRENCY,
+  segmentDuration = CLOUD_CHUNK_SEGMENT_SECONDS,
+}) {
+  const { splitAudioFile } = require("./ffmpegUtils");
+
+  const jobId = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const chunkDir = path.join(os.tmpdir(), `ow-chunks-${jobId}`);
+  let tmpInputPath = null;
+
+  let inputPath = filePath;
+  if (!inputPath && buffer) {
+    tmpInputPath = path.join(os.tmpdir(), `ow-audio-${jobId}.webm`);
+    fs.writeFileSync(tmpInputPath, buffer);
+    inputPath = tmpInputPath;
+  }
+
+  fs.mkdirSync(chunkDir, { recursive: true });
+
+  try {
+    onProgress?.({ stage: "splitting", chunksTotal: 0, chunksCompleted: 0 });
+
+    const chunkPaths = await splitAudioFile(inputPath, chunkDir, { segmentDuration });
+    const totalChunks = chunkPaths.length;
+
+    onProgress?.({ stage: "transcribing", chunksTotal: totalChunks, chunksCompleted: 0 });
+
+    const results = new Array(totalChunks).fill(null);
+    const failureCodes = new Set();
+    let completedCount = 0;
+
+    const transcribeChunk = async (index) => {
+      const chunkBuffer = fs.readFileSync(chunkPaths[index]);
+      const chunkName = path.basename(chunkPaths[index]);
+      const { body, boundary } = buildMultipartBody(
+        chunkBuffer,
+        chunkName,
+        "audio/mpeg",
+        multipartFields
+      );
+      const url = new URL(`${apiUrl}/api/transcribe`);
+      const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
+
+      results[index] = interpretTranscribeResponse(data);
+      completedCount++;
+      onProgress?.({
+        stage: "transcribing",
+        chunksTotal: totalChunks,
+        chunksCompleted: completedCount,
+      });
+    };
+
+    const executing = new Set();
+    for (let index = 0; index < totalChunks; index++) {
+      const p = transcribeChunk(index).then(
+        () => executing.delete(p),
+        (err) => {
+          executing.delete(p);
+          if (err.code === "AUTH_EXPIRED" || err.code === "LIMIT_REACHED") throw err;
+          if (err.code) failureCodes.add(err.code);
+          debugLogger.warn(`Chunk ${index} failed`, { error: err.message, code: err.code });
+        }
+      );
+      executing.add(p);
+      if (executing.size >= concurrencyLimit) {
+        await Promise.race(executing);
+      }
+    }
+    await Promise.all(executing);
+
+    const succeeded = results.filter((r) => r !== null);
+    if (succeeded.length === 0) {
+      if (failureCodes.size === 1 && failureCodes.has("NO_SPEECH_DETECTED")) {
+        throw Object.assign(new Error("No speech detected in audio"), {
+          code: "NO_SPEECH_DETECTED",
+        });
+      }
+      throw new Error("All chunks failed to transcribe");
+    }
+
+    const text = results
+      .filter((r) => r !== null)
+      .map((r) => r.text)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const failed = totalChunks - succeeded.length;
+    return {
+      text,
+      responses: succeeded,
+      lastResponse: succeeded[succeeded.length - 1],
+      ...(failed > 0 ? { warning: `${failed} of ${totalChunks} chunks failed` } : {}),
+    };
+  } finally {
+    if (tmpInputPath) {
+      try {
+        fs.unlinkSync(tmpInputPath);
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      fs.rmSync(chunkDir, { recursive: true, force: true });
+    } catch (cleanupErr) {
+      debugLogger.warn("Failed to cleanup chunk dir", { error: cleanupErr.message });
+    }
+  }
+}
+
 class IPCHandlers {
   constructor(managers) {
     this.environmentManager = managers.environmentManager;
@@ -128,6 +274,8 @@ class IPCHandlers {
     this.deepgramStreaming = null;
     this.gladiaStreaming = null;
     this._dictationStreaming = null;
+    this._dictationConnectPromise = null;
+    this._dictationIdleTimer = null;
     this._meetingMicStreaming = null;
     this._meetingSystemStreaming = null;
     this._autoLearnEnabled = true; // Default on, synced from renderer
@@ -2255,6 +2403,171 @@ class IPCHandlers {
       return this.environmentManager.saveCustomReasoningKey(key);
     });
 
+    // Enterprise provider key handlers
+    ipcMain.handle("get-bedrock-region", async () => {
+      return this.environmentManager.getBedrockRegion();
+    });
+    ipcMain.handle("save-bedrock-region", async (event, value) => {
+      return this.environmentManager.saveBedrockRegion(value);
+    });
+    ipcMain.handle("get-bedrock-profile", async () => {
+      return this.environmentManager.getBedrockProfile();
+    });
+    ipcMain.handle("save-bedrock-profile", async (event, value) => {
+      return this.environmentManager.saveBedrockProfile(value);
+    });
+    ipcMain.handle("get-bedrock-access-key-id", async () => {
+      return this.environmentManager.getBedrockAccessKeyId();
+    });
+    ipcMain.handle("save-bedrock-access-key-id", async (event, key) => {
+      return this.environmentManager.saveBedrockAccessKeyId(key);
+    });
+    ipcMain.handle("get-bedrock-secret-access-key", async () => {
+      return this.environmentManager.getBedrockSecretAccessKey();
+    });
+    ipcMain.handle("save-bedrock-secret-access-key", async (event, key) => {
+      return this.environmentManager.saveBedrockSecretAccessKey(key);
+    });
+    ipcMain.handle("get-bedrock-session-token", async () => {
+      return this.environmentManager.getBedrockSessionToken();
+    });
+    ipcMain.handle("save-bedrock-session-token", async (event, key) => {
+      return this.environmentManager.saveBedrockSessionToken(key);
+    });
+    ipcMain.handle("get-azure-endpoint", async () => {
+      return this.environmentManager.getAzureEndpoint();
+    });
+    ipcMain.handle("save-azure-endpoint", async (event, value) => {
+      return this.environmentManager.saveAzureEndpoint(value);
+    });
+    ipcMain.handle("get-azure-api-key", async () => {
+      return this.environmentManager.getAzureApiKey();
+    });
+    ipcMain.handle("save-azure-api-key", async (event, key) => {
+      return this.environmentManager.saveAzureApiKey(key);
+    });
+    ipcMain.handle("get-azure-deployment", async () => {
+      return this.environmentManager.getAzureDeployment();
+    });
+    ipcMain.handle("save-azure-deployment", async (event, value) => {
+      return this.environmentManager.saveAzureDeployment(value);
+    });
+    ipcMain.handle("get-azure-api-version", async () => {
+      return this.environmentManager.getAzureApiVersion();
+    });
+    ipcMain.handle("save-azure-api-version", async (event, value) => {
+      return this.environmentManager.saveAzureApiVersion(value);
+    });
+    ipcMain.handle("get-vertex-project", async () => {
+      return this.environmentManager.getVertexProject();
+    });
+    ipcMain.handle("save-vertex-project", async (event, value) => {
+      return this.environmentManager.saveVertexProject(value);
+    });
+    ipcMain.handle("get-vertex-location", async () => {
+      return this.environmentManager.getVertexLocation();
+    });
+    ipcMain.handle("save-vertex-location", async (event, value) => {
+      return this.environmentManager.saveVertexLocation(value);
+    });
+    ipcMain.handle("get-vertex-api-key", async () => {
+      return this.environmentManager.getVertexApiKey();
+    });
+    ipcMain.handle("save-vertex-api-key", async (event, key) => {
+      return this.environmentManager.saveVertexApiKey(key);
+    });
+
+    // Enterprise provider test connection
+    ipcMain.handle("test-enterprise-connection", async (event, provider, config) => {
+      const {
+        mapEnterpriseError,
+        pickEnterpriseConfig,
+        validateEnterpriseEndpoint,
+      } = require("./enterpriseProviderErrors");
+      try {
+        validateEnterpriseEndpoint(config.azureEndpoint);
+
+        const { generateText } = require("ai");
+        const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
+
+        const model = getEnterpriseAIModel(
+          provider,
+          config.model || "test",
+          config.apiKey || "",
+          pickEnterpriseConfig(config)
+        );
+
+        await generateText({
+          model,
+          prompt: "Say hello in one word.",
+          maxOutputTokens: 10,
+        });
+
+        return { success: true };
+      } catch (err) {
+        const mapped = mapEnterpriseError(provider, err, config);
+        return {
+          success: false,
+          error: mapped.message,
+          action: mapped.action,
+          copyCommand: mapped.copyCommand,
+          retryable: mapped.retryable,
+        };
+      }
+    });
+
+    ipcMain.handle(
+      "process-enterprise-reasoning",
+      async (event, text, modelId, _agentName, config) => {
+        const {
+          isEnterpriseProvider,
+          mapEnterpriseError,
+          pickEnterpriseConfig,
+          validateEnterpriseEndpoint,
+        } = require("./enterpriseProviderErrors");
+        const provider = config?.provider;
+        try {
+          if (!isEnterpriseProvider(provider)) {
+            throw new Error(`Unsupported enterprise provider: ${provider}`);
+          }
+          if (!modelId) {
+            throw new Error("No model specified for enterprise reasoning");
+          }
+
+          validateEnterpriseEndpoint(config?.azureEndpoint);
+
+          const { generateText } = require("ai");
+          const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
+
+          const model = getEnterpriseAIModel(
+            provider,
+            modelId,
+            config.apiKey || "",
+            pickEnterpriseConfig(config)
+          );
+
+          const timeoutMs = config?.timeoutMs || 60000;
+          // Opus 4.7 / GPT-5 / o-series dropped `temperature`; renderer
+          // derives support from the model registry and we honor that here.
+          const useTemperature = config?.supportsTemperature !== false;
+          const { text: generated } = await generateText({
+            model,
+            system: config?.systemPrompt || "",
+            prompt: text,
+            maxOutputTokens: config?.maxTokens || 4096,
+            ...(useTemperature ? { temperature: config?.temperature ?? 0.3 } : {}),
+            abortSignal: AbortSignal.timeout(timeoutMs),
+          });
+
+          return { success: true, text: (generated || "").trim() };
+        } catch (err) {
+          debugLogger.error("Enterprise reasoning error:", err);
+          const mapped = mapEnterpriseError(provider, err, config || {});
+          return { success: false, error: mapped.message, retryable: mapped.retryable };
+        }
+      }
+    );
+
     ipcMain.handle("get-dictation-key", async () => {
       return this.environmentManager.getDictationKey();
     });
@@ -2952,7 +3265,7 @@ class IPCHandlers {
         if (!cookieHeader) throw new Error("No session cookies available");
 
         const audioData = Buffer.from(audioBuffer);
-        const { body, boundary } = buildMultipartBody(audioData, "audio.webm", "audio/webm", {
+        const multipartFields = {
           language: opts.language,
           prompt: opts.prompt,
           sendLogs: opts.sendLogs,
@@ -2960,14 +3273,40 @@ class IPCHandlers {
           appVersion: app.getVersion(),
           clientVersion: app.getVersion(),
           sessionId: this.sessionId,
-        });
+        };
 
-        debugLogger.debug(
-          "Cloud transcribe request",
-          { audioSize: audioData.length, bodySize: body.length },
-          "cloud-api"
+        debugLogger.debug("Cloud transcribe request", { audioSize: audioData.length }, "cloud-api");
+
+        if (audioData.length > CLOUD_INLINE_LIMIT) {
+          const { text, responses, lastResponse } = await chunkedCloudTranscribe({
+            buffer: audioData,
+            apiUrl,
+            cookieHeader,
+            multipartFields,
+          });
+          const sum = (field) => responses.reduce((s, r) => s + (r?.[field] || 0), 0);
+          return {
+            success: true,
+            text,
+            wordsUsed: lastResponse?.wordsUsed,
+            wordsRemaining: lastResponse?.wordsRemaining,
+            plan: lastResponse?.plan,
+            limitReached: lastResponse?.limitReached || false,
+            sttProvider: lastResponse?.sttProvider,
+            sttModel: lastResponse?.sttModel,
+            sttProcessingMs: sum("sttProcessingMs"),
+            sttWordCount: sum("sttWordCount"),
+            sttLanguage: lastResponse?.sttLanguage,
+            audioDurationMs: sum("audioDurationMs"),
+          };
+        }
+
+        const { body, boundary } = buildMultipartBody(
+          audioData,
+          "audio.webm",
+          "audio/webm",
+          multipartFields
         );
-
         const url = new URL(`${apiUrl}/api/transcribe`);
         const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
 
@@ -2977,89 +3316,26 @@ class IPCHandlers {
           "cloud-api"
         );
 
-        if (data.statusCode === 401) {
-          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-        }
-        if (data.statusCode === 503) {
-          return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
-        }
-        if (data.statusCode === 429) {
-          return {
-            success: false,
-            error: "Daily word limit reached",
-            code: "LIMIT_REACHED",
-            limitReached: true,
-            ...data.data,
-          };
-        }
-        if (data.statusCode !== 200) {
-          throw new Error(data.data?.error || `API error: ${data.statusCode}`);
-        }
-
+        const result = interpretTranscribeResponse(data);
         return {
           success: true,
-          text: data.data.text,
-          wordsUsed: data.data.wordsUsed,
-          wordsRemaining: data.data.wordsRemaining,
-          plan: data.data.plan,
-          limitReached: data.data.limitReached || false,
-          sttProvider: data.data.sttProvider,
-          sttModel: data.data.sttModel,
-          sttProcessingMs: data.data.sttProcessingMs,
-          sttWordCount: data.data.sttWordCount,
-          sttLanguage: data.data.sttLanguage,
-          audioDurationMs: data.data.audioDurationMs,
+          text: result.text,
+          wordsUsed: result.wordsUsed,
+          wordsRemaining: result.wordsRemaining,
+          plan: result.plan,
+          limitReached: result.limitReached || false,
+          sttProvider: result.sttProvider,
+          sttModel: result.sttModel,
+          sttProcessingMs: result.sttProcessingMs,
+          sttWordCount: result.sttWordCount,
+          sttLanguage: result.sttLanguage,
+          audioDurationMs: result.audioDurationMs,
         };
       } catch (error) {
         debugLogger.error("Cloud transcription error", { error: error.message }, "cloud-api");
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle("meeting-transcribe-chain", async (event, blobUrl, opts = {}) => {
-      try {
-        const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
-
-        const response = await fetch(`${apiUrl}/api/transcribe-chain`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Cookie: cookieHeader,
-          },
-          body: JSON.stringify({
-            mediaUrl: blobUrl,
-            skipCleanup: opts.skipCleanup ?? false,
-            agentName: opts.agentName,
-            customDictionary: opts.customDictionary,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || `Chain failed: ${response.status}`);
+        if (error.code) {
+          return { success: false, error: error.message, code: error.code, ...error };
         }
-
-        fetch(`${apiUrl}/api/delete-audio`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Cookie: cookieHeader },
-          body: JSON.stringify({ url: blobUrl }),
-        }).catch((err) => debugLogger.warn("Blob cleanup failed", { error: err.message }));
-
-        return {
-          success: true,
-          text: data.text,
-          rawText: data.rawText,
-          cleanedText: data.cleanedText,
-          processingDurationSec: data.processingDurationSec,
-          speedupFactor: data.speedupFactor,
-        };
-      } catch (error) {
-        debugLogger.error("Meeting chain transcription error", { error: error.message });
         return { success: false, error: error.message };
       }
     });
@@ -3087,17 +3363,36 @@ class IPCHandlers {
             if (cookieHeader) {
               const apiUrl = getApiUrl();
               if (apiUrl) {
-                const { body, boundary } = buildMultipartBody(buffer, "audio.webm", "audio/webm", {
+                const multipartFields = {
                   clientType: "desktop",
                   appVersion: app.getVersion(),
                   sessionId: this.sessionId,
-                });
-                const url = new URL(`${apiUrl}/api/transcribe`);
-                const data = await postMultipart(url, body, boundary, {
-                  Cookie: cookieHeader,
-                });
-                if (data.statusCode === 200 && data.data?.text) {
-                  result = { text: data.data.text, source: "openwhispr", model: "cloud" };
+                };
+                if (buffer.length > CLOUD_INLINE_LIMIT) {
+                  const { text } = await chunkedCloudTranscribe({
+                    buffer,
+                    apiUrl,
+                    cookieHeader,
+                    multipartFields,
+                  });
+                  result = { text, source: "openwhispr", model: "cloud" };
+                } else {
+                  const { body, boundary } = buildMultipartBody(
+                    buffer,
+                    "audio.webm",
+                    "audio/webm",
+                    multipartFields
+                  );
+                  const url = new URL(`${apiUrl}/api/transcribe`);
+                  const data = await postMultipart(url, body, boundary, {
+                    Cookie: cookieHeader,
+                  });
+                  const responseData = interpretTranscribeResponse(data);
+                  result = {
+                    text: responseData.text,
+                    source: "openwhispr",
+                    model: "cloud",
+                  };
                 }
               }
             }
@@ -3174,9 +3469,12 @@ class IPCHandlers {
       } catch (error) {
         debugLogger.error(
           "Retry transcription failed",
-          { id, error: error.message },
+          { id, error: error.message, code: error.code },
           "audio-storage"
         );
+        if (error.code) {
+          return { success: false, error: error.message, code: error.code, ...error };
+        }
         return { success: false, error: error.message };
       }
     });
@@ -3752,6 +4050,35 @@ class IPCHandlers {
         return this._resolveOneOnOneOtherParticipant(note?.participants);
       } catch (_) {
         return null;
+      }
+    };
+
+    const adoptActiveCalendarEventForNote = (noteId) => {
+      if (!noteId) return;
+      try {
+        const note = this.databaseManager.getNote(noteId);
+        if (!note || note.participants || note.calendar_event_id) return;
+
+        const events = this.databaseManager.getActiveEvents();
+        for (const evt of events) {
+          if (!evt.attendees) continue;
+          if (!this._resolveOneOnOneOtherParticipant(evt.attendees)) continue;
+          if (this.databaseManager.getNoteByCalendarEventId(evt.id, noteId)) continue;
+
+          this.databaseManager.updateNote(noteId, {
+            calendar_event_id: evt.id,
+            participants: evt.attendees,
+          });
+          const updated = this.databaseManager.getNote(noteId);
+          if (updated) this.broadcastToWindows("note-updated", updated);
+          return;
+        }
+      } catch (error) {
+        debugLogger.warn(
+          "Adopt active calendar event failed",
+          { noteId, error: error.message },
+          "meeting"
+        );
       }
     };
 
@@ -4333,21 +4660,57 @@ class IPCHandlers {
         event.sender.send("dictation-realtime-session-end", data || {});
     };
 
+    const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
+    const clearDictationIdleTimer = () => {
+      if (this._dictationIdleTimer) {
+        clearTimeout(this._dictationIdleTimer);
+        this._dictationIdleTimer = null;
+      }
+    };
+
+    const startDictationIdleTimer = () => {
+      clearDictationIdleTimer();
+      this._dictationIdleTimer = setTimeout(() => {
+        if (this._dictationStreaming) {
+          debugLogger.debug("Closing idle dictation warmup connection");
+          this._dictationStreaming.disconnect().catch(() => {});
+          this._dictationStreaming = null;
+        }
+      }, DICTATION_IDLE_TIMEOUT_MS);
+    };
+
     const connectDictationStreaming = async (event, options) => {
+      if (this._dictationConnectPromise) {
+        await this._dictationConnectPromise.catch(() => {});
+      }
+
+      clearDictationIdleTimer();
+
       if (this._dictationStreaming) {
         await this._dictationStreaming.disconnect().catch(() => {});
         this._dictationStreaming = null;
       }
-      const isCloud = options.mode !== "byok";
-      const apiKey = await fetchRealtimeToken(event, { mode: options.mode });
-      const streaming = new OpenAIRealtimeStreaming();
-      setupDictationCallbacks(streaming, event);
-      await streaming.connect({
-        apiKey,
-        model: options.model || "gpt-4o-mini-transcribe",
-        preconfigured: isCloud,
-      });
-      this._dictationStreaming = streaming;
+
+      const connectInner = async () => {
+        const isCloud = options.mode !== "byok";
+        const apiKey = await fetchRealtimeToken(event, { mode: options.mode });
+        const streaming = new OpenAIRealtimeStreaming();
+        setupDictationCallbacks(streaming, event);
+        await streaming.connect({
+          apiKey,
+          model: options.model || "gpt-4o-mini-transcribe",
+          preconfigured: isCloud,
+        });
+        this._dictationStreaming = streaming;
+      };
+
+      this._dictationConnectPromise = connectInner();
+      try {
+        await this._dictationConnectPromise;
+      } finally {
+        this._dictationConnectPromise = null;
+      }
     };
 
     // Pre-warm: fetch tokens + connect WebSockets before user hits record
@@ -4412,6 +4775,7 @@ class IPCHandlers {
         const systemAudioPlan = await getMeetingSystemAudioPlan();
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
         meetingEchoLeakDetector.reset();
+        adoptActiveCalendarEventForNote(options.noteId);
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingOneOnOneProfileBound = false;
 
@@ -4714,6 +5078,7 @@ class IPCHandlers {
     ipcMain.handle("dictation-realtime-warmup", async (event, options = {}) => {
       try {
         await connectDictationStreaming(event, options);
+        startDictationIdleTimer();
         return { success: true };
       } catch (err) {
         return { success: false, error: err.message };
@@ -4722,6 +5087,7 @@ class IPCHandlers {
 
     ipcMain.handle("dictation-realtime-start", async (event, options = {}) => {
       try {
+        clearDictationIdleTimer();
         if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
         return { success: true };
       } catch (err) {
@@ -4734,6 +5100,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("dictation-realtime-stop", async () => {
+      clearDictationIdleTimer();
       if (!this._dictationStreaming) {
         return { success: true, text: "" };
       }
@@ -5313,11 +5680,6 @@ class IPCHandlers {
     });
 
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
-      const fs = require("fs");
-      const os = require("os");
-      const { splitAudioFile } = require("./ffmpegUtils");
-      const FILE_SIZE_LIMIT = 25 * 1024 * 1024;
-      const CONCURRENCY_LIMIT = 5;
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
@@ -5325,129 +5687,29 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
+        const multipartFields = {
+          source: "file_upload",
+          clientType: "desktop",
+          appVersion: app.getVersion(),
+          clientVersion: app.getVersion(),
+          sessionId: this.sessionId,
+        };
+
         const fileSize = fs.statSync(filePath).size;
 
-        if (fileSize > FILE_SIZE_LIMIT) {
+        if (fileSize > CLOUD_INLINE_LIMIT) {
           debugLogger.debug("Large file detected, using client-side chunking", {
             fileSize,
             filePath: path.basename(filePath),
           });
-
-          const chunkDir = path.join(os.tmpdir(), `ow-chunks-${Date.now()}`);
-          fs.mkdirSync(chunkDir, { recursive: true });
-
-          try {
-            event.sender.send("upload-transcription-progress", {
-              stage: "splitting",
-              chunksTotal: 0,
-              chunksCompleted: 0,
-            });
-
-            const chunkPaths = await splitAudioFile(filePath, chunkDir, {
-              segmentDuration: 240, // ~3.75 MB/chunk, under Vercel's 4.5 MB payload limit
-            });
-            const totalChunks = chunkPaths.length;
-
-            debugLogger.debug("Audio split into chunks", { totalChunks });
-
-            event.sender.send("upload-transcription-progress", {
-              stage: "transcribing",
-              chunksTotal: totalChunks,
-              chunksCompleted: 0,
-            });
-
-            const results = new Array(totalChunks).fill(null);
-            let completedCount = 0;
-
-            const transcribeChunk = async (index) => {
-              const chunkBuffer = fs.readFileSync(chunkPaths[index]);
-              const chunkName = path.basename(chunkPaths[index]);
-
-              const { body, boundary } = buildMultipartBody(chunkBuffer, chunkName, "audio/mpeg", {
-                source: "file_upload",
-                clientType: "desktop",
-                appVersion: app.getVersion(),
-                clientVersion: app.getVersion(),
-                sessionId: this.sessionId,
-              });
-
-              const url = new URL(`${apiUrl}/api/transcribe`);
-              const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
-
-              if (data.statusCode === 401) {
-                throw Object.assign(new Error("Session expired"), { code: "AUTH_EXPIRED" });
-              }
-              if (data.statusCode === 503) {
-                throw Object.assign(new Error("Request timed out"), { code: "SERVER_ERROR" });
-              }
-              if (data.statusCode === 429) {
-                throw Object.assign(new Error("Daily word limit reached"), {
-                  code: "LIMIT_REACHED",
-                  ...data.data,
-                });
-              }
-              if (data.statusCode !== 200) {
-                throw new Error(data.data?.error || `API error: ${data.statusCode}`);
-              }
-
-              results[index] = data.data;
-              completedCount++;
-
-              event.sender.send("upload-transcription-progress", {
-                stage: "transcribing",
-                chunksTotal: totalChunks,
-                chunksCompleted: completedCount,
-              });
-            };
-
-            const indices = Array.from({ length: totalChunks }, (_, i) => i);
-            const executing = new Set();
-
-            for (const index of indices) {
-              const p = transcribeChunk(index).then(
-                () => executing.delete(p),
-                (err) => {
-                  executing.delete(p);
-                  if (err.code === "AUTH_EXPIRED" || err.code === "LIMIT_REACHED") throw err;
-                  debugLogger.warn(`Chunk ${index} failed`, { error: err.message });
-                }
-              );
-              executing.add(p);
-              if (executing.size >= CONCURRENCY_LIMIT) {
-                await Promise.race(executing);
-              }
-            }
-            await Promise.all(executing);
-
-            const succeeded = results.filter((r) => r !== null);
-            if (succeeded.length === 0) {
-              throw new Error("All chunks failed to transcribe");
-            }
-
-            const fullText = results
-              .filter((r) => r !== null)
-              .map((r) => r.text)
-              .join(" ")
-              .replace(/\s+/g, " ")
-              .trim();
-
-            const failed = results.filter((r) => r === null).length;
-            if (failed > 0) {
-              debugLogger.warn("Some chunks failed", { failed, total: totalChunks });
-            }
-
-            return {
-              success: true,
-              text: fullText,
-              ...(failed > 0 ? { warning: `${failed} of ${totalChunks} chunks failed` } : {}),
-            };
-          } finally {
-            try {
-              fs.rmSync(chunkDir, { recursive: true, force: true });
-            } catch (cleanupErr) {
-              debugLogger.warn("Failed to cleanup chunk dir", { error: cleanupErr.message });
-            }
-          }
+          const { text, warning } = await chunkedCloudTranscribe({
+            filePath,
+            apiUrl,
+            cookieHeader,
+            multipartFields,
+            onProgress: (payload) => event.sender.send("upload-transcription-progress", payload),
+          });
+          return { success: true, text, ...(warning ? { warning } : {}) };
         }
 
         const audioBuffer = fs.readFileSync(filePath);
@@ -5455,39 +5717,20 @@ class IPCHandlers {
         const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
         const fileName = path.basename(filePath);
 
-        const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, {
-          source: "file_upload",
-          clientType: "desktop",
-          appVersion: app.getVersion(),
-          clientVersion: app.getVersion(),
-          sessionId: this.sessionId,
-        });
-
+        const { body, boundary } = buildMultipartBody(
+          audioBuffer,
+          fileName,
+          contentType,
+          multipartFields
+        );
         const url = new URL(`${apiUrl}/api/transcribe`);
         const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
+        const result = interpretTranscribeResponse(data);
 
-        if (data.statusCode === 401) {
-          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
-        }
-        if (data.statusCode === 503) {
-          return { success: false, error: "Request timed out", code: "SERVER_ERROR" };
-        }
-        if (data.statusCode === 429) {
-          return {
-            success: false,
-            error: "Daily word limit reached",
-            code: "LIMIT_REACHED",
-            ...data.data,
-          };
-        }
-        if (data.statusCode !== 200) {
-          throw new Error(data.data?.error || `API error: ${data.statusCode}`);
-        }
-
-        return { success: true, text: data.data.text };
+        return { success: true, text: result.text };
       } catch (error) {
         debugLogger.error("Cloud audio file transcription error", { error: error.message });
-        if (error.code === "AUTH_EXPIRED" || error.code === "LIMIT_REACHED") {
+        if (error.code) {
           return { success: false, error: error.message, code: error.code, ...error };
         }
         return { success: false, error: error.message };

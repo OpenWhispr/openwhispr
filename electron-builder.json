@@ -133,10 +133,17 @@
     "entitlementsInherit": "resources/mac/entitlements.mac.plist",
     "identity": "HeroTools Inc. (9R85XFMH59)",
     "notarize": true,
+    "extraResources": [
+      {
+        "from": "src/assets/Assets.car",
+        "to": "Assets.car"
+      }
+    ],
     "extendInfo": {
       "LSUIElement": false,
+      "CFBundleIconName": "openwhispr",
       "NSMicrophoneUsageDescription": "OpenWhispr uses the microphone to capture your voice for transcription.",
-      "NSAudioCaptureUsageDescription": "OpenWhispr uses system audio to capture other participants' audio from calls and meetings. Your screen is never recorded.",
+      "NSAudioCaptureUsageDescription": "OpenWhispr uses system audio to capture other participants' audio from calls and meetings.",
       "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications."
     }
   },

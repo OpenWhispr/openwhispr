@@ -7,6 +7,8 @@ export interface ProviderTabItem {
   id: string;
   name: string;
   recommended?: boolean;
+  disabled?: boolean;
+  disabledLabel?: string;
 }
 
 type ColorScheme = Exclude<BaseColorScheme, "blue"> | "dynamic";
@@ -80,21 +82,40 @@ export function ProviderTabs({
 
       {providers.map((provider) => {
         const isSelected = selectedId === provider.id;
+        const isDisabled = !!provider.disabled;
 
         return (
           <button
             key={provider.id}
             data-tab-button
-            onClick={() => onSelect(provider.id)}
+            type="button"
+            disabled={isDisabled}
+            aria-disabled={isDisabled}
+            title={isDisabled ? provider.disabledLabel : undefined}
+            onClick={() => {
+              if (isDisabled) return;
+              onSelect(provider.id);
+            }}
             className={`relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs transition-colors duration-150 ${
               scrollable ? "whitespace-nowrap" : ""
-            } ${isSelected ? "text-foreground [&_svg]:text-primary" : "text-muted-foreground ring-1 ring-border/60 dark:ring-white/10 hover:text-foreground hover:bg-foreground/4 dark:hover:bg-white/5"}`}
+            } ${
+              isDisabled
+                ? "text-muted-foreground/50 cursor-not-allowed ring-1 ring-border/40 dark:ring-white/5"
+                : isSelected
+                  ? "text-foreground [&_svg]:text-primary"
+                  : "text-muted-foreground ring-1 ring-border/60 dark:ring-white/10 hover:text-foreground hover:bg-foreground/4 dark:hover:bg-white/5"
+            }`}
           >
             {renderIcon ? renderIcon(provider.id) : <ProviderIcon provider={provider.id} />}
             <span>{provider.name}</span>
             {provider.recommended && (
               <span className="text-[10px] text-primary/70 font-medium">
                 {t("common.recommended")}
+              </span>
+            )}
+            {isDisabled && provider.disabledLabel && (
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                {provider.disabledLabel}
               </span>
             )}
           </button>

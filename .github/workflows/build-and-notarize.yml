@@ -178,7 +178,7 @@ jobs:
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
 
       - name: Build and Sign Application
-        run: npm run build:win -- --publish never
+        run: npm run build:win -- --publish never ${{ github.actor == 'dependabot[bot]' && '--config.win.azureSignOptions=null' || '' }}
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
           VITE_NEON_AUTH_URL: ${{ vars.VITE_NEON_AUTH_URL }}

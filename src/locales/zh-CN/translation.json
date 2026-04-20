@@ -297,8 +297,10 @@
     "mode": {
       "cloud": "云端",
       "local": "本地",
+      "enterprise": "企业",
       "localDescription": "在你的设备上运行，完全隐私，离线可用。",
-      "cloudDescription": "通过 API 使用高级模型，快速且强大，需要联网。"
+      "cloudDescription": "通过 API 使用高级模型，快速且强大，需要联网。",
+      "enterpriseDescription": "使用你组织的云服务商凭据。"
     },
     "custom": {
       "endpointWithProtocol": "请输入包含协议的完整 URL（例如 https://server/v1）。",
@@ -323,7 +325,45 @@
     },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
-    "availableModels": "可用模型"
+    "availableModels": "可用模型",
+    "enterprise": {
+      "title": "企业级提供商",
+      "description": "使用你组织的凭据连接云端提供商。",
+      "testConnection": "测试连接",
+      "testing": "测试中…",
+      "testSuccess": "已连接",
+      "testFailed": "连接失败",
+      "authMode": "认证方式",
+      "ssoProfile": "SSO 配置文件",
+      "accessKeys": "访问密钥",
+      "adc": "Application Default Credentials",
+      "apiKeyMode": "API 密钥",
+      "region": "区域",
+      "profile": "配置文件名称",
+      "accessKeyId": "Access Key ID",
+      "secretAccessKey": "Secret Access Key",
+      "sessionToken": "Session Token（可选）",
+      "endpoint": "端点 URL",
+      "deploymentName": "部署名称",
+      "apiVersion": "API 版本",
+      "projectId": "项目 ID",
+      "location": "位置",
+      "customModelId": "自定义模型 ID",
+      "customModelPlaceholder": "输入模型 ID 或部署名称",
+      "suggestedModels": "推荐模型",
+      "bedrock": {
+        "ssoHelp": "使用你的 AWS CLI SSO 配置。请确保已运行 'aws sso login'。",
+        "keysHelp": "输入你的 AWS IAM 访问密钥。"
+      },
+      "azure": {
+        "endpointHelp": "你的 Azure OpenAI 资源端点（例如 https://myresource.openai.azure.com）。",
+        "deploymentHelp": "Azure OpenAI 中的模型部署名称。"
+      },
+      "vertex": {
+        "adcHelp": "使用 Application Default Credentials。请执行：gcloud auth application-default login",
+        "apikeyHelp": "从 Google AI Studio 获取的 Vertex AI Express Mode API 密钥。"
+      }
+    }
   },
   "transcription": {
     "deleteModel": {
@@ -1113,7 +1153,9 @@
         "openwhisprDesc": "准确可靠，无需设置。",
         "providersDesc": "使用你自己的 API Key。",
         "localDesc": "设备端模型，完全私密。",
-        "selfHostedDesc": "你的服务器，在你的网络上。"
+        "selfHostedDesc": "你的服务器，在你的网络上。",
+        "enterprise": "企业级",
+        "enterpriseDesc": "使用你组织的云账号（AWS、Azure、GCP）。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "准确可靠，无需设置。",
@@ -1138,6 +1180,10 @@
         "switchedSelfHosted": {
           "title": "自托管",
           "description": "使用你自己的服务器。"
+        },
+        "switchedEnterprise": {
+          "title": "企业级",
+          "description": "正在使用你组织的云账号。"
         }
       }
     },
@@ -1486,8 +1532,7 @@
     "selfHosted": {
       "endpointUrl": "端点 URL",
       "serverUrl": "服务器 URL",
-      "apiKeyOptional": "API Key（可选）",
-      "lanHint": "音频留在你的网络中 — 不会离开你的 LAN。"
+      "apiKeyOptional": "API Key（可选）"
     }
   },
   "models": {
@@ -1536,6 +1581,14 @@
         "groq_compound": "Groq Compound 系统，450 T/秒",
         "groq_compound_mini": "快速 Compound 系统，3x 更低延迟",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文"
+      },
+      "enterprise": {
+        "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",
+        "bedrock_claude_sonnet_4_6": "均衡性能。推荐用作智能助手模式的默认模型。",
+        "bedrock_claude_opus_4_7": "最高智能。适用于复杂的智能助手模式任务。",
+        "bedrock_nova_lite": "最便宜的选择。AWS 原生，适合高流量场景。",
+        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
+        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "强大的混合模型",
@@ -1729,6 +1782,7 @@
       "selectFolder": "选择文件夹",
       "transcriptionFailed": "转录失败",
       "errorOccurred": "发生错误",
+      "noSpeechDetected": "未在此音频中检测到语音。",
       "noProviderTitle": "尚未设置转录服务商",
       "noProviderDescription": "添加 API Key 或下载本地模型以开始转录。",
       "noProviderAction": "打开转录设置",
@@ -1890,7 +1944,7 @@
     "support": "支持",
     "limitReached": "已达每周上限",
     "limitReachedDescription": "升级到 Pro 即可无限转录。",
-    "upgradeToPro": "升级到 Pro",
+    "viewPlans": "查看套餐",
     "upgradeTitle": "升级到 Pro",
     "upgradeDescription": "无限转录、实时转录等更多功能。",
     "learnMore": "了解更多",
@@ -2028,7 +2082,9 @@
         "openwhisprDesc": "准确可靠，无需设置。",
         "providersDesc": "使用自己的 API 密钥。",
         "localDesc": "设备端模型，完全私密。",
-        "selfHostedDesc": "你自己网络上的服务器。"
+        "selfHostedDesc": "你自己网络上的服务器。",
+        "enterprise": "企业级",
+        "enterpriseDesc": "使用你组织的云账号（AWS、Azure、GCP）。"
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "准确可靠，无需设置。",

@@ -29,6 +29,7 @@ import {
   BookOpen,
   Copy,
   Trash2,
+  Building2,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { NEON_AUTH_URL, signOut, deleteAccount } from "../lib/neonAuth";
@@ -60,6 +61,7 @@ import { useUpdater } from "../hooks/useUpdater";
 
 import PromptStudio from "./ui/PromptStudio";
 import ReasoningModelSelector from "./ReasoningModelSelector";
+import EnterpriseSection from "./EnterpriseSection";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
@@ -494,6 +496,12 @@ function AiModelsSection({
       description: t("settingsPage.aiModels.modes.selfHostedDesc"),
       icon: <Network className="w-4 h-4" />,
     },
+    {
+      id: "enterprise",
+      label: t("settingsPage.aiModels.modes.enterprise"),
+      description: t("settingsPage.aiModels.modes.enterpriseDesc"),
+      icon: <Building2 className="w-4 h-4" />,
+    },
   ];
 
   const handleReasoningModeSelect = (mode: InferenceMode) => {
@@ -504,7 +512,7 @@ function AiModelsSection({
     if (mode === reasoningMode) return;
     setReasoningMode(mode);
     setCloudReasoningMode(mode === "openwhispr" ? "openwhispr" : "byok");
-    if (mode === "openwhispr" || mode === "self-hosted") {
+    if (mode === "openwhispr" || mode === "self-hosted" || mode === "enterprise") {
       window.electronAPI?.llamaServerStop?.();
     }
 
@@ -513,6 +521,7 @@ function AiModelsSection({
       providers: "switchedProviders",
       local: "switchedLocal",
       "self-hosted": "switchedSelfHosted",
+      enterprise: "switchedEnterprise",
     }[mode];
     toast({
       title: t(`settingsPage.aiModels.toasts.${toastKey}.title`),
@@ -578,6 +587,15 @@ function AiModelsSection({
               service="reasoning"
               url={remoteReasoningUrl}
               onUrlChange={setRemoteReasoningUrl}
+            />
+          )}
+
+          {reasoningMode === "enterprise" && (
+            <EnterpriseSection
+              currentProvider={reasoningProvider}
+              reasoningModel={reasoningModel}
+              setReasoningModel={setReasoningModel}
+              setLocalReasoningProvider={setReasoningProvider}
             />
           )}
           <GpuDeviceSelector purpose="intelligence" />

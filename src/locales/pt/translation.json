@@ -269,8 +269,10 @@
     "mode": {
       "cloud": "Nuvem",
       "local": "Local",
+      "enterprise": "Corporativo",
       "localDescription": "Roda no seu dispositivo. Privacidade total, funciona offline.",
-      "cloudDescription": "Modelos avançados via API. Rápido e potente, requer internet."
+      "cloudDescription": "Modelos avançados via API. Rápido e potente, requer internet.",
+      "enterpriseDescription": "Use as credenciais de nuvem da sua organização."
     },
     "custom": {
       "endpointWithProtocol": "Informe uma URL base completa com protocolo (por exemplo, https://server/v1).",
@@ -295,7 +297,45 @@
     },
     "getApiKey": "Obter chave API ->",
     "selectModel": "Selecionar modelo",
-    "availableModels": "Modelos disponíveis"
+    "availableModels": "Modelos disponíveis",
+    "enterprise": {
+      "title": "Provedores corporativos",
+      "description": "Conecte-se a provedores de nuvem usando as credenciais da sua organização.",
+      "testConnection": "Testar conexão",
+      "testing": "Testando…",
+      "testSuccess": "Conectado",
+      "testFailed": "Falha na conexão",
+      "authMode": "Autenticação",
+      "ssoProfile": "Perfil SSO",
+      "accessKeys": "Chaves de acesso",
+      "adc": "Application Default Credentials",
+      "apiKeyMode": "Chave API",
+      "region": "Região",
+      "profile": "Nome do perfil",
+      "accessKeyId": "Access Key ID",
+      "secretAccessKey": "Secret Access Key",
+      "sessionToken": "Session Token (opcional)",
+      "endpoint": "URL do endpoint",
+      "deploymentName": "Nome do deployment",
+      "apiVersion": "Versão da API",
+      "projectId": "ID do projeto",
+      "location": "Localização",
+      "customModelId": "ID de modelo personalizado",
+      "customModelPlaceholder": "Informe um ID de modelo ou nome de deployment",
+      "suggestedModels": "Modelos sugeridos",
+      "bedrock": {
+        "ssoHelp": "Usa sua configuração SSO do AWS CLI. Certifique-se de ter executado 'aws sso login'.",
+        "keysHelp": "Informe suas chaves de acesso AWS IAM."
+      },
+      "azure": {
+        "endpointHelp": "O endpoint do seu recurso Azure OpenAI (ex.: https://myresource.openai.azure.com).",
+        "deploymentHelp": "Nome do deployment do seu modelo no Azure OpenAI."
+      },
+      "vertex": {
+        "adcHelp": "Usa Application Default Credentials. Execute: gcloud auth application-default login",
+        "apikeyHelp": "Chave API do Vertex AI Express Mode obtida no Google AI Studio."
+      }
+    }
   },
   "transcription": {
     "deleteModel": {
@@ -1090,7 +1130,9 @@
         "openwhisprDesc": "Resultados confiáveis. Sem configuração.",
         "providersDesc": "Use sua própria chave API.",
         "localDesc": "Modelos no dispositivo. Privado.",
-        "selfHostedDesc": "Seu servidor na sua rede."
+        "selfHostedDesc": "Seu servidor na sua rede.",
+        "enterprise": "Corporativo",
+        "enterpriseDesc": "Use a conta de nuvem da sua organização (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Resultados confiáveis. Sem configuração.",
@@ -1115,6 +1157,10 @@
         "switchedSelfHosted": {
           "title": "Auto-hospedado",
           "description": "Usando seu próprio servidor."
+        },
+        "switchedEnterprise": {
+          "title": "Corporativo",
+          "description": "Usando a conta de nuvem da sua organização."
         }
       }
     },
@@ -1463,8 +1509,7 @@
     "selfHosted": {
       "endpointUrl": "URL do endpoint",
       "serverUrl": "URL do servidor",
-      "apiKeyOptional": "API Key (opcional)",
-      "lanHint": "O áudio permanece na sua rede — nada sai da sua LAN."
+      "apiKeyOptional": "API Key (opcional)"
     }
   },
   "models": {
@@ -1513,6 +1558,14 @@
         "groq_compound": "Sistema compound da Groq, 450 T/seg",
         "groq_compound_mini": "Sistema compound rápido, 3x menor latência",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexto 256K"
+      },
+      "enterprise": {
+        "bedrock_claude_haiku_4_5": "Rápido e barato. Ótimo para limpar texto.",
+        "bedrock_claude_sonnet_4_6": "Equilibrado. Padrão recomendado para o Modo Agente.",
+        "bedrock_claude_opus_4_7": "Máxima inteligência. Para tarefas complexas do Modo Agente.",
+        "bedrock_nova_lite": "Opção mais barata. Nativo da AWS, ideal para alto volume.",
+        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
+        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Modelo híbrido poderoso",
@@ -1734,6 +1787,7 @@
       "selectFolder": "Selecionar pasta",
       "transcriptionFailed": "Falha na transcrição",
       "errorOccurred": "Ocorreu um erro",
+      "noSpeechDetected": "Nenhuma fala detectada neste áudio.",
       "noProviderTitle": "Nenhum provedor de transcrição configurado",
       "noProviderDescription": "Adicione uma chave API ou baixe um modelo local para começar a transcrever.",
       "noProviderAction": "Abrir configurações de transcrição",
@@ -1895,7 +1949,7 @@
     "support": "Suporte",
     "limitReached": "Limite semanal atingido",
     "limitReachedDescription": "Faça upgrade para Pro para transcrições ilimitadas.",
-    "upgradeToPro": "Fazer upgrade para Pro",
+    "viewPlans": "Ver planos",
     "upgradeTitle": "Fazer upgrade para Pro",
     "upgradeDescription": "Transcrições ilimitadas e recursos avançados.",
     "learnMore": "Saiba mais",
@@ -2033,7 +2087,9 @@
         "openwhisprDesc": "Resultados confiáveis. Sem configuração.",
         "providersDesc": "Traga sua própria chave API.",
         "localDesc": "Modelos no dispositivo. Totalmente privado.",
-        "selfHostedDesc": "Seu próprio servidor na sua rede."
+        "selfHostedDesc": "Seu próprio servidor na sua rede.",
+        "enterprise": "Corporativo",
+        "enterpriseDesc": "Use a conta de nuvem da sua organização (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Resultados confiáveis. Sem configuração.",

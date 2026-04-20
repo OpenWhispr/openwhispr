@@ -1,4 +1,10 @@
-import { getModelProvider, getCloudModel, getOpenAiApiConfig } from "../models/ModelRegistry";
+import {
+  getModelProvider,
+  getCloudModel,
+  getOpenAiApiConfig,
+  isEnterpriseProvider,
+  type EnterpriseProvider,
+} from "../models/ModelRegistry";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy } from "../utils/retry";
@@ -523,6 +529,17 @@ class ReasoningService extends BaseReasoningService {
           case "custom":
             result = await this.processWithOpenAI(text, trimmedModel, agentName, config);
             break;
+          case "bedrock":
+          case "azure":
+          case "vertex":
+            result = await this.processWithEnterprise(
+              provider as EnterpriseProvider,
+              text,
+              trimmedModel,
+              agentName,
+              config
+            );
+            break;
           default:
             throw new Error(`Unsupported reasoning provider: ${provider}`);
         }
@@ -546,6 +563,7 @@ class ReasoningService extends BaseReasoningService {
         error: (error as Error).message,
         stack: (error as Error).stack,
       });
+
       throw error;
     }
   }
@@ -846,6 +864,79 @@ class ReasoningService extends BaseReasoningService {
         });
         throw new Error("Anthropic reasoning is not available in this environment");
       }
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  private async processWithEnterprise(
+    provider: EnterpriseProvider,
+    text: string,
+    model: string,
+    agentName: string | null = null,
+    config: ReasoningConfig = {}
+  ): Promise<string> {
+    if (this.isProcessing) {
+      throw new Error("Already processing a request");
+    }
+
+    if (typeof window === "undefined" || !window.electronAPI) {
+      throw new Error("Enterprise reasoning is not available in this environment");
+    }
+
+    logger.logReasoning("ENTERPRISE_START", { provider, model, agentName });
+
+    this.isProcessing = true;
+    try {
+      const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
+      const s = getSettings();
+
+      const apiKey =
+        provider === "azure" ? s.azureApiKey : provider === "vertex" ? s.vertexApiKey : "";
+
+      const { supportsTemperature } = getOpenAiApiConfig(model);
+
+      const startTime = Date.now();
+      const result = await window.electronAPI.processEnterpriseReasoning(text, model, agentName, {
+        ...config,
+        systemPrompt,
+        provider,
+        apiKey,
+        supportsTemperature,
+        bedrockRegion: s.bedrockRegion,
+        bedrockProfile: s.bedrockProfile,
+        bedrockAccessKeyId: s.bedrockAccessKeyId,
+        bedrockSecretAccessKey: s.bedrockSecretAccessKey,
+        bedrockSessionToken: s.bedrockSessionToken,
+        azureEndpoint: s.azureEndpoint,
+        azureApiVersion: s.azureApiVersion,
+        vertexProject: s.vertexProject,
+        vertexLocation: s.vertexLocation,
+      });
+
+      const processingTimeMs = Date.now() - startTime;
+
+      if (!result.success) {
+        logger.logReasoning("ENTERPRISE_ERROR", {
+          provider,
+          model,
+          processingTimeMs,
+          error: result.error,
+        });
+        const enhanced = new Error(result.error || `${provider} reasoning failed`) as Error & {
+          retryable?: boolean;
+        };
+        enhanced.retryable = result.retryable ?? false;
+        throw enhanced;
+      }
+
+      logger.logReasoning("ENTERPRISE_SUCCESS", {
+        provider,
+        model,
+        processingTimeMs,
+        resultLength: result.text?.length || 0,
+      });
+      return result.text || "";
     } finally {
       this.isProcessing = false;
     }
@@ -1436,6 +1527,13 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig & { systemPrompt: string },
     tools?: Record<string, import("ai").Tool>
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
+    if (isEnterpriseProvider(provider)) {
+      throw new Error(
+        "Agent Mode is not yet supported with enterprise providers (Bedrock/Azure/Vertex). " +
+          "Switch to Cloud or Local for Agent Mode, or use this provider for text cleanup only."
+      );
+    }
+
     const cloudProviders = ["openai", "groq", "gemini", "anthropic", "custom"];
     const isLocalProvider = !cloudProviders.includes(provider);
 
@@ -1720,6 +1818,27 @@ class ReasoningService extends BaseReasoningService {
           hasCustomEndpoint: true,
         });
         return true;
+      }
+
+      // Enterprise providers: detect credentials by provider, short-circuit.
+      // Runtime auth errors (expired SSO, missing ADC) surface via
+      // mapEnterpriseError with actionable remediation copy.
+      if (settings.reasoningProvider === "bedrock") {
+        const hasBedrockCreds =
+          !!settings.bedrockProfile?.trim() ||
+          (!!settings.bedrockAccessKeyId?.trim() && !!settings.bedrockSecretAccessKey?.trim());
+        logger.logReasoning("API_KEY_CHECK", { bedrock: true, hasBedrockCreds });
+        if (hasBedrockCreds) return true;
+      }
+      if (settings.reasoningProvider === "azure") {
+        const hasAzureCreds = !!settings.azureApiKey?.trim() && !!settings.azureEndpoint?.trim();
+        logger.logReasoning("API_KEY_CHECK", { azure: true, hasAzureCreds });
+        if (hasAzureCreds) return true;
+      }
+      if (settings.reasoningProvider === "vertex") {
+        const hasVertexCreds = !!settings.vertexApiKey?.trim() || !!settings.vertexProject?.trim();
+        logger.logReasoning("API_KEY_CHECK", { vertex: true, hasVertexCreds });
+        if (hasVertexCreds) return true;
       }
 
       const openaiKey = await window.electronAPI?.getOpenAIKey?.();

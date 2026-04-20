@@ -297,8 +297,10 @@
     "mode": {
       "cloud": "Cloud",
       "local": "Local",
+      "enterprise": "Entreprise",
       "localDescription": "S'exécute sur votre appareil. Confidentialité totale et fonctionnement hors ligne.",
-      "cloudDescription": "Modèles avancés via API. Rapides et puissants, nécessitent internet."
+      "cloudDescription": "Modèles avancés via API. Rapides et puissants, nécessitent internet.",
+      "enterpriseDescription": "Utilisez les identifiants cloud de votre organisation."
     },
     "custom": {
       "endpointWithProtocol": "Saisissez une URL de base complète avec protocole (ex : https://server/v1).",
@@ -323,7 +325,45 @@
     },
     "getApiKey": "Obtenir la clé API ->",
     "selectModel": "Sélectionner un modèle",
-    "availableModels": "Modèles disponibles"
+    "availableModels": "Modèles disponibles",
+    "enterprise": {
+      "title": "Fournisseurs Enterprise",
+      "description": "Connectez-vous aux fournisseurs cloud avec les identifiants de votre organisation.",
+      "testConnection": "Tester la connexion",
+      "testing": "Test en cours…",
+      "testSuccess": "Connecté",
+      "testFailed": "Échec de la connexion",
+      "authMode": "Authentification",
+      "ssoProfile": "Profil SSO",
+      "accessKeys": "Clés d'accès",
+      "adc": "Application Default Credentials",
+      "apiKeyMode": "Clé API",
+      "region": "Région",
+      "profile": "Nom du profil",
+      "accessKeyId": "Access Key ID",
+      "secretAccessKey": "Secret Access Key",
+      "sessionToken": "Session Token (facultatif)",
+      "endpoint": "URL de l'endpoint",
+      "deploymentName": "Nom du déploiement",
+      "apiVersion": "Version de l'API",
+      "projectId": "ID du projet",
+      "location": "Emplacement",
+      "customModelId": "ID de modèle personnalisé",
+      "customModelPlaceholder": "Saisissez un ID de modèle ou un nom de déploiement",
+      "suggestedModels": "Modèles suggérés",
+      "bedrock": {
+        "ssoHelp": "Utilise votre configuration SSO d'AWS CLI. Assurez-vous d'avoir exécuté 'aws sso login'.",
+        "keysHelp": "Saisissez vos clés d'accès AWS IAM."
+      },
+      "azure": {
+        "endpointHelp": "L'endpoint de votre ressource Azure OpenAI (par ex. https://myresource.openai.azure.com).",
+        "deploymentHelp": "Nom du déploiement de votre modèle dans Azure OpenAI."
+      },
+      "vertex": {
+        "adcHelp": "Utilise Application Default Credentials. Exécutez : gcloud auth application-default login",
+        "apikeyHelp": "Clé API Vertex AI Express Mode obtenue depuis Google AI Studio."
+      }
+    }
   },
   "transcription": {
     "deleteModel": {
@@ -1166,7 +1206,9 @@
         "openwhisprDesc": "Résultats fiables. Aucune configuration requise.",
         "providersDesc": "Utilisez votre propre clé API.",
         "localDesc": "Modèles sur l'appareil. 100 % privé.",
-        "selfHostedDesc": "Votre serveur sur votre réseau."
+        "selfHostedDesc": "Votre serveur sur votre réseau.",
+        "enterprise": "Enterprise",
+        "enterpriseDesc": "Utilisez le compte cloud de votre organisation (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",
@@ -1191,6 +1233,10 @@
         "switchedSelfHosted": {
           "title": "Auto-hébergé",
           "description": "Utilisation de votre propre serveur."
+        },
+        "switchedEnterprise": {
+          "title": "Enterprise",
+          "description": "Utilise le compte cloud de votre organisation."
         }
       }
     },
@@ -1539,8 +1585,7 @@
     "selfHosted": {
       "endpointUrl": "URL du point d'accès",
       "serverUrl": "URL du serveur",
-      "apiKeyOptional": "Clé API (facultative)",
-      "lanHint": "L'audio reste sur votre réseau — rien ne quitte votre LAN."
+      "apiKeyOptional": "Clé API (facultative)"
     }
   },
   "models": {
@@ -1590,6 +1635,14 @@
         "groq_compound_mini": "Système compound rapide, 3x latence réduite",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexte 256K"
       },
+      "enterprise": {
+        "bedrock_claude_haiku_4_5": "Rapide et économique. Parfait pour nettoyer le texte.",
+        "bedrock_claude_sonnet_4_6": "Équilibré. Choix par défaut pour le Mode Agent.",
+        "bedrock_claude_opus_4_7": "Intelligence maximale. Pour les tâches complexes en Mode Agent.",
+        "bedrock_nova_lite": "Option la moins chère. Natif à AWS, idéal pour les gros volumes.",
+        "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
+        "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
+      },
       "local": {
         "qwen_qwen3_5_9b_q4_k_m": "Modèle hybride puissant",
         "qwen_qwen3_5_4b_q4_k_m": "Qwen3.5 équilibré pour usage général",
@@ -1634,7 +1687,7 @@
     "support": "Assistance",
     "limitReached": "Limite hebdomadaire atteinte",
     "limitReachedDescription": "Passez à Pro pour des transcriptions illimitées.",
-    "upgradeToPro": "Passer à Pro",
+    "viewPlans": "Voir les forfaits",
     "upgradeTitle": "Passer à Pro",
     "upgradeDescription": "Transcriptions illimitées et fonctionnalités premium.",
     "learnMore": "En savoir plus",
@@ -1843,6 +1896,7 @@
       "selectFolder": "Sélectionner un dossier",
       "transcriptionFailed": "Échec de la transcription",
       "errorOccurred": "Une erreur est survenue",
+      "noSpeechDetected": "Aucune parole détectée dans cet audio.",
       "noProviderTitle": "Aucun fournisseur de transcription configuré",
       "noProviderDescription": "Ajoutez une clé API ou téléchargez un modèle local pour commencer à transcrire.",
       "noProviderAction": "Ouvrir les paramètres de transcription",
@@ -2081,7 +2135,9 @@
         "openwhisprDesc": "Résultats fiables. Aucune configuration requise.",
         "providersDesc": "Apportez votre propre clé API.",
         "localDesc": "Modèles sur l'appareil. Entièrement privé.",
-        "selfHostedDesc": "Votre propre serveur sur votre réseau."
+        "selfHostedDesc": "Votre propre serveur sur votre réseau.",
+        "enterprise": "Enterprise",
+        "enterpriseDesc": "Utilisez le compte cloud de votre organisation (AWS, Azure, GCP)."
       },
       "openwhisprCloud": "OpenWhispr Cloud",
       "openwhisprCloudDescription": "Résultats fiables. Aucune configuration requise.",

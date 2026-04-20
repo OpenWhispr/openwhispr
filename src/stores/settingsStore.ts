@@ -113,6 +113,12 @@ function migrateProviderSettings() {
     if (reasoningProvider === "custom") {
       newReasoningMode = "self-hosted";
     } else if (
+      reasoningProvider === "bedrock" ||
+      reasoningProvider === "azure" ||
+      reasoningProvider === "vertex"
+    ) {
+      newReasoningMode = "enterprise";
+    } else if (
       reasoningProvider === "qwen" ||
       reasoningProvider === "llama" ||
       reasoningProvider === "mistral" ||
@@ -147,6 +153,12 @@ function migrateAgentMode() {
     const localProviders = ["qwen", "llama", "mistral", "openai-oss", "gemma"];
     if (agentProvider === "custom") {
       agentInferenceMode = "self-hosted";
+    } else if (
+      agentProvider === "bedrock" ||
+      agentProvider === "azure" ||
+      agentProvider === "vertex"
+    ) {
+      agentInferenceMode = "enterprise";
     } else if (agentProvider && localProviders.includes(agentProvider)) {
       agentInferenceMode = "local";
     } else {
@@ -231,6 +243,36 @@ export interface SettingsState
   setCustomTranscriptionApiKey: (key: string) => void;
   setCustomReasoningApiKey: (key: string) => void;
 
+  // Enterprise providers
+  bedrockAuthMode: string;
+  bedrockRegion: string;
+  bedrockProfile: string;
+  bedrockAccessKeyId: string;
+  bedrockSecretAccessKey: string;
+  bedrockSessionToken: string;
+  azureEndpoint: string;
+  azureApiKey: string;
+  azureDeploymentName: string;
+  azureApiVersion: string;
+  vertexAuthMode: string;
+  vertexProject: string;
+  vertexLocation: string;
+  vertexApiKey: string;
+  setBedrockAuthMode: (value: string) => void;
+  setBedrockRegion: (value: string) => void;
+  setBedrockProfile: (value: string) => void;
+  setBedrockAccessKeyId: (key: string) => void;
+  setBedrockSecretAccessKey: (key: string) => void;
+  setBedrockSessionToken: (key: string) => void;
+  setAzureEndpoint: (value: string) => void;
+  setAzureApiKey: (key: string) => void;
+  setAzureDeploymentName: (value: string) => void;
+  setAzureApiVersion: (value: string) => void;
+  setVertexAuthMode: (value: string) => void;
+  setVertexProject: (value: string) => void;
+  setVertexLocation: (value: string) => void;
+  setVertexApiKey: (key: string) => void;
+
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
   setActivationMode: (mode: "tap" | "push") => void;
@@ -285,14 +327,6 @@ function createBooleanSetter(key: string) {
     if (isBrowser) localStorage.setItem(key, String(value));
     useSettingsStore.setState({ [key]: value });
   };
-}
-
-const LOCAL_PROVIDERS = new Set(["qwen", "llama", "mistral", "openai-oss", "gemma"]);
-
-function inferenceModeForProvider(provider: string): Exclude<InferenceMode, "openwhispr"> {
-  if (provider === "custom") return "self-hosted";
-  if (LOCAL_PROVIDERS.has(provider)) return "local";
-  return "providers";
 }
 
 let envPersistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -369,6 +403,22 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   customTranscriptionApiKey: readString("customTranscriptionApiKey", ""),
   customReasoningApiKey: readString("customReasoningApiKey", ""),
 
+  // Enterprise providers
+  bedrockAuthMode: readString("bedrockAuthMode", "sso"),
+  bedrockRegion: readString("bedrockRegion", "us-east-1"),
+  bedrockProfile: readString("bedrockProfile", ""),
+  bedrockAccessKeyId: readString("bedrockAccessKeyId", ""),
+  bedrockSecretAccessKey: readString("bedrockSecretAccessKey", ""),
+  bedrockSessionToken: readString("bedrockSessionToken", ""),
+  azureEndpoint: readString("azureEndpoint", ""),
+  azureApiKey: readString("azureApiKey", ""),
+  azureDeploymentName: readString("azureDeploymentName", ""),
+  azureApiVersion: readString("azureApiVersion", "2024-10-21"),
+  vertexAuthMode: readString("vertexAuthMode", "adc"),
+  vertexProject: readString("vertexProject", ""),
+  vertexLocation: readString("vertexLocation", "us-central1"),
+  vertexApiKey: readString("vertexApiKey", ""),
+
   dictationKey: readString("dictationKey", ""),
   meetingKey: readString("meetingKey", ""),
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
@@ -437,7 +487,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
   reasoningMode: (() => {
     const v = readString("reasoningMode", "openwhispr");
-    if (v === "openwhispr" || v === "providers" || v === "local" || v === "self-hosted") return v;
+    if (
+      v === "openwhispr" ||
+      v === "providers" ||
+      v === "local" ||
+      v === "self-hosted" ||
+      v === "enterprise"
+    )
+      return v;
     return "openwhispr" as InferenceMode;
   })(),
   remoteReasoningType: (() => {
@@ -465,7 +522,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cloudAgentMode: readString("cloudAgentMode", "openwhispr"),
   agentInferenceMode: (() => {
     const v = readString("agentInferenceMode", "openwhispr");
-    if (v === "openwhispr" || v === "providers" || v === "local" || v === "self-hosted") return v;
+    if (
+      v === "openwhispr" ||
+      v === "providers" ||
+      v === "local" ||
+      v === "self-hosted" ||
+      v === "enterprise"
+    )
+      return v;
     return "openwhispr" as InferenceMode;
   })(),
   remoteAgentUrl: readString("remoteAgentUrl", ""),
@@ -490,34 +554,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
   setUseReasoningModel: createBooleanSetter("useReasoningModel"),
   setReasoningProvider: (value: string) => {
-    const mode = inferenceModeForProvider(value);
-    if (isBrowser) {
-      localStorage.setItem("reasoningProvider", value);
-      localStorage.setItem("reasoningMode", mode);
-      localStorage.setItem("cloudReasoningMode", "byok");
-    }
-    useSettingsStore.setState({
-      reasoningProvider: value,
-      reasoningMode: mode,
-      cloudReasoningMode: "byok",
-    });
+    if (isBrowser) localStorage.setItem("reasoningProvider", value);
+    useSettingsStore.setState({ reasoningProvider: value });
   },
   setReasoningModel: (value: string) => {
     if (isBrowser) localStorage.setItem("reasoningModel", value);
-    if (!value) {
-      useSettingsStore.setState({ reasoningModel: value });
-      return;
-    }
-    const mode = inferenceModeForProvider(useSettingsStore.getState().reasoningProvider);
-    if (isBrowser) {
-      localStorage.setItem("reasoningMode", mode);
-      localStorage.setItem("cloudReasoningMode", "byok");
-    }
-    useSettingsStore.setState({
-      reasoningModel: value,
-      reasoningMode: mode,
-      cloudReasoningMode: "byok",
-    });
+    useSettingsStore.setState({ reasoningModel: value });
   },
 
   setCustomDictionary: (words: string[]) => {
@@ -595,6 +637,88 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ customReasoningApiKey: key });
     window.electronAPI?.saveCustomReasoningKey?.(key);
     invalidateApiKeyCaches("custom");
+  },
+
+  // Enterprise provider setters
+  setBedrockAuthMode: (value: string) => {
+    if (isBrowser) localStorage.setItem("bedrockAuthMode", value);
+    set({ bedrockAuthMode: value });
+  },
+  setBedrockRegion: (value: string) => {
+    if (isBrowser) localStorage.setItem("bedrockRegion", value);
+    set({ bedrockRegion: value });
+    window.electronAPI?.saveBedrockRegion?.(value);
+    debouncedPersistToEnv();
+  },
+  setBedrockProfile: (value: string) => {
+    if (isBrowser) localStorage.setItem("bedrockProfile", value);
+    set({ bedrockProfile: value });
+    window.electronAPI?.saveBedrockProfile?.(value);
+    debouncedPersistToEnv();
+  },
+  setBedrockAccessKeyId: (key: string) => {
+    if (isBrowser) localStorage.setItem("bedrockAccessKeyId", key);
+    set({ bedrockAccessKeyId: key });
+    window.electronAPI?.saveBedrockAccessKeyId?.(key);
+    debouncedPersistToEnv();
+  },
+  setBedrockSecretAccessKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("bedrockSecretAccessKey", key);
+    set({ bedrockSecretAccessKey: key });
+    window.electronAPI?.saveBedrockSecretAccessKey?.(key);
+    debouncedPersistToEnv();
+  },
+  setBedrockSessionToken: (key: string) => {
+    if (isBrowser) localStorage.setItem("bedrockSessionToken", key);
+    set({ bedrockSessionToken: key });
+    window.electronAPI?.saveBedrockSessionToken?.(key);
+    debouncedPersistToEnv();
+  },
+  setAzureEndpoint: (value: string) => {
+    if (isBrowser) localStorage.setItem("azureEndpoint", value);
+    set({ azureEndpoint: value });
+    window.electronAPI?.saveAzureEndpoint?.(value);
+    debouncedPersistToEnv();
+  },
+  setAzureApiKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("azureApiKey", key);
+    set({ azureApiKey: key });
+    window.electronAPI?.saveAzureApiKey?.(key);
+    debouncedPersistToEnv();
+  },
+  setAzureDeploymentName: (value: string) => {
+    if (isBrowser) localStorage.setItem("azureDeploymentName", value);
+    set({ azureDeploymentName: value });
+    window.electronAPI?.saveAzureDeployment?.(value);
+    debouncedPersistToEnv();
+  },
+  setAzureApiVersion: (value: string) => {
+    if (isBrowser) localStorage.setItem("azureApiVersion", value);
+    set({ azureApiVersion: value });
+    window.electronAPI?.saveAzureApiVersion?.(value);
+    debouncedPersistToEnv();
+  },
+  setVertexAuthMode: (value: string) => {
+    if (isBrowser) localStorage.setItem("vertexAuthMode", value);
+    set({ vertexAuthMode: value });
+  },
+  setVertexProject: (value: string) => {
+    if (isBrowser) localStorage.setItem("vertexProject", value);
+    set({ vertexProject: value });
+    window.electronAPI?.saveVertexProject?.(value);
+    debouncedPersistToEnv();
+  },
+  setVertexLocation: (value: string) => {
+    if (isBrowser) localStorage.setItem("vertexLocation", value);
+    set({ vertexLocation: value });
+    window.electronAPI?.saveVertexLocation?.(value);
+    debouncedPersistToEnv();
+  },
+  setVertexApiKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("vertexApiKey", key);
+    set({ vertexApiKey: key });
+    window.electronAPI?.saveVertexApiKey?.(key);
+    debouncedPersistToEnv();
   },
 
   setDictationKey: (key: string) => {
@@ -696,33 +820,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setAgentModel: (value: string) => {
     if (isBrowser) localStorage.setItem("agentModel", value);
-    if (!value) {
-      useSettingsStore.setState({ agentModel: value });
-      return;
-    }
-    const mode = inferenceModeForProvider(useSettingsStore.getState().agentProvider);
-    if (isBrowser) {
-      localStorage.setItem("agentInferenceMode", mode);
-      localStorage.setItem("cloudAgentMode", "byok");
-    }
-    useSettingsStore.setState({
-      agentModel: value,
-      agentInferenceMode: mode,
-      cloudAgentMode: "byok",
-    });
+    useSettingsStore.setState({ agentModel: value });
   },
   setAgentProvider: (value: string) => {
-    const mode = inferenceModeForProvider(value);
-    if (isBrowser) {
-      localStorage.setItem("agentProvider", value);
-      localStorage.setItem("agentInferenceMode", mode);
-      localStorage.setItem("cloudAgentMode", "byok");
-    }
-    useSettingsStore.setState({
-      agentProvider: value,
-      agentInferenceMode: mode,
-      cloudAgentMode: "byok",
-    });
+    if (isBrowser) localStorage.setItem("agentProvider", value);
+    useSettingsStore.setState({ agentProvider: value });
   },
   setAgentKey: (key: string) => {
     if (!isBrowser) {
