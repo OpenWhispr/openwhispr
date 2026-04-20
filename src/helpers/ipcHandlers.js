@@ -3502,7 +3502,7 @@ class IPCHandlers {
 
     const DUPLICATE_TRANSCRIPT_WINDOW_MS = 6000;
     const DUPLICATE_TRANSCRIPT_MERGE_LIMIT = 3;
-    const STREAMING_RISKY_MIC_SEGMENT_HOLDBACK_MS = 1500;
+    const STREAMING_RISKY_MIC_SEGMENT_HOLDBACK_MS = 3000;
     const LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS = 4500;
 
     const buildNearbyTranscriptCandidates = (
@@ -3557,6 +3557,9 @@ class IPCHandlers {
 
     const hasRiskyMicDuplicateProfile = (suppression = null) => {
       if (isWithinMeetingStartupWarmup()) {
+        return true;
+      }
+      if (suppression?.systemSpeaking) {
         return true;
       }
       return (
