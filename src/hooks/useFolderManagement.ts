@@ -4,6 +4,7 @@ import { useToast } from "../components/ui/useToast";
 import logger from "../utils/logger";
 import type { FolderItem } from "../types/electron";
 import { findDefaultFolder } from "../components/notes/shared";
+import { syncService } from "../services/SyncService.js";
 import {
   useActiveFolderId,
   setActiveFolderId,
@@ -205,6 +206,7 @@ export function useFolderManagement(): UseFolderManagementReturn {
           const personalFolder = findDefaultFolder(items);
           if (personalFolder) setActiveFolderId(personalFolder.id);
         }
+        syncService.syncAll().catch(console.error);
       } else if (result.error) {
         toast({
           title: t("notes.folders.couldNotDelete"),

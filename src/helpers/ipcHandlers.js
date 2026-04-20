@@ -1158,6 +1158,10 @@ class IPCHandlers {
       this.databaseManager.markFolderSynced(id, cloudId)
     );
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
+    ipcMain.handle("db-get-pending-folder-deletes", () =>
+      this.databaseManager.getPendingFolderDeletes()
+    );
+    ipcMain.handle("db-hard-delete-folder", (_, id) => this.databaseManager.hardDeleteFolder(id));
 
     // Conversations sync
     ipcMain.handle("db-get-pending-conversations", () =>

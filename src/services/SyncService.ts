@@ -175,7 +175,21 @@ class SyncService {
 
   private async syncFolders(): Promise<void> {
     await this.pushPendingFolders();
+    await this.pushFolderDeletes();
     await this.pullFolders();
+  }
+
+  private async pushFolderDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingFolderDeletes?.()) ?? [];
+    for (const f of deletes) {
+      if (!f.cloud_id) continue;
+      try {
+        await FoldersService.delete(f.cloud_id);
+        await window.electronAPI.hardDeleteFolder?.(f.id);
+      } catch (err) {
+        console.error("Folder delete sync failed:", err);
+      }
+    }
   }
 
   private async pushPendingFolders(): Promise<void> {
@@ -221,6 +235,7 @@ class SyncService {
         const local = await window.electronAPI.getFolderByClientId?.(
           cloudFolder.client_folder_id ?? ""
         );
+        if (local?.deleted_at) continue;
         if (!local || cloudFolder.updated_at > local.created_at) {
           await window.electronAPI.upsertFolderFromCloud?.(
             cloudFolder as unknown as Record<string, unknown>

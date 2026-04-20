@@ -35,6 +35,7 @@ export interface TranscriptionItem {
   client_transcription_id: string;
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
 }
 
 export interface NoteItem {
@@ -68,6 +69,7 @@ export interface FolderItem {
   client_folder_id: string;
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
 }
 
 export interface ActionItem {
@@ -1604,6 +1606,8 @@ declare global {
       upsertFolderFromCloud?: (cloudFolder: Record<string, unknown>) => Promise<FolderItem>;
       markFolderSynced?: (id: number, cloudId: string) => Promise<void>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
+      getPendingFolderDeletes?: () => Promise<FolderItem[]>;
+      hardDeleteFolder?: (id: number) => Promise<void>;
 
       getPendingConversations?: () => Promise<ConversationPreview[]>;
       getPendingConversationDeletes?: () => Promise<ConversationPreview[]>;

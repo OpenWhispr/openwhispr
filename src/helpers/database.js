@@ -456,6 +456,11 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        this.db.exec("ALTER TABLE folders ADD COLUMN deleted_at TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       // Sync columns for agent_conversations
       try {
@@ -854,7 +859,11 @@ class DatabaseManager {
   getFolders() {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return this.db.prepare("SELECT * FROM folders ORDER BY sort_order ASC, created_at ASC").all();
+      return this.db
+        .prepare(
+          "SELECT * FROM folders WHERE deleted_at IS NULL ORDER BY sort_order ASC, created_at ASC"
+        )
+        .all();
     } catch (error) {
       debugLogger.error("Error getting folders", { error: error.message }, "notes");
       throw error;
@@ -893,10 +902,16 @@ class DatabaseManager {
       const personal = this.db
         .prepare("SELECT id FROM folders WHERE name = 'Personal' AND is_default = 1")
         .get();
-      if (personal) {
-        this.db.prepare("UPDATE notes SET folder_id = ? WHERE folder_id = ?").run(personal.id, id);
-      }
-      this.db.prepare("DELETE FROM folders WHERE id = ?").run(id);
+      const reassignNotes = this.db.prepare("UPDATE notes SET folder_id = ? WHERE folder_id = ?");
+      const tombstone = this.db.prepare(
+        "UPDATE folders SET deleted_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
+      );
+      const hardDelete = this.db.prepare("DELETE FROM folders WHERE id = ?");
+      this.db.transaction(() => {
+        if (personal) reassignNotes.run(personal.id, id);
+        if (folder.cloud_id) tombstone.run(id);
+        else hardDelete.run(id);
+      })();
       return { success: true, id };
     } catch (error) {
       debugLogger.error("Error deleting folder", { error: error.message }, "notes");
@@ -2045,9 +2060,40 @@ class DatabaseManager {
   getPendingFolders() {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return this.db.prepare("SELECT * FROM folders WHERE sync_status = 'pending'").all();
+      return this.db
+        .prepare("SELECT * FROM folders WHERE sync_status = 'pending' AND deleted_at IS NULL")
+        .all();
     } catch (error) {
       debugLogger.error("Error getting pending folders", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getPendingFolderDeletes() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM folders WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error(
+        "Error getting pending folder deletes",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  hardDeleteFolder(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db.prepare("DELETE FROM folders WHERE id = ?").run(id);
+      return { success: result.changes > 0, id };
+    } catch (error) {
+      debugLogger.error("Error hard deleting folder", { error: error.message }, "database");
       throw error;
     }
   }
@@ -2110,7 +2156,7 @@ class DatabaseManager {
   getFolderIdMap() {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return this.db.prepare("SELECT * FROM folders").all();
+      return this.db.prepare("SELECT * FROM folders WHERE deleted_at IS NULL").all();
     } catch (error) {
       debugLogger.error("Error getting folder id map", { error: error.message }, "database");
       throw error;
