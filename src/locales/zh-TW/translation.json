@@ -2175,6 +2175,7 @@
       "learnMore": "瞭解更多",
       "viewPlans": "查看方案",
       "copyUrl": "複製 MCP URL",
+      "proRequired": "升級到付費方案，以將 OpenWhispr 連接到 Claude、ChatGPT 和 Cursor。",
       "copied": "已複製"
     },
     "plan": {

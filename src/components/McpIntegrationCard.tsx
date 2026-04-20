@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, Copy, ExternalLink, Plus } from "lucide-react";
+import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { useToast } from "./ui/useToast";
 import { cn } from "./lib/utils";
@@ -54,9 +55,16 @@ export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegration
         </div>
       </div>
 
-      <h3 className="text-sm font-semibold text-foreground mb-1">{t("integrations.mcp.title")}</h3>
+      <div className="flex items-center gap-1.5 mb-1">
+        <h3 className="text-sm font-semibold text-foreground">{t("integrations.mcp.title")}</h3>
+        {!isPaid && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+            {t("integrations.plan.pro")}
+          </Badge>
+        )}
+      </div>
       <p className="text-xs text-muted-foreground/70 mb-4 leading-relaxed">
-        {t("integrations.mcp.description")}
+        {isPaid ? t("integrations.mcp.description") : t("integrations.mcp.proRequired")}
       </p>
 
       <ol className="space-y-1.5 text-xs text-muted-foreground mb-4 list-decimal pl-4 marker:text-muted-foreground/40">

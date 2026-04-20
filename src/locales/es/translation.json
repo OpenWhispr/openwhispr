@@ -2244,6 +2244,7 @@
       "learnMore": "Más información",
       "viewPlans": "Ver planes",
       "copyUrl": "Copiar URL de MCP",
+      "proRequired": "Actualiza a un plan de pago para conectar OpenWhispr con Claude, ChatGPT y Cursor.",
       "copied": "Copiado"
     },
     "plan": {

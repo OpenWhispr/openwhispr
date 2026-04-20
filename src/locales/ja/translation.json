@@ -2180,6 +2180,7 @@
       "learnMore": "詳細",
       "viewPlans": "プランを表示",
       "copyUrl": "MCP URLをコピー",
+      "proRequired": "OpenWhispr を Claude、ChatGPT、Cursor に接続するには、有料プランへのアップグレードが必要です。",
       "copied": "コピーしました"
     },
     "plan": {

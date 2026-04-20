@@ -2180,6 +2180,7 @@
       "learnMore": "Узнать больше",
       "viewPlans": "Посмотреть планы",
       "copyUrl": "Копировать URL MCP",
+      "proRequired": "Перейдите на платный план, чтобы подключить OpenWhispr к Claude, ChatGPT и Cursor.",
       "copied": "Скопировано"
     },
     "plan": {

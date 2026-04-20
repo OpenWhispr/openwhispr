@@ -112,14 +112,20 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
     [t]
   );
 
-  const [activeSection, setActiveSection] = React.useState<SettingsSectionType>("account");
-  const [initialSubTab, setInitialSubTab] = useState<string | undefined>(undefined);
+  const resolveSection = (section: string | undefined): SettingsSectionType =>
+    section ? ((SECTION_ALIASES[section] ?? section) as SettingsSectionType) : "account";
+
+  const [activeSection, setActiveSection] = React.useState<SettingsSectionType>(() =>
+    resolveSection(initialSection)
+  );
+  const [initialSubTab, setInitialSubTab] = useState<string | undefined>(() =>
+    initialSection ? LEGACY_SUB_TAB[initialSection] : undefined
+  );
   const [prevOpen, setPrevOpen] = useState(open);
 
   if (open && !prevOpen && initialSection) {
     setPrevOpen(open);
-    const resolved = (SECTION_ALIASES[initialSection] ?? initialSection) as SettingsSectionType;
-    setActiveSection(resolved);
+    setActiveSection(resolveSection(initialSection));
     setInitialSubTab(LEGACY_SUB_TAB[initialSection]);
   } else if (open !== prevOpen) {
     setPrevOpen(open);

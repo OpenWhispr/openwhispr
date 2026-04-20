@@ -2244,6 +2244,7 @@
       "learnMore": "En savoir plus",
       "viewPlans": "Voir les forfaits",
       "copyUrl": "Copier l'URL MCP",
+      "proRequired": "Passez à un plan payant pour connecter OpenWhispr à Claude, ChatGPT et Cursor.",
       "copied": "Copié"
     },
     "plan": {
