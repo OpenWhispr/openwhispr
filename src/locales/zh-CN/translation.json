@@ -1473,7 +1473,8 @@
       "tabs": {
         "dictation": "听写",
         "noteRecording": "笔记录音"
-      }
+      },
+      "selfHostedStreamingNote": "需要支持流式转录的服务器。"
     },
     "llms": {
       "title": "语言模型",

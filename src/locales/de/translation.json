@@ -1478,7 +1478,8 @@
       "tabs": {
         "dictation": "Diktat",
         "noteRecording": "Notizaufnahme"
-      }
+      },
+      "selfHostedStreamingNote": "Erfordert einen Server, der Streaming-Transkription unterstützt."
     },
     "llms": {
       "title": "Sprachmodelle",

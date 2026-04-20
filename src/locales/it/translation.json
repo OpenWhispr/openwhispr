@@ -1478,7 +1478,8 @@
       "tabs": {
         "dictation": "Dettatura",
         "noteRecording": "Registrazione note"
-      }
+      },
+      "selfHostedStreamingNote": "Richiede un server che supporti la trascrizione in streaming."
     },
     "llms": {
       "title": "Modelli linguistici",

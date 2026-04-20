@@ -1450,7 +1450,8 @@
       "tabs": {
         "dictation": "Ditado",
         "noteRecording": "Gravação de notas"
-      }
+      },
+      "selfHostedStreamingNote": "Requer um servidor que suporte transcrição em streaming."
     },
     "llms": {
       "title": "Modelos de linguagem",

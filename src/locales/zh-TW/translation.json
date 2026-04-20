@@ -1473,7 +1473,8 @@
       "tabs": {
         "dictation": "聽寫",
         "noteRecording": "筆記錄音"
-      }
+      },
+      "selfHostedStreamingNote": "需要支援串流轉錄的伺服器。"
     },
     "llms": {
       "title": "語言模型",

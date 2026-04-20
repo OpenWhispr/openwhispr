@@ -147,11 +147,16 @@ export function MeetingTranscriptionPanel() {
       {meetingTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {meetingTranscriptionMode === "local" && renderTranscriptionPicker("local")}
       {meetingTranscriptionMode === "self-hosted" && (
-        <SelfHostedPanel
-          service="transcription"
-          url={meetingRemoteTranscriptionUrl}
-          onUrlChange={setMeetingRemoteTranscriptionUrl}
-        />
+        <>
+          <SelfHostedPanel
+            service="transcription"
+            url={meetingRemoteTranscriptionUrl}
+            onUrlChange={setMeetingRemoteTranscriptionUrl}
+          />
+          <p className="text-xs text-muted-foreground/80 px-1">
+            {t("settingsPage.speechToText.selfHostedStreamingNote")}
+          </p>
+        </>
       )}
     </div>
   );

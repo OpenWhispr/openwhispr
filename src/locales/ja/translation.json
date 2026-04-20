@@ -1478,7 +1478,8 @@
       "tabs": {
         "dictation": "ディクテーション",
         "noteRecording": "ノート録音"
-      }
+      },
+      "selfHostedStreamingNote": "ストリーミング文字起こしに対応したサーバーが必要です。"
     },
     "llms": {
       "title": "言語モデル",
