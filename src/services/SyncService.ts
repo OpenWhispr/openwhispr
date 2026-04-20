@@ -456,9 +456,7 @@ class SyncService {
     for (let i = 0; i < withCloudId.length; i += TRANSCRIPTION_BATCH_SIZE) {
       const chunk = withCloudId.slice(i, i + TRANSCRIPTION_BATCH_SIZE);
       try {
-        const { deleted } = await TranscriptionsService.batchDelete(
-          chunk.map((t) => t.cloud_id!)
-        );
+        const { deleted } = await TranscriptionsService.batchDelete(chunk.map((t) => t.cloud_id!));
         for (const cloudId of deleted) {
           const local = chunk.find((t) => t.cloud_id === cloudId);
           if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
