@@ -121,6 +121,7 @@ export default function AgentModeSettings() {
       setGroqApiKey={setGroqApiKey}
       customReasoningApiKey={customReasoningApiKey}
       setCustomReasoningApiKey={setCustomReasoningApiKey}
+      setReasoningMode={setAgentInferenceMode}
       mode={mode}
     />
   );

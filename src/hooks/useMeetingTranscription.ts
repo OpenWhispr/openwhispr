@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { getSettings } from "../stores/settingsStore";
+import { getSettings, selectResolvedMeetingTranscription } from "../stores/settingsStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
 import {
@@ -105,31 +105,25 @@ const isSegmentWithinIdentificationWindow = (
 };
 
 const getMeetingTranscriptionOptions = () => {
-  const {
-    useLocalWhisper,
-    localTranscriptionProvider,
-    whisperModel,
-    parakeetModel,
-    cloudTranscriptionMode,
-    cloudTranscriptionModel,
-    openaiApiKey,
-  } = getSettings();
+  const state = getSettings();
+  const resolved = selectResolvedMeetingTranscription(state);
 
-  if (useLocalWhisper) {
+  if (resolved.useLocalWhisper) {
     return {
       provider: "local" as const,
-      localProvider: localTranscriptionProvider,
+      localProvider: resolved.localTranscriptionProvider,
       localModel:
-        localTranscriptionProvider === "nvidia"
-          ? parakeetModel || "parakeet-tdt-0.6b-v3"
-          : whisperModel || "base",
+        resolved.localTranscriptionProvider === "nvidia"
+          ? resolved.parakeetModel || "parakeet-tdt-0.6b-v3"
+          : resolved.whisperModel || "base",
     };
   }
 
-  const model = REALTIME_MODELS.has(cloudTranscriptionModel)
-    ? cloudTranscriptionModel
+  const model = REALTIME_MODELS.has(resolved.cloudTranscriptionModel)
+    ? resolved.cloudTranscriptionModel
     : "gpt-4o-mini-transcribe";
-  const mode = cloudTranscriptionMode === "byok" && !!openaiApiKey ? "byok" : "openwhispr";
+  const mode =
+    resolved.cloudTranscriptionMode === "byok" && !!state.openaiApiKey ? "byok" : "openwhispr";
   return { provider: "openai-realtime" as const, model, mode };
 };
 

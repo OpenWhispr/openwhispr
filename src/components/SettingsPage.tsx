@@ -73,6 +73,7 @@ import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
 import ApiKeysSection from "./ApiKeysSection";
 import AgentModeSettings from "./settings/AgentModeSettings";
+import MeetingSettings from "./settings/MeetingSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
@@ -101,6 +102,7 @@ export type SettingsSectionType =
   | "general"
   | "hotkeys"
   | "transcription"
+  | "meetings"
   | "intelligence"
   | "privacyData"
   | "system"
@@ -543,6 +545,7 @@ function AiModelsSection({
       setGroqApiKey={setGroqApiKey}
       customReasoningApiKey={customReasoningApiKey}
       setCustomReasoningApiKey={setCustomReasoningApiKey}
+      setReasoningMode={setReasoningMode}
       mode={mode}
     />
   );
@@ -3194,6 +3197,9 @@ EOF`,
             toast={toast}
           />
         );
+
+      case "meetings":
+        return <MeetingSettings />;
 
       case "aiModels":
         return (

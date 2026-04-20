@@ -888,6 +888,10 @@
         "description": "Motor de fala para texto",
         "label": "Transcrição"
       },
+      "meetings": {
+        "description": "Modelos dedicados para reuniões",
+        "label": "Reuniões"
+      },
       "intelligence": {
         "description": "Modelos de IA, agente e prompts",
         "label": "Inteligência"
@@ -1499,6 +1503,21 @@
       },
       "transcriptionPreview": "Pré-visualização ao vivo",
       "transcriptionPreviewDescription": "Mostrar transcrição em janela flutuante antes da limpeza"
+    },
+    "meetings": {
+      "title": "Reuniões",
+      "description": "Defina um modelo de fala para texto e uma IA dedicados para reuniões. Mantenha a herança dos padrões se não precisar de substituições por reunião.",
+      "speechTitle": "Fala para texto",
+      "intelligenceTitle": "Inteligência",
+      "followTranscription": {
+        "label": "Usar ajustes de transcrição",
+        "description": "As reuniões usam o mesmo fala para texto do ditado"
+      },
+      "followIntelligence": {
+        "label": "Usar ajustes de inteligência",
+        "description": "As reuniões usam a mesma IA do restante do app"
+      },
+      "inheritedSummary": "Atualmente: {{summary}}"
     },
     "intelligence": {
       "gpuDevice": {

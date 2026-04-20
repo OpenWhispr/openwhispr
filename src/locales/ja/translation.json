@@ -916,6 +916,10 @@
         "description": "音声テキスト変換エンジン",
         "label": "文字起こし"
       },
+      "meetings": {
+        "description": "ミーティング専用モデル",
+        "label": "ミーティング"
+      },
       "intelligence": {
         "description": "AIモデル、エージェント、プロンプト",
         "label": "インテリジェンス"
@@ -1527,6 +1531,21 @@
       },
       "transcriptionPreview": "リアルタイム文字起こしプレビュー",
       "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示"
+    },
+    "meetings": {
+      "title": "ミーティング",
+      "description": "ミーティング用の専用音声テキスト変換モデルとAIを設定します。ミーティングごとの上書きが不要な場合はデフォルトのままにしてください。",
+      "speechTitle": "音声テキスト変換",
+      "intelligenceTitle": "インテリジェンス",
+      "followTranscription": {
+        "label": "文字起こし設定を使用",
+        "description": "ミーティングはディクテーションと同じ音声テキスト変換を使用します"
+      },
+      "followIntelligence": {
+        "label": "インテリジェンス設定を使用",
+        "description": "ミーティングはアプリの他の部分と同じAIを使用します"
+      },
+      "inheritedSummary": "現在: {{summary}}"
     },
     "intelligence": {
       "gpuDevice": {

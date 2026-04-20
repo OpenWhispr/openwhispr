@@ -11,6 +11,7 @@ import {
   Key,
   Shield,
   MessageSquare,
+  CalendarDays,
 } from "lucide-react";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
@@ -78,6 +79,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         label: t("settingsModal.sections.transcription.label"),
         icon: Mic,
         description: t("settingsModal.sections.transcription.description"),
+        group: t("settingsModal.groups.speechAi"),
+      },
+      {
+        id: "meetings",
+        label: t("settingsModal.sections.meetings.label"),
+        icon: CalendarDays,
+        description: t("settingsModal.sections.meetings.description"),
         group: t("settingsModal.groups.speechAi"),
       },
       {

@@ -964,6 +964,10 @@
         "description": "Motor de voz a texto",
         "label": "Transcripción"
       },
+      "meetings": {
+        "description": "Modelos dedicados para reuniones",
+        "label": "Reuniones"
+      },
       "intelligence": {
         "description": "Modelos de IA, agente y prompts",
         "label": "Inteligencia"
@@ -1575,6 +1579,21 @@
       },
       "transcriptionPreview": "Vista previa en vivo",
       "transcriptionPreviewDescription": "Mostrar transcripción en una ventana flotante antes de la corrección"
+    },
+    "meetings": {
+      "title": "Reuniones",
+      "description": "Establece un modelo de voz a texto y una IA dedicados para reuniones. Deja que hereden los valores predeterminados si no necesitas anular nada por reunión.",
+      "speechTitle": "Voz a texto",
+      "intelligenceTitle": "Inteligencia",
+      "followTranscription": {
+        "label": "Usar ajustes de transcripción",
+        "description": "Las reuniones usan el mismo voz a texto que el dictado"
+      },
+      "followIntelligence": {
+        "label": "Usar ajustes de inteligencia",
+        "description": "Las reuniones usan la misma IA que el resto de la app"
+      },
+      "inheritedSummary": "Actualmente: {{summary}}"
     },
     "intelligence": {
       "gpuDevice": {

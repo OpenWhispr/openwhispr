@@ -1012,6 +1012,10 @@
         "description": "Speech-to-text engine",
         "label": "Transcription"
       },
+      "meetings": {
+        "description": "Dedicated models for meetings",
+        "label": "Meetings"
+      },
       "intelligence": {
         "description": "AI models, agent & prompts",
         "label": "Intelligence"
@@ -1623,6 +1627,21 @@
       },
       "transcriptionPreview": "Live Transcription Preview",
       "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup"
+    },
+    "meetings": {
+      "title": "Meetings",
+      "description": "Set a dedicated speech-to-text model and AI for meetings. Leave inheriting your defaults if you don't need per-meeting overrides.",
+      "speechTitle": "Speech to Text",
+      "intelligenceTitle": "Intelligence",
+      "followTranscription": {
+        "label": "Use Transcription settings",
+        "description": "Meetings use the same speech-to-text as dictation"
+      },
+      "followIntelligence": {
+        "label": "Use Intelligence settings",
+        "description": "Meetings use the same AI as the rest of the app"
+      },
+      "inheritedSummary": "Currently: {{summary}}"
     },
     "intelligence": {
       "gpuDevice": {

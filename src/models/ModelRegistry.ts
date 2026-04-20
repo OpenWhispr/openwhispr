@@ -57,6 +57,7 @@ export interface TranscriptionModelDefinition {
   name: string;
   description: string;
   descriptionKey?: string;
+  streaming?: boolean;
 }
 
 export interface TranscriptionProviderData {
@@ -326,6 +327,13 @@ export function getModelProvider(modelId: string): string {
 
 export function getTranscriptionProviders(): TranscriptionProviderData[] {
   return modelRegistry.getTranscriptionProviders();
+}
+
+export function getStreamingTranscriptionProviders(): TranscriptionProviderData[] {
+  return modelRegistry
+    .getTranscriptionProviders()
+    .map((p) => ({ ...p, models: p.models.filter((m) => m.streaming) }))
+    .filter((p) => p.models.length > 0);
 }
 
 export function getTranscriptionProvider(
