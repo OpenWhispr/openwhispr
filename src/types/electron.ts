@@ -1614,7 +1614,7 @@ declare global {
       markFolderSynced?: (id: number, cloudId: string) => Promise<void>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
-      hardDeleteFolder?: (id: number) => Promise<void>;
+      hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
 
       getPendingConversations?: () => Promise<ConversationPreview[]>;
       getPendingConversationDeletes?: () => Promise<ConversationPreview[]>;
@@ -1633,7 +1633,7 @@ declare global {
       ) => Promise<TranscriptionItem>;
       markTranscriptionSynced?: (id: number, cloudId: string) => Promise<void>;
       getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
-      hardDeleteTranscription?: (id: number) => Promise<void>;
+      hardDeleteTranscription?: (id: number) => Promise<{ success: boolean; id: number }>;
     };
 
     api?: {
