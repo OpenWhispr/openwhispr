@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Key, Copy, Check, Trash2, Plus, Shield, AlertTriangle, ExternalLink } from "lucide-react";
+import { Key, Copy, Check, Trash2, Plus, Shield, AlertTriangle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
@@ -16,7 +16,7 @@ import {
   ConfirmDialog,
 } from "./ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { SectionHeader, SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
+import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
 import { ApiKeysService } from "../services/ApiKeysService";
 import type { ApiKey } from "../services/ApiKeysService";
 import {
@@ -87,34 +87,15 @@ export default function ApiKeysSection() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="mb-3">
-          <h3 className="text-xs font-semibold text-foreground tracking-tight">
-            {t("apiKeysSection.title")}
-          </h3>
-          <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">
-            {t("apiKeysSection.description")}
-            <span className="mx-1.5 text-muted-foreground/30">·</span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-primary/80 hover:text-primary transition-colors"
-              onClick={() =>
-                window.electronAPI?.openExternal?.("https://docs.openwhispr.com/api/overview")
-              }
-            >
-              {t("apiKeysSection.docsLink")}
-              <ExternalLink className="h-2.5 w-2.5" />
-            </button>
-          </p>
-        </div>
-        {!isLoading && keys.length > 0 && keys.length < MAX_API_KEYS && (
+    <div className="space-y-3">
+      {!isLoading && keys.length > 0 && keys.length < MAX_API_KEYS && (
+        <div className="flex justify-end">
           <Button variant="outline" size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="h-3.5 w-3.5 mr-1.5" />
             {t("apiKeysSection.createButton")}
           </Button>
-        )}
-      </div>
+        </div>
+      )}
 
       {isLoading ? (
         <SettingsPanel>

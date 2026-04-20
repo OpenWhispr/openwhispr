@@ -900,10 +900,6 @@
         "description": "Piani, utilizzo e fatturazione",
         "label": "Piani e fatturazione"
       },
-      "apiKeys": {
-        "label": "Chiavi API",
-        "description": "Gestisci accesso API"
-      },
       "general": {
         "description": "Aspetto, suoni e avvio",
         "label": "Preferenze"
@@ -913,7 +909,7 @@
         "label": "Scorciatoie"
       },
       "speechToText": {
-        "description": "Motori per dettatura e riunioni",
+        "description": "Motori per dettatura e registrazione di note",
         "label": "Riconoscimento vocale"
       },
       "llms": {
@@ -1132,20 +1128,12 @@
         "bulletPoints": "Hey {{agentName}}, converti questo in elenco puntato"
       }
     },
-    "apiKeys": {
-      "title": "Chiavi API",
-      "signInRequired": "Accesso richiesto",
-      "signInRequiredDescription": "Accedi per gestire le tue chiavi API.",
-      "proRequired": "L'accesso API richiede un piano a pagamento",
-      "proRequiredDescription": "Passa a Pro per creare chiavi API e integrare OpenWhispr nei tuoi flussi di lavoro.",
-      "viewPlans": "Vedi piani"
-    },
     "aiModels": {
       "customSetup": "Configurazione personalizzata",
       "customSetupDescription": "Usa il tuo provider e la tua chiave API.",
       "description": "Correggi le trascrizioni, gestisci i comandi e risolvi gli errori preservando il tuo tono.",
       "enableTextCleanup": "Attiva correzione testo",
-      "enableTextCleanupDescription": "L'IA migliora la qualità della trascrizione",
+      "enableTextCleanupDescription": "Usa l'IA per formattare il testo ed eseguire comandi vocali",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Provider cloud",
@@ -1474,7 +1462,7 @@
     },
     "speechToText": {
       "title": "Riconoscimento vocale",
-      "description": "Scegli un motore per dettatura e registrazione di riunioni",
+      "description": "Scegli un motore per dettatura e registrazione di note",
       "tabs": {
         "dictation": "Dettatura",
         "noteRecording": "Registrazione note"
@@ -2173,6 +2161,26 @@
       "systemAudioRequired": "Autorizzazione Audio di Sistema richiesta",
       "systemAudioDescription": "Per trascrivere le riunioni, OpenWhispr necessita dell'autorizzazione Audio di Sistema per catturare l'audio degli altri partecipanti. Non registriamo mai il tuo schermo. Verrai reindirizzato alle Impostazioni di Sistema per attivarla.",
       "openSettings": "Apri Impostazioni di Sistema"
+    },
+    "sections": { "calendar": "Calendario", "api": "API", "mcp": "MCP" },
+    "api": {
+      "title": "Chiavi API",
+      "description": "Gestisci le chiavi API per l'accesso programmatico",
+      "proRequired": "Passa a un piano a pagamento per accedere all'API",
+      "manage": "Gestisci chiavi",
+      "viewPlans": "Visualizza i piani",
+      "dialogTitle": "Chiavi API"
+    },
+    "mcp": {
+      "title": "Porta le tue note nei tuoi strumenti di IA",
+      "description": "Chatta, cerca e lavora con le tue note in Claude, ChatGPT e Cursor.",
+      "step1": "Nel tuo strumento di IA, aggiungi OpenWhispr MCP usando l'URL pubblico",
+      "step2": "Autenticati tramite il flusso OAuth del browser.",
+      "step3": "Chatta, cerca e lavora con le tue note ovunque.",
+      "learnMore": "Scopri di più",
+      "viewPlans": "Visualizza i piani",
+      "copyUrl": "Copia URL MCP",
+      "copied": "Copiato"
     },
     "plan": {
       "title": "Il tuo Piano",

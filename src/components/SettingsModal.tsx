@@ -8,7 +8,6 @@ import {
   Wrench,
   Keyboard,
   CreditCard,
-  Key,
   Shield,
 } from "lucide-react";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
@@ -65,13 +64,6 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         label: t("settingsModal.sections.plansBilling.label"),
         icon: CreditCard,
         description: t("settingsModal.sections.plansBilling.description"),
-        group: t("settingsModal.groups.account"),
-      },
-      {
-        id: "apiKeys",
-        label: t("settingsModal.sections.apiKeys.label"),
-        icon: Key,
-        description: t("settingsModal.sections.apiKeys.description"),
         group: t("settingsModal.groups.account"),
       },
       {

@@ -872,10 +872,6 @@
         "description": "Planos, uso e cobrança",
         "label": "Planos e cobrança"
       },
-      "apiKeys": {
-        "label": "Chaves API",
-        "description": "Gerenciar acesso API"
-      },
       "general": {
         "description": "Aparência, sons e inicialização",
         "label": "Preferências"
@@ -885,7 +881,7 @@
         "label": "Atalhos"
       },
       "speechToText": {
-        "description": "Motores para ditado e reuniões",
+        "description": "Motores para ditado e gravação de notas",
         "label": "Voz para texto"
       },
       "llms": {
@@ -1104,20 +1100,12 @@
         "bulletPoints": "Hey {{agentName}}, converta isso em tópicos"
       }
     },
-    "apiKeys": {
-      "title": "Chaves de API",
-      "signInRequired": "Login necessário",
-      "signInRequiredDescription": "Faça login para gerenciar suas chaves de API.",
-      "proRequired": "O acesso à API requer um plano pago",
-      "proRequiredDescription": "Faça upgrade para Pro para criar chaves de API e integrar o OpenWhispr aos seus fluxos de trabalho.",
-      "viewPlans": "Ver planos"
-    },
     "aiModels": {
       "customSetup": "Configuração personalizada",
       "customSetupDescription": "Use seu próprio provedor e chave API.",
       "description": "Limpe transcrições, processe comandos e corrija erros preservando seu tom de voz.",
       "enableTextCleanup": "Ativar limpeza de texto",
-      "enableTextCleanupDescription": "A IA melhora a qualidade da transcrição",
+      "enableTextCleanupDescription": "Use IA para formatar texto e executar comandos de voz",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Provedores na nuvem",
@@ -1446,7 +1434,7 @@
     },
     "speechToText": {
       "title": "Voz para texto",
-      "description": "Escolha um motor para ditado e captura de reuniões",
+      "description": "Escolha um motor para ditado e gravação de notas",
       "tabs": {
         "dictation": "Ditado",
         "noteRecording": "Gravação de notas"
@@ -2173,6 +2161,26 @@
       "systemAudioRequired": "Permissão de Áudio do Sistema Necessária",
       "systemAudioDescription": "Para transcrever reuniões, o OpenWhispr precisa da permissão de Áudio do Sistema para capturar o áudio dos outros participantes. Nunca gravamos a sua tela. Você será levado às Configurações do Sistema para ativá-la.",
       "openSettings": "Abrir Configurações do Sistema"
+    },
+    "sections": { "calendar": "Calendário", "api": "API", "mcp": "MCP" },
+    "api": {
+      "title": "Chaves de API",
+      "description": "Gerencie chaves de API para acesso programático",
+      "proRequired": "Atualize para um plano pago para acessar a API",
+      "manage": "Gerenciar chaves",
+      "viewPlans": "Ver planos",
+      "dialogTitle": "Chaves de API"
+    },
+    "mcp": {
+      "title": "Leve suas notas para suas ferramentas de IA",
+      "description": "Converse, pesquise e trabalhe com suas notas no Claude, ChatGPT e Cursor.",
+      "step1": "Na sua ferramenta de IA, adicione OpenWhispr MCP usando a URL pública",
+      "step2": "Autentique-se pelo fluxo OAuth do navegador.",
+      "step3": "Converse, pesquise e trabalhe com suas notas em qualquer lugar.",
+      "learnMore": "Saiba mais",
+      "viewPlans": "Ver planos",
+      "copyUrl": "Copiar URL do MCP",
+      "copied": "Copiado"
     },
     "plan": {
       "title": "Seu Plano",

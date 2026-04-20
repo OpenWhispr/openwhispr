@@ -961,7 +961,7 @@
         "label": "Raccourcis"
       },
       "speechToText": {
-        "description": "Moteurs pour dictée et réunions",
+        "description": "Moteurs pour dictée et enregistrement de notes",
         "label": "Reconnaissance vocale"
       },
       "llms": {
@@ -1193,7 +1193,7 @@
       "customSetupDescription": "Utilisez votre propre fournisseur et clé API.",
       "description": "Corrige les transcriptions, gère les commandes et corrige les erreurs tout en préservant votre ton.",
       "enableTextCleanup": "Activer la correction de texte",
-      "enableTextCleanupDescription": "L'IA améliore la qualité de transcription",
+      "enableTextCleanupDescription": "Utilisez l'IA pour mettre en forme le texte et exécuter les commandes vocales",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Fournisseurs cloud",
@@ -1522,7 +1522,7 @@
     },
     "speechToText": {
       "title": "Reconnaissance vocale",
-      "description": "Choisissez un moteur pour la dictée et la capture de réunions",
+      "description": "Choisissez un moteur pour la dictée et l'enregistrement de notes",
       "tabs": {
         "dictation": "Dictée",
         "noteRecording": "Enregistrement de notes"

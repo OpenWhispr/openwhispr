@@ -900,10 +900,6 @@
         "description": "プラン、使用状況、請求",
         "label": "プランと請求"
       },
-      "apiKeys": {
-        "description": "APIキーの管理",
-        "label": "APIキー"
-      },
       "general": {
         "description": "外観、サウンド、起動設定",
         "label": "環境設定"
@@ -913,7 +909,7 @@
         "label": "ホットキー"
       },
       "speechToText": {
-        "description": "ディクテーションとミーティング用エンジン",
+        "description": "ディクテーションとノート録音用エンジン",
         "label": "音声認識"
       },
       "llms": {
@@ -1132,20 +1128,12 @@
         "bulletPoints": "Hey {{agentName}}、これを箇条書きに変換して"
       }
     },
-    "apiKeys": {
-      "title": "APIキー",
-      "signInRequired": "サインインが必要です",
-      "signInRequiredDescription": "APIキーを管理するにはサインインしてください。",
-      "proRequired": "APIアクセスには有料プランが必要です",
-      "proRequiredDescription": "Proにアップグレードして、APIキーを作成しワークフローにOpenWhisprを統合しましょう。",
-      "viewPlans": "プランを見る"
-    },
     "aiModels": {
       "customSetup": "カスタム設定",
       "customSetupDescription": "独自のプロバイダーと API キーを使用。",
       "description": "文字起こしのクリーンアップ、コマンド処理、エラー修正を行いながら、あなたの話し方を維持します。",
       "enableTextCleanup": "テキスト補正を有効にする",
-      "enableTextCleanupDescription": "AI が文字起こしの品質を向上",
+      "enableTextCleanupDescription": "AI でテキストを整形し、音声コマンドを実行",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "クラウドプロバイダー",
@@ -1474,7 +1462,7 @@
     },
     "speechToText": {
       "title": "音声認識",
-      "description": "ディクテーションとミーティング録音用のエンジンを選択",
+      "description": "ディクテーションとノート録音用のエンジンを選択",
       "tabs": {
         "dictation": "ディクテーション",
         "noteRecording": "ノート録音"
@@ -2173,6 +2161,26 @@
       "systemAudioRequired": "システムオーディオの権限が必要です",
       "systemAudioDescription": "会議を文字起こしするには、OpenWhispr に他の参加者の音声を録音するためのシステムオーディオの権限が必要です。画面を録画することはありません。システム設定に移動して有効にします。",
       "openSettings": "システム設定を開く"
+    },
+    "sections": { "calendar": "カレンダー", "api": "API", "mcp": "MCP" },
+    "api": {
+      "title": "APIキー",
+      "description": "プログラムからのアクセス用にAPIキーを管理",
+      "proRequired": "APIを利用するには有料プランへのアップグレードが必要です",
+      "manage": "キーを管理",
+      "viewPlans": "プランを表示",
+      "dialogTitle": "APIキー"
+    },
+    "mcp": {
+      "title": "メモをAIツールに持ち込みましょう",
+      "description": "Claude、ChatGPT、Cursor内でメモを使ってチャット、検索、作業ができます。",
+      "step1": "AIツールで、公開URLを使用してOpenWhispr MCPを追加します",
+      "step2": "ブラウザのOAuthフローで認証します。",
+      "step3": "どこからでもメモを使ってチャット、検索、作業ができます。",
+      "learnMore": "詳細",
+      "viewPlans": "プランを表示",
+      "copyUrl": "MCP URLをコピー",
+      "copied": "コピーしました"
     },
     "plan": {
       "title": "プラン",

@@ -809,7 +809,13 @@ export default function ControlPanel() {
             )}
             {activeView === "integrations" && (
               <Suspense fallback={null}>
-                <IntegrationsView />
+                <IntegrationsView
+                  isPaid={!!(usage?.isSubscribed || usage?.isTrial)}
+                  onUpgrade={() => {
+                    setSettingsSection("plansBilling");
+                    setShowSettings(true);
+                  }}
+                />
               </Suspense>
             )}
           </div>

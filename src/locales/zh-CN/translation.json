@@ -900,10 +900,6 @@
         "description": "套餐、用量与账单",
         "label": "套餐与账单"
       },
-      "apiKeys": {
-        "label": "API 密钥",
-        "description": "管理 API 访问"
-      },
       "general": {
         "description": "外观、声音与启动",
         "label": "偏好设置"
@@ -913,7 +909,7 @@
         "label": "快捷键"
       },
       "speechToText": {
-        "description": "听写与会议引擎",
+        "description": "听写与笔记录音引擎",
         "label": "语音转文字"
       },
       "llms": {
@@ -1127,20 +1123,12 @@
         "bulletPoints": "Hey {{agentName}}，把这个转换成要点列表"
       }
     },
-    "apiKeys": {
-      "title": "API 密钥",
-      "signInRequired": "需要登录",
-      "signInRequiredDescription": "登录以管理您的 API 密钥。",
-      "proRequired": "API 访问需要付费计划",
-      "proRequiredDescription": "升级到 Pro 以创建 API 密钥并将 OpenWhispr 集成到您的工作流程中。",
-      "viewPlans": "查看方案"
-    },
     "aiModels": {
       "customSetup": "自定义设置",
       "customSetupDescription": "使用你自己的服务商和 API Key。",
       "description": "整理转录文本、处理指令、修正错误，同时保留你的语气风格。",
       "enableTextCleanup": "启用文本整理",
-      "enableTextCleanupDescription": "AI 提升转录质量",
+      "enableTextCleanupDescription": "使用 AI 格式化文本并执行语音指令",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "云服务商",
@@ -1469,7 +1457,7 @@
     },
     "speechToText": {
       "title": "语音转文字",
-      "description": "为听写和会议录制选择一个引擎",
+      "description": "为听写和笔记录音选择一个引擎",
       "tabs": {
         "dictation": "听写",
         "noteRecording": "笔记录音"
@@ -2168,6 +2156,26 @@
       "systemAudioRequired": "需要系统音频权限",
       "systemAudioDescription": "要转录会议，OpenWhispr 需要系统音频权限来录制其他参与者的音频。我们绝不会录制您的屏幕。您将被引导至系统设置以启用此权限。",
       "openSettings": "打开系统设置"
+    },
+    "sections": { "calendar": "日历", "api": "API", "mcp": "MCP" },
+    "api": {
+      "title": "API 密钥",
+      "description": "管理用于程序访问的 API 密钥",
+      "proRequired": "升级到付费计划以访问 API",
+      "manage": "管理密钥",
+      "viewPlans": "查看套餐",
+      "dialogTitle": "API 密钥"
+    },
+    "mcp": {
+      "title": "将笔记带到你的 AI 工具中",
+      "description": "在 Claude、ChatGPT 和 Cursor 中与你的笔记一起聊天、搜索和工作。",
+      "step1": "在你的 AI 工具中，使用公开 URL 添加 OpenWhispr MCP",
+      "step2": "通过浏览器 OAuth 流程进行身份验证。",
+      "step3": "随时随地与你的笔记一起聊天、搜索和工作。",
+      "learnMore": "了解更多",
+      "viewPlans": "查看套餐",
+      "copyUrl": "复制 MCP URL",
+      "copied": "已复制"
     },
     "plan": {
       "title": "您的方案",

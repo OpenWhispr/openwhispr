@@ -900,10 +900,6 @@
         "description": "Tarife, Nutzung & Abrechnung",
         "label": "Tarife & Abrechnung"
       },
-      "apiKeys": {
-        "label": "API-Schlüssel",
-        "description": "API-Zugriff verwalten"
-      },
       "general": {
         "description": "Darstellung, Töne & Start",
         "label": "Einstellungen"
@@ -913,7 +909,7 @@
         "label": "Hotkeys"
       },
       "speechToText": {
-        "description": "Engines für Diktat & Besprechungen",
+        "description": "Engines für Diktat & Notizaufnahme",
         "label": "Spracherkennung"
       },
       "llms": {
@@ -1132,20 +1128,12 @@
         "bulletPoints": "Hey {{agentName}}, wandle das in Stichpunkte um"
       }
     },
-    "apiKeys": {
-      "title": "API-Schlüssel",
-      "signInRequired": "Anmeldung erforderlich",
-      "signInRequiredDescription": "Melden Sie sich an, um Ihre API-Schlüssel zu verwalten.",
-      "proRequired": "API-Zugriff erfordert einen kostenpflichtigen Plan",
-      "proRequiredDescription": "Upgraden Sie auf Pro, um API-Schlüssel zu erstellen und OpenWhispr in Ihre Workflows zu integrieren.",
-      "viewPlans": "Pläne anzeigen"
-    },
     "aiModels": {
       "customSetup": "Benutzerdefinierte Einrichtung",
       "customSetupDescription": "Verwenden Sie Ihren eigenen Anbieter und API-Schlüssel.",
       "description": "Bereinigt Transkriptionen, verarbeitet Befehle und korrigiert Fehler unter Beibehaltung Ihres Stils.",
       "enableTextCleanup": "Textbereinigung aktivieren",
-      "enableTextCleanupDescription": "KI verbessert die Transkriptionsqualität",
+      "enableTextCleanupDescription": "KI formatiert Text und führt Sprachbefehle aus",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud-Anbieter",
@@ -1474,7 +1462,7 @@
     },
     "speechToText": {
       "title": "Spracherkennung",
-      "description": "Wählen Sie eine Engine für Diktat und Besprechungsaufnahme",
+      "description": "Wählen Sie eine Engine für Diktat und Notizaufnahme",
       "tabs": {
         "dictation": "Diktat",
         "noteRecording": "Notizaufnahme"
@@ -2173,6 +2161,26 @@
       "systemAudioRequired": "Systemaudio-Berechtigung erforderlich",
       "systemAudioDescription": "Zum Transkribieren von Meetings benötigt OpenWhispr die Systemaudio-Berechtigung, um den Ton anderer Teilnehmer aufzunehmen. Wir nehmen Ihren Bildschirm nie auf. Sie werden zu den Systemeinstellungen weitergeleitet, um diese zu aktivieren.",
       "openSettings": "Systemeinstellungen öffnen"
+    },
+    "sections": { "calendar": "Kalender", "api": "API", "mcp": "MCP" },
+    "api": {
+      "title": "API-Schlüssel",
+      "description": "Verwalte API-Schlüssel für programmatischen Zugriff",
+      "proRequired": "Upgrade auf einen kostenpflichtigen Plan, um die API zu nutzen",
+      "manage": "Schlüssel verwalten",
+      "viewPlans": "Pläne ansehen",
+      "dialogTitle": "API-Schlüssel"
+    },
+    "mcp": {
+      "title": "Bring deine Notizen in deine KI-Tools",
+      "description": "Chatte, suche und arbeite mit deinen Notizen in Claude, ChatGPT und Cursor.",
+      "step1": "Füge OpenWhispr MCP in deinem KI-Tool mit der öffentlichen URL hinzu",
+      "step2": "Authentifiziere dich über den Browser-OAuth-Flow.",
+      "step3": "Chatte, suche und arbeite mit deinen Notizen überall.",
+      "learnMore": "Mehr erfahren",
+      "viewPlans": "Pläne ansehen",
+      "copyUrl": "MCP-URL kopieren",
+      "copied": "Kopiert"
     },
     "plan": {
       "title": "Dein Plan",

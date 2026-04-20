@@ -1009,7 +1009,7 @@
         "label": "Hotkeys"
       },
       "speechToText": {
-        "description": "Engines for dictation & meetings",
+        "description": "Engines for dictation & note recording",
         "label": "Speech-to-Text"
       },
       "llms": {
@@ -1241,7 +1241,7 @@
       "customSetupDescription": "Use your own provider and API key.",
       "description": "Clean up transcriptions, handle commands, and fix errors while preserving your tone.",
       "enableTextCleanup": "Enable text cleanup",
-      "enableTextCleanupDescription": "AI improves transcription quality",
+      "enableTextCleanupDescription": "Use AI to format text and follow voice commands",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud Providers",
@@ -1570,7 +1570,7 @@
     },
     "speechToText": {
       "title": "Speech-to-Text",
-      "description": "Pick an engine for dictation and meeting capture",
+      "description": "Pick an engine for dictation and note recording",
       "tabs": {
         "dictation": "Dictation",
         "noteRecording": "Note Recording"

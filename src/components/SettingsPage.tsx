@@ -76,7 +76,6 @@ import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
-import ApiKeysSection from "./ApiKeysSection";
 import AgentModeSettings from "./settings/AgentModeSettings";
 import { MeetingReasoningPanel, MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import LanguageSelector from "./ui/LanguageSelector";
@@ -103,7 +102,6 @@ const formatAmount = (cents: number, currency: string) =>
 export type SettingsSectionType =
   | "account"
   | "plansBilling"
-  | "apiKeys"
   | "general"
   | "hotkeys"
   | "speechToText"
@@ -369,11 +367,6 @@ function TranscriptionSection({
 
   return (
     <div className="space-y-4">
-      <SectionHeader
-        title={t("settingsPage.transcription.title")}
-        description={t("settingsPage.transcription.description")}
-      />
-
       <InferenceModeSelector
         modes={transcriptionModes}
         activeMode={transcriptionMode}
@@ -554,11 +547,6 @@ function AiModelsSection({
 
   return (
     <div className="space-y-4">
-      <SectionHeader
-        title={t("settingsPage.aiModels.title")}
-        description={t("settingsPage.aiModels.description")}
-      />
-
       <SettingsPanel>
         <SettingsPanelRow>
           <SettingsRow
@@ -2265,84 +2253,6 @@ export default function SettingsPage({
             ) : (
               <>
                 <SectionHeader title={t("settingsPage.account.pricing.title")} />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <div className="flex items-center justify-between">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-5 w-16 rounded-full" />
-                    </div>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </>
-            )}
-          </div>
-        );
-
-      case "apiKeys":
-        return (
-          <div className="space-y-5">
-            {!NEON_AUTH_URL ? (
-              <>
-                <SectionHeader
-                  title={t("settingsPage.apiKeys.title")}
-                  description={t("settingsPage.account.notConfigured")}
-                />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <SettingsRow
-                      label={t("settingsPage.account.featuresDisabled")}
-                      description={t("settingsPage.account.featuresDisabledDescription")}
-                    >
-                      <Badge variant="warning">{t("settingsPage.account.disabled")}</Badge>
-                    </SettingsRow>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </>
-            ) : isLoaded && isSignedIn && user && (usage?.isSubscribed || usage?.isTrial) ? (
-              <ApiKeysSection />
-            ) : isLoaded && isSignedIn && user ? (
-              <>
-                <SectionHeader title={t("settingsPage.apiKeys.title")} />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <div className="flex flex-col items-center py-5 text-center">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 mb-2.5">
-                        <Key className="h-4 w-4 text-primary" />
-                      </div>
-                      <p className="text-xs font-medium text-foreground mb-1">
-                        {t("settingsPage.apiKeys.proRequired")}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground/70 mb-3 max-w-[260px] leading-relaxed">
-                        {t("settingsPage.apiKeys.proRequiredDescription")}
-                      </p>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => onNavigateToSection?.("plansBilling")}
-                      >
-                        {t("settingsPage.apiKeys.viewPlans")}
-                      </Button>
-                    </div>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </>
-            ) : isLoaded ? (
-              <>
-                <SectionHeader title={t("settingsPage.apiKeys.title")} />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <SettingsRow
-                      label={t("settingsPage.apiKeys.signInRequired")}
-                      description={t("settingsPage.apiKeys.signInRequiredDescription")}
-                    >
-                      <Badge variant="outline">{t("settingsPage.account.offline")}</Badge>
-                    </SettingsRow>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </>
-            ) : (
-              <>
-                <SectionHeader title={t("settingsPage.apiKeys.title")} />
                 <SettingsPanel>
                   <SettingsPanelRow>
                     <div className="flex items-center justify-between">

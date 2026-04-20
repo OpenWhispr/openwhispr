@@ -961,7 +961,7 @@
         "label": "Atajos"
       },
       "speechToText": {
-        "description": "Motores para dictado y reuniones",
+        "description": "Motores para dictado y grabación de notas",
         "label": "Conversión de voz a texto"
       },
       "llms": {
@@ -1193,7 +1193,7 @@
       "customSetupDescription": "Usa tu propio proveedor y clave API.",
       "description": "Corrige transcripciones, gestiona comandos y soluciona errores preservando tu tono.",
       "enableTextCleanup": "Activar corrección de texto",
-      "enableTextCleanupDescription": "La IA mejora la calidad de transcripción",
+      "enableTextCleanupDescription": "Usa la IA para dar formato al texto y ejecutar comandos de voz",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Proveedores en la nube",
@@ -1522,7 +1522,7 @@
     },
     "speechToText": {
       "title": "Conversión de voz a texto",
-      "description": "Elige un motor para dictado y captura de reuniones",
+      "description": "Elige un motor para dictado y grabación de notas",
       "tabs": {
         "dictation": "Dictado",
         "noteRecording": "Grabación de notas"
