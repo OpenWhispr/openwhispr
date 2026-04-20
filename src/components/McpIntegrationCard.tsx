@@ -4,7 +4,6 @@ import { Check, Copy, ExternalLink, Plus } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { useToast } from "./ui/useToast";
-import { cn } from "./lib/utils";
 import logo from "../assets/logo.svg";
 import claudeIcon from "../assets/icons/providers/claude.svg";
 import openaiIcon from "../assets/icons/providers/openai.svg";
@@ -32,7 +31,6 @@ export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegration
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    if (!isPaid) return;
     try {
       await navigator.clipboard.writeText(MCP_URL);
       setCopied(true);
@@ -67,34 +65,30 @@ export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegration
         {isPaid ? t("integrations.mcp.description") : t("integrations.mcp.proRequired")}
       </p>
 
-      <ol className="space-y-1.5 text-xs text-muted-foreground mb-4 list-decimal pl-4 marker:text-muted-foreground/40">
-        <li className="leading-relaxed">
-          {t("integrations.mcp.step1")}{" "}
-          <span className="inline-flex items-center gap-1 rounded-md border border-primary/15 bg-primary/5 px-1.5 py-0.5 font-mono text-[10.5px] text-foreground align-middle">
-            {MCP_URL}
-            <button
-              type="button"
-              disabled={!isPaid}
-              onClick={handleCopy}
-              aria-label={t("integrations.mcp.copyUrl")}
-              className={cn(
-                "p-0.5 rounded transition-colors",
-                isPaid
-                  ? "hover:bg-primary/10 text-muted-foreground hover:text-foreground"
-                  : "text-muted-foreground/40 cursor-not-allowed"
-              )}
-            >
-              {copied ? (
-                <Check className="h-2.5 w-2.5 text-success" />
-              ) : (
-                <Copy className="h-2.5 w-2.5" />
-              )}
-            </button>
-          </span>
-        </li>
-        <li className="leading-relaxed">{t("integrations.mcp.step2")}</li>
-        <li className="leading-relaxed">{t("integrations.mcp.step3")}</li>
-      </ol>
+      {isPaid && (
+        <ol className="space-y-1.5 text-xs text-muted-foreground mb-4 list-decimal pl-4 marker:text-muted-foreground/40">
+          <li className="leading-relaxed">
+            {t("integrations.mcp.step1")}{" "}
+            <span className="inline-flex items-center gap-1 rounded-md border border-primary/15 bg-primary/5 px-1.5 py-0.5 font-mono text-[10.5px] text-foreground align-middle">
+              {MCP_URL}
+              <button
+                type="button"
+                onClick={handleCopy}
+                aria-label={t("integrations.mcp.copyUrl")}
+                className="p-0.5 rounded transition-colors hover:bg-primary/10 text-muted-foreground hover:text-foreground"
+              >
+                {copied ? (
+                  <Check className="h-2.5 w-2.5 text-success" />
+                ) : (
+                  <Copy className="h-2.5 w-2.5" />
+                )}
+              </button>
+            </span>
+          </li>
+          <li className="leading-relaxed">{t("integrations.mcp.step2")}</li>
+          <li className="leading-relaxed">{t("integrations.mcp.step3")}</li>
+        </ol>
+      )}
 
       {isPaid ? (
         <Button
