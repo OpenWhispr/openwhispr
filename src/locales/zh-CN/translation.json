@@ -888,7 +888,7 @@
     "groups": {
       "account": "账户",
       "app": "应用",
-      "speechAi": "语音与 AI",
+      "aiModels": "AI 模型",
       "system": "系统"
     },
     "sections": {

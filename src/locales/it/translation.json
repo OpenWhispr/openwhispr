@@ -888,7 +888,7 @@
     "groups": {
       "account": "Account",
       "app": "App",
-      "speechAi": "Voce & IA",
+      "aiModels": "Modelli IA",
       "system": "Sistema"
     },
     "sections": {

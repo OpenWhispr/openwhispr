@@ -860,7 +860,7 @@
     "groups": {
       "account": "Conta",
       "app": "Aplicativo",
-      "speechAi": "Fala & IA",
+      "aiModels": "Modelos de IA",
       "system": "Sistema"
     },
     "sections": {

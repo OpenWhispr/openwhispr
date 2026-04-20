@@ -984,7 +984,7 @@
     "groups": {
       "account": "Account",
       "app": "App",
-      "speechAi": "Speech & AI",
+      "aiModels": "AI Models",
       "system": "System"
     },
     "sections": {

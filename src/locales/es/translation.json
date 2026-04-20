@@ -936,7 +936,7 @@
     "groups": {
       "account": "Cuenta",
       "app": "Aplicación",
-      "speechAi": "Voz e IA",
+      "aiModels": "Modelos de IA",
       "system": "Sistema"
     },
     "sections": {

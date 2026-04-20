@@ -888,7 +888,7 @@
     "groups": {
       "account": "アカウント",
       "app": "アプリ",
-      "speechAi": "音声 & AI",
+      "aiModels": "AIモデル",
       "system": "システム"
     },
     "sections": {
