@@ -1491,13 +1491,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (provider === "smallest") {
         const audioBuffer = await optimizedAudio.arrayBuffer();
         const params = new URLSearchParams({ language: language || "en" });
-        const appVersion = await window.electronAPI.getAppVersion?.();
         const smallestHeaders = {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/octet-stream",
           "X-Source": "openwhispr",
         };
-        if (appVersion) smallestHeaders["X-Version"] = appVersion;
         const smallestResponse = await fetch(`${endpoint}?${params}`, {
           method: "POST",
           headers: smallestHeaders,
