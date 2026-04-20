@@ -128,11 +128,6 @@ export default function AgentModeSettings() {
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        title={t("agentMode.settings.title")}
-        description={t("agentMode.settings.description")}
-      />
-
       <SettingsPanel>
         <SettingsPanelRow>
           <SettingsRow

@@ -275,8 +275,8 @@
       "rawTranscript": "Rohtranskript"
     },
     "cloudMigration": {
-      "title": "Willkommen bei OpenWhispr Pro",
-      "description": "Ihre 7-Tage-Testphase ist aktiv! Wir haben die Transkription auf OpenWhispr Cloud umgestellt für schnellere und genauere Ergebnisse. Ihre bisherigen Einstellungen sind gespeichert – wechseln Sie jederzeit in den Einstellungen zurück.",
+      "title": "Willkommen bei OpenWhispr Cloud",
+      "description": "Wir haben die Transkription auf OpenWhispr Cloud umgestellt für schnellere und genauere Ergebnisse. Ihre bisherigen Einstellungen sind gespeichert – wechseln Sie jederzeit in den Einstellungen zurück.",
       "viewSettings": "Einstellungen anzeigen"
     },
     "aiCta": {
@@ -2069,8 +2069,6 @@
   },
   "agentMode": {
     "settings": {
-      "title": "Agent-Modus",
-      "description": "Sprach-Chat-Assistent mit separatem KI-Modell",
       "enabled": "Agent-Modus aktivieren",
       "enabledDescription": "Verwende eine separate Tastenkombination, um ein Sprach-Chat-Overlay zu öffnen",
       "hotkey": "Agent-Tastenkombination",

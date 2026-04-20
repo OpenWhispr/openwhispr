@@ -275,8 +275,8 @@
       "clearAllErrorDescription": "Something went wrong. Please try again."
     },
     "cloudMigration": {
-      "title": "Welcome to OpenWhispr Pro",
-      "description": "Your 7-day free trial is active! We've switched your transcription to OpenWhispr Cloud for faster, more accurate results. Your previous settings are saved - switch back anytime in Settings.",
+      "title": "Welcome to OpenWhispr Cloud",
+      "description": "We've switched your transcription to OpenWhispr Cloud for faster, more accurate results. Your previous settings are saved — switch back anytime in Settings.",
       "viewSettings": "View Settings"
     },
     "aiCta": {
@@ -2177,8 +2177,6 @@
   },
   "agentMode": {
     "settings": {
-      "title": "Agent Mode",
-      "description": "Voice chat assistant with a separate AI model",
       "enabled": "Enable Agent Mode",
       "enabledDescription": "Use a separate hotkey to open a voice chat overlay",
       "hotkey": "Agent Hotkey",

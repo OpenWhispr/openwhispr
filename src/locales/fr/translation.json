@@ -275,8 +275,8 @@
       "rawTranscript": "Transcription brute"
     },
     "cloudMigration": {
-      "title": "Bienvenue sur OpenWhispr Pro",
-      "description": "Votre essai gratuit de 7 jours est actif ! Nous avons basculé la transcription vers OpenWhispr Cloud pour des résultats plus rapides et plus précis. Vos anciens réglages sont conservés : vous pouvez revenir en arrière à tout moment dans Paramètres.",
+      "title": "Bienvenue sur OpenWhispr Cloud",
+      "description": "Nous avons basculé la transcription vers OpenWhispr Cloud pour des résultats plus rapides et plus précis. Vos anciens réglages sont conservés : vous pouvez revenir en arrière à tout moment dans Paramètres.",
       "viewSettings": "Voir les paramètres"
     },
     "aiCta": {
@@ -2129,8 +2129,6 @@
   },
   "agentMode": {
     "settings": {
-      "title": "Mode Agent",
-      "description": "Assistant vocal de chat avec un modèle IA séparé",
       "enabled": "Activer le Mode Agent",
       "enabledDescription": "Utiliser un raccourci clavier séparé pour ouvrir une fenêtre de chat vocal",
       "hotkey": "Raccourci Agent",

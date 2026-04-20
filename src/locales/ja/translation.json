@@ -275,8 +275,8 @@
       "rawTranscript": "生の文字起こし"
     },
     "cloudMigration": {
-      "title": "OpenWhispr Pro へようこそ",
-      "description": "7 日間の無料トライアルが有効です！より高速で正確な文字起こしのために OpenWhispr Cloud に切り替えました。以前の設定は保存されています。設定からいつでも戻せます。",
+      "title": "OpenWhispr Cloud へようこそ",
+      "description": "より高速で正確な文字起こしのために OpenWhispr Cloud に切り替えました。以前の設定は保存されています。設定からいつでも戻せます。",
       "viewSettings": "設定を表示"
     },
     "aiCta": {
@@ -2069,8 +2069,6 @@
   },
   "agentMode": {
     "settings": {
-      "title": "エージェントモード",
-      "description": "別のAIモデルを使用する音声チャットアシスタント",
       "enabled": "エージェントモードを有効にする",
       "enabledDescription": "別のホットキーを使用して音声チャットオーバーレイを開く",
       "hotkey": "エージェントホットキー",

@@ -275,8 +275,8 @@
       "rawTranscript": "原始转录"
     },
     "cloudMigration": {
-      "title": "欢迎使用 OpenWhispr Pro",
-      "description": "你的 7 天免费试用已激活！我们已将转录切换到 OpenWhispr 云端，以获得更快、更准确的结果。你之前的设置已保存——随时可以在设置中切换回去。",
+      "title": "欢迎使用 OpenWhispr 云端",
+      "description": "我们已将转录切换到 OpenWhispr 云端，以获得更快、更准确的结果。你之前的设置已保存——随时可以在设置中切换回去。",
       "viewSettings": "查看设置"
     },
     "aiCta": {
@@ -2064,8 +2064,6 @@
   },
   "agentMode": {
     "settings": {
-      "title": "智能助手模式",
-      "description": "使用独立AI模型的语音聊天助手",
       "enabled": "启用智能助手模式",
       "enabledDescription": "使用独立热键打开语音聊天覆盖层",
       "hotkey": "助手热键",
