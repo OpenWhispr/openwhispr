@@ -13,8 +13,8 @@
 </p>
 
 <p align="center">
-  Free, open-source voice-to-text dictation app with AI agents, meeting transcription, and notes.<br/>
-  Privacy-first alternative to WisprFlow, Granola, and Otter. Cross-platform for macOS, Windows, and Linux.
+  The open-source and free alternative to WisprFlow and Granola.<br/>
+  Privacy-first voice-to-text dictation with AI agents, meeting transcription, and notes. Cross-platform for macOS, Windows, and Linux.
 </p>
 
 <p align="center">
