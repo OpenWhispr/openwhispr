@@ -3873,7 +3873,6 @@ class IPCHandlers {
               Authorization: `Bearer ${apiKey}`,
               "Content-Type": "application/octet-stream",
               "X-Source": "openwhispr",
-              "X-Version": app.getVersion(),
             };
             const smallestResponse = await fetch(`${endpoint}?${params}`, {
               method: "POST",
