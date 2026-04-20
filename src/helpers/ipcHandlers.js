@@ -4122,7 +4122,6 @@ class IPCHandlers {
       const started = await this.meetingAecManager
         .start({
           onMicChunk: (chunk) => {
-            meetingEchoLeakDetector.analyzeMicChunk(chunk);
             dispatchMeetingAudioBuffer(chunk, "mic");
           },
           onError: (error) => {
@@ -4175,6 +4174,8 @@ class IPCHandlers {
       if (!meetingAecEnabled) {
         return false;
       }
+
+      meetingEchoLeakDetector.analyzeMicChunk(buffer);
 
       const sent = this.meetingAecManager?.processMicBuffer(buffer);
       if (sent) {
