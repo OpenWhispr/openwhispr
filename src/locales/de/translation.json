@@ -15,6 +15,12 @@
       "changePath": "Speicherort ändern",
       "rebuild": "Alle Dateien neu erstellen",
       "rebuildDescription": "Alle Notizen und Transkripte erneut auf die Festplatte synchronisieren"
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "Sprecher erkennen und beschriften",
+        "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
+      }
     }
   },
   "tray": {
@@ -1923,7 +1929,19 @@
       "nameOrEmailPlaceholder": "Name oder E-Mail eingeben",
       "addContact": "Kontakt hinzufügen",
       "save": "Speichern",
-      "cancel": "Abbrechen"
+      "cancel": "Abbrechen",
+      "pill": {
+        "identifying": "Sprecher werden identifiziert",
+        "notLabeled": "Sprecher nicht beschriftet",
+        "finalizing": "Sprecher werden finalisiert…",
+        "justYou": "nur du",
+        "defaultingHint": "standardmäßig 1 weitere Person",
+        "toggleAria": "Sprechererkennung für diese Aufnahme umschalten",
+        "incAria": "Erwartete Sprecheranzahl erhöhen",
+        "decAria": "Erwartete Sprecheranzahl verringern",
+        "othersInCall_one": "{{count}} weitere Person im Gespräch",
+        "othersInCall_other": "{{count}} weitere Personen im Gespräch"
+      }
     }
   },
   "dictionary": {
@@ -2160,7 +2178,11 @@
       "systemAudioDescription": "Zum Transkribieren von Meetings benötigt OpenWhispr die Systemaudio-Berechtigung, um den Ton anderer Teilnehmer aufzunehmen. Wir nehmen Ihren Bildschirm nie auf. Sie werden zu den Systemeinstellungen weitergeleitet, um diese zu aktivieren.",
       "openSettings": "Systemeinstellungen öffnen"
     },
-    "sections": { "calendar": "Kalender", "api": "API", "mcp": "MCP" },
+    "sections": {
+      "calendar": "Kalender",
+      "api": "API",
+      "mcp": "MCP"
+    },
     "api": {
       "title": "API-Schlüssel",
       "description": "Verwalte API-Schlüssel für programmatischen Zugriff",
@@ -2363,5 +2385,11 @@
     "copy": "Kopieren",
     "copied": "Kopiert",
     "waitingForInput": "Sag etwas..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "Du",
+      "others": "Andere"
+    }
   }
 }

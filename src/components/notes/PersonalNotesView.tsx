@@ -131,6 +131,11 @@ export default function PersonalNotesView({
     startTranscription,
     stopTranscription,
     lockSpeaker,
+    sessionDiarizationEnabled,
+    sessionExpectedCount,
+    userTouchedStepper,
+    setSessionDiarizationEnabled,
+    setSessionExpectedCount,
   } = useMeetingTranscription();
   const recordingNoteIdRef = useRef<number | null>(null);
   const [recordingNoteId, setRecordingNoteId] = useState<number | null>(null);
@@ -940,6 +945,11 @@ export default function PersonalNotesView({
               }
               onLiveSpeakerLock={lockSpeaker}
               liveTranscript={isActiveNoteRecording ? realtimeTranscript : ""}
+              sessionDiarizationEnabled={sessionDiarizationEnabled}
+              sessionExpectedCount={sessionExpectedCount}
+              userTouchedStepper={userTouchedStepper}
+              onSetSessionDiarizationEnabled={setSessionDiarizationEnabled}
+              onSetSessionExpectedCount={setSessionExpectedCount}
               folderName={activeFolderName}
               calendarEventName={calendarEventName}
               folders={folders}

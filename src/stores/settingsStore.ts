@@ -108,6 +108,7 @@ const BOOLEAN_SETTINGS = new Set([
   "startMinimized",
   "meetingProcessDetection",
   "meetingAudioDetection",
+  "speakerDiarizationEnabled",
   "isSignedIn",
   "agentEnabled",
   "autoPasteEnabled",
@@ -239,6 +240,7 @@ export interface SettingsState
   gcalEmail: string;
   meetingProcessDetection: boolean;
   meetingAudioDetection: boolean;
+  speakerDiarizationEnabled: boolean;
   panelStartPosition: "bottom-right" | "center" | "bottom-left";
   showTranscriptionPreview: boolean;
   autoPasteEnabled: boolean;
@@ -378,6 +380,7 @@ export interface SettingsState
   setGcalAccounts: (accounts: GoogleCalendarAccount[]) => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setMeetingAudioDetection: (value: boolean) => void;
+  setSpeakerDiarizationEnabled: (value: boolean) => void;
   setPanelStartPosition: (position: "bottom-right" | "center" | "bottom-left") => void;
   setShowTranscriptionPreview: (value: boolean) => void;
   setAutoPasteEnabled: (value: boolean) => void;
@@ -548,6 +551,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
   meetingAudioDetection: readBoolean("meetingAudioDetection", true),
+  speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
   panelStartPosition: (() => {
     const v = readString("panelStartPosition", "bottom-right");
     if (v === "bottom-right" || v === "center" || v === "bottom-left") return v;
@@ -952,6 +956,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
   setMeetingAudioDetection: createBooleanSetter("meetingAudioDetection"),
+  setSpeakerDiarizationEnabled: (value: boolean) => {
+    if (isBrowser) localStorage.setItem("speakerDiarizationEnabled", String(value));
+    useSettingsStore.setState({ speakerDiarizationEnabled: value });
+    if (isBrowser) {
+      window.electronAPI?.setSpeakerDiarizationEnabled?.(value);
+    }
+  },
   setPanelStartPosition: (position: "bottom-right" | "center" | "bottom-left") => {
     if (get().panelStartPosition === position) return;
     if (isBrowser) localStorage.setItem("panelStartPosition", position);
@@ -1345,6 +1356,19 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync meeting detection preferences on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    try {
+      const currentState = useSettingsStore.getState();
+      await window.electronAPI.setSpeakerDiarizationEnabled?.(
+        currentState.speakerDiarizationEnabled
+      );
+    } catch (err) {
+      logger.warn(
+        "Failed to sync speaker diarization preference on startup",
         { error: (err as Error).message },
         "settings"
       );

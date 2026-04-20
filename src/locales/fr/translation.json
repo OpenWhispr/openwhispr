@@ -15,6 +15,12 @@
       "changePath": "Changer l'emplacement",
       "rebuild": "Reconstruire tous les fichiers",
       "rebuildDescription": "Resynchroniser toutes les notes et transcriptions sur le disque"
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "Identifier et étiqueter les intervenants",
+        "description": "Lorsque désactivé, les transcriptions affichent « Vous » et « Autres »"
+      }
     }
   },
   "tray": {
@@ -2044,7 +2050,19 @@
       "nameOrEmailPlaceholder": "Tapez un nom ou un e-mail",
       "addContact": "Ajouter un contact",
       "save": "Enregistrer",
-      "cancel": "Annuler"
+      "cancel": "Annuler",
+      "pill": {
+        "identifying": "Identification des intervenants",
+        "notLabeled": "Intervenants non étiquetés",
+        "finalizing": "Finalisation des intervenants…",
+        "justYou": "juste vous",
+        "defaultingHint": "par défaut 1 autre",
+        "toggleAria": "Activer l'identification des intervenants pour cet enregistrement",
+        "incAria": "Augmenter le nombre d'intervenants attendus",
+        "decAria": "Diminuer le nombre d'intervenants attendus",
+        "othersInCall_one": "{{count}} autre dans l'appel",
+        "othersInCall_other": "{{count}} autres dans l'appel"
+      }
     }
   },
   "dictionary": {
@@ -2379,5 +2397,11 @@
     "copy": "Copier",
     "copied": "Copié",
     "waitingForInput": "Dites quelque chose..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "Vous",
+      "others": "Autres"
+    }
   }
 }

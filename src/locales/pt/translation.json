@@ -15,6 +15,12 @@
       "changePath": "Alterar local",
       "rebuild": "Reconstruir todos os arquivos",
       "rebuildDescription": "Ressincronizar todas as notas e transcrições no disco"
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "Identificar e rotular participantes",
+        "description": "Quando desativado, as transcrições mostram \"Você\" e \"Outros\""
+      }
     }
   },
   "tray": {
@@ -1923,7 +1929,19 @@
       "nameOrEmailPlaceholder": "Digite um nome ou e-mail",
       "addContact": "Adicionar contato",
       "save": "Salvar",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "pill": {
+        "identifying": "Identificando participantes",
+        "notLabeled": "Participantes sem rótulo",
+        "finalizing": "Finalizando participantes…",
+        "justYou": "só você",
+        "defaultingHint": "assumindo 1 outra pessoa",
+        "toggleAria": "Alternar identificação de participantes para esta gravação",
+        "incAria": "Aumentar número esperado de participantes",
+        "decAria": "Diminuir número esperado de participantes",
+        "othersInCall_one": "{{count}} outra pessoa na chamada",
+        "othersInCall_other": "{{count}} outras pessoas na chamada"
+      }
     }
   },
   "dictionary": {
@@ -2160,7 +2178,11 @@
       "systemAudioDescription": "Para transcrever reuniões, o OpenWhispr precisa da permissão de Áudio do Sistema para capturar o áudio dos outros participantes. Nunca gravamos a sua tela. Você será levado às Configurações do Sistema para ativá-la.",
       "openSettings": "Abrir Configurações do Sistema"
     },
-    "sections": { "calendar": "Calendário", "api": "API", "mcp": "MCP" },
+    "sections": {
+      "calendar": "Calendário",
+      "api": "API",
+      "mcp": "MCP"
+    },
     "api": {
       "title": "Chaves de API",
       "description": "Gerencie chaves de API para acesso programático",
@@ -2363,5 +2385,11 @@
     "copy": "Copiar",
     "copied": "Copiado",
     "waitingForInput": "Diga algo..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "Você",
+      "others": "Outros"
+    }
   }
 }

@@ -27,6 +27,21 @@ const {
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
+const {
+  DEFAULT_EXPECTED_SPEAKER_COUNT,
+  MAX_SPEAKER_COUNT,
+} = require("../constants/speakerDetection.json");
+
+function parseAttendees(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
@@ -284,6 +299,8 @@ class IPCHandlers {
     this.audioStorageManager = new AudioStorageManager();
     this._audioCleanupInterval = null;
     this._noteFilesEnabled = false;
+    this.speakerDiarizationEnabled = true;
+    this.activeMeetingSpeakerConfig = null;
     liveSpeakerIdentifier.setDiarizationManager(this.diarizationManager);
     this._setupTextEditMonitor();
     this._setupAudioCleanup();
@@ -3535,11 +3552,20 @@ class IPCHandlers {
       return false;
     };
 
-    const hasRiskyMicDuplicateProfile = (suppression = null) =>
-      !!suppression &&
-      (suppression.reason === "double_talk" ||
-        suppression.hasBleedEvidence ||
-        suppression.likelyRenderBleed);
+    const isWithinMeetingStartupWarmup = () =>
+      meetingStartedAt != null && Date.now() - meetingStartedAt < MEETING_STARTUP_WARMUP_MS;
+
+    const hasRiskyMicDuplicateProfile = (suppression = null) => {
+      if (isWithinMeetingStartupWarmup()) {
+        return true;
+      }
+      return (
+        !!suppression &&
+        (suppression.reason === "double_talk" ||
+          suppression.hasBleedEvidence ||
+          suppression.likelyRenderBleed)
+      );
+    };
 
     const removeRacingMicEntriesFor = (systemText, systemTimestamp) => {
       const removed = [];
@@ -3980,6 +4006,8 @@ class IPCHandlers {
     };
 
     const MEETING_MIC_REFERENCE_ALIGNMENT_MS = 320;
+    const MEETING_STARTUP_WARMUP_MS = 1500;
+    let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
 
@@ -4007,6 +4035,7 @@ class IPCHandlers {
     let meetingAecEnabled = false;
     let meetingOneOnOneAttendee = null;
     let meetingOneOnOneProfileBound = false;
+    let meetingNoteId = null;
 
     const getLiveSpeakerProfiles = () => this.databaseManager.getSpeakerProfiles(true);
     const shouldSuppressMicTranscriptSegment = (startedAt, endedAt = Date.now()) =>
@@ -4022,37 +4051,17 @@ class IPCHandlers {
       }
     };
 
-    const adoptActiveCalendarEventForNote = (noteId) => {
-      if (!noteId) return;
-      try {
-        const note = this.databaseManager.getNote(noteId);
-        if (!note || note.participants || note.calendar_event_id) return;
+    const resolveDiarizationEnabled = () =>
+      (this.activeMeetingSpeakerConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
 
-        const events = this.databaseManager.getActiveEvents();
-        for (const evt of events) {
-          if (!evt.attendees) continue;
-          if (!this._resolveOneOnOneOtherParticipant(evt.attendees)) continue;
-          if (this.databaseManager.getNoteByCalendarEventId(evt.id, noteId)) continue;
-
-          this.databaseManager.updateNote(noteId, {
-            calendar_event_id: evt.id,
-            participants: evt.attendees,
-          });
-          const updated = this.databaseManager.getNote(noteId);
-          if (updated) this.broadcastToWindows("note-updated", updated);
-          return;
-        }
-      } catch (error) {
-        debugLogger.warn(
-          "Adopt active calendar event failed",
-          { noteId, error: error.message },
-          "meeting"
-        );
-      }
+    const resolveSessionMaxSpeakers = () => {
+      const count = this.activeMeetingSpeakerConfig?.expectedCount;
+      return count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
     };
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
       if (!meetingOneOnOneAttendee || meetingOneOnOneProfileBound || !speakerId) return;
+      if (!resolveDiarizationEnabled()) return;
       const embedding = liveSpeakerIdentifier.getSpeakerEmbedding(speakerId);
       if (!embedding) return;
       try {
@@ -4092,7 +4101,24 @@ class IPCHandlers {
         return;
       }
 
-      const sent = streaming.sendAudio(buffer);
+      let outbound = buffer;
+      if (source === "mic" && buffer.length >= 2) {
+        const samples = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.length >> 1);
+        let sumSq = 0;
+        let peak = 0;
+        for (let i = 0; i < samples.length; i++) {
+          const n = samples[i] / 0x7fff;
+          sumSq += n * n;
+          const abs = n < 0 ? -n : n;
+          if (abs > peak) peak = abs;
+        }
+        const rms = Math.sqrt(sumSq / samples.length);
+        if (rms < 0.0015 && peak < 0.05) {
+          outbound = Buffer.alloc(buffer.length);
+        }
+      }
+
+      const sent = streaming.sendAudio(outbound);
       meetingSendCounts[source]++;
       if (meetingSendCounts[source] <= 5 || meetingSendCounts[source] % 100 === 0) {
         debugLogger.debug("Meeting audio send", {
@@ -4159,6 +4185,9 @@ class IPCHandlers {
 
         meetingPendingMicChunks.shift();
         const analysis = meetingEchoLeakDetector.analyzeMicChunk(next.buffer);
+        if (next.analysisOnly) {
+          continue;
+        }
         if (analysis?.shouldMute && !meetingAecEnabled) {
           if (!meetingLocalMode) {
             dispatchMeetingAudioBuffer(Buffer.alloc(next.buffer.length), "mic");
@@ -4175,10 +4204,14 @@ class IPCHandlers {
         return false;
       }
 
-      meetingEchoLeakDetector.analyzeMicChunk(buffer);
-
       const sent = this.meetingAecManager?.processMicBuffer(buffer);
       if (sent) {
+        meetingPendingMicChunks.push({
+          buffer,
+          queuedAt: Date.now(),
+          analysisOnly: true,
+        });
+        flushPendingMeetingMicChunks();
         return true;
       }
 
@@ -4205,6 +4238,11 @@ class IPCHandlers {
       await stopLiveSpeakerIdentification();
 
       if (systemAudioMode !== "native" || !liveSpeakerIdentifier.isAvailable()) {
+        return false;
+      }
+
+      const diarizationEnabled = resolveDiarizationEnabled();
+      if (!diarizationEnabled) {
         return false;
       }
 
@@ -4257,6 +4295,8 @@ class IPCHandlers {
         },
         {
           getSpeakerProfiles: getLiveSpeakerProfiles,
+          maxSpeakers: resolveSessionMaxSpeakers(),
+          enabled: true,
         }
       );
 
@@ -4478,6 +4518,7 @@ class IPCHandlers {
       meetingLiveSpeakerStartedAt = null;
       meetingOneOnOneAttendee = null;
       meetingOneOnOneProfileBound = false;
+      meetingNoteId = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
       if (meetingDiarizationStream) {
@@ -4498,6 +4539,7 @@ class IPCHandlers {
       meetingPendingMicChunks = [];
       resetPendingMicFinals();
       meetingAecEnabled = false;
+      meetingStartedAt = null;
       meetingEchoLeakDetector.reset();
     };
 
@@ -4736,14 +4778,15 @@ class IPCHandlers {
       }
 
       meetingTranscriptionStartInProgress = true;
+      meetingStartedAt = Date.now();
       this.meetingDetectionEngine?.setUserRecording(true);
       try {
         const systemAudioPlan = await getMeetingSystemAudioPlan();
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
         meetingEchoLeakDetector.reset();
-        adoptActiveCalendarEventForNote(options.noteId);
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingOneOnOneProfileBound = false;
+        meetingNoteId = options.noteId ?? null;
 
         if (systemAudioMode === "unsupported" && this._meetingSystemStreaming?.isConnected) {
           await this._meetingSystemStreaming.disconnect().catch(() => ({ text: "" }));
@@ -4996,6 +5039,9 @@ class IPCHandlers {
               .map((segment) => segment.text)
               .join(" ")
               .trim() || meetingLocalTranscript;
+          const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
+          const noteIdSnapshot = meetingNoteId;
+          this.activeMeetingSpeakerConfig = null;
           resetMeetingLocalState();
 
           // Fire-and-forget background diarization (or notify skip)
@@ -5005,7 +5051,9 @@ class IPCHandlers {
             diarizationStartedAt,
             diarizationSegments,
             diarizationWin,
-            liveSpeakerState
+            liveSpeakerState,
+            sessionSpeakerConfigSnapshot,
+            noteIdSnapshot
           );
 
           return { success: true, transcript, diarizationSessionId };
@@ -5020,6 +5068,10 @@ class IPCHandlers {
             .join(" ")
             .trim() || [results[0]?.text, results[1]?.text].filter(Boolean).join(" ");
 
+        const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
+        const noteIdSnapshot = meetingNoteId;
+        this.activeMeetingSpeakerConfig = null;
+
         // Fire-and-forget background diarization (or notify skip)
         this._startOrSkipDiarization(
           diarizationSessionId,
@@ -5027,7 +5079,9 @@ class IPCHandlers {
           diarizationStartedAt,
           diarizationSegments,
           diarizationWin,
-          liveSpeakerState
+          liveSpeakerState,
+          sessionSpeakerConfigSnapshot,
+          noteIdSnapshot
         );
 
         return { success: true, transcript, diarizationSessionId };
@@ -6674,6 +6728,34 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("meeting-set-speaker-diarization-enabled", async (_event, payload) => {
+      try {
+        this.speakerDiarizationEnabled = payload?.enabled !== false;
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("meeting-set-session-speaker-config", async (_event, payload) => {
+      try {
+        const enabled = payload?.enabled !== false;
+        const expectedCount = Math.max(
+          1,
+          Math.min(
+            MAX_SPEAKER_COUNT,
+            Number(payload?.expectedCount) || DEFAULT_EXPECTED_SPEAKER_COUNT
+          )
+        );
+        this.activeMeetingSpeakerConfig = { enabled, expectedCount };
+        liveSpeakerIdentifier.setEnabled(enabled);
+        liveSpeakerIdentifier.setMaxSpeakers(expectedCount);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("meeting-notification-respond", async (_event, detectionId, action) => {
       try {
         await this.meetingDetectionEngine.handleNotificationResponse(detectionId, action);
@@ -7130,13 +7212,49 @@ class IPCHandlers {
     return reconciledSpeakers;
   }
 
+  _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
+    if (sessionConfig?.expectedCount) {
+      return {
+        numSpeakers: Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT),
+        cap: null,
+      };
+    }
+
+    let attendees = [];
+    if (noteId) {
+      try {
+        const note = this.databaseManager.getNote(noteId);
+        attendees = parseAttendees(note?.participants);
+      } catch (_) {
+        attendees = [];
+      }
+    }
+    if (attendees.length >= 2) {
+      return {
+        numSpeakers: Math.min(attendees.length, MAX_SPEAKER_COUNT),
+        cap: null,
+      };
+    }
+
+    if (observedSpeakerIds.size >= 2) {
+      return {
+        numSpeakers: Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT),
+        cap: null,
+      };
+    }
+
+    return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
+  }
+
   _startOrSkipDiarization(
     sessionId,
     rawPcmPath,
     audioStartedAt,
     transcriptSegments,
     win,
-    liveSpeakerState = null
+    liveSpeakerState = null,
+    sessionConfig = null,
+    noteId = null
   ) {
     const send = (payload) => {
       if (win && !win.isDestroyed()) {
@@ -7144,7 +7262,9 @@ class IPCHandlers {
       }
     };
 
-    if (!this.diarizationManager?.isAvailable() || !rawPcmPath) {
+    const diarizationEnabled = (sessionConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
+
+    if (!diarizationEnabled || !this.diarizationManager?.isAvailable() || !rawPcmPath) {
       send({
         segments: transcriptSegments.map((segment, index) => ({
           ...segment,
@@ -7175,12 +7295,21 @@ class IPCHandlers {
           });
         }
 
-        const expectedSpeakerCount =
-          observedSpeakerIds.size >= 2 ? Math.min(observedSpeakerIds.size, 4) : -1;
-        const diarizationSegments = await this.diarizationManager.diarize(
+        const { numSpeakers, cap } = this._resolveSpeakerExpectation({
+          sessionConfig,
+          noteId,
+          observedSpeakerIds,
+        });
+        let diarizationSegments = await this.diarizationManager.diarize(
           tmpWav,
-          expectedSpeakerCount > 0 ? { numSpeakers: expectedSpeakerCount } : {}
+          numSpeakers > 0 ? { numSpeakers } : {}
         );
+        if (cap != null) {
+          diarizationSegments = this.diarizationManager.capSpeakerClusters(
+            diarizationSegments,
+            cap
+          );
+        }
 
         const startMs =
           (Number.isFinite(audioStartedAt) && audioStartedAt) ||

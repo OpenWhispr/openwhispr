@@ -15,6 +15,12 @@
       "changePath": "Cambia percorso",
       "rebuild": "Ricostruisci tutti i file",
       "rebuildDescription": "Risincronizza tutte le note e trascrizioni su disco"
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "Identifica ed etichetta i partecipanti",
+        "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
+      }
     }
   },
   "tray": {
@@ -1923,7 +1929,19 @@
       "nameOrEmailPlaceholder": "Inserisci nome o email",
       "addContact": "Aggiungi contatto",
       "save": "Salva",
-      "cancel": "Annulla"
+      "cancel": "Annulla",
+      "pill": {
+        "identifying": "Identificazione dei partecipanti",
+        "notLabeled": "Partecipanti non etichettati",
+        "finalizing": "Finalizzazione dei partecipanti…",
+        "justYou": "solo tu",
+        "defaultingHint": "predefinito 1 altra persona",
+        "toggleAria": "Attiva/disattiva l'identificazione dei partecipanti per questa registrazione",
+        "incAria": "Aumenta il numero di partecipanti previsti",
+        "decAria": "Diminuisci il numero di partecipanti previsti",
+        "othersInCall_one": "{{count}} altra persona in chiamata",
+        "othersInCall_other": "{{count}} altre persone in chiamata"
+      }
     }
   },
   "dictionary": {
@@ -2160,7 +2178,11 @@
       "systemAudioDescription": "Per trascrivere le riunioni, OpenWhispr necessita dell'autorizzazione Audio di Sistema per catturare l'audio degli altri partecipanti. Non registriamo mai il tuo schermo. Verrai reindirizzato alle Impostazioni di Sistema per attivarla.",
       "openSettings": "Apri Impostazioni di Sistema"
     },
-    "sections": { "calendar": "Calendario", "api": "API", "mcp": "MCP" },
+    "sections": {
+      "calendar": "Calendario",
+      "api": "API",
+      "mcp": "MCP"
+    },
     "api": {
       "title": "Chiavi API",
       "description": "Gestisci le chiavi API per l'accesso programmatico",
@@ -2363,5 +2385,11 @@
     "copy": "Copia",
     "copied": "Copiato",
     "waitingForInput": "Di qualcosa..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "Tu",
+      "others": "Altri"
+    }
   }
 }

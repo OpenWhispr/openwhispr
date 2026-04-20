@@ -15,6 +15,12 @@
       "changePath": "變更位置",
       "rebuild": "重建所有檔案",
       "rebuildDescription": "將所有筆記和逐字稿重新同步到磁碟"
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "辨識並標記發言者",
+        "description": "關閉後，逐字稿會顯示「你」和「其他人」"
+      }
     }
   },
   "tray": {
@@ -1918,7 +1924,18 @@
       "nameOrEmailPlaceholder": "輸入姓名或電子郵件",
       "addContact": "新增聯絡人",
       "save": "儲存",
-      "cancel": "取消"
+      "cancel": "取消",
+      "pill": {
+        "identifying": "正在辨識發言者",
+        "notLabeled": "發言者未標記",
+        "finalizing": "正在完成發言者辨識…",
+        "justYou": "只有你",
+        "defaultingHint": "預設 1 位其他人",
+        "toggleAria": "切換此錄音的發言者辨識",
+        "incAria": "增加預期發言人數",
+        "decAria": "減少預期發言人數",
+        "othersInCall_other": "通話中還有 {{count}} 人"
+      }
     }
   },
   "dictionary": {
@@ -2155,7 +2172,11 @@
       "systemAudioDescription": "要轉錄會議，OpenWhispr 需要系統音訊權限來錄製其他參與者的音訊。我們絕不會錄製您的螢幕。您將被引導至系統設定以啟用此權限。",
       "openSettings": "打開系統設定"
     },
-    "sections": { "calendar": "行事曆", "api": "API", "mcp": "MCP" },
+    "sections": {
+      "calendar": "行事曆",
+      "api": "API",
+      "mcp": "MCP"
+    },
     "api": {
       "title": "API 金鑰",
       "description": "管理用於程式存取的 API 金鑰",
@@ -2358,5 +2379,11 @@
     "copy": "複製",
     "copied": "已複製",
     "waitingForInput": "說點什麼..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "你",
+      "others": "其他人"
+    }
   }
 }

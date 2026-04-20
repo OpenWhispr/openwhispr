@@ -1542,6 +1542,13 @@ declare global {
       meetingDetectionSetPreferences?: (
         prefs: Record<string, boolean>
       ) => Promise<{ success: boolean }>;
+      setSpeakerDiarizationEnabled?: (
+        enabled: boolean
+      ) => Promise<{ success: boolean; error?: string }>;
+      setMeetingSessionSpeakerConfig?: (config: {
+        enabled: boolean;
+        expectedCount: number;
+      }) => Promise<{ success: boolean; error?: string }>;
       onMeetingDetected?: (callback: (data: any) => void) => () => void;
       onMeetingDetectedStartRecording?: (callback: (data: any) => void) => () => void;
       onMeetingNotificationData?: (callback: (data: any) => void) => () => void;

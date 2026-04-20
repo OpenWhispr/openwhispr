@@ -15,6 +15,12 @@
       "changePath": "Change location",
       "rebuild": "Rebuild all files",
       "rebuildDescription": "Re-sync all notes and transcripts to disk"
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "Identify and label speakers",
+        "description": "When off, transcripts show \"You\" and \"Others\""
+      }
     }
   },
   "tray": {
@@ -2092,6 +2098,18 @@
         "confirmed": "Confirmed",
         "suggested": "Suggested",
         "locked": "Locked"
+      },
+      "pill": {
+        "identifying": "Identifying speakers",
+        "notLabeled": "Speakers not labeled",
+        "finalizing": "Finalizing speakers…",
+        "justYou": "just you",
+        "defaultingHint": "defaulting to 1 other — change if more",
+        "toggleAria": "Toggle speaker identification for this recording",
+        "incAria": "Increase expected speaker count",
+        "decAria": "Decrease expected speaker count",
+        "othersInCall_one": "{{count}} other in call",
+        "othersInCall_other": "{{count}} others in call"
       }
     }
   },
@@ -2379,5 +2397,11 @@
     "copy": "Copy",
     "copied": "Copied",
     "waitingForInput": "Say something..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "You",
+      "others": "Others"
+    }
   }
 }

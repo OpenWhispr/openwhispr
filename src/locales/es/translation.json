@@ -15,6 +15,12 @@
       "changePath": "Cambiar ubicación",
       "rebuild": "Reconstruir todos los archivos",
       "rebuildDescription": "Resincronizar todas las notas y transcripciones al disco"
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "Identificar y etiquetar participantes",
+        "description": "Cuando está desactivado, las transcripciones muestran \"Tú\" y \"Otros\""
+      }
     }
   },
   "tray": {
@@ -1983,7 +1989,19 @@
       "nameOrEmailPlaceholder": "Escribe un nombre o correo",
       "addContact": "Añadir contacto",
       "save": "Guardar",
-      "cancel": "Cancelar"
+      "cancel": "Cancelar",
+      "pill": {
+        "identifying": "Identificando participantes",
+        "notLabeled": "Participantes sin etiquetar",
+        "finalizing": "Finalizando participantes…",
+        "justYou": "solo tú",
+        "defaultingHint": "por defecto 1 otra persona",
+        "toggleAria": "Alternar identificación de participantes para esta grabación",
+        "incAria": "Aumentar número de participantes esperados",
+        "decAria": "Disminuir número de participantes esperados",
+        "othersInCall_one": "{{count}} otra persona en la llamada",
+        "othersInCall_other": "{{count}} otras personas en la llamada"
+      }
     }
   },
   "dictionary": {
@@ -2379,5 +2397,11 @@
     "copy": "Copiar",
     "copied": "Copiado",
     "waitingForInput": "Di algo..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "Tú",
+      "others": "Otros"
+    }
   }
 }

@@ -2,13 +2,29 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2 } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { InferenceModeSelector } from "../ui/SettingsSection";
+import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
+import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
 import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
+
+export function MeetingSpeakerDetectionRow() {
+  const { t } = useTranslation();
+  const speakerDiarizationEnabled = useSettingsStore((s) => s.speakerDiarizationEnabled);
+  const setSpeakerDiarizationEnabled = useSettingsStore((s) => s.setSpeakerDiarizationEnabled);
+
+  return (
+    <SettingsRow
+      label={t("settings.meeting.speakerDetection.title")}
+      description={t("settings.meeting.speakerDetection.description")}
+    >
+      <Toggle checked={speakerDiarizationEnabled} onChange={setSpeakerDiarizationEnabled} />
+    </SettingsRow>
+  );
+}
 
 const noop = () => {};
 
@@ -158,6 +174,7 @@ export function MeetingTranscriptionPanel() {
           </p>
         </>
       )}
+      <MeetingSpeakerDetectionRow />
     </div>
   );
 }

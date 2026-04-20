@@ -783,8 +783,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-upsert-transcription-from-cloud", cloudTranscription),
   markTranscriptionSynced: (id, cloudId) =>
     ipcRenderer.invoke("db-mark-transcription-synced", id, cloudId),
-  getPendingTranscriptionDeletes: () =>
-    ipcRenderer.invoke("db-get-pending-transcription-deletes"),
+  getPendingTranscriptionDeletes: () => ipcRenderer.invoke("db-get-pending-transcription-deletes"),
   hardDeleteTranscription: (id) => ipcRenderer.invoke("db-hard-delete-transcription", id),
 
   // Google Calendar
@@ -830,6 +829,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   meetingDetectionGetPreferences: () => ipcRenderer.invoke("meeting-detection-get-preferences"),
   meetingDetectionSetPreferences: (prefs) =>
     ipcRenderer.invoke("meeting-detection-set-preferences", prefs),
+  setSpeakerDiarizationEnabled: (enabled) =>
+    ipcRenderer.invoke("meeting-set-speaker-diarization-enabled", { enabled }),
+  setMeetingSessionSpeakerConfig: (config) =>
+    ipcRenderer.invoke("meeting-set-session-speaker-config", config),
   onMeetingDetected: registerListener(
     "meeting-detected",
     (callback) => (_event, data) => callback(data)

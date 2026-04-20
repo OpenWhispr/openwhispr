@@ -1,11 +1,15 @@
+const { i18nMain } = require("./i18nMain");
+
 function resolveSpeaker(seg, speakerMappings) {
   if (seg.speakerName && !seg.speakerIsPlaceholder) return seg.speakerName;
   if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
   if (seg.speaker === "you") return "You";
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
-    return isNaN(num) ? "Unknown Speaker" : `Speaker ${num + 1}`;
+    if (!isNaN(num)) return `Speaker ${num + 1}`;
   }
+  if (seg.source === "mic") return i18nMain.t("transcript.speaker.you");
+  if (seg.source === "system") return i18nMain.t("transcript.speaker.others");
   return "Unknown Speaker";
 }
 
