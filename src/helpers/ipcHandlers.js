@@ -5856,11 +5856,14 @@ class IPCHandlers {
 
     ipcMain.handle("open-whisper-models-folder", async () => {
       try {
-        const modelsDir = this.whisperManager.getModelsDir();
-        await shell.openPath(modelsDir);
+        const { getCacheRoot } = require("./modelDirUtils");
+        const cacheRoot = getCacheRoot();
+        await fs.promises.mkdir(cacheRoot, { recursive: true });
+        const errMsg = await shell.openPath(cacheRoot);
+        if (errMsg) return { success: false, error: errMsg };
         return { success: true };
       } catch (error) {
-        debugLogger.error("Failed to open whisper models folder:", error);
+        debugLogger.error("Failed to open model cache folder:", error);
         return { success: false, error: error.message };
       }
     });

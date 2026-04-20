@@ -2,9 +2,13 @@ const { app } = require("electron");
 const os = require("os");
 const path = require("path");
 
-function getModelsDirForService(service) {
+function getCacheRoot() {
   const homeDir = app?.getPath?.("home") || os.homedir();
-  return path.join(homeDir, ".cache", "openwhispr", `${service}-models`);
+  return path.join(homeDir, ".cache", "openwhispr");
 }
 
-module.exports = { getModelsDirForService };
+function getModelsDirForService(service) {
+  return path.join(getCacheRoot(), `${service}-models`);
+}
+
+module.exports = { getCacheRoot, getModelsDirForService };
