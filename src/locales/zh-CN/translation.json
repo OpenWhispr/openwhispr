@@ -1536,21 +1536,6 @@
       "transcriptionPreview": "实时转录预览",
       "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理"
     },
-    "meetings": {
-      "title": "会议",
-      "description": "为会议设置专用的语音转文字模型和 AI。如果不需要为每个会议单独覆盖，请保留继承默认值。",
-      "speechTitle": "语音转文字",
-      "intelligenceTitle": "智能",
-      "followTranscription": {
-        "label": "使用转录设置",
-        "description": "会议使用与听写相同的语音转文字"
-      },
-      "followIntelligence": {
-        "label": "使用智能设置",
-        "description": "会议使用与应用其他部分相同的 AI"
-      },
-      "inheritedSummary": "当前：{{summary}}"
-    },
     "intelligence": {
       "gpuDevice": {
         "title": "智能处理 GPU",

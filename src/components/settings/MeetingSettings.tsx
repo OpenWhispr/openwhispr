@@ -1,15 +1,8 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2 } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { Toggle } from "../ui/toggle";
-import {
-  SettingsRow,
-  SettingsPanel,
-  SettingsPanelRow,
-  SectionHeader,
-  InferenceModeSelector,
-} from "../ui/SettingsSection";
+import { InferenceModeSelector } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import ReasoningModelSelector from "../ReasoningModelSelector";
@@ -28,14 +21,12 @@ function useStartOnboarding() {
   }, []);
 }
 
-export function MeetingTranscriptionPanel({ showHeader = false }: { showHeader?: boolean } = {}) {
+export function MeetingTranscriptionPanel() {
   const { t } = useTranslation();
   const startOnboarding = useStartOnboarding();
 
   const {
     isSignedIn,
-    meetingFollowsTranscription,
-    setMeetingFollowsTranscription,
     meetingTranscriptionMode,
     setMeetingTranscriptionMode,
     setMeetingUseLocalWhisper,
@@ -62,13 +53,6 @@ export function MeetingTranscriptionPanel({ showHeader = false }: { showHeader?:
     setMistralApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
-    useLocalWhisper,
-    whisperModel,
-    localTranscriptionProvider,
-    parakeetModel,
-    cloudTranscriptionProvider,
-    cloudTranscriptionModel,
-    transcriptionMode,
   } = useSettingsStore();
 
   const transcriptionModes: InferenceModeOption[] = [
@@ -152,84 +136,33 @@ export function MeetingTranscriptionPanel({ showHeader = false }: { showHeader?:
     />
   );
 
-  const transcriptionSummary = useMemo(() => {
-    if (transcriptionMode === "openwhispr") return t("settingsPage.transcription.modes.openwhispr");
-    if (transcriptionMode === "self-hosted")
-      return t("settingsPage.transcription.modes.selfHosted");
-    if (useLocalWhisper) {
-      const model =
-        localTranscriptionProvider === "nvidia"
-          ? parakeetModel || "parakeet"
-          : whisperModel || "base";
-      return `${t("common.local")} · ${model}`;
-    }
-    return `${cloudTranscriptionProvider || "openai"} · ${cloudTranscriptionModel || "gpt-4o-mini-transcribe"}`;
-  }, [
-    t,
-    transcriptionMode,
-    useLocalWhisper,
-    localTranscriptionProvider,
-    parakeetModel,
-    whisperModel,
-    cloudTranscriptionProvider,
-    cloudTranscriptionModel,
-  ]);
-
   return (
     <div className="space-y-3">
-      {showHeader && <SectionHeader title={t("settingsPage.meetings.speechTitle")} />}
-      <SettingsPanel>
-        <SettingsPanelRow>
-          <SettingsRow
-            label={t("settingsPage.meetings.followTranscription.label")}
-            description={t("settingsPage.meetings.followTranscription.description")}
-          >
-            <Toggle
-              checked={meetingFollowsTranscription}
-              onChange={setMeetingFollowsTranscription}
-            />
-          </SettingsRow>
-        </SettingsPanelRow>
-        {meetingFollowsTranscription && (
-          <SettingsPanelRow>
-            <p className="text-xs text-muted-foreground/80">
-              {t("settingsPage.meetings.inheritedSummary", { summary: transcriptionSummary })}
-            </p>
-          </SettingsPanelRow>
-        )}
-      </SettingsPanel>
+      <InferenceModeSelector
+        modes={transcriptionModes}
+        activeMode={meetingTranscriptionMode}
+        onSelect={handleTranscriptionModeSelect}
+      />
 
-      {!meetingFollowsTranscription && (
-        <>
-          <InferenceModeSelector
-            modes={transcriptionModes}
-            activeMode={meetingTranscriptionMode}
-            onSelect={handleTranscriptionModeSelect}
-          />
-
-          {meetingTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-          {meetingTranscriptionMode === "local" && renderTranscriptionPicker("local")}
-          {meetingTranscriptionMode === "self-hosted" && (
-            <SelfHostedPanel
-              service="transcription"
-              url={meetingRemoteTranscriptionUrl}
-              onUrlChange={setMeetingRemoteTranscriptionUrl}
-            />
-          )}
-        </>
+      {meetingTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+      {meetingTranscriptionMode === "local" && renderTranscriptionPicker("local")}
+      {meetingTranscriptionMode === "self-hosted" && (
+        <SelfHostedPanel
+          service="transcription"
+          url={meetingRemoteTranscriptionUrl}
+          onUrlChange={setMeetingRemoteTranscriptionUrl}
+        />
       )}
     </div>
   );
 }
 
-export function MeetingReasoningPanel({ showHeader = false }: { showHeader?: boolean } = {}) {
+export function MeetingReasoningPanel() {
   const { t } = useTranslation();
   const startOnboarding = useStartOnboarding();
 
   const {
     isSignedIn,
-    meetingFollowsReasoning,
-    setMeetingFollowsReasoning,
     meetingReasoningMode,
     setMeetingReasoningMode,
     meetingReasoningProvider,
@@ -251,9 +184,6 @@ export function MeetingReasoningPanel({ showHeader = false }: { showHeader?: boo
     setGroqApiKey,
     customReasoningApiKey,
     setCustomReasoningApiKey,
-    reasoningMode,
-    reasoningProvider,
-    reasoningModel,
   } = useSettingsStore();
 
   const aiModes: InferenceModeOption[] = [
@@ -324,78 +254,31 @@ export function MeetingReasoningPanel({ showHeader = false }: { showHeader?: boo
     />
   );
 
-  const reasoningSummary = useMemo(() => {
-    if (reasoningMode === "openwhispr") return t("settingsPage.aiModels.modes.openwhispr");
-    if (reasoningMode === "self-hosted") return t("settingsPage.aiModels.modes.selfHosted");
-    if (reasoningMode === "enterprise") return t("settingsPage.aiModels.modes.enterprise");
-    const provider = reasoningProvider || "openai";
-    return reasoningModel ? `${provider} · ${reasoningModel}` : provider;
-  }, [t, reasoningMode, reasoningProvider, reasoningModel]);
-
   return (
     <div className="space-y-3">
-      {showHeader && <SectionHeader title={t("settingsPage.meetings.intelligenceTitle")} />}
-      <SettingsPanel>
-        <SettingsPanelRow>
-          <SettingsRow
-            label={t("settingsPage.meetings.followIntelligence.label")}
-            description={t("settingsPage.meetings.followIntelligence.description")}
-          >
-            <Toggle checked={meetingFollowsReasoning} onChange={setMeetingFollowsReasoning} />
-          </SettingsRow>
-        </SettingsPanelRow>
-        {meetingFollowsReasoning && (
-          <SettingsPanelRow>
-            <p className="text-xs text-muted-foreground/80">
-              {t("settingsPage.meetings.inheritedSummary", { summary: reasoningSummary })}
-            </p>
-          </SettingsPanelRow>
-        )}
-      </SettingsPanel>
-
-      {!meetingFollowsReasoning && (
-        <>
-          <InferenceModeSelector
-            modes={aiModes}
-            activeMode={meetingReasoningMode}
-            onSelect={handleReasoningModeSelect}
-          />
-
-          {meetingReasoningMode === "providers" && renderReasoningSelector("cloud")}
-          {meetingReasoningMode === "local" && renderReasoningSelector("local")}
-          {meetingReasoningMode === "self-hosted" && (
-            <SelfHostedPanel
-              service="reasoning"
-              url={meetingRemoteReasoningUrl}
-              onUrlChange={setMeetingRemoteReasoningUrl}
-            />
-          )}
-          {meetingReasoningMode === "enterprise" && (
-            <EnterpriseSection
-              currentProvider={meetingReasoningProvider}
-              reasoningModel={meetingReasoningModel}
-              setReasoningModel={setMeetingReasoningModel}
-              setLocalReasoningProvider={setMeetingReasoningProvider}
-            />
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-export default function MeetingSettings() {
-  const { t } = useTranslation();
-  return (
-    <div className="space-y-6">
-      <SectionHeader
-        title={t("settingsPage.meetings.title")}
-        description={t("settingsPage.meetings.description")}
+      <InferenceModeSelector
+        modes={aiModes}
+        activeMode={meetingReasoningMode}
+        onSelect={handleReasoningModeSelect}
       />
-      <MeetingTranscriptionPanel showHeader />
-      <div className="border-t border-border/40 pt-6">
-        <MeetingReasoningPanel showHeader />
-      </div>
+
+      {meetingReasoningMode === "providers" && renderReasoningSelector("cloud")}
+      {meetingReasoningMode === "local" && renderReasoningSelector("local")}
+      {meetingReasoningMode === "self-hosted" && (
+        <SelfHostedPanel
+          service="reasoning"
+          url={meetingRemoteReasoningUrl}
+          onUrlChange={setMeetingRemoteReasoningUrl}
+        />
+      )}
+      {meetingReasoningMode === "enterprise" && (
+        <EnterpriseSection
+          currentProvider={meetingReasoningProvider}
+          reasoningModel={meetingReasoningModel}
+          setReasoningModel={setMeetingReasoningModel}
+          setLocalReasoningProvider={setMeetingReasoningProvider}
+        />
+      )}
     </div>
   );
 }

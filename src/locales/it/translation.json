@@ -1541,21 +1541,6 @@
       "transcriptionPreview": "Anteprima dal vivo",
       "transcriptionPreviewDescription": "Mostra la trascrizione in una finestra flottante prima della correzione"
     },
-    "meetings": {
-      "title": "Riunioni",
-      "description": "Imposta un modello di riconoscimento vocale e un'IA dedicati per le riunioni. Lascia ereditare i valori predefiniti se non servono override per singola riunione.",
-      "speechTitle": "Riconoscimento vocale",
-      "intelligenceTitle": "Intelligenza",
-      "followTranscription": {
-        "label": "Usa impostazioni di trascrizione",
-        "description": "Le riunioni usano lo stesso riconoscimento vocale della dettatura"
-      },
-      "followIntelligence": {
-        "label": "Usa impostazioni di intelligenza",
-        "description": "Le riunioni usano la stessa IA del resto dell'app"
-      },
-      "inheritedSummary": "Attualmente: {{summary}}"
-    },
     "intelligence": {
       "gpuDevice": {
         "title": "GPU di intelligenza",

@@ -1536,21 +1536,6 @@
       "transcriptionPreview": "即時轉錄預覽",
       "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行文字整理"
     },
-    "meetings": {
-      "title": "會議",
-      "description": "為會議設定專用的語音轉文字模型和 AI。若不需要為個別會議覆寫，請保留繼承預設值。",
-      "speechTitle": "語音轉文字",
-      "intelligenceTitle": "智慧功能",
-      "followTranscription": {
-        "label": "使用轉錄設定",
-        "description": "會議使用與聽寫相同的語音轉文字"
-      },
-      "followIntelligence": {
-        "label": "使用智慧功能設定",
-        "description": "會議使用與應用程式其他部分相同的 AI"
-      },
-      "inheritedSummary": "目前：{{summary}}"
-    },
     "intelligence": {
       "gpuDevice": {
         "title": "智慧處理 GPU",

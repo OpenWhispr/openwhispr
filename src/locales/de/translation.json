@@ -1541,21 +1541,6 @@
       "transcriptionPreview": "Live-Transkriptionsvorschau",
       "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen"
     },
-    "meetings": {
-      "title": "Besprechungen",
-      "description": "Legen Sie ein dediziertes Sprache-zu-Text-Modell und eine KI für Besprechungen fest. Standardwerte übernehmen, wenn keine Besprechungs-spezifischen Überschreibungen nötig sind.",
-      "speechTitle": "Sprache-zu-Text",
-      "intelligenceTitle": "Intelligenz",
-      "followTranscription": {
-        "label": "Transkriptionseinstellungen verwenden",
-        "description": "Besprechungen nutzen dieselbe Spracherkennung wie das Diktat"
-      },
-      "followIntelligence": {
-        "label": "Intelligenz-Einstellungen verwenden",
-        "description": "Besprechungen nutzen dieselbe KI wie der Rest der App"
-      },
-      "inheritedSummary": "Aktuell: {{summary}}"
-    },
     "intelligence": {
       "gpuDevice": {
         "title": "Intelligenz-GPU",

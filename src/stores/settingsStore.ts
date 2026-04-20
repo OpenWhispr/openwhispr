@@ -46,6 +46,53 @@ function readStringArray(key: string, fallback: string[]): string[] {
   }
 }
 
+// One-time migration for legacy `meetingFollows{Transcription,Reasoning}` flags.
+// When the flag was true (the default), meeting/note recordings inherited the
+// main dictation/intelligence settings. We've removed the toggle; copy the
+// effective values into the dedicated meeting fields so post-migration reads
+// (which always go through meeting fields) preserve every existing user's
+// behavior. After migration the flag stays at "false" as a marker so this
+// never runs again. Safe to delete after a few releases.
+const MEETING_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
+  ["useLocalWhisper", "meetingUseLocalWhisper"],
+  ["whisperModel", "meetingWhisperModel"],
+  ["localTranscriptionProvider", "meetingLocalTranscriptionProvider"],
+  ["parakeetModel", "meetingParakeetModel"],
+  ["cloudTranscriptionProvider", "meetingCloudTranscriptionProvider"],
+  ["cloudTranscriptionModel", "meetingCloudTranscriptionModel"],
+  ["cloudTranscriptionBaseUrl", "meetingCloudTranscriptionBaseUrl"],
+  ["cloudTranscriptionMode", "meetingCloudTranscriptionMode"],
+  ["transcriptionMode", "meetingTranscriptionMode"],
+  ["remoteTranscriptionType", "meetingRemoteTranscriptionType"],
+  ["remoteTranscriptionUrl", "meetingRemoteTranscriptionUrl"],
+];
+const MEETING_REASONING_PAIRS: ReadonlyArray<[string, string]> = [
+  ["reasoningProvider", "meetingReasoningProvider"],
+  ["reasoningModel", "meetingReasoningModel"],
+  ["reasoningMode", "meetingReasoningMode"],
+  ["cloudReasoningMode", "meetingCloudReasoningMode"],
+  ["cloudReasoningBaseUrl", "meetingCloudReasoningBaseUrl"],
+  ["remoteReasoningType", "meetingRemoteReasoningType"],
+  ["remoteReasoningUrl", "meetingRemoteReasoningUrl"],
+];
+
+function migrateMeetingFollowFlags() {
+  if (!isBrowser) return;
+  for (const [flag, pairs] of [
+    ["meetingFollowsTranscription", MEETING_TRANSCRIPTION_PAIRS],
+    ["meetingFollowsReasoning", MEETING_REASONING_PAIRS],
+  ] as const) {
+    if (localStorage.getItem(flag) === "false") continue;
+    for (const [src, dst] of pairs) {
+      const v = localStorage.getItem(src);
+      if (v !== null) localStorage.setItem(dst, v);
+    }
+    localStorage.setItem(flag, "false");
+  }
+}
+
+migrateMeetingFollowFlags();
+
 const BOOLEAN_SETTINGS = new Set([
   "useLocalWhisper",
   "allowOpenAIFallback",
@@ -61,8 +108,6 @@ const BOOLEAN_SETTINGS = new Set([
   "startMinimized",
   "meetingProcessDetection",
   "meetingAudioDetection",
-  "meetingFollowsTranscription",
-  "meetingFollowsReasoning",
   "isSignedIn",
   "agentEnabled",
   "autoPasteEnabled",
@@ -208,7 +253,6 @@ export interface SettingsState
   remoteReasoningType: SelfHostedType;
   remoteReasoningUrl: string;
 
-  meetingFollowsTranscription: boolean;
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
   meetingWhisperModel: string;
@@ -221,7 +265,6 @@ export interface SettingsState
   meetingRemoteTranscriptionType: SelfHostedType;
   meetingRemoteTranscriptionUrl: string;
 
-  meetingFollowsReasoning: boolean;
   meetingReasoningMode: InferenceMode;
   meetingReasoningProvider: string;
   meetingReasoningModel: string;
@@ -237,7 +280,6 @@ export interface SettingsState
   setRemoteReasoningType: (type: SelfHostedType) => void;
   setRemoteReasoningUrl: (url: string) => void;
 
-  setMeetingFollowsTranscription: (value: boolean) => void;
   setMeetingTranscriptionMode: (mode: InferenceMode) => void;
   setMeetingUseLocalWhisper: (value: boolean) => void;
   setMeetingWhisperModel: (value: string) => void;
@@ -250,7 +292,6 @@ export interface SettingsState
   setMeetingRemoteTranscriptionType: (type: SelfHostedType) => void;
   setMeetingRemoteTranscriptionUrl: (url: string) => void;
 
-  setMeetingFollowsReasoning: (value: boolean) => void;
   setMeetingReasoningMode: (mode: InferenceMode) => void;
   setMeetingReasoningProvider: (value: string) => void;
   setMeetingReasoningModel: (value: string) => void;
@@ -547,7 +588,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   remoteReasoningUrl: readString("remoteReasoningUrl", ""),
 
-  meetingFollowsTranscription: readBoolean("meetingFollowsTranscription", true),
   meetingTranscriptionMode: (() => {
     const v = readString("meetingTranscriptionMode", "openwhispr");
     if (v === "openwhispr" || v === "providers" || v === "local" || v === "self-hosted") return v;
@@ -570,7 +610,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   meetingRemoteTranscriptionUrl: readString("meetingRemoteTranscriptionUrl", ""),
 
-  meetingFollowsReasoning: readBoolean("meetingFollowsReasoning", true),
   meetingReasoningMode: (() => {
     const v = readString("meetingReasoningMode", "openwhispr");
     if (
@@ -604,7 +643,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ) => void,
   setRemoteReasoningUrl: createStringSetter("remoteReasoningUrl"),
 
-  setMeetingFollowsTranscription: createBooleanSetter("meetingFollowsTranscription"),
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode
   ) => void,
@@ -624,7 +662,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ) => void,
   setMeetingRemoteTranscriptionUrl: createStringSetter("meetingRemoteTranscriptionUrl"),
 
-  setMeetingFollowsReasoning: createBooleanSetter("meetingFollowsReasoning"),
   setMeetingReasoningMode: createStringSetter("meetingReasoningMode") as (
     mode: InferenceMode
   ) => void,
@@ -1085,38 +1122,21 @@ export interface ResolvedMeetingTranscription {
 
 export const selectResolvedMeetingTranscription = (
   state: SettingsState
-): ResolvedMeetingTranscription => {
-  if (state.meetingFollowsTranscription) {
-    return {
-      useLocalWhisper: state.useLocalWhisper,
-      whisperModel: state.whisperModel,
-      localTranscriptionProvider: state.localTranscriptionProvider,
-      parakeetModel: state.parakeetModel,
-      cloudTranscriptionProvider: state.cloudTranscriptionProvider,
-      cloudTranscriptionModel: state.cloudTranscriptionModel,
-      cloudTranscriptionBaseUrl: state.cloudTranscriptionBaseUrl ?? "",
-      cloudTranscriptionMode: state.cloudTranscriptionMode,
-      transcriptionMode: state.transcriptionMode,
-      remoteTranscriptionType: state.remoteTranscriptionType,
-      remoteTranscriptionUrl: state.remoteTranscriptionUrl,
-    };
-  }
-  return {
-    useLocalWhisper: state.meetingUseLocalWhisper,
-    whisperModel: state.meetingWhisperModel || state.whisperModel,
-    localTranscriptionProvider: state.meetingLocalTranscriptionProvider,
-    parakeetModel: state.meetingParakeetModel || state.parakeetModel,
-    cloudTranscriptionProvider:
-      state.meetingCloudTranscriptionProvider || state.cloudTranscriptionProvider,
-    cloudTranscriptionModel: state.meetingCloudTranscriptionModel || state.cloudTranscriptionModel,
-    cloudTranscriptionBaseUrl:
-      state.meetingCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
-    cloudTranscriptionMode: state.meetingCloudTranscriptionMode || state.cloudTranscriptionMode,
-    transcriptionMode: state.meetingTranscriptionMode,
-    remoteTranscriptionType: state.meetingRemoteTranscriptionType,
-    remoteTranscriptionUrl: state.meetingRemoteTranscriptionUrl || state.remoteTranscriptionUrl,
-  };
-};
+): ResolvedMeetingTranscription => ({
+  useLocalWhisper: state.meetingUseLocalWhisper,
+  whisperModel: state.meetingWhisperModel || state.whisperModel,
+  localTranscriptionProvider: state.meetingLocalTranscriptionProvider,
+  parakeetModel: state.meetingParakeetModel || state.parakeetModel,
+  cloudTranscriptionProvider:
+    state.meetingCloudTranscriptionProvider || state.cloudTranscriptionProvider,
+  cloudTranscriptionModel: state.meetingCloudTranscriptionModel || state.cloudTranscriptionModel,
+  cloudTranscriptionBaseUrl:
+    state.meetingCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
+  cloudTranscriptionMode: state.meetingCloudTranscriptionMode || state.cloudTranscriptionMode,
+  transcriptionMode: state.meetingTranscriptionMode,
+  remoteTranscriptionType: state.meetingRemoteTranscriptionType,
+  remoteTranscriptionUrl: state.meetingRemoteTranscriptionUrl || state.remoteTranscriptionUrl,
+});
 
 export interface ResolvedMeetingReasoning {
   reasoningProvider: string;
@@ -1128,28 +1148,15 @@ export interface ResolvedMeetingReasoning {
   remoteReasoningUrl: string;
 }
 
-export const selectResolvedMeetingReasoning = (state: SettingsState): ResolvedMeetingReasoning => {
-  if (state.meetingFollowsReasoning) {
-    return {
-      reasoningProvider: state.reasoningProvider,
-      reasoningModel: state.reasoningModel,
-      reasoningMode: state.reasoningMode,
-      cloudReasoningMode: state.cloudReasoningMode,
-      cloudReasoningBaseUrl: state.cloudReasoningBaseUrl ?? "",
-      remoteReasoningType: state.remoteReasoningType,
-      remoteReasoningUrl: state.remoteReasoningUrl,
-    };
-  }
-  return {
-    reasoningProvider: state.meetingReasoningProvider || state.reasoningProvider,
-    reasoningModel: state.meetingReasoningModel || state.reasoningModel,
-    reasoningMode: state.meetingReasoningMode,
-    cloudReasoningMode: state.meetingCloudReasoningMode || state.cloudReasoningMode,
-    cloudReasoningBaseUrl: state.meetingCloudReasoningBaseUrl || state.cloudReasoningBaseUrl || "",
-    remoteReasoningType: state.meetingRemoteReasoningType,
-    remoteReasoningUrl: state.meetingRemoteReasoningUrl || state.remoteReasoningUrl,
-  };
-};
+export const selectResolvedMeetingReasoning = (state: SettingsState): ResolvedMeetingReasoning => ({
+  reasoningProvider: state.meetingReasoningProvider || state.reasoningProvider,
+  reasoningModel: state.meetingReasoningModel || state.reasoningModel,
+  reasoningMode: state.meetingReasoningMode,
+  cloudReasoningMode: state.meetingCloudReasoningMode || state.cloudReasoningMode,
+  cloudReasoningBaseUrl: state.meetingCloudReasoningBaseUrl || state.cloudReasoningBaseUrl || "",
+  remoteReasoningType: state.meetingRemoteReasoningType,
+  remoteReasoningUrl: state.meetingRemoteReasoningUrl || state.remoteReasoningUrl,
+});
 
 export function isCloudAgentMode() {
   return selectIsCloudAgentMode(useSettingsStore.getState());
