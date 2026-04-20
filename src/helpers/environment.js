@@ -82,8 +82,7 @@ class EnvironmentManager {
     }
   }
 
-  // Encrypted secret storage — safeStorage requires app.whenReady().
-  // Call this after construction, from main.js post-whenReady.
+  // safeStorage requires app.whenReady(), so init runs after construction.
   async init() {
     if (!this._encryptionAvailable()) {
       debugLogger.warn(
@@ -193,19 +192,14 @@ class EnvironmentManager {
       return;
     }
 
-    await this._rewriteEnvFileWithoutSecrets();
+    const envPath = path.join(app.getPath("userData"), ".env");
+    if (fs.existsSync(envPath)) await this._writeEnvFileAtomic(envPath);
     await fsPromises.writeFile(this._getMigrationSentinelPath(), "");
     debugLogger.info(
       "Migrated secrets to encrypted storage",
       { count: migrated.length },
       "environment"
     );
-  }
-
-  async _rewriteEnvFileWithoutSecrets() {
-    const envPath = path.join(app.getPath("userData"), ".env");
-    if (!fs.existsSync(envPath)) return;
-    await this._writeEnvFileAtomic(envPath);
   }
 
   async _writeEnvFileAtomic(envPath) {
@@ -227,9 +221,8 @@ class EnvironmentManager {
 
   _saveKey(envVarName, key) {
     if (SECRET_KEY_SET.has(envVarName) && this._encryptionAvailable()) {
-      // _saveSecretKey sets process.env synchronously before the first await,
-      // so in-process reads see the new value immediately; the file write
-      // completes asynchronously.
+      // _saveSecretKey updates process.env before its first await, so
+      // in-process reads see the new value while the encrypted write lands.
       this._saveSecretKey(envVarName, key).catch((error) => {
         debugLogger.error(
           "Failed to persist encrypted secret",

@@ -343,69 +343,35 @@ function debouncedPersistToEnv() {
   }, 1000);
 }
 
-type SecretProvider =
-  | "openai"
-  | "anthropic"
-  | "gemini"
-  | "groq"
-  | "mistral"
-  | "customTranscription"
-  | "customReasoning"
-  | "bedrockAccessKeyId"
-  | "bedrockSecretAccessKey"
-  | "bedrockSessionToken"
-  | "azureApiKey"
-  | "vertexApiKey";
+const SECRET_IPC_SAVERS = {
+  openai: "saveOpenAIKey",
+  anthropic: "saveAnthropicKey",
+  gemini: "saveGeminiKey",
+  groq: "saveGroqKey",
+  mistral: "saveMistralKey",
+  customTranscription: "saveCustomTranscriptionKey",
+  customReasoning: "saveCustomReasoningKey",
+  bedrockAccessKeyId: "saveBedrockAccessKeyId",
+  bedrockSecretAccessKey: "saveBedrockSecretAccessKey",
+  bedrockSessionToken: "saveBedrockSessionToken",
+  azureApiKey: "saveAzureApiKey",
+  vertexApiKey: "saveVertexApiKey",
+} as const;
 
-function callSecretIpc(provider: SecretProvider, key: string): void {
-  const api = window.electronAPI;
-  if (!api) return;
-  switch (provider) {
-    case "openai":
-      void api.saveOpenAIKey?.(key);
-      return;
-    case "anthropic":
-      void api.saveAnthropicKey?.(key);
-      return;
-    case "gemini":
-      void api.saveGeminiKey?.(key);
-      return;
-    case "groq":
-      void api.saveGroqKey?.(key);
-      return;
-    case "mistral":
-      void api.saveMistralKey?.(key);
-      return;
-    case "customTranscription":
-      void api.saveCustomTranscriptionKey?.(key);
-      return;
-    case "customReasoning":
-      void api.saveCustomReasoningKey?.(key);
-      return;
-    case "bedrockAccessKeyId":
-      void api.saveBedrockAccessKeyId?.(key);
-      return;
-    case "bedrockSecretAccessKey":
-      void api.saveBedrockSecretAccessKey?.(key);
-      return;
-    case "bedrockSessionToken":
-      void api.saveBedrockSessionToken?.(key);
-      return;
-    case "azureApiKey":
-      void api.saveAzureApiKey?.(key);
-      return;
-    case "vertexApiKey":
-      void api.saveVertexApiKey?.(key);
-      return;
-  }
-}
+type SecretProvider = keyof typeof SECRET_IPC_SAVERS;
 
 const secretSaveTimers: Partial<Record<SecretProvider, ReturnType<typeof setTimeout>>> = {};
 function debouncedSaveSecret(provider: SecretProvider, key: string) {
   if (!isBrowser) return;
   const timer = secretSaveTimers[provider];
   if (timer) clearTimeout(timer);
-  secretSaveTimers[provider] = setTimeout(() => callSecretIpc(provider, key), 250);
+  secretSaveTimers[provider] = setTimeout(() => {
+    const api = window.electronAPI;
+    const save = api?.[SECRET_IPC_SAVERS[provider]] as
+      | ((k: string) => Promise<unknown>)
+      | undefined;
+    void save?.(key);
+  }, 250);
 }
 
 const STALE_SECRET_LOCALSTORAGE_KEYS = [
@@ -460,8 +426,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "cloudTranscriptionBaseUrl",
     API_ENDPOINTS.TRANSCRIPTION_BASE
   ),
-  // Default is promoted to "byok" post-hydration if any secret came back
-  // non-empty from main process (see initializeSettings).
   cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
   cloudReasoningMode: readString("cloudReasoningMode", "openwhispr"),
   cloudReasoningBaseUrl: readString("cloudReasoningBaseUrl", API_ENDPOINTS.OPENAI_BASE),
@@ -472,7 +436,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   reasoningModel: readString("reasoningModel", ""),
   reasoningProvider: readString("reasoningProvider", "openai"),
 
-  // Secrets hydrate from main process via initializeSettings — never from localStorage.
+  // Secrets hydrate from main process in initializeSettings, never from localStorage.
   openaiApiKey: "",
   anthropicApiKey: "",
   geminiApiKey: "",
@@ -1046,7 +1010,6 @@ export async function initializeSettings(): Promise<void> {
 
   const state = useSettingsStore.getState();
 
-  // Hydrate secrets from main process (encrypted storage is the source of truth).
   if (window.electronAPI) {
     try {
       const [
@@ -1092,13 +1055,11 @@ export async function initializeSettings(): Promise<void> {
         vertexApiKey: vertexApiKey || "",
       });
 
-      // Post-hydration BYOK default (must run after keys are loaded because
-      // hasStoredByokKey reads from Zustand state, not localStorage).
+      // hasStoredByokKey reads from Zustand, so this default must run after hydration.
       if (!localStorage.getItem("cloudTranscriptionMode") && hasStoredByokKey()) {
         useSettingsStore.setState({ cloudTranscriptionMode: "byok" });
       }
 
-      // Self-healing cleanup of stale plaintext secrets from localStorage.
       for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {
         localStorage.removeItem(key);
       }
