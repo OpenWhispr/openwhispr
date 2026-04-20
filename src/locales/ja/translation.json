@@ -15,6 +15,12 @@
       "changePath": "保存先を変更",
       "rebuild": "すべてのファイルを再構築",
       "rebuildDescription": "すべてのノートと文字起こしをディスクに再同期"
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "話者を識別してラベル付け",
+        "description": "オフにすると、文字起こしには「あなた」と「他の人」と表示されます"
+      }
     }
   },
   "tray": {
@@ -1846,6 +1852,18 @@
         "suggested": "候補",
         "locked": "固定"
       },
+      "pill": {
+        "identifying": "話者を識別中",
+        "notLabeled": "話者ラベルなし",
+        "finalizing": "話者を確定中…",
+        "justYou": "あなたのみ",
+        "defaultingHint": "他の参加者を1人と想定 — 違う場合は変更してください",
+        "toggleAria": "この録音の話者識別を切り替える",
+        "incAria": "想定する話者数を増やす",
+        "decAria": "想定する話者数を減らす",
+        "othersInCall_one": "他{{count}}人が通話中",
+        "othersInCall_other": "他{{count}}人が通話中"
+      },
       "createNewPrefix": "作成",
       "emailPlaceholder": "name@example.com",
       "nameOrEmailPlaceholder": "名前またはメールを入力",
@@ -2363,5 +2381,11 @@
     "copy": "コピー",
     "copied": "コピー済み",
     "waitingForInput": "何か話してください..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "あなた",
+      "others": "他の人"
+    }
   }
 }
