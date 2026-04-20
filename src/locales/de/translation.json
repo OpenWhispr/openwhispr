@@ -912,17 +912,13 @@
         "description": "Diktat-Hotkey & Aktivierung",
         "label": "Hotkeys"
       },
-      "transcription": {
-        "description": "Sprache-zu-Text-Engine",
-        "label": "Transkription"
+      "speechToText": {
+        "description": "Engines für Diktat & Besprechungen",
+        "label": "Spracherkennung"
       },
-      "meetings": {
-        "description": "Dedizierte Modelle für Besprechungen",
-        "label": "Besprechungen"
-      },
-      "intelligence": {
-        "description": "KI-Modelle, Agent & Prompts",
-        "label": "Intelligenz"
+      "llms": {
+        "description": "Modelle für Chat, Bereinigung & Zusammenfassungen",
+        "label": "Sprachmodelle"
       },
       "privacyData": {
         "description": "Datenschutz, Berechtigungen & Analyse",
@@ -931,10 +927,6 @@
       "system": {
         "description": "Updates, Speicher & Entwicklertools",
         "label": "System"
-      },
-      "agentMode": {
-        "label": "Agent-Modus",
-        "description": "Sprach-Chat-Assistent"
       }
     },
     "title": "Einstellungen"
@@ -1479,6 +1471,23 @@
     "prompts": {
       "description": "Den einheitlichen System-Prompt anzeigen, anpassen und testen, der Textbereinigung und Anweisungserkennung steuert",
       "title": "Prompt-Studio"
+    },
+    "speechToText": {
+      "title": "Spracherkennung",
+      "description": "Wählen Sie eine Engine für Diktat und Besprechungsaufnahme",
+      "tabs": {
+        "dictation": "Diktat",
+        "noteRecording": "Notizaufnahme"
+      }
+    },
+    "llms": {
+      "title": "Sprachmodelle",
+      "description": "Konfigurieren Sie Modelle für Bereinigung, Notizformatierung und Chat",
+      "tabs": {
+        "dictationCleanup": "Diktat-Bereinigung",
+        "noteFormatting": "Notizformatierung",
+        "chatIntelligence": "Chat-Intelligenz"
+      }
     },
     "transcription": {
       "customSetup": "Benutzerdefinierte Einrichtung",

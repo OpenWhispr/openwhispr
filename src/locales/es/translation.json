@@ -960,17 +960,13 @@
         "description": "Atajo de dictado y activación",
         "label": "Atajos"
       },
-      "transcription": {
-        "description": "Motor de voz a texto",
-        "label": "Transcripción"
+      "speechToText": {
+        "description": "Motores para dictado y reuniones",
+        "label": "Conversión de voz a texto"
       },
-      "meetings": {
-        "description": "Modelos dedicados para reuniones",
-        "label": "Reuniones"
-      },
-      "intelligence": {
-        "description": "Modelos de IA, agente y prompts",
-        "label": "Inteligencia"
+      "llms": {
+        "description": "Modelos para chat, limpieza y resúmenes",
+        "label": "Modelos de lenguaje"
       },
       "privacyData": {
         "description": "Privacidad, permisos y análisis",
@@ -979,10 +975,6 @@
       "system": {
         "description": "Actualizaciones, almacenamiento y herramientas de desarrollo",
         "label": "Sistema"
-      },
-      "agentMode": {
-        "label": "Modo Agente",
-        "description": "Asistente de chat por voz"
       }
     },
     "title": "Ajustes"
@@ -1527,6 +1519,23 @@
     "prompts": {
       "description": "Visualiza, personaliza y prueba el prompt de sistema unificado que impulsa la corrección de texto y la detección de instrucciones",
       "title": "Estudio de prompts"
+    },
+    "speechToText": {
+      "title": "Conversión de voz a texto",
+      "description": "Elige un motor para dictado y captura de reuniones",
+      "tabs": {
+        "dictation": "Dictado",
+        "noteRecording": "Grabación de notas"
+      }
+    },
+    "llms": {
+      "title": "Modelos de lenguaje",
+      "description": "Configura modelos para limpieza, formato de notas y chat",
+      "tabs": {
+        "dictationCleanup": "Limpieza de dictado",
+        "noteFormatting": "Formato de notas",
+        "chatIntelligence": "Inteligencia de chat"
+      }
     },
     "transcription": {
       "customSetup": "Configuración personalizada",

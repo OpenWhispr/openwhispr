@@ -912,17 +912,13 @@
         "description": "ディクテーションホットキーと起動モード",
         "label": "ホットキー"
       },
-      "transcription": {
-        "description": "音声テキスト変換エンジン",
-        "label": "文字起こし"
+      "speechToText": {
+        "description": "ディクテーションとミーティング用エンジン",
+        "label": "音声認識"
       },
-      "meetings": {
-        "description": "ミーティング専用モデル",
-        "label": "ミーティング"
-      },
-      "intelligence": {
-        "description": "AIモデル、エージェント、プロンプト",
-        "label": "インテリジェンス"
+      "llms": {
+        "description": "チャット、整形、要約用のモデル",
+        "label": "言語モデル"
       },
       "privacyData": {
         "description": "プライバシー、権限、分析",
@@ -931,10 +927,6 @@
       "system": {
         "description": "更新、ストレージ、開発者ツール",
         "label": "システム"
-      },
-      "agentMode": {
-        "label": "エージェントモード",
-        "description": "音声チャットアシスタント"
       }
     },
     "title": "設定"
@@ -1479,6 +1471,23 @@
     "prompts": {
       "description": "テキスト補正と指示検出を行う統合システムプロンプトの表示、カスタマイズ、テスト",
       "title": "プロンプトスタジオ"
+    },
+    "speechToText": {
+      "title": "音声認識",
+      "description": "ディクテーションとミーティング録音用のエンジンを選択",
+      "tabs": {
+        "dictation": "ディクテーション",
+        "noteRecording": "ノート録音"
+      }
+    },
+    "llms": {
+      "title": "言語モデル",
+      "description": "クリーンアップ、ノートのフォーマット、チャット用のモデルを設定",
+      "tabs": {
+        "dictationCleanup": "音声入力のクリーンアップ",
+        "noteFormatting": "ノートのフォーマット",
+        "chatIntelligence": "チャットインテリジェンス"
+      }
     },
     "transcription": {
       "customSetup": "カスタム設定",

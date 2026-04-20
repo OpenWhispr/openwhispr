@@ -912,17 +912,13 @@
         "description": "Scorciatoia di dettatura e attivazione",
         "label": "Scorciatoie"
       },
-      "transcription": {
-        "description": "Motore di riconoscimento vocale",
-        "label": "Trascrizione"
+      "speechToText": {
+        "description": "Motori per dettatura e riunioni",
+        "label": "Riconoscimento vocale"
       },
-      "meetings": {
-        "description": "Modelli dedicati per le riunioni",
-        "label": "Riunioni"
-      },
-      "intelligence": {
-        "description": "Modelli IA, agente e prompt",
-        "label": "Intelligenza"
+      "llms": {
+        "description": "Modelli per chat, pulizia e riassunti",
+        "label": "Modelli linguistici"
       },
       "privacyData": {
         "description": "Privacy, permessi e analisi",
@@ -931,10 +927,6 @@
       "system": {
         "description": "Aggiornamenti, archiviazione e strumenti di sviluppo",
         "label": "Sistema"
-      },
-      "agentMode": {
-        "label": "Modalità Agente",
-        "description": "Assistente vocale chat"
       }
     },
     "title": "Impostazioni"
@@ -1479,6 +1471,23 @@
     "prompts": {
       "description": "Visualizza, personalizza e testa il prompt di sistema unificato che gestisce la correzione del testo e il rilevamento delle istruzioni",
       "title": "Prompt Studio"
+    },
+    "speechToText": {
+      "title": "Riconoscimento vocale",
+      "description": "Scegli un motore per dettatura e registrazione di riunioni",
+      "tabs": {
+        "dictation": "Dettatura",
+        "noteRecording": "Registrazione note"
+      }
+    },
+    "llms": {
+      "title": "Modelli linguistici",
+      "description": "Configura modelli per pulizia, formattazione note e chat",
+      "tabs": {
+        "dictationCleanup": "Pulizia della dettatura",
+        "noteFormatting": "Formattazione note",
+        "chatIntelligence": "Intelligenza chat"
+      }
     },
     "transcription": {
       "customSetup": "Configurazione personalizzata",

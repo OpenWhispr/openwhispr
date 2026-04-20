@@ -960,17 +960,13 @@
         "description": "Raccourci de dictée et activation",
         "label": "Raccourcis"
       },
-      "transcription": {
-        "description": "Moteur de reconnaissance vocale",
-        "label": "Transcription"
+      "speechToText": {
+        "description": "Moteurs pour dictée et réunions",
+        "label": "Reconnaissance vocale"
       },
-      "meetings": {
-        "description": "Modèles dédiés aux réunions",
-        "label": "Réunions"
-      },
-      "intelligence": {
-        "description": "Modèles IA, agent & prompts",
-        "label": "Intelligence"
+      "llms": {
+        "description": "Modèles pour chat, nettoyage & résumés",
+        "label": "Modèles de langage"
       },
       "privacyData": {
         "description": "Confidentialité, permissions & analytique",
@@ -979,10 +975,6 @@
       "system": {
         "description": "Mises à jour, stockage & outils de développement",
         "label": "Système"
-      },
-      "agentMode": {
-        "label": "Mode Agent",
-        "description": "Assistant vocal de chat"
       }
     },
     "title": "Paramètres"
@@ -1527,6 +1519,23 @@
     "prompts": {
       "description": "Affichez, personnalisez et testez le prompt système unifié qui gère la correction du texte et la détection des instructions",
       "title": "Studio de prompts"
+    },
+    "speechToText": {
+      "title": "Reconnaissance vocale",
+      "description": "Choisissez un moteur pour la dictée et la capture de réunions",
+      "tabs": {
+        "dictation": "Dictée",
+        "noteRecording": "Enregistrement de notes"
+      }
+    },
+    "llms": {
+      "title": "Modèles de langage",
+      "description": "Configurez les modèles pour le nettoyage, la mise en forme des notes et le chat",
+      "tabs": {
+        "dictationCleanup": "Nettoyage de la dictée",
+        "noteFormatting": "Mise en forme des notes",
+        "chatIntelligence": "Intelligence du chat"
+      }
     },
     "transcription": {
       "customSetup": "Configuration personnalisée",

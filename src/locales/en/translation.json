@@ -1008,17 +1008,13 @@
         "description": "Dictation hotkey & activation",
         "label": "Hotkeys"
       },
-      "transcription": {
-        "description": "Speech-to-text engine",
-        "label": "Transcription"
+      "speechToText": {
+        "description": "Engines for dictation & meetings",
+        "label": "Speech-to-Text"
       },
-      "meetings": {
-        "description": "Dedicated models for meetings",
-        "label": "Meetings"
-      },
-      "intelligence": {
-        "description": "AI models, agent & prompts",
-        "label": "Intelligence"
+      "llms": {
+        "description": "Models for chat, cleanup & summaries",
+        "label": "Language Models"
       },
       "privacyData": {
         "description": "Privacy, permissions & analytics",
@@ -1027,10 +1023,6 @@
       "system": {
         "description": "Updates, storage & developer tools",
         "label": "System"
-      },
-      "agentMode": {
-        "label": "Agent Mode",
-        "description": "Voice chat assistant"
       }
     },
     "title": "Settings"
@@ -1575,6 +1567,23 @@
     "prompts": {
       "description": "View, customize, and test the unified system prompt that powers text cleanup and instruction detection",
       "title": "Prompt Studio"
+    },
+    "speechToText": {
+      "title": "Speech-to-Text",
+      "description": "Pick an engine for dictation and meeting capture",
+      "tabs": {
+        "dictation": "Dictation",
+        "noteRecording": "Note Recording"
+      }
+    },
+    "llms": {
+      "title": "Language Models",
+      "description": "Configure models for cleanup, note formatting, and chat",
+      "tabs": {
+        "dictationCleanup": "Dictation Cleanup",
+        "noteFormatting": "Note Formatting",
+        "chatIntelligence": "Chat Intelligence"
+      }
     },
     "transcription": {
       "customSetup": "Custom Setup",

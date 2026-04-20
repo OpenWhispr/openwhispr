@@ -10,23 +10,36 @@ import {
   CreditCard,
   Key,
   Shield,
-  MessageSquare,
-  CalendarDays,
 } from "lucide-react";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
 
 export type { SettingsSectionType };
 
-// Maps old section IDs to new ones for backward-compatible deep-linking
+// The old AI Models sidebar had four items (transcription, meetings,
+// intelligence, agentMode) — they now collapse into two: speechToText + llms.
+// Legacy deep-links land on the matching sub-tab via LEGACY_SUB_TAB.
 const SECTION_ALIASES: Record<string, SettingsSectionType> = {
-  aiModels: "intelligence",
-  agentConfig: "intelligence",
-  prompts: "intelligence",
+  aiModels: "llms",
+  agentConfig: "llms",
+  agentMode: "llms",
+  intelligence: "llms",
+  meetings: "llms",
+  prompts: "llms",
+  transcription: "speechToText",
   softwareUpdates: "system",
   privacy: "privacyData",
   permissions: "privacyData",
   developer: "system",
+};
+
+const LEGACY_SUB_TAB: Record<string, string> = {
+  transcription: "dictation",
+  meetings: "noteFormatting",
+  intelligence: "dictationCleanup",
+  agentMode: "chatIntelligence",
+  agentConfig: "chatIntelligence",
+  aiModels: "dictationCleanup",
 };
 
 interface SettingsModalProps {
@@ -75,31 +88,17 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         group: t("settingsModal.groups.app"),
       },
       {
-        id: "transcription",
-        label: t("settingsModal.sections.transcription.label"),
+        id: "speechToText",
+        label: t("settingsModal.sections.speechToText.label"),
         icon: Mic,
-        description: t("settingsModal.sections.transcription.description"),
+        description: t("settingsModal.sections.speechToText.description"),
         group: t("settingsModal.groups.aiModels"),
       },
       {
-        id: "meetings",
-        label: t("settingsModal.sections.meetings.label"),
-        icon: CalendarDays,
-        description: t("settingsModal.sections.meetings.description"),
-        group: t("settingsModal.groups.aiModels"),
-      },
-      {
-        id: "intelligence",
-        label: t("settingsModal.sections.intelligence.label"),
+        id: "llms",
+        label: t("settingsModal.sections.llms.label"),
         icon: Brain,
-        description: t("settingsModal.sections.intelligence.description"),
-        group: t("settingsModal.groups.aiModels"),
-      },
-      {
-        id: "agentMode",
-        label: t("settingsModal.sections.agentMode.label"),
-        icon: MessageSquare,
-        description: t("settingsModal.sections.agentMode.description"),
+        description: t("settingsModal.sections.llms.description"),
         group: t("settingsModal.groups.aiModels"),
       },
       {
@@ -121,15 +120,23 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
   );
 
   const [activeSection, setActiveSection] = React.useState<SettingsSectionType>("account");
+  const [initialSubTab, setInitialSubTab] = useState<string | undefined>(undefined);
   const [prevOpen, setPrevOpen] = useState(open);
 
   if (open && !prevOpen && initialSection) {
     setPrevOpen(open);
     const resolved = (SECTION_ALIASES[initialSection] ?? initialSection) as SettingsSectionType;
     setActiveSection(resolved);
+    setInitialSubTab(LEGACY_SUB_TAB[initialSection]);
   } else if (open !== prevOpen) {
     setPrevOpen(open);
+    if (!open) setInitialSubTab(undefined);
   }
+
+  const handleSectionChange = (section: SettingsSectionType) => {
+    setActiveSection(section);
+    setInitialSubTab(undefined);
+  };
 
   return (
     <SidebarModal<SettingsSectionType>
@@ -138,9 +145,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
       title={t("settingsModal.title")}
       sidebarItems={sidebarItems}
       activeSection={activeSection}
-      onSectionChange={setActiveSection}
+      onSectionChange={handleSectionChange}
     >
-      <SettingsPage activeSection={activeSection} onNavigateToSection={setActiveSection} />
+      <SettingsPage
+        activeSection={activeSection}
+        onNavigateToSection={handleSectionChange}
+        initialSubTab={initialSubTab}
+      />
     </SidebarModal>
   );
 }

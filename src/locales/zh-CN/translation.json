@@ -912,17 +912,13 @@
         "description": "听写快捷键与激活模式",
         "label": "快捷键"
       },
-      "transcription": {
-        "description": "语音转文字引擎",
-        "label": "转录"
+      "speechToText": {
+        "description": "听写与会议引擎",
+        "label": "语音转文字"
       },
-      "meetings": {
-        "description": "会议专用模型",
-        "label": "会议"
-      },
-      "intelligence": {
-        "description": "AI 模型、助手与提示词",
-        "label": "智能"
+      "llms": {
+        "description": "用于聊天、整理和摘要的模型",
+        "label": "语言模型"
       },
       "privacyData": {
         "description": "隐私、权限与数据分析",
@@ -931,10 +927,6 @@
       "system": {
         "description": "更新、存储与开发者工具",
         "label": "系统"
-      },
-      "agentMode": {
-        "label": "智能助手模式",
-        "description": "语音聊天助手"
       }
     },
     "title": "设置"
@@ -1474,6 +1466,23 @@
     "prompts": {
       "description": "查看、自定义和测试用于文本整理和指令识别的统一系统提示词",
       "title": "提示词工作室"
+    },
+    "speechToText": {
+      "title": "语音转文字",
+      "description": "为听写和会议录制选择一个引擎",
+      "tabs": {
+        "dictation": "听写",
+        "noteRecording": "笔记录音"
+      }
+    },
+    "llms": {
+      "title": "语言模型",
+      "description": "配置用于听写清理、笔记格式化和聊天的模型",
+      "tabs": {
+        "dictationCleanup": "听写清理",
+        "noteFormatting": "笔记格式化",
+        "chatIntelligence": "聊天智能"
+      }
     },
     "transcription": {
       "customSetup": "自定义设置",

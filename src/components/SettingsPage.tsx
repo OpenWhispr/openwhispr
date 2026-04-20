@@ -30,6 +30,9 @@ import {
   Copy,
   Trash2,
   Building2,
+  MessageSquare,
+  FileAudio,
+  Wand2,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { NEON_AUTH_URL, signOut, deleteAccount } from "../lib/neonAuth";
@@ -62,8 +65,10 @@ import { useUpdater } from "../hooks/useUpdater";
 import PromptStudio from "./ui/PromptStudio";
 import ReasoningModelSelector from "./ReasoningModelSelector";
 import EnterpriseSection from "./EnterpriseSection";
+import { ProviderTabs } from "./ui/ProviderTabs";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
+import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
 import { formatHotkeyLabel } from "../utils/hotkeys";
@@ -73,7 +78,7 @@ import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
 import ApiKeysSection from "./ApiKeysSection";
 import AgentModeSettings from "./settings/AgentModeSettings";
-import MeetingSettings from "./settings/MeetingSettings";
+import { MeetingReasoningPanel, MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
@@ -101,19 +106,16 @@ export type SettingsSectionType =
   | "apiKeys"
   | "general"
   | "hotkeys"
-  | "transcription"
-  | "meetings"
-  | "intelligence"
+  | "speechToText"
+  | "llms"
   | "privacyData"
-  | "system"
-  | "aiModels"
-  | "agentConfig"
-  | "prompts"
-  | "agentMode";
+  | "system";
 
 interface SettingsPageProps {
   activeSection?: SettingsSectionType;
   onNavigateToSection?: (section: SettingsSectionType) => void;
+  /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
+  initialSubTab?: string;
 }
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
@@ -602,6 +604,105 @@ function AiModelsSection({
   );
 }
 
+type SpeechTab = "dictation" | "noteRecording";
+type LlmTab = "dictationCleanup" | "noteFormatting" | "chatIntelligence";
+
+const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording"];
+const LLM_TABS: LlmTab[] = ["dictationCleanup", "noteFormatting", "chatIntelligence"];
+
+function useSubTab<T extends string>(storageKey: string, options: readonly T[], initial?: T) {
+  const [tab, setTab] = useLocalStorage<T>(storageKey, initial ?? options[0]);
+  useEffect(() => {
+    if (initial && initial !== tab) setTab(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial]);
+  const safeTab = options.includes(tab) ? tab : options[0];
+  return [safeTab, setTab] as const;
+}
+
+function SpeechToTextTabs({
+  initialTab,
+  renderDictation,
+  renderNoteRecording,
+}: {
+  initialTab?: SpeechTab;
+  renderDictation: () => React.ReactNode;
+  renderNoteRecording: () => React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  const [tab, setTab] = useSubTab<SpeechTab>("settings.speechToTextTab", SPEECH_TABS, initialTab);
+
+  const subTabs = [
+    { id: "dictation", name: t("settingsPage.speechToText.tabs.dictation") },
+    { id: "noteRecording", name: t("settingsPage.speechToText.tabs.noteRecording") },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader
+        title={t("settingsPage.speechToText.title")}
+        description={t("settingsPage.speechToText.description")}
+      />
+      <ProviderTabs
+        providers={subTabs}
+        selectedId={tab}
+        onSelect={(id) => setTab(id as SpeechTab)}
+        renderIcon={(id) =>
+          id === "dictation" ? (
+            <Mic className="w-3.5 h-3.5" />
+          ) : (
+            <FileAudio className="w-3.5 h-3.5" />
+          )
+        }
+      />
+      {tab === "dictation" ? renderDictation() : renderNoteRecording()}
+    </div>
+  );
+}
+
+function LlmsTabs({
+  initialTab,
+  renderDictationCleanup,
+  renderNoteFormatting,
+  renderChatIntelligence,
+}: {
+  initialTab?: LlmTab;
+  renderDictationCleanup: () => React.ReactNode;
+  renderNoteFormatting: () => React.ReactNode;
+  renderChatIntelligence: () => React.ReactNode;
+}) {
+  const { t } = useTranslation();
+  const [tab, setTab] = useSubTab<LlmTab>("settings.llmsTab", LLM_TABS, initialTab);
+
+  const subTabs = [
+    { id: "dictationCleanup", name: t("settingsPage.llms.tabs.dictationCleanup") },
+    { id: "noteFormatting", name: t("settingsPage.llms.tabs.noteFormatting") },
+    { id: "chatIntelligence", name: t("settingsPage.llms.tabs.chatIntelligence") },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader
+        title={t("settingsPage.llms.title")}
+        description={t("settingsPage.llms.description")}
+      />
+      <ProviderTabs
+        providers={subTabs}
+        selectedId={tab}
+        onSelect={(id) => setTab(id as LlmTab)}
+        renderIcon={(id) => {
+          if (id === "dictationCleanup") return <Wand2 className="w-3.5 h-3.5" />;
+          if (id === "noteFormatting") return <BookOpen className="w-3.5 h-3.5" />;
+          return <MessageSquare className="w-3.5 h-3.5" />;
+        }}
+      />
+      {tab === "dictationCleanup" && renderDictationCleanup()}
+      {tab === "noteFormatting" && renderNoteFormatting()}
+      {tab === "chatIntelligence" && renderChatIntelligence()}
+    </div>
+  );
+}
+
 function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligence" }) {
   const { t } = useTranslation();
   const [gpus, setGpus] = useState<GpuDevice[]>([]);
@@ -669,6 +770,7 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
 export default function SettingsPage({
   activeSection = "general",
   onNavigateToSection,
+  initialSubTab,
 }: SettingsPageProps) {
   const { isCompact } = useSettingsLayout();
   const {
@@ -3158,339 +3260,203 @@ EOF`,
           </div>
         );
 
-      case "transcription":
+      case "speechToText":
         return (
-          <TranscriptionSection
-            isSignedIn={isSignedIn ?? false}
-            startOnboarding={startOnboarding}
-            cloudTranscriptionMode={cloudTranscriptionMode}
-            setCloudTranscriptionMode={setCloudTranscriptionMode}
-            useLocalWhisper={useLocalWhisper}
-            setUseLocalWhisper={setUseLocalWhisper}
-            updateTranscriptionSettings={updateTranscriptionSettings}
-            cloudTranscriptionProvider={cloudTranscriptionProvider}
-            setCloudTranscriptionProvider={setCloudTranscriptionProvider}
-            cloudTranscriptionModel={cloudTranscriptionModel}
-            setCloudTranscriptionModel={setCloudTranscriptionModel}
-            localTranscriptionProvider={localTranscriptionProvider}
-            setLocalTranscriptionProvider={setLocalTranscriptionProvider}
-            whisperModel={whisperModel}
-            setWhisperModel={setWhisperModel}
-            parakeetModel={parakeetModel}
-            setParakeetModel={setParakeetModel}
-            openaiApiKey={openaiApiKey}
-            setOpenaiApiKey={setOpenaiApiKey}
-            groqApiKey={groqApiKey}
-            setGroqApiKey={setGroqApiKey}
-            mistralApiKey={mistralApiKey}
-            setMistralApiKey={setMistralApiKey}
-            customTranscriptionApiKey={customTranscriptionApiKey}
-            setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
-            cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
-            setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
-            transcriptionMode={transcriptionMode}
-            setTranscriptionMode={setTranscriptionMode}
-            remoteTranscriptionUrl={remoteTranscriptionUrl}
-            setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
-            showTranscriptionPreview={showTranscriptionPreview}
-            setShowTranscriptionPreview={setShowTranscriptionPreview}
-            toast={toast}
-          />
-        );
-
-      case "meetings":
-        return <MeetingSettings />;
-
-      case "aiModels":
-        return (
-          <AiModelsSection
-            isSignedIn={isSignedIn ?? false}
-            startOnboarding={startOnboarding}
-            cloudReasoningMode={cloudReasoningMode}
-            setCloudReasoningMode={setCloudReasoningMode}
-            useReasoningModel={useReasoningModel}
-            setUseReasoningModel={(value) => {
-              setUseReasoningModel(value);
-              updateReasoningSettings({ useReasoningModel: value });
-            }}
-            reasoningModel={reasoningModel}
-            setReasoningModel={setReasoningModel}
-            reasoningProvider={reasoningProvider}
-            setReasoningProvider={setReasoningProvider}
-            cloudReasoningBaseUrl={cloudReasoningBaseUrl}
-            setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
-            openaiApiKey={openaiApiKey}
-            setOpenaiApiKey={setOpenaiApiKey}
-            anthropicApiKey={anthropicApiKey}
-            setAnthropicApiKey={setAnthropicApiKey}
-            geminiApiKey={geminiApiKey}
-            setGeminiApiKey={setGeminiApiKey}
-            groqApiKey={groqApiKey}
-            setGroqApiKey={setGroqApiKey}
-            customReasoningApiKey={customReasoningApiKey}
-            setCustomReasoningApiKey={setCustomReasoningApiKey}
-            reasoningMode={reasoningMode}
-            setReasoningMode={setReasoningMode}
-            remoteReasoningUrl={remoteReasoningUrl}
-            setRemoteReasoningUrl={setRemoteReasoningUrl}
-            toast={toast}
-          />
-        );
-
-      case "agentConfig":
-        return (
-          <div className="space-y-5">
-            <SectionHeader
-              title={t("settingsPage.agentConfig.title")}
-              description={t("settingsPage.agentConfig.description")}
-            />
-
-            {/* Agent Name */}
-            <div>
-              <p className="text-[13px] font-medium text-foreground mb-3">
-                {t("settingsPage.agentConfig.agentName")}
-              </p>
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <div className="space-y-3">
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder={t("settingsPage.agentConfig.placeholder")}
-                        value={agentNameInput}
-                        onChange={(e) => setAgentNameInput(e.target.value)}
-                        className="flex-1 text-center text-base font-mono"
-                      />
-                      <Button
-                        onClick={handleSaveAgentName}
-                        disabled={!agentNameInput.trim()}
-                        size="sm"
-                      >
-                        {t("settingsPage.agentConfig.save")}
-                      </Button>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground/60">
-                      {t("settingsPage.agentConfig.helper")}
-                    </p>
-                  </div>
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
-
-            {/* How it works */}
-            <div>
-              <SectionHeader title={t("settingsPage.agentConfig.howItWorksTitle")} />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <p className="text-[12px] text-muted-foreground leading-relaxed">
-                    {t("settingsPage.agentConfig.howItWorksDescription", { agentName })}
-                  </p>
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
-
-            {/* Examples */}
-            <div>
-              <SectionHeader title={t("settingsPage.agentConfig.examplesTitle")} />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <div className="space-y-2.5">
-                    {[
-                      {
-                        input: `Hey ${agentName}, write a formal email about the budget`,
-                        mode: t("settingsPage.agentConfig.instructionMode"),
-                      },
-                      {
-                        input: `Hey ${agentName}, make this more professional`,
-                        mode: t("settingsPage.agentConfig.instructionMode"),
-                      },
-                      {
-                        input: `Hey ${agentName}, convert this to bullet points`,
-                        mode: t("settingsPage.agentConfig.instructionMode"),
-                      },
-                      {
-                        input: t("settingsPage.agentConfig.cleanupExample"),
-                        mode: t("settingsPage.agentConfig.cleanupMode"),
-                      },
-                    ].map((example, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <span
-                          className={`shrink-0 mt-0.5 text-[10px] font-medium uppercase tracking-wider px-1.5 py-px rounded ${
-                            example.mode === t("settingsPage.agentConfig.instructionMode")
-                              ? "bg-primary/10 text-primary dark:bg-primary/15"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {example.mode}
-                        </span>
-                        <p className="text-[12px] text-muted-foreground leading-relaxed">
-                          "{example.input}"
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
-          </div>
-        );
-
-      case "prompts":
-        return (
-          <div className="space-y-5">
-            <SectionHeader
-              title={t("settingsPage.prompts.title")}
-              description={t("settingsPage.prompts.description")}
-            />
-
-            <PromptStudio />
-          </div>
-        );
-
-      case "intelligence":
-        return (
-          <div className="space-y-6">
-            {/* Text Cleanup (AI Models) */}
-            <AiModelsSection
-              isSignedIn={isSignedIn ?? false}
-              startOnboarding={startOnboarding}
-              cloudReasoningMode={cloudReasoningMode}
-              setCloudReasoningMode={setCloudReasoningMode}
-              useReasoningModel={useReasoningModel}
-              setUseReasoningModel={(value) => {
-                updateReasoningSettings({ useReasoningModel: value });
-              }}
-              reasoningModel={reasoningModel}
-              setReasoningModel={setReasoningModel}
-              reasoningProvider={reasoningProvider}
-              setReasoningProvider={setReasoningProvider}
-              cloudReasoningBaseUrl={cloudReasoningBaseUrl}
-              setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
-              openaiApiKey={openaiApiKey}
-              setOpenaiApiKey={setOpenaiApiKey}
-              anthropicApiKey={anthropicApiKey}
-              setAnthropicApiKey={setAnthropicApiKey}
-              geminiApiKey={geminiApiKey}
-              setGeminiApiKey={setGeminiApiKey}
-              groqApiKey={groqApiKey}
-              setGroqApiKey={setGroqApiKey}
-              customReasoningApiKey={customReasoningApiKey}
-              setCustomReasoningApiKey={setCustomReasoningApiKey}
-              reasoningMode={reasoningMode}
-              setReasoningMode={setReasoningMode}
-              remoteReasoningUrl={remoteReasoningUrl}
-              setRemoteReasoningUrl={setRemoteReasoningUrl}
-              toast={toast}
-            />
-
-            {/* Agent Config */}
-            <div className="border-t border-border/40 pt-6">
-              <SectionHeader
-                title={t("settingsPage.agentConfig.title")}
-                description={t("settingsPage.agentConfig.description")}
+          <SpeechToTextTabs
+            initialTab={initialSubTab as SpeechTab | undefined}
+            renderDictation={() => (
+              <TranscriptionSection
+                isSignedIn={isSignedIn ?? false}
+                startOnboarding={startOnboarding}
+                cloudTranscriptionMode={cloudTranscriptionMode}
+                setCloudTranscriptionMode={setCloudTranscriptionMode}
+                useLocalWhisper={useLocalWhisper}
+                setUseLocalWhisper={setUseLocalWhisper}
+                updateTranscriptionSettings={updateTranscriptionSettings}
+                cloudTranscriptionProvider={cloudTranscriptionProvider}
+                setCloudTranscriptionProvider={setCloudTranscriptionProvider}
+                cloudTranscriptionModel={cloudTranscriptionModel}
+                setCloudTranscriptionModel={setCloudTranscriptionModel}
+                localTranscriptionProvider={localTranscriptionProvider}
+                setLocalTranscriptionProvider={setLocalTranscriptionProvider}
+                whisperModel={whisperModel}
+                setWhisperModel={setWhisperModel}
+                parakeetModel={parakeetModel}
+                setParakeetModel={setParakeetModel}
+                openaiApiKey={openaiApiKey}
+                setOpenaiApiKey={setOpenaiApiKey}
+                groqApiKey={groqApiKey}
+                setGroqApiKey={setGroqApiKey}
+                mistralApiKey={mistralApiKey}
+                setMistralApiKey={setMistralApiKey}
+                customTranscriptionApiKey={customTranscriptionApiKey}
+                setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
+                cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
+                setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+                transcriptionMode={transcriptionMode}
+                setTranscriptionMode={setTranscriptionMode}
+                remoteTranscriptionUrl={remoteTranscriptionUrl}
+                setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                showTranscriptionPreview={showTranscriptionPreview}
+                setShowTranscriptionPreview={setShowTranscriptionPreview}
+                toast={toast}
               />
+            )}
+            renderNoteRecording={() => <MeetingTranscriptionPanel />}
+          />
+        );
 
-              <div className="space-y-5">
-                <div>
-                  <p className="text-xs font-medium text-foreground mb-3">
-                    {t("settingsPage.agentConfig.agentName")}
-                  </p>
-                  <SettingsPanel>
-                    <SettingsPanelRow>
-                      <div className="space-y-3">
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder={t("settingsPage.agentConfig.placeholder")}
-                            value={agentNameInput}
-                            onChange={(e) => setAgentNameInput(e.target.value)}
-                            className="flex-1 text-center text-base font-mono"
-                          />
-                          <Button
-                            onClick={handleSaveAgentName}
-                            disabled={!agentNameInput.trim()}
-                            size="sm"
-                          >
-                            {t("settingsPage.agentConfig.save")}
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground/60">
-                          {t("settingsPage.agentConfig.helper")}
-                        </p>
-                      </div>
-                    </SettingsPanelRow>
-                  </SettingsPanel>
-                </div>
+      case "llms":
+        return (
+          <LlmsTabs
+            initialTab={initialSubTab as LlmTab | undefined}
+            renderChatIntelligence={() => (
+              <div className="space-y-6">
+                <AgentModeSettings />
 
-                <div>
-                  <SectionHeader title={t("settingsPage.agentConfig.howItWorksTitle")} />
-                  <SettingsPanel>
-                    <SettingsPanelRow>
-                      <p className="text-xs text-muted-foreground leading-relaxed">
-                        {t("settingsPage.agentConfig.howItWorksDescription", { agentName })}
-                      </p>
-                    </SettingsPanelRow>
-                  </SettingsPanel>
-                </div>
+                <div className="border-t border-border/40 pt-6 space-y-5">
+                  <SectionHeader
+                    title={t("settingsPage.agentConfig.title")}
+                    description={t("settingsPage.agentConfig.description")}
+                  />
 
-                <div>
-                  <SectionHeader title={t("settingsPage.agentConfig.examplesTitle")} />
-                  <SettingsPanel>
-                    <SettingsPanelRow>
-                      <div className="space-y-2.5">
-                        {[
-                          {
-                            input: t("settingsPage.agentConfig.examples.formalEmail", {
-                              agentName,
-                            }),
-                            mode: t("settingsPage.agentConfig.instructionMode"),
-                          },
-                          {
-                            input: t("settingsPage.agentConfig.examples.professional", {
-                              agentName,
-                            }),
-                            mode: t("settingsPage.agentConfig.instructionMode"),
-                          },
-                          {
-                            input: t("settingsPage.agentConfig.examples.bulletPoints", {
-                              agentName,
-                            }),
-                            mode: t("settingsPage.agentConfig.instructionMode"),
-                          },
-                          {
-                            input: t("settingsPage.agentConfig.cleanupExample"),
-                            mode: t("settingsPage.agentConfig.cleanupMode"),
-                          },
-                        ].map((example, i) => (
-                          <div key={i} className="flex items-start gap-3">
-                            <span
-                              className={`shrink-0 mt-0.5 text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded ${
-                                example.mode === t("settingsPage.agentConfig.instructionMode")
-                                  ? "bg-primary/10 text-primary dark:bg-primary/15"
-                                  : "bg-muted text-muted-foreground"
-                              }`}
+                  <div>
+                    <p className="text-xs font-medium text-foreground mb-3">
+                      {t("settingsPage.agentConfig.agentName")}
+                    </p>
+                    <SettingsPanel>
+                      <SettingsPanelRow>
+                        <div className="space-y-3">
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder={t("settingsPage.agentConfig.placeholder")}
+                              value={agentNameInput}
+                              onChange={(e) => setAgentNameInput(e.target.value)}
+                              className="flex-1 text-center text-base font-mono"
+                            />
+                            <Button
+                              onClick={handleSaveAgentName}
+                              disabled={!agentNameInput.trim()}
+                              size="sm"
                             >
-                              {example.mode}
-                            </span>
-                            <p className="text-xs text-muted-foreground leading-relaxed">
-                              "{example.input}"
-                            </p>
+                              {t("settingsPage.agentConfig.save")}
+                            </Button>
                           </div>
-                        ))}
-                      </div>
-                    </SettingsPanelRow>
-                  </SettingsPanel>
+                          <p className="text-xs text-muted-foreground/60">
+                            {t("settingsPage.agentConfig.helper")}
+                          </p>
+                        </div>
+                      </SettingsPanelRow>
+                    </SettingsPanel>
+                  </div>
+
+                  <div>
+                    <SectionHeader title={t("settingsPage.agentConfig.howItWorksTitle")} />
+                    <SettingsPanel>
+                      <SettingsPanelRow>
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          {t("settingsPage.agentConfig.howItWorksDescription", { agentName })}
+                        </p>
+                      </SettingsPanelRow>
+                    </SettingsPanel>
+                  </div>
+
+                  <div>
+                    <SectionHeader title={t("settingsPage.agentConfig.examplesTitle")} />
+                    <SettingsPanel>
+                      <SettingsPanelRow>
+                        <div className="space-y-2.5">
+                          {[
+                            {
+                              input: t("settingsPage.agentConfig.examples.formalEmail", {
+                                agentName,
+                              }),
+                              mode: t("settingsPage.agentConfig.instructionMode"),
+                            },
+                            {
+                              input: t("settingsPage.agentConfig.examples.professional", {
+                                agentName,
+                              }),
+                              mode: t("settingsPage.agentConfig.instructionMode"),
+                            },
+                            {
+                              input: t("settingsPage.agentConfig.examples.bulletPoints", {
+                                agentName,
+                              }),
+                              mode: t("settingsPage.agentConfig.instructionMode"),
+                            },
+                            {
+                              input: t("settingsPage.agentConfig.cleanupExample"),
+                              mode: t("settingsPage.agentConfig.cleanupMode"),
+                            },
+                          ].map((example, i) => (
+                            <div key={i} className="flex items-start gap-3">
+                              <span
+                                className={`shrink-0 mt-0.5 text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded ${
+                                  example.mode === t("settingsPage.agentConfig.instructionMode")
+                                    ? "bg-primary/10 text-primary dark:bg-primary/15"
+                                    : "bg-muted text-muted-foreground"
+                                }`}
+                              >
+                                {example.mode}
+                              </span>
+                              <p className="text-xs text-muted-foreground leading-relaxed">
+                                "{example.input}"
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </SettingsPanelRow>
+                    </SettingsPanel>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+            renderDictationCleanup={() => (
+              <div className="space-y-6">
+                <AiModelsSection
+                  isSignedIn={isSignedIn ?? false}
+                  startOnboarding={startOnboarding}
+                  cloudReasoningMode={cloudReasoningMode}
+                  setCloudReasoningMode={setCloudReasoningMode}
+                  useReasoningModel={useReasoningModel}
+                  setUseReasoningModel={(value) => {
+                    updateReasoningSettings({ useReasoningModel: value });
+                  }}
+                  reasoningModel={reasoningModel}
+                  setReasoningModel={setReasoningModel}
+                  reasoningProvider={reasoningProvider}
+                  setReasoningProvider={setReasoningProvider}
+                  cloudReasoningBaseUrl={cloudReasoningBaseUrl}
+                  setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
+                  openaiApiKey={openaiApiKey}
+                  setOpenaiApiKey={setOpenaiApiKey}
+                  anthropicApiKey={anthropicApiKey}
+                  setAnthropicApiKey={setAnthropicApiKey}
+                  geminiApiKey={geminiApiKey}
+                  setGeminiApiKey={setGeminiApiKey}
+                  groqApiKey={groqApiKey}
+                  setGroqApiKey={setGroqApiKey}
+                  customReasoningApiKey={customReasoningApiKey}
+                  setCustomReasoningApiKey={setCustomReasoningApiKey}
+                  reasoningMode={reasoningMode}
+                  setReasoningMode={setReasoningMode}
+                  remoteReasoningUrl={remoteReasoningUrl}
+                  setRemoteReasoningUrl={setRemoteReasoningUrl}
+                  toast={toast}
+                />
 
-            {/* System Prompt */}
-            <div className="border-t border-border/40 pt-6">
-              <SectionHeader
-                title={t("settingsPage.prompts.title")}
-                description={t("settingsPage.prompts.description")}
-              />
-              <PromptStudio />
-            </div>
-          </div>
+                <div className="border-t border-border/40 pt-6">
+                  <SectionHeader
+                    title={t("settingsPage.prompts.title")}
+                    description={t("settingsPage.prompts.description")}
+                  />
+                  <PromptStudio />
+                </div>
+              </div>
+            )}
+            renderNoteFormatting={() => <MeetingReasoningPanel />}
+          />
         );
 
       case "privacyData":
@@ -4034,9 +4000,6 @@ EOF`,
             </div>
           </div>
         );
-
-      case "agentMode":
-        return <AgentModeSettings />;
 
       default:
         return null;
