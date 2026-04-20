@@ -917,7 +917,7 @@
         "label": "语音转文字"
       },
       "llms": {
-        "description": "用于聊天、整理和摘要的模型",
+        "description": "用于清理、笔记格式化和聊天的模型",
         "label": "语言模型"
       },
       "privacyData": {

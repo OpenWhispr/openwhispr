@@ -40,6 +40,7 @@ const LEGACY_SUB_TAB: Record<string, string> = {
   agentMode: "chatIntelligence",
   agentConfig: "chatIntelligence",
   aiModels: "dictationCleanup",
+  prompts: "dictationCleanup",
 };
 
 interface SettingsModalProps {

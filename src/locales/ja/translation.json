@@ -917,7 +917,7 @@
         "label": "音声認識"
       },
       "llms": {
-        "description": "チャット、整形、要約用のモデル",
+        "description": "クリーンアップ、ノートのフォーマット、チャット用のモデル",
         "label": "言語モデル"
       },
       "privacyData": {
@@ -1484,7 +1484,7 @@
       "title": "言語モデル",
       "description": "クリーンアップ、ノートのフォーマット、チャット用のモデルを設定",
       "tabs": {
-        "dictationCleanup": "音声入力のクリーンアップ",
+        "dictationCleanup": "ディクテーションのクリーンアップ",
         "noteFormatting": "ノートのフォーマット",
         "chatIntelligence": "チャットインテリジェンス"
       }
