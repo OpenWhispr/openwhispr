@@ -1568,7 +1568,8 @@
         "openai_whisper_1": "Originales Whisper-Modell",
         "groq_whisper_large_v3": "Hochpräzise Spracherkennung",
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
-        "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription"
+        "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
+        "smallest_pulse": "Schnelle und präzise Spracherkennung"
       },
       "cloud": {
         "openai_gpt_5_4": "Frontier-Modell für komplexes Reasoning",
