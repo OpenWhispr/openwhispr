@@ -2222,6 +2222,30 @@
       "systemAudioDescription": "Pour transcrire les réunions, OpenWhispr a besoin de l'autorisation Audio Système pour capturer l'audio des autres participants. Nous n'enregistrons jamais votre écran. Vous serez dirigé vers les Réglages Système pour l'activer.",
       "openSettings": "Ouvrir les Réglages Système"
     },
+    "sections": {
+      "calendar": "Calendrier",
+      "api": "API",
+      "mcp": "MCP"
+    },
+    "api": {
+      "title": "Clés API",
+      "description": "Gérez les clés API pour un accès programmatique",
+      "proRequired": "Passez à un plan payant pour accéder à l'API",
+      "manage": "Gérer les clés",
+      "viewPlans": "Voir les forfaits",
+      "dialogTitle": "Clés API"
+    },
+    "mcp": {
+      "title": "Apportez vos notes à vos outils d'IA",
+      "description": "Discutez, recherchez et travaillez avec vos notes dans Claude, ChatGPT et Cursor.",
+      "step1": "Dans votre outil d'IA, ajoutez OpenWhispr MCP avec l'URL publique",
+      "step2": "Authentifiez-vous via le flux OAuth du navigateur.",
+      "step3": "Discutez, recherchez et travaillez avec vos notes n'importe où.",
+      "learnMore": "En savoir plus",
+      "viewPlans": "Voir les forfaits",
+      "copyUrl": "Copier l'URL MCP",
+      "copied": "Copié"
+    },
     "plan": {
       "title": "Votre forfait",
       "current": "Actuel",

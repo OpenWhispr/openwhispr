@@ -2270,6 +2270,30 @@
       "systemAudioDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
       "openSettings": "Open System Settings"
     },
+    "sections": {
+      "calendar": "Calendar",
+      "api": "API",
+      "mcp": "MCP"
+    },
+    "api": {
+      "title": "API keys",
+      "description": "Manage API keys for programmatic access",
+      "proRequired": "Upgrade to a paid plan to access the API",
+      "manage": "Manage keys",
+      "viewPlans": "View Plans",
+      "dialogTitle": "API keys"
+    },
+    "mcp": {
+      "title": "Bring your notes to your AI tools",
+      "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
+      "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
+      "step2": "Authenticate via the browser OAuth flow.",
+      "step3": "Chat, search, and work with your notes anywhere.",
+      "learnMore": "Learn more",
+      "viewPlans": "View Plans",
+      "copyUrl": "Copy MCP URL",
+      "copied": "Copied"
+    },
     "plan": {
       "title": "Your Plan",
       "current": "Current",

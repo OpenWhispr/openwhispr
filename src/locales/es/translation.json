@@ -2222,6 +2222,30 @@
       "systemAudioDescription": "Para transcribir reuniones, OpenWhispr necesita el permiso de Audio del Sistema para capturar el audio de otros participantes. Nunca grabamos tu pantalla. Serás dirigido a Ajustes del Sistema para activarlo.",
       "openSettings": "Abrir Ajustes del Sistema"
     },
+    "sections": {
+      "calendar": "Calendario",
+      "api": "API",
+      "mcp": "MCP"
+    },
+    "api": {
+      "title": "Claves API",
+      "description": "Administra las claves API para acceso programático",
+      "proRequired": "Actualiza a un plan de pago para acceder a la API",
+      "manage": "Administrar claves",
+      "viewPlans": "Ver planes",
+      "dialogTitle": "Claves API"
+    },
+    "mcp": {
+      "title": "Lleva tus notas a tus herramientas de IA",
+      "description": "Chatea, busca y trabaja con tus notas en Claude, ChatGPT y Cursor.",
+      "step1": "En tu herramienta de IA, añade OpenWhispr MCP usando la URL pública",
+      "step2": "Autentícate mediante el flujo OAuth del navegador.",
+      "step3": "Chatea, busca y trabaja con tus notas en cualquier lugar.",
+      "learnMore": "Más información",
+      "viewPlans": "Ver planes",
+      "copyUrl": "Copiar URL de MCP",
+      "copied": "Copiado"
+    },
     "plan": {
       "title": "Tu Plan",
       "current": "Actual",
