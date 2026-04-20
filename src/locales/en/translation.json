@@ -1002,10 +1002,6 @@
         "description": "Plans, usage & billing",
         "label": "Plans & Billing"
       },
-      "apiKeys": {
-        "label": "API Keys",
-        "description": "Manage API access"
-      },
       "general": {
         "description": "Appearance, sounds & startup",
         "label": "Preferences"
@@ -1233,14 +1229,6 @@
         "professional": "Hey {{agentName}}, make this more professional",
         "bulletPoints": "Hey {{agentName}}, convert this to bullet points"
       }
-    },
-    "apiKeys": {
-      "title": "API Keys",
-      "signInRequired": "Sign in required",
-      "signInRequiredDescription": "Sign in to manage your API keys.",
-      "proRequired": "API access requires a paid plan",
-      "proRequiredDescription": "Upgrade to Pro to create API keys and integrate OpenWhispr with your workflows.",
-      "viewPlans": "View Plans"
     },
     "aiModels": {
       "customSetup": "Custom Setup",

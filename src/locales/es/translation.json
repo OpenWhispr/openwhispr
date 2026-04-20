@@ -954,10 +954,6 @@
         "description": "Planes, uso y facturación",
         "label": "Planes y facturación"
       },
-      "apiKeys": {
-        "label": "Claves API",
-        "description": "Gestionar acceso API"
-      },
       "general": {
         "description": "Apariencia, sonidos e inicio",
         "label": "Preferencias"
@@ -1185,14 +1181,6 @@
         "professional": "Hey {{agentName}}, hazlo más profesional",
         "bulletPoints": "Hey {{agentName}}, convierte esto en viñetas"
       }
-    },
-    "apiKeys": {
-      "title": "Claves de API",
-      "signInRequired": "Inicio de sesión requerido",
-      "signInRequiredDescription": "Inicia sesión para administrar tus claves de API.",
-      "proRequired": "El acceso a la API requiere un plan de pago",
-      "proRequiredDescription": "Actualiza a Pro para crear claves API e integrar OpenWhispr en tus flujos de trabajo.",
-      "viewPlans": "Ver planes"
     },
     "aiModels": {
       "customSetup": "Configuración personalizada",
