@@ -904,7 +904,7 @@ class DatabaseManager {
         .get();
       const reassignNotes = this.db.prepare("UPDATE notes SET folder_id = ? WHERE folder_id = ?");
       const tombstone = this.db.prepare(
-        "UPDATE folders SET deleted_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
+        "UPDATE folders SET deleted_at = datetime('now'), sync_status = 'pending', name = '__deleted_' || id || '_' || name WHERE id = ?"
       );
       const hardDelete = this.db.prepare("DELETE FROM folders WHERE id = ?");
       this.db.transaction(() => {
