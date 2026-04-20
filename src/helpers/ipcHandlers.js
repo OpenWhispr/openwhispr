@@ -1192,6 +1192,12 @@ class IPCHandlers {
     ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId) =>
       this.databaseManager.markTranscriptionSynced(id, cloudId)
     );
+    ipcMain.handle("db-get-pending-transcription-deletes", () =>
+      this.databaseManager.getPendingTranscriptionDeletes()
+    );
+    ipcMain.handle("db-hard-delete-transcription", (_, id) =>
+      this.databaseManager.hardDeleteTranscription(id)
+    );
 
     ipcMain.handle("export-note", async (event, noteId, format) => {
       try {

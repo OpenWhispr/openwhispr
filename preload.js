@@ -781,6 +781,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-upsert-transcription-from-cloud", cloudTranscription),
   markTranscriptionSynced: (id, cloudId) =>
     ipcRenderer.invoke("db-mark-transcription-synced", id, cloudId),
+  getPendingTranscriptionDeletes: () =>
+    ipcRenderer.invoke("db-get-pending-transcription-deletes"),
+  hardDeleteTranscription: (id) => ipcRenderer.invoke("db-hard-delete-transcription", id),
 
   // Google Calendar
   gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),

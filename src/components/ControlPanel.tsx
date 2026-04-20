@@ -326,6 +326,7 @@ export default function ControlPanel() {
             const result = await window.electronAPI.deleteTranscription(id);
             if (result.success) {
               removeFromStore(id);
+              syncService.syncAll().catch(console.error);
             } else {
               showAlertDialog({
                 title: t("controlPanel.history.couldNotDeleteTitle"),
@@ -354,6 +355,7 @@ export default function ControlPanel() {
           const result = await window.electronAPI.clearTranscriptions();
           if (result.success) {
             clearStore();
+            syncService.syncAll().catch(console.error);
             toast({
               title: t("controlPanel.history.clearAllSuccess"),
               variant: "success",

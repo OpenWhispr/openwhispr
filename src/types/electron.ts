@@ -1621,6 +1621,8 @@ declare global {
         cloudTranscription: Record<string, unknown>
       ) => Promise<TranscriptionItem>;
       markTranscriptionSynced?: (id: number, cloudId: string) => Promise<void>;
+      getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
+      hardDeleteTranscription?: (id: number) => Promise<void>;
     };
 
     api?: {

@@ -429,7 +429,21 @@ class SyncService {
 
   private async syncTranscriptions(): Promise<void> {
     await this.pushPendingTranscriptions();
+    await this.pushTranscriptionDeletes();
     await this.pullTranscriptions();
+  }
+
+  private async pushTranscriptionDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingTranscriptionDeletes?.()) ?? [];
+    for (const t of deletes) {
+      if (!t.cloud_id) continue;
+      try {
+        await TranscriptionsService.delete(t.cloud_id);
+        await window.electronAPI.hardDeleteTranscription?.(t.id);
+      } catch (err) {
+        console.error("Transcription delete sync failed:", err);
+      }
+    }
   }
 
   private async pushPendingTranscriptions(): Promise<void> {
