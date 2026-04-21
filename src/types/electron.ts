@@ -829,6 +829,10 @@ declare global {
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;
+
+      // Gladia API key management
+      getGladiaKey?: () => Promise<string | null>;
+      saveGladiaKey?: (key: string) => Promise<void>;
       proxyMistralTranscription: (data: {
         audioBuffer: ArrayBuffer;
         model?: string;
@@ -1074,6 +1078,7 @@ declare global {
         apiKey: string;
         baseUrl: string;
         model: string;
+        provider?: string;
       }) => Promise<{
         success: boolean;
         text?: string;
@@ -1287,6 +1292,36 @@ declare global {
       onDeepgramFinalTranscript?: (callback: (text: string) => void) => () => void;
       onDeepgramError?: (callback: (error: string) => void) => () => void;
       onDeepgramSessionEnd?: (
+        callback: (data: { audioDuration?: number; text?: string }) => void
+      ) => () => void;
+
+      // Gladia Streaming
+      gladiaStreamingWarmup?: (options?: {
+        sampleRate?: number;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      gladiaStreamingStart?: (options?: { sampleRate?: number; language?: string }) => Promise<{
+        success: boolean;
+        usedWarmConnection?: boolean;
+        error?: string;
+        code?: string;
+      }>;
+      gladiaStreamingSend?: (audioBuffer: ArrayBuffer) => void;
+      gladiaStreamingStop?: () => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+      }>;
+      gladiaStreamingStatus?: () => Promise<{
+        isConnected: boolean;
+        sessionId: string | null;
+        hasWarmConnection: boolean;
+      }>;
+      onGladiaPartialTranscript?: (callback: (text: string) => void) => () => void;
+      onGladiaFinalTranscript?: (callback: (text: string) => void) => () => void;
+      onGladiaError?: (callback: (error: string) => void) => () => void;
+      onGladiaSessionEnd?: (
         callback: (data: { audioDuration?: number; text?: string }) => void
       ) => () => void;
 

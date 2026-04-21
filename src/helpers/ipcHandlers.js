@@ -9,6 +9,7 @@ const debugLogger = require("./debugLogger");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
+const GladiaStreaming = require("./gladiaStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
@@ -286,6 +287,7 @@ class IPCHandlers {
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
+    this.gladiaStreaming = null;
     this._dictationStreaming = null;
     this._dictationConnectPromise = null;
     this._dictationIdleTimer = null;
@@ -2369,6 +2371,14 @@ class IPCHandlers {
       return this.environmentManager.saveMistralKey(key);
     });
 
+    ipcMain.handle("get-gladia-key", async () => {
+      return this.environmentManager.getGladiaKey();
+    });
+
+    ipcMain.handle("save-gladia-key", async (event, key) => {
+      return this.environmentManager.saveGladiaKey(key);
+    });
+
     ipcMain.handle(
       "proxy-mistral-transcription",
       async (event, { audioBuffer, model, language, contextBias }) => {
@@ -4011,6 +4021,37 @@ class IPCHandlers {
       return win;
     };
 
+    const connectGladiaStreaming = async (event, options) => {
+      if (this._meetingMicStreaming?.isConnected) {
+        await this._meetingMicStreaming.disconnect();
+      }
+      if (this._meetingSystemStreaming?.isConnected) {
+        await this._meetingSystemStreaming.disconnect();
+      }
+      this._meetingMicStreaming = null;
+      this._meetingSystemStreaming = null;
+      const win = BrowserWindow.fromWebContents(event.sender);
+      const apiKey = this.environmentManager.getGladiaKey();
+      const connectOpts = { apiKey, language: options.language };
+
+      const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
+      const pairs =
+        systemAudioMode !== "unsupported"
+          ? [
+              { ref: "_meetingMicStreaming", source: "mic" },
+              { ref: "_meetingSystemStreaming", source: "system" },
+            ]
+          : [{ ref: "_meetingMicStreaming", source: "mic" }];
+
+      for (const { ref, source } of pairs) {
+        this[ref] = new GladiaStreaming();
+        attachMeetingStreamingHandlers(this[ref], win, source);
+      }
+
+      await Promise.all(pairs.map(({ ref }) => this[ref].connect(connectOpts)));
+      return win;
+    };
+
     const MEETING_MIC_REFERENCE_ALIGNMENT_MS = 320;
     const MEETING_STARTUP_WARMUP_MS = 1500;
     let meetingStartedAt = null;
@@ -4742,7 +4783,7 @@ class IPCHandlers {
         return { success: true };
       }
 
-      if (options.provider !== "openai-realtime") {
+      if (options.provider !== "openai-realtime" && options.provider !== "gladia-realtime") {
         return { success: false, error: `Unsupported provider: ${options.provider}` };
       }
 
@@ -4756,7 +4797,11 @@ class IPCHandlers {
       meetingTranscriptionPrepareInProgress = true;
       meetingTranscriptionPreparePromise = (async () => {
         try {
-          await connectRealtimeStreaming(event, options);
+          const connect =
+            options.provider === "gladia-realtime"
+              ? connectGladiaStreaming
+              : connectRealtimeStreaming;
+          await connect(event, options);
           debugLogger.debug("Meeting transcription prepared (meeting streams warm)");
           return { success: true };
         } catch (error) {
@@ -4859,11 +4904,15 @@ class IPCHandlers {
           };
         }
 
-        if (options.provider !== "openai-realtime") {
+        if (options.provider !== "openai-realtime" && options.provider !== "gladia-realtime") {
           return { success: false, error: `Unsupported provider: ${options.provider}` };
         }
 
-        await connectRealtimeStreaming(event, options);
+        const connect =
+          options.provider === "gladia-realtime"
+            ? connectGladiaStreaming
+            : connectRealtimeStreaming;
+        await connect(event, options);
         const realtimeWin = BrowserWindow.fromWebContents(event.sender);
         await startLiveSpeakerIdentification(realtimeWin, systemAudioMode);
         await startMeetingAec(systemAudioMode);
@@ -5764,12 +5813,11 @@ class IPCHandlers {
 
     ipcMain.handle(
       "transcribe-audio-file-byok",
-      async (event, { filePath, apiKey, baseUrl, model }) => {
+      async (event, { filePath, apiKey, baseUrl, model, provider }) => {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
-          if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
           const fileSize = fs.statSync(filePath).size;
           if (fileSize > BYOK_FILE_SIZE_LIMIT) {
@@ -5778,6 +5826,24 @@ class IPCHandlers {
               error: "File too large. Maximum size for bring-your-own-key is 25 MB.",
             };
           }
+
+          if (provider === "gladia") {
+            const { GladiaClient } = require("@gladiaio/sdk");
+            const client = new GladiaClient({ apiKey });
+            const audioBuffer = fs.readFileSync(filePath);
+            const fileName = path.basename(filePath);
+            const ext = path.extname(filePath).toLowerCase().replace(".", "");
+            const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
+            const blob = new Blob([audioBuffer], { type: contentType });
+            const file = new File([blob], fileName, { type: contentType });
+            const config = {};
+            if (model && model !== "solaria-1") config.model = model;
+            const result = await client.preRecordedV2().transcribe(file, config);
+            const text = result?.result?.transcription?.full_transcript || "";
+            return { success: true, text };
+          }
+
+          if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
           const audioBuffer = fs.readFileSync(filePath);
           const ext = path.extname(filePath).toLowerCase().replace(".", "");
@@ -6265,6 +6331,108 @@ class IPCHandlers {
         return { isConnected: false, sessionId: null };
       }
       return this.assemblyAiStreaming.getStatus();
+    });
+
+    // Gladia streaming handlers
+    ipcMain.handle("gladia-streaming-warmup", async (event, options = {}) => {
+      try {
+        const apiKey = this.environmentManager.getGladiaKey();
+        if (!apiKey)
+          return { success: false, error: "No Gladia API key configured", code: "NO_KEY" };
+
+        if (!this.gladiaStreaming) {
+          this.gladiaStreaming = new GladiaStreaming();
+        }
+
+        if (this.gladiaStreaming.hasWarmConnection()) {
+          debugLogger.debug("Gladia connection already warm", {}, "streaming");
+          return { success: true, alreadyWarm: true };
+        }
+
+        await this.gladiaStreaming.warmup({ ...options, apiKey });
+        debugLogger.debug("Gladia connection warmed up", {}, "streaming");
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Gladia warmup error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
+    let gladiaStreamingStartInProgress = false;
+
+    ipcMain.handle("gladia-streaming-start", async (event, options = {}) => {
+      if (gladiaStreamingStartInProgress) {
+        return { success: false, error: "Operation in progress" };
+      }
+      gladiaStreamingStartInProgress = true;
+      try {
+        const apiKey = this.environmentManager.getGladiaKey();
+        if (!apiKey)
+          return { success: false, error: "No Gladia API key configured", code: "NO_KEY" };
+
+        const win = BrowserWindow.fromWebContents(event.sender);
+
+        if (!this.gladiaStreaming) {
+          this.gladiaStreaming = new GladiaStreaming();
+        }
+
+        if (this.gladiaStreaming.isConnected) {
+          await this.gladiaStreaming.disconnect(false);
+        }
+
+        const hasWarm = this.gladiaStreaming.hasWarmConnection();
+        debugLogger.debug("Gladia streaming start", { hasWarmConnection: hasWarm }, "streaming");
+
+        this.gladiaStreaming.onPartialTranscript = (text) => {
+          if (win && !win.isDestroyed()) win.webContents.send("gladia-partial-transcript", text);
+        };
+        this.gladiaStreaming.onFinalTranscript = (text) => {
+          if (win && !win.isDestroyed()) win.webContents.send("gladia-final-transcript", text);
+        };
+        this.gladiaStreaming.onError = (error) => {
+          if (win && !win.isDestroyed()) win.webContents.send("gladia-error", error.message);
+        };
+        this.gladiaStreaming.onSessionEnd = (data) => {
+          if (win && !win.isDestroyed()) win.webContents.send("gladia-session-end", data);
+        };
+
+        await this.gladiaStreaming.connect({ ...options, apiKey });
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Gladia streaming start error", { error: error.message });
+        return { success: false, error: error.message };
+      } finally {
+        gladiaStreamingStartInProgress = false;
+      }
+    });
+
+    ipcMain.on("gladia-streaming-send", (event, audioBuffer) => {
+      try {
+        if (!this.gladiaStreaming) return;
+        this.gladiaStreaming.sendAudio(Buffer.from(audioBuffer));
+      } catch (error) {
+        debugLogger.error("Gladia streaming send error", { error: error.message });
+      }
+    });
+
+    ipcMain.handle("gladia-streaming-stop", async () => {
+      try {
+        let result = { text: "" };
+        if (this.gladiaStreaming) {
+          result = await this.gladiaStreaming.disconnect(true);
+          this.gladiaStreaming.cleanupAll();
+          this.gladiaStreaming = null;
+        }
+        return { success: true, text: result?.text || "" };
+      } catch (error) {
+        debugLogger.error("Gladia streaming stop error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("gladia-streaming-status", async () => {
+      if (!this.gladiaStreaming) return { isConnected: false, sessionId: null };
+      return this.gladiaStreaming.getStatus();
     });
 
     let deepgramTokenWindowId = null;

@@ -8,6 +8,7 @@ import groqIcon from "@/assets/icons/providers/groq.svg";
 import nvidiaIcon from "@/assets/icons/providers/nvidia.svg";
 import openaiOssIcon from "@/assets/icons/providers/openai-oss.svg";
 import gemmaIcon from "@/assets/icons/providers/gemma.svg";
+import gladiaIcon from "@/assets/icons/providers/gladia.svg";
 import bedrockIcon from "@/assets/icons/providers/bedrock.svg";
 import azureIcon from "@/assets/icons/providers/azure.svg";
 import vertexIcon from "@/assets/icons/providers/vertex.svg";
@@ -24,6 +25,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   nvidia: nvidiaIcon,
   "openai-oss": openaiOssIcon,
   gemma: gemmaIcon,
+  gladia: gladiaIcon,
   bedrock: bedrockIcon,
   azure: azureIcon,
   vertex: vertexIcon,

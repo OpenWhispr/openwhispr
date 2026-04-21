@@ -10,6 +10,7 @@ const PERSISTED_KEYS = [
   "GEMINI_API_KEY",
   "GROQ_API_KEY",
   "MISTRAL_API_KEY",
+  "GLADIA_API_KEY",
   "CUSTOM_TRANSCRIPTION_API_KEY",
   "CUSTOM_REASONING_API_KEY",
   "LOCAL_TRANSCRIPTION_PROVIDER",
@@ -122,6 +123,16 @@ class EnvironmentManager {
 
   saveMistralKey(key) {
     return this._saveKey("MISTRAL_API_KEY", key);
+  }
+
+  getGladiaKey() {
+    return this._getKey("GLADIA_API_KEY");
+  }
+
+  saveGladiaKey(key) {
+    const result = this._saveKey("GLADIA_API_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
   }
 
   getCustomTranscriptionKey() {

@@ -85,6 +85,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     openaiApiKey,
     groqApiKey,
     mistralApiKey,
+    gladiaApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
     dictationKey,
@@ -94,6 +95,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setOpenaiApiKey,
     setGroqApiKey,
     setMistralApiKey,
+    setGladiaApiKey,
     updateTranscriptionSettings,
     preferredLanguage,
   } = useSettings();
@@ -504,6 +506,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
               setGroqApiKey={setGroqApiKey}
               mistralApiKey={mistralApiKey}
               setMistralApiKey={setMistralApiKey}
+              gladiaApiKey={gladiaApiKey}
+              setGladiaApiKey={setGladiaApiKey}
               customTranscriptionApiKey={customTranscriptionApiKey}
               setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
               cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
@@ -664,6 +668,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             return groqApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "mistral") {
             return mistralApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "gladia") {
+            return gladiaApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "custom") {
             // Custom can work without API key for local endpoints
             return true;

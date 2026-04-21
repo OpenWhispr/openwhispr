@@ -1563,7 +1563,8 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍实时速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
-        "mistral_voxtral_mini_latest": "快速多语言转录"
+        "mistral_voxtral_mini_latest": "快速多语言转录",
+        "gladia_solaria_1": "实时多语言语音识别"
       },
       "cloud": {
         "openai_gpt_5_4": "复杂推理前沿模型",

@@ -1616,7 +1616,8 @@
         "openai_whisper_1": "Modèle Whisper original",
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
-        "mistral_voxtral_mini_latest": "Transcription multilingue rapide"
+        "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
+        "gladia_solaria_1": "Reconnaissance vocale multilingue en temps réel"
       },
       "cloud": {
         "openai_gpt_5_4": "Modèle frontier pour le raisonnement complexe",

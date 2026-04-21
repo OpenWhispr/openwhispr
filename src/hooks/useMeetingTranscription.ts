@@ -129,6 +129,10 @@ const getMeetingTranscriptionOptions = () => {
     };
   }
 
+  if (resolved.cloudTranscriptionProvider === "gladia") {
+    return { provider: "gladia-realtime" as const };
+  }
+
   const model = REALTIME_MODELS.has(resolved.cloudTranscriptionModel)
     ? resolved.cloudTranscriptionModel
     : "gpt-4o-mini-transcribe";

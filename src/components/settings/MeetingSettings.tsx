@@ -67,6 +67,8 @@ export function MeetingTranscriptionPanel() {
     setGroqApiKey,
     mistralApiKey,
     setMistralApiKey,
+    gladiaApiKey,
+    setGladiaApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
   } = useSettingsStore();
@@ -144,6 +146,8 @@ export function MeetingTranscriptionPanel() {
       setGroqApiKey={setGroqApiKey}
       mistralApiKey={mistralApiKey}
       setMistralApiKey={setMistralApiKey}
+      gladiaApiKey={gladiaApiKey}
+      setGladiaApiKey={setGladiaApiKey}
       customTranscriptionApiKey={customTranscriptionApiKey}
       setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
       cloudTranscriptionBaseUrl={meetingCloudTranscriptionBaseUrl}
