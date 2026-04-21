@@ -456,6 +456,11 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        this.db.exec("ALTER TABLE folders ADD COLUMN deleted_at TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       // Sync columns for agent_conversations
       try {
@@ -489,6 +494,11 @@ class DatabaseManager {
       }
       try {
         this.db.exec("ALTER TABLE transcriptions ADD COLUMN sync_status TEXT DEFAULT 'pending'");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE transcriptions ADD COLUMN deleted_at TEXT");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
@@ -565,7 +575,9 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const stmt = this.db.prepare("SELECT * FROM transcriptions ORDER BY timestamp DESC LIMIT ?");
+      const stmt = this.db.prepare(
+        "SELECT * FROM transcriptions WHERE deleted_at IS NULL ORDER BY timestamp DESC LIMIT ?"
+      );
       const transcriptions = stmt.all(limit);
       return transcriptions;
     } catch (error) {
@@ -579,9 +591,14 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const stmt = this.db.prepare("DELETE FROM transcriptions");
-      const result = stmt.run();
-      return { cleared: result.changes, success: true };
+      const tombstone = this.db.prepare(
+        "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE cloud_id IS NOT NULL AND deleted_at IS NULL"
+      );
+      const hardDelete = this.db.prepare("DELETE FROM transcriptions WHERE cloud_id IS NULL");
+      const clearAll = this.db.transaction(
+        () => tombstone.run().changes + hardDelete.run().changes
+      );
+      return { cleared: clearAll(), success: true };
     } catch (error) {
       debugLogger.error("Error clearing transcriptions", { error: error.message }, "database");
       throw error;
@@ -593,7 +610,13 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const stmt = this.db.prepare("DELETE FROM transcriptions WHERE id = ?");
+      const row = this.db.prepare("SELECT cloud_id FROM transcriptions WHERE id = ?").get(id);
+      if (!row) return { success: false, id };
+      const stmt = row.cloud_id
+        ? this.db.prepare(
+            "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
+          )
+        : this.db.prepare("DELETE FROM transcriptions WHERE id = ?");
       const result = stmt.run(id);
       return { success: result.changes > 0, id };
     } catch (error) {
@@ -836,7 +859,11 @@ class DatabaseManager {
   getFolders() {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return this.db.prepare("SELECT * FROM folders ORDER BY sort_order ASC, created_at ASC").all();
+      return this.db
+        .prepare(
+          "SELECT * FROM folders WHERE deleted_at IS NULL ORDER BY sort_order ASC, created_at ASC"
+        )
+        .all();
     } catch (error) {
       debugLogger.error("Error getting folders", { error: error.message }, "notes");
       throw error;
@@ -872,14 +899,21 @@ class DatabaseManager {
       const folder = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
       if (!folder) return { success: false, error: "Folder not found" };
       if (folder.is_default) return { success: false, error: "Cannot delete default folders" };
-      const personal = this.db
-        .prepare("SELECT id FROM folders WHERE name = 'Personal' AND is_default = 1")
-        .get();
-      if (personal) {
-        this.db.prepare("UPDATE notes SET folder_id = ? WHERE folder_id = ?").run(personal.id, id);
-      }
-      this.db.prepare("DELETE FROM folders WHERE id = ?").run(id);
-      return { success: true, id };
+      const noteIds = this.db
+        .prepare("SELECT id FROM notes WHERE folder_id = ?")
+        .all(id)
+        .map((row) => row.id);
+      const hardDeleteNotes = this.db.prepare("DELETE FROM notes WHERE folder_id = ?");
+      const tombstoneFolder = this.db.prepare(
+        "UPDATE folders SET deleted_at = datetime('now'), sync_status = 'pending', name = '__deleted_' || id || '_' || name WHERE id = ?"
+      );
+      const hardDeleteFolder = this.db.prepare("DELETE FROM folders WHERE id = ?");
+      this.db.transaction(() => {
+        hardDeleteNotes.run(id);
+        if (folder.cloud_id) tombstoneFolder.run(id);
+        else hardDeleteFolder.run(id);
+      })();
+      return { success: true, id, noteIds };
     } catch (error) {
       debugLogger.error("Error deleting folder", { error: error.message }, "notes");
       throw error;
@@ -898,7 +932,9 @@ class DatabaseManager {
         .prepare("SELECT id FROM folders WHERE name = ? AND id != ?")
         .get(trimmed, id);
       if (existing) return { success: false, error: "A folder with that name already exists" };
-      this.db.prepare("UPDATE folders SET name = ? WHERE id = ?").run(trimmed, id);
+      this.db
+        .prepare("UPDATE folders SET name = ?, sync_status = 'pending' WHERE id = ?")
+        .run(trimmed, id);
       const updated = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
       return { success: true, folder: updated };
     } catch (error) {
@@ -2027,9 +2063,40 @@ class DatabaseManager {
   getPendingFolders() {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return this.db.prepare("SELECT * FROM folders WHERE sync_status = 'pending'").all();
+      return this.db
+        .prepare("SELECT * FROM folders WHERE sync_status = 'pending' AND deleted_at IS NULL")
+        .all();
     } catch (error) {
       debugLogger.error("Error getting pending folders", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getPendingFolderDeletes() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM folders WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error(
+        "Error getting pending folder deletes",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  hardDeleteFolder(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db.prepare("DELETE FROM folders WHERE id = ?").run(id);
+      return { success: result.changes > 0, id };
+    } catch (error) {
+      debugLogger.error("Error hard deleting folder", { error: error.message }, "database");
       throw error;
     }
   }
@@ -2092,7 +2159,7 @@ class DatabaseManager {
   getFolderIdMap() {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return this.db.prepare("SELECT * FROM folders").all();
+      return this.db.prepare("SELECT * FROM folders WHERE deleted_at IS NULL").all();
     } catch (error) {
       debugLogger.error("Error getting folder id map", { error: error.message }, "database");
       throw error;
@@ -2234,13 +2301,46 @@ class DatabaseManager {
   getPendingTranscriptions() {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      return this.db.prepare("SELECT * FROM transcriptions WHERE sync_status = 'pending'").all();
+      return this.db
+        .prepare(
+          "SELECT * FROM transcriptions WHERE sync_status = 'pending' AND deleted_at IS NULL"
+        )
+        .all();
     } catch (error) {
       debugLogger.error(
         "Error getting pending transcriptions",
         { error: error.message },
         "database"
       );
+      throw error;
+    }
+  }
+
+  getPendingTranscriptionDeletes() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM transcriptions WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error(
+        "Error getting pending transcription deletes",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  hardDeleteTranscription(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db.prepare("DELETE FROM transcriptions WHERE id = ?").run(id);
+      return { success: result.changes > 0, id };
+    } catch (error) {
+      debugLogger.error("Error hard deleting transcription", { error: error.message }, "database");
       throw error;
     }
   }

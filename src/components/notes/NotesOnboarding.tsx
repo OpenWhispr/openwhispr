@@ -38,6 +38,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const setReasoningModel = useSettingsStore((s) => s.setReasoningModel);
   const reasoningProvider = useSettingsStore((s) => s.reasoningProvider);
   const setReasoningProvider = useSettingsStore((s) => s.setReasoningProvider);
+  const setReasoningMode = useSettingsStore((s) => s.setReasoningMode);
   const cloudReasoningBaseUrl = useSettingsStore((s) => s.cloudReasoningBaseUrl);
   const setCloudReasoningBaseUrl = useSettingsStore((s) => s.setCloudReasoningBaseUrl);
   const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
@@ -184,6 +185,7 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                   setGroqApiKey={setGroqApiKey}
                   customReasoningApiKey={customReasoningApiKey}
                   setCustomReasoningApiKey={setCustomReasoningApiKey}
+                  setReasoningMode={setReasoningMode}
                 />
               </div>
             )}

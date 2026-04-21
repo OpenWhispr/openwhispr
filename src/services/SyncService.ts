@@ -175,7 +175,21 @@ class SyncService {
 
   private async syncFolders(): Promise<void> {
     await this.pushPendingFolders();
+    await this.pushFolderDeletes();
     await this.pullFolders();
+  }
+
+  private async pushFolderDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingFolderDeletes?.()) ?? [];
+    for (const f of deletes) {
+      if (!f.cloud_id) continue;
+      try {
+        await FoldersService.delete(f.cloud_id);
+        await window.electronAPI.hardDeleteFolder?.(f.id);
+      } catch (err) {
+        console.error("Folder delete sync failed:", err);
+      }
+    }
   }
 
   private async pushPendingFolders(): Promise<void> {
@@ -221,6 +235,7 @@ class SyncService {
         const local = await window.electronAPI.getFolderByClientId?.(
           cloudFolder.client_folder_id ?? ""
         );
+        if (local?.deleted_at) continue;
         if (!local || cloudFolder.updated_at > local.created_at) {
           await window.electronAPI.upsertFolderFromCloud?.(
             cloudFolder as unknown as Record<string, unknown>
@@ -429,7 +444,27 @@ class SyncService {
 
   private async syncTranscriptions(): Promise<void> {
     await this.pushPendingTranscriptions();
+    await this.pushTranscriptionDeletes();
     await this.pullTranscriptions();
+  }
+
+  private async pushTranscriptionDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingTranscriptionDeletes?.()) ?? [];
+    const withCloudId = deletes.filter((t) => t.cloud_id);
+    if (withCloudId.length === 0) return;
+
+    for (let i = 0; i < withCloudId.length; i += TRANSCRIPTION_BATCH_SIZE) {
+      const chunk = withCloudId.slice(i, i + TRANSCRIPTION_BATCH_SIZE);
+      try {
+        const { deleted } = await TranscriptionsService.batchDelete(chunk.map((t) => t.cloud_id!));
+        for (const cloudId of deleted) {
+          const local = chunk.find((t) => t.cloud_id === cloudId);
+          if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
+        }
+      } catch (err) {
+        console.error("Transcription batch delete failed:", err);
+      }
+    }
   }
 
   private async pushPendingTranscriptions(): Promise<void> {

@@ -7,11 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.6.10] - 2026-04-16
+## [1.6.10] - 2026-04-20
 
 ### Added
 
+- **Speaker Diarization Controls**: Global on/off toggle in Settings plus a session-scoped pill in the recording view with its own switch and a "1 other in call / 2 others in call" stepper. Unscoped recordings cap at a sensible default to prevent phantom speakers; calendar attendees or the stepper value override. When labeling is off, transcripts fall back to "You"/"Others" labels derived from audio source
 - **Auto-Label 1-on-1 Speakers**: Automatically label system audio speakers in 1-on-1 meetings when exactly two participants are detected (user + one other), creating voice fingerprint profiles and triggering retroactive mapping across past notes
+- **Integrations View**: New top-level Integrations surface hosting API key management (relocated from Settings) and a new MCP integration card with a copyable server URL chip for paid users
+- **Dedicated Meetings Settings**: Separate Speech-to-Text and Language Model selectors for meeting recording, independent from dictation
+- **Streaming-Only Engine Filter**: Note Recording picker now filters to streaming-capable engines (OpenAI Cloud, gpt-4o-transcribe, on-device, streaming LAN servers); self-hosted stays available with a caption warning
+
+### Changed
+
+- **Settings Reorganization**: "AI Models" collapsed into Speech-to-Text and Language Models; "Speech & AI" sidebar group renamed to "AI Models"; Meetings section added with its own sub-tabs; multiple redundant headers removed (sidebar "Settings", Agent Mode, enterprise provider-tabs wrapper, system-prompt textarea wrapper)
+- **Agent Hotkey Relocated**: Moved into the Hotkeys section where it belongs, no longer orphaned under Agent Mode
+- **MCP Pro Gating**: Free users see an upgrade message on the MCP card instead of operational-looking setup steps; paid users get the full flow
+- **README Reframed**: Positions OpenWhispr as an open-source alternative to WisprFlow (dictation) and Granola (meetings)
+- **Meeting Sub-tabs Simplified**: Engine selectors now shown directly; "follow main settings" toggles dropped. A one-time migration preserves every existing user's behavior with zero breaking changes
+
+### Fixed
+
+- **Stop Binding Random Notes to 1-on-1 Attendees**: Removed over-eager calendar-event adoption that was auto-linking unassigned notes to the first active 1-on-1 calendar event, stamping unrelated recordings with that attendee's speaker profile
+- **Echo Leak Detector Pre-AEC**: Detector was receiving the AEC-cleaned mic buffer so correlation against system reference was always ~0; now runs on the raw mic buffer where the leak actually exists
+- **Cloud Sync — Transcriptions Reappear on Restart**: Clearing history hard-deleted locally while cloud rows stayed intact; now soft-deletes with tombstones pushed to cloud before hard-delete
+- **Cloud Sync — Folders Reappear on Restart**: Same delete-sync bug as transcriptions; mirrored the notes/conversations pattern with `deleted_at`, `pushFolderDeletes`, and a pull-side tombstone guard
+- **Folder Name Collision After Delete**: `UNIQUE(name)` blocked recreating a folder with the same name while its tombstone sat unsynced; tombstoned rows now get a mangled internal name that frees the slot without leaking to cloud
+- **View Plans Deep-Link**: `SettingsModal` was initializing `activeSection` to "account" regardless of `initialSection` because `prevOpen` equalled `open` on first mount; moved to lazy state initializers so the resolution branch fires correctly
+- **MCP i18n**: Setup steps corrected from OAuth to API key auth
+- **Missing Integrations i18n Keys**: Added to en, es, fr locales
+- **Legacy Prompts Deep-Link**: Now routes to the Dictation Cleanup sub-tab where PromptStudio lives, instead of falling back to the default tab
+- **Japanese / Chinese Sidebar Descriptions**: Rewritten to use the same vocabulary as the actual sub-tabs
+- **Spanish Enterprise Strings**: Aligned on "en la nube" for consistency
+- **Parakeet Model Cache**: "Open cache folder" now opens at the cache root so downloaded models are actually visible
 
 ## [1.6.9] - 2026-04-16
 

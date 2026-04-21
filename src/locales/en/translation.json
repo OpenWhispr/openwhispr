@@ -15,6 +15,12 @@
       "changePath": "Change location",
       "rebuild": "Rebuild all files",
       "rebuildDescription": "Re-sync all notes and transcripts to disk"
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "Identify and label speakers",
+        "description": "When off, transcripts show \"You\" and \"Others\""
+      }
     }
   },
   "tray": {
@@ -275,8 +281,8 @@
       "clearAllErrorDescription": "Something went wrong. Please try again."
     },
     "cloudMigration": {
-      "title": "Welcome to OpenWhispr Pro",
-      "description": "Your 7-day free trial is active! We've switched your transcription to OpenWhispr Cloud for faster, more accurate results. Your previous settings are saved - switch back anytime in Settings.",
+      "title": "Welcome to OpenWhispr Cloud",
+      "description": "We've switched your transcription to OpenWhispr Cloud for faster, more accurate results. Your previous settings are saved — switch back anytime in Settings.",
       "viewSettings": "View Settings"
     },
     "aiCta": {
@@ -984,7 +990,7 @@
     "groups": {
       "account": "Account",
       "app": "App",
-      "speechAi": "Speech & AI",
+      "aiModels": "AI Models",
       "system": "System"
     },
     "sections": {
@@ -996,10 +1002,6 @@
         "description": "Plans, usage & billing",
         "label": "Plans & Billing"
       },
-      "apiKeys": {
-        "label": "API Keys",
-        "description": "Manage API access"
-      },
       "general": {
         "description": "Appearance, sounds & startup",
         "label": "Preferences"
@@ -1008,13 +1010,13 @@
         "description": "Dictation hotkey & activation",
         "label": "Hotkeys"
       },
-      "transcription": {
-        "description": "Speech-to-text engine",
-        "label": "Transcription"
+      "speechToText": {
+        "description": "Engines for dictation & note recording",
+        "label": "Speech-to-Text"
       },
-      "intelligence": {
-        "description": "AI models, agent & prompts",
-        "label": "Intelligence"
+      "llms": {
+        "description": "Models for chat, cleanup & summaries",
+        "label": "Language Models"
       },
       "privacyData": {
         "description": "Privacy, permissions & analytics",
@@ -1023,10 +1025,6 @@
       "system": {
         "description": "Updates, storage & developer tools",
         "label": "System"
-      },
-      "agentMode": {
-        "label": "Agent Mode",
-        "description": "Voice chat assistant"
       }
     },
     "title": "Settings"
@@ -1232,20 +1230,12 @@
         "bulletPoints": "Hey {{agentName}}, convert this to bullet points"
       }
     },
-    "apiKeys": {
-      "title": "API Keys",
-      "signInRequired": "Sign in required",
-      "signInRequiredDescription": "Sign in to manage your API keys.",
-      "proRequired": "API access requires a paid plan",
-      "proRequiredDescription": "Upgrade to Pro to create API keys and integrate OpenWhispr with your workflows.",
-      "viewPlans": "View Plans"
-    },
     "aiModels": {
       "customSetup": "Custom Setup",
       "customSetupDescription": "Use your own provider and API key.",
       "description": "Clean up transcriptions, handle commands, and fix errors while preserving your tone.",
       "enableTextCleanup": "Enable text cleanup",
-      "enableTextCleanupDescription": "AI improves transcription quality",
+      "enableTextCleanupDescription": "Use AI to format text and follow voice commands",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud Providers",
@@ -1572,6 +1562,24 @@
       "description": "View, customize, and test the unified system prompt that powers text cleanup and instruction detection",
       "title": "Prompt Studio"
     },
+    "speechToText": {
+      "title": "Speech-to-Text",
+      "description": "Pick an engine for dictation and note recording",
+      "tabs": {
+        "dictation": "Dictation",
+        "noteRecording": "Note Recording"
+      },
+      "selfHostedStreamingNote": "Requires a server that supports streaming transcription."
+    },
+    "llms": {
+      "title": "Language Models",
+      "description": "Configure models for cleanup, note formatting, and chat",
+      "tabs": {
+        "dictationCleanup": "Dictation Cleanup",
+        "noteFormatting": "Note Formatting",
+        "chatIntelligence": "Chat Intelligence"
+      }
+    },
     "transcription": {
       "customSetup": "Custom Setup",
       "customSetupDescription": "Use your own provider and API key.",
@@ -1870,7 +1878,11 @@
       "folderName": "Folder name",
       "couldNotCreate": "Couldn't create folder",
       "couldNotRename": "Couldn't rename folder",
-      "couldNotDelete": "Couldn't delete folder"
+      "couldNotDelete": "Couldn't delete folder",
+      "deleteTitle": "Delete folder?",
+      "deleteDescription": "This will permanently delete \"{{name}}\" and its {{count}} note(s). This cannot be undone.",
+      "deleteDescriptionEmpty": "This will permanently delete \"{{name}}\". This cannot be undone.",
+      "deleteConfirm": "Delete folder and notes"
     },
     "list": {
       "title": "Notes",
@@ -2079,6 +2091,18 @@
         "confirmed": "Confirmed",
         "suggested": "Suggested",
         "locked": "Locked"
+      },
+      "pill": {
+        "identifying": "Identifying speakers",
+        "notLabeled": "Speakers not labeled",
+        "finalizing": "Finalizing speakers…",
+        "justYou": "just you",
+        "defaultingHint": "defaulting to 1 other — change if more",
+        "toggleAria": "Toggle speaker identification for this recording",
+        "incAria": "Increase expected speaker count",
+        "decAria": "Decrease expected speaker count",
+        "othersInCall_one": "{{count}} other in call",
+        "othersInCall_other": "{{count}} others in call"
       }
     }
   },
@@ -2164,8 +2188,6 @@
   },
   "agentMode": {
     "settings": {
-      "title": "Agent Mode",
-      "description": "Voice chat assistant with a separate AI model",
       "enabled": "Enable Agent Mode",
       "enabledDescription": "Use a separate hotkey to open a voice chat overlay",
       "hotkey": "Agent Hotkey",
@@ -2257,6 +2279,31 @@
       "systemAudioDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
       "openSettings": "Open System Settings"
     },
+    "sections": {
+      "calendar": "Calendar",
+      "api": "API",
+      "mcp": "MCP"
+    },
+    "api": {
+      "title": "API keys",
+      "description": "Manage API keys for programmatic access",
+      "proRequired": "Upgrade to a paid plan to access the API",
+      "manage": "Manage keys",
+      "viewPlans": "View Plans",
+      "dialogTitle": "API keys"
+    },
+    "mcp": {
+      "title": "Bring your notes to your AI tools",
+      "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
+      "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
+      "step2": "Create an API key above with the scopes you need.",
+      "step3": "Paste the key as the Authorization header to connect.",
+      "learnMore": "Learn more",
+      "viewPlans": "View Plans",
+      "copyUrl": "Copy MCP URL",
+      "proRequired": "Upgrade to a paid plan to connect OpenWhispr to Claude, ChatGPT, and Cursor.",
+      "copied": "Copied"
+    },
     "plan": {
       "title": "Your Plan",
       "current": "Current",
@@ -2343,5 +2390,11 @@
     "copy": "Copy",
     "copied": "Copied",
     "waitingForInput": "Say something..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "You",
+      "others": "Others"
+    }
   }
 }

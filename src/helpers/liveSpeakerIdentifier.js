@@ -2,6 +2,13 @@ const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const speakerEmbeddings = require("./speakerEmbeddings");
 const { downsample24kTo16k } = require("../utils/audioUtils");
+const { MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
+
+function clampMaxSpeakers(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return MAX_SPEAKER_COUNT;
+  return Math.max(1, Math.min(MAX_SPEAKER_COUNT, Math.floor(n)));
+}
 
 const SAMPLE_RATE = 16000;
 const VAD_WINDOW_SIZE = 512;
@@ -110,6 +117,8 @@ class LiveSpeakerIdentifier {
     this.currentSegmentSpeakerName = null;
     this.lastLiveIdentificationSample = 0;
     this._diarizationManager = null;
+    this.maxSpeakers = MAX_SPEAKER_COUNT;
+    this.enabled = true;
   }
 
   setDiarizationManager(manager) {
@@ -143,11 +152,18 @@ class LiveSpeakerIdentifier {
   async start(options = {}, extraOptions = {}) {
     const resolvedOptions =
       typeof options === "function" ? { onSpeakerIdentified: options, ...extraOptions } : options;
-    const { onSpeakerIdentified = null, getSpeakerProfiles = null } = resolvedOptions;
+    const {
+      onSpeakerIdentified = null,
+      getSpeakerProfiles = null,
+      maxSpeakers = MAX_SPEAKER_COUNT,
+      enabled = true,
+    } = resolvedOptions;
 
     this.onSpeakerIdentified =
       typeof onSpeakerIdentified === "function" ? onSpeakerIdentified : null;
     this.getSpeakerProfiles = typeof getSpeakerProfiles === "function" ? getSpeakerProfiles : null;
+    this.maxSpeakers = clampMaxSpeakers(maxSpeakers);
+    this.enabled = enabled !== false;
     this._resetMeetingState();
 
     if (!this.isAvailable()) {
@@ -283,6 +299,14 @@ class LiveSpeakerIdentifier {
       });
 
     return this.queue;
+  }
+
+  setMaxSpeakers(n) {
+    this.maxSpeakers = clampMaxSpeakers(n);
+  }
+
+  setEnabled(enabled) {
+    this.enabled = enabled !== false;
   }
 
   mapSpeaker(liveId, profileId, displayName, noteId) {
@@ -508,6 +532,8 @@ class LiveSpeakerIdentifier {
     this.currentSegmentSpeakerName = resolved.displayName || null;
     this.lastLiveIdentificationSample = this.segmentEndSample;
 
+    if (!this.enabled) return;
+
     this.onSpeakerIdentified?.({
       speakerId: resolved.speakerId,
       displayName: resolved.displayName || null,
@@ -543,12 +569,14 @@ class LiveSpeakerIdentifier {
       this.transientDisplayNames.get(speakerId) ||
       null;
 
-    this.onSpeakerIdentified?.({
-      speakerId,
-      displayName,
-      startTime: Math.max(0, this.segmentStartSample / SAMPLE_RATE - LIVE_WINDOW_PADDING_SECONDS),
-      endTime: this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS,
-    });
+    if (this.enabled) {
+      this.onSpeakerIdentified?.({
+        speakerId,
+        displayName,
+        startTime: Math.max(0, this.segmentStartSample / SAMPLE_RATE - LIVE_WINDOW_PADDING_SECONDS),
+        endTime: this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS,
+      });
+    }
 
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
@@ -640,7 +668,7 @@ class LiveSpeakerIdentifier {
     if (matchedProfile) {
       speakerId = this._findTransientSpeakerForProfile(matchedProfile.id);
       if (!speakerId) {
-        speakerId = this._assignSpeakerId(embedding);
+        speakerId = this._assignOrForceCluster(embedding);
       } else if (updateCentroid) {
         this._updateCentroid(speakerId, embedding);
       }
@@ -653,7 +681,7 @@ class LiveSpeakerIdentifier {
       };
     }
 
-    speakerId = this.currentSegmentSpeakerId || this._assignSpeakerId(embedding);
+    speakerId = this.currentSegmentSpeakerId || this._assignOrForceCluster(embedding);
     if (updateCentroid && this.currentSegmentSpeakerId) {
       this._updateCentroid(speakerId, embedding);
     }
@@ -662,6 +690,30 @@ class LiveSpeakerIdentifier {
       speakerId,
       displayName: this.transientDisplayNames.get(speakerId) || null,
     };
+  }
+
+  _assignOrForceCluster(embedding) {
+    if (this.transientEmbeddings.size >= this.maxSpeakers) {
+      const nearest = this._findNearestTransient(embedding);
+      if (nearest) {
+        this._updateCentroid(nearest, embedding);
+        return nearest;
+      }
+    }
+    return this._assignSpeakerId(embedding);
+  }
+
+  _findNearestTransient(embedding) {
+    let bestSpeakerId = null;
+    let bestSimilarity = -Infinity;
+    for (const [speakerId, centroid] of this.transientEmbeddings.entries()) {
+      const similarity = speakerEmbeddings.cosineSimilarity(embedding, centroid);
+      if (similarity > bestSimilarity) {
+        bestSimilarity = similarity;
+        bestSpeakerId = speakerId;
+      }
+    }
+    return bestSpeakerId;
   }
 
   _findTransientSpeakerForProfile(profileId) {

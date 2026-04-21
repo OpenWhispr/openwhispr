@@ -15,6 +15,7 @@ import {
   getEffectiveReasoningModel,
   isCloudReasoningMode,
 } from "../stores/settingsStore";
+import { syncService } from "../services/SyncService.js";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
@@ -1885,6 +1886,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       const result = await window.electronAPI.saveTranscription(text, rawText);
+      if (result?.id) syncService.debouncedPush("transcription", result.id);
 
       // Save audio if we have a captured blob and the transcription was saved successfully
       if (result?.id && this.lastAudioBlob) {
@@ -1923,6 +1925,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         errorMessage,
         errorCode,
       });
+      if (result?.id) syncService.debouncedPush("transcription", result.id);
 
       if (result?.id && this.lastAudioBlob) {
         try {

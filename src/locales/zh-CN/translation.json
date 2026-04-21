@@ -15,6 +15,12 @@
       "changePath": "更改位置",
       "rebuild": "重建所有文件",
       "rebuildDescription": "将所有笔记和转录重新同步到磁盘"
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "识别并标记发言者",
+        "description": "关闭后，转写会显示\"你\"和\"其他人\""
+      }
     }
   },
   "tray": {
@@ -275,8 +281,8 @@
       "rawTranscript": "原始转录"
     },
     "cloudMigration": {
-      "title": "欢迎使用 OpenWhispr Pro",
-      "description": "你的 7 天免费试用已激活！我们已将转录切换到 OpenWhispr 云端，以获得更快、更准确的结果。你之前的设置已保存——随时可以在设置中切换回去。",
+      "title": "欢迎使用 OpenWhispr 云端",
+      "description": "我们已将转录切换到 OpenWhispr 云端，以获得更快、更准确的结果。你之前的设置已保存——随时可以在设置中切换回去。",
       "viewSettings": "查看设置"
     },
     "aiCta": {
@@ -888,7 +894,7 @@
     "groups": {
       "account": "账户",
       "app": "应用",
-      "speechAi": "语音与 AI",
+      "aiModels": "AI 模型",
       "system": "系统"
     },
     "sections": {
@@ -900,10 +906,6 @@
         "description": "套餐、用量与账单",
         "label": "套餐与账单"
       },
-      "apiKeys": {
-        "label": "API 密钥",
-        "description": "管理 API 访问"
-      },
       "general": {
         "description": "外观、声音与启动",
         "label": "偏好设置"
@@ -912,13 +914,13 @@
         "description": "听写快捷键与激活模式",
         "label": "快捷键"
       },
-      "transcription": {
-        "description": "语音转文字引擎",
-        "label": "转录"
+      "speechToText": {
+        "description": "听写与笔记录音引擎",
+        "label": "语音转文字"
       },
-      "intelligence": {
-        "description": "AI 模型、助手与提示词",
-        "label": "智能"
+      "llms": {
+        "description": "用于清理、笔记格式化和聊天的模型",
+        "label": "语言模型"
       },
       "privacyData": {
         "description": "隐私、权限与数据分析",
@@ -927,10 +929,6 @@
       "system": {
         "description": "更新、存储与开发者工具",
         "label": "系统"
-      },
-      "agentMode": {
-        "label": "智能助手模式",
-        "description": "语音聊天助手"
       }
     },
     "title": "设置"
@@ -1131,20 +1129,12 @@
         "bulletPoints": "Hey {{agentName}}，把这个转换成要点列表"
       }
     },
-    "apiKeys": {
-      "title": "API 密钥",
-      "signInRequired": "需要登录",
-      "signInRequiredDescription": "登录以管理您的 API 密钥。",
-      "proRequired": "API 访问需要付费计划",
-      "proRequiredDescription": "升级到 Pro 以创建 API 密钥并将 OpenWhispr 集成到您的工作流程中。",
-      "viewPlans": "查看方案"
-    },
     "aiModels": {
       "customSetup": "自定义设置",
       "customSetupDescription": "使用你自己的服务商和 API Key。",
       "description": "整理转录文本、处理指令、修正错误，同时保留你的语气风格。",
       "enableTextCleanup": "启用文本整理",
-      "enableTextCleanupDescription": "AI 提升转录质量",
+      "enableTextCleanupDescription": "使用 AI 格式化文本并执行语音指令",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "云服务商",
@@ -1471,6 +1461,24 @@
       "description": "查看、自定义和测试用于文本整理和指令识别的统一系统提示词",
       "title": "提示词工作室"
     },
+    "speechToText": {
+      "title": "语音转文字",
+      "description": "为听写和笔记录音选择一个引擎",
+      "tabs": {
+        "dictation": "听写",
+        "noteRecording": "笔记录音"
+      },
+      "selfHostedStreamingNote": "需要支持流式转录的服务器。"
+    },
+    "llms": {
+      "title": "语言模型",
+      "description": "配置用于听写清理、笔记格式化和聊天的模型",
+      "tabs": {
+        "dictationCleanup": "听写清理",
+        "noteFormatting": "笔记格式化",
+        "chatIntelligence": "聊天智能"
+      }
+    },
     "transcription": {
       "customSetup": "自定义设置",
       "customSetupDescription": "使用你自己的服务商和 API Key。",
@@ -1708,7 +1716,11 @@
       "folderName": "文件夹名称",
       "couldNotCreate": "无法创建文件夹",
       "couldNotRename": "无法重命名文件夹",
-      "couldNotDelete": "无法删除文件夹"
+      "couldNotDelete": "无法删除文件夹",
+      "deleteTitle": "删除文件夹？",
+      "deleteDescription": "这将永久删除「{{name}}」及其 {{count}} 条笔记。此操作无法撤销。",
+      "deleteDescriptionEmpty": "这将永久删除「{{name}}」。此操作无法撤销。",
+      "deleteConfirm": "删除文件夹和笔记"
     },
     "list": {
       "title": "笔记",
@@ -1917,7 +1929,19 @@
       "nameOrEmailPlaceholder": "输入姓名或邮箱",
       "addContact": "添加联系人",
       "save": "保存",
-      "cancel": "取消"
+      "cancel": "取消",
+      "pill": {
+        "identifying": "正在识别发言者",
+        "notLabeled": "发言者未标记",
+        "finalizing": "正在完成发言者识别…",
+        "justYou": "只有你",
+        "defaultingHint": "默认 1 位其他人",
+        "toggleAria": "切换本次录音的发言者识别",
+        "incAria": "增加预计发言人数",
+        "decAria": "减少预计发言人数",
+        "othersInCall_one": "通话中还有 {{count}} 人",
+        "othersInCall_other": "通话中还有 {{count}} 人"
+      }
     }
   },
   "dictionary": {
@@ -2063,8 +2087,6 @@
   },
   "agentMode": {
     "settings": {
-      "title": "智能助手模式",
-      "description": "使用独立AI模型的语音聊天助手",
       "enabled": "启用智能助手模式",
       "enabledDescription": "使用独立热键打开语音聊天覆盖层",
       "hotkey": "助手热键",
@@ -2155,6 +2177,31 @@
       "systemAudioRequired": "需要系统音频权限",
       "systemAudioDescription": "要转录会议，OpenWhispr 需要系统音频权限来录制其他参与者的音频。我们绝不会录制您的屏幕。您将被引导至系统设置以启用此权限。",
       "openSettings": "打开系统设置"
+    },
+    "sections": {
+      "calendar": "日历",
+      "api": "API",
+      "mcp": "MCP"
+    },
+    "api": {
+      "title": "API 密钥",
+      "description": "管理用于程序访问的 API 密钥",
+      "proRequired": "升级到付费计划以访问 API",
+      "manage": "管理密钥",
+      "viewPlans": "查看套餐",
+      "dialogTitle": "API 密钥"
+    },
+    "mcp": {
+      "title": "将笔记带到你的 AI 工具中",
+      "description": "在 Claude、ChatGPT 和 Cursor 中与你的笔记一起聊天、搜索和工作。",
+      "step1": "在你的 AI 工具中，使用公开 URL 添加 OpenWhispr MCP",
+      "step2": "在上方创建具有所需权限的 API 密钥。",
+      "step3": "将密钥粘贴为 Authorization 标头以连接。",
+      "learnMore": "了解更多",
+      "viewPlans": "查看套餐",
+      "copyUrl": "复制 MCP URL",
+      "proRequired": "升级到付费计划，以将 OpenWhispr 连接到 Claude、ChatGPT 和 Cursor。",
+      "copied": "已复制"
     },
     "plan": {
       "title": "您的方案",
@@ -2338,5 +2385,11 @@
     "copy": "复制",
     "copied": "已复制",
     "waitingForInput": "说点什么..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "你",
+      "others": "其他人"
+    }
   }
 }

@@ -13,6 +13,7 @@ import { useDialogs } from "../hooks/useDialogs";
 import { useModelDownload, type DownloadProgress } from "../hooks/useModelDownload";
 import {
   getTranscriptionProviders,
+  getStreamingTranscriptionProviders,
   TranscriptionProviderData,
   WHISPER_MODEL_INFO,
   PARAKEET_MODEL_INFO,
@@ -203,6 +204,7 @@ interface TranscriptionModelPickerProps {
   className?: string;
   variant?: "onboarding" | "settings";
   mode?: "cloud" | "local";
+  streamingOnly?: boolean;
 }
 
 const CLOUD_PROVIDER_TABS = [
@@ -282,6 +284,7 @@ export default function TranscriptionModelPicker({
   className = "",
   variant = "settings",
   mode,
+  streamingOnly = false,
 }: TranscriptionModelPickerProps) {
   const { t } = useTranslation();
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
@@ -316,10 +319,16 @@ export default function TranscriptionModelPicker({
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const colorScheme: ColorScheme = variant === "settings" ? "purple" : "blue";
   const styles = useMemo(() => MODEL_PICKER_COLORS[colorScheme], [colorScheme]);
-  const cloudProviders = useMemo(() => getTranscriptionProviders(), []);
-  const cloudProviderTabs = CLOUD_PROVIDER_TABS.map((provider) =>
-    provider.id === "custom" ? { ...provider, name: t("transcription.customProvider") } : provider
+  const cloudProviders = useMemo(
+    () => (streamingOnly ? getStreamingTranscriptionProviders() : getTranscriptionProviders()),
+    [streamingOnly]
   );
+  const cloudProviderTabs = useMemo(() => {
+    const visibleIds = new Set([...cloudProviders.map((p) => p.id), "custom"]);
+    return CLOUD_PROVIDER_TABS.filter((p) => visibleIds.has(p.id)).map((provider) =>
+      provider.id === "custom" ? { ...provider, name: t("transcription.customProvider") } : provider
+    );
+  }, [cloudProviders, t]);
 
   useEffect(() => {
     selectedLocalModelRef.current = selectedLocalModel;

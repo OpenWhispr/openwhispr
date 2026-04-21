@@ -16,8 +16,6 @@ interface EnterpriseSectionProps {
   setLocalReasoningProvider: (p: string) => void;
 }
 
-// Selected tab is derived from currentProvider. Clicking a tab propagates
-// through setLocalReasoningProvider so currentProvider stays authoritative.
 export default function EnterpriseSection({
   currentProvider,
   reasoningModel,
@@ -43,24 +41,20 @@ export default function EnterpriseSection({
 
   return (
     <div className="space-y-2">
-      <div className="border border-border rounded-lg overflow-hidden">
-        <ProviderTabs
-          providers={ENTERPRISE_PROVIDER_TABS}
-          selectedId={selectedEnterprise}
-          onSelect={handleEnterpriseSelect}
-          colorScheme="purple"
-        />
+      <ProviderTabs
+        providers={ENTERPRISE_PROVIDER_TABS}
+        selectedId={selectedEnterprise}
+        onSelect={handleEnterpriseSelect}
+        colorScheme="purple"
+      />
 
-        {selectedEnterprise && (
-          <div className="p-3">
-            <EnterpriseProviderConfig
-              provider={selectedEnterprise as "bedrock" | "azure" | "vertex"}
-              reasoningModel={reasoningModel}
-              setReasoningModel={setReasoningModel}
-            />
-          </div>
-        )}
-      </div>
+      {selectedEnterprise && (
+        <EnterpriseProviderConfig
+          provider={selectedEnterprise as "bedrock" | "azure" | "vertex"}
+          reasoningModel={reasoningModel}
+          setReasoningModel={setReasoningModel}
+        />
+      )}
     </div>
   );
 }

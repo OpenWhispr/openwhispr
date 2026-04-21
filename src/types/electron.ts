@@ -35,6 +35,7 @@ export interface TranscriptionItem {
   client_transcription_id: string;
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
 }
 
 export interface NoteItem {
@@ -68,6 +69,7 @@ export interface FolderItem {
   client_folder_id: string;
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
 }
 
 export interface ActionItem {
@@ -1575,6 +1577,13 @@ declare global {
       meetingDetectionSetPreferences?: (
         prefs: Record<string, boolean>
       ) => Promise<{ success: boolean }>;
+      setSpeakerDiarizationEnabled?: (
+        enabled: boolean
+      ) => Promise<{ success: boolean; error?: string }>;
+      setMeetingSessionSpeakerConfig?: (config: {
+        enabled: boolean;
+        expectedCount: number;
+      }) => Promise<{ success: boolean; error?: string }>;
       onMeetingDetected?: (callback: (data: any) => void) => () => void;
       onMeetingDetectedStartRecording?: (callback: (data: any) => void) => () => void;
       onMeetingNotificationData?: (callback: (data: any) => void) => () => void;
@@ -1639,6 +1648,8 @@ declare global {
       upsertFolderFromCloud?: (cloudFolder: Record<string, unknown>) => Promise<FolderItem>;
       markFolderSynced?: (id: number, cloudId: string) => Promise<void>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
+      getPendingFolderDeletes?: () => Promise<FolderItem[]>;
+      hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
 
       getPendingConversations?: () => Promise<ConversationPreview[]>;
       getPendingConversationDeletes?: () => Promise<ConversationPreview[]>;
@@ -1656,6 +1667,8 @@ declare global {
         cloudTranscription: Record<string, unknown>
       ) => Promise<TranscriptionItem>;
       markTranscriptionSynced?: (id: number, cloudId: string) => Promise<void>;
+      getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
+      hardDeleteTranscription?: (id: number) => Promise<{ success: boolean; id: number }>;
     };
 
     api?: {

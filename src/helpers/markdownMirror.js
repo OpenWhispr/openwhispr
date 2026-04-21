@@ -159,18 +159,12 @@ class MarkdownMirror {
     }
   }
 
-  deleteFolder(folderName, targetName) {
+  deleteFolder(folderName) {
     if (!this._basePath) return;
     try {
-      const srcDir = path.join(this._basePath, folderName);
-      const destDir = path.join(this._basePath, targetName || "Personal");
-      fs.mkdirSync(destDir, { recursive: true });
-      if (fs.existsSync(srcDir)) {
-        const files = fs.readdirSync(srcDir);
-        for (const file of files) {
-          fs.renameSync(path.join(srcDir, file), path.join(destDir, file));
-        }
-        fs.rmdirSync(srcDir);
+      const dir = path.join(this._basePath, folderName);
+      if (fs.existsSync(dir)) {
+        fs.rmSync(dir, { recursive: true, force: true });
       }
     } catch (err) {
       debugLogger.error(
