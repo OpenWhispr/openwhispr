@@ -339,22 +339,19 @@ class SyncService {
         if (cloudNotes.length === 0) break;
 
         for (const cloudNote of cloudNotes) {
+          const local = await window.electronAPI.getNoteByClientId?.(
+            cloudNote.client_note_id ?? ""
+          );
+
           if (cloudNote.deleted_at) {
-            const local = await window.electronAPI.getNoteByClientId?.(
-              cloudNote.client_note_id ?? ""
-            );
             if (local) await window.electronAPI.hardDeleteNote?.(local.id);
             continue;
           }
 
-          const local = await window.electronAPI.getNoteByClientId?.(
-            cloudNote.client_note_id ?? ""
-          );
-          const localFolderId = cloudNote.folder_id
-            ? (cloudToLocal.get(cloudNote.folder_id) ?? defaultFolderId)
-            : defaultFolderId;
-
           if (!local || cloudNote.updated_at > local.updated_at) {
+            const localFolderId = cloudNote.folder_id
+              ? (cloudToLocal.get(cloudNote.folder_id) ?? defaultFolderId)
+              : defaultFolderId;
             await window.electronAPI.upsertNoteFromCloud?.(
               cloudNote as unknown as Record<string, unknown>,
               localFolderId
@@ -448,17 +445,15 @@ class SyncService {
         if (cloudConvs.length === 0) break;
 
         for (const cloudConv of cloudConvs) {
+          const local = await window.electronAPI.getConversationByClientId?.(
+            cloudConv.client_conversation_id ?? ""
+          );
+
           if (cloudConv.deleted_at) {
-            const local = await window.electronAPI.getConversationByClientId?.(
-              cloudConv.client_conversation_id ?? ""
-            );
             if (local) await window.electronAPI.hardDeleteConversation?.(local.id);
             continue;
           }
 
-          const local = await window.electronAPI.getConversationByClientId?.(
-            cloudConv.client_conversation_id ?? ""
-          );
           if (!local || cloudConv.updated_at > local.updated_at) {
             await window.electronAPI.upsertConversationFromCloud?.(
               cloudConv as unknown as Record<string, unknown>,
@@ -549,17 +544,15 @@ class SyncService {
         if (cloudTs.length === 0) break;
 
         for (const cloudT of cloudTs) {
+          const local = await window.electronAPI.getTranscriptionByClientId?.(
+            cloudT.client_transcription_id ?? ""
+          );
+
           if (cloudT.deleted_at) {
-            const local = await window.electronAPI.getTranscriptionByClientId?.(
-              cloudT.client_transcription_id ?? ""
-            );
             if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
             continue;
           }
 
-          const local = await window.electronAPI.getTranscriptionByClientId?.(
-            cloudT.client_transcription_id ?? ""
-          );
           if (!local) {
             await window.electronAPI.upsertTranscriptionFromCloud?.(
               cloudT as unknown as Record<string, unknown>
