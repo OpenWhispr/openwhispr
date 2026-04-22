@@ -15,6 +15,7 @@ const STRONG_BLEED_MIC_TO_SYSTEM_RATIO = 1.25;
 const PARTIAL_BLEED_CORRELATION = 0.6;
 const PARTIAL_BLEED_RESIDUAL = 0.45;
 const PARTIAL_BLEED_EXPLAINED = 0.5;
+const HIGH_CORRELATION_BLEED = 0.7;
 const FINAL_BLEED_CORRELATION = 0.55;
 const FINAL_BLEED_RESIDUAL = 0.48;
 const FINAL_BLEED_EXPLAINED = 0.45;
@@ -209,9 +210,10 @@ class MeetingEchoLeakDetector {
       bleedMatches.reduce((sum, entry) => sum + entry.explainedRatio, 0) / bleedMatches.length;
 
     return (
-      averageCorrelation >= PARTIAL_BLEED_CORRELATION &&
-      averageResidual <= PARTIAL_BLEED_RESIDUAL &&
-      averageExplained >= PARTIAL_BLEED_EXPLAINED
+      averageCorrelation >= HIGH_CORRELATION_BLEED ||
+      (averageCorrelation >= PARTIAL_BLEED_CORRELATION &&
+        averageResidual <= PARTIAL_BLEED_RESIDUAL &&
+        averageExplained >= PARTIAL_BLEED_EXPLAINED)
     );
   }
 
@@ -277,9 +279,10 @@ class MeetingEchoLeakDetector {
         : null;
     const hasBleedEvidence =
       bleedMatches.length > 0 &&
-      averageCorrelation >= PARTIAL_BLEED_CORRELATION &&
-      averageResidual <= PARTIAL_BLEED_RESIDUAL &&
-      averageExplained >= PARTIAL_BLEED_EXPLAINED;
+      (averageCorrelation >= HIGH_CORRELATION_BLEED ||
+        (averageCorrelation >= PARTIAL_BLEED_CORRELATION &&
+          averageResidual <= PARTIAL_BLEED_RESIDUAL &&
+          averageExplained >= PARTIAL_BLEED_EXPLAINED));
     const bleedShare = bleedMatches.length / relevant.length;
     const shareGate = systemSpeaking ? VAD_GATED_SUSPECTED_SHARE : 0.6;
     const likelyRenderBleedShareGate = systemSpeaking ? VAD_GATED_SUSPECTED_SHARE : 0.4;
