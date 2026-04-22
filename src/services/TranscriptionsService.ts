@@ -26,6 +26,7 @@ interface CloudTranscription {
   status: string;
   deleted_at: string | null;
   created_at: string;
+  updated_at: string;
 }
 
 async function create(transcription: TranscriptionInput): Promise<CloudTranscription> {
@@ -42,11 +43,13 @@ async function batchCreate(
 
 async function list(
   limit?: number,
-  before?: string
+  before?: string,
+  since?: string
 ): Promise<{ transcriptions: CloudTranscription[] }> {
   const params = new URLSearchParams();
   if (limit !== undefined) params.set("limit", String(limit));
   if (before !== undefined) params.set("before", before);
+  if (since !== undefined) params.set("since", since);
   const query = params.toString();
   return cloudGet<{ transcriptions: CloudTranscription[] }>(
     `/api/transcriptions/list${query ? `?${query}` : ""}`

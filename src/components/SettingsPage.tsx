@@ -895,6 +895,7 @@ export default function SettingsPage({
     installUpdate: installUpdateAction,
     getAppVersion,
     error: updateError,
+    clearError: clearUpdateError,
   } = useUpdater();
 
   const isUpdateAvailable =
@@ -1150,11 +1151,18 @@ export default function SettingsPage({
   const handleNoteFilesRebuild = useCallback(async () => {
     setNoteFilesRebuilding(true);
     try {
-      await window.electronAPI?.noteFilesRebuild?.();
+      const result = await window.electronAPI?.noteFilesRebuild?.();
+      if (result && !result.success) {
+        toast({
+          title: t("settings.noteFiles.rebuildError.title"),
+          description: result.error || t("settings.noteFiles.rebuildError.description"),
+          variant: "destructive",
+        });
+      }
     } finally {
       setNoteFilesRebuilding(false);
     }
-  }, []);
+  }, [toast, t]);
 
   useEffect(() => {
     let mounted = true;
@@ -1219,8 +1227,9 @@ export default function SettingsPage({
         title: t("settingsPage.general.updates.dialogs.updateError.title"),
         description: t("settingsPage.general.updates.dialogs.updateError.description"),
       });
+      clearUpdateError();
     }
-  }, [updateError, showAlertDialog, t]);
+  }, [updateError, showAlertDialog, clearUpdateError, t]);
 
   useEffect(() => {
     if (installInitiated) {

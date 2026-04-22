@@ -237,6 +237,12 @@ export function useUpdater() {
     }
   }, []);
 
+  const clearError = useCallback(() => {
+    if (globalState.error) {
+      updateGlobalState({ error: null });
+    }
+  }, []);
+
   return {
     status: state.status,
     info: state.info,
@@ -249,5 +255,6 @@ export function useUpdater() {
     downloadUpdate,
     installUpdate,
     getAppVersion,
+    clearError,
   };
 }

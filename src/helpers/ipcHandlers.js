@@ -345,7 +345,14 @@ class IPCHandlers {
   }
 
   _asyncMirrorWrite(note) {
-    if (!this._noteFilesEnabled) return;
+    if (!this._noteFilesEnabled) {
+      debugLogger.debug(
+        "Mirror write skipped: note files disabled",
+        { noteId: note.id },
+        "note-files"
+      );
+      return;
+    }
     setImmediate(() => {
       const markdownMirror = require("./markdownMirror");
       const folderName = this._getFolderName(note.folder_id);
@@ -357,7 +364,10 @@ class IPCHandlers {
   }
 
   _asyncMirrorDelete(noteId) {
-    if (!this._noteFilesEnabled) return;
+    if (!this._noteFilesEnabled) {
+      debugLogger.debug("Mirror delete skipped: note files disabled", { noteId }, "note-files");
+      return;
+    }
     setImmediate(() => {
       const markdownMirror = require("./markdownMirror");
       markdownMirror.deleteNote(noteId);
@@ -1176,7 +1186,15 @@ class IPCHandlers {
     ipcMain.handle("db-mark-note-sync-error", (_, id) =>
       this.databaseManager.markNoteSyncError(id)
     );
-    ipcMain.handle("db-hard-delete-note", (_, id) => this.databaseManager.hardDeleteNote(id));
+    ipcMain.handle("db-hard-delete-note", (_, id) => {
+      const result = this.databaseManager.hardDeleteNote(id);
+      if (result?.success) {
+        this._asyncVectorDelete(id);
+        this._asyncMirrorDelete(id);
+        setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
+      }
+      return result;
+    });
 
     // Folders sync
     ipcMain.handle("db-get-pending-folders", () => this.databaseManager.getPendingFolders());
@@ -1193,7 +1211,22 @@ class IPCHandlers {
     ipcMain.handle("db-get-pending-folder-deletes", () =>
       this.databaseManager.getPendingFolderDeletes()
     );
-    ipcMain.handle("db-hard-delete-folder", (_, id) => this.databaseManager.hardDeleteFolder(id));
+    ipcMain.handle("db-hard-delete-folder", (_, id) => {
+      const result = this.databaseManager.hardDeleteFolder(id);
+      if (result?.success) {
+        for (const noteId of result.noteIds ?? []) {
+          this._asyncVectorDelete(noteId);
+        }
+        setImmediate(() => {
+          this.broadcastToWindows("folder-deleted", { id });
+          if (this._noteFilesEnabled && result.name) {
+            const markdownMirror = require("./markdownMirror");
+            markdownMirror.deleteFolder(result.name);
+          }
+        });
+      }
+      return result;
+    });
 
     // Conversations sync
     ipcMain.handle("db-get-pending-conversations", () =>
@@ -1211,9 +1244,13 @@ class IPCHandlers {
     ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
       this.databaseManager.markConversationSynced(id, cloudId)
     );
-    ipcMain.handle("db-hard-delete-conversation", (_, id) =>
-      this.databaseManager.hardDeleteConversation(id)
-    );
+    ipcMain.handle("db-hard-delete-conversation", (_, id) => {
+      const result = this.databaseManager.hardDeleteConversation(id);
+      if (result?.success) {
+        setImmediate(() => this.broadcastToWindows("conversation-deleted", { id }));
+      }
+      return result;
+    });
 
     // Transcriptions sync
     ipcMain.handle("db-get-pending-transcriptions", () =>
@@ -1231,9 +1268,13 @@ class IPCHandlers {
     ipcMain.handle("db-get-pending-transcription-deletes", () =>
       this.databaseManager.getPendingTranscriptionDeletes()
     );
-    ipcMain.handle("db-hard-delete-transcription", (_, id) =>
-      this.databaseManager.hardDeleteTranscription(id)
-    );
+    ipcMain.handle("db-hard-delete-transcription", (_, id) => {
+      const result = this.databaseManager.hardDeleteTranscription(id);
+      if (result?.success) {
+        setImmediate(() => this.broadcastToWindows("transcription-deleted", { id }));
+      }
+      return result;
+    });
 
     ipcMain.handle("export-note", async (event, noteId, format) => {
       try {
@@ -4839,20 +4880,37 @@ class IPCHandlers {
 
       meetingTranscriptionPrepareInProgress = true;
       meetingTranscriptionPreparePromise = (async () => {
+        let timeoutHandle;
         try {
-          await connectRealtimeStreaming(event, options);
+          await Promise.race([
+            connectRealtimeStreaming(event, options),
+            new Promise((_, reject) => {
+              timeoutHandle = setTimeout(() => reject(new Error("Prepare timed out")), 15000);
+            }),
+          ]);
           debugLogger.debug("Meeting transcription prepared (meeting streams warm)");
           return { success: true };
         } catch (error) {
           debugLogger.error("Meeting transcription prepare error", { error: error.message });
           return { success: false, error: error.message };
         } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
           meetingTranscriptionPrepareInProgress = false;
           meetingTranscriptionPreparePromise = null;
         }
       })();
 
       return meetingTranscriptionPreparePromise;
+    });
+
+    ipcMain.handle("meeting-transcription-cancel", async () => {
+      if (isMeetingStreamingConnected() || meetingLocalTimer) {
+        return { success: false, reason: "recording-active" };
+      }
+      meetingTranscriptionPrepareInProgress = false;
+      meetingTranscriptionStartInProgress = false;
+      meetingTranscriptionPreparePromise = null;
+      return { success: true };
     });
 
     ipcMain.handle("meeting-transcription-start", async (event, options = {}) => {
@@ -6923,11 +6981,15 @@ class IPCHandlers {
     });
 
     // Note files (markdown mirror) handlers
-    ipcMain.handle("note-files-set-enabled", async (_event, enabled, customPath) => {
+    ipcMain.handle("note-files-set-enabled", async (_event, enabled, customPath, options) => {
       try {
         this._noteFilesEnabled = !!enabled;
-        if (enabled) {
-          this._rebuildMirror(customPath || path.join(app.getPath("userData"), "notes"));
+        if (!enabled) return { success: true };
+        const basePath = customPath || path.join(app.getPath("userData"), "notes");
+        if (options?.skipRebuild) {
+          require("./markdownMirror").init(basePath);
+        } else {
+          this._rebuildMirror(basePath);
         }
         return { success: true };
       } catch (error) {

@@ -503,7 +503,8 @@ declare global {
       // Note files (markdown mirror)
       noteFilesSetEnabled?: (
         enabled: boolean,
-        customPath?: string
+        customPath?: string,
+        options?: { skipRebuild?: boolean }
       ) => Promise<{ success: boolean; error?: string }>;
       noteFilesSetPath?: (path: string) => Promise<{ success: boolean; error?: string }>;
       noteFilesRebuild?: () => Promise<{ success: boolean; error?: string }>;
@@ -1416,6 +1417,10 @@ declare global {
         transcript?: string;
         diarizationSessionId?: string;
         error?: string;
+      }>;
+      meetingTranscriptionCancel?: () => Promise<{
+        success: boolean;
+        reason?: "recording-active";
       }>;
       onMeetingTranscriptionSegment?: (
         callback: (data: {

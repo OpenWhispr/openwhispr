@@ -2093,8 +2093,16 @@ class DatabaseManager {
   hardDeleteFolder(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const result = this.db.prepare("DELETE FROM folders WHERE id = ?").run(id);
-      return { success: result.changes > 0, id };
+      const folder = this.db.prepare("SELECT name FROM folders WHERE id = ?").get(id);
+      const noteIds = this.db
+        .prepare("SELECT id FROM notes WHERE folder_id = ?")
+        .all(id)
+        .map((row) => row.id);
+      const result = this.db.transaction(() => {
+        this.db.prepare("DELETE FROM notes WHERE folder_id = ?").run(id);
+        return this.db.prepare("DELETE FROM folders WHERE id = ?").run(id);
+      })();
+      return { success: result.changes > 0, id, noteIds, name: folder?.name ?? null };
     } catch (error) {
       debugLogger.error("Error hard deleting folder", { error: error.message }, "database");
       throw error;

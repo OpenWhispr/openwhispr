@@ -14,7 +14,11 @@
       "path": "保存先",
       "changePath": "保存先を変更",
       "rebuild": "すべてのファイルを再構築",
-      "rebuildDescription": "すべてのノートと文字起こしをディスクに再同期"
+      "rebuildDescription": "すべてのノートと文字起こしをディスクに再同期",
+      "rebuildError": {
+        "title": "再構築に失敗しました",
+        "description": "ノートファイルを再構築できませんでした。機能が有効になっており、フォルダーに書き込み可能であることを確認してください。"
+      }
     },
     "meeting": {
       "speakerDetection": {

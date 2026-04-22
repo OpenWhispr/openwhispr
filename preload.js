@@ -104,8 +104,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getFolderNoteCounts: () => ipcRenderer.invoke("db-get-folder-note-counts"),
 
   // Note files (markdown mirror) functions
-  noteFilesSetEnabled: (enabled, customPath) =>
-    ipcRenderer.invoke("note-files-set-enabled", enabled, customPath),
+  noteFilesSetEnabled: (enabled, customPath, options) =>
+    ipcRenderer.invoke("note-files-set-enabled", enabled, customPath, options),
   noteFilesSetPath: (path) => ipcRenderer.invoke("note-files-set-path", path),
   noteFilesRebuild: () => ipcRenderer.invoke("note-files-rebuild"),
   noteFilesGetDefaultPath: () => ipcRenderer.invoke("note-files-get-default-path"),
@@ -548,6 +548,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   meetingTranscriptionSend: (buffer, source) =>
     ipcRenderer.send("meeting-transcription-send", buffer, source),
   meetingTranscriptionStop: () => ipcRenderer.invoke("meeting-transcription-stop"),
+  meetingTranscriptionCancel: () => ipcRenderer.invoke("meeting-transcription-cancel"),
   onMeetingTranscriptionSegment: registerListener(
     "meeting-transcription-segment",
     (callback) => (_event, data) => callback(data)
