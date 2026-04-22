@@ -109,6 +109,7 @@ class SyncService {
         audio_duration_seconds: note.audio_duration_seconds,
         transcript: note.transcript,
         folder_id: cloudFolderId,
+        updated_at: note.updated_at,
       });
     } else {
       const cloud = await NotesService.create({
