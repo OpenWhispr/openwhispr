@@ -14,7 +14,11 @@
       "path": "儲存位置",
       "changePath": "變更位置",
       "rebuild": "重建所有檔案",
-      "rebuildDescription": "將所有筆記和逐字稿重新同步到磁碟"
+      "rebuildDescription": "將所有筆記和逐字稿重新同步到磁碟",
+      "rebuildError": {
+        "title": "重建失敗",
+        "description": "無法重建筆記檔案。請確認功能已啟用，且資料夾可寫入。"
+      }
     },
     "meeting": {
       "speakerDetection": {

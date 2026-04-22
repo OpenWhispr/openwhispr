@@ -14,7 +14,11 @@
       "path": "Emplacement de sauvegarde",
       "changePath": "Changer l'emplacement",
       "rebuild": "Reconstruire tous les fichiers",
-      "rebuildDescription": "Resynchroniser toutes les notes et transcriptions sur le disque"
+      "rebuildDescription": "Resynchroniser toutes les notes et transcriptions sur le disque",
+      "rebuildError": {
+        "title": "Échec de la reconstruction",
+        "description": "Impossible de reconstruire les fichiers de notes. Assurez-vous que la fonctionnalité est activée et que le dossier est accessible en écriture."
+      }
     },
     "meeting": {
       "speakerDetection": {

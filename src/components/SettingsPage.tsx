@@ -1151,11 +1151,18 @@ export default function SettingsPage({
   const handleNoteFilesRebuild = useCallback(async () => {
     setNoteFilesRebuilding(true);
     try {
-      await window.electronAPI?.noteFilesRebuild?.();
+      const result = await window.electronAPI?.noteFilesRebuild?.();
+      if (result && !result.success) {
+        toast({
+          title: t("settings.noteFiles.rebuildError.title"),
+          description: result.error || t("settings.noteFiles.rebuildError.description"),
+          variant: "destructive",
+        });
+      }
     } finally {
       setNoteFilesRebuilding(false);
     }
-  }, []);
+  }, [toast, t]);
 
   useEffect(() => {
     let mounted = true;

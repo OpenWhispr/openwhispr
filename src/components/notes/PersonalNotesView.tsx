@@ -512,10 +512,12 @@ export default function PersonalNotesView({
 
   // Pre-warm WebSocket when entering meeting mode (before user hits record)
   useEffect(() => {
-    if (isMeetingMode) {
-      prepareTranscription();
-    }
-  }, [isMeetingMode, prepareTranscription]);
+    if (!isMeetingMode) return;
+    prepareTranscription();
+    return () => {
+      window.electronAPI?.meetingTranscriptionCancel?.();
+    };
+  }, [isMeetingMode, activeNoteId, prepareTranscription]);
 
   useEffect(() => {
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;

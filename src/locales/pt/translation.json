@@ -14,7 +14,11 @@
       "path": "Local de salvamento",
       "changePath": "Alterar local",
       "rebuild": "Reconstruir todos os arquivos",
-      "rebuildDescription": "Ressincronizar todas as notas e transcrições no disco"
+      "rebuildDescription": "Ressincronizar todas as notas e transcrições no disco",
+      "rebuildError": {
+        "title": "Falha na reconstrução",
+        "description": "Não foi possível reconstruir os arquivos de notas. Verifique se o recurso está ativado e se a pasta permite gravação."
+      }
     },
     "meeting": {
       "speakerDetection": {

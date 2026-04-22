@@ -119,6 +119,14 @@ export default function ControlPanel() {
   }, [showAlertDialog, t]);
 
   useEffect(() => {
+    const { noteFilesEnabled, noteFilesPath } = useSettingsStore.getState();
+    if (!noteFilesEnabled) return;
+    window.electronAPI?.noteFilesSetEnabled?.(true, noteFilesPath || undefined, {
+      skipRebuild: true,
+    });
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const mod = platform === "darwin" ? e.metaKey : e.ctrlKey;
       if (mod && e.key === "k") {

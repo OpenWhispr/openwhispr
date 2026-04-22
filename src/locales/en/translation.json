@@ -14,7 +14,11 @@
       "path": "Save location",
       "changePath": "Change location",
       "rebuild": "Rebuild all files",
-      "rebuildDescription": "Re-sync all notes and transcripts to disk"
+      "rebuildDescription": "Re-sync all notes and transcripts to disk",
+      "rebuildError": {
+        "title": "Rebuild failed",
+        "description": "Could not rebuild note files. Make sure the feature is enabled and the folder is writable."
+      }
     },
     "meeting": {
       "speakerDetection": {

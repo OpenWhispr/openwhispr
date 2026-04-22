@@ -14,7 +14,11 @@
       "path": "Speicherort",
       "changePath": "Speicherort ändern",
       "rebuild": "Alle Dateien neu erstellen",
-      "rebuildDescription": "Alle Notizen und Transkripte erneut auf die Festplatte synchronisieren"
+      "rebuildDescription": "Alle Notizen und Transkripte erneut auf die Festplatte synchronisieren",
+      "rebuildError": {
+        "title": "Neuerstellung fehlgeschlagen",
+        "description": "Die Notizdateien konnten nicht neu erstellt werden. Stellen Sie sicher, dass die Funktion aktiviert ist und der Ordner beschreibbar ist."
+      }
     },
     "meeting": {
       "speakerDetection": {

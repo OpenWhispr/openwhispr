@@ -14,7 +14,11 @@
       "path": "Ubicación de guardado",
       "changePath": "Cambiar ubicación",
       "rebuild": "Reconstruir todos los archivos",
-      "rebuildDescription": "Resincronizar todas las notas y transcripciones al disco"
+      "rebuildDescription": "Resincronizar todas las notas y transcripciones al disco",
+      "rebuildError": {
+        "title": "Error al reconstruir",
+        "description": "No se pudieron reconstruir los archivos de notas. Asegúrate de que la función esté habilitada y la carpeta tenga permisos de escritura."
+      }
     },
     "meeting": {
       "speakerDetection": {

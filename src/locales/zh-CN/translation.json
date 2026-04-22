@@ -14,7 +14,11 @@
       "path": "保存位置",
       "changePath": "更改位置",
       "rebuild": "重建所有文件",
-      "rebuildDescription": "将所有笔记和转录重新同步到磁盘"
+      "rebuildDescription": "将所有笔记和转录重新同步到磁盘",
+      "rebuildError": {
+        "title": "重建失败",
+        "description": "无法重建笔记文件。请确保已启用该功能，并且文件夹可写。"
+      }
     },
     "meeting": {
       "speakerDetection": {

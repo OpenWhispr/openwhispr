@@ -14,7 +14,11 @@
       "path": "Percorso di salvataggio",
       "changePath": "Cambia percorso",
       "rebuild": "Ricostruisci tutti i file",
-      "rebuildDescription": "Risincronizza tutte le note e trascrizioni su disco"
+      "rebuildDescription": "Risincronizza tutte le note e trascrizioni su disco",
+      "rebuildError": {
+        "title": "Ricostruzione non riuscita",
+        "description": "Impossibile ricostruire i file delle note. Assicurati che la funzione sia abilitata e che la cartella sia scrivibile."
+      }
     },
     "meeting": {
       "speakerDetection": {
