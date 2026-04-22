@@ -3754,6 +3754,15 @@ class IPCHandlers {
       schedulePendingMicFinalFlush();
 
       for (const pending of ready) {
+        if (pending.micSuppression?.hasBleedEvidence) {
+          debugLogger.debug("Dropping flagged-bleed mic segment after holdback", {
+            text: pending.text.slice(0, 80),
+            holdbackMs: pending.holdbackMs,
+            averageCorrelation: pending.micSuppression?.averageCorrelation?.toFixed(3),
+            averageResidual: pending.micSuppression?.averageResidual?.toFixed(3),
+          });
+          continue;
+        }
         debugLogger.debug("Releasing buffered mic segment after duplicate holdback", {
           text: pending.text.slice(0, 80),
           holdbackMs: pending.holdbackMs,
