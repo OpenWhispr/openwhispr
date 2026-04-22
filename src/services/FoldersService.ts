@@ -13,6 +13,7 @@ interface CloudFolder {
   name: string;
   is_default: boolean;
   sort_order: number;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -33,8 +34,9 @@ async function deleteFolder(id: string): Promise<void> {
   await cloudDelete("/api/folders/delete", { id });
 }
 
-async function list(): Promise<{ folders: CloudFolder[] }> {
-  return cloudGet<{ folders: CloudFolder[] }>("/api/folders/list");
+async function list(since?: string): Promise<{ folders: CloudFolder[] }> {
+  const query = since ? `?since=${encodeURIComponent(since)}` : "";
+  return cloudGet<{ folders: CloudFolder[] }>(`/api/folders/list${query}`);
 }
 
 export { create, batchCreate, update, deleteFolder, list };

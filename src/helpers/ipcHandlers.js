@@ -1164,7 +1164,15 @@ class IPCHandlers {
     ipcMain.handle("db-mark-note-sync-error", (_, id) =>
       this.databaseManager.markNoteSyncError(id)
     );
-    ipcMain.handle("db-hard-delete-note", (_, id) => this.databaseManager.hardDeleteNote(id));
+    ipcMain.handle("db-hard-delete-note", (_, id) => {
+      const result = this.databaseManager.hardDeleteNote(id);
+      if (result?.success) {
+        this._asyncVectorDelete(id);
+        this._asyncMirrorDelete(id);
+        setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
+      }
+      return result;
+    });
 
     // Folders sync
     ipcMain.handle("db-get-pending-folders", () => this.databaseManager.getPendingFolders());
@@ -1181,7 +1189,22 @@ class IPCHandlers {
     ipcMain.handle("db-get-pending-folder-deletes", () =>
       this.databaseManager.getPendingFolderDeletes()
     );
-    ipcMain.handle("db-hard-delete-folder", (_, id) => this.databaseManager.hardDeleteFolder(id));
+    ipcMain.handle("db-hard-delete-folder", (_, id) => {
+      const result = this.databaseManager.hardDeleteFolder(id);
+      if (result?.success) {
+        for (const noteId of result.noteIds ?? []) {
+          this._asyncVectorDelete(noteId);
+        }
+        setImmediate(() => {
+          this.broadcastToWindows("folder-deleted", { id });
+          if (this._noteFilesEnabled && result.name) {
+            const markdownMirror = require("./markdownMirror");
+            markdownMirror.deleteFolder(result.name);
+          }
+        });
+      }
+      return result;
+    });
 
     // Conversations sync
     ipcMain.handle("db-get-pending-conversations", () =>
@@ -1199,9 +1222,13 @@ class IPCHandlers {
     ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
       this.databaseManager.markConversationSynced(id, cloudId)
     );
-    ipcMain.handle("db-hard-delete-conversation", (_, id) =>
-      this.databaseManager.hardDeleteConversation(id)
-    );
+    ipcMain.handle("db-hard-delete-conversation", (_, id) => {
+      const result = this.databaseManager.hardDeleteConversation(id);
+      if (result?.success) {
+        setImmediate(() => this.broadcastToWindows("conversation-deleted", { id }));
+      }
+      return result;
+    });
 
     // Transcriptions sync
     ipcMain.handle("db-get-pending-transcriptions", () =>
@@ -1219,9 +1246,13 @@ class IPCHandlers {
     ipcMain.handle("db-get-pending-transcription-deletes", () =>
       this.databaseManager.getPendingTranscriptionDeletes()
     );
-    ipcMain.handle("db-hard-delete-transcription", (_, id) =>
-      this.databaseManager.hardDeleteTranscription(id)
-    );
+    ipcMain.handle("db-hard-delete-transcription", (_, id) => {
+      const result = this.databaseManager.hardDeleteTranscription(id);
+      if (result?.success) {
+        setImmediate(() => this.broadcastToWindows("transcription-deleted", { id }));
+      }
+      return result;
+    });
 
     ipcMain.handle("export-note", async (event, noteId, format) => {
       try {
