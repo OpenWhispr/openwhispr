@@ -371,6 +371,15 @@ declare global {
         streamingProvider: string;
       } | null>;
 
+      getNoteRecordingConfig?: () => Promise<{
+        success: boolean;
+        providers: Array<{
+          id: string;
+          name: string;
+          models: Array<{ id: string; name: string; default?: boolean }>;
+        }>;
+      } | null>;
+
       // Database operations
       saveTranscription: (
         text: string,

@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { OPENWHISPR_API_URL } from "../config/constants";
 import logger from "../utils/logger";
 
 export interface NoteRecordingProviderModel {
@@ -26,17 +25,14 @@ let inFlight: Promise<NoteRecordingProvider[] | null> | null = null;
 
 export async function fetchProviders(): Promise<NoteRecordingProvider[] | null> {
   if (inFlight) return inFlight;
-  if (!OPENWHISPR_API_URL) return null;
+  if (!window.electronAPI?.getNoteRecordingConfig) return null;
 
   inFlight = (async () => {
     try {
-      const res = await fetch(`${OPENWHISPR_API_URL}/api/note-recording-config`, {
-        credentials: "include",
-      });
-      if (!res.ok) {
-        throw new Error(`API error: ${res.status}`);
+      const data = await window.electronAPI.getNoteRecordingConfig!();
+      if (!data?.success) {
+        throw new Error("Note recording config unavailable");
       }
-      const data = (await res.json()) as { providers?: NoteRecordingProvider[] };
       const providers = Array.isArray(data.providers) ? data.providers : [];
       useStreamingProvidersStore.setState({ providers });
       return providers;

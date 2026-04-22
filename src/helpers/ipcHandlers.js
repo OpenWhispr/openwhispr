@@ -5762,6 +5762,33 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("get-note-recording-config", async (event) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        const response = await fetch(`${apiUrl}/api/note-recording-config`, {
+          headers: { Cookie: cookieHeader },
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          }
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return { success: true, ...data };
+      } catch (error) {
+        debugLogger.error("Note recording config fetch error:", error);
+        return null;
+      }
+    });
+
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
       try {
         const apiUrl = getApiUrl();
