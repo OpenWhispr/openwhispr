@@ -874,7 +874,7 @@ export default function TranscriptionModelPicker({
                           groq: "https://console.groq.com/keys",
                           mistral: "https://console.mistral.ai/api-keys",
                           openai: "https://platform.openai.com/api-keys",
-                          smallest: "https://waves.smallest.ai/",
+                          smallest: "https://app.smallest.ai/",
                         }[selectedCloudProvider] || "https://platform.openai.com/api-keys"
                       )}
                       className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
