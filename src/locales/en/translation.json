@@ -1668,7 +1668,8 @@
         "openai_whisper_1": "Original Whisper model",
         "groq_whisper_large_v3": "High accuracy speech recognition",
         "groq_whisper_large_v3_turbo": "216x real-time speed",
-        "mistral_voxtral_mini_latest": "Fast multilingual transcription"
+        "mistral_voxtral_mini_latest": "Fast multilingual transcription",
+        "smallest_pulse": "Fast and accurate speech-to-text"
       },
       "cloud": {
         "openai_gpt_5_4": "Frontier model for complex reasoning",

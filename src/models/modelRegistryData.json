@@ -180,6 +180,19 @@
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
         }
       ]
+    },
+    {
+      "id": "smallest",
+      "name": "Smallest AI",
+      "baseUrl": "https://api.smallest.ai/waves/v1",
+      "models": [
+        {
+          "id": "pulse",
+          "name": "Pulse",
+          "description": "Fast and accurate speech-to-text",
+          "descriptionKey": "models.descriptions.transcription.smallest_pulse"
+        }
+      ]
     }
   ],
   "cloudProviders": [

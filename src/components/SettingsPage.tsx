@@ -196,6 +196,8 @@ interface TranscriptionSectionProps {
   setGroqApiKey: (key: string) => void;
   mistralApiKey: string;
   setMistralApiKey: (key: string) => void;
+  smallestAiApiKey: string;
+  setSmallestAiApiKey: (key: string) => void;
   customTranscriptionApiKey: string;
   setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
@@ -238,6 +240,8 @@ function TranscriptionSection({
   setGroqApiKey,
   mistralApiKey,
   setMistralApiKey,
+  smallestAiApiKey,
+  setSmallestAiApiKey,
   customTranscriptionApiKey,
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
@@ -357,6 +361,8 @@ function TranscriptionSection({
       setGroqApiKey={setGroqApiKey}
       mistralApiKey={mistralApiKey}
       setMistralApiKey={setMistralApiKey}
+      smallestAiApiKey={smallestAiApiKey}
+      setSmallestAiApiKey={setSmallestAiApiKey}
       customTranscriptionApiKey={customTranscriptionApiKey}
       setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
       cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
@@ -789,6 +795,7 @@ export default function SettingsPage({
     geminiApiKey,
     groqApiKey,
     mistralApiKey,
+    smallestAiApiKey,
     dictationKey,
     activationMode,
     setActivationMode,
@@ -813,6 +820,7 @@ export default function SettingsPage({
     setGeminiApiKey,
     setGroqApiKey,
     setMistralApiKey,
+    setSmallestAiApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
     customReasoningApiKey,
@@ -3199,6 +3207,8 @@ EOF`,
                 setGroqApiKey={setGroqApiKey}
                 mistralApiKey={mistralApiKey}
                 setMistralApiKey={setMistralApiKey}
+                smallestAiApiKey={smallestAiApiKey}
+                setSmallestAiApiKey={setSmallestAiApiKey}
                 customTranscriptionApiKey={customTranscriptionApiKey}
                 setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
                 cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}

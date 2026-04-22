@@ -1563,7 +1563,8 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍即時速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
-        "mistral_voxtral_mini_latest": "快速多語言轉錄"
+        "mistral_voxtral_mini_latest": "快速多語言轉錄",
+        "smallest_pulse": "快速準確的語音轉文字"
       },
       "cloud": {
         "openai_gpt_5_4": "複雜推理前沿模型",

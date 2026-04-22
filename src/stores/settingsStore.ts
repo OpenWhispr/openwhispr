@@ -328,6 +328,7 @@ export interface SettingsState
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
+  setSmallestAiApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCustomReasoningApiKey: (key: string) => void;
 
@@ -488,6 +489,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   geminiApiKey: readString("geminiApiKey", ""),
   groqApiKey: readString("groqApiKey", ""),
   mistralApiKey: readString("mistralApiKey", ""),
+  smallestAiApiKey: readString("smallestAiApiKey", ""),
   customTranscriptionApiKey: readString("customTranscriptionApiKey", ""),
   customReasoningApiKey: readString("customReasoningApiKey", ""),
 
@@ -783,6 +785,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ mistralApiKey: key });
     window.electronAPI?.saveMistralKey?.(key);
     invalidateApiKeyCaches("mistral");
+  },
+  setSmallestAiApiKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("smallestAiApiKey", key);
+    set({ smallestAiApiKey: key });
+    window.electronAPI?.saveSmallestAiKey?.(key);
+    invalidateApiKeyCaches("smallest");
   },
   setCustomTranscriptionApiKey: (key: string) => {
     if (isBrowser) localStorage.setItem("customTranscriptionApiKey", key);
@@ -1088,6 +1096,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
+    if (keys.smallestAiApiKey !== undefined) s.setSmallestAiApiKey(keys.smallestAiApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.customReasoningApiKey !== undefined)
@@ -1225,6 +1234,10 @@ export async function initializeSettings(): Promise<void> {
       if (!state.mistralApiKey) {
         const envKey = await window.electronAPI.getMistralKey?.();
         if (envKey) createStringSetter("mistralApiKey")(envKey);
+      }
+      if (!state.smallestAiApiKey) {
+        const envKey = await window.electronAPI.getSmallestAiKey?.();
+        if (envKey) createStringSetter("smallestAiApiKey")(envKey);
       }
       if (!state.customTranscriptionApiKey) {
         const envKey = await window.electronAPI.getCustomTranscriptionKey?.();

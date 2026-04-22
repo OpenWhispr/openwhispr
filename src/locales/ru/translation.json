@@ -1568,7 +1568,8 @@
         "openai_whisper_1": "Оригинальная модель Whisper",
         "groq_whisper_large_v3_turbo": "Скорость в 216 раз быстрее реального времени",
         "groq_whisper_large_v3": "Модель Large v3, быстрая и точная",
-        "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция"
+        "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция",
+        "smallest_pulse": "Быстрое и точное распознавание речи"
       },
       "cloud": {
         "openai_gpt_5_4": "Фронтирная модель для сложного рассуждения",
