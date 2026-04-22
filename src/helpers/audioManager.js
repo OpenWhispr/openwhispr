@@ -1964,6 +1964,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
+      // Realtime WebSocket is OpenAI-only; non-OpenAI providers (custom, groq,
+      // mistral) don't speak the realtime protocol and must fall through to
+      // the HTTP path.
+      const provider = s.cloudTranscriptionProvider || "openai";
+      if (provider !== "openai") return false;
       if (s.cloudTranscriptionMode === "byok") return !!s.openaiApiKey;
       if (s.cloudTranscriptionMode === "openwhispr") return !!(isSignedInOverride ?? s.isSignedIn);
       return false;
