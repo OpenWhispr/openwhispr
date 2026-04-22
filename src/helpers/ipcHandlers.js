@@ -4156,6 +4156,21 @@ class IPCHandlers {
     let meetingLiveSpeakerState = null;
     let meetingLiveSpeakerStartedAt = null;
     let meetingReclusterTimer = null;
+    let meetingSpeakerRemapper = (id) => id;
+
+    const createSpeakerRemapper = (maxSpeakers) => {
+      const cap = Math.max(1, Math.floor(maxSpeakers) || 1);
+      const map = new Map();
+      return (internalId) => {
+        if (!internalId) return internalId;
+        const existing = map.get(internalId);
+        if (existing !== undefined) return existing;
+        const index = map.size < cap ? map.size : cap - 1;
+        const label = `speaker_${index}`;
+        map.set(internalId, label);
+        return label;
+      };
+    };
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
@@ -4416,13 +4431,15 @@ class IPCHandlers {
 
       meetingLiveSpeakerState = null;
       meetingLiveSpeakerStartedAt = Date.now();
+      meetingSpeakerRemapper = createSpeakerRemapper(resolveSessionMaxSpeakers());
       const started = await liveSpeakerIdentifier.start(
         (identification) => {
           if (!win || win.isDestroyed()) {
             return;
           }
 
-          bindOneOnOneAttendeeToSpeaker(identification.speakerId);
+          const publicSpeakerId = meetingSpeakerRemapper(identification.speakerId);
+          bindOneOnOneAttendeeToSpeaker(publicSpeakerId);
 
           const displayName = meetingOneOnOneAttendee
             ? meetingOneOnOneAttendee.displayName
@@ -4438,6 +4455,7 @@ class IPCHandlers {
           );
           const enrichedIdentification = {
             ...identification,
+            speakerId: publicSpeakerId,
             displayName,
             startTime,
             endTime,
@@ -4454,7 +4472,7 @@ class IPCHandlers {
               (!seg.speaker || seg.speakerIsPlaceholder)
             ) {
               applyConfirmedSpeaker(seg, {
-                speaker: identification.speakerId,
+                speaker: publicSpeakerId,
                 speakerName: displayName || seg.speakerName,
                 speakerIsPlaceholder: false,
               });
@@ -4476,7 +4494,14 @@ class IPCHandlers {
           const merges = await liveSpeakerIdentifier.recluster();
           if (!merges.length) return;
 
-          for (const { keep, remove, displayName } of merges) {
+          const publicMerges = merges.map(({ keep, remove, displayName, similarity }) => ({
+            keep: meetingSpeakerRemapper(keep),
+            remove: meetingSpeakerRemapper(remove),
+            displayName,
+            similarity,
+          }));
+          for (const { keep, remove, displayName } of publicMerges) {
+            if (keep === remove) continue;
             for (const seg of meetingDiarizationSegments) {
               if (seg.speaker === remove) {
                 seg.speaker = keep;
@@ -4485,7 +4510,7 @@ class IPCHandlers {
             }
           }
 
-          win.webContents.send("meeting-speakers-merged", merges);
+          win.webContents.send("meeting-speakers-merged", publicMerges);
         }, 30_000);
       } else {
         meetingLiveSpeakerStartedAt = null;
