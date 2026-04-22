@@ -392,20 +392,35 @@ class IPCHandlers {
     return map;
   }
 
-  _resolveOneOnOneOtherParticipant(participantsJson) {
-    if (!participantsJson) return null;
+  _parseNonSelfParticipants(participantsJson) {
+    if (!participantsJson) return [];
     let participants;
     try {
       participants = JSON.parse(participantsJson);
     } catch (_) {
-      return null;
+      return [];
     }
-    if (!Array.isArray(participants) || participants.length === 0) return null;
+    if (!Array.isArray(participants) || participants.length === 0) return [];
     const googleEmails = new Set(
       this.databaseManager.getGoogleAccounts().map((a) => a.email.toLowerCase())
     );
-    const isSelf = (p) => p.self === true || googleEmails.has((p.email || "").toLowerCase());
-    const others = participants.filter((p) => !isSelf(p));
+    return participants.filter(
+      (p) => p && p.self !== true && !googleEmails.has((p.email || "").toLowerCase())
+    );
+  }
+
+  _getNoteNonSelfParticipants(noteId) {
+    if (!noteId) return [];
+    try {
+      const note = this.databaseManager.getNote(noteId);
+      return this._parseNonSelfParticipants(note?.participants);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  _resolveOneOnOneOtherParticipant(participantsJson) {
+    const others = this._parseNonSelfParticipants(participantsJson);
     if (others.length !== 1) return null;
     const displayName = others[0].displayName || others[0].email;
     if (!displayName) return null;
@@ -4147,7 +4162,18 @@ class IPCHandlers {
     let meetingOneOnOneProfileBound = false;
     let meetingNoteId = null;
 
-    const getLiveSpeakerProfiles = () => this.databaseManager.getSpeakerProfiles(true);
+    const getLiveSpeakerProfiles = () => {
+      const attendees = this._getNoteNonSelfParticipants(meetingNoteId);
+      const attendeeEmails = new Set();
+      for (const p of attendees) {
+        const email = (p.email || "").toLowerCase().trim();
+        if (email) attendeeEmails.add(email);
+      }
+      if (attendeeEmails.size === 0) return [];
+      return this.databaseManager
+        .getSpeakerProfiles(true)
+        .filter((p) => p.email && attendeeEmails.has(p.email.toLowerCase()));
+    };
     const shouldSuppressMicTranscriptSegment = (startedAt, endedAt = Date.now()) =>
       meetingEchoLeakDetector.shouldSuppressMicSegment(startedAt, endedAt);
 
