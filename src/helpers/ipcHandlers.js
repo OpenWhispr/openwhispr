@@ -4116,7 +4116,7 @@ class IPCHandlers {
     const MEETING_STARTUP_WARMUP_MS = 1500;
     const MEETING_MIC_BLEED_RMS_CEILING = 0.01;
     const MEETING_MIC_BLEED_PEAK_CEILING = 0.025;
-    const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
+    const MEETING_MIC_BLEED_LOOKBACK_MS = 2500;
     let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
