@@ -31,20 +31,12 @@ const http = require("http");
 const tls = require("tls");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
-// Trust the OS certificate store for all Node-side TLS (ws, https.get, etc.).
-// Chromium's network stack already honors the system keychain, but Node uses a
-// bundled CA list — so corporate MITM proxies break realtime WS and HF
-// downloads while the renderer's fetch works. Merging is strictly additive:
-// nothing that validated before stops validating.
+// Extend Node's TLS trust with the OS store so ws and https.get see corporate
+// CAs that Chromium already trusts.
 try {
-  if (
-    typeof tls.getCACertificates === "function" &&
-    typeof tls.setDefaultCACertificates === "function"
-  ) {
-    const systemCAs = tls.getCACertificates("system");
-    if (Array.isArray(systemCAs) && systemCAs.length > 0) {
-      tls.setDefaultCACertificates([...tls.rootCertificates, ...systemCAs]);
-    }
+  const systemCAs = tls.getCACertificates("system");
+  if (systemCAs?.length) {
+    tls.setDefaultCACertificates([...tls.rootCertificates, ...systemCAs]);
   }
 } catch (err) {
   require("./src/helpers/debugLogger").warn("System CA merge failed; using bundled CA list", {
