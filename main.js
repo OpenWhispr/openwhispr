@@ -34,12 +34,13 @@ require("dotenv").config({ path: path.join(__dirname, ".env") });
 // Extend Node's TLS trust with the OS store so ws and https.get see corporate
 // CAs that Chromium already trusts.
 try {
+  const currentCAs = tls.getCACertificates();
   const systemCAs = tls.getCACertificates("system");
   if (systemCAs?.length) {
-    tls.setDefaultCACertificates([...tls.rootCertificates, ...systemCAs]);
+    tls.setDefaultCACertificates([...currentCAs, ...systemCAs]);
   }
 } catch (err) {
-  require("./src/helpers/debugLogger").warn("System CA merge failed; using bundled CA list", {
+  require("./src/helpers/debugLogger").warn("System CA merge failed; using existing CA list", {
     error: err?.message,
   });
 }
