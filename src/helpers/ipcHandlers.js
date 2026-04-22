@@ -4073,6 +4073,8 @@ class IPCHandlers {
 
     const MEETING_MIC_REFERENCE_ALIGNMENT_MS = 320;
     const MEETING_STARTUP_WARMUP_MS = 1500;
+    const MEETING_MIC_BLEED_RMS_CEILING = 0.01;
+    const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
     let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
@@ -4180,6 +4182,11 @@ class IPCHandlers {
         }
         const rms = Math.sqrt(sumSq / samples.length);
         if (rms < 0.0015 && peak < 0.05) {
+          outbound = Buffer.alloc(buffer.length);
+        } else if (
+          rms < MEETING_MIC_BLEED_RMS_CEILING &&
+          meetingEchoLeakDetector.isSystemSpeaking(Date.now() - MEETING_MIC_BLEED_LOOKBACK_MS)
+        ) {
           outbound = Buffer.alloc(buffer.length);
         }
       }
@@ -4413,6 +4420,19 @@ class IPCHandlers {
       const rms = Math.sqrt(sumSq / samples.length);
       if (rms < 0.0015 && peak < 0.05) {
         debugLogger.debug("Skipping silent meeting chunk", {
+          source,
+          rms: rms.toFixed(4),
+          peak: peak.toFixed(4),
+        });
+        return;
+      }
+
+      if (
+        source === "mic" &&
+        rms < MEETING_MIC_BLEED_RMS_CEILING &&
+        meetingEchoLeakDetector.isSystemSpeaking(Date.now() - 5000)
+      ) {
+        debugLogger.debug("Skipping system-dominant mic chunk", {
           source,
           rms: rms.toFixed(4),
           peak: peak.toFixed(4),
