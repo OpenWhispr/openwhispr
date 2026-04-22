@@ -107,6 +107,10 @@ class DeepgramStreaming {
     this.connectionOptions = null;
   }
 
+  get completedSegments() {
+    return this.finalSegments;
+  }
+
   setTokenRefreshFn(fn) {
     this.tokenRefreshFn = fn;
   }

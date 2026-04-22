@@ -40,6 +40,7 @@ class AssemblyAiStreaming {
     this.isDisconnecting = false;
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;
+    this.completedSegments = [];
   }
 
   buildWebSocketUrl(options) {
@@ -395,6 +396,7 @@ class AssemblyAiStreaming {
                 // turn only when this variant is formatted, otherwise ignore duplicate.
                 if (message.turn_is_formatted && previousTurn.text !== trimmedTranscript) {
                   previousTurn.text = trimmedTranscript;
+                  this.completedSegments[this.completedSegments.length - 1] = trimmedTranscript;
                   this.lastTurnText = trimmedTranscript;
                   this.accumulatedText = this.turns.map((turn) => turn.text).join(" ");
                   this.onFinalTranscript?.(this.accumulatedText);
@@ -414,6 +416,7 @@ class AssemblyAiStreaming {
                 text: trimmedTranscript,
                 normalized: normalizedTranscript,
               });
+              this.completedSegments.push(trimmedTranscript);
               this.lastTurnText = trimmedTranscript;
               this.accumulatedText = this.turns.map((turn) => turn.text).join(" ");
               this.onFinalTranscript?.(this.accumulatedText);
@@ -453,6 +456,9 @@ class AssemblyAiStreaming {
         case "Error":
           debugLogger.error("AssemblyAI streaming error", { error: message.error });
           this.onError?.(new Error(message.error));
+          break;
+
+        case "SpeechStarted":
           break;
 
         default:
@@ -543,6 +549,7 @@ class AssemblyAiStreaming {
 
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;
+    this.completedSegments = [];
 
     if (this.ws) {
       try {
