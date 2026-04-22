@@ -15,6 +15,20 @@ import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
 import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
+import { modelRegistry, isEnterpriseProvider } from "../../models/ModelRegistry";
+
+function isProviderValidForMode(provider: string, mode: InferenceMode): boolean {
+  switch (mode) {
+    case "providers":
+      return modelRegistry.getCloudProviders().some((p) => p.id === provider);
+    case "local":
+      return modelRegistry.getAllProviders().some((p) => p.id === provider);
+    case "enterprise":
+      return isEnterpriseProvider(provider);
+    default:
+      return true;
+  }
+}
 
 export default function AgentModeSettings() {
   const { t } = useTranslation();
@@ -98,6 +112,10 @@ export default function AgentModeSettings() {
     if (mode === agentInferenceMode) return;
     setAgentInferenceMode(mode);
     setCloudAgentMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    if (!isProviderValidForMode(agentProvider, mode)) {
+      setAgentProvider("");
+      setAgentModel("");
+    }
     if (mode === "openwhispr" || mode === "self-hosted" || mode === "enterprise") {
       window.electronAPI?.llamaServerStop?.();
     }

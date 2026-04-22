@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Speaker Label Cap**: UI speaker labels are now strictly capped at `expectedCount` (interpreted as the number of other attendees besides the user), preventing phantom `Speaker 3+` labels in 1-on-1 and small-group sessions
 - **Live Speaker Profile Matching Scoped to Note Attendees**: Live diarization no longer pulls in profiles from unrelated notes when identifying attendees
 - **Sync — Preserve Client `updated_at` on Note Push**: Server was overwriting `updated_at` on every push, causing spurious sync loops and stale-merge conflicts
+- **Chat Intelligence Stale Provider on Mode Switch** (#647): Switching Agent Mode from Cloud Providers to Local left the previous cloud provider cached, routing chat to the stale provider and erroring with "API key not configured" despite a local model being selected; mode changes now clear `agentProvider`/`agentModel` when incompatible with the new mode
 
 ## [1.6.10] - 2026-04-20
 
@@ -569,6 +570,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.4.8] - 2026-02-12
 
 ### Added
+
 - **Referral Program**: Invite friends to earn free Pro months with referral dashboard, email invitations, invite tracking with status badges, and animated spectrogram share card with unique referral code
 - **Notes System**: Added sidebar navigation with notes system and dictionary view for organizing transcriptions
 - **Folder Organization**: Notes can be organized into custom folders with a default Personal folder, folder management UI, and folder-aware note filtering. Upload flow now includes folder selection
