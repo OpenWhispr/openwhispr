@@ -9,6 +9,8 @@ const TOKEN_EXPIRY_MS = 300000;
 const REWARM_DELAY_MS = 2000;
 const MAX_REWARM_ATTEMPTS = 10;
 const KEEPALIVE_INTERVAL_MS = 15000;
+const MIN_FRAME_MS = 50;
+const MIN_FRAME_BYTES = (SAMPLE_RATE * 2 * MIN_FRAME_MS) / 1000;
 
 class AssemblyAiStreaming {
   constructor() {
@@ -36,6 +38,8 @@ class AssemblyAiStreaming {
     this.rewarmTimer = null;
     this.keepAliveInterval = null;
     this.isDisconnecting = false;
+    this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
   }
 
   buildWebSocketUrl(options) {
@@ -472,7 +476,16 @@ class AssemblyAiStreaming {
       return false;
     }
 
-    this.ws.send(pcmBuffer);
+    this.pendingAudio.push(pcmBuffer);
+    this.pendingAudioBytes += pcmBuffer.length;
+    if (this.pendingAudioBytes < MIN_FRAME_BYTES) {
+      return true;
+    }
+
+    const frame = Buffer.concat(this.pendingAudio, this.pendingAudioBytes);
+    this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
+    this.ws.send(frame);
     return true;
   }
 
@@ -527,6 +540,9 @@ class AssemblyAiStreaming {
   cleanup() {
     clearTimeout(this.connectionTimeout);
     this.connectionTimeout = null;
+
+    this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
 
     if (this.ws) {
       try {
