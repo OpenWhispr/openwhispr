@@ -4074,6 +4074,7 @@ class IPCHandlers {
     const MEETING_MIC_REFERENCE_ALIGNMENT_MS = 320;
     const MEETING_STARTUP_WARMUP_MS = 1500;
     const MEETING_MIC_BLEED_RMS_CEILING = 0.01;
+    const MEETING_MIC_BLEED_PEAK_CEILING = 0.025;
     const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
     let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
@@ -4185,6 +4186,7 @@ class IPCHandlers {
           outbound = Buffer.alloc(buffer.length);
         } else if (
           rms < MEETING_MIC_BLEED_RMS_CEILING &&
+          peak < MEETING_MIC_BLEED_PEAK_CEILING &&
           meetingEchoLeakDetector.isSystemSpeaking(Date.now() - MEETING_MIC_BLEED_LOOKBACK_MS)
         ) {
           outbound = Buffer.alloc(buffer.length);
@@ -4430,6 +4432,7 @@ class IPCHandlers {
       if (
         source === "mic" &&
         rms < MEETING_MIC_BLEED_RMS_CEILING &&
+        peak < MEETING_MIC_BLEED_PEAK_CEILING &&
         meetingEchoLeakDetector.isSystemSpeaking(Date.now() - 5000)
       ) {
         debugLogger.debug("Skipping system-dominant mic chunk", {
