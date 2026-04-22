@@ -895,6 +895,7 @@ export default function SettingsPage({
     installUpdate: installUpdateAction,
     getAppVersion,
     error: updateError,
+    clearError: clearUpdateError,
   } = useUpdater();
 
   const isUpdateAvailable =
@@ -1219,8 +1220,9 @@ export default function SettingsPage({
         title: t("settingsPage.general.updates.dialogs.updateError.title"),
         description: t("settingsPage.general.updates.dialogs.updateError.description"),
       });
+      clearUpdateError();
     }
-  }, [updateError, showAlertDialog, t]);
+  }, [updateError, showAlertDialog, clearUpdateError, t]);
 
   useEffect(() => {
     if (installInitiated) {
