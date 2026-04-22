@@ -79,7 +79,7 @@ interface UseMeetingTranscriptionReturn {
 const MEETING_AUDIO_BUFFER_SIZE = 800;
 const MEETING_STOP_FLUSH_TIMEOUT_MS = 50;
 const MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS = {
-  echoCancellation: true,
+  echoCancellation: false,
   noiseSuppression: false,
   autoGainControl: false,
 } as const;
