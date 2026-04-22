@@ -247,7 +247,7 @@ const PROVIDER_CREDENTIALS: Record<
     fields: [{ key: "mistralApiKey", input: "secret" }],
   },
   smallest: {
-    consoleUrl: "https://waves.smallest.ai/",
+    consoleUrl: "https://app.smallest.ai/",
     fields: [{ key: "smallestAiApiKey", input: "secret" }],
   },
   corti: {
