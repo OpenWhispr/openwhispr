@@ -4141,6 +4141,8 @@ class IPCHandlers {
     const MEETING_MIC_BLEED_RMS_CEILING = 0.01;
     const MEETING_MIC_BLEED_PEAK_CEILING = 0.025;
     const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
+    const MEETING_MIC_STATS_LOG_LIMIT = 200;
+    let meetingMicStatsLogCount = 0;
     let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
@@ -4258,14 +4260,29 @@ class IPCHandlers {
           if (abs > peak) peak = abs;
         }
         const rms = Math.sqrt(sumSq / samples.length);
+        const systemSpeaking = meetingEchoLeakDetector.isSystemSpeaking(
+          Date.now() - MEETING_MIC_BLEED_LOOKBACK_MS
+        );
         if (rms < 0.0015 && peak < 0.05) {
           outbound = Buffer.alloc(buffer.length);
         } else if (
           rms < MEETING_MIC_BLEED_RMS_CEILING &&
           peak < MEETING_MIC_BLEED_PEAK_CEILING &&
-          meetingEchoLeakDetector.isSystemSpeaking(Date.now() - MEETING_MIC_BLEED_LOOKBACK_MS)
+          systemSpeaking
         ) {
           outbound = Buffer.alloc(buffer.length);
+        }
+        if (
+          meetingMicStatsLogCount < MEETING_MIC_STATS_LOG_LIMIT &&
+          (systemSpeaking || rms > 0.02)
+        ) {
+          meetingMicStatsLogCount += 1;
+          debugLogger.debug("Meeting mic audio stats", {
+            rms: rms.toFixed(4),
+            peak: peak.toFixed(4),
+            systemSpeaking,
+            zeroed: outbound !== buffer,
+          });
         }
       }
 
