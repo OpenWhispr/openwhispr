@@ -4063,7 +4063,9 @@ class IPCHandlers {
       }
 
       await Promise.all(
-        pairs.map(({ ref, secret }) => this[ref].connect({ apiKey: secret, ...connectOpts }))
+        pairs.map(({ ref, secret }) =>
+          this[ref].connect({ apiKey: secret, token: secret, ...connectOpts })
+        )
       );
 
       return win;
