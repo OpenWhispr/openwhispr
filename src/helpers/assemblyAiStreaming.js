@@ -41,6 +41,7 @@ class AssemblyAiStreaming {
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;
     this.completedSegments = [];
+    this.speechStartedAt = null;
   }
 
   buildWebSocketUrl(options) {
@@ -399,7 +400,7 @@ class AssemblyAiStreaming {
                   this.completedSegments[this.completedSegments.length - 1] = trimmedTranscript;
                   this.lastTurnText = trimmedTranscript;
                   this.accumulatedText = this.turns.map((turn) => turn.text).join(" ");
-                  this.onFinalTranscript?.(this.accumulatedText);
+                  this.onFinalTranscript?.(this.accumulatedText, previousTurn.startedAt);
                   debugLogger.debug("AssemblyAI formatted turn update applied", {
                     text: trimmedTranscript.slice(0, 100),
                     totalAccumulated: this.accumulatedText.length,
@@ -412,14 +413,17 @@ class AssemblyAiStreaming {
                 break;
               }
 
+              const speechTimestamp = this.speechStartedAt || Date.now();
+              this.speechStartedAt = null;
               this.turns.push({
                 text: trimmedTranscript,
                 normalized: normalizedTranscript,
+                startedAt: speechTimestamp,
               });
               this.completedSegments.push(trimmedTranscript);
               this.lastTurnText = trimmedTranscript;
               this.accumulatedText = this.turns.map((turn) => turn.text).join(" ");
-              this.onFinalTranscript?.(this.accumulatedText);
+              this.onFinalTranscript?.(this.accumulatedText, speechTimestamp);
               debugLogger.debug("AssemblyAI final transcript (end_of_turn)", {
                 text: message.transcript.slice(0, 100),
                 totalAccumulated: this.accumulatedText.length,
@@ -459,6 +463,7 @@ class AssemblyAiStreaming {
           break;
 
         case "SpeechStarted":
+          this.speechStartedAt = Date.now();
           break;
 
         default:
@@ -550,6 +555,7 @@ class AssemblyAiStreaming {
     this.pendingAudio = [];
     this.pendingAudioBytes = 0;
     this.completedSegments = [];
+    this.speechStartedAt = null;
 
     if (this.ws) {
       try {
