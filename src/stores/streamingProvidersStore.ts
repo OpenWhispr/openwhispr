@@ -46,11 +46,3 @@ export async function fetchProviders(): Promise<NoteRecordingProvider[] | null> 
 
   return inFlight;
 }
-
-export function getDefaultProvider(): NoteRecordingProvider | null {
-  return useStreamingProvidersStore.getState().providers?.[0] ?? null;
-}
-
-export function useStreamingProviders(): NoteRecordingProvider[] | null {
-  return useStreamingProvidersStore((state) => state.providers);
-}
