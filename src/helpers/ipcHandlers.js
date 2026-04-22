@@ -4218,7 +4218,8 @@ class IPCHandlers {
 
     const resolveSessionMaxSpeakers = () => {
       const count = this.activeMeetingSpeakerConfig?.expectedCount;
-      return count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
+      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
+      return Math.max(1, total - 1);
     };
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
@@ -7472,8 +7473,9 @@ class IPCHandlers {
 
   _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
     if (sessionConfig?.expectedCount) {
+      const total = Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT);
       return {
-        numSpeakers: Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT),
+        numSpeakers: Math.max(1, total - 1),
         cap: null,
       };
     }
