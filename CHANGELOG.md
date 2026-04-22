@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.11] - 2026-04-22
+
+### Added
+
+- **Interoperable Cloud Streaming Providers**: Meeting recording now supports AssemblyAI Universal-3 Pro, Deepgram, and OpenAI Realtime as interchangeable cloud streaming backends. Provider availability is server-authoritative via the `NOTE_RECORDING_PROVIDERS` env var on the API; desktop picks the active provider from the catalog returned by `/api/note-recording-config`
+- **Acoustic VAD Gate for Meeting Mic**: Drops system-dominant microphone chunks using RMS/peak thresholds against a rolling reference window, preventing cross-language hallucinations from speaker bleed into the mic
+- **Peak Escape**: Soft exception to the VAD gate when the mic peak spikes cleanly over the system-speaking window, so the user's voice onset is never clipped mid-syllable
+- **Cross-Device Delete Propagation** (#646): Deletes now propagate across devices through the sync pipeline for all object types
+
+### Changed
+
+- **Meeting Streaming Provider Authority**: Removed the desktop-side streaming provider UI picker. The authoritative list lives on the API; the desktop renders whichever providers are enabled server-side
+- **Echo Cancellation Pipeline**: AEC3 config now disables OS-level `echoCancellation` (it was double-processing) and enables the built-in high-pass filter plus `kModerate` noise suppression, giving a noticeably cleaner mic path before the VAD gate
+- **VAD Thresholds Tuned Against Measured Leak**: RMS ceiling `0.018`, peak ceiling `0.07`, lookback `500ms` — calibrated from real session traces where user speech consistently exceeded both thresholds and bleed consistently sat below
+
+### Fixed
+
+- **AssemblyAI v3 Frame Size**: Buffer audio to meet the v3 minimum 50ms frame requirement (was hitting "Input Duration Error: 45.0 ms")
+- **AssemblyAI / Deepgram `completedSegments`**: The echo-leak detector crashed on turn-end for non-OpenAI providers because `completedSegments` only existed on the OpenAI client; exposed it on AssemblyAI and Deepgram as well
+- **Streaming Token Plumbing**: Streaming client factory now passes both `apiKey` and `token` fields (OpenAI expects `apiKey`, AssemblyAI/Deepgram expect `token`)
+- **Note-Recording Config Over IPC**: Moved the `/api/note-recording-config` fetch from the renderer into the main process so Neon Auth session cookies are attached (was returning 401)
+- **Speech-Start Timestamp to Echo-Leak Detector**: AssemblyAI and Deepgram turns now pass their speech-start wall-clock time to the detector, eliminating `missing_start` drops on legitimate turns
+- **Drop Flagged-Bleed Mic Segments on Holdback Expiry**: When the echo-leak detector flags a mic turn as bleed, the segment is now dropped rather than flushed once the holdback window closes; correlation `>= 0.70` alone is sufficient evidence (in addition to the prior three-condition check)
+- **Speaker Label Cap**: UI speaker labels are now strictly capped at `expectedCount` (interpreted as the number of other attendees besides the user), preventing phantom `Speaker 3+` labels in 1-on-1 and small-group sessions
+- **Live Speaker Profile Matching Scoped to Note Attendees**: Live diarization no longer pulls in profiles from unrelated notes when identifying attendees
+- **Sync — Preserve Client `updated_at` on Note Push**: Server was overwriting `updated_at` on every push, causing spurious sync loops and stale-merge conflicts
+
 ## [1.6.10] - 2026-04-20
 
 ### Added
