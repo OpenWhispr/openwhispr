@@ -25,6 +25,7 @@ import WindowControls from "./WindowControls";
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { setActiveNoteId, setActiveFolderId, initializeNotes } from "../stores/noteStore";
+import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import HistoryView from "./HistoryView";
 import { syncService } from "../services/SyncService.js";
 
@@ -283,6 +284,10 @@ export default function ControlPanel() {
 
   useEffect(() => {
     syncService.syncAll().catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    fetchStreamingProviders();
   }, []);
 
   const handleMeetingRecordingRequestHandled = useCallback(

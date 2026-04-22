@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getSettings, selectResolvedMeetingTranscription } from "../stores/settingsStore";
+import { useStreamingProvidersStore } from "../stores/streamingProvidersStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
 import {
@@ -83,7 +84,6 @@ const MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS = {
   autoGainControl: false,
 } as const;
 
-const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 const SPEAKER_IDENTIFICATION_RETENTION_MS = 30_000;
 const SYSTEM_SPEAKER_CARRY_FORWARD_MS = 8_000;
 const buildTranscriptText = (segments: TranscriptSegment[]) =>
@@ -129,12 +129,25 @@ const getMeetingTranscriptionOptions = () => {
     };
   }
 
-  const model = REALTIME_MODELS.has(resolved.cloudTranscriptionModel)
-    ? resolved.cloudTranscriptionModel
-    : "gpt-4o-mini-transcribe";
+  const catalog = useStreamingProvidersStore.getState().providers;
+  const provider =
+    catalog?.find((p) => p.id === resolved.cloudTranscriptionProvider) ?? catalog?.[0];
+  const byokKeyAvailable = provider?.id === "openai" ? !!state.openaiApiKey : true;
   const mode =
-    resolved.cloudTranscriptionMode === "byok" && !!state.openaiApiKey ? "byok" : "openwhispr";
-  return { provider: "openai-realtime" as const, model, mode };
+    resolved.cloudTranscriptionMode === "byok" && byokKeyAvailable ? "byok" : "openwhispr";
+  if (!provider) {
+    logger.debug(
+      "Streaming providers catalog not loaded, falling back to OpenAI default",
+      {},
+      "meeting"
+    );
+    return { provider: "openai-realtime" as const, model: "gpt-4o-mini-transcribe", mode };
+  }
+  const model =
+    provider.models.find((m) => m.id === resolved.cloudTranscriptionModel)?.id ??
+    provider.models.find((m) => m.default)?.id ??
+    provider.models[0]?.id;
+  return { provider: `${provider.id}-realtime` as const, model, mode };
 };
 
 const stopMediaStream = (stream: MediaStream | null) => {

@@ -20,6 +20,11 @@
       "speakerDetection": {
         "title": "Identificar y etiquetar participantes",
         "description": "Cuando está desactivado, las transcripciones muestran \"Tú\" y \"Otros\""
+      },
+      "streamingProvider": {
+        "providerLabel": "Proveedor",
+        "modelLabel": "Modelo",
+        "empty": "No hay proveedores de streaming configurados en el servidor"
       }
     }
   },

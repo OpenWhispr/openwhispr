@@ -32,6 +32,18 @@ const {
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
 
+const STREAMING_CLIENT_BY_PROVIDER = {
+  "openai-realtime": OpenAIRealtimeStreaming,
+  "assemblyai-realtime": AssemblyAiStreaming,
+  "deepgram-realtime": DeepgramStreaming,
+};
+const ALLOWED_MEETING_PROVIDERS = new Set([
+  "local",
+  "openai-realtime",
+  "assemblyai-realtime",
+  "deepgram-realtime",
+]);
+
 function parseAttendees(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -3891,34 +3903,78 @@ class IPCHandlers {
     };
 
     const fetchRealtimeToken = async (event, options, { streams } = {}) => {
+      const postServerToken = async (path, body = {}) => {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+        const response = await fetch(`${apiUrl}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `Token request failed: ${response.status}`);
+        }
+        return response.json();
+      };
+
+      const dual = (factory) => (streams === 2 ? Promise.all([factory(), factory()]) : factory());
+
+      if (options.provider === "assemblyai-realtime") {
+        if (options.mode === "byok") {
+          const apiKey = this.environmentManager.getAssemblyAIKey();
+          if (!apiKey) {
+            throw new Error("No AssemblyAI API key configured. Add your key in Settings.");
+          }
+          return dual(async () => {
+            const response = await fetch(
+              "https://streaming.assemblyai.com/v3/token?expires_in_seconds=60",
+              { headers: { Authorization: apiKey } }
+            );
+            if (!response.ok) {
+              const err = await response.json().catch(() => ({}));
+              throw new Error(err.error || `AssemblyAI token request failed: ${response.status}`);
+            }
+            const data = await response.json();
+            if (!data.token) throw new Error("No AssemblyAI token received");
+            return data.token;
+          });
+        }
+        return dual(async () => {
+          const data = await postServerToken("/api/streaming-token");
+          if (!data.token) throw new Error("No AssemblyAI token received");
+          return data.token;
+        });
+      }
+
+      if (options.provider === "deepgram-realtime") {
+        if (options.mode === "byok") {
+          const apiKey = this.environmentManager.getDeepgramKey();
+          if (!apiKey) {
+            throw new Error("No Deepgram API key configured. Add your key in Settings.");
+          }
+          return streams === 2 ? [apiKey, apiKey] : apiKey;
+        }
+        return dual(async () => {
+          const data = await postServerToken("/api/deepgram-streaming-token");
+          if (!data.token) throw new Error("No Deepgram token received");
+          return data.token;
+        });
+      }
+
       if (options.mode === "byok") {
         const apiKey = this.environmentManager.getOpenAIKey();
         if (!apiKey) throw new Error("No OpenAI API key configured. Add your key in Settings.");
         return streams === 2 ? [apiKey, apiKey] : apiKey;
       }
 
-      const apiUrl = getApiUrl();
-      if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-      const cookieHeader = await getSessionCookies(event);
-      if (!cookieHeader) throw new Error("No session cookies available");
-
-      const tokenResponse = await fetch(`${apiUrl}/api/openai-realtime-token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Cookie: cookieHeader },
-        body: JSON.stringify({
-          model: options.model,
-          language: options.language,
-          streams: streams || 1,
-        }),
+      const data = await postServerToken("/api/openai-realtime-token", {
+        model: options.model,
+        language: options.language,
+        streams: streams || 1,
       });
-
-      if (!tokenResponse.ok) {
-        const err = await tokenResponse.json().catch(() => ({}));
-        throw new Error(err.error || `Token request failed: ${tokenResponse.status}`);
-      }
-
-      const data = await tokenResponse.json();
       if (streams === 2) {
         if (!data.clientSecrets || data.clientSecrets.length < 2) {
           throw new Error("Expected two client secrets for dual-stream");
@@ -3999,8 +4055,10 @@ class IPCHandlers {
         ];
       }
 
+      const StreamingClass =
+        STREAMING_CLIENT_BY_PROVIDER[options.provider] ?? OpenAIRealtimeStreaming;
       for (const { ref, source } of pairs) {
-        this[ref] = new OpenAIRealtimeStreaming();
+        this[ref] = new StreamingClass();
         attachMeetingStreamingHandlers(this[ref], win, source);
       }
 
@@ -4738,12 +4796,12 @@ class IPCHandlers {
         return { success: false, error: "Operation in progress" };
       }
 
-      if (options.provider === "local") {
-        return { success: true };
+      if (!ALLOWED_MEETING_PROVIDERS.has(options.provider)) {
+        return { success: false, error: `Unsupported provider: ${options.provider}` };
       }
 
-      if (options.provider !== "openai-realtime") {
-        return { success: false, error: `Unsupported provider: ${options.provider}` };
+      if (options.provider === "local") {
+        return { success: true };
       }
 
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
@@ -4859,7 +4917,7 @@ class IPCHandlers {
           };
         }
 
-        if (options.provider !== "openai-realtime") {
+        if (!ALLOWED_MEETING_PROVIDERS.has(options.provider)) {
           return { success: false, error: `Unsupported provider: ${options.provider}` };
         }
 

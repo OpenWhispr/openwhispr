@@ -46,8 +46,14 @@ class AssemblyAiStreaming {
       format_turns: "true",
       token: options.token,
     });
-    if (options.language && options.language !== "auto") {
-      params.set("speech_model", "universal-streaming-multilingual");
+    if (options.model) {
+      params.set("speech_model", options.model);
+    }
+    if (options.minTurnSilence != null) {
+      params.set("min_turn_silence", String(options.minTurnSilence));
+    }
+    if (options.maxTurnSilence != null) {
+      params.set("max_turn_silence", String(options.maxTurnSilence));
     }
     if (options.keyterms && options.keyterms.length > 0) {
       params.set("keyterms_prompt", JSON.stringify(options.keyterms.slice(0, 100)));

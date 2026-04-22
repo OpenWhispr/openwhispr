@@ -20,6 +20,11 @@
       "speakerDetection": {
         "title": "Identify and label speakers",
         "description": "When off, transcripts show \"You\" and \"Others\""
+      },
+      "streamingProvider": {
+        "providerLabel": "Provider",
+        "modelLabel": "Model",
+        "empty": "No streaming providers configured on server"
       }
     }
   },

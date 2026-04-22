@@ -20,6 +20,11 @@
       "speakerDetection": {
         "title": "話者を識別してラベル付け",
         "description": "オフにすると、文字起こしには「あなた」と「他の人」と表示されます"
+      },
+      "streamingProvider": {
+        "providerLabel": "プロバイダー",
+        "modelLabel": "モデル",
+        "empty": "サーバーにストリーミングプロバイダーが設定されていません"
       }
     }
   },

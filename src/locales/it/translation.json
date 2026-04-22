@@ -20,6 +20,11 @@
       "speakerDetection": {
         "title": "Identifica ed etichetta i partecipanti",
         "description": "Se disattivato, le trascrizioni mostrano \"Tu\" e \"Altri\""
+      },
+      "streamingProvider": {
+        "providerLabel": "Provider",
+        "modelLabel": "Modello",
+        "empty": "Nessun provider di streaming configurato sul server"
       }
     }
   },
