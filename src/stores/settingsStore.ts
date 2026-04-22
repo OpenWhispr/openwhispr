@@ -1136,19 +1136,7 @@ export const selectResolvedMeetingTranscription = (
   state: SettingsState
 ): ResolvedMeetingTranscription => {
   const catalog = useStreamingProvidersStore.getState().providers;
-  const catalogIds = catalog?.map((p) => p.id) ?? null;
-  const meetingOverride = state.meetingCloudTranscriptionProvider;
-  const inherited = state.cloudTranscriptionProvider;
-  let cloudTranscriptionProvider = "";
-  if (catalogIds) {
-    if (meetingOverride && catalogIds.includes(meetingOverride)) {
-      cloudTranscriptionProvider = meetingOverride;
-    } else if (inherited && catalogIds.includes(inherited)) {
-      cloudTranscriptionProvider = inherited;
-    } else {
-      cloudTranscriptionProvider = catalogIds[0] ?? "";
-    }
-  }
+  const cloudTranscriptionProvider = catalog?.[0]?.id ?? "";
 
   return {
     useLocalWhisper: state.meetingUseLocalWhisper,

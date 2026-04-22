@@ -24,11 +24,6 @@
       "speakerDetection": {
         "title": "Sprecher erkennen und beschriften",
         "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
-      },
-      "streamingProvider": {
-        "providerLabel": "Anbieter",
-        "modelLabel": "Modell",
-        "empty": "Keine Streaming-Anbieter auf dem Server konfiguriert"
       }
     }
   },

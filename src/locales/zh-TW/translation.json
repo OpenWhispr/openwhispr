@@ -24,11 +24,6 @@
       "speakerDetection": {
         "title": "辨識並標記發言者",
         "description": "關閉後，逐字稿會顯示「你」和「其他人」"
-      },
-      "streamingProvider": {
-        "providerLabel": "服務商",
-        "modelLabel": "模型",
-        "empty": "伺服器未設定任何串流服務商"
       }
     }
   },

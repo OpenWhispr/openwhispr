@@ -1,104 +1,15 @@
-import { useCallback, useMemo } from "react";
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2 } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { useStreamingProviders } from "../../stores/streamingProvidersStore";
 import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
 import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
-
-function MeetingStreamingProviderPicker() {
-  const { t } = useTranslation();
-  const providers = useStreamingProviders();
-  const meetingCloudTranscriptionProvider = useSettingsStore(
-    (s) => s.meetingCloudTranscriptionProvider
-  );
-  const meetingCloudTranscriptionModel = useSettingsStore((s) => s.meetingCloudTranscriptionModel);
-  const setMeetingCloudTranscriptionProvider = useSettingsStore(
-    (s) => s.setMeetingCloudTranscriptionProvider
-  );
-  const setMeetingCloudTranscriptionModel = useSettingsStore(
-    (s) => s.setMeetingCloudTranscriptionModel
-  );
-
-  const selectedProvider = useMemo(() => {
-    if (!providers?.length) return null;
-    return providers.find((p) => p.id === meetingCloudTranscriptionProvider) ?? providers[0];
-  }, [providers, meetingCloudTranscriptionProvider]);
-
-  const selectedModel = useMemo(() => {
-    if (!selectedProvider) return "";
-    const stored = selectedProvider.models.find((m) => m.id === meetingCloudTranscriptionModel);
-    if (stored) return stored.id;
-    return (
-      selectedProvider.models.find((m) => m.default)?.id ?? selectedProvider.models[0]?.id ?? ""
-    );
-  }, [selectedProvider, meetingCloudTranscriptionModel]);
-
-  const handleProviderChange = useCallback(
-    (providerId: string) => {
-      if (providerId === meetingCloudTranscriptionProvider) return;
-      setMeetingCloudTranscriptionProvider(providerId);
-      setMeetingCloudTranscriptionModel("");
-    },
-    [
-      meetingCloudTranscriptionProvider,
-      setMeetingCloudTranscriptionProvider,
-      setMeetingCloudTranscriptionModel,
-    ]
-  );
-
-  if (providers === null) return null;
-
-  if (providers.length === 0) {
-    return (
-      <p className="text-xs text-muted-foreground/80 px-1">
-        {t("settings.meeting.streamingProvider.empty")}
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <SettingsRow label={t("settings.meeting.streamingProvider.providerLabel")}>
-        <Select value={selectedProvider?.id ?? ""} onValueChange={handleProviderChange}>
-          <SelectTrigger className="h-8 w-48 text-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {providers.map((p) => (
-              <SelectItem key={p.id} value={p.id} className="text-xs">
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </SettingsRow>
-      {selectedProvider && selectedProvider.models.length > 0 && (
-        <SettingsRow label={t("settings.meeting.streamingProvider.modelLabel")}>
-          <Select value={selectedModel} onValueChange={setMeetingCloudTranscriptionModel}>
-            <SelectTrigger className="h-8 w-48 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {selectedProvider.models.map((m) => (
-                <SelectItem key={m.id} value={m.id} className="text-xs">
-                  {m.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </SettingsRow>
-      )}
-    </div>
-  );
-}
 
 export function MeetingSpeakerDetectionRow() {
   const { t } = useTranslation();
@@ -249,7 +160,6 @@ export function MeetingTranscriptionPanel() {
         onSelect={handleTranscriptionModeSelect}
       />
 
-      {meetingTranscriptionMode === "openwhispr" && <MeetingStreamingProviderPicker />}
       {meetingTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {meetingTranscriptionMode === "local" && renderTranscriptionPicker("local")}
       {meetingTranscriptionMode === "self-hosted" && (

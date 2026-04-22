@@ -24,11 +24,6 @@
       "speakerDetection": {
         "title": "识别并标记发言者",
         "description": "关闭后，转写会显示\"你\"和\"其他人\""
-      },
-      "streamingProvider": {
-        "providerLabel": "服务商",
-        "modelLabel": "模型",
-        "empty": "服务器未配置任何流式服务商"
       }
     }
   },

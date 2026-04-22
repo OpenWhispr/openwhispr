@@ -24,11 +24,6 @@
       "speakerDetection": {
         "title": "Identificar e rotular participantes",
         "description": "Quando desativado, as transcrições mostram \"Você\" e \"Outros\""
-      },
-      "streamingProvider": {
-        "providerLabel": "Provedor",
-        "modelLabel": "Modelo",
-        "empty": "Nenhum provedor de streaming configurado no servidor"
       }
     }
   },
