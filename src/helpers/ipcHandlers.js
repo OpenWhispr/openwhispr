@@ -7036,6 +7036,29 @@ class IPCHandlers {
       return this.environmentManager.saveAgentKey?.(key) || { success: true };
     });
 
+    // Paste-last transcription hotkey
+    ipcMain.handle("update-paste-last-hotkey", async (_event, hotkey) => {
+      const hotkeyManager = this.windowManager.hotkeyManager;
+      const pasteLastCallback = this.windowManager._pasteLastCallback;
+      if (!pasteLastCallback) {
+        return { success: false, message: "Paste-last hotkey callback not initialized" };
+      }
+      const result = hotkeyManager.registerSlot("pasteLast", hotkey, pasteLastCallback);
+      if (!result.success) {
+        return { success: false, message: result.error, suggestions: result.suggestions };
+      }
+      this.environmentManager.savePasteLastKey?.(hotkey);
+      return result;
+    });
+
+    ipcMain.handle("get-paste-last-key", async () => {
+      return this.environmentManager.getPasteLastKeyForRenderer?.() || "";
+    });
+
+    ipcMain.handle("save-paste-last-key", async (_event, key) => {
+      return this.environmentManager.savePasteLastKey?.(key) || { success: true };
+    });
+
     ipcMain.handle("toggle-agent-overlay", async () => {
       this.windowManager.toggleAgentOverlay();
       return { success: true };

@@ -33,6 +33,8 @@
       "hide": "隱藏語音輸入面板"
     },
     "openControlPanel": "開啟控制面板",
+    "pasteLastTranscription": "貼上最後轉錄",
+    "pasteLastTranscriptionEmpty": "貼上最後轉錄(尚無)",
     "quit": "結束 OpenWhispr",
     "tooltip": "OpenWhispr - 語音輸入"
   },
@@ -1292,6 +1294,13 @@
         "layoutLabel": "透過快捷鍵觸發時,開啟方式:",
         "layoutFullWidth": "全寬",
         "layoutSidePanel": "側邊欄"
+      },
+      "pasteLastHotkey": {
+        "title": "貼上最後轉錄",
+        "description": "按此快捷鍵立即貼上您最近的轉錄內容",
+        "resetToDefault": "重設為 {{hotkey}}",
+        "emptyNotificationTitle": "無內容可貼上",
+        "emptyNotificationBody": "請先錄製一段轉錄,然後按貼上最後轉錄的快捷鍵以重複它。"
       },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",

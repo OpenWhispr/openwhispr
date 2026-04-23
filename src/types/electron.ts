@@ -1061,6 +1061,12 @@ declare global {
       resumeMediaPlayback?: () => Promise<boolean>;
       openWhisperModelsFolder?: () => Promise<{ success: boolean; error?: string }>;
 
+      // Paste-last transcription hotkey
+      updatePasteLastHotkey?: (hotkey: string) => Promise<{ success: boolean; message?: string }>;
+      notifyPasteLastKeyChanged?: (hotkey: string) => void;
+      getPasteLastKey?: () => Promise<string | null>;
+      savePasteLastKey?: (key: string) => Promise<void>;
+
       // Windows Push-to-Talk notifications
       notifyActivationModeChanged?: (mode: "tap" | "push") => void;
       notifyHotkeyChanged?: (hotkey: string) => void;

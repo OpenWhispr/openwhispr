@@ -33,6 +33,8 @@
       "hide": "Ocultar panel de dictado"
     },
     "openControlPanel": "Abrir panel de control",
+    "pasteLastTranscription": "Pegar última transcripción",
+    "pasteLastTranscriptionEmpty": "Pegar última transcripción (ninguna aún)",
     "quit": "Salir de OpenWhispr",
     "tooltip": "OpenWhispr - Dictado por voz"
   },
@@ -1340,6 +1342,13 @@
         "layoutLabel": "Al activarse con el atajo, abrir en:",
         "layoutFullWidth": "Ancho completo",
         "layoutSidePanel": "Panel lateral"
+      },
+      "pasteLastHotkey": {
+        "title": "Pegar última transcripción",
+        "description": "Presiona este atajo para pegar instantáneamente tu transcripción más reciente",
+        "resetToDefault": "Restablecer a {{hotkey}}",
+        "emptyNotificationTitle": "Nada que pegar",
+        "emptyNotificationBody": "Graba primero una transcripción y luego presiona el atajo para pegar la última para repetirla."
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
