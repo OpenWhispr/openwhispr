@@ -39,6 +39,8 @@
     },
     "openControlPanel": "Open Control Panel",
     "hideControlPanel": "Hide Control Panel",
+    "pasteLastTranscription": "Paste Last Transcription",
+    "pasteLastTranscriptionEmpty": "Paste Last Transcription (none yet)",
     "quit": "Quit OpenWhispr",
     "tooltip": "OpenWhispr - Voice Dictation"
   },
@@ -2092,6 +2094,13 @@
       "voiceAgentHotkey": {
         "title": "Voice Assistant Hotkey",
         "description": "Speak a command and the assistant answers in a floating panel with your notes, calendar, and web tools. Select text first to edit it in place."
+      },
+      "pasteLastHotkey": {
+        "title": "Paste Last Transcription",
+        "description": "Press this shortcut to instantly paste your most recent transcription",
+        "resetToDefault": "Reset to {{hotkey}}",
+        "emptyNotificationTitle": "Nothing to paste",
+        "emptyNotificationBody": "Record a transcription first, then press the paste-last hotkey to repeat it."
       },
       "microphone": {
         "description": "Select which input device to use for dictation",

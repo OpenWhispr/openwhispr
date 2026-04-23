@@ -9881,6 +9881,29 @@ class IPCHandlers {
       return this.environmentManager.getTranslationKey?.() || "";
     });
 
+    // Paste-last transcription hotkey
+    ipcMain.handle("update-paste-last-hotkey", async (_event, hotkey) => {
+      const hotkeyManager = this.windowManager.hotkeyManager;
+      const pasteLastCallback = this.windowManager._pasteLastCallback;
+      if (!pasteLastCallback) {
+        return { success: false, message: "Paste-last hotkey callback not initialized" };
+      }
+      const result = hotkeyManager.registerSlot("pasteLast", hotkey, pasteLastCallback);
+      if (!result.success) {
+        return { success: false, message: result.error, suggestions: result.suggestions };
+      }
+      this.environmentManager.savePasteLastKey?.(hotkey);
+      return result;
+    });
+
+    ipcMain.handle("get-paste-last-key", async () => {
+      return this.environmentManager.getPasteLastKeyForRenderer?.() || "";
+    });
+
+    ipcMain.handle("save-paste-last-key", async (_event, key) => {
+      return this.environmentManager.savePasteLastKey?.(key) || { success: true };
+    });
+
     ipcMain.handle("acquire-recording-lock", async (_event, pipeline) => {
       if (this._activeRecordingPipeline && this._activeRecordingPipeline !== pipeline) {
         return { success: false, holder: this._activeRecordingPipeline };

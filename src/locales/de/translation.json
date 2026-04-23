@@ -39,6 +39,8 @@
     },
     "openControlPanel": "Kontrollzentrum öffnen",
     "hideControlPanel": "Kontrollzentrum ausblenden",
+    "pasteLastTranscription": "Letzte Transkription einfügen",
+    "pasteLastTranscriptionEmpty": "Letzte Transkription einfügen (noch keine vorhanden)",
     "quit": "OpenWhispr beenden",
     "tooltip": "OpenWhispr – Sprachdiktat"
   },
@@ -2092,6 +2094,13 @@
       "voiceAgentHotkey": {
         "title": "Sprachassistent-Hotkey",
         "description": "Sprechen Sie einen Befehl und der Assistent antwortet in einem schwebenden Panel — mit Ihren Notizen, Ihrem Kalender und Web-Tools. Markieren Sie zuerst Text, um ihn direkt zu bearbeiten."
+      },
+      "pasteLastHotkey": {
+        "title": "Letzte Transkription einfügen",
+        "description": "Drücken Sie diese Tastenkombination, um Ihre letzte Transkription sofort einzufügen",
+        "resetToDefault": "Zurücksetzen auf {{hotkey}}",
+        "emptyNotificationTitle": "Nichts zum Einfügen",
+        "emptyNotificationBody": "Nehmen Sie zuerst eine Transkription auf, und drücken Sie dann die Tastenkombination, um sie zu wiederholen."
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
