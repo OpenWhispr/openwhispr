@@ -15,6 +15,7 @@ import {
   getEffectiveReasoningModel,
   isCloudReasoningMode,
 } from "../stores/settingsStore";
+import { shouldProcessTranscription } from "./transcriptionDecision";
 import { syncService } from "../services/SyncService.js";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -93,6 +94,7 @@ class AudioManager {
     this.recordingStartTime = null;
     this.reasoningAvailabilityCache = { value: false, expiresAt: 0 };
     this.cachedReasoningPreference = null;
+    this.cachedAgentPreference = null;
     this.isStreaming = false;
     this.streamingAudioContext = null;
     this.streamingSource = null;
@@ -917,12 +919,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return false;
     }
 
-    const useReasoning = getSettings().useReasoningModel;
+    const settings = getSettings();
+    const useReasoning = settings.useReasoningModel;
+    const agentEnabled = settings.agentEnabled;
     const now = Date.now();
     const cacheValid =
       this.reasoningAvailabilityCache &&
       now < this.reasoningAvailabilityCache.expiresAt &&
-      this.cachedReasoningPreference === useReasoning;
+      this.cachedReasoningPreference === useReasoning &&
+      this.cachedAgentPreference === agentEnabled;
 
     if (cacheValid) {
       return this.reasoningAvailabilityCache.value;
@@ -930,14 +935,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     logger.logReasoning("REASONING_STORAGE_CHECK", {
       useReasoning,
+      agentEnabled,
     });
 
-    if (!useReasoning) {
+    if (!useReasoning && !agentEnabled) {
       this.reasoningAvailabilityCache = {
         value: false,
         expiresAt: now + REASONING_CACHE_TTL,
       };
       this.cachedReasoningPreference = useReasoning;
+      this.cachedAgentPreference = agentEnabled;
       return false;
     }
 
@@ -947,6 +954,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         expiresAt: now + REASONING_CACHE_TTL,
       };
       this.cachedReasoningPreference = useReasoning;
+      this.cachedAgentPreference = agentEnabled;
       return true;
     }
 
@@ -956,7 +964,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       logger.logReasoning("REASONING_AVAILABILITY", {
         isAvailable,
         reasoningEnabled: useReasoning,
-        finalDecision: useReasoning && isAvailable,
+        agentEnabled,
+        finalDecision: (useReasoning || agentEnabled) && isAvailable,
       });
 
       this.reasoningAvailabilityCache = {
@@ -964,6 +973,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         expiresAt: now + REASONING_CACHE_TTL,
       };
       this.cachedReasoningPreference = useReasoning;
+      this.cachedAgentPreference = agentEnabled;
 
       return isAvailable;
     } catch (error) {
@@ -977,6 +987,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         expiresAt: now + REASONING_CACHE_TTL,
       };
       this.cachedReasoningPreference = useReasoning;
+      this.cachedAgentPreference = agentEnabled;
       return false;
     }
   }
@@ -1009,7 +1020,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     const reasoningModel = getEffectiveReasoningModel();
     const isCloud = isCloudReasoningMode();
-    const reasoningProvider = getSettings().reasoningProvider || "auto";
+    const settings = getSettings();
+    const reasoningProvider = settings.reasoningProvider || "auto";
     const agentName =
       typeof window !== "undefined" && window.localStorage
         ? localStorage.getItem("agentName") || null
@@ -1028,9 +1040,31 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       reasoningModel,
       reasoningProvider,
       agentName,
+      agentEnabled: settings.agentEnabled,
+      useReasoningModel: settings.useReasoningModel,
     });
 
     if (useReasoning) {
+      const decision = shouldProcessTranscription({
+        useReasoningModel: settings.useReasoningModel,
+        agentEnabled: settings.agentEnabled,
+        agentName,
+        transcript: normalizedText,
+      });
+
+      if (decision === "skip") {
+        logger.logReasoning("AGENT_ONLY_NOT_ADDRESSED", {
+          source,
+          reason: "Agent enabled without text cleanup, but transcript does not address agent",
+          agentName,
+        });
+        return normalizedText;
+      }
+
+      if (decision === "agent-only") {
+        logger.logReasoning("AGENT_ONLY_DETECTED", { source, agentName });
+      }
+
       try {
         logger.logReasoning("SENDING_TO_REASONING", {
           preparedTextLength: normalizedText.length,
@@ -1240,7 +1274,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const opts = {};
     if (language) opts.language = language;
     const reasoningMode = settings.cloudReasoningMode || "openwhispr";
-    if (settings.useReasoningModel && !this.skipReasoning && reasoningMode === "openwhispr") {
+    if ((settings.useReasoningModel || settings.agentEnabled) && !this.skipReasoning && reasoningMode === "openwhispr") {
       opts.sendLogs = "false";
     }
 
@@ -1260,15 +1294,27 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
     timings.transcriptionProcessingDurationMs = Math.round(performance.now() - transcriptionStart);
 
-    // Process with reasoning if enabled
+    // Process with reasoning if enabled (text cleanup or agent-only)
     const rawText = result.text;
     let processedText = result.text;
-    if (settings.useReasoningModel && processedText && !this.skipReasoning) {
+    if ((settings.useReasoningModel || settings.agentEnabled) && processedText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
       const cloudReasoningMode = settings.cloudReasoningMode || "openwhispr";
 
-      if (cloudReasoningMode === "openwhispr") {
+      const decision = shouldProcessTranscription({
+        useReasoningModel: settings.useReasoningModel,
+        agentEnabled: settings.agentEnabled,
+        agentName,
+        transcript: processedText,
+      });
+
+      if (decision === "skip") {
+        logger.logReasoning("CLOUD_AGENT_ONLY_NOT_ADDRESSED", {
+          reason: "Agent enabled without text cleanup, but transcript does not address agent",
+          agentName,
+        });
+      } else if (cloudReasoningMode === "openwhispr") {
         const reasonResult = await withSessionRefresh(async () => {
           const res = await window.electronAPI.cloudReason(processedText, {
             agentName,
@@ -2425,74 +2471,88 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingSttWordCount = finalText ? finalText.split(/\s+/).filter(Boolean).length : 0;
 
     let usedCloudReasoning = false;
-    if (stSettings.useReasoningModel && finalText && !this.skipReasoning) {
+    if ((stSettings.useReasoningModel || stSettings.agentEnabled) && finalText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
       const cloudReasoningMode = stSettings.cloudReasoningMode || "openwhispr";
 
-      try {
-        if (cloudReasoningMode === "openwhispr") {
-          const reasonResult = await withSessionRefresh(async () => {
-            const res = await window.electronAPI.cloudReason(finalText, {
-              agentName,
-              customDictionary: stSettings.customDictionary,
-              customPrompt: this.getCustomPrompt(),
-              language: stSettings.preferredLanguage || "auto",
-              locale: stSettings.uiLanguage || "en",
-              sttProvider: this.getStreamingProviderName(),
-              sttModel: streamingSttModel,
-              sttProcessingMs: streamingSttProcessingMs,
-              sttWordCount: streamingSttWordCount,
-              sttLanguage: streamingSttLanguage,
-              audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
-              audioSizeBytes: streamingAudioBytesSent || undefined,
-              audioFormat: "linear16",
+      const decision = shouldProcessTranscription({
+        useReasoningModel: stSettings.useReasoningModel,
+        agentEnabled: stSettings.agentEnabled,
+        agentName,
+        transcript: finalText,
+      });
+
+      if (decision === "skip") {
+        logger.logReasoning("STREAMING_AGENT_ONLY_NOT_ADDRESSED", {
+          reason: "Agent enabled without text cleanup, but transcript does not address agent",
+          agentName,
+        });
+      } else {
+        try {
+          if (cloudReasoningMode === "openwhispr") {
+            const reasonResult = await withSessionRefresh(async () => {
+              const res = await window.electronAPI.cloudReason(finalText, {
+                agentName,
+                customDictionary: stSettings.customDictionary,
+                customPrompt: this.getCustomPrompt(),
+                language: stSettings.preferredLanguage || "auto",
+                locale: stSettings.uiLanguage || "en",
+                sttProvider: this.getStreamingProviderName(),
+                sttModel: streamingSttModel,
+                sttProcessingMs: streamingSttProcessingMs,
+                sttWordCount: streamingSttWordCount,
+                sttLanguage: streamingSttLanguage,
+                audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
+                audioSizeBytes: streamingAudioBytesSent || undefined,
+                audioFormat: "linear16",
+              });
+              if (!res.success) {
+                const err = new Error(res.error || "Cloud reasoning failed");
+                err.code = res.code;
+                throw err;
+              }
+              return res;
             });
-            if (!res.success) {
-              const err = new Error(res.error || "Cloud reasoning failed");
-              err.code = res.code;
-              throw err;
-            }
-            return res;
-          });
 
-          if (reasonResult.success && reasonResult.text) {
-            finalText = reasonResult.text;
-          }
-          usedCloudReasoning = true;
-
-          logger.info(
-            "Streaming reasoning complete",
-            {
-              reasoningDurationMs: Math.round(performance.now() - reasoningStart),
-              model: reasonResult.model,
-            },
-            "streaming"
-          );
-        } else {
-          const effectiveModel = getEffectiveReasoningModel();
-          if (effectiveModel) {
-            const result = await this.processWithReasoningModel(
-              finalText,
-              effectiveModel,
-              agentName
-            );
-            if (result) {
-              finalText = result;
+            if (reasonResult.success && reasonResult.text) {
+              finalText = reasonResult.text;
             }
+            usedCloudReasoning = true;
+
             logger.info(
-              "Streaming BYOK reasoning complete",
-              { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },
+              "Streaming reasoning complete",
+              {
+                reasoningDurationMs: Math.round(performance.now() - reasoningStart),
+                model: reasonResult.model,
+              },
               "streaming"
             );
+          } else {
+            const effectiveModel = getEffectiveReasoningModel();
+            if (effectiveModel) {
+              const result = await this.processWithReasoningModel(
+                finalText,
+                effectiveModel,
+                agentName
+              );
+              if (result) {
+                finalText = result;
+              }
+              logger.info(
+                "Streaming BYOK reasoning complete",
+                { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },
+                "streaming"
+              );
+            }
           }
+        } catch (reasonError) {
+          logger.error(
+            "Streaming reasoning failed, using raw text",
+            { error: reasonError.message },
+            "streaming"
+          );
         }
-      } catch (reasonError) {
-        logger.error(
-          "Streaming reasoning failed, using raw text",
-          { error: reasonError.message },
-          "streaming"
-        );
       }
     }
 
