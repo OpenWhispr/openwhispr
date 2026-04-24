@@ -643,7 +643,12 @@ function SpeechToTextTabs({
           )
         }
       />
-      {tab === "dictation" ? renderDictation() : renderNoteRecording()}
+      <div style={{ display: tab === "dictation" ? undefined : "none" }}>
+        {renderDictation()}
+      </div>
+      <div style={{ display: tab === "noteRecording" ? undefined : "none" }}>
+        {renderNoteRecording()}
+      </div>
     </div>
   );
 }
@@ -684,9 +689,15 @@ function LlmsTabs({
           return <MessageSquare className="w-3.5 h-3.5" />;
         }}
       />
-      {tab === "dictationCleanup" && renderDictationCleanup()}
-      {tab === "noteFormatting" && renderNoteFormatting()}
-      {tab === "chatIntelligence" && renderChatIntelligence()}
+      <div style={{ display: tab === "dictationCleanup" ? undefined : "none" }}>
+        {renderDictationCleanup()}
+      </div>
+      <div style={{ display: tab === "noteFormatting" ? undefined : "none" }}>
+        {renderNoteFormatting()}
+      </div>
+      <div style={{ display: tab === "chatIntelligence" ? undefined : "none" }}>
+        {renderChatIntelligence()}
+      </div>
     </div>
   );
 }
