@@ -37,6 +37,8 @@ class WindowManager {
     this.winPushState = null;
     this._cachedActivationMode = "tap";
     this._floatingIconAutoHide = false;
+    this._contextAwarenessEnabled = true;
+    this.contextCaptureManager = null;
     this._agentAnimationState = null;
     this._panelStartPosition = "bottom-right";
     this._isDictatingToggle = false;
@@ -439,7 +441,7 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.showDictationPanel();
-      this.mainWindow.webContents.send("toggle-dictation");
+      this.mainWindow.webContents.send("toggle-dictation", this.captureAppContext());
       this._isDictatingToggle = !this._isDictatingToggle;
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     }
@@ -451,7 +453,7 @@ class WindowManager {
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.showDictationPanel();
-      this.mainWindow.webContents.send("start-dictation");
+      this.mainWindow.webContents.send("start-dictation", this.captureAppContext());
       this.meetingDetectionEngine?.setUserRecording(true);
     }
   }
@@ -467,6 +469,11 @@ class WindowManager {
     }
   }
 
+  captureAppContext() {
+    if (!this._contextAwarenessEnabled) return null;
+    return this.contextCaptureManager?.captureContext() ?? null;
+  }
+
   getActivationMode() {
     return this._cachedActivationMode;
   }
@@ -475,8 +482,16 @@ class WindowManager {
     this._cachedActivationMode = mode === "push" ? "push" : "tap";
   }
 
+  setContextCaptureManager(manager) {
+    this.contextCaptureManager = manager;
+  }
+
   setFloatingIconAutoHide(enabled) {
     this._floatingIconAutoHide = Boolean(enabled);
+  }
+
+  setContextAwarenessEnabled(enabled) {
+    this._contextAwarenessEnabled = Boolean(enabled);
   }
 
   setPanelStartPosition(position) {

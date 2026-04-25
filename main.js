@@ -251,6 +251,7 @@ const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
+const ContextCaptureManager = require("./src/helpers/contextCaptureManager");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
@@ -402,6 +403,7 @@ function initializeDeferredManagers() {
   clipboardManager.preWarmAccessibility();
   trayManager = new TrayManager();
   globeKeyManager = new GlobeKeyManager();
+  windowManager.setContextCaptureManager(new ContextCaptureManager());
 
   if (process.platform === "darwin") {
     globeKeyManager.on("error", (error) => {
@@ -612,6 +614,7 @@ async function startApp() {
 
   windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
+  windowManager.setContextAwarenessEnabled(environmentManager.getContextAwarenessEnabled());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());
 
   ipcMain.on("activation-mode-changed", (_event, mode) => {
@@ -626,6 +629,11 @@ async function startApp() {
     if (windowManager.mainWindow && !windowManager.mainWindow.isDestroyed()) {
       windowManager.mainWindow.webContents.send("floating-icon-auto-hide-changed", enabled);
     }
+  });
+
+  ipcMain.on("context-awareness-changed", (_event, enabled) => {
+    windowManager.setContextAwarenessEnabled(enabled);
+    environmentManager.saveContextAwarenessEnabled(enabled);
   });
 
   ipcMain.on("start-minimized-changed", (_event, enabled) => {
