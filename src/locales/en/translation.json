@@ -2135,6 +2135,12 @@
     "done": "Done",
     "remindLater": "Remind Me Later"
   },
+  "postMigration": {
+    "title": "Welcome back to OpenWhispr",
+    "description": "Your notes and settings carried over from the previous version. macOS treats this as a new app though, so a few permissions need to be granted again.",
+    "done": "Done",
+    "remindLater": "Remind Me Later"
+  },
   "apiKeyInput": {
     "placeholder": "Paste your API key",
     "label": "API Key",

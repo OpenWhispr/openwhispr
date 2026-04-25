@@ -27,6 +27,7 @@ const {
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
+const postMigrationDetector = require("./postMigrationDetector");
 const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
@@ -6303,6 +6304,14 @@ class IPCHandlers {
 
     ipcMain.handle("get-app-version", async () => {
       return this.updateManager.getAppVersion();
+    });
+
+    ipcMain.handle("get-post-migration-state", () => ({
+      justMigrated: postMigrationDetector.isReturningFromOldBundle(),
+    }));
+
+    ipcMain.handle("mark-bundle-migrated", () => {
+      postMigrationDetector.markBundleMigrated();
     });
 
     ipcMain.handle("get-update-status", async () => {

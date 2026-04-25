@@ -2034,6 +2034,12 @@
     "done": "完成",
     "remindLater": "稍後提醒我"
   },
+  "postMigration": {
+    "title": "歡迎回到 OpenWhispr",
+    "description": "您的筆記與設定已從先前版本保留下來。不過 macOS 會將此視為一款全新的應用程式，因此需要您重新授予部分權限。",
+    "done": "完成",
+    "remindLater": "稍後提醒我"
+  },
   "apiKeyInput": {
     "placeholder": "輸入你的 API Key",
     "label": "API Key",

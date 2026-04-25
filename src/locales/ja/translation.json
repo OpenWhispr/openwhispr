@@ -2039,6 +2039,12 @@
     "done": "完了",
     "remindLater": "後で通知"
   },
+  "postMigration": {
+    "title": "OpenWhispr へおかえりなさい",
+    "description": "ノートと設定は以前のバージョンから引き継がれています。ただし macOS はこれを新しいアプリとして扱うため、いくつかの権限を改めて付与していただく必要があります。",
+    "done": "完了",
+    "remindLater": "後で通知"
+  },
   "apiKeyInput": {
     "placeholder": "API キーを入力",
     "label": "API キー",
