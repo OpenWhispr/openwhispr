@@ -2087,6 +2087,12 @@
     "done": "Terminé",
     "remindLater": "Me le rappeler plus tard"
   },
+  "postMigration": {
+    "title": "Bon retour sur OpenWhispr",
+    "description": "Vos notes et vos paramètres ont été conservés depuis la version précédente. macOS considère toutefois cette installation comme une nouvelle app, il faudra donc accorder à nouveau quelques permissions.",
+    "done": "Terminé",
+    "remindLater": "Me le rappeler plus tard"
+  },
   "apiKeyInput": {
     "placeholder": "Collez votre clé API",
     "label": "Clé API",

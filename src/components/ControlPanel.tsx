@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Download, RefreshCw, Loader2, AlertTriangle, Zap, ChevronLeft } from "lucide-react";
 import UpgradePrompt from "./UpgradePrompt";
 import TccResetModal from "./TccResetModal";
+import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useHotkey } from "../hooks/useHotkey";
@@ -52,6 +53,7 @@ export default function ControlPanel() {
   const [showSettings, setShowSettings] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showTccReset, setShowTccReset] = useState(false);
+  const [showPostMigration, setShowPostMigration] = useState(false);
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
   const [settingsSection, setSettingsSection] = useState<string | undefined>();
@@ -143,6 +145,18 @@ export default function ControlPanel() {
   const dismissTccResetPermanently = useCallback(() => {
     localStorage.setItem(TCC_RESET_MODAL_SEEN_KEY, "true");
     setShowTccReset(false);
+  }, []);
+
+  useEffect(() => {
+    if (platform !== "darwin") return;
+    window.electronAPI?.getPostMigrationState?.().then((state) => {
+      if (state?.justMigrated) setShowPostMigration(true);
+    });
+  }, []);
+
+  const dismissPostMigrationPermanently = useCallback(async () => {
+    await window.electronAPI?.markBundleMigrated?.();
+    setShowPostMigration(false);
   }, []);
 
   useEffect(() => {
@@ -293,13 +307,11 @@ export default function ControlPanel() {
 
   // When accessibility is missing on macOS, open the permissions settings page
   useEffect(() => {
-    const cleanup = window.electronAPI?.onAccessibilityMissing?.(() => {
-      if (isAccessibilitySkipped()) {
-        return;
-      }
-      if (!isTccResetModalSeen()) {
-        return;
-      }
+    const cleanup = window.electronAPI?.onAccessibilityMissing?.(async () => {
+      if (isAccessibilitySkipped()) return;
+      if (!isTccResetModalSeen()) return;
+      const migration = await window.electronAPI?.getPostMigrationState?.();
+      if (migration?.justMigrated) return;
       setSettingsSection("privacyData");
       setShowSettings(true);
       toast({
@@ -599,6 +611,12 @@ export default function ControlPanel() {
         open={showTccReset}
         onOpenChange={setShowTccReset}
         onDone={dismissTccResetPermanently}
+      />
+
+      <PostMigrationOnboarding
+        open={showPostMigration}
+        onOpenChange={setShowPostMigration}
+        onDone={dismissPostMigrationPermanently}
       />
 
       {showSettings && (
