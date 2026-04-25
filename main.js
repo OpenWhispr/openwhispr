@@ -595,6 +595,7 @@ function startAuthBridgeServer() {
 async function startApp() {
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
+  await environmentManager.init();
   startAuthBridgeServer();
 
   // Electron's file:// sends no Origin header, which Neon Auth rejects.
