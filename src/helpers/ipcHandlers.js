@@ -27,6 +27,33 @@ const {
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
+const {
+  DEFAULT_EXPECTED_SPEAKER_COUNT,
+  MAX_SPEAKER_COUNT,
+} = require("../constants/speakerDetection.json");
+
+const STREAMING_CLIENT_BY_PROVIDER = {
+  "openai-realtime": OpenAIRealtimeStreaming,
+  "assemblyai-realtime": AssemblyAiStreaming,
+  "deepgram-realtime": DeepgramStreaming,
+};
+const ALLOWED_MEETING_PROVIDERS = new Set([
+  "local",
+  "openai-realtime",
+  "assemblyai-realtime",
+  "deepgram-realtime",
+]);
+
+function parseAttendees(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
@@ -284,6 +311,8 @@ class IPCHandlers {
     this.audioStorageManager = new AudioStorageManager();
     this._audioCleanupInterval = null;
     this._noteFilesEnabled = false;
+    this.speakerDiarizationEnabled = true;
+    this.activeMeetingSpeakerConfig = null;
     liveSpeakerIdentifier.setDiarizationManager(this.diarizationManager);
     this._setupTextEditMonitor();
     this._setupAudioCleanup();
@@ -316,7 +345,14 @@ class IPCHandlers {
   }
 
   _asyncMirrorWrite(note) {
-    if (!this._noteFilesEnabled) return;
+    if (!this._noteFilesEnabled) {
+      debugLogger.debug(
+        "Mirror write skipped: note files disabled",
+        { noteId: note.id },
+        "note-files"
+      );
+      return;
+    }
     setImmediate(() => {
       const markdownMirror = require("./markdownMirror");
       const folderName = this._getFolderName(note.folder_id);
@@ -328,7 +364,10 @@ class IPCHandlers {
   }
 
   _asyncMirrorDelete(noteId) {
-    if (!this._noteFilesEnabled) return;
+    if (!this._noteFilesEnabled) {
+      debugLogger.debug("Mirror delete skipped: note files disabled", { noteId }, "note-files");
+      return;
+    }
     setImmediate(() => {
       const markdownMirror = require("./markdownMirror");
       markdownMirror.deleteNote(noteId);
@@ -353,20 +392,35 @@ class IPCHandlers {
     return map;
   }
 
-  _resolveOneOnOneOtherParticipant(participantsJson) {
-    if (!participantsJson) return null;
+  _parseNonSelfParticipants(participantsJson) {
+    if (!participantsJson) return [];
     let participants;
     try {
       participants = JSON.parse(participantsJson);
     } catch (_) {
-      return null;
+      return [];
     }
-    if (!Array.isArray(participants) || participants.length === 0) return null;
+    if (!Array.isArray(participants) || participants.length === 0) return [];
     const googleEmails = new Set(
       this.databaseManager.getGoogleAccounts().map((a) => a.email.toLowerCase())
     );
-    const isSelf = (p) => p.self === true || googleEmails.has((p.email || "").toLowerCase());
-    const others = participants.filter((p) => !isSelf(p));
+    return participants.filter(
+      (p) => p && p.self !== true && !googleEmails.has((p.email || "").toLowerCase())
+    );
+  }
+
+  _getNoteNonSelfParticipants(noteId) {
+    if (!noteId) return [];
+    try {
+      const note = this.databaseManager.getNote(noteId);
+      return this._parseNonSelfParticipants(note?.participants);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  _resolveOneOnOneOtherParticipant(participantsJson) {
+    const others = this._parseNonSelfParticipants(participantsJson);
     if (others.length !== 1) return null;
     const displayName = others[0].displayName || others[0].email;
     if (!displayName) return null;
@@ -955,11 +1009,14 @@ class IPCHandlers {
       const folderName = this._noteFilesEnabled ? this._getFolderName(id) : null;
       const result = this.databaseManager.deleteFolder(id);
       if (result?.success) {
+        for (const noteId of result.noteIds ?? []) {
+          this._asyncVectorDelete(noteId);
+        }
         setImmediate(() => {
           this.broadcastToWindows("folder-deleted", { id });
           if (this._noteFilesEnabled && folderName) {
             const markdownMirror = require("./markdownMirror");
-            markdownMirror.deleteFolder(folderName, "Personal");
+            markdownMirror.deleteFolder(folderName);
           }
         });
       }
@@ -1144,7 +1201,15 @@ class IPCHandlers {
     ipcMain.handle("db-mark-note-sync-error", (_, id) =>
       this.databaseManager.markNoteSyncError(id)
     );
-    ipcMain.handle("db-hard-delete-note", (_, id) => this.databaseManager.hardDeleteNote(id));
+    ipcMain.handle("db-hard-delete-note", (_, id) => {
+      const result = this.databaseManager.hardDeleteNote(id);
+      if (result?.success) {
+        this._asyncVectorDelete(id);
+        this._asyncMirrorDelete(id);
+        setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
+      }
+      return result;
+    });
 
     // Folders sync
     ipcMain.handle("db-get-pending-folders", () => this.databaseManager.getPendingFolders());
@@ -1158,6 +1223,25 @@ class IPCHandlers {
       this.databaseManager.markFolderSynced(id, cloudId)
     );
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
+    ipcMain.handle("db-get-pending-folder-deletes", () =>
+      this.databaseManager.getPendingFolderDeletes()
+    );
+    ipcMain.handle("db-hard-delete-folder", (_, id) => {
+      const result = this.databaseManager.hardDeleteFolder(id);
+      if (result?.success) {
+        for (const noteId of result.noteIds ?? []) {
+          this._asyncVectorDelete(noteId);
+        }
+        setImmediate(() => {
+          this.broadcastToWindows("folder-deleted", { id });
+          if (this._noteFilesEnabled && result.name) {
+            const markdownMirror = require("./markdownMirror");
+            markdownMirror.deleteFolder(result.name);
+          }
+        });
+      }
+      return result;
+    });
 
     // Conversations sync
     ipcMain.handle("db-get-pending-conversations", () =>
@@ -1175,9 +1259,13 @@ class IPCHandlers {
     ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
       this.databaseManager.markConversationSynced(id, cloudId)
     );
-    ipcMain.handle("db-hard-delete-conversation", (_, id) =>
-      this.databaseManager.hardDeleteConversation(id)
-    );
+    ipcMain.handle("db-hard-delete-conversation", (_, id) => {
+      const result = this.databaseManager.hardDeleteConversation(id);
+      if (result?.success) {
+        setImmediate(() => this.broadcastToWindows("conversation-deleted", { id }));
+      }
+      return result;
+    });
 
     // Transcriptions sync
     ipcMain.handle("db-get-pending-transcriptions", () =>
@@ -1192,6 +1280,16 @@ class IPCHandlers {
     ipcMain.handle("db-mark-transcription-synced", (_, id, cloudId) =>
       this.databaseManager.markTranscriptionSynced(id, cloudId)
     );
+    ipcMain.handle("db-get-pending-transcription-deletes", () =>
+      this.databaseManager.getPendingTranscriptionDeletes()
+    );
+    ipcMain.handle("db-hard-delete-transcription", (_, id) => {
+      const result = this.databaseManager.hardDeleteTranscription(id);
+      if (result?.success) {
+        setImmediate(() => this.broadcastToWindows("transcription-deleted", { id }));
+      }
+      return result;
+    });
 
     ipcMain.handle("export-note", async (event, noteId, format) => {
       try {
@@ -3475,7 +3573,7 @@ class IPCHandlers {
 
     const DUPLICATE_TRANSCRIPT_WINDOW_MS = 6000;
     const DUPLICATE_TRANSCRIPT_MERGE_LIMIT = 3;
-    const STREAMING_RISKY_MIC_SEGMENT_HOLDBACK_MS = 1500;
+    const STREAMING_RISKY_MIC_SEGMENT_HOLDBACK_MS = 3000;
     const LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS = 4500;
 
     const buildNearbyTranscriptCandidates = (
@@ -3525,11 +3623,23 @@ class IPCHandlers {
       return false;
     };
 
-    const hasRiskyMicDuplicateProfile = (suppression = null) =>
-      !!suppression &&
-      (suppression.reason === "double_talk" ||
-        suppression.hasBleedEvidence ||
-        suppression.likelyRenderBleed);
+    const isWithinMeetingStartupWarmup = () =>
+      meetingStartedAt != null && Date.now() - meetingStartedAt < MEETING_STARTUP_WARMUP_MS;
+
+    const hasRiskyMicDuplicateProfile = (suppression = null) => {
+      if (isWithinMeetingStartupWarmup()) {
+        return true;
+      }
+      if (suppression?.systemSpeaking) {
+        return true;
+      }
+      return (
+        !!suppression &&
+        (suppression.reason === "double_talk" ||
+          suppression.hasBleedEvidence ||
+          suppression.likelyRenderBleed)
+      );
+    };
 
     const removeRacingMicEntriesFor = (systemText, systemTimestamp) => {
       const removed = [];
@@ -3644,6 +3754,15 @@ class IPCHandlers {
       schedulePendingMicFinalFlush();
 
       for (const pending of ready) {
+        if (pending.micSuppression?.hasBleedEvidence) {
+          debugLogger.debug("Dropping flagged-bleed mic segment after holdback", {
+            text: pending.text.slice(0, 80),
+            holdbackMs: pending.holdbackMs,
+            averageCorrelation: pending.micSuppression?.averageCorrelation?.toFixed(3),
+            averageResidual: pending.micSuppression?.averageResidual?.toFixed(3),
+          });
+          continue;
+        }
         debugLogger.debug("Releasing buffered mic segment after duplicate holdback", {
           text: pending.text.slice(0, 80),
           holdbackMs: pending.holdbackMs,
@@ -3849,34 +3968,78 @@ class IPCHandlers {
     };
 
     const fetchRealtimeToken = async (event, options, { streams } = {}) => {
+      const postServerToken = async (path, body = {}) => {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+        const response = await fetch(`${apiUrl}${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.error || `Token request failed: ${response.status}`);
+        }
+        return response.json();
+      };
+
+      const dual = (factory) => (streams === 2 ? Promise.all([factory(), factory()]) : factory());
+
+      if (options.provider === "assemblyai-realtime") {
+        if (options.mode === "byok") {
+          const apiKey = this.environmentManager.getAssemblyAIKey();
+          if (!apiKey) {
+            throw new Error("No AssemblyAI API key configured. Add your key in Settings.");
+          }
+          return dual(async () => {
+            const response = await fetch(
+              "https://streaming.assemblyai.com/v3/token?expires_in_seconds=60",
+              { headers: { Authorization: apiKey } }
+            );
+            if (!response.ok) {
+              const err = await response.json().catch(() => ({}));
+              throw new Error(err.error || `AssemblyAI token request failed: ${response.status}`);
+            }
+            const data = await response.json();
+            if (!data.token) throw new Error("No AssemblyAI token received");
+            return data.token;
+          });
+        }
+        return dual(async () => {
+          const data = await postServerToken("/api/streaming-token");
+          if (!data.token) throw new Error("No AssemblyAI token received");
+          return data.token;
+        });
+      }
+
+      if (options.provider === "deepgram-realtime") {
+        if (options.mode === "byok") {
+          const apiKey = this.environmentManager.getDeepgramKey();
+          if (!apiKey) {
+            throw new Error("No Deepgram API key configured. Add your key in Settings.");
+          }
+          return streams === 2 ? [apiKey, apiKey] : apiKey;
+        }
+        return dual(async () => {
+          const data = await postServerToken("/api/deepgram-streaming-token");
+          if (!data.token) throw new Error("No Deepgram token received");
+          return data.token;
+        });
+      }
+
       if (options.mode === "byok") {
         const apiKey = this.environmentManager.getOpenAIKey();
         if (!apiKey) throw new Error("No OpenAI API key configured. Add your key in Settings.");
         return streams === 2 ? [apiKey, apiKey] : apiKey;
       }
 
-      const apiUrl = getApiUrl();
-      if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-
-      const cookieHeader = await getSessionCookies(event);
-      if (!cookieHeader) throw new Error("No session cookies available");
-
-      const tokenResponse = await fetch(`${apiUrl}/api/openai-realtime-token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Cookie: cookieHeader },
-        body: JSON.stringify({
-          model: options.model,
-          language: options.language,
-          streams: streams || 1,
-        }),
+      const data = await postServerToken("/api/openai-realtime-token", {
+        model: options.model,
+        language: options.language,
+        streams: streams || 1,
       });
-
-      if (!tokenResponse.ok) {
-        const err = await tokenResponse.json().catch(() => ({}));
-        throw new Error(err.error || `Token request failed: ${tokenResponse.status}`);
-      }
-
-      const data = await tokenResponse.json();
       if (streams === 2) {
         if (!data.clientSecrets || data.clientSecrets.length < 2) {
           throw new Error("Expected two client secrets for dual-stream");
@@ -3957,19 +4120,30 @@ class IPCHandlers {
         ];
       }
 
+      const StreamingClass =
+        STREAMING_CLIENT_BY_PROVIDER[options.provider] ?? OpenAIRealtimeStreaming;
       for (const { ref, source } of pairs) {
-        this[ref] = new OpenAIRealtimeStreaming();
+        this[ref] = new StreamingClass();
         attachMeetingStreamingHandlers(this[ref], win, source);
       }
 
       await Promise.all(
-        pairs.map(({ ref, secret }) => this[ref].connect({ apiKey: secret, ...connectOpts }))
+        pairs.map(({ ref, secret }) =>
+          this[ref].connect({ apiKey: secret, token: secret, ...connectOpts })
+        )
       );
 
       return win;
     };
 
     const MEETING_MIC_REFERENCE_ALIGNMENT_MS = 320;
+    const MEETING_STARTUP_WARMUP_MS = 1500;
+    const MEETING_MIC_BLEED_RMS_CEILING = 0.018;
+    const MEETING_MIC_BLEED_PEAK_CEILING = 0.07;
+    const MEETING_MIC_BLEED_LOOKBACK_MS = 500;
+    const MEETING_MIC_STATS_LOG_LIMIT = 200;
+    let meetingMicStatsLogCount = 0;
+    let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
 
@@ -3982,6 +4156,21 @@ class IPCHandlers {
     let meetingLiveSpeakerState = null;
     let meetingLiveSpeakerStartedAt = null;
     let meetingReclusterTimer = null;
+    let meetingSpeakerRemapper = (id) => id;
+
+    const createSpeakerRemapper = (maxSpeakers) => {
+      const cap = Math.max(1, Math.floor(maxSpeakers) || 1);
+      const map = new Map();
+      return (internalId) => {
+        if (!internalId) return internalId;
+        const existing = map.get(internalId);
+        if (existing !== undefined) return existing;
+        const index = map.size < cap ? map.size : cap - 1;
+        const label = `speaker_${index}`;
+        map.set(internalId, label);
+        return label;
+      };
+    };
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
@@ -3997,8 +4186,20 @@ class IPCHandlers {
     let meetingAecEnabled = false;
     let meetingOneOnOneAttendee = null;
     let meetingOneOnOneProfileBound = false;
+    let meetingNoteId = null;
 
-    const getLiveSpeakerProfiles = () => this.databaseManager.getSpeakerProfiles(true);
+    const getLiveSpeakerProfiles = () => {
+      const attendees = this._getNoteNonSelfParticipants(meetingNoteId);
+      const attendeeEmails = new Set();
+      for (const p of attendees) {
+        const email = (p.email || "").toLowerCase().trim();
+        if (email) attendeeEmails.add(email);
+      }
+      if (attendeeEmails.size === 0) return [];
+      return this.databaseManager
+        .getSpeakerProfiles(true)
+        .filter((p) => p.email && attendeeEmails.has(p.email.toLowerCase()));
+    };
     const shouldSuppressMicTranscriptSegment = (startedAt, endedAt = Date.now()) =>
       meetingEchoLeakDetector.shouldSuppressMicSegment(startedAt, endedAt);
 
@@ -4012,37 +4213,18 @@ class IPCHandlers {
       }
     };
 
-    const adoptActiveCalendarEventForNote = (noteId) => {
-      if (!noteId) return;
-      try {
-        const note = this.databaseManager.getNote(noteId);
-        if (!note || note.participants || note.calendar_event_id) return;
+    const resolveDiarizationEnabled = () =>
+      (this.activeMeetingSpeakerConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
 
-        const events = this.databaseManager.getActiveEvents();
-        for (const evt of events) {
-          if (!evt.attendees) continue;
-          if (!this._resolveOneOnOneOtherParticipant(evt.attendees)) continue;
-          if (this.databaseManager.getNoteByCalendarEventId(evt.id, noteId)) continue;
-
-          this.databaseManager.updateNote(noteId, {
-            calendar_event_id: evt.id,
-            participants: evt.attendees,
-          });
-          const updated = this.databaseManager.getNote(noteId);
-          if (updated) this.broadcastToWindows("note-updated", updated);
-          return;
-        }
-      } catch (error) {
-        debugLogger.warn(
-          "Adopt active calendar event failed",
-          { noteId, error: error.message },
-          "meeting"
-        );
-      }
+    const resolveSessionMaxSpeakers = () => {
+      const count = this.activeMeetingSpeakerConfig?.expectedCount;
+      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
+      return Math.max(1, total - 1);
     };
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
       if (!meetingOneOnOneAttendee || meetingOneOnOneProfileBound || !speakerId) return;
+      if (!resolveDiarizationEnabled()) return;
       const embedding = liveSpeakerIdentifier.getSpeakerEmbedding(speakerId);
       if (!embedding) return;
       try {
@@ -4082,7 +4264,45 @@ class IPCHandlers {
         return;
       }
 
-      const sent = streaming.sendAudio(buffer);
+      let outbound = buffer;
+      if (source === "mic" && buffer.length >= 2) {
+        const samples = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.length >> 1);
+        let sumSq = 0;
+        let peak = 0;
+        for (let i = 0; i < samples.length; i++) {
+          const n = samples[i] / 0x7fff;
+          sumSq += n * n;
+          const abs = n < 0 ? -n : n;
+          if (abs > peak) peak = abs;
+        }
+        const rms = Math.sqrt(sumSq / samples.length);
+        const systemSpeaking = meetingEchoLeakDetector.isSystemSpeaking(
+          Date.now() - MEETING_MIC_BLEED_LOOKBACK_MS
+        );
+        if (rms < 0.0015 && peak < 0.05) {
+          outbound = Buffer.alloc(buffer.length);
+        } else if (
+          rms < MEETING_MIC_BLEED_RMS_CEILING &&
+          peak < MEETING_MIC_BLEED_PEAK_CEILING &&
+          systemSpeaking
+        ) {
+          outbound = Buffer.alloc(buffer.length);
+        }
+        if (
+          meetingMicStatsLogCount < MEETING_MIC_STATS_LOG_LIMIT &&
+          (systemSpeaking || rms > 0.02)
+        ) {
+          meetingMicStatsLogCount += 1;
+          debugLogger.debug("Meeting mic audio stats", {
+            rms: rms.toFixed(4),
+            peak: peak.toFixed(4),
+            systemSpeaking,
+            zeroed: outbound !== buffer,
+          });
+        }
+      }
+
+      const sent = streaming.sendAudio(outbound);
       meetingSendCounts[source]++;
       if (meetingSendCounts[source] <= 5 || meetingSendCounts[source] % 100 === 0) {
         debugLogger.debug("Meeting audio send", {
@@ -4112,7 +4332,6 @@ class IPCHandlers {
       const started = await this.meetingAecManager
         .start({
           onMicChunk: (chunk) => {
-            meetingEchoLeakDetector.analyzeMicChunk(chunk);
             dispatchMeetingAudioBuffer(chunk, "mic");
           },
           onError: (error) => {
@@ -4150,6 +4369,9 @@ class IPCHandlers {
 
         meetingPendingMicChunks.shift();
         const analysis = meetingEchoLeakDetector.analyzeMicChunk(next.buffer);
+        if (next.analysisOnly) {
+          continue;
+        }
         if (analysis?.shouldMute && !meetingAecEnabled) {
           if (!meetingLocalMode) {
             dispatchMeetingAudioBuffer(Buffer.alloc(next.buffer.length), "mic");
@@ -4168,6 +4390,12 @@ class IPCHandlers {
 
       const sent = this.meetingAecManager?.processMicBuffer(buffer);
       if (sent) {
+        meetingPendingMicChunks.push({
+          buffer,
+          queuedAt: Date.now(),
+          analysisOnly: true,
+        });
+        flushPendingMeetingMicChunks();
         return true;
       }
 
@@ -4197,15 +4425,22 @@ class IPCHandlers {
         return false;
       }
 
+      const diarizationEnabled = resolveDiarizationEnabled();
+      if (!diarizationEnabled) {
+        return false;
+      }
+
       meetingLiveSpeakerState = null;
       meetingLiveSpeakerStartedAt = Date.now();
+      meetingSpeakerRemapper = createSpeakerRemapper(resolveSessionMaxSpeakers());
       const started = await liveSpeakerIdentifier.start(
         (identification) => {
           if (!win || win.isDestroyed()) {
             return;
           }
 
-          bindOneOnOneAttendeeToSpeaker(identification.speakerId);
+          const publicSpeakerId = meetingSpeakerRemapper(identification.speakerId);
+          bindOneOnOneAttendeeToSpeaker(publicSpeakerId);
 
           const displayName = meetingOneOnOneAttendee
             ? meetingOneOnOneAttendee.displayName
@@ -4221,6 +4456,7 @@ class IPCHandlers {
           );
           const enrichedIdentification = {
             ...identification,
+            speakerId: publicSpeakerId,
             displayName,
             startTime,
             endTime,
@@ -4237,7 +4473,7 @@ class IPCHandlers {
               (!seg.speaker || seg.speakerIsPlaceholder)
             ) {
               applyConfirmedSpeaker(seg, {
-                speaker: identification.speakerId,
+                speaker: publicSpeakerId,
                 speakerName: displayName || seg.speakerName,
                 speakerIsPlaceholder: false,
               });
@@ -4246,6 +4482,8 @@ class IPCHandlers {
         },
         {
           getSpeakerProfiles: getLiveSpeakerProfiles,
+          maxSpeakers: resolveSessionMaxSpeakers(),
+          enabled: true,
         }
       );
 
@@ -4257,7 +4495,14 @@ class IPCHandlers {
           const merges = await liveSpeakerIdentifier.recluster();
           if (!merges.length) return;
 
-          for (const { keep, remove, displayName } of merges) {
+          const publicMerges = merges.map(({ keep, remove, displayName, similarity }) => ({
+            keep: meetingSpeakerRemapper(keep),
+            remove: meetingSpeakerRemapper(remove),
+            displayName,
+            similarity,
+          }));
+          for (const { keep, remove, displayName } of publicMerges) {
+            if (keep === remove) continue;
             for (const seg of meetingDiarizationSegments) {
               if (seg.speaker === remove) {
                 seg.speaker = keep;
@@ -4266,7 +4511,7 @@ class IPCHandlers {
             }
           }
 
-          win.webContents.send("meeting-speakers-merged", merges);
+          win.webContents.send("meeting-speakers-merged", publicMerges);
         }, 30_000);
       } else {
         meetingLiveSpeakerStartedAt = null;
@@ -4296,6 +4541,20 @@ class IPCHandlers {
       const rms = Math.sqrt(sumSq / samples.length);
       if (rms < 0.0015 && peak < 0.05) {
         debugLogger.debug("Skipping silent meeting chunk", {
+          source,
+          rms: rms.toFixed(4),
+          peak: peak.toFixed(4),
+        });
+        return;
+      }
+
+      if (
+        source === "mic" &&
+        rms < MEETING_MIC_BLEED_RMS_CEILING &&
+        peak < MEETING_MIC_BLEED_PEAK_CEILING &&
+        meetingEchoLeakDetector.isSystemSpeaking(Date.now() - 5000)
+      ) {
+        debugLogger.debug("Skipping system-dominant mic chunk", {
           source,
           rms: rms.toFixed(4),
           peak: peak.toFixed(4),
@@ -4467,6 +4726,7 @@ class IPCHandlers {
       meetingLiveSpeakerStartedAt = null;
       meetingOneOnOneAttendee = null;
       meetingOneOnOneProfileBound = false;
+      meetingNoteId = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
       if (meetingDiarizationStream) {
@@ -4487,6 +4747,7 @@ class IPCHandlers {
       meetingPendingMicChunks = [];
       resetPendingMicFinals();
       meetingAecEnabled = false;
+      meetingStartedAt = null;
       meetingEchoLeakDetector.reset();
     };
 
@@ -4679,12 +4940,12 @@ class IPCHandlers {
         return { success: false, error: "Operation in progress" };
       }
 
-      if (options.provider === "local") {
-        return { success: true };
+      if (!ALLOWED_MEETING_PROVIDERS.has(options.provider)) {
+        return { success: false, error: `Unsupported provider: ${options.provider}` };
       }
 
-      if (options.provider !== "openai-realtime") {
-        return { success: false, error: `Unsupported provider: ${options.provider}` };
+      if (options.provider === "local") {
+        return { success: true };
       }
 
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
@@ -4696,20 +4957,37 @@ class IPCHandlers {
 
       meetingTranscriptionPrepareInProgress = true;
       meetingTranscriptionPreparePromise = (async () => {
+        let timeoutHandle;
         try {
-          await connectRealtimeStreaming(event, options);
+          await Promise.race([
+            connectRealtimeStreaming(event, options),
+            new Promise((_, reject) => {
+              timeoutHandle = setTimeout(() => reject(new Error("Prepare timed out")), 15000);
+            }),
+          ]);
           debugLogger.debug("Meeting transcription prepared (meeting streams warm)");
           return { success: true };
         } catch (error) {
           debugLogger.error("Meeting transcription prepare error", { error: error.message });
           return { success: false, error: error.message };
         } finally {
+          if (timeoutHandle) clearTimeout(timeoutHandle);
           meetingTranscriptionPrepareInProgress = false;
           meetingTranscriptionPreparePromise = null;
         }
       })();
 
       return meetingTranscriptionPreparePromise;
+    });
+
+    ipcMain.handle("meeting-transcription-cancel", async () => {
+      if (isMeetingStreamingConnected() || meetingLocalTimer) {
+        return { success: false, reason: "recording-active" };
+      }
+      meetingTranscriptionPrepareInProgress = false;
+      meetingTranscriptionStartInProgress = false;
+      meetingTranscriptionPreparePromise = null;
+      return { success: true };
     });
 
     ipcMain.handle("meeting-transcription-start", async (event, options = {}) => {
@@ -4725,14 +5003,15 @@ class IPCHandlers {
       }
 
       meetingTranscriptionStartInProgress = true;
+      meetingStartedAt = Date.now();
       this.meetingDetectionEngine?.setUserRecording(true);
       try {
         const systemAudioPlan = await getMeetingSystemAudioPlan();
         let { mode: systemAudioMode, strategy: systemAudioStrategy } = systemAudioPlan;
         meetingEchoLeakDetector.reset();
-        adoptActiveCalendarEventForNote(options.noteId);
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingOneOnOneProfileBound = false;
+        meetingNoteId = options.noteId ?? null;
 
         if (systemAudioMode === "unsupported" && this._meetingSystemStreaming?.isConnected) {
           await this._meetingSystemStreaming.disconnect().catch(() => ({ text: "" }));
@@ -4799,7 +5078,7 @@ class IPCHandlers {
           };
         }
 
-        if (options.provider !== "openai-realtime") {
+        if (!ALLOWED_MEETING_PROVIDERS.has(options.provider)) {
           return { success: false, error: `Unsupported provider: ${options.provider}` };
         }
 
@@ -4985,6 +5264,9 @@ class IPCHandlers {
               .map((segment) => segment.text)
               .join(" ")
               .trim() || meetingLocalTranscript;
+          const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
+          const noteIdSnapshot = meetingNoteId;
+          this.activeMeetingSpeakerConfig = null;
           resetMeetingLocalState();
 
           // Fire-and-forget background diarization (or notify skip)
@@ -4994,7 +5276,9 @@ class IPCHandlers {
             diarizationStartedAt,
             diarizationSegments,
             diarizationWin,
-            liveSpeakerState
+            liveSpeakerState,
+            sessionSpeakerConfigSnapshot,
+            noteIdSnapshot
           );
 
           return { success: true, transcript, diarizationSessionId };
@@ -5009,6 +5293,10 @@ class IPCHandlers {
             .join(" ")
             .trim() || [results[0]?.text, results[1]?.text].filter(Boolean).join(" ");
 
+        const sessionSpeakerConfigSnapshot = this.activeMeetingSpeakerConfig;
+        const noteIdSnapshot = meetingNoteId;
+        this.activeMeetingSpeakerConfig = null;
+
         // Fire-and-forget background diarization (or notify skip)
         this._startOrSkipDiarization(
           diarizationSessionId,
@@ -5016,7 +5304,9 @@ class IPCHandlers {
           diarizationStartedAt,
           diarizationSegments,
           diarizationWin,
-          liveSpeakerState
+          liveSpeakerState,
+          sessionSpeakerConfigSnapshot,
+          noteIdSnapshot
         );
 
         return { success: true, transcript, diarizationSessionId };
@@ -5595,7 +5885,10 @@ class IPCHandlers {
 
         return { success: true, data };
       } catch (error) {
-        debugLogger.error(`Cloud API request error (${opts?.path}):`, error);
+        debugLogger.error(
+          `Cloud API request error (${opts?.path}): ${error?.message || error} ${error?.code || ""}`.trim(),
+          error?.stack
+        );
         return { success: false, error: error.message };
       }
     });
@@ -5626,6 +5919,33 @@ class IPCHandlers {
         return { success: true, ...data };
       } catch (error) {
         debugLogger.error("STT config fetch error:", error);
+        return null;
+      }
+    });
+
+    ipcMain.handle("get-note-recording-config", async (event) => {
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const cookieHeader = await getSessionCookies(event);
+        if (!cookieHeader) throw new Error("No session cookies available");
+
+        const response = await fetch(`${apiUrl}/api/note-recording-config`, {
+          headers: { Cookie: cookieHeader },
+        });
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          }
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return { success: true, ...data };
+      } catch (error) {
+        debugLogger.error("Note recording config fetch error:", error);
         return null;
       }
     });
@@ -5856,11 +6176,14 @@ class IPCHandlers {
 
     ipcMain.handle("open-whisper-models-folder", async () => {
       try {
-        const modelsDir = this.whisperManager.getModelsDir();
-        await shell.openPath(modelsDir);
+        const { getCacheRoot } = require("./modelDirUtils");
+        const cacheRoot = getCacheRoot();
+        await fs.promises.mkdir(cacheRoot, { recursive: true });
+        const errMsg = await shell.openPath(cacheRoot);
+        if (errMsg) return { success: false, error: errMsg };
         return { success: true };
       } catch (error) {
-        debugLogger.error("Failed to open whisper models folder:", error);
+        debugLogger.error("Failed to open model cache folder:", error);
         return { success: false, error: error.message };
       }
     });
@@ -6660,6 +6983,34 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("meeting-set-speaker-diarization-enabled", async (_event, payload) => {
+      try {
+        this.speakerDiarizationEnabled = payload?.enabled !== false;
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("meeting-set-session-speaker-config", async (_event, payload) => {
+      try {
+        const enabled = payload?.enabled !== false;
+        const expectedCount = Math.max(
+          1,
+          Math.min(
+            MAX_SPEAKER_COUNT,
+            Number(payload?.expectedCount) || DEFAULT_EXPECTED_SPEAKER_COUNT
+          )
+        );
+        this.activeMeetingSpeakerConfig = { enabled, expectedCount };
+        liveSpeakerIdentifier.setEnabled(enabled);
+        liveSpeakerIdentifier.setMaxSpeakers(expectedCount);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("meeting-notification-respond", async (_event, detectionId, action) => {
       try {
         await this.meetingDetectionEngine.handleNotificationResponse(detectionId, action);
@@ -6707,11 +7058,15 @@ class IPCHandlers {
     });
 
     // Note files (markdown mirror) handlers
-    ipcMain.handle("note-files-set-enabled", async (_event, enabled, customPath) => {
+    ipcMain.handle("note-files-set-enabled", async (_event, enabled, customPath, options) => {
       try {
         this._noteFilesEnabled = !!enabled;
-        if (enabled) {
-          this._rebuildMirror(customPath || path.join(app.getPath("userData"), "notes"));
+        if (!enabled) return { success: true };
+        const basePath = customPath || path.join(app.getPath("userData"), "notes");
+        if (options?.skipRebuild) {
+          require("./markdownMirror").init(basePath);
+        } else {
+          this._rebuildMirror(basePath);
         }
         return { success: true };
       } catch (error) {
@@ -7116,13 +7471,50 @@ class IPCHandlers {
     return reconciledSpeakers;
   }
 
+  _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
+    if (sessionConfig?.expectedCount) {
+      const total = Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT);
+      return {
+        numSpeakers: Math.max(1, total - 1),
+        cap: null,
+      };
+    }
+
+    let attendees = [];
+    if (noteId) {
+      try {
+        const note = this.databaseManager.getNote(noteId);
+        attendees = parseAttendees(note?.participants);
+      } catch (_) {
+        attendees = [];
+      }
+    }
+    if (attendees.length >= 2) {
+      return {
+        numSpeakers: Math.min(attendees.length, MAX_SPEAKER_COUNT),
+        cap: null,
+      };
+    }
+
+    if (observedSpeakerIds.size >= 2) {
+      return {
+        numSpeakers: Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT),
+        cap: null,
+      };
+    }
+
+    return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
+  }
+
   _startOrSkipDiarization(
     sessionId,
     rawPcmPath,
     audioStartedAt,
     transcriptSegments,
     win,
-    liveSpeakerState = null
+    liveSpeakerState = null,
+    sessionConfig = null,
+    noteId = null
   ) {
     const send = (payload) => {
       if (win && !win.isDestroyed()) {
@@ -7130,7 +7522,9 @@ class IPCHandlers {
       }
     };
 
-    if (!this.diarizationManager?.isAvailable() || !rawPcmPath) {
+    const diarizationEnabled = (sessionConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
+
+    if (!diarizationEnabled || !this.diarizationManager?.isAvailable() || !rawPcmPath) {
       send({
         segments: transcriptSegments.map((segment, index) => ({
           ...segment,
@@ -7161,12 +7555,21 @@ class IPCHandlers {
           });
         }
 
-        const expectedSpeakerCount =
-          observedSpeakerIds.size >= 2 ? Math.min(observedSpeakerIds.size, 4) : -1;
-        const diarizationSegments = await this.diarizationManager.diarize(
+        const { numSpeakers, cap } = this._resolveSpeakerExpectation({
+          sessionConfig,
+          noteId,
+          observedSpeakerIds,
+        });
+        let diarizationSegments = await this.diarizationManager.diarize(
           tmpWav,
-          expectedSpeakerCount > 0 ? { numSpeakers: expectedSpeakerCount } : {}
+          numSpeakers > 0 ? { numSpeakers } : {}
         );
+        if (cap != null) {
+          diarizationSegments = this.diarizationManager.capSpeakerClusters(
+            diarizationSegments,
+            cap
+          );
+        }
 
         const startMs =
           (Number.isFinite(audioStartedAt) && audioStartedAt) ||

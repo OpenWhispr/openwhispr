@@ -109,6 +109,7 @@ class SyncService {
         audio_duration_seconds: note.audio_duration_seconds,
         transcript: note.transcript,
         folder_id: cloudFolderId,
+        updated_at: note.updated_at,
       });
     } else {
       const cloud = await NotesService.create({
@@ -175,7 +176,21 @@ class SyncService {
 
   private async syncFolders(): Promise<void> {
     await this.pushPendingFolders();
+    await this.pushFolderDeletes();
     await this.pullFolders();
+  }
+
+  private async pushFolderDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingFolderDeletes?.()) ?? [];
+    for (const f of deletes) {
+      if (!f.cloud_id) continue;
+      try {
+        await FoldersService.delete(f.cloud_id);
+        await window.electronAPI.hardDeleteFolder?.(f.id);
+      } catch (err) {
+        console.error("Folder delete sync failed:", err);
+      }
+    }
   }
 
   private async pushPendingFolders(): Promise<void> {
@@ -216,17 +231,29 @@ class SyncService {
 
   private async pullFolders(): Promise<void> {
     try {
-      const { folders: cloudFolders } = await FoldersService.list();
+      const since = localStorage.getItem("lastSyncedAt.folders") ?? undefined;
+      const syncStartedAt = new Date().toISOString();
+      const { folders: cloudFolders } = await FoldersService.list(since);
+
       for (const cloudFolder of cloudFolders) {
         const local = await window.electronAPI.getFolderByClientId?.(
           cloudFolder.client_folder_id ?? ""
         );
+
+        if (cloudFolder.deleted_at) {
+          if (local) await window.electronAPI.hardDeleteFolder?.(local.id);
+          continue;
+        }
+
+        if (local?.deleted_at) continue;
         if (!local || cloudFolder.updated_at > local.created_at) {
           await window.electronAPI.upsertFolderFromCloud?.(
             cloudFolder as unknown as Record<string, unknown>
           );
         }
       }
+
+      localStorage.setItem("lastSyncedAt.folders", syncStartedAt);
     } catch (err) {
       console.error("Folder pull failed:", err);
     }
@@ -301,33 +328,46 @@ class SyncService {
 
   private async pullNotes(): Promise<void> {
     try {
+      const since = localStorage.getItem("lastSyncedAt.notes") ?? undefined;
+      const syncStartedAt = new Date().toISOString();
       const { cloudToLocal, defaultFolderId } = await this.buildCloudToLocalFolderMap();
-      let before: string | undefined;
-      let hasMore = true;
 
-      while (hasMore) {
-        const { notes: cloudNotes } = await NotesService.list(BATCH_SIZE, before);
+      let cursor: string | undefined = since;
+      while (true) {
+        const { notes: cloudNotes } = since
+          ? await NotesService.list(BATCH_SIZE, undefined, cursor)
+          : await NotesService.list(BATCH_SIZE, cursor);
         if (cloudNotes.length === 0) break;
-        hasMore = cloudNotes.length === BATCH_SIZE;
-        before = cloudNotes[cloudNotes.length - 1].created_at;
 
         for (const cloudNote of cloudNotes) {
-          if (cloudNote.deleted_at) continue;
           const local = await window.electronAPI.getNoteByClientId?.(
             cloudNote.client_note_id ?? ""
           );
-          const localFolderId = cloudNote.folder_id
-            ? (cloudToLocal.get(cloudNote.folder_id) ?? defaultFolderId)
-            : defaultFolderId;
+
+          if (cloudNote.deleted_at) {
+            if (local) await window.electronAPI.hardDeleteNote?.(local.id);
+            continue;
+          }
 
           if (!local || cloudNote.updated_at > local.updated_at) {
+            const localFolderId = cloudNote.folder_id
+              ? (cloudToLocal.get(cloudNote.folder_id) ?? defaultFolderId)
+              : defaultFolderId;
             await window.electronAPI.upsertNoteFromCloud?.(
               cloudNote as unknown as Record<string, unknown>,
               localFolderId
             );
           }
         }
+
+        if (cloudNotes.length < BATCH_SIZE) break;
+        const last = cloudNotes[cloudNotes.length - 1];
+        const next = since ? last.updated_at : last.created_at;
+        if (next === cursor) break;
+        cursor = next;
       }
+
+      localStorage.setItem("lastSyncedAt.notes", syncStartedAt);
     } catch (err) {
       console.error("Note pull failed:", err);
     }
@@ -395,25 +435,26 @@ class SyncService {
 
   private async pullConversations(): Promise<void> {
     try {
-      let before: string | undefined;
-      let hasMore = true;
+      const since = localStorage.getItem("lastSyncedAt.conversations") ?? undefined;
+      const syncStartedAt = new Date().toISOString();
 
-      while (hasMore) {
-        const { conversations: cloudConvs } = await ConversationsService.list(
-          BATCH_SIZE,
-          before,
-          false,
-          "messages"
-        );
+      let cursor: string | undefined = since;
+      while (true) {
+        const { conversations: cloudConvs } = since
+          ? await ConversationsService.list(BATCH_SIZE, undefined, false, "messages", cursor)
+          : await ConversationsService.list(BATCH_SIZE, cursor, false, "messages");
         if (cloudConvs.length === 0) break;
-        hasMore = cloudConvs.length === BATCH_SIZE;
-        before = cloudConvs[cloudConvs.length - 1].created_at;
 
         for (const cloudConv of cloudConvs) {
-          if (cloudConv.deleted_at) continue;
           const local = await window.electronAPI.getConversationByClientId?.(
             cloudConv.client_conversation_id ?? ""
           );
+
+          if (cloudConv.deleted_at) {
+            if (local) await window.electronAPI.hardDeleteConversation?.(local.id);
+            continue;
+          }
+
           if (!local || cloudConv.updated_at > local.updated_at) {
             await window.electronAPI.upsertConversationFromCloud?.(
               cloudConv as unknown as Record<string, unknown>,
@@ -421,7 +462,15 @@ class SyncService {
             );
           }
         }
+
+        if (cloudConvs.length < BATCH_SIZE) break;
+        const last = cloudConvs[cloudConvs.length - 1];
+        const next = since ? last.updated_at : last.created_at;
+        if (next === cursor) break;
+        cursor = next;
       }
+
+      localStorage.setItem("lastSyncedAt.conversations", syncStartedAt);
     } catch (err) {
       console.error("Conversation pull failed:", err);
     }
@@ -429,7 +478,27 @@ class SyncService {
 
   private async syncTranscriptions(): Promise<void> {
     await this.pushPendingTranscriptions();
+    await this.pushTranscriptionDeletes();
     await this.pullTranscriptions();
+  }
+
+  private async pushTranscriptionDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingTranscriptionDeletes?.()) ?? [];
+    const withCloudId = deletes.filter((t) => t.cloud_id);
+    if (withCloudId.length === 0) return;
+
+    for (let i = 0; i < withCloudId.length; i += TRANSCRIPTION_BATCH_SIZE) {
+      const chunk = withCloudId.slice(i, i + TRANSCRIPTION_BATCH_SIZE);
+      try {
+        const { deleted } = await TranscriptionsService.batchDelete(chunk.map((t) => t.cloud_id!));
+        for (const cloudId of deleted) {
+          const local = chunk.find((t) => t.cloud_id === cloudId);
+          if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
+        }
+      } catch (err) {
+        console.error("Transcription batch delete failed:", err);
+      }
+    }
   }
 
   private async pushPendingTranscriptions(): Promise<void> {
@@ -465,30 +534,41 @@ class SyncService {
 
   private async pullTranscriptions(): Promise<void> {
     try {
-      let before: string | undefined;
-      let hasMore = true;
+      const since = localStorage.getItem("lastSyncedAt.transcriptions") ?? undefined;
+      const syncStartedAt = new Date().toISOString();
 
-      while (hasMore) {
-        const { transcriptions: cloudTs } = await TranscriptionsService.list(
-          TRANSCRIPTION_BATCH_SIZE,
-          before
-        );
+      let cursor: string | undefined = since;
+      while (true) {
+        const { transcriptions: cloudTs } = since
+          ? await TranscriptionsService.list(TRANSCRIPTION_BATCH_SIZE, undefined, cursor)
+          : await TranscriptionsService.list(TRANSCRIPTION_BATCH_SIZE, cursor);
         if (cloudTs.length === 0) break;
-        hasMore = cloudTs.length === TRANSCRIPTION_BATCH_SIZE;
-        before = cloudTs[cloudTs.length - 1].created_at;
 
         for (const cloudT of cloudTs) {
-          if (cloudT.deleted_at) continue;
           const local = await window.electronAPI.getTranscriptionByClientId?.(
             cloudT.client_transcription_id ?? ""
           );
+
+          if (cloudT.deleted_at) {
+            if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
+            continue;
+          }
+
           if (!local) {
             await window.electronAPI.upsertTranscriptionFromCloud?.(
               cloudT as unknown as Record<string, unknown>
             );
           }
         }
+
+        if (cloudTs.length < TRANSCRIPTION_BATCH_SIZE) break;
+        const last = cloudTs[cloudTs.length - 1];
+        const next = since ? last.updated_at : last.created_at;
+        if (next === cursor) break;
+        cursor = next;
       }
+
+      localStorage.setItem("lastSyncedAt.transcriptions", syncStartedAt);
     } catch (err) {
       console.error("Transcription pull failed:", err);
     }

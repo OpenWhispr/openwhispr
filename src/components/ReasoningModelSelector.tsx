@@ -5,6 +5,7 @@ import type {
   LlamaVulkanStatus,
   VulkanGpuResult,
   LlamaVulkanDownloadProgress,
+  InferenceMode,
 } from "../types/electron";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -21,7 +22,6 @@ import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
-import { useSettingsStore } from "../stores/settingsStore";
 
 type CloudModelOption = {
   value: string;
@@ -52,6 +52,7 @@ interface ReasoningModelSelectorProps {
   setGroqApiKey: (key: string) => void;
   customReasoningApiKey?: string;
   setCustomReasoningApiKey?: (key: string) => void;
+  setReasoningMode?: (mode: InferenceMode) => void;
   mode?: "cloud" | "local";
 }
 
@@ -323,6 +324,7 @@ export default function ReasoningModelSelector({
   setGroqApiKey,
   customReasoningApiKey = "",
   setCustomReasoningApiKey,
+  setReasoningMode: setReasoningModeProp,
   mode,
 }: ReasoningModelSelectorProps) {
   const { t } = useTranslation();
@@ -646,7 +648,7 @@ export default function ReasoningModelSelector({
 
   const handleModeChange = async (newMode: "cloud" | "local") => {
     setSelectedMode(newMode);
-    useSettingsStore.getState().setReasoningMode(newMode === "local" ? "local" : "providers");
+    setReasoningModeProp?.(newMode === "local" ? "local" : "providers");
 
     if (newMode === "cloud") {
       window.electronAPI?.llamaServerStop?.();

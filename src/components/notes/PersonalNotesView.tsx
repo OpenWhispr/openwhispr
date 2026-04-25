@@ -21,7 +21,15 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "../ui/dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
+import {
+  ConfirmDialog,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
+import { useDialogs } from "../../hooks/useDialogs";
 import {
   Select,
   SelectTrigger,
@@ -131,6 +139,11 @@ export default function PersonalNotesView({
     startTranscription,
     stopTranscription,
     lockSpeaker,
+    sessionDiarizationEnabled,
+    sessionExpectedCount,
+    userTouchedStepper,
+    setSessionDiarizationEnabled,
+    setSessionExpectedCount,
   } = useMeetingTranscription();
   const recordingNoteIdRef = useRef<number | null>(null);
   const [recordingNoteId, setRecordingNoteId] = useState<number | null>(null);
@@ -160,6 +173,25 @@ export default function PersonalNotesView({
     handleConfirmRename,
     handleDeleteFolder,
   } = useFolderManagement();
+
+  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
+
+  const requestDeleteFolder = useCallback(
+    (folder: { id: number; name: string }) => {
+      const count = folderCounts[folder.id] ?? 0;
+      showConfirmDialog({
+        title: t("notes.folders.deleteTitle"),
+        description:
+          count > 0
+            ? t("notes.folders.deleteDescription", { name: folder.name, count })
+            : t("notes.folders.deleteDescriptionEmpty", { name: folder.name }),
+        confirmText: t("notes.folders.deleteConfirm"),
+        variant: "destructive",
+        onConfirm: () => handleDeleteFolder(folder.id),
+      });
+    },
+    [folderCounts, handleDeleteFolder, showConfirmDialog, t]
+  );
 
   const activeNote = notes.find((n) => n.id === activeNoteId) ?? null;
 
@@ -480,10 +512,12 @@ export default function PersonalNotesView({
 
   // Pre-warm WebSocket when entering meeting mode (before user hits record)
   useEffect(() => {
-    if (isMeetingMode) {
-      prepareTranscription();
-    }
-  }, [isMeetingMode, prepareTranscription]);
+    if (!isMeetingMode) return;
+    prepareTranscription();
+    return () => {
+      window.electronAPI?.meetingTranscriptionCancel?.();
+    };
+  }, [isMeetingMode, activeNoteId, prepareTranscription]);
 
   useEffect(() => {
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
@@ -743,7 +777,7 @@ export default function PersonalNotesView({
                             <DropdownMenuItem
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeleteFolder(folder.id);
+                                requestDeleteFolder(folder);
                               }}
                               className="text-xs gap-2 rounded-md px-2 py-1 text-destructive focus:text-destructive focus:bg-destructive/10"
                             >
@@ -940,6 +974,11 @@ export default function PersonalNotesView({
               }
               onLiveSpeakerLock={lockSpeaker}
               liveTranscript={isActiveNoteRecording ? realtimeTranscript : ""}
+              sessionDiarizationEnabled={sessionDiarizationEnabled}
+              sessionExpectedCount={sessionExpectedCount}
+              userTouchedStepper={userTouchedStepper}
+              onSetSessionDiarizationEnabled={setSessionDiarizationEnabled}
+              onSetSessionExpectedCount={setSessionExpectedCount}
               folderName={activeFolderName}
               calendarEventName={calendarEventName}
               folders={folders}
@@ -1229,6 +1268,17 @@ export default function PersonalNotesView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => !open && hideConfirmDialog()}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        onConfirm={confirmDialog.onConfirm}
+        variant={confirmDialog.variant}
+      />
     </div>
   );
 }

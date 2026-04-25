@@ -28,7 +28,22 @@ const {
 } = require("electron");
 const path = require("path");
 const http = require("http");
+const tls = require("tls");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
+
+// Extend Node's TLS trust with the OS store so ws and https.get see corporate
+// CAs that Chromium already trusts.
+try {
+  const currentCAs = tls.getCACertificates();
+  const systemCAs = tls.getCACertificates("system");
+  if (systemCAs?.length) {
+    tls.setDefaultCACertificates([...currentCAs, ...systemCAs]);
+  }
+} catch (err) {
+  require("./src/helpers/debugLogger").warn("System CA merge failed; using existing CA list", {
+    error: err?.message,
+  });
+}
 
 const VALID_CHANNELS = new Set(["development", "staging", "production"]);
 const DEFAULT_OAUTH_PROTOCOL_BY_CHANNEL = {

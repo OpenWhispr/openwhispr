@@ -14,7 +14,17 @@
       "path": "儲存位置",
       "changePath": "變更位置",
       "rebuild": "重建所有檔案",
-      "rebuildDescription": "將所有筆記和逐字稿重新同步到磁碟"
+      "rebuildDescription": "將所有筆記和逐字稿重新同步到磁碟",
+      "rebuildError": {
+        "title": "重建失敗",
+        "description": "無法重建筆記檔案。請確認功能已啟用，且資料夾可寫入。"
+      }
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "辨識並標記發言者",
+        "description": "關閉後，逐字稿會顯示「你」和「其他人」"
+      }
     }
   },
   "tray": {
@@ -178,7 +188,7 @@
       "systemAudioDescription": "轉錄會議、通話、講座、播客和其他系統音訊。",
       "optional": "可選",
       "recommended": "建議",
-      "accessibilityTroubleshooting": "未偵測到？請在系統設定的輔助使用中移除 OpenWhispr，然後重新加入並開啟。您可以跳過此步驟繼續 — 文字將複製到剪貼簿而非自動貼上。"
+      "accessibilityTroubleshooting": "在系統設定 → 輔助使用中，將 OpenWhispr 的開關關閉再重新開啟。如果無效，請將 OpenWhispr 從清單中移除後重新加入。還是不行？請寄信至 support@openwhispr.com。"
     },
     "transcription": {
       "title": "轉錄設定",
@@ -275,8 +285,8 @@
       "rawTranscript": "原始轉錄"
     },
     "cloudMigration": {
-      "title": "歡迎使用 OpenWhispr Pro",
-      "description": "你的 7 天免費試用已啟用！我們已將轉錄切換至 OpenWhispr Cloud，提供更快、更準確的結果。你之前的設定已儲存，隨時可在設定中切換回來。",
+      "title": "歡迎使用 OpenWhispr Cloud",
+      "description": "我們已將轉錄切換至 OpenWhispr Cloud，提供更快、更準確的結果。你之前的設定已儲存，隨時可在設定中切換回來。",
       "viewSettings": "查看設定"
     },
     "aiCta": {
@@ -888,7 +898,7 @@
     "groups": {
       "account": "帳戶",
       "app": "應用程式",
-      "speechAi": "語音與 AI",
+      "aiModels": "AI 模型",
       "system": "系統"
     },
     "sections": {
@@ -900,10 +910,6 @@
         "description": "方案、用量與帳單",
         "label": "方案與帳單"
       },
-      "apiKeys": {
-        "label": "API 金鑰",
-        "description": "管理 API 存取"
-      },
       "general": {
         "description": "外觀、音效與啟動",
         "label": "偏好設定"
@@ -912,13 +918,13 @@
         "description": "聽寫快捷鍵與啟用模式",
         "label": "快捷鍵"
       },
-      "transcription": {
-        "description": "語音轉文字引擎",
-        "label": "轉錄"
+      "speechToText": {
+        "description": "聽寫與筆記錄音引擎",
+        "label": "語音轉文字"
       },
-      "intelligence": {
-        "description": "AI 模型、助理與提示詞",
-        "label": "智慧功能"
+      "llms": {
+        "description": "用於清理、筆記格式化和聊天的模型",
+        "label": "語言模型"
       },
       "privacyData": {
         "description": "隱私、權限與資料分析",
@@ -927,10 +933,6 @@
       "system": {
         "description": "更新、儲存與開發者工具",
         "label": "系統"
-      },
-      "agentMode": {
-        "label": "智慧助手模式",
-        "description": "語音聊天助手"
       }
     },
     "title": "設定"
@@ -1131,20 +1133,12 @@
         "bulletPoints": "Hey {{agentName}}，將這個轉換成要點列表"
       }
     },
-    "apiKeys": {
-      "title": "API 金鑰",
-      "signInRequired": "需要登入",
-      "signInRequiredDescription": "登入以管理您的 API 金鑰。",
-      "proRequired": "API 存取需要付費方案",
-      "proRequiredDescription": "升級至 Pro 以建立 API 金鑰並將 OpenWhispr 整合到您的工作流程中。",
-      "viewPlans": "查看方案"
-    },
     "aiModels": {
       "customSetup": "自訂設定",
       "customSetupDescription": "使用你自己的供應商和 API Key。",
       "description": "整理轉錄文字、處理指令、修正錯誤，同時保留你的語調。",
       "enableTextCleanup": "啟用文字整理",
-      "enableTextCleanupDescription": "AI 自動提升轉錄品質",
+      "enableTextCleanupDescription": "使用 AI 格式化文字並執行語音指令",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "雲端供應商",
@@ -1471,6 +1465,24 @@
       "description": "檢視、自訂和測試用於文字整理和指令偵測的統一系統提示詞",
       "title": "提示詞工作室"
     },
+    "speechToText": {
+      "title": "語音轉文字",
+      "description": "為聽寫和筆記錄音選擇一個引擎",
+      "tabs": {
+        "dictation": "聽寫",
+        "noteRecording": "筆記錄音"
+      },
+      "selfHostedStreamingNote": "需要支援串流轉錄的伺服器。"
+    },
+    "llms": {
+      "title": "語言模型",
+      "description": "設定用於聽寫清理、筆記格式化和聊天的模型",
+      "tabs": {
+        "dictationCleanup": "聽寫清理",
+        "noteFormatting": "筆記格式化",
+        "chatIntelligence": "聊天智能"
+      }
+    },
     "transcription": {
       "customSetup": "自訂設定",
       "customSetupDescription": "使用你自己的供應商和 API Key。",
@@ -1707,7 +1719,11 @@
       "folderName": "資料夾名稱",
       "couldNotCreate": "無法建立資料夾",
       "couldNotRename": "無法重新命名資料夾",
-      "couldNotDelete": "無法刪除資料夾"
+      "couldNotDelete": "無法刪除資料夾",
+      "deleteTitle": "刪除資料夾？",
+      "deleteDescription": "這將永久刪除「{{name}}」及其 {{count}} 則筆記。此操作無法復原。",
+      "deleteDescriptionEmpty": "這將永久刪除「{{name}}」。此操作無法復原。",
+      "deleteConfirm": "刪除資料夾和筆記"
     },
     "list": {
       "title": "筆記",
@@ -1916,7 +1932,19 @@
       "nameOrEmailPlaceholder": "輸入姓名或電子郵件",
       "addContact": "新增聯絡人",
       "save": "儲存",
-      "cancel": "取消"
+      "cancel": "取消",
+      "pill": {
+        "identifying": "正在辨識發言者",
+        "notLabeled": "發言者未標記",
+        "finalizing": "正在完成發言者辨識…",
+        "justYou": "只有你",
+        "defaultingHint": "預設 1 位其他人",
+        "toggleAria": "切換此錄音的發言者辨識",
+        "incAria": "增加預期發言人數",
+        "decAria": "減少預期發言人數",
+        "othersInCall_one": "通話中還有 {{count}} 人",
+        "othersInCall_other": "通話中還有 {{count}} 人"
+      }
     }
   },
   "dictionary": {
@@ -2000,6 +2028,12 @@
     "contactSupport": "聯絡支援",
     "submitBug": "提交 Bug"
   },
+  "tccReset": {
+    "title": "重新授予 OpenWhispr 權限",
+    "description": "抱歉造成不便。OpenWhispr 已遷移至新的 Apple Developer 帳號，macOS 已清除您的權限。請重新授予這些權限。",
+    "done": "完成",
+    "remindLater": "稍後提醒我"
+  },
   "apiKeyInput": {
     "placeholder": "輸入你的 API Key",
     "label": "API Key",
@@ -2062,8 +2096,6 @@
   },
   "agentMode": {
     "settings": {
-      "title": "智慧助手模式",
-      "description": "使用獨立AI模型的語音聊天助手",
       "enabled": "啟用智慧助手模式",
       "enabledDescription": "使用獨立熱鍵開啟語音聊天覆蓋層",
       "hotkey": "助手熱鍵",
@@ -2154,6 +2186,31 @@
       "systemAudioRequired": "需要系統音訊權限",
       "systemAudioDescription": "要轉錄會議，OpenWhispr 需要系統音訊權限來錄製其他參與者的音訊。我們絕不會錄製您的螢幕。您將被引導至系統設定以啟用此權限。",
       "openSettings": "打開系統設定"
+    },
+    "sections": {
+      "calendar": "行事曆",
+      "api": "API",
+      "mcp": "MCP"
+    },
+    "api": {
+      "title": "API 金鑰",
+      "description": "管理用於程式存取的 API 金鑰",
+      "proRequired": "升級到付費方案以存取 API",
+      "manage": "管理金鑰",
+      "viewPlans": "查看方案",
+      "dialogTitle": "API 金鑰"
+    },
+    "mcp": {
+      "title": "將筆記帶到你的 AI 工具中",
+      "description": "在 Claude、ChatGPT 和 Cursor 中與你的筆記一起聊天、搜尋和工作。",
+      "step1": "在你的 AI 工具中，使用公開 URL 新增 OpenWhispr MCP",
+      "step2": "在上方建立具有所需權限的 API 金鑰。",
+      "step3": "將金鑰貼上為 Authorization 標頭以連線。",
+      "learnMore": "瞭解更多",
+      "viewPlans": "查看方案",
+      "copyUrl": "複製 MCP URL",
+      "proRequired": "升級到付費方案，以將 OpenWhispr 連接到 Claude、ChatGPT 和 Cursor。",
+      "copied": "已複製"
     },
     "plan": {
       "title": "您的方案",
@@ -2337,5 +2394,11 @@
     "copy": "複製",
     "copied": "已複製",
     "waitingForInput": "說點什麼..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "你",
+      "others": "其他人"
+    }
   }
 }

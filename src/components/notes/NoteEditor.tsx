@@ -93,6 +93,11 @@ interface NoteEditorProps {
   meetingSystemPartialSpeakerName?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
   liveTranscript?: string;
+  sessionDiarizationEnabled?: boolean;
+  sessionExpectedCount?: number;
+  userTouchedStepper?: boolean;
+  onSetSessionDiarizationEnabled?: (enabled: boolean) => void;
+  onSetSessionExpectedCount?: (count: number) => void;
   folderName?: string | null;
   calendarEventName?: string | null;
   folders?: FolderItem[];
@@ -124,6 +129,11 @@ export default function NoteEditor({
   meetingSystemPartialSpeakerName,
   onLiveSpeakerLock,
   liveTranscript,
+  sessionDiarizationEnabled,
+  sessionExpectedCount,
+  userTouchedStepper,
+  onSetSessionDiarizationEnabled,
+  onSetSessionExpectedCount,
   folderName,
   calendarEventName,
   folders,
@@ -849,6 +859,11 @@ export default function NoteEditor({
                 participants={parsedParticipants}
                 isRecording={isRecording}
                 isDiarizing={isDiarizing}
+                sessionDiarizationEnabled={sessionDiarizationEnabled}
+                sessionExpectedCount={sessionExpectedCount}
+                userTouchedStepper={userTouchedStepper}
+                onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
+                onSetSessionExpectedCount={onSetSessionExpectedCount}
                 onMapSpeaker={handleMapSpeaker}
                 onConfirmSuggestion={handleConfirmSuggestion}
                 onDismissSuggestion={handleDismissSuggestion}

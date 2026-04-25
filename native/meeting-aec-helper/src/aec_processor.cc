@@ -31,9 +31,11 @@ AecProcessor::AecProcessor(int sample_rate_hz)
   webrtc::AudioProcessing::Config config;
   config.pipeline.maximum_internal_processing_rate = kProcessingSampleRate;
   config.echo_canceller.enabled = true;
-  config.echo_canceller.enforce_high_pass_filtering = false;
-  config.high_pass_filter.enabled = false;
-  config.noise_suppression.enabled = false;
+  config.echo_canceller.enforce_high_pass_filtering = true;
+  config.high_pass_filter.enabled = true;
+  config.noise_suppression.enabled = true;
+  config.noise_suppression.level =
+      webrtc::AudioProcessing::Config::NoiseSuppression::Level::kModerate;
   config.transient_suppression.enabled = false;
   config.gain_controller1.enabled = false;
   config.gain_controller2.enabled = false;

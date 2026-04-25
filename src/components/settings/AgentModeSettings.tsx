@@ -2,7 +2,6 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Cloud, Key, Cpu, Network, Building2 } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { HotkeyInput } from "../ui/HotkeyInput";
 import { Toggle } from "../ui/toggle";
 import {
   SettingsRow,
@@ -15,18 +14,27 @@ import type { InferenceModeOption } from "../ui/SettingsSection";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
 import SelfHostedPanel from "../SelfHostedPanel";
-import { validateHotkeyForSlot } from "../../utils/hotkeyValidation";
 import type { InferenceMode } from "../../types/electron";
+import { modelRegistry, isEnterpriseProvider } from "../../models/ModelRegistry";
+
+function isProviderValidForMode(provider: string, mode: InferenceMode): boolean {
+  switch (mode) {
+    case "providers":
+      return modelRegistry.getCloudProviders().some((p) => p.id === provider);
+    case "local":
+      return modelRegistry.getAllProviders().some((p) => p.id === provider);
+    case "enterprise":
+      return isEnterpriseProvider(provider);
+    default:
+      return true;
+  }
+}
 
 export default function AgentModeSettings() {
   const { t } = useTranslation();
   const {
     agentEnabled,
     setAgentEnabled,
-    agentKey,
-    setAgentKey,
-    dictationKey,
-    meetingKey,
     agentModel,
     setAgentModel,
     agentProvider,
@@ -53,19 +61,6 @@ export default function AgentModeSettings() {
     cloudReasoningBaseUrl,
     setCloudReasoningBaseUrl,
   } = useSettingsStore();
-
-  const validateAgentHotkey = useCallback(
-    (hotkey: string) =>
-      validateHotkeyForSlot(
-        hotkey,
-        {
-          "settingsPage.general.hotkey.title": dictationKey,
-          "settingsPage.general.meetingHotkey.title": meetingKey,
-        },
-        t
-      ),
-    [dictationKey, meetingKey, t]
-  );
 
   const startOnboarding = useCallback(() => {
     localStorage.setItem("pendingCloudMigration", "true");
@@ -117,6 +112,10 @@ export default function AgentModeSettings() {
     if (mode === agentInferenceMode) return;
     setAgentInferenceMode(mode);
     setCloudAgentMode(mode === "openwhispr" ? "openwhispr" : "byok");
+    if (!isProviderValidForMode(agentProvider, mode)) {
+      setAgentProvider("");
+      setAgentModel("");
+    }
     if (mode === "openwhispr" || mode === "self-hosted" || mode === "enterprise") {
       window.electronAPI?.llamaServerStop?.();
     }
@@ -140,17 +139,13 @@ export default function AgentModeSettings() {
       setGroqApiKey={setGroqApiKey}
       customReasoningApiKey={customReasoningApiKey}
       setCustomReasoningApiKey={setCustomReasoningApiKey}
+      setReasoningMode={setAgentInferenceMode}
       mode={mode}
     />
   );
 
   return (
     <div className="space-y-6">
-      <SectionHeader
-        title={t("agentMode.settings.title")}
-        description={t("agentMode.settings.description")}
-      />
-
       <SettingsPanel>
         <SettingsPanelRow>
           <SettingsRow
@@ -164,14 +159,6 @@ export default function AgentModeSettings() {
 
       {agentEnabled && (
         <>
-          <div>
-            <SectionHeader
-              title={t("agentMode.settings.hotkey")}
-              description={t("agentMode.settings.hotkeyDescription")}
-            />
-            <HotkeyInput value={agentKey} onChange={setAgentKey} validate={validateAgentHotkey} />
-          </div>
-
           <InferenceModeSelector
             modes={agentModes}
             activeMode={agentInferenceMode}
@@ -203,17 +190,13 @@ export default function AgentModeSettings() {
               title={t("agentMode.settings.systemPrompt")}
               description={t("agentMode.settings.systemPromptDescription")}
             />
-            <SettingsPanel>
-              <SettingsPanelRow>
-                <textarea
-                  value={agentSystemPrompt}
-                  onChange={(e) => setAgentSystemPrompt(e.target.value)}
-                  placeholder={t("agentMode.settings.systemPromptPlaceholder")}
-                  rows={4}
-                  className="w-full text-xs bg-transparent border border-border/50 rounded-md px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary/30 placeholder:text-muted-foreground/50"
-                />
-              </SettingsPanelRow>
-            </SettingsPanel>
+            <textarea
+              value={agentSystemPrompt}
+              onChange={(e) => setAgentSystemPrompt(e.target.value)}
+              placeholder={t("agentMode.settings.systemPromptPlaceholder")}
+              rows={4}
+              className="w-full text-xs bg-transparent border border-border/50 rounded-md px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary/30 placeholder:text-muted-foreground/50"
+            />
           </div>
         </>
       )}
