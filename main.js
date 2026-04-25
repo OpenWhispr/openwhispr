@@ -1002,16 +1002,18 @@ async function startApp() {
     const {
       isGlobeLikeHotkey: isGlobeLike,
       isModifierOnlyHotkey,
+      hasNonStandardKey,
     } = require("./src/helpers/hotkeyManager");
     const isValidHotkey = (hotkey) => hotkey && !isGlobeLike(hotkey);
 
     const isRightSideMod = (hotkey) =>
       /^Right(Control|Ctrl|Alt|Option|Shift|Super|Win|Meta|Command|Cmd)$/i.test(hotkey);
 
+
     const needsNativeListener = (hotkey, mode) => {
       if (!isValidHotkey(hotkey)) return false;
       if (mode === "push") return true;
-      return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey);
+      return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey) || hasNonStandardKey(hotkey);
     };
 
     windowsKeyManager.on("key-down", (_key) => {
