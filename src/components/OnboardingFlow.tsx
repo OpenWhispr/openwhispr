@@ -307,6 +307,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     localStorage.setItem("onboardingCompleted", "true");
     localStorage.setItem("skipAuth", skippedAuth.toString());
 
+    // Fresh install: write the bundle-migration sentinel so the
+    // PostMigrationOnboarding modal doesn't fire on next launch.
+    // Migrating users skip onboarding entirely (their flag carries over
+    // via productName-keyed userData), so they never reach this code.
+    void window.electronAPI?.markBundleMigrated?.();
+
     // Non-signed-in users in cloud mode default to BYOK to avoid
     // "OpenWhispr Cloud requires sign-in" errors.
     if (!isSignedIn && !useLocalWhisper) {
