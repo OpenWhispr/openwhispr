@@ -451,28 +451,40 @@ app.on("open-url", (event, url) => {
   }
 });
 
-// Extract the session verifier from the deep link and navigate the control
-// panel to its app URL with the verifier param so the Neon Auth SDK can
-// read it from window.location.search and complete authentication.
-function navigateControlPanelWithVerifier(verifier) {
-  if (!verifier) return;
+// Inject the Better Auth session cookie into Electron's session, then reload
+// the control panel so the renderer's authClient picks up the new session.
+async function applySessionTokenAndRefresh(token) {
+  if (!token) return;
   if (!isLiveWindow(windowManager?.controlPanelWindow)) return;
 
-  const appUrl = DevServerManager.getAppUrl(true);
+  try {
+    await session.defaultSession.cookies.set({
+      url: "https://auth.openwhispr.com",
+      name: "__Secure-neon-auth.session_token",
+      value: token,
+      domain: ".openwhispr.com",
+      path: "/",
+      secure: true,
+      httpOnly: true,
+      sameSite: "lax",
+    });
+  } catch (err) {
+    if (debugLogger) debugLogger.error("Failed to set OAuth session cookie:", err);
+    return;
+  }
 
+  const appUrl = DevServerManager.getAppUrl(true);
   if (appUrl) {
-    const separator = appUrl.includes("?") ? "&" : "?";
-    const urlWithVerifier = `${appUrl}${separator}neon_auth_session_verifier=${encodeURIComponent(verifier)}`;
-    windowManager.controlPanelWindow.loadURL(urlWithVerifier);
+    windowManager.controlPanelWindow.loadURL(appUrl);
   } else {
     const fileInfo = DevServerManager.getAppFilePath(true);
-    if (!fileInfo) return;
-    fileInfo.query.neon_auth_session_verifier = verifier;
-    windowManager.controlPanelWindow.loadFile(fileInfo.path, { query: fileInfo.query });
+    if (fileInfo) {
+      windowManager.controlPanelWindow.loadFile(fileInfo.path, { query: fileInfo.query });
+    }
   }
 
   if (debugLogger) {
-    debugLogger.debug("Navigating control panel with OAuth verifier", {
+    debugLogger.debug("Applied OAuth session cookie and reloaded control panel", {
       appChannel: APP_CHANNEL,
       oauthProtocol: OAUTH_PROTOCOL,
     });
@@ -484,9 +496,9 @@ function navigateControlPanelWithVerifier(verifier) {
 function handleOAuthDeepLink(deepLinkUrl) {
   try {
     const parsed = new URL(deepLinkUrl);
-    const verifier = parsed.searchParams.get("neon_auth_session_verifier");
-    if (!verifier) return;
-    navigateControlPanelWithVerifier(verifier);
+    const token = parsed.searchParams.get("token");
+    if (!token) return;
+    void applySessionTokenAndRefresh(token);
   } catch (err) {
     if (debugLogger) debugLogger.error("Failed to handle OAuth deep link:", err);
   }
@@ -550,11 +562,11 @@ function startAuthBridgeServer() {
       return;
     }
 
-    let verifier = requestUrl.searchParams.get("neon_auth_session_verifier");
-    if (!verifier && req.method === "POST") {
+    let token = requestUrl.searchParams.get("token");
+    if (!token && req.method === "POST") {
       try {
         const body = await parseJsonBody(req);
-        verifier = body?.neon_auth_session_verifier || body?.verifier || null;
+        token = body?.token || null;
       } catch (error) {
         res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
         res.end(error.message || "Invalid request");
@@ -562,13 +574,13 @@ function startAuthBridgeServer() {
       }
     }
 
-    if (!verifier) {
+    if (!token) {
       res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
-      res.end("Missing neon_auth_session_verifier");
+      res.end("Missing token");
       return;
     }
 
-    navigateControlPanelWithVerifier(verifier);
+    void applySessionTokenAndRefresh(token);
 
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(

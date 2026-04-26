@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { resetPassword, NEON_AUTH_URL, authClient } from "../lib/neonAuth";
+import { resetPassword, AUTH_URL, authClient } from "../lib/auth";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { AlertCircle, ArrowLeft, Check, Loader2 } from "lucide-react";
@@ -51,7 +51,7 @@ export default function ResetPasswordView({ token, onSuccess, onBack }: ResetPas
     [password, confirmPassword, token, t]
   );
 
-  if (!NEON_AUTH_URL || !authClient) {
+  if (!AUTH_URL || !authClient) {
     return (
       <div className="space-y-3">
         <div className="bg-warning/5 p-2.5 rounded border border-warning/20">

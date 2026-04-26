@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { authClient, isWithinGracePeriod } from "../lib/neonAuth";
+import { authClient, isWithinGracePeriod } from "../lib/auth";
 import logger from "../utils/logger";
 import { useSettingsStore } from "../stores/settingsStore";
 
