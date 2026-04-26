@@ -244,6 +244,7 @@ const ParakeetManager = require("./src/helpers/parakeet");
 const DiarizationManager = require("./src/helpers/diarization");
 const TrayManager = require("./src/helpers/tray");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
+const CliBridge = require("./src/helpers/cliBridge");
 const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
@@ -285,6 +286,7 @@ let linuxPortalAudioManager = null;
 let meetingAecManager = null;
 let qdrantManager = null;
 let ipcHandlers = null;
+let cliBridge = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 
@@ -596,6 +598,12 @@ async function startApp() {
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
   startAuthBridgeServer();
+
+  cliBridge = new CliBridge(ipcHandlers);
+  cliBridge.start().catch((err) => {
+    debugLogger.error("CLI bridge failed to start", { error: err.message });
+    cliBridge = null;
+  });
 
   // Electron's file:// sends no Origin header, which Neon Auth rejects.
   session.defaultSession.webRequest.onBeforeSendHeaders(
@@ -1320,6 +1328,10 @@ if (gotSingleInstanceLock) {
     if (authBridgeServer) {
       authBridgeServer.close();
       authBridgeServer = null;
+    }
+    if (cliBridge) {
+      cliBridge.stop().catch(() => {});
+      cliBridge = null;
     }
     if (windowManager && isLiveWindow(windowManager.agentWindow)) {
       windowManager.agentWindow.destroy();
