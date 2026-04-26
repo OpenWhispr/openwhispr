@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Download, RefreshCw, Loader2, AlertTriangle, Zap, ChevronLeft } from "lucide-react";
 import UpgradePrompt from "./UpgradePrompt";
-import TccResetModal from "./TccResetModal";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
@@ -25,11 +24,7 @@ import ControlPanelSidebar, { type ControlPanelView } from "./ControlPanelSideba
 import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
-import {
-  isAccessibilitySkipped,
-  isTccResetModalSeen,
-  TCC_RESET_MODAL_SEEN_KEY,
-} from "../utils/permissions";
+import { isAccessibilitySkipped } from "../utils/permissions";
 import { setActiveNoteId, setActiveFolderId, initializeNotes } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import HistoryView from "./HistoryView";
@@ -52,7 +47,6 @@ export default function ControlPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
-  const [showTccReset, setShowTccReset] = useState(false);
   const [showPostMigration, setShowPostMigration] = useState(false);
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
@@ -133,18 +127,6 @@ export default function ControlPanel() {
     window.electronAPI?.noteFilesSetEnabled?.(true, noteFilesPath || undefined, {
       skipRebuild: true,
     });
-  }, []);
-
-  useEffect(() => {
-    if (platform !== "darwin") return;
-    if (isTccResetModalSeen()) return;
-    if (localStorage.getItem("onboardingCompleted") !== "true") return;
-    setShowTccReset(true);
-  }, []);
-
-  const dismissTccResetPermanently = useCallback(() => {
-    localStorage.setItem(TCC_RESET_MODAL_SEEN_KEY, "true");
-    setShowTccReset(false);
   }, []);
 
   useEffect(() => {
@@ -309,7 +291,6 @@ export default function ControlPanel() {
   useEffect(() => {
     const cleanup = window.electronAPI?.onAccessibilityMissing?.(async () => {
       if (isAccessibilitySkipped()) return;
-      if (!isTccResetModalSeen()) return;
       const migration = await window.electronAPI?.getPostMigrationState?.();
       if (migration?.justMigrated) return;
       setSettingsSection("privacyData");
@@ -605,12 +586,6 @@ export default function ControlPanel() {
         onOpenChange={setShowUpgradePrompt}
         wordsUsed={limitData?.wordsUsed}
         limit={limitData?.limit}
-      />
-
-      <TccResetModal
-        open={showTccReset}
-        onOpenChange={setShowTccReset}
-        onDone={dismissTccResetPermanently}
       />
 
       <PostMigrationOnboarding

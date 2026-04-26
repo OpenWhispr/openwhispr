@@ -2033,12 +2033,6 @@
     "contactSupport": "サポートに問い合わせ",
     "submitBug": "バグを報告"
   },
-  "tccReset": {
-    "title": "OpenWhispr の権限を再付与してください",
-    "description": "ご不便をおかけしてすみません。OpenWhispr が新しい Apple Developer アカウントに移行したため、macOS が権限をリセットしました。お手数ですが、もう一度権限を付与してください。",
-    "done": "完了",
-    "remindLater": "後で通知"
-  },
   "postMigration": {
     "title": "OpenWhispr へおかえりなさい",
     "description": "ノートと設定は以前のバージョンから引き継がれています。ただし macOS はこれを新しいアプリとして扱うため、いくつかの権限を改めて付与していただく必要があります。",

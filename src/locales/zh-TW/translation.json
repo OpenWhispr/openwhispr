@@ -2028,12 +2028,6 @@
     "contactSupport": "聯絡支援",
     "submitBug": "提交 Bug"
   },
-  "tccReset": {
-    "title": "重新授予 OpenWhispr 權限",
-    "description": "抱歉造成不便。OpenWhispr 已遷移至新的 Apple Developer 帳號，macOS 已清除您的權限。請重新授予這些權限。",
-    "done": "完成",
-    "remindLater": "稍後提醒我"
-  },
   "postMigration": {
     "title": "歡迎回到 OpenWhispr",
     "description": "您的筆記與設定已從先前版本保留下來。不過 macOS 會將此視為一款全新的應用程式，因此需要您重新授予部分權限。",

@@ -2129,12 +2129,6 @@
     "contactSupport": "Contact Support",
     "submitBug": "Submit Bug"
   },
-  "tccReset": {
-    "title": "Re-grant OpenWhispr's permissions",
-    "description": "Sorry about this. OpenWhispr moved to a new Apple Developer account and macOS cleared your permissions. Please grant them again.",
-    "done": "Done",
-    "remindLater": "Remind Me Later"
-  },
   "postMigration": {
     "title": "Welcome back to OpenWhispr",
     "description": "Your notes and settings carried over from the previous version. macOS treats this as a new app though, so a few permissions need to be granted again.",
