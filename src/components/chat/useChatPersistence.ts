@@ -32,6 +32,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     async (title: string, noteId?: number | null): Promise<number> => {
       const conv = await window.electronAPI?.createAgentConversation?.(title, noteId ?? undefined);
       const id = conv?.id ?? 0;
+      conversationIdRef.current = id;
       setConversationId(id);
       options.onConversationCreated?.(id, title);
       return id;
@@ -42,6 +43,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
   const loadConversation = useCallback(async (id: number) => {
     const conv = await window.electronAPI?.getAgentConversation?.(id);
     if (!conv) return;
+    conversationIdRef.current = id;
     setConversationId(id);
     const loaded: Message[] = conv.messages.map((m) => {
       const parsed = m.metadata ? tryParseMetadata(m.metadata) : undefined;
@@ -76,6 +78,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
 
   const handleNewChat = useCallback(() => {
     setMessages([]);
+    conversationIdRef.current = null;
     setConversationId(null);
   }, []);
 

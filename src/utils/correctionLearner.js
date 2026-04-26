@@ -28,7 +28,7 @@ function editDistance(a, b) {
 function tokenize(text) {
   return text
     .split(/\s+/)
-    .map((w) => w.replace(/^[^\w]+|[^\w]+$/g, ""))
+    .map((w) => w.replace(/^[^\p{L}\p{N}_]+|[^\p{L}\p{N}_]+$/gu, ""))
     .filter((w) => w.length > 0);
 }
 

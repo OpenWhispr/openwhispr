@@ -1964,6 +1964,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
+      // Realtime WS is OpenAI-only — other providers fall through to HTTP.
+      if ((s.cloudTranscriptionProvider || "openai") !== "openai") return false;
       if (s.cloudTranscriptionMode === "byok") return !!s.openaiApiKey;
       if (s.cloudTranscriptionMode === "openwhispr") return !!(isSignedInOverride ?? s.isSignedIn);
       return false;
