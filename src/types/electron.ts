@@ -767,6 +767,8 @@ declare global {
       downloadUpdate: () => Promise<UpdateResult>;
       installUpdate: () => Promise<UpdateResult>;
       getAppVersion: () => Promise<AppVersionResult>;
+      getPostMigrationState: () => Promise<{ justMigrated: boolean }>;
+      markBundleMigrated: () => Promise<void>;
       getUpdateStatus: () => Promise<UpdateStatusResult>;
       getUpdateInfo: () => Promise<UpdateInfoResult | null>;
 

@@ -9,7 +9,6 @@ import WindowControls from "./components/WindowControls.tsx";
 import { Card, CardContent } from "./components/ui/card.tsx";
 import { useAuth } from "./hooks/useAuth";
 import { useTheme } from "./hooks/useTheme";
-import { TCC_RESET_MODAL_SEEN_KEY } from "./utils/permissions";
 
 const ControlPanel = React.lazy(() => import("./components/ControlPanel.tsx"));
 const OnboardingFlow = React.lazy(() => import("./components/OnboardingFlow.tsx"));
@@ -72,7 +71,6 @@ function MainApp() {
 
     if (isReturningUser) {
       localStorage.setItem("onboardingCompleted", "true");
-      localStorage.setItem(TCC_RESET_MODAL_SEEN_KEY, "true");
     }
 
     const resolved = localStorage.getItem("onboardingCompleted") === "true";
@@ -99,7 +97,6 @@ function MainApp() {
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
     localStorage.setItem("onboardingCompleted", "true");
-    localStorage.setItem("tccResetModalSeen_1_6_11", "true");
   };
 
   if (isAgentPanel) {

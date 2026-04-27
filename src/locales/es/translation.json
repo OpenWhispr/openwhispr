@@ -2081,9 +2081,9 @@
     "contactSupport": "Contactar soporte",
     "submitBug": "Reportar un error"
   },
-  "tccReset": {
-    "title": "Vuelve a conceder los permisos de OpenWhispr",
-    "description": "Perdona las molestias. OpenWhispr se ha trasladado a una nueva cuenta de Apple Developer y macOS ha borrado tus permisos. Vuelve a concederlos, por favor.",
+  "postMigration": {
+    "title": "Te damos la bienvenida de nuevo a OpenWhispr",
+    "description": "Tus notas y ajustes se han trasladado desde la versión anterior. Eso sí, macOS lo trata como una app nueva, así que tendrás que volver a conceder algunos permisos.",
     "done": "Hecho",
     "remindLater": "Recordármelo más tarde"
   },

@@ -1,5 +1,5 @@
 {
-  "appId": "com.herotools.openwispr",
+  "appId": "com.gizmolabs.openwhispr",
   "afterPack": "scripts/afterPack.js",
   "productName": "OpenWhispr",
   "protocols": {

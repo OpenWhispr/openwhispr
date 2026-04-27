@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.6.11] - 2026-04-22
+## [1.7.0] - 2026-04-26
 
 ### Added
 
+- **Bundle ID Migration to Gizmo Labs** (macOS/Windows): App identifier renamed from `com.herotools.openwispr` to `com.gizmolabs.openwhispr` to align with the new legal entity (Gizmo Labs Inc.) and fix the long-standing typo. Existing notes, settings, API keys, and downloaded models carry over automatically on first launch (userData path is keyed by `productName`, not bundle ID). Auto-update from 1.6.x cannot reach this release — Squirrel.Mac enforces `CFBundleIdentifier` matching and the Team ID change in Gizmo Labs signing already broke the cryptographic update chain. Users must manually re-download from openwhispr.com/download
+- **Post-Migration Onboarding** (macOS): One-time modal walks returning users through re-granting Microphone, Accessibility, and System Audio after the bundle rename. Detected via a sentinel file (`.bundle-migrated`) in userData; reuses the existing `PermissionsSection` and live-polling hooks. Fresh installs write the sentinel during onboarding completion so the modal never fires for new users
 - **Interoperable Cloud Streaming Providers**: Meeting recording now supports AssemblyAI Universal-3 Pro, Deepgram, and OpenAI Realtime as interchangeable cloud streaming backends. Provider availability is server-authoritative via the `NOTE_RECORDING_PROVIDERS` env var on the API; desktop picks the active provider from the catalog returned by `/api/note-recording-config`
 - **Acoustic VAD Gate for Meeting Mic**: Drops system-dominant microphone chunks using RMS/peak thresholds against a rolling reference window, preventing cross-language hallucinations from speaker bleed into the mic
 - **Peak Escape**: Soft exception to the VAD gate when the mic peak spikes cleanly over the system-speaking window, so the user's voice onset is never clipped mid-syllable
