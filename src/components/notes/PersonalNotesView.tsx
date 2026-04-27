@@ -61,6 +61,7 @@ import {
   initializeNotes,
   setActiveNoteId,
   setActiveFolderId,
+  removeNote,
 } from "../../stores/noteStore";
 import { useMeetingTranscription } from "../../hooks/useMeetingTranscription";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
@@ -407,11 +408,15 @@ export default function PersonalNotesView({
   const handleMoveToFolder = useCallback(
     async (noteId: number, folderId: number) => {
       await window.electronAPI.updateNote(noteId, { folder_id: folderId });
-      // Don't re-filter notes — the IPC onNoteUpdated listener updates the note
-      // in the store, and we stay on the current note. Folder counts refresh below.
+      if (noteId === activeNoteId) {
+        // Follow the moved note — switching active folder re-loads notes and preserves activeNoteId.
+        setActiveFolderId(folderId);
+      } else {
+        removeNote(noteId);
+      }
       loadFolders();
     },
-    [loadFolders]
+    [activeNoteId, loadFolders]
   );
 
   const { dragState, noteDragHandlers, folderDropHandlers } = useNoteDragAndDrop({
