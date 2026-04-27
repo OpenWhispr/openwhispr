@@ -312,7 +312,7 @@ class CliBridge {
       param("GET", "/v1/notes/", "", "id", ({ params }) => {
         const id = requireId(params, "note");
         const note = db.getNote(id);
-        if (!note) {
+        if (!note || note.deleted_at) {
           const err = new Error(`Note ${id} not found`);
           err.code = "NOT_FOUND";
           throw err;
@@ -380,7 +380,7 @@ class CliBridge {
       param("GET", "/v1/transcriptions/", "", "id", ({ params }) => {
         const id = requireId(params, "transcription");
         const transcription = db.getTranscriptionById(id);
-        if (!transcription) {
+        if (!transcription || transcription.deleted_at) {
           const err = new Error(`Transcription ${id} not found`);
           err.code = "NOT_FOUND";
           throw err;

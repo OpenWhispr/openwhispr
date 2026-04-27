@@ -72,7 +72,8 @@ Override with `--format <fmt>`. Supported values vary by command:
 - Lists (`notes list`, `notes search`, `folders list`, `transcriptions list`): `json|table`
 - `notes get`: `json|markdown`
 - `transcriptions get`: `json|text`
-- Mutations (`notes delete`, `transcriptions delete`, `audio delete`, `meeting finalize`) and status commands (`auth status`, `config get`, `doctor`, `version`): `--format json` for machine output; otherwise human-readable text
+- `notes create`, `notes update`, `folders create`: no `--format` flag — always emit the full JSON of the created/updated resource on stdout
+- Delete-style mutations (`notes delete`, `transcriptions delete`, `audio delete`, `meeting finalize`) and status commands (`auth status`, `config get`, `doctor`, `version`): `--format json` for machine output; otherwise human-readable text
 
 Always pass `--format json` when parsing CLI output programmatically.
 
