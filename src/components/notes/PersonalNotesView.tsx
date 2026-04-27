@@ -409,7 +409,6 @@ export default function PersonalNotesView({
     async (noteId: number, folderId: number) => {
       await window.electronAPI.updateNote(noteId, { folder_id: folderId });
       if (noteId === activeNoteId) {
-        // Follow the moved note — switching active folder re-loads notes and preserves activeNoteId.
         setActiveFolderId(folderId);
       } else {
         removeNote(noteId);
