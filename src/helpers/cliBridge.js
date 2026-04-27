@@ -5,7 +5,6 @@ const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
-const { SafetyGateError } = require("./ipcHandlers");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8219;
@@ -220,12 +219,6 @@ class CliBridge {
   }
 
   _sendError(res, err) {
-    if (err instanceof SafetyGateError) {
-      sendJson(res, 409, {
-        error: { code: err.code, message: err.message, details: err.details },
-      });
-      return;
-    }
     if (err.code === "NOT_FOUND") {
       sendV1Error(res, 404, "not_found", err.message);
       return;
@@ -329,8 +322,7 @@ class CliBridge {
             body.note_type ?? "personal",
             body.source_file ?? null,
             body.audio_duration_seconds ?? null,
-            body.folder_id ?? null,
-            body.source_transcription_id ?? null
+            body.folder_id ?? null
           );
           const note = unwrapMutationResult(result, "note");
           setImmediate(() => ipc.broadcastToWindows("note-added", note));
@@ -406,16 +398,6 @@ class CliBridge {
           model: null,
         });
         return NO_CONTENT;
-      }),
-      exact("POST", "/v1/meeting/finalize", ({ body }) => {
-        const result = ipc.finalizeMeetingInternal({
-          transcriptionId: body?.transcription_id ?? body?.transcriptionId,
-          folderId: body?.folder_id ?? body?.folderId,
-          content: body?.content,
-          title: body?.title,
-          dryRun: body?.dry_run ?? body?.dryRun ?? false,
-        });
-        return { data: result };
       }),
     ];
   }

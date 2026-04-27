@@ -32,15 +32,6 @@ const {
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
 
-class SafetyGateError extends Error {
-  constructor(message, details = {}) {
-    super(message);
-    this.name = "SafetyGateError";
-    this.code = "SAFETY_GATE_REFUSED";
-    this.details = details;
-  }
-}
-
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
   "assemblyai-realtime": AssemblyAiStreaming,
@@ -915,17 +906,6 @@ class IPCHandlers {
 
     ipcMain.handle("db-delete-note", async (event, id) => {
       return this.deleteNoteInternal(id);
-    });
-
-    ipcMain.handle("meeting-finalize", async (event, args) => {
-      try {
-        return this.finalizeMeetingInternal(args || {});
-      } catch (err) {
-        if (err instanceof SafetyGateError) {
-          return { success: false, error: err.message, code: err.code, details: err.details };
-        }
-        return { success: false, error: err.message, code: err.code || "ERROR" };
-      }
     });
 
     ipcMain.handle("db-search-notes", async (event, query, limit) => {
@@ -7739,85 +7719,6 @@ class IPCHandlers {
     return result;
   }
 
-  finalizeMeetingInternal({ transcriptionId, folderId, content, title, dryRun = false } = {}) {
-    if (transcriptionId == null) {
-      throw new Error("transcriptionId is required");
-    }
-    if (folderId == null) {
-      throw new Error("folderId is required");
-    }
-    if (typeof content !== "string" || content.length === 0) {
-      throw new Error("content is required");
-    }
-
-    const transcription = this.databaseManager.getTranscriptionById(transcriptionId);
-    if (!transcription || transcription.deleted_at) {
-      const err = new Error(`Transcription ${transcriptionId} not found`);
-      err.code = "NOT_FOUND";
-      throw err;
-    }
-
-    const folders = this.databaseManager.getFolders();
-    const targetFolder = folders.find((f) => f.id === folderId);
-    if (!targetFolder) {
-      const err = new Error(`Folder ${folderId} not found`);
-      err.code = "NOT_FOUND";
-      throw err;
-    }
-
-    if (dryRun) {
-      return {
-        success: true,
-        dryRun: true,
-        transcriptionId,
-        folderId,
-        folderName: targetFolder.name,
-        title: title || "Untitled Note",
-      };
-    }
-
-    const noteResult = this.databaseManager.saveNote(
-      title || "Untitled Note",
-      content,
-      "meeting",
-      null,
-      null,
-      folderId,
-      transcriptionId
-    );
-    if (!noteResult?.success || !noteResult.note) {
-      throw new Error("Failed to create note");
-    }
-    const note = noteResult.note;
-
-    const verified = this.databaseManager.getNote(note.id);
-    if (
-      !verified ||
-      verified.folder_id !== folderId ||
-      verified.source_transcription_id !== transcriptionId
-    ) {
-      throw new SafetyGateError("Note did not land in the target folder with the expected source", {
-        noteId: note.id,
-        expectedFolderId: folderId,
-        actualFolderId: verified?.folder_id ?? null,
-        expectedTranscriptionId: transcriptionId,
-        actualTranscriptionId: verified?.source_transcription_id ?? null,
-      });
-    }
-
-    setImmediate(() => this.broadcastToWindows("note-added", note));
-    this._asyncVectorUpsert(note);
-    this._asyncMirrorWrite(note);
-
-    const deleteResult = this.deleteTranscriptionInternal(transcriptionId);
-
-    return {
-      success: true,
-      note: verified,
-      transcriptionDeleted: !!deleteResult?.success,
-    };
-  }
-
   broadcastToWindows(channel, payload) {
     const windows = BrowserWindow.getAllWindows();
     windows.forEach((win) => {
@@ -7829,4 +7730,3 @@ class IPCHandlers {
 }
 
 module.exports = IPCHandlers;
-module.exports.SafetyGateError = SafetyGateError;

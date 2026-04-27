@@ -439,11 +439,6 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
-      try {
-        this.db.exec("ALTER TABLE notes ADD COLUMN source_transcription_id INTEGER");
-      } catch (err) {
-        if (!err.message.includes("duplicate column")) throw err;
-      }
 
       // Sync columns for folders
       try {
@@ -748,8 +743,7 @@ class DatabaseManager {
     noteType = "personal",
     sourceFile = null,
     audioDuration = null,
-    folderId = null,
-    sourceTranscriptionId = null
+    folderId = null
   ) {
     try {
       if (!this.db) {
@@ -764,7 +758,7 @@ class DatabaseManager {
       }
       const clientNoteId = randomUUID();
       const stmt = this.db.prepare(
-        "INSERT INTO notes (title, content, note_type, source_file, audio_duration_seconds, folder_id, client_note_id, source_transcription_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO notes (title, content, note_type, source_file, audio_duration_seconds, folder_id, client_note_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
       );
       const result = stmt.run(
         title,
@@ -773,8 +767,7 @@ class DatabaseManager {
         sourceFile,
         audioDuration,
         folderId,
-        clientNoteId,
-        sourceTranscriptionId
+        clientNoteId
       );
 
       const fetchStmt = this.db.prepare("SELECT * FROM notes WHERE id = ?");

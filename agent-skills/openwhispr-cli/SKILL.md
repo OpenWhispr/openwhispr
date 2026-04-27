@@ -1,6 +1,6 @@
 ---
 name: openwhispr-cli
-description: Use this skill whenever the user wants to operate on OpenWhispr notes, folders, transcriptions, or meeting recordings from a terminal or shell. The OpenWhispr CLI (`openwhispr` binary, npm package `@openwhispr/cli`) talks to either the local desktop app or the cloud API and exposes every operation needed for managing notes, folders, transcriptions, audio, the composite end-of-meeting workflow, plus auth and config. Trigger this skill when the user mentions "openwhispr cli", running shell commands against OpenWhispr, automating note workflows, finalizing a meeting, cleaning up a transcription, building agent integrations against OpenWhispr, or scripting any OpenWhispr operation — even if they don't say "CLI" explicitly.
+description: Use this skill whenever the user wants to operate on OpenWhispr notes, folders, transcriptions, or audio from a terminal or shell. The OpenWhispr CLI (`openwhispr` binary, npm package `@openwhispr/cli`) talks to either the local desktop app or the cloud API and exposes every operation needed for managing notes, folders, transcriptions, audio, plus auth and config. Trigger this skill when the user mentions "openwhispr cli", running shell commands against OpenWhispr, automating note workflows, cleaning up a transcription, building agent integrations against OpenWhispr, or scripting any OpenWhispr operation — even if they don't say "CLI" explicitly.
 ---
 
 # OpenWhispr CLI
@@ -54,8 +54,7 @@ API keys are scoped server-side. Match scopes to the commands the user needs to 
 | `notes:read` | `notes list/get/search`, `folders list` |
 | `notes:write` | `notes create/update/delete`, `folders create` |
 | `transcriptions:read` | `transcriptions list/get` |
-| `transcriptions:delete` | `transcriptions delete`, `meeting finalize` |
-| `meetings:finalize` | `meeting finalize` |
+| `transcriptions:delete` | `transcriptions delete` |
 | `usage:read` | (used internally by `doctor` and the remote backend's reachability ping) |
 
 Scopes are enforced server-side; the CLI does not validate them locally. If a scope is missing, the API returns a 401/403 and the CLI exits with code 3.
@@ -73,7 +72,7 @@ Override with `--format <fmt>`. Supported values vary by command:
 - `notes get`: `json|markdown`
 - `transcriptions get`: `json|text`
 - `notes create`, `notes update`, `folders create`: no `--format` flag — always emit the full JSON of the created/updated resource on stdout
-- Delete-style mutations (`notes delete`, `transcriptions delete`, `audio delete`, `meeting finalize`) and status commands (`auth status`, `config get`, `doctor`, `version`): `--format json` for machine output; otherwise human-readable text
+- Delete-style mutations (`notes delete`, `transcriptions delete`, `audio delete`) and status commands (`auth status`, `config get`, `doctor`, `version`): `--format json` for machine output; otherwise human-readable text
 
 Always pass `--format json` when parsing CLI output programmatically.
 
@@ -88,7 +87,6 @@ Honor these exit codes when scripting or recovering from errors:
 | 2 | Backend unreachable | Start the desktop app, or run `auth login` for cloud, or try `--remote`/`--local` explicitly |
 | 3 | Auth failure (missing/invalid key, insufficient scope) | Do not retry — surface to the user |
 | 4 | Not found (no such note/transcription/folder) | Check the ID and rerun |
-| 5 | Safety gate refused (e.g. `meeting finalize` could not verify the new note) | Do not retry — investigate first |
 
 ## Commands
 
@@ -101,13 +99,10 @@ openwhispr notes list [--folder <id>] [--limit N] [--format json|table]
 openwhispr notes get <id> [--format json|markdown]
 openwhispr notes create --content <text> | --content-file <path>
                         [--title <t>] [--folder <id>]
-                        [--source-transcription <id>]
 openwhispr notes update <id> [--content <t>] [--folder <id>] [--title <t>]
 openwhispr notes delete <id> [--dry-run] [--format json]
 openwhispr notes search <query> [--limit N] [--format json|table]
 ```
-
-`--source-transcription` links a note to the transcription it was generated from. Required by `meeting finalize`'s safety gate; useful in general for traceability.
 
 ### Folders
 
@@ -135,19 +130,6 @@ openwhispr audio delete <transcription-id> [--format json]
 ```
 
 Local-only. The cloud API does not store audio. Running this with `--remote` returns a clear "not supported" error (exit 1).
-
-### Meeting
-
-```bash
-openwhispr meeting finalize --transcription <id>
-                            --folder <id>
-                            --content-file <path>
-                            [--title <t>]
-                            [--dry-run]
-                            [--format json]
-```
-
-Composite operation: creates a note from the transcription, verifies it landed in the requested folder linked to the transcription via `source_transcription_id`, then deletes the transcription and audio. **This is destructive — the raw transcript and audio are gone afterward.** Use `--dry-run` first to validate without deleting. The result shape is `{dry_run, note_id, transcription_id, folder_id, transcription_deleted}`. Local hits `/v1/meeting/finalize`; remote hits `/api/v1/meetings/finalize`. See the **Workflows** section below.
 
 ### Auth
 
@@ -184,51 +166,6 @@ openwhispr --version    # or: openwhispr version
 ```
 
 ## Workflows
-
-### Finalizing a meeting (the destructive composite)
-
-When a meeting recording has finished and the user has confirmed the polished note content + target folder, use `meeting finalize`. The safety gate prevents deleting the transcription unless the note successfully landed.
-
-**Prerequisites — confirm all of these before running:**
-
-1. The recording has finished (the transcription appears in `openwhispr transcriptions list`).
-2. The polished note content is ready, written to a temp file.
-3. The user has chosen a folder and confirmed the destination.
-4. The user has agreed to discard the raw transcription + audio. This is destructive — point it out explicitly if there's any ambiguity.
-
-**Step 1 — dry-run** to surface problems without deleting anything:
-
-```bash
-openwhispr meeting finalize \
-  --transcription <transcription-id> \
-  --folder <folder-id> \
-  --content-file <path-to-temp-content> \
-  --title "<title>" \
-  --dry-run --format json
-```
-
-If the exit code is non-zero, stop and report the error. Do not retry.
-
-**Step 2 — execute for real:**
-
-```bash
-openwhispr meeting finalize \
-  --transcription <transcription-id> \
-  --folder <folder-id> \
-  --content-file <path-to-temp-content> \
-  --title "<title>" \
-  --format json
-```
-
-The response prints `note_id`. Confirm with `openwhispr notes get <note-id> --format json` — verify `folder_id` matches the user's choice and `source_transcription_id` matches the transcription you finalized.
-
-**Idempotency:** if the create succeeds but the delete fails, the note exists and the transcription is intact. Re-running with the same arguments will detect the existing note (linked via `source_transcription_id`), skip the create, and complete the delete. This is safe.
-
-**Hard rules:**
-
-- Do not compose `notes create` + `transcriptions delete` by hand. Always use `meeting finalize` — the composite has the safety gate; the two-step does not.
-- Do not retry destructive commands on failure. Surface the exit code and stderr to the user.
-- During an active meeting window (recording just finished, sync hasn't reconciled yet), prefer `--local`. The local SQLite is authoritative.
 
 ### Bulk note operations
 
@@ -268,11 +205,10 @@ The CLI writes both files with `0600`. If you see them with looser permissions (
 | `Backend unreachable` (exit 2) on every command | Desktop closed and no API key | Start desktop, or `openwhispr auth login` |
 | `Auth failed` (exit 3) on remote commands only | API key revoked, expired, or missing scope | Regenerate key with the right scopes |
 | `Not found` (exit 4) on a known-existing note | Wrong backend — the note is on the other side, not yet synced | Try the opposite backend (`--local` or `--remote`) |
-| `Safety gate refused` (exit 5) on `meeting finalize` | The note didn't land in the target folder | Don't retry — check folder ID and re-examine |
 | Config file readable by other users | File created or edited outside the CLI | `chmod 0600 ~/.openwhispr/cli-config.json` |
 
 ## Programmatic invocation
 
-When invoking from another program, always pass `--format json` and parse stdout. Inspect the exit code first — non-zero codes (1–5) follow the table above. On error, the CLI writes a plain-text message to **stderr** (not JSON) and exits with the relevant code; capture stderr separately to surface it to users.
+When invoking from another program, always pass `--format json` and parse stdout. Inspect the exit code first — non-zero codes (1–4) follow the table above. On error, the CLI writes a plain-text message to **stderr** (not JSON) and exits with the relevant code; capture stderr separately to surface it to users.
 
 Successful list/search responses print a bare JSON array (the CLI strips the API's `{data: [...]}` envelope before printing), so `jq '.[]'` is correct, not `jq '.data[]'`. Single-resource gets print the bare object.
