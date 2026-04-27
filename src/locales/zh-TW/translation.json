@@ -590,7 +590,8 @@
     },
     "social": {
       "completeInBrowser": "請在瀏覽器中完成登入",
-      "continueWithGoogle": "使用 Google 繼續"
+      "continueWithGoogle": "使用 Google 繼續",
+      "continueWithMicrosoft": "使用 Microsoft 繼續"
     },
     "welcomeSubtitle": "隨時隨地用語音輸入文字",
     "welcomeTitle": "歡迎使用 OpenWhispr",
@@ -962,7 +963,7 @@
       },
       "disabled": "已停用",
       "featuresDisabled": "帳號功能已停用",
-      "featuresDisabledDescription": "請在 .env 檔案中設定 VITE_NEON_AUTH_URL 以啟用帳號功能。",
+      "featuresDisabledDescription": "請在 .env 檔案中設定 VITE_AUTH_URL 以啟用帳號功能。",
       "notConfigured": "尚未設定驗證功能",
       "notSignedIn": "尚未登入",
       "notSignedInDescription": "建立帳號以解鎖進階功能。",

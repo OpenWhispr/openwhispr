@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
         writeBundle() {
           const runtimeEnv = {
             VITE_OPENWHISPR_API_URL: env.VITE_OPENWHISPR_API_URL || '',
-            VITE_NEON_AUTH_URL: env.VITE_NEON_AUTH_URL || '',
+            VITE_AUTH_URL: env.VITE_AUTH_URL || '',
           }
           fs.writeFileSync(
             path.resolve(__dirname, 'dist', 'runtime-env.json'),
@@ -55,7 +55,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: devServerPort,
       strictPort: true,
-      host: '127.0.0.1', // Use IP address instead of localhost for Neon Auth CORS
+      host: '127.0.0.1',
     },
     build: {
       outDir: 'dist',

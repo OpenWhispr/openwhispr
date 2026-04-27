@@ -563,7 +563,8 @@
     },
     "social": {
       "completeInBrowser": "Conclua o login no navegador",
-      "continueWithGoogle": "Continuar com o Google"
+      "continueWithGoogle": "Continuar com o Google",
+      "continueWithMicrosoft": "Continuar com a Microsoft"
     },
     "welcomeSubtitle": "Use sua voz para ditar em qualquer lugar",
     "welcomeTitle": "Boas-vindas ao OpenWhispr"
@@ -934,7 +935,7 @@
       },
       "disabled": "Desabilitado",
       "featuresDisabled": "Recursos de conta desabilitados",
-      "featuresDisabledDescription": "Defina VITE_NEON_AUTH_URL no seu arquivo .env para habilitar os recursos de conta.",
+      "featuresDisabledDescription": "Defina VITE_AUTH_URL no seu arquivo .env para habilitar os recursos de conta.",
       "notConfigured": "A autenticação não está configurada",
       "notSignedIn": "Não conectado",
       "notSignedInDescription": "Crie uma conta para desbloquear recursos premium.",

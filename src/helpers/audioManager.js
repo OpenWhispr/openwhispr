@@ -3,7 +3,7 @@ import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constant
 import logger from "../utils/logger";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import { isSecureEndpoint } from "../utils/urlUtils";
-import { withSessionRefresh } from "../lib/neonAuth";
+import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, validateLanguageForModel } from "../utils/languageSupport";
 import {
   createLocalSpeechGateState,

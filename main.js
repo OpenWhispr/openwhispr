@@ -609,19 +609,6 @@ async function startApp() {
   initializeCoreManagers();
   startAuthBridgeServer();
 
-  // Electron's file:// sends no Origin header, which Neon Auth rejects.
-  session.defaultSession.webRequest.onBeforeSendHeaders(
-    { urls: ["https://*.neon.tech/*"] },
-    (details, callback) => {
-      try {
-        details.requestHeaders["Origin"] = new URL(details.url).origin;
-      } catch {
-        /* malformed URL — leave Origin as-is */
-      }
-      callback({ requestHeaders: details.requestHeaders });
-    }
-  );
-
   windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
   windowManager.setPanelStartPosition(environmentManager.getPanelStartPosition());

@@ -591,7 +591,8 @@
     },
     "social": {
       "completeInBrowser": "ブラウザでサインインを完了してください",
-      "continueWithGoogle": "Google で続ける"
+      "continueWithGoogle": "Google で続ける",
+      "continueWithMicrosoft": "Microsoft で続ける"
     },
     "welcomeSubtitle": "音声でどこでもディクテーション",
     "welcomeTitle": "OpenWhispr へようこそ"
@@ -962,7 +963,7 @@
       },
       "disabled": "無効",
       "featuresDisabled": "アカウント機能が無効です",
-      "featuresDisabledDescription": ".env ファイルで VITE_NEON_AUTH_URL を設定してアカウント機能を有効にしてください。",
+      "featuresDisabledDescription": ".env ファイルで VITE_AUTH_URL を設定してアカウント機能を有効にしてください。",
       "notConfigured": "認証が設定されていません",
       "notSignedIn": "サインインしていません",
       "notSignedInDescription": "アカウントを作成してプレミアム機能をアンロックしましょう。",

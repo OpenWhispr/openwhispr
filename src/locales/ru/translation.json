@@ -590,7 +590,8 @@
     },
     "social": {
       "completeInBrowser": "Завершите вход в браузере",
-      "continueWithGoogle": "Продолжить с Google"
+      "continueWithGoogle": "Продолжить с Google",
+      "continueWithMicrosoft": "Продолжить с Microsoft"
     },
     "welcomeSubtitle": "Диктуйте где угодно голосом",
     "welcomeTitle": "Добро пожаловать в OpenWhispr",
@@ -962,7 +963,7 @@
       },
       "disabled": "Отключено",
       "featuresDisabled": "Функции аккаунта отключены",
-      "featuresDisabledDescription": "Установите VITE_NEON_AUTH_URL в файле .env для включения функций аккаунта.",
+      "featuresDisabledDescription": "Установите VITE_AUTH_URL в файле .env для включения функций аккаунта.",
       "notConfigured": "Аутентификация не настроена",
       "notSignedIn": "Вы не вошли в систему",
       "notSignedInDescription": "Создайте аккаунт, чтобы разблокировать премиум-функции.",
