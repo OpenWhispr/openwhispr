@@ -6,8 +6,11 @@ import { localProvider } from "./local";
 import { enterpriseProvider } from "./enterprise";
 import { openwhisprProvider } from "./openwhispr";
 import { lanProvider } from "./lan";
+import { openaiProvider } from "./openai";
 
 export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Object.freeze({
+  openai: openaiProvider,
+  custom: openaiProvider,
   anthropic: anthropicProvider,
   gemini: geminiProvider,
   groq: groqProvider,

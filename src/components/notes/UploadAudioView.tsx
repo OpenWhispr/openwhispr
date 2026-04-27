@@ -31,7 +31,7 @@ import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
 import { withSessionRefresh } from "../../lib/neonAuth";
 import { getAllReasoningModels } from "../../models/ModelRegistry";
-import { useSettingsStore, selectIsCloudReasoningMode } from "../../stores/settingsStore";
+import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
 import { generateNoteTitle } from "../../utils/generateTitle";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
@@ -121,11 +121,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     updateTranscriptionSettings,
   } = useSettings();
 
-  const isCloudReasoning = useSettingsStore(selectIsCloudReasoningMode);
-  const effectiveReasoningModel = useSettingsStore((s) =>
-    selectIsCloudReasoningMode(s) ? "" : s.reasoningModel
+  const isCloudCleanup = useSettingsStore(selectIsCloudCleanupMode);
+  const effectiveCleanupModel = useSettingsStore((s) =>
+    selectIsCloudCleanupMode(s) ? "" : s.cleanupModel
   );
-  const useReasoningModel = useSettingsStore((s) => s.useReasoningModel);
+  const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
 
   const isOpenWhisprCloud =
     isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
@@ -264,11 +264,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const generateTitle = async (text: string): Promise<string> => {
-    if (!useReasoningModel) return "";
-    const model = isCloudReasoning
-      ? ""
-      : effectiveReasoningModel || getAllReasoningModels()[0]?.value;
-    if (!model && !isCloudReasoning) return "";
+    if (!useCleanupModel) return "";
+    const model = isCloudCleanup ? "" : effectiveCleanupModel || getAllReasoningModels()[0]?.value;
+    if (!model && !isCloudCleanup) return "";
     return generateNoteTitle(text, model);
   };
 

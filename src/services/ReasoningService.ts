@@ -9,11 +9,11 @@ import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
 import logger from "../utils/logger";
-import { isSecureEndpoint } from "../utils/urlUtils";
-import { getSettings, isCloudReasoningMode } from "../stores/settingsStore";
+import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
+import { getConfiguredOpenAIBase } from "./ai/openaiBase";
 
 export type AgentStreamChunk =
   | { type: "content"; text: string }
@@ -29,12 +29,9 @@ export type AgentStreamChunk =
 
 class ReasoningService extends BaseReasoningService {
   private apiKeyCache: SecureCache<string>;
-  private openAiEndpointPreference = new Map<string, "responses" | "chat">();
-  private static readonly OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
   private static readonly MAX_TOOL_STEPS = 20;
   private cacheCleanupStop: (() => void) | undefined;
   private streamAbortController: AbortController | null = null;
-  private probedBases = new Set<string>();
 
   private readonly providerContext: ProviderContext;
 
@@ -59,210 +56,13 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
-  private isLanReasoningMode(): boolean {
+  private isLanCleanupMode(): boolean {
     const settings = getSettings();
     return (
-      settings.reasoningMode === "self-hosted" &&
-      settings.remoteReasoningType === "lan" &&
-      !!settings.remoteReasoningUrl
+      settings.cleanupMode === "self-hosted" &&
+      settings.cleanupRemoteType === "lan" &&
+      !!settings.cleanupRemoteUrl
     );
-  }
-
-  private getConfiguredOpenAIBase(): string {
-    if (typeof window === "undefined") {
-      return API_ENDPOINTS.OPENAI_BASE;
-    }
-
-    try {
-      const settings = getSettings();
-      const provider = settings.reasoningProvider || "";
-      const isCustomProvider = provider === "custom";
-
-      if (!isCustomProvider) {
-        logger.logReasoning("CUSTOM_REASONING_ENDPOINT_CHECK", {
-          hasCustomUrl: false,
-          provider,
-          reason: "Provider is not 'custom', using default OpenAI endpoint",
-          defaultEndpoint: API_ENDPOINTS.OPENAI_BASE,
-        });
-        return API_ENDPOINTS.OPENAI_BASE;
-      }
-
-      const stored = settings.cloudReasoningBaseUrl || "";
-      const trimmed = stored.trim();
-
-      if (!trimmed) {
-        logger.logReasoning("CUSTOM_REASONING_ENDPOINT_CHECK", {
-          hasCustomUrl: false,
-          provider,
-          usingDefault: true,
-          defaultEndpoint: API_ENDPOINTS.OPENAI_BASE,
-        });
-        return API_ENDPOINTS.OPENAI_BASE;
-      }
-
-      const normalized = normalizeBaseUrl(trimmed) || API_ENDPOINTS.OPENAI_BASE;
-
-      logger.logReasoning("CUSTOM_REASONING_ENDPOINT_CHECK", {
-        hasCustomUrl: true,
-        provider,
-        rawUrl: trimmed,
-        normalizedUrl: normalized,
-        defaultEndpoint: API_ENDPOINTS.OPENAI_BASE,
-      });
-
-      const knownNonOpenAIUrls = [
-        "api.groq.com",
-        "api.anthropic.com",
-        "generativelanguage.googleapis.com",
-      ];
-
-      const isKnownNonOpenAI = knownNonOpenAIUrls.some((url) => normalized.includes(url));
-      if (isKnownNonOpenAI) {
-        logger.logReasoning("OPENAI_BASE_REJECTED", {
-          reason: "Custom URL is a known non-OpenAI provider, using default OpenAI endpoint",
-          attempted: normalized,
-        });
-        return API_ENDPOINTS.OPENAI_BASE;
-      }
-
-      if (!isSecureEndpoint(normalized)) {
-        logger.logReasoning("OPENAI_BASE_REJECTED", {
-          reason: "HTTPS required (HTTP allowed for local network only)",
-          attempted: normalized,
-        });
-        return API_ENDPOINTS.OPENAI_BASE;
-      }
-
-      logger.logReasoning("CUSTOM_REASONING_ENDPOINT_RESOLVED", {
-        customEndpoint: normalized,
-        isCustom: true,
-        provider,
-      });
-
-      return normalized;
-    } catch (error) {
-      logger.logReasoning("CUSTOM_REASONING_ENDPOINT_ERROR", {
-        error: (error as Error).message,
-        fallbackTo: API_ENDPOINTS.OPENAI_BASE,
-      });
-      return API_ENDPOINTS.OPENAI_BASE;
-    }
-  }
-
-  private getOpenAIEndpointCandidates(
-    base: string
-  ): Array<{ url: string; type: "responses" | "chat" }> {
-    const lower = base.toLowerCase();
-
-    if (lower.endsWith("/responses") || lower.endsWith("/chat/completions")) {
-      const type = lower.endsWith("/responses") ? "responses" : "chat";
-      return [{ url: base, type }];
-    }
-
-    const preference = this.getStoredOpenAiPreference(base);
-    if (preference === "chat") {
-      return [{ url: buildApiUrl(base, "/chat/completions"), type: "chat" }];
-    }
-
-    const candidates: Array<{ url: string; type: "responses" | "chat" }> = [
-      { url: buildApiUrl(base, "/responses"), type: "responses" },
-      { url: buildApiUrl(base, "/chat/completions"), type: "chat" },
-    ];
-
-    return candidates;
-  }
-
-  private getStoredOpenAiPreference(base: string): "responses" | "chat" | undefined {
-    if (this.openAiEndpointPreference.has(base)) {
-      return this.openAiEndpointPreference.get(base);
-    }
-
-    if (typeof window === "undefined" || !window.localStorage) {
-      return undefined;
-    }
-
-    try {
-      const raw = window.localStorage.getItem(ReasoningService.OPENAI_ENDPOINT_PREF_STORAGE_KEY);
-      if (!raw) {
-        return undefined;
-      }
-      const parsed = JSON.parse(raw);
-      if (typeof parsed !== "object" || parsed === null) {
-        return undefined;
-      }
-      const value = parsed[base];
-      if (value === "responses" || value === "chat") {
-        this.openAiEndpointPreference.set(base, value);
-        return value;
-      }
-    } catch {
-      return undefined;
-    }
-
-    return undefined;
-  }
-
-  private rememberOpenAiPreference(base: string, preference: "responses" | "chat"): void {
-    this.openAiEndpointPreference.set(base, preference);
-
-    if (typeof window === "undefined" || !window.localStorage) {
-      return;
-    }
-
-    try {
-      const raw = window.localStorage.getItem(ReasoningService.OPENAI_ENDPOINT_PREF_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
-      const data = typeof parsed === "object" && parsed !== null ? parsed : {};
-      data[base] = preference;
-      window.localStorage.setItem(
-        ReasoningService.OPENAI_ENDPOINT_PREF_STORAGE_KEY,
-        JSON.stringify(data)
-      );
-    } catch {}
-  }
-
-  /** Probe /v1/models to detect llama.cpp and prefer /chat/completions. */
-  private async detectReasoningServerType(base: string): Promise<void> {
-    if (this.probedBases.has(base) || this.getStoredOpenAiPreference(base) !== undefined) {
-      return;
-    }
-
-    const lower = base.toLowerCase();
-    if (lower.endsWith("/responses") || lower.endsWith("/chat/completions")) {
-      return;
-    }
-
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000);
-      const res = await fetch(buildApiUrl(base, "/models"), {
-        method: "GET",
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-
-      if (!res.ok) {
-        this.probedBases.add(base);
-        return;
-      }
-
-      const body = await res.json();
-      const first = body?.data?.[0];
-
-      if (first?.owned_by === "llamacpp") {
-        this.rememberOpenAiPreference(base, "chat");
-        logger.logReasoning("LLAMACPP_DETECTED_VIA_MODELS", {
-          base,
-          modelId: first?.id,
-          ownedBy: first.owned_by,
-        });
-      }
-
-      this.probedBases.add(base);
-    } catch {
-      this.probedBases.add(base);
-    }
   }
 
   private async getApiKey(
@@ -276,7 +76,7 @@ class ReasoningService extends BaseReasoningService {
         logger.logReasoning("CUSTOM_KEY_IPC_FALLBACK", { error: (err as Error)?.message });
       }
       if (!customKey || !customKey.trim()) {
-        customKey = getSettings().customReasoningApiKey || "";
+        customKey = getSettings().cleanupCustomApiKey || "";
       }
       const trimmedKey = customKey.trim();
 
@@ -489,9 +289,8 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig = {}
   ): Promise<string> {
     const trimmedModel = model?.trim?.() || "";
-    const provider = getModelProvider(trimmedModel);
-    const isLanReasoning = !!config.lanUrl || this.isLanReasoningMode();
-    const providerId = isLanReasoning ? "lan" : provider;
+    const isLanCleanup = !!config.lanUrl || this.isLanCleanupMode();
+    const providerId = isLanCleanup ? "lan" : config.provider || getModelProvider(trimmedModel);
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");
@@ -501,28 +300,24 @@ class ReasoningService extends BaseReasoningService {
       provider: providerId,
       model: trimmedModel,
       agentName,
-      isLanReasoning,
+      isLanCleanup,
       textLength: text.length,
     });
 
+    const handler = PROVIDER_REGISTRY[providerId];
+    if (!handler) {
+      throw new Error(`Unsupported reasoning provider: ${providerId}`);
+    }
+
     const startTime = Date.now();
     try {
-      const handler = PROVIDER_REGISTRY[providerId];
-      let result: string;
-
-      if (handler) {
-        result = await handler.call({
-          text,
-          model: trimmedModel,
-          agentName,
-          config,
-          ctx: this.providerContext,
-        });
-      } else if (provider === "openai" || provider === "custom") {
-        result = await this.processWithOpenAI(text, trimmedModel, agentName, config);
-      } else {
-        throw new Error(`Unsupported reasoning provider: ${provider}`);
-      }
+      const result = await handler.call({
+        text,
+        model: trimmedModel,
+        agentName,
+        config,
+        ctx: this.providerContext,
+      });
 
       logger.logReasoning("PROVIDER_SUCCESS", {
         provider: providerId,
@@ -542,247 +337,6 @@ class ReasoningService extends BaseReasoningService {
     }
   }
 
-  private async processWithOpenAI(
-    text: string,
-    model: string,
-    agentName: string | null = null,
-    config: ReasoningConfig = {}
-  ): Promise<string> {
-    const reasoningProvider = getSettings().reasoningProvider || "";
-    const isCustomProvider = reasoningProvider === "custom";
-
-    logger.logReasoning("OPENAI_START", {
-      model,
-      agentName,
-      isCustomProvider,
-      hasApiKey: false, // Will update after fetching
-    });
-
-    if (this.isProcessing) {
-      throw new Error("Already processing a request");
-    }
-
-    const apiKey = await this.getApiKey(isCustomProvider ? "custom" : "openai");
-
-    logger.logReasoning("OPENAI_API_KEY", {
-      hasApiKey: !!apiKey,
-      keyLength: apiKey?.length || 0,
-    });
-
-    this.isProcessing = true;
-
-    try {
-      const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
-      const userPrompt = text;
-
-      const messages = [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ];
-
-      const openAiBase = this.getConfiguredOpenAIBase();
-      await this.detectReasoningServerType(openAiBase);
-      const endpointCandidates = this.getOpenAIEndpointCandidates(openAiBase);
-      const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
-
-      logger.logReasoning("OPENAI_ENDPOINTS", {
-        base: openAiBase,
-        isCustomEndpoint,
-        candidates: endpointCandidates.map((candidate) => candidate.url),
-        preference: this.getStoredOpenAiPreference(openAiBase) || null,
-      });
-
-      if (isCustomEndpoint) {
-        logger.logReasoning("CUSTOM_TEXT_CLEANUP_REQUEST", {
-          customBase: openAiBase,
-          model,
-          textLength: text.length,
-          hasApiKey: !!apiKey,
-          apiKeyPreview: apiKey ? `${apiKey.substring(0, 8)}...` : "(none)",
-        });
-      }
-
-      const response = await withRetry(async () => {
-        let lastError: Error | null = null;
-
-        for (const { url: endpoint, type } of endpointCandidates) {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000);
-          try {
-            const maxTokens =
-              config.maxTokens ||
-              Math.max(
-                4096,
-                this.calculateMaxTokens(
-                  text.length,
-                  TOKEN_LIMITS.MIN_TOKENS,
-                  TOKEN_LIMITS.MAX_TOKENS,
-                  TOKEN_LIMITS.TOKEN_MULTIPLIER
-                )
-              );
-
-            const apiConfig = getOpenAiApiConfig(model);
-            const requestBody: any = { model };
-
-            if (type === "responses") {
-              requestBody.input = messages;
-              requestBody.store = false;
-              requestBody.max_output_tokens = maxTokens;
-            } else {
-              requestBody.messages = messages;
-              requestBody[apiConfig.tokenParam] = maxTokens;
-            }
-
-            if (apiConfig.supportsTemperature) {
-              requestBody.temperature = config.temperature || 0.3;
-            }
-
-            const res = await fetch(endpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${apiKey}`,
-              },
-              body: JSON.stringify(requestBody),
-              signal: controller.signal,
-            });
-
-            if (!res.ok) {
-              const errorData = await res.json().catch(() => ({ error: res.statusText }));
-              const errorMessage =
-                errorData.error?.message || errorData.message || `OpenAI API error: ${res.status}`;
-
-              const isUnsupportedEndpoint =
-                (res.status === 404 || res.status === 405) && type === "responses";
-
-              if (isUnsupportedEndpoint) {
-                lastError = new Error(errorMessage);
-                this.rememberOpenAiPreference(openAiBase, "chat");
-                logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
-                  attemptedEndpoint: endpoint,
-                  error: errorMessage,
-                });
-                continue;
-              }
-
-              throw new Error(errorMessage);
-            }
-
-            this.rememberOpenAiPreference(openAiBase, type);
-            return res.json();
-          } catch (error) {
-            if ((error as Error).name === "AbortError") {
-              throw new Error("Request timed out after 30s");
-            }
-            lastError = error as Error;
-            if (type === "responses") {
-              logger.logReasoning("OPENAI_ENDPOINT_FALLBACK", {
-                attemptedEndpoint: endpoint,
-                error: (error as Error).message,
-              });
-              continue;
-            }
-            throw error;
-          } finally {
-            clearTimeout(timeoutId);
-          }
-        }
-
-        throw lastError || new Error("No OpenAI endpoint responded");
-      }, createApiRetryStrategy());
-
-      const isResponsesApi = Array.isArray(response?.output);
-      const isChatCompletions = Array.isArray(response?.choices);
-
-      logger.logReasoning("OPENAI_RAW_RESPONSE", {
-        model,
-        format: isResponsesApi ? "responses" : isChatCompletions ? "chat_completions" : "unknown",
-        hasOutput: isResponsesApi,
-        outputLength: isResponsesApi ? response.output.length : 0,
-        outputTypes: isResponsesApi ? response.output.map((item: any) => item.type) : undefined,
-        hasChoices: isChatCompletions,
-        choicesLength: isChatCompletions ? response.choices.length : 0,
-        usage: response.usage,
-      });
-
-      let responseText = "";
-
-      if (isResponsesApi) {
-        for (const item of response.output) {
-          if (item.type === "message" && item.content) {
-            for (const content of item.content) {
-              if (content.type === "output_text" && content.text) {
-                responseText = content.text.trim();
-                break;
-              }
-            }
-            if (responseText) break;
-          }
-        }
-      }
-
-      if (!responseText && typeof response?.output_text === "string") {
-        responseText = response.output_text.trim();
-      }
-
-      if (!responseText && isChatCompletions) {
-        for (const choice of response.choices) {
-          const message = choice?.message ?? choice?.delta;
-          const content = message?.content;
-
-          if (typeof content === "string" && content.trim()) {
-            responseText = content.trim();
-            break;
-          }
-
-          if (Array.isArray(content)) {
-            for (const part of content) {
-              if (typeof part?.text === "string" && part.text.trim()) {
-                responseText = part.text.trim();
-                break;
-              }
-            }
-          }
-
-          if (responseText) break;
-
-          if (typeof choice?.text === "string" && choice.text.trim()) {
-            responseText = choice.text.trim();
-            break;
-          }
-        }
-      }
-
-      logger.logReasoning("OPENAI_RESPONSE", {
-        model,
-        responseLength: responseText.length,
-        tokensUsed: response.usage?.total_tokens || 0,
-        success: true,
-        isEmpty: responseText.length === 0,
-      });
-
-      if (!responseText) {
-        logger.logReasoning("OPENAI_EMPTY_RESPONSE_FALLBACK", {
-          model,
-          originalTextLength: text.length,
-          reason: "Empty response from API",
-        });
-        return text;
-      }
-
-      return responseText;
-    } catch (error) {
-      logger.logReasoning("OPENAI_ERROR", {
-        model,
-        error: (error as Error).message,
-        errorType: (error as Error).name,
-      });
-      throw error;
-    } finally {
-      this.isProcessing = false;
-    }
-  }
-
   private getCustomPrompt(): string | undefined {
     return getSettings().customPrompts.cleanup || undefined;
   }
@@ -798,13 +352,13 @@ class ReasoningService extends BaseReasoningService {
 
     const settings = getSettings();
     const lanOverride = config.lanUrl?.trim();
-    const isLanReasoning = !!lanOverride || this.isLanReasoningMode();
+    const isLanCleanup = !!lanOverride || this.isLanCleanupMode();
 
     let endpoint: string;
     let apiKey = "";
 
-    if (isLanReasoning) {
-      const rawUrl = lanOverride || settings.remoteReasoningUrl.trim();
+    if (isLanCleanup) {
+      const rawUrl = lanOverride || settings.cleanupRemoteUrl.trim();
       const baseUrl = normalizeBaseUrl(rawUrl) || rawUrl;
       endpoint = buildApiUrl(baseUrl, "/v1/chat/completions");
     } else if (isLocalProvider) {
@@ -826,7 +380,7 @@ class ReasoningService extends BaseReasoningService {
           break;
         case "openai":
         case "custom":
-          endpoint = buildApiUrl(this.getConfiguredOpenAIBase(), "/chat/completions");
+          endpoint = buildApiUrl(getConfiguredOpenAIBase(), "/chat/completions");
           break;
         default:
           endpoint = buildApiUrl(API_ENDPOINTS.OPENAI_BASE, "/chat/completions");
@@ -835,7 +389,7 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const apiConfig = getOpenAiApiConfig(model);
-    const useOldTokenParam = isLocalProvider || isLanReasoning || provider === "groq";
+    const useOldTokenParam = isLocalProvider || isLanCleanup || provider === "groq";
 
     const requestBody: Record<string, unknown> = {
       model,
@@ -860,7 +414,7 @@ class ReasoningService extends BaseReasoningService {
       model,
       provider,
       isLocal: isLocalProvider,
-      isLan: !!isLanReasoning,
+      isLan: !!isLanCleanup,
       messageCount: messages.length,
     });
 
@@ -937,7 +491,7 @@ class ReasoningService extends BaseReasoningService {
             if (!content) continue;
 
             // Strip Qwen3 <think> blocks from streamed output
-            if (isLocalProvider || isLanReasoning) {
+            if (isLocalProvider || isLanCleanup) {
               if (insideThinkBlock) {
                 const endIdx = content.indexOf("</think>");
                 if (endIdx !== -1) {
@@ -994,9 +548,9 @@ class ReasoningService extends BaseReasoningService {
 
     const settings = getSettings();
     const lanOverride = config.lanUrl?.trim();
-    const isLanReasoning = !!lanOverride || this.isLanReasoningMode();
+    const isLanCleanup = !!lanOverride || this.isLanCleanupMode();
 
-    if ((isLocalProvider || isLanReasoning) && !tools) {
+    if ((isLocalProvider || isLanCleanup) && !tools) {
       const contentGen = this.processTextStreaming(messages, model, provider, config);
       for await (const text of contentGen) {
         yield { type: "content", text };
@@ -1008,8 +562,8 @@ class ReasoningService extends BaseReasoningService {
     let apiKey = "";
     let baseURL: string | undefined;
 
-    if (isLanReasoning) {
-      const rawUrl = lanOverride || settings.remoteReasoningUrl.trim();
+    if (isLanCleanup) {
+      const rawUrl = lanOverride || settings.cleanupRemoteUrl.trim();
       baseURL = normalizeBaseUrl(rawUrl) || rawUrl;
       if (!baseURL.endsWith("/v1")) {
         baseURL = buildApiUrl(baseURL, "/v1");
@@ -1023,11 +577,11 @@ class ReasoningService extends BaseReasoningService {
     } else {
       const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom";
       apiKey = await this.getApiKey(providerKey);
-      baseURL = provider === "custom" ? this.getConfiguredOpenAIBase() : undefined;
+      baseURL = provider === "custom" ? getConfiguredOpenAIBase() : undefined;
     }
     const apiConfig = getOpenAiApiConfig(model);
 
-    const aiProvider = isLocalProvider || isLanReasoning ? "local" : provider;
+    const aiProvider = isLocalProvider || isLanCleanup ? "local" : provider;
     const aiModel = getAIModel(aiProvider, model, apiKey, baseURL);
 
     const modelDef = getCloudModel(model);
@@ -1041,7 +595,7 @@ class ReasoningService extends BaseReasoningService {
       messageCount: messages.length,
     });
 
-    const useTemperature = isLocalProvider || isLanReasoning || apiConfig.supportsTemperature;
+    const useTemperature = isLocalProvider || isLanCleanup || apiConfig.supportsTemperature;
 
     const result = streamText({
       model: aiModel,
@@ -1256,18 +810,18 @@ class ReasoningService extends BaseReasoningService {
 
   async isAvailable(): Promise<boolean> {
     try {
-      if (isCloudReasoningMode()) {
-        logger.logReasoning("API_KEY_CHECK", { cloudReasoningMode: true });
+      if (isCloudCleanupMode()) {
+        logger.logReasoning("API_KEY_CHECK", { cloudCleanupMode: true });
         return true;
       }
 
-      if (this.isLanReasoningMode()) {
-        logger.logReasoning("API_KEY_CHECK", { lanReasoning: true });
+      if (this.isLanCleanupMode()) {
+        logger.logReasoning("API_KEY_CHECK", { lanCleanup: true });
         return true;
       }
 
       const settings = getSettings();
-      if (settings.reasoningProvider === "custom" && settings.cloudReasoningBaseUrl?.trim()) {
+      if (settings.cleanupProvider === "custom" && settings.cleanupCloudBaseUrl?.trim()) {
         logger.logReasoning("API_KEY_CHECK", {
           customProvider: true,
           hasCustomEndpoint: true,
@@ -1278,19 +832,19 @@ class ReasoningService extends BaseReasoningService {
       // Enterprise providers: detect credentials by provider, short-circuit.
       // Runtime auth errors (expired SSO, missing ADC) surface via
       // mapEnterpriseError with actionable remediation copy.
-      if (settings.reasoningProvider === "bedrock") {
+      if (settings.cleanupProvider === "bedrock") {
         const hasBedrockCreds =
           !!settings.bedrockProfile?.trim() ||
           (!!settings.bedrockAccessKeyId?.trim() && !!settings.bedrockSecretAccessKey?.trim());
         logger.logReasoning("API_KEY_CHECK", { bedrock: true, hasBedrockCreds });
         if (hasBedrockCreds) return true;
       }
-      if (settings.reasoningProvider === "azure") {
+      if (settings.cleanupProvider === "azure") {
         const hasAzureCreds = !!settings.azureApiKey?.trim() && !!settings.azureEndpoint?.trim();
         logger.logReasoning("API_KEY_CHECK", { azure: true, hasAzureCreds });
         if (hasAzureCreds) return true;
       }
-      if (settings.reasoningProvider === "vertex") {
+      if (settings.cleanupProvider === "vertex") {
         const hasVertexCreds = !!settings.vertexApiKey?.trim() || !!settings.vertexProject?.trim();
         logger.logReasoning("API_KEY_CHECK", { vertex: true, hasVertexCreds });
         if (hasVertexCreds) return true;

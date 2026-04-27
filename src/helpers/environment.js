@@ -13,16 +13,18 @@ const PERSISTED_KEYS = [
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "CUSTOM_TRANSCRIPTION_API_KEY",
-  "CUSTOM_REASONING_API_KEY",
+  "CUSTOM_CLEANUP_API_KEY",
   "LOCAL_TRANSCRIPTION_PROVIDER",
   "PARAKEET_MODEL",
   "LOCAL_WHISPER_MODEL",
-  "REASONING_PROVIDER",
-  "LOCAL_REASONING_MODEL",
+  "CLEANUP_PROVIDER",
+  "LOCAL_CLEANUP_MODEL",
+  "DICTATION_AGENT_PROVIDER",
+  "LOCAL_DICTATION_AGENT_MODEL",
   "LLAMA_GPU_BACKEND",
   "LLAMA_VULKAN_ENABLED",
   "DICTATION_KEY",
-  "AGENT_KEY",
+  "CHAT_AGENT_KEY",
   "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
@@ -151,11 +153,13 @@ class EnvironmentManager {
   }
 
   getCustomReasoningKey() {
-    return this._getKey("CUSTOM_REASONING_API_KEY");
+    // TODO: drop CUSTOM_REASONING_API_KEY fallback after 2 releases.
+    return this._getKey("CUSTOM_CLEANUP_API_KEY") || this._getKey("CUSTOM_REASONING_API_KEY");
   }
 
   saveCustomReasoningKey(key) {
-    return this._saveKey("CUSTOM_REASONING_API_KEY", key);
+    delete process.env.CUSTOM_REASONING_API_KEY;
+    return this._saveKey("CUSTOM_CLEANUP_API_KEY", key);
   }
 
   // Enterprise providers — AWS Bedrock
@@ -247,11 +251,13 @@ class EnvironmentManager {
   }
 
   getAgentKey() {
-    return this._getKey("AGENT_KEY");
+    // TODO: drop AGENT_KEY fallback after 2 releases.
+    return this._getKey("CHAT_AGENT_KEY") || this._getKey("AGENT_KEY");
   }
 
   saveAgentKey(key) {
-    const result = this._saveKey("AGENT_KEY", key);
+    delete process.env.AGENT_KEY;
+    const result = this._saveKey("CHAT_AGENT_KEY", key);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

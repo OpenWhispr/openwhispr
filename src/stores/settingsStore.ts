@@ -16,13 +16,13 @@ import {
 } from "../config/inferenceScopes";
 import type {
   TranscriptionSettings,
-  ReasoningSettings,
+  CleanupSettings,
   HotkeySettings,
   MicrophoneSettings,
   ApiKeySettings,
   PrivacySettings,
   ThemeSettings,
-  AgentModeSettings,
+  ChatAgentSettings,
 } from "../hooks/useSettings";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
@@ -106,7 +106,7 @@ const BOOLEAN_SETTINGS = new Set([
   "allowOpenAIFallback",
   "allowLocalFallback",
   "assemblyAiStreaming",
-  "useReasoningModel",
+  "useCleanupModel",
   "preferBuiltInMic",
   "cloudBackupEnabled",
   "telemetryEnabled",
@@ -118,7 +118,7 @@ const BOOLEAN_SETTINGS = new Set([
   "meetingAudioDetection",
   "speakerDiarizationEnabled",
   "isSignedIn",
-  "agentEnabled",
+  "chatAgentEnabled",
   "autoPasteEnabled",
   "keepTranscriptionInClipboard",
   "dataRetentionEnabled",
@@ -259,16 +259,62 @@ function migrateCustomPrompts() {
 
 migrateCustomPrompts();
 
+// One-time migration of legacy LLM-scope localStorage keys. Safe to delete
+// after a few releases.
+const LLM_SCOPE_KEY_PAIRS: ReadonlyArray<[string, string]> = [
+  ["reasoningModel", "cleanupModel"],
+  ["reasoningProvider", "cleanupProvider"],
+  ["reasoningMode", "cleanupMode"],
+  ["useReasoningModel", "useCleanupModel"],
+  ["cloudReasoningMode", "cleanupCloudMode"],
+  ["cloudReasoningBaseUrl", "cleanupCloudBaseUrl"],
+  ["customReasoningApiKey", "cleanupCustomApiKey"],
+  ["remoteReasoningType", "cleanupRemoteType"],
+  ["remoteReasoningUrl", "cleanupRemoteUrl"],
+  ["meetingReasoningMode", "noteFormattingMode"],
+  ["meetingReasoningProvider", "noteFormattingProvider"],
+  ["meetingReasoningModel", "noteFormattingModel"],
+  ["meetingCloudReasoningMode", "noteFormattingCloudMode"],
+  ["meetingCloudReasoningBaseUrl", "noteFormattingCloudBaseUrl"],
+  ["meetingRemoteReasoningType", "noteFormattingRemoteType"],
+  ["meetingRemoteReasoningUrl", "noteFormattingRemoteUrl"],
+  ["agentInferenceMode", "chatAgentMode"],
+  ["agentProvider", "chatAgentProvider"],
+  ["agentModel", "chatAgentModel"],
+  ["cloudAgentMode", "chatAgentCloudMode"],
+  ["remoteAgentUrl", "chatAgentRemoteUrl"],
+  ["agentEnabled", "chatAgentEnabled"],
+  ["agentKey", "chatAgentKey"],
+];
+
+function migrateLLMScopeKeys() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("_llmScopeKeysMigrated") === "1") return;
+
+  for (const [oldKey, newKey] of LLM_SCOPE_KEY_PAIRS) {
+    const value = localStorage.getItem(oldKey);
+    if (value === null) continue;
+    if (localStorage.getItem(newKey) === null) {
+      localStorage.setItem(newKey, value);
+    }
+    localStorage.removeItem(oldKey);
+  }
+
+  localStorage.setItem("_llmScopeKeysMigrated", "1");
+}
+
+migrateLLMScopeKeys();
+
 export interface SettingsState
   extends
     TranscriptionSettings,
-    ReasoningSettings,
+    CleanupSettings,
     HotkeySettings,
     MicrophoneSettings,
     ApiKeySettings,
     PrivacySettings,
     ThemeSettings,
-    AgentModeSettings {
+    ChatAgentSettings {
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   pauseMediaOnDictation: boolean;
@@ -290,9 +336,9 @@ export interface SettingsState
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
-  reasoningMode: InferenceMode;
-  remoteReasoningType: SelfHostedType;
-  remoteReasoningUrl: string;
+  cleanupMode: InferenceMode;
+  cleanupRemoteType: SelfHostedType;
+  cleanupRemoteUrl: string;
 
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
@@ -306,13 +352,14 @@ export interface SettingsState
   meetingRemoteTranscriptionType: SelfHostedType;
   meetingRemoteTranscriptionUrl: string;
 
-  meetingReasoningMode: InferenceMode;
-  meetingReasoningProvider: string;
-  meetingReasoningModel: string;
-  meetingCloudReasoningMode: string;
-  meetingCloudReasoningBaseUrl: string;
-  meetingRemoteReasoningType: SelfHostedType;
-  meetingRemoteReasoningUrl: string;
+  noteFormattingMode: InferenceMode;
+  noteFormattingProvider: string;
+  noteFormattingModel: string;
+  noteFormattingCloudMode: string;
+  noteFormattingCloudBaseUrl: string;
+  noteFormattingRemoteType: SelfHostedType;
+  noteFormattingRemoteUrl: string;
+  noteFormattingCustomApiKey: string;
 
   dictationAgentMode: InferenceMode;
   dictationAgentProvider: string;
@@ -338,9 +385,9 @@ export interface SettingsState
   setTranscriptionMode: (mode: InferenceMode) => void;
   setRemoteTranscriptionType: (type: SelfHostedType) => void;
   setRemoteTranscriptionUrl: (url: string) => void;
-  setReasoningMode: (mode: InferenceMode) => void;
-  setRemoteReasoningType: (type: SelfHostedType) => void;
-  setRemoteReasoningUrl: (url: string) => void;
+  setCleanupMode: (mode: InferenceMode) => void;
+  setCleanupRemoteType: (type: SelfHostedType) => void;
+  setCleanupRemoteUrl: (url: string) => void;
 
   setMeetingTranscriptionMode: (mode: InferenceMode) => void;
   setMeetingUseLocalWhisper: (value: boolean) => void;
@@ -354,13 +401,14 @@ export interface SettingsState
   setMeetingRemoteTranscriptionType: (type: SelfHostedType) => void;
   setMeetingRemoteTranscriptionUrl: (url: string) => void;
 
-  setMeetingReasoningMode: (mode: InferenceMode) => void;
-  setMeetingReasoningProvider: (value: string) => void;
-  setMeetingReasoningModel: (value: string) => void;
-  setMeetingCloudReasoningMode: (value: string) => void;
-  setMeetingCloudReasoningBaseUrl: (value: string) => void;
-  setMeetingRemoteReasoningType: (type: SelfHostedType) => void;
-  setMeetingRemoteReasoningUrl: (url: string) => void;
+  setNoteFormattingMode: (mode: InferenceMode) => void;
+  setNoteFormattingProvider: (value: string) => void;
+  setNoteFormattingModel: (value: string) => void;
+  setNoteFormattingCloudMode: (value: string) => void;
+  setNoteFormattingCloudBaseUrl: (value: string) => void;
+  setNoteFormattingRemoteType: (type: SelfHostedType) => void;
+  setNoteFormattingRemoteUrl: (url: string) => void;
+  setNoteFormattingCustomApiKey: (key: string) => void;
 
   setUseLocalWhisper: (value: boolean) => void;
   setWhisperModel: (value: string) => void;
@@ -374,13 +422,13 @@ export interface SettingsState
   setCloudTranscriptionModel: (value: string) => void;
   setCloudTranscriptionBaseUrl: (value: string) => void;
   setCloudTranscriptionMode: (value: string) => void;
-  setCloudReasoningMode: (value: string) => void;
-  setCloudReasoningBaseUrl: (value: string) => void;
+  setCleanupCloudMode: (value: string) => void;
+  setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
-  setUseReasoningModel: (value: boolean) => void;
-  setReasoningModel: (value: string) => void;
-  setReasoningProvider: (value: string) => void;
+  setUseCleanupModel: (value: boolean) => void;
+  setCleanupModel: (value: string) => void;
+  setCleanupProvider: (value: string) => void;
   setUiLanguage: (language: string) => void;
 
   setOpenaiApiKey: (key: string) => void;
@@ -389,7 +437,7 @@ export interface SettingsState
   setGroqApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
-  setCustomReasoningApiKey: (key: string) => void;
+  setCleanupCustomApiKey: (key: string) => void;
 
   // Enterprise providers
   bedrockAuthMode: string;
@@ -449,18 +497,20 @@ export interface SettingsState
   setNoteFilesPath: (value: string) => void;
   setIsSignedIn: (value: boolean) => void;
 
-  setAgentModel: (value: string) => void;
-  setAgentProvider: (value: string) => void;
-  setAgentKey: (key: string) => void;
-  setAgentEnabled: (value: boolean) => void;
-  setCloudAgentMode: (value: string) => void;
-  setAgentInferenceMode: (mode: InferenceMode) => void;
-  setRemoteAgentUrl: (url: string) => void;
+  setChatAgentModel: (value: string) => void;
+  setChatAgentProvider: (value: string) => void;
+  setChatAgentKey: (key: string) => void;
+  setChatAgentEnabled: (value: boolean) => void;
+  setChatAgentCloudMode: (value: string) => void;
+  setChatAgentMode: (mode: InferenceMode) => void;
+  setChatAgentCloudBaseUrl: (value: string) => void;
+  setChatAgentRemoteType: (type: SelfHostedType) => void;
+  setChatAgentRemoteUrl: (url: string) => void;
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
-  updateReasoningSettings: (settings: Partial<ReasoningSettings>) => void;
+  updateCleanupSettings: (settings: Partial<CleanupSettings>) => void;
   updateApiKeys: (keys: Partial<ApiKeySettings>) => void;
-  updateAgentModeSettings: (settings: Partial<AgentModeSettings>) => void;
+  updateChatAgentSettings: (settings: Partial<ChatAgentSettings>) => void;
 }
 
 function createStringSetter(key: string) {
@@ -533,14 +583,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "cloudTranscriptionMode",
     hasStoredByokKey() ? "byok" : "openwhispr"
   ),
-  cloudReasoningMode: readString("cloudReasoningMode", "openwhispr"),
-  cloudReasoningBaseUrl: readString("cloudReasoningBaseUrl", API_ENDPOINTS.OPENAI_BASE),
+  cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
+  cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   customDictionary: readStringArray("customDictionary", []),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
-  useReasoningModel: readBoolean("useReasoningModel", true),
-  reasoningModel: readString("reasoningModel", ""),
-  reasoningProvider: readString("reasoningProvider", "openai"),
+  useCleanupModel: readBoolean("useCleanupModel", true),
+  cleanupModel: readString("cleanupModel", ""),
+  cleanupProvider: readString("cleanupProvider", "openai"),
 
   openaiApiKey: readString("openaiApiKey", ""),
   anthropicApiKey: readString("anthropicApiKey", ""),
@@ -548,7 +598,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   groqApiKey: readString("groqApiKey", ""),
   mistralApiKey: readString("mistralApiKey", ""),
   customTranscriptionApiKey: readString("customTranscriptionApiKey", ""),
-  customReasoningApiKey: readString("customReasoningApiKey", ""),
+  cleanupCustomApiKey: readString("cleanupCustomApiKey", ""),
 
   // Enterprise providers
   bedrockAuthMode: readString("bedrockAuthMode", "sso"),
@@ -633,8 +683,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
   })(),
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
-  reasoningMode: (() => {
-    const v = readString("reasoningMode", "openwhispr");
+  cleanupMode: (() => {
+    const v = readString("cleanupMode", "openwhispr");
     if (
       v === "openwhispr" ||
       v === "providers" ||
@@ -645,11 +695,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       return v;
     return "openwhispr" as InferenceMode;
   })(),
-  remoteReasoningType: (() => {
-    const v = readString("remoteReasoningType", "lan");
+  cleanupRemoteType: (() => {
+    const v = readString("cleanupRemoteType", "lan");
     return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
   })(),
-  remoteReasoningUrl: readString("remoteReasoningUrl", ""),
+  cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
 
   meetingTranscriptionMode: (() => {
     const v = readString("meetingTranscriptionMode", "openwhispr");
@@ -673,8 +723,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   meetingRemoteTranscriptionUrl: readString("meetingRemoteTranscriptionUrl", ""),
 
-  meetingReasoningMode: (() => {
-    const v = readString("meetingReasoningMode", "openwhispr");
+  noteFormattingMode: (() => {
+    const v = readString("noteFormattingMode", "openwhispr");
     if (
       v === "openwhispr" ||
       v === "providers" ||
@@ -685,26 +735,25 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       return v;
     return "openwhispr" as InferenceMode;
   })(),
-  meetingReasoningProvider: readString("meetingReasoningProvider", ""),
-  meetingReasoningModel: readString("meetingReasoningModel", ""),
-  meetingCloudReasoningMode: readString("meetingCloudReasoningMode", ""),
-  meetingCloudReasoningBaseUrl: readString("meetingCloudReasoningBaseUrl", ""),
-  meetingRemoteReasoningType: (() => {
-    const v = readString("meetingRemoteReasoningType", "lan");
+  noteFormattingProvider: readString("noteFormattingProvider", ""),
+  noteFormattingModel: readString("noteFormattingModel", ""),
+  noteFormattingCloudMode: readString("noteFormattingCloudMode", ""),
+  noteFormattingCloudBaseUrl: readString("noteFormattingCloudBaseUrl", ""),
+  noteFormattingRemoteType: (() => {
+    const v = readString("noteFormattingRemoteType", "lan");
     return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
   })(),
-  meetingRemoteReasoningUrl: readString("meetingRemoteReasoningUrl", ""),
+  noteFormattingRemoteUrl: readString("noteFormattingRemoteUrl", ""),
+  noteFormattingCustomApiKey: readString("noteFormattingCustomApiKey", ""),
 
   setTranscriptionMode: createStringSetter("transcriptionMode") as (mode: InferenceMode) => void,
   setRemoteTranscriptionType: createStringSetter("remoteTranscriptionType") as (
     type: SelfHostedType
   ) => void,
   setRemoteTranscriptionUrl: createStringSetter("remoteTranscriptionUrl"),
-  setReasoningMode: createStringSetter("reasoningMode") as (mode: InferenceMode) => void,
-  setRemoteReasoningType: createStringSetter("remoteReasoningType") as (
-    type: SelfHostedType
-  ) => void,
-  setRemoteReasoningUrl: createStringSetter("remoteReasoningUrl"),
+  setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
+  setCleanupRemoteType: createStringSetter("cleanupRemoteType") as (type: SelfHostedType) => void,
+  setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode
@@ -725,25 +774,24 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ) => void,
   setMeetingRemoteTranscriptionUrl: createStringSetter("meetingRemoteTranscriptionUrl"),
 
-  setMeetingReasoningMode: createStringSetter("meetingReasoningMode") as (
-    mode: InferenceMode
-  ) => void,
-  setMeetingReasoningProvider: createStringSetter("meetingReasoningProvider"),
-  setMeetingReasoningModel: createStringSetter("meetingReasoningModel"),
-  setMeetingCloudReasoningMode: createStringSetter("meetingCloudReasoningMode"),
-  setMeetingCloudReasoningBaseUrl: createStringSetter("meetingCloudReasoningBaseUrl"),
-  setMeetingRemoteReasoningType: createStringSetter("meetingRemoteReasoningType") as (
+  setNoteFormattingMode: createStringSetter("noteFormattingMode") as (mode: InferenceMode) => void,
+  setNoteFormattingProvider: createStringSetter("noteFormattingProvider"),
+  setNoteFormattingModel: createStringSetter("noteFormattingModel"),
+  setNoteFormattingCloudMode: createStringSetter("noteFormattingCloudMode"),
+  setNoteFormattingCloudBaseUrl: createStringSetter("noteFormattingCloudBaseUrl"),
+  setNoteFormattingRemoteType: createStringSetter("noteFormattingRemoteType") as (
     type: SelfHostedType
   ) => void,
-  setMeetingRemoteReasoningUrl: createStringSetter("meetingRemoteReasoningUrl"),
+  setNoteFormattingRemoteUrl: createStringSetter("noteFormattingRemoteUrl"),
+  setNoteFormattingCustomApiKey: createStringSetter("noteFormattingCustomApiKey"),
 
-  agentModel: readString("agentModel", "openai/gpt-oss-120b"),
-  agentProvider: readString("agentProvider", "groq"),
-  agentKey: readString("agentKey", ""),
-  agentEnabled: readBoolean("agentEnabled", true),
-  cloudAgentMode: readString("cloudAgentMode", "openwhispr"),
-  agentInferenceMode: (() => {
-    const v = readString("agentInferenceMode", "openwhispr");
+  chatAgentModel: readString("chatAgentModel", "openai/gpt-oss-120b"),
+  chatAgentProvider: readString("chatAgentProvider", "groq"),
+  chatAgentKey: readString("chatAgentKey", ""),
+  chatAgentEnabled: readBoolean("chatAgentEnabled", true),
+  chatAgentCloudMode: readString("chatAgentCloudMode", "openwhispr"),
+  chatAgentMode: (() => {
+    const v = readString("chatAgentMode", "openwhispr");
     if (
       v === "openwhispr" ||
       v === "providers" ||
@@ -754,7 +802,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       return v;
     return "openwhispr" as InferenceMode;
   })(),
-  remoteAgentUrl: readString("remoteAgentUrl", ""),
+  chatAgentRemoteUrl: readString("chatAgentRemoteUrl", ""),
+  chatAgentCloudBaseUrl: readString("chatAgentCloudBaseUrl", ""),
+  chatAgentRemoteType: (() => {
+    const v = readString("chatAgentRemoteType", "lan");
+    return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
+  })(),
 
   dictationAgentMode: (() => {
     const v = readString("dictationAgentMode", "");
@@ -816,18 +869,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCloudTranscriptionModel: createStringSetter("cloudTranscriptionModel"),
   setCloudTranscriptionBaseUrl: createStringSetter("cloudTranscriptionBaseUrl"),
   setCloudTranscriptionMode: createStringSetter("cloudTranscriptionMode"),
-  setCloudReasoningMode: createStringSetter("cloudReasoningMode"),
-  setCloudReasoningBaseUrl: createStringSetter("cloudReasoningBaseUrl"),
+  setCleanupCloudMode: createStringSetter("cleanupCloudMode"),
+  setCleanupCloudBaseUrl: createStringSetter("cleanupCloudBaseUrl"),
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
-  setUseReasoningModel: createBooleanSetter("useReasoningModel"),
-  setReasoningProvider: (value: string) => {
-    if (isBrowser) localStorage.setItem("reasoningProvider", value);
-    useSettingsStore.setState({ reasoningProvider: value });
-  },
-  setReasoningModel: (value: string) => {
-    if (isBrowser) localStorage.setItem("reasoningModel", value);
-    useSettingsStore.setState({ reasoningModel: value });
-  },
+  setUseCleanupModel: createBooleanSetter("useCleanupModel"),
+  setCleanupProvider: createStringSetter("cleanupProvider"),
+  setCleanupModel: createStringSetter("cleanupModel"),
 
   setCustomDictionary: (words: string[]) => {
     if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
@@ -893,9 +940,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     window.electronAPI?.saveCustomTranscriptionKey?.(key);
     invalidateApiKeyCaches("custom");
   },
-  setCustomReasoningApiKey: (key: string) => {
-    if (isBrowser) localStorage.setItem("customReasoningApiKey", key);
-    set({ customReasoningApiKey: key });
+  setCleanupCustomApiKey: (key: string) => {
+    if (isBrowser) localStorage.setItem("cleanupCustomApiKey", key);
+    set({ cleanupCustomApiKey: key });
     window.electronAPI?.saveCustomReasoningKey?.(key);
     invalidateApiKeyCaches("custom");
   },
@@ -1086,58 +1133,56 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ isSignedIn: value });
   },
 
-  setAgentModel: (value: string) => {
-    if (isBrowser) localStorage.setItem("agentModel", value);
-    useSettingsStore.setState({ agentModel: value });
-  },
-  setAgentProvider: (value: string) => {
-    if (isBrowser) localStorage.setItem("agentProvider", value);
-    useSettingsStore.setState({ agentProvider: value });
-  },
-  setAgentKey: (key: string) => {
+  setChatAgentModel: createStringSetter("chatAgentModel"),
+  setChatAgentProvider: createStringSetter("chatAgentProvider"),
+  setChatAgentKey: (key: string) => {
     if (!isBrowser) {
-      useSettingsStore.setState({ agentKey: key });
+      useSettingsStore.setState({ chatAgentKey: key });
       return;
     }
 
     const updateAgentHotkey = window.electronAPI?.updateAgentHotkey;
     if (!updateAgentHotkey) {
-      localStorage.setItem("agentKey", key);
-      useSettingsStore.setState({ agentKey: key });
+      localStorage.setItem("chatAgentKey", key);
+      useSettingsStore.setState({ chatAgentKey: key });
       window.electronAPI?.saveAgentKey?.(key);
       return;
     }
 
-    const previousKey = get().agentKey;
+    const previousKey = get().chatAgentKey;
 
     void updateAgentHotkey(key)
       .then((result) => {
         if (!result?.success) {
-          localStorage.setItem("agentKey", previousKey);
-          useSettingsStore.setState({ agentKey: previousKey });
+          localStorage.setItem("chatAgentKey", previousKey);
+          useSettingsStore.setState({ chatAgentKey: previousKey });
           logger.warn(
-            "Failed to update agent hotkey",
+            "Failed to update chat agent hotkey",
             { hotkey: key, message: result?.message },
             "settings"
           );
           return;
         }
 
-        localStorage.setItem("agentKey", key);
-        useSettingsStore.setState({ agentKey: key });
+        localStorage.setItem("chatAgentKey", key);
+        useSettingsStore.setState({ chatAgentKey: key });
       })
       .catch((error) => {
         logger.warn(
-          "Failed to update agent hotkey",
+          "Failed to update chat agent hotkey",
           { hotkey: key, error: error instanceof Error ? error.message : String(error) },
           "settings"
         );
       });
   },
-  setAgentEnabled: createBooleanSetter("agentEnabled"),
-  setCloudAgentMode: createStringSetter("cloudAgentMode"),
-  setAgentInferenceMode: createStringSetter("agentInferenceMode") as (mode: InferenceMode) => void,
-  setRemoteAgentUrl: createStringSetter("remoteAgentUrl"),
+  setChatAgentEnabled: createBooleanSetter("chatAgentEnabled"),
+  setChatAgentCloudMode: createStringSetter("chatAgentCloudMode"),
+  setChatAgentMode: createStringSetter("chatAgentMode") as (mode: InferenceMode) => void,
+  setChatAgentCloudBaseUrl: createStringSetter("chatAgentCloudBaseUrl"),
+  setChatAgentRemoteType: createStringSetter("chatAgentRemoteType") as (
+    type: SelfHostedType
+  ) => void,
+  setChatAgentRemoteUrl: createStringSetter("chatAgentRemoteUrl"),
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => {
     const s = useSettingsStore.getState();
@@ -1170,17 +1215,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setShowTranscriptionPreview(settings.showTranscriptionPreview);
   },
 
-  updateReasoningSettings: (settings: Partial<ReasoningSettings>) => {
+  updateCleanupSettings: (settings: Partial<CleanupSettings>) => {
     const s = useSettingsStore.getState();
-    if (settings.useReasoningModel !== undefined)
-      s.setUseReasoningModel(settings.useReasoningModel);
-    if (settings.reasoningModel !== undefined) s.setReasoningModel(settings.reasoningModel);
-    if (settings.reasoningProvider !== undefined)
-      s.setReasoningProvider(settings.reasoningProvider);
-    if (settings.cloudReasoningBaseUrl !== undefined)
-      s.setCloudReasoningBaseUrl(settings.cloudReasoningBaseUrl);
-    if (settings.cloudReasoningMode !== undefined)
-      s.setCloudReasoningMode(settings.cloudReasoningMode);
+    if (settings.useCleanupModel !== undefined) s.setUseCleanupModel(settings.useCleanupModel);
+    if (settings.cleanupModel !== undefined) s.setCleanupModel(settings.cleanupModel);
+    if (settings.cleanupProvider !== undefined) s.setCleanupProvider(settings.cleanupProvider);
+    if (settings.cleanupCloudBaseUrl !== undefined)
+      s.setCleanupCloudBaseUrl(settings.cleanupCloudBaseUrl);
+    if (settings.cleanupCloudMode !== undefined) s.setCleanupCloudMode(settings.cleanupCloudMode);
   },
 
   updateApiKeys: (keys: Partial<ApiKeySettings>) => {
@@ -1192,30 +1234,31 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
-    if (keys.customReasoningApiKey !== undefined)
-      s.setCustomReasoningApiKey(keys.customReasoningApiKey);
+    if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
   },
 
-  updateAgentModeSettings: (settings: Partial<AgentModeSettings>) => {
+  updateChatAgentSettings: (settings: Partial<ChatAgentSettings>) => {
     const s = useSettingsStore.getState();
-    if (settings.agentModel !== undefined) s.setAgentModel(settings.agentModel);
-    if (settings.agentProvider !== undefined) s.setAgentProvider(settings.agentProvider);
-    if (settings.agentKey !== undefined) s.setAgentKey(settings.agentKey);
-    if (settings.agentEnabled !== undefined) s.setAgentEnabled(settings.agentEnabled);
-    if (settings.cloudAgentMode !== undefined) s.setCloudAgentMode(settings.cloudAgentMode);
+    if (settings.chatAgentModel !== undefined) s.setChatAgentModel(settings.chatAgentModel);
+    if (settings.chatAgentProvider !== undefined)
+      s.setChatAgentProvider(settings.chatAgentProvider);
+    if (settings.chatAgentKey !== undefined) s.setChatAgentKey(settings.chatAgentKey);
+    if (settings.chatAgentEnabled !== undefined) s.setChatAgentEnabled(settings.chatAgentEnabled);
+    if (settings.chatAgentCloudMode !== undefined)
+      s.setChatAgentCloudMode(settings.chatAgentCloudMode);
   },
 }));
 
 // --- Selectors (derived state, not stored) ---
 
-export const selectIsCloudReasoningMode = (state: SettingsState) =>
-  state.isSignedIn && state.cloudReasoningMode === "openwhispr";
+export const selectIsCloudCleanupMode = (state: SettingsState) =>
+  state.isSignedIn && state.cleanupCloudMode === "openwhispr";
 
-export const selectEffectiveReasoningProvider = (state: SettingsState) =>
-  selectIsCloudReasoningMode(state) ? "openwhispr" : state.reasoningProvider;
+export const selectEffectiveCleanupProvider = (state: SettingsState) =>
+  selectIsCloudCleanupMode(state) ? "openwhispr" : state.cleanupProvider;
 
-export const selectIsCloudAgentMode = (state: SettingsState) =>
-  state.isSignedIn && state.cloudAgentMode === "openwhispr";
+export const selectIsCloudChatAgentMode = (state: SettingsState) =>
+  state.isSignedIn && state.chatAgentCloudMode === "openwhispr";
 
 export interface ResolvedMeetingTranscription {
   useLocalWhisper: boolean;
@@ -1253,26 +1296,26 @@ export const selectResolvedMeetingTranscription = (
   };
 };
 
-export interface ResolvedMeetingReasoning {
-  reasoningProvider: string;
-  reasoningModel: string;
-  reasoningMode: InferenceMode;
-  cloudReasoningMode: string;
-  cloudReasoningBaseUrl: string;
-  remoteReasoningType: SelfHostedType;
-  remoteReasoningUrl: string;
+export interface ResolvedNoteFormatting {
+  provider: string;
+  model: string;
+  mode: InferenceMode;
+  cloudMode: string;
+  cloudBaseUrl: string;
+  remoteType: SelfHostedType;
+  remoteUrl: string;
 }
 
-export const selectResolvedMeetingReasoning = (state: SettingsState): ResolvedMeetingReasoning => {
+export const selectResolvedNoteFormatting = (state: SettingsState): ResolvedNoteFormatting => {
   const cfg = selectResolvedLLMConfig(state, "noteFormatting");
   return {
-    reasoningProvider: cfg.provider,
-    reasoningModel: cfg.model,
-    reasoningMode: cfg.mode,
-    cloudReasoningMode: cfg.cloudMode || "",
-    cloudReasoningBaseUrl: cfg.cloudBaseUrl || "",
-    remoteReasoningType: cfg.remoteType ?? "lan",
-    remoteReasoningUrl: cfg.remoteUrl || "",
+    provider: cfg.provider,
+    model: cfg.model,
+    mode: cfg.mode,
+    cloudMode: cfg.cloudMode || "",
+    cloudBaseUrl: cfg.cloudBaseUrl || "",
+    remoteType: cfg.remoteType ?? "lan",
+    remoteUrl: cfg.remoteUrl || "",
   };
 };
 
@@ -1312,7 +1355,9 @@ export const selectResolvedLLMConfig = (
     cloudBaseUrl: read("cloudBaseUrl") || fallback?.cloudBaseUrl,
     remoteType: (read("remoteType") as SelfHostedType | undefined) ?? fallback?.remoteType,
     remoteUrl: read("remoteUrl") || fallback?.remoteUrl,
-    customApiKey: read("customApiKey") || fallback?.customApiKey,
+    // No fallback inheritance: each scope owns its custom API key explicitly.
+    // Inheriting cleanup's key into other scopes silently was a footgun.
+    customApiKey: read("customApiKey"),
   };
 };
 
@@ -1332,8 +1377,8 @@ export function setResolvedLLMConfig(
   if (Object.keys(updates).length > 0) useSettingsStore.setState(updates);
 }
 
-export function isCloudAgentMode() {
-  return selectIsCloudAgentMode(useSettingsStore.getState());
+export function isCloudChatAgentMode() {
+  return selectIsCloudChatAgentMode(useSettingsStore.getState());
 }
 
 // --- Convenience getters for non-React code ---
@@ -1342,16 +1387,16 @@ export function getSettings() {
   return useSettingsStore.getState();
 }
 
-export function getEffectiveReasoningModel() {
+export function getEffectiveCleanupModel() {
   const state = useSettingsStore.getState();
-  if (selectIsCloudReasoningMode(state)) {
+  if (selectIsCloudCleanupMode(state)) {
     return "";
   }
-  return state.reasoningModel;
+  return state.cleanupModel;
 }
 
-export function isCloudReasoningMode() {
-  return selectIsCloudReasoningMode(useSettingsStore.getState());
+export function isCloudCleanupMode() {
+  return selectIsCloudCleanupMode(useSettingsStore.getState());
 }
 
 // --- Initialization ---
@@ -1393,9 +1438,9 @@ export async function initializeSettings(): Promise<void> {
         const envKey = await window.electronAPI.getCustomTranscriptionKey?.();
         if (envKey) createStringSetter("customTranscriptionApiKey")(envKey);
       }
-      if (!state.customReasoningApiKey) {
+      if (!state.cleanupCustomApiKey) {
         const envKey = await window.electronAPI.getCustomReasoningKey?.();
-        if (envKey) createStringSetter("customReasoningApiKey")(envKey);
+        if (envKey) createStringSetter("cleanupCustomApiKey")(envKey);
       }
     } catch (err) {
       logger.warn(
@@ -1438,15 +1483,15 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Sync agent key from main process
+    // Sync chat agent hotkey from main process
     try {
       const envKey = await window.electronAPI.getAgentKey?.();
-      if (envKey && envKey !== state.agentKey) {
-        createStringSetter("agentKey")(envKey);
+      if (envKey && envKey !== state.chatAgentKey) {
+        createStringSetter("chatAgentKey")(envKey);
       }
     } catch (err) {
       logger.warn(
-        "Failed to sync agent key on startup",
+        "Failed to sync chat agent hotkey on startup",
         { error: (err as Error).message },
         "settings"
       );

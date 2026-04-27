@@ -19,7 +19,7 @@ interface HistoryViewProps {
   setShowCloudMigrationBanner: (show: boolean) => void;
   aiCTADismissed: boolean;
   setAiCTADismissed: (dismissed: boolean) => void;
-  useReasoningModel: boolean;
+  useCleanupModel: boolean;
   copyToClipboard: (text: string) => void;
   deleteTranscription: (id: number) => void;
   clearAllTranscriptions: () => void;
@@ -36,7 +36,7 @@ export default function HistoryView({
   setShowCloudMigrationBanner,
   aiCTADismissed,
   setAiCTADismissed,
-  useReasoningModel,
+  useCleanupModel,
   copyToClipboard,
   deleteTranscription,
   clearAllTranscriptions,
@@ -111,7 +111,7 @@ export default function HistoryView({
           </div>
         )}
 
-        {!useReasoningModel && !aiCTADismissed && (
+        {!useCleanupModel && !aiCTADismissed && (
           <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
             <button
               onClick={() => {

@@ -6,7 +6,7 @@ import logger from "../../../utils/logger";
 export const lanProvider: InferenceProvider = {
   id: "lan",
   async call({ text, agentName, config, ctx }) {
-    const lanUrl = (config.lanUrl || getSettings().remoteReasoningUrl).trim();
+    const lanUrl = (config.lanUrl || getSettings().cleanupRemoteUrl).trim();
     logger.logReasoning("LAN_START", { url: lanUrl, agentName });
 
     try {

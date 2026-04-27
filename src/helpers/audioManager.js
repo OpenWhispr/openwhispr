@@ -10,11 +10,7 @@ import {
   getLocalSpeechGateDecision,
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
-import {
-  getSettings,
-  getEffectiveReasoningModel,
-  isCloudReasoningMode,
-} from "../stores/settingsStore";
+import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../stores/settingsStore";
 import { detectAgentName } from "../config/agentDetection";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
@@ -920,7 +916,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return false;
     }
 
-    const useReasoning = getSettings().useReasoningModel;
+    const useReasoning = getSettings().useCleanupModel;
     const now = Date.now();
     const cacheValid =
       this.reasoningAvailabilityCache &&
@@ -944,7 +940,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return false;
     }
 
-    if (isCloudReasoningMode()) {
+    if (isCloudCleanupMode()) {
       this.reasoningAvailabilityCache = {
         value: true,
         expiresAt: now + REASONING_CACHE_TTL,
@@ -1010,16 +1006,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       timestamp: new Date().toISOString(),
     });
 
-    const reasoningModel = getEffectiveReasoningModel();
-    const isCloud = isCloudReasoningMode();
-    const reasoningProvider = getSettings().reasoningProvider || "auto";
+    const cleanupModel = getEffectiveCleanupModel();
+    const isCloud = isCloudCleanupMode();
+    const cleanupProvider = getSettings().cleanupProvider || "auto";
     const agentName =
       typeof window !== "undefined" && window.localStorage
         ? localStorage.getItem("agentName") || null
         : null;
-    if (!reasoningModel && !isCloud) {
+    if (!cleanupModel && !isCloud) {
       logger.logReasoning("REASONING_SKIPPED", {
-        reason: "No reasoning model selected",
+        reason: "No cleanup model selected",
       });
       return normalizedText;
     }
@@ -1028,8 +1024,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     logger.logReasoning("REASONING_CHECK", {
       useReasoning,
-      reasoningModel,
-      reasoningProvider,
+      cleanupModel,
+      cleanupProvider,
       agentName,
     });
 
@@ -1039,17 +1035,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const isAgentInvocation = !!agentName && detectAgentName(normalizedText, agentName);
         const dictationAgentModel = settings.dictationAgentModel?.trim() || "";
         const useDictationAgent = isAgentInvocation && dictationAgentModel.length > 0;
-        const targetModel = useDictationAgent ? dictationAgentModel : reasoningModel;
+        const targetModel = useDictationAgent ? dictationAgentModel : cleanupModel;
+        const dictationAgentProvider = settings.dictationAgentProvider?.trim() || "";
+        const targetProvider = useDictationAgent ? dictationAgentProvider || undefined : undefined;
 
         logger.logReasoning("SENDING_TO_REASONING", {
           preparedTextLength: normalizedText.length,
           model: targetModel,
-          provider: reasoningProvider,
+          provider: targetProvider || cleanupProvider,
           path: useDictationAgent ? "dictationAgent" : "cleanup",
         });
 
         const reasoningConfig = useDictationAgent
           ? {
+              provider: targetProvider,
               systemPrompt: resolvePrompt("dictationAgent", {
                 agentName,
                 language: settings.preferredLanguage,
@@ -1261,8 +1260,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const audioFormat = audioBlob.type;
     const opts = {};
     if (language) opts.language = language;
-    const reasoningMode = settings.cloudReasoningMode || "openwhispr";
-    if (settings.useReasoningModel && !this.skipReasoning && reasoningMode === "openwhispr") {
+    const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
+    if (settings.useCleanupModel && !this.skipReasoning && cleanupCloudMode === "openwhispr") {
       opts.sendLogs = "false";
     }
 
@@ -1285,12 +1284,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Process with reasoning if enabled
     const rawText = result.text;
     let processedText = result.text;
-    if (settings.useReasoningModel && processedText && !this.skipReasoning) {
+    if (settings.useCleanupModel && processedText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
-      const cloudReasoningMode = settings.cloudReasoningMode || "openwhispr";
+      const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
 
-      if (cloudReasoningMode === "openwhispr") {
+      if (cleanupCloudMode === "openwhispr") {
         const reasonResult = await withSessionRefresh(async () => {
           const res = await window.electronAPI.cloudReason(processedText, {
             agentName,
@@ -1319,7 +1318,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           processedText = reasonResult.text;
         }
       } else {
-        const effectiveModel = getEffectiveReasoningModel();
+        const effectiveModel = getEffectiveCleanupModel();
         if (effectiveModel) {
           const result = await this.processWithReasoningModel(
             processedText,
@@ -2442,13 +2441,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingSttWordCount = finalText ? finalText.split(/\s+/).filter(Boolean).length : 0;
 
     let usedCloudReasoning = false;
-    if (stSettings.useReasoningModel && finalText && !this.skipReasoning) {
+    if (stSettings.useCleanupModel && finalText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
-      const cloudReasoningMode = stSettings.cloudReasoningMode || "openwhispr";
+      const cleanupCloudMode = stSettings.cleanupCloudMode || "openwhispr";
 
       try {
-        if (cloudReasoningMode === "openwhispr") {
+        if (cleanupCloudMode === "openwhispr") {
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(finalText, {
               agentName,
@@ -2487,7 +2486,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "streaming"
           );
         } else {
-          const effectiveModel = getEffectiveReasoningModel();
+          const effectiveModel = getEffectiveCleanupModel();
           if (effectiveModel) {
             const result = await this.processWithReasoningModel(
               finalText,
@@ -2590,7 +2589,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "Streaming total processing",
         {
           totalProcessingMs: Math.round(tBeforePaste - t0),
-          hasReasoning: stSettings.useReasoningModel,
+          hasReasoning: stSettings.useCleanupModel,
         },
         "streaming"
       );
@@ -2613,7 +2612,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   shouldShowPreviewCleanupState() {
     const settings = getSettings();
-    return !!settings.useReasoningModel && !this.skipReasoning;
+    return !!settings.useCleanupModel && !this.skipReasoning;
   }
 
   cleanupPreview(options = {}) {

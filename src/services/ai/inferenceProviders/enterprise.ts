@@ -14,7 +14,7 @@ export const enterpriseProvider: InferenceProvider = {
       throw new Error("Enterprise reasoning is not available in this environment");
     }
 
-    const provider = getSettings().reasoningProvider;
+    const provider = getSettings().cleanupProvider;
     if (!isEnterpriseProvider(provider)) {
       throw new Error(`Unsupported enterprise provider: ${provider}`);
     }

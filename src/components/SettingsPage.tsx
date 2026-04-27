@@ -29,7 +29,6 @@ import {
   BookOpen,
   Copy,
   Trash2,
-  Building2,
   MessageSquare,
   FileAudio,
   Wand2,
@@ -63,8 +62,6 @@ import { useClipboard } from "../hooks/useClipboard";
 import { useUpdater } from "../hooks/useUpdater";
 
 import PromptStudio from "./ui/PromptStudio";
-import ReasoningModelSelector from "./ReasoningModelSelector";
-import EnterpriseSection from "./EnterpriseSection";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
@@ -76,9 +73,10 @@ import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
-import AgentModeSettings from "./settings/AgentModeSettings";
+import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
-import { MeetingReasoningPanel, MeetingTranscriptionPanel } from "./settings/MeetingSettings";
+import InferenceConfigEditor from "./settings/InferenceConfigEditor";
+import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
@@ -396,32 +394,8 @@ function TranscriptionSection({
 }
 
 interface AiModelsSectionProps {
-  isSignedIn: boolean;
-  startOnboarding: () => void;
-  cloudReasoningMode: string;
-  setCloudReasoningMode: (mode: string) => void;
-  useReasoningModel: boolean;
-  setUseReasoningModel: (value: boolean) => void;
-  reasoningModel: string;
-  setReasoningModel: (model: string) => void;
-  reasoningProvider: string;
-  setReasoningProvider: (provider: string) => void;
-  cloudReasoningBaseUrl: string;
-  setCloudReasoningBaseUrl: (url: string) => void;
-  openaiApiKey: string;
-  setOpenaiApiKey: (key: string) => void;
-  anthropicApiKey: string;
-  setAnthropicApiKey: (key: string) => void;
-  geminiApiKey: string;
-  setGeminiApiKey: (key: string) => void;
-  groqApiKey: string;
-  setGroqApiKey: (key: string) => void;
-  customReasoningApiKey: string;
-  setCustomReasoningApiKey: (key: string) => void;
-  reasoningMode: InferenceMode;
-  setReasoningMode: (mode: InferenceMode) => void;
-  remoteReasoningUrl: string;
-  setRemoteReasoningUrl: (url: string) => void;
+  useCleanupModel: boolean;
+  setUseCleanupModel: (value: boolean) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -430,91 +404,19 @@ interface AiModelsSectionProps {
   }) => void;
 }
 
-function AiModelsSection({
-  isSignedIn,
-  startOnboarding,
-  cloudReasoningMode,
-  setCloudReasoningMode,
-  useReasoningModel,
-  setUseReasoningModel,
-  reasoningModel,
-  setReasoningModel,
-  reasoningProvider,
-  setReasoningProvider,
-  cloudReasoningBaseUrl,
-  setCloudReasoningBaseUrl,
-  openaiApiKey,
-  setOpenaiApiKey,
-  anthropicApiKey,
-  setAnthropicApiKey,
-  geminiApiKey,
-  setGeminiApiKey,
-  groqApiKey,
-  setGroqApiKey,
-  customReasoningApiKey,
-  setCustomReasoningApiKey,
-  reasoningMode,
-  setReasoningMode,
-  remoteReasoningUrl,
-  setRemoteReasoningUrl,
-  toast,
-}: AiModelsSectionProps) {
+const CLEANUP_MODE_TOAST_KEY: Record<InferenceMode, string> = {
+  openwhispr: "switchedCloud",
+  providers: "switchedProviders",
+  local: "switchedLocal",
+  "self-hosted": "switchedSelfHosted",
+  enterprise: "switchedEnterprise",
+};
+
+function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModelsSectionProps) {
   const { t } = useTranslation();
 
-  const aiModes: InferenceModeOption[] = [
-    {
-      id: "openwhispr",
-      label: t("settingsPage.aiModels.modes.openwhispr"),
-      description: t("settingsPage.aiModels.modes.openwhisprDesc"),
-      icon: <Cloud className="w-4 h-4" />,
-      disabled: !isSignedIn,
-      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
-    },
-    {
-      id: "providers",
-      label: t("settingsPage.aiModels.modes.providers"),
-      description: t("settingsPage.aiModels.modes.providersDesc"),
-      icon: <Key className="w-4 h-4" />,
-    },
-    {
-      id: "local",
-      label: t("settingsPage.aiModels.modes.local"),
-      description: t("settingsPage.aiModels.modes.localDesc"),
-      icon: <Cpu className="w-4 h-4" />,
-    },
-    {
-      id: "self-hosted",
-      label: t("settingsPage.aiModels.modes.selfHosted"),
-      description: t("settingsPage.aiModels.modes.selfHostedDesc"),
-      icon: <Network className="w-4 h-4" />,
-    },
-    {
-      id: "enterprise",
-      label: t("settingsPage.aiModels.modes.enterprise"),
-      description: t("settingsPage.aiModels.modes.enterpriseDesc"),
-      icon: <Building2 className="w-4 h-4" />,
-    },
-  ];
-
-  const handleReasoningModeSelect = (mode: InferenceMode) => {
-    if (mode === "openwhispr" && !isSignedIn) {
-      startOnboarding();
-      return;
-    }
-    if (mode === reasoningMode) return;
-    setReasoningMode(mode);
-    setCloudReasoningMode(mode === "openwhispr" ? "openwhispr" : "byok");
-    if (mode === "openwhispr" || mode === "self-hosted" || mode === "enterprise") {
-      window.electronAPI?.llamaServerStop?.();
-    }
-
-    const toastKey = {
-      openwhispr: "switchedCloud",
-      providers: "switchedProviders",
-      local: "switchedLocal",
-      "self-hosted": "switchedSelfHosted",
-      enterprise: "switchedEnterprise",
-    }[mode];
+  const handleCleanupModeChange = (mode: InferenceMode) => {
+    const toastKey = CLEANUP_MODE_TOAST_KEY[mode];
     toast({
       title: t(`settingsPage.aiModels.toasts.${toastKey}.title`),
       description: t(`settingsPage.aiModels.toasts.${toastKey}.description`),
@@ -522,29 +424,6 @@ function AiModelsSection({
       duration: 3000,
     });
   };
-
-  const renderReasoningSelector = (mode?: "cloud" | "local") => (
-    <ReasoningModelSelector
-      reasoningModel={reasoningModel}
-      setReasoningModel={setReasoningModel}
-      localReasoningProvider={reasoningProvider}
-      setLocalReasoningProvider={setReasoningProvider}
-      cloudReasoningBaseUrl={cloudReasoningBaseUrl}
-      setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
-      openaiApiKey={openaiApiKey}
-      setOpenaiApiKey={setOpenaiApiKey}
-      anthropicApiKey={anthropicApiKey}
-      setAnthropicApiKey={setAnthropicApiKey}
-      geminiApiKey={geminiApiKey}
-      setGeminiApiKey={setGeminiApiKey}
-      groqApiKey={groqApiKey}
-      setGroqApiKey={setGroqApiKey}
-      customReasoningApiKey={customReasoningApiKey}
-      setCustomReasoningApiKey={setCustomReasoningApiKey}
-      setReasoningMode={setReasoningMode}
-      mode={mode}
-    />
-  );
 
   return (
     <div className="space-y-4">
@@ -554,38 +433,14 @@ function AiModelsSection({
             label={t("settingsPage.aiModels.enableTextCleanup")}
             description={t("settingsPage.aiModels.enableTextCleanupDescription")}
           >
-            <Toggle checked={useReasoningModel} onChange={setUseReasoningModel} />
+            <Toggle checked={useCleanupModel} onChange={setUseCleanupModel} />
           </SettingsRow>
         </SettingsPanelRow>
       </SettingsPanel>
 
-      {useReasoningModel && (
+      {useCleanupModel && (
         <>
-          <InferenceModeSelector
-            modes={aiModes}
-            activeMode={reasoningMode}
-            onSelect={handleReasoningModeSelect}
-          />
-
-          {reasoningMode === "providers" && renderReasoningSelector("cloud")}
-          {reasoningMode === "local" && renderReasoningSelector("local")}
-
-          {reasoningMode === "self-hosted" && (
-            <SelfHostedPanel
-              service="reasoning"
-              url={remoteReasoningUrl}
-              onUrlChange={setRemoteReasoningUrl}
-            />
-          )}
-
-          {reasoningMode === "enterprise" && (
-            <EnterpriseSection
-              currentProvider={reasoningProvider}
-              reasoningModel={reasoningModel}
-              setReasoningModel={setReasoningModel}
-              setLocalReasoningProvider={setReasoningProvider}
-            />
-          )}
+          <InferenceConfigEditor scope="dictationCleanup" onModeChange={handleCleanupModeChange} />
           <GpuDeviceSelector purpose="intelligence" />
         </>
       )}
@@ -791,10 +646,7 @@ export default function SettingsPage({
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
-    cloudReasoningBaseUrl,
-    useReasoningModel,
-    reasoningModel,
-    reasoningProvider,
+    useCleanupModel,
     openaiApiKey,
     anthropicApiKey,
     geminiApiKey,
@@ -815,10 +667,7 @@ export default function SettingsPage({
     setCloudTranscriptionProvider,
     setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl,
-    setCloudReasoningBaseUrl,
-    setUseReasoningModel,
-    setReasoningModel,
-    setReasoningProvider,
+    setUseCleanupModel,
     setOpenaiApiKey,
     setAnthropicApiKey,
     setGeminiApiKey,
@@ -826,27 +675,19 @@ export default function SettingsPage({
     setMistralApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
-    customReasoningApiKey,
-    setCustomReasoningApiKey,
     setDictationKey,
     meetingKey,
     setMeetingKey,
     autoLearnCorrections,
     setAutoLearnCorrections,
     updateTranscriptionSettings,
-    updateReasoningSettings,
+    updateCleanupSettings,
     cloudTranscriptionMode,
     setCloudTranscriptionMode,
-    cloudReasoningMode,
-    setCloudReasoningMode,
     transcriptionMode,
     setTranscriptionMode,
     remoteTranscriptionUrl,
     setRemoteTranscriptionUrl,
-    reasoningMode,
-    setReasoningMode,
-    remoteReasoningUrl,
-    setRemoteReasoningUrl,
     audioCuesEnabled,
     setAudioCuesEnabled,
     pauseMediaOnDictation,
@@ -879,8 +720,8 @@ export default function SettingsPage({
     setNoteFilesPath,
   } = useSettings();
 
-  const agentKey = useSettingsStore((s) => s.agentKey);
-  const setAgentKey = useSettingsStore((s) => s.setAgentKey);
+  const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
+  const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
   const meetingAudioDetection = useSettingsStore((s) => s.meetingAudioDetection);
   const setMeetingAudioDetection = useSettingsStore((s) => s.setMeetingAudioDetection);
 
@@ -1057,11 +898,11 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": agentKey,
+          "agentMode.settings.hotkey": chatAgentKey,
         },
         t
       ),
-    [meetingKey, agentKey, t]
+    [meetingKey, chatAgentKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -1070,11 +911,11 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.hotkey.title": dictationKey,
-          "agentMode.settings.hotkey": agentKey,
+          "agentMode.settings.hotkey": chatAgentKey,
         },
         t
       ),
-    [dictationKey, agentKey, t]
+    [dictationKey, chatAgentKey, t]
   );
 
   const validateAgentHotkey = useCallback(
@@ -3180,8 +3021,8 @@ EOF`,
               <SettingsPanel>
                 <SettingsPanelRow>
                   <HotkeyInput
-                    value={agentKey}
-                    onChange={setAgentKey}
+                    value={chatAgentKey}
+                    onChange={setChatAgentKey}
                     validate={validateAgentHotkey}
                   />
                 </SettingsPanelRow>
@@ -3242,7 +3083,7 @@ EOF`,
             initialTab={initialSubTab as LlmTab | undefined}
             renderChatIntelligence={() => (
               <div className="space-y-6">
-                <AgentModeSettings />
+                <ChatAgentSettings />
 
                 <div className="border-t border-border/40 pt-6 space-y-5">
                   <SectionHeader
@@ -3345,34 +3186,10 @@ EOF`,
             renderDictationCleanup={() => (
               <div className="space-y-6">
                 <AiModelsSection
-                  isSignedIn={isSignedIn ?? false}
-                  startOnboarding={startOnboarding}
-                  cloudReasoningMode={cloudReasoningMode}
-                  setCloudReasoningMode={setCloudReasoningMode}
-                  useReasoningModel={useReasoningModel}
-                  setUseReasoningModel={(value) => {
-                    updateReasoningSettings({ useReasoningModel: value });
+                  useCleanupModel={useCleanupModel}
+                  setUseCleanupModel={(value) => {
+                    updateCleanupSettings({ useCleanupModel: value });
                   }}
-                  reasoningModel={reasoningModel}
-                  setReasoningModel={setReasoningModel}
-                  reasoningProvider={reasoningProvider}
-                  setReasoningProvider={setReasoningProvider}
-                  cloudReasoningBaseUrl={cloudReasoningBaseUrl}
-                  setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
-                  openaiApiKey={openaiApiKey}
-                  setOpenaiApiKey={setOpenaiApiKey}
-                  anthropicApiKey={anthropicApiKey}
-                  setAnthropicApiKey={setAnthropicApiKey}
-                  geminiApiKey={geminiApiKey}
-                  setGeminiApiKey={setGeminiApiKey}
-                  groqApiKey={groqApiKey}
-                  setGroqApiKey={setGroqApiKey}
-                  customReasoningApiKey={customReasoningApiKey}
-                  setCustomReasoningApiKey={setCustomReasoningApiKey}
-                  reasoningMode={reasoningMode}
-                  setReasoningMode={setReasoningMode}
-                  remoteReasoningUrl={remoteReasoningUrl}
-                  setRemoteReasoningUrl={setRemoteReasoningUrl}
                   toast={toast}
                 />
 
@@ -3386,7 +3203,7 @@ EOF`,
               </div>
             )}
             renderDictationAgent={() => <DictationAgentSettings />}
-            renderNoteFormatting={() => <MeetingReasoningPanel />}
+            renderNoteFormatting={() => <InferenceConfigEditor scope="noteFormatting" />}
           />
         );
 

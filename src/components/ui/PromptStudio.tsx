@@ -20,7 +20,7 @@ import ReasoningService from "../../services/ReasoningService";
 import { getModelProvider } from "../../models/ModelRegistry";
 import logger from "../../utils/logger";
 import { getDefaultPromptText, type PromptKind } from "../../config/prompts";
-import { useSettingsStore, selectIsCloudReasoningMode } from "../../stores/settingsStore";
+import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
 
 interface PromptStudioProps {
   className?: string;
@@ -42,7 +42,7 @@ const PROVIDER_CONFIG: Record<string, ProviderConfig> = {
   custom: {
     label: "Custom endpoint",
     apiKeyStorageKey: "openaiApiKey",
-    baseStorageKey: "cloudReasoningBaseUrl",
+    baseStorageKey: "cleanupCloudBaseUrl",
   },
   local: { label: "Local" },
 };
@@ -59,9 +59,9 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   const { agentName } = useAgentName();
   const uiLanguage = useSettingsStore((s) => s.uiLanguage);
 
-  const isCloudMode = useSettingsStore(selectIsCloudReasoningMode);
-  const useReasoningModel = useSettingsStore((s) => s.useReasoningModel);
-  const reasoningModel = useSettingsStore((s) => s.reasoningModel);
+  const isCloudMode = useSettingsStore(selectIsCloudCleanupMode);
+  const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
+  const cleanupModel = useSettingsStore((s) => s.cleanupModel);
 
   const customPrompt = useSettingsStore((s) => s.customPrompts[kind]);
   const setCustomPrompt = useSettingsStore((s) => s.setCustomPrompt);
@@ -98,47 +98,47 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
     setTestResult("");
 
     try {
-      const reasoningProvider = isCloudMode
+      const cleanupProvider = isCloudMode
         ? "openwhispr"
-        : reasoningModel
-          ? getModelProvider(reasoningModel)
+        : cleanupModel
+          ? getModelProvider(cleanupModel)
           : "openai";
 
       logger.debug(
         "PromptStudio test starting",
         {
-          useReasoningModel,
+          useCleanupModel,
           isCloudMode,
-          reasoningModel,
-          reasoningProvider,
+          cleanupModel,
+          cleanupProvider,
           testTextLength: testText.length,
           agentName,
         },
         "prompt-studio"
       );
 
-      if (!useReasoningModel) {
+      if (!useCleanupModel) {
         setTestResult(t("promptStudio.test.disabledReasoning"));
         return;
       }
 
-      if (!isCloudMode && !reasoningModel) {
+      if (!isCloudMode && !cleanupModel) {
         setTestResult(t("promptStudio.test.noModelSelected"));
         return;
       }
 
       if (!isCloudMode) {
-        const providerConfig = PROVIDER_CONFIG[reasoningProvider] || {
-          label: reasoningProvider.charAt(0).toUpperCase() + reasoningProvider.slice(1),
+        const providerConfig = PROVIDER_CONFIG[cleanupProvider] || {
+          label: cleanupProvider.charAt(0).toUpperCase() + cleanupProvider.slice(1),
         };
 
         if (providerConfig.baseStorageKey) {
-          const baseUrl = (useSettingsStore.getState().cloudReasoningBaseUrl || "").trim();
+          const baseUrl = (useSettingsStore.getState().cleanupCloudBaseUrl || "").trim();
           if (!baseUrl) {
             setTestResult(
               t("promptStudio.test.baseUrlMissing", {
                 provider:
-                  reasoningProvider === "custom"
+                  cleanupProvider === "custom"
                     ? t("promptStudio.test.customEndpoint")
                     : providerConfig.label,
               })
@@ -148,7 +148,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         }
       }
 
-      const modelToUse = isCloudMode ? reasoningModel || "auto" : reasoningModel;
+      const modelToUse = isCloudMode ? cleanupModel || "auto" : cleanupModel;
 
       const previous = customPrompt;
       setCustomPrompt(kind, editedPrompt);
@@ -324,26 +324,26 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         {/* ── Test Tab ── */}
         {activeTab === "test" &&
           (() => {
-            const reasoningProvider = isCloudMode
+            const cleanupProvider = isCloudMode
               ? "openwhispr"
-              : reasoningModel
-                ? getModelProvider(reasoningModel)
+              : cleanupModel
+                ? getModelProvider(cleanupModel)
                 : "openai";
-            const providerConfig = PROVIDER_CONFIG[reasoningProvider] || {
-              label: reasoningProvider.charAt(0).toUpperCase() + reasoningProvider.slice(1),
+            const providerConfig = PROVIDER_CONFIG[cleanupProvider] || {
+              label: cleanupProvider.charAt(0).toUpperCase() + cleanupProvider.slice(1),
             };
 
             const displayModel = isCloudMode
               ? t("promptStudio.test.openwhisprCloud")
-              : reasoningModel || t("promptStudio.test.none");
+              : cleanupModel || t("promptStudio.test.none");
             const displayProvider =
-              reasoningProvider === "custom"
+              cleanupProvider === "custom"
                 ? t("promptStudio.test.customEndpoint")
                 : providerConfig.label;
 
             return (
               <div className="divide-y divide-border/40 dark:divide-border-subtle">
-                {!useReasoningModel && (
+                {!useCleanupModel && (
                   <div className="px-5 py-4">
                     <div className="rounded-lg border border-warning/20 bg-warning/5 dark:bg-warning/10 px-4 py-3">
                       <div className="flex items-start gap-2.5">
@@ -414,7 +414,7 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 <div className="px-5 py-4">
                   <Button
                     onClick={testPrompt}
-                    disabled={!testText.trim() || isLoading || !useReasoningModel}
+                    disabled={!testText.trim() || isLoading || !useCleanupModel}
                     size="sm"
                     className="w-full"
                   >

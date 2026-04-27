@@ -576,8 +576,10 @@ declare global {
         useLocalWhisper: boolean;
         localTranscriptionProvider: LocalTranscriptionProvider;
         model?: string;
-        reasoningProvider: string;
-        reasoningModel?: string;
+        cleanupProvider: string;
+        cleanupModel?: string;
+        dictationAgentProvider: string;
+        dictationAgentModel?: string;
       }) => Promise<void>;
 
       // Clipboard operations
