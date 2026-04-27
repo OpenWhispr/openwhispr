@@ -4,7 +4,12 @@ import { openExternalLink } from "../utils/externalLinks";
 import logger from "../utils/logger";
 
 export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
-export const authClient = createAuthClient({ baseURL: AUTH_URL });
+export const authClient = createAuthClient({
+  baseURL: AUTH_URL,
+  fetchOptions: {
+    headers: { "x-openwhispr-source": "desktop" },
+  },
+});
 
 export type SocialProvider = "google" | "microsoft";
 
@@ -177,7 +182,10 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
 
       const response = await fetch(`${AUTH_URL}/api/auth/sign-in/social`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-openwhispr-source": "desktop",
+        },
         credentials: "include",
         body: JSON.stringify({
           provider,

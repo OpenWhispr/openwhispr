@@ -155,10 +155,12 @@ function shouldRegisterProtocolWithAppArg() {
 function getDefaultHtmlHandler() {
   try {
     const { execFileSync } = require("child_process");
-    return execFileSync("xdg-mime", ["query", "default", "text/html"], {
-      encoding: "utf8",
-      timeout: 3000,
-    }).trim() || null;
+    return (
+      execFileSync("xdg-mime", ["query", "default", "text/html"], {
+        encoding: "utf8",
+        timeout: 3000,
+      }).trim() || null
+    );
   } catch {
     return null;
   }
@@ -608,6 +610,28 @@ async function startApp() {
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
   startAuthBridgeServer();
+
+  // Electron's file:// renderer sends Origin: null, which Better Auth's
+  // trustedOrigins check rejects. Spoof Origin to the request's own URL so
+  // calls to OpenWhispr's auth and API hosts are treated as same-origin.
+  session.defaultSession.webRequest.onBeforeSendHeaders(
+    {
+      urls: [
+        "https://auth.openwhispr.com/*",
+        "https://api.openwhispr.com/*",
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*",
+      ],
+    },
+    (details, callback) => {
+      try {
+        details.requestHeaders["Origin"] = new URL(details.url).origin;
+      } catch {
+        // malformed URL — leave Origin as-is
+      }
+      callback({ requestHeaders: details.requestHeaders });
+    }
+  );
 
   windowManager.setActivationModeCache(environmentManager.getActivationMode());
   windowManager.setFloatingIconAutoHide(environmentManager.getFloatingIconAutoHide());
@@ -1134,7 +1158,9 @@ async function startApp() {
     });
 
     linuxKeyManager.on("permission-denied", () => {
-      debugLogger.warn("[Push-to-Talk] Linux key listener has no permission to access input devices");
+      debugLogger.warn(
+        "[Push-to-Talk] Linux key listener has no permission to access input devices"
+      );
       if (isLiveWindow(windowManager.mainWindow)) {
         windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
       }
