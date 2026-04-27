@@ -56,16 +56,25 @@ API keys are scoped server-side. Match scopes to the commands the user needs to 
 | `transcriptions:read` | `transcriptions list/get` |
 | `transcriptions:delete` | `transcriptions delete`, `meeting finalize` |
 | `meetings:finalize` | `meeting finalize` |
-| `usage:read` | (used internally by `auth status` for the remote ping) |
+| `usage:read` | (used internally by `doctor` and the remote backend's reachability ping) |
+
+Scopes are enforced server-side; the CLI does not validate them locally. If a scope is missing, the API returns a 401/403 and the CLI exits with code 3.
 
 ## Output
 
 The CLI auto-detects whether stdout is a TTY:
 
-- TTY → human-readable (table for lists, markdown or rendered for single resources)
+- TTY → human-readable (table for lists, markdown or text for single resources)
 - Pipe/redirect → JSON
 
-Override with `--format json|table|markdown`. Always pass `--format json` when parsing CLI output programmatically.
+Override with `--format <fmt>`. Supported values vary by command:
+
+- Lists (`notes list`, `notes search`, `folders list`, `transcriptions list`): `json|table`
+- `notes get`: `json|markdown`
+- `transcriptions get`: `json|text`
+- Mutations (`notes delete`, `transcriptions delete`, `audio delete`, `meeting finalize`) and status commands (`auth status`, `config get`, `doctor`, `version`): `--format json` for machine output; otherwise human-readable text
+
+Always pass `--format json` when parsing CLI output programmatically.
 
 ## Exit codes
 
@@ -87,14 +96,14 @@ Noun-verb syntax: `openwhispr <noun> <verb>`. Same convention as `gh`, `kubectl`
 ### Notes
 
 ```bash
-openwhispr notes list [--folder <id>] [--limit N]
+openwhispr notes list [--folder <id>] [--limit N] [--format json|table]
 openwhispr notes get <id> [--format json|markdown]
 openwhispr notes create --content <text> | --content-file <path>
                         [--title <t>] [--folder <id>]
                         [--source-transcription <id>]
 openwhispr notes update <id> [--content <t>] [--folder <id>] [--title <t>]
-openwhispr notes delete <id>
-openwhispr notes search <query> [--limit N]
+openwhispr notes delete <id> [--dry-run] [--format json]
+openwhispr notes search <query> [--limit N] [--format json|table]
 ```
 
 `--source-transcription` links a note to the transcription it was generated from. Required by `meeting finalize`'s safety gate; useful in general for traceability.
@@ -102,7 +111,7 @@ openwhispr notes search <query> [--limit N]
 ### Folders
 
 ```bash
-openwhispr folders list
+openwhispr folders list [--format json|table]
 openwhispr folders create --name <name> [--sort-order <n>]
 ```
 
@@ -111,17 +120,17 @@ Folder names must be unique per user. Create returns 409-equivalent on duplicate
 ### Transcriptions
 
 ```bash
-openwhispr transcriptions list [--limit N]
-openwhispr transcriptions get <id> [--format json|text|srt|vtt]
-openwhispr transcriptions delete <id>
+openwhispr transcriptions list [--limit N] [--format json|table]
+openwhispr transcriptions get <id> [--format json|text]
+openwhispr transcriptions delete <id> [--dry-run] [--format json]
 ```
 
-`text|srt|vtt` formats are remote-only and require segment data on the transcription. `text` works whenever there's a transcript; `srt` and `vtt` need word-level timestamps.
+`--format text` returns the plain transcript text body. SRT/VTT export is not currently exposed by the CLI; use `--format json` and post-process if you need timestamped subtitle formats.
 
 ### Audio
 
 ```bash
-openwhispr audio delete <transcription-id>
+openwhispr audio delete <transcription-id> [--format json]
 ```
 
 Local-only. The cloud API does not store audio. Running this with `--remote` returns a clear "not supported" error (exit 1).
@@ -137,25 +146,27 @@ openwhispr meeting finalize --transcription <id>
                             [--format json]
 ```
 
-Composite operation: creates a note from the transcription, verifies it landed in the requested folder linked to the transcription via `source_transcription_id`, then deletes the transcription and audio. **This is destructive — the raw transcript and audio are gone afterward.** Use `--dry-run` first to validate without deleting. See the **Workflows** section below.
+Composite operation: creates a note from the transcription, verifies it landed in the requested folder linked to the transcription via `source_transcription_id`, then deletes the transcription and audio. **This is destructive — the raw transcript and audio are gone afterward.** Use `--dry-run` first to validate without deleting. The result shape is `{dry_run, note_id, transcription_id, folder_id, transcription_deleted}`. Local hits `/v1/meeting/finalize`; remote hits `/api/v1/meetings/finalize`. See the **Workflows** section below.
 
 ### Auth
 
 ```bash
-openwhispr auth login    # prompts for API key
-openwhispr auth status
+openwhispr auth login [--api-key <key>]   # prompts on stdin if --api-key omitted
+openwhispr auth status [--format json]
 openwhispr auth logout
 ```
+
+`auth status` reads the stored config and reports whether a key is configured — it does **not** make a network call. To verify the key actually works, use `openwhispr doctor`.
 
 ### Config
 
 ```bash
-openwhispr config get
+openwhispr config get [--format json]
 openwhispr config set backend auto|local|remote
 openwhispr config set api-base https://api.openwhispr.com
 ```
 
-`api-base` is overridable for self-hosted or staging deployments. Default is the production cloud.
+Only `backend` and `api-base` are settable via `config set`. The API key is managed through `auth login`/`auth logout`. `api-base` is overridable for self-hosted or staging deployments (default: production cloud). The `OPENWHISPR_API_BASE` env var also overrides it for a single invocation.
 
 ### Doctor
 
@@ -224,7 +235,7 @@ Pipe `notes list --format json` through `jq` for filtering, then iterate:
 
 ```bash
 openwhispr notes list --limit 100 --format json | \
-  jq -r '.data[] | select(.title | contains("draft")) | .id' | \
+  jq -r '.[] | select(.title | contains("draft")) | .id' | \
   while read id; do
     openwhispr notes delete "$id"
   done
@@ -233,7 +244,7 @@ openwhispr notes list --limit 100 --format json | \
 ### Searching for context before writing a note
 
 ```bash
-openwhispr notes search "quarterly budget" --format json | jq '.data[].id'
+openwhispr notes search "quarterly budget" --format json | jq '.[].id'
 ```
 
 Use the IDs returned to read related notes with `notes get` before composing the new note's content.
@@ -247,7 +258,7 @@ The CLI reads/writes these files. Both should always be `0600`.
 | `~/.openwhispr/cli-bridge.json` | The desktop app at startup | `{version, port, token}` for the loopback bridge |
 | `~/.openwhispr/cli-config.json` | The CLI's `auth login` and `config set` | `{backend, apiBase, apiKey}` |
 
-If either file's permissions are looser than `0600`, the CLI will warn but still operate. Tighten them with `chmod 0600 <file>`.
+The CLI writes both files with `0600`. If you see them with looser permissions (e.g., after manual editing), tighten with `chmod 0600 <file>`.
 
 ## Troubleshooting
 
@@ -257,8 +268,10 @@ If either file's permissions are looser than `0600`, the CLI will warn but still
 | `Auth failed` (exit 3) on remote commands only | API key revoked, expired, or missing scope | Regenerate key with the right scopes |
 | `Not found` (exit 4) on a known-existing note | Wrong backend — the note is on the other side, not yet synced | Try the opposite backend (`--local` or `--remote`) |
 | `Safety gate refused` (exit 5) on `meeting finalize` | The note didn't land in the target folder | Don't retry — check folder ID and re-examine |
-| `0o600` permission warning at startup | Config file is too permissive | `chmod 0600 ~/.openwhispr/cli-config.json` |
+| Config file readable by other users | File created or edited outside the CLI | `chmod 0600 ~/.openwhispr/cli-config.json` |
 
 ## Programmatic invocation
 
-When invoking from another program, always pass `--format json` and parse the output. Inspect exit code first; on non-zero, the response shape is `{ "error": { "code": "...", "message": "..." } }` matching the cloud REST API and the local bridge.
+When invoking from another program, always pass `--format json` and parse stdout. Inspect the exit code first — non-zero codes (1–5) follow the table above. On error, the CLI writes a plain-text message to **stderr** (not JSON) and exits with the relevant code; capture stderr separately to surface it to users.
+
+Successful list/search responses print a bare JSON array (the CLI strips the API's `{data: [...]}` envelope before printing), so `jq '.[]'` is correct, not `jq '.data[]'`. Single-resource gets print the bare object.
