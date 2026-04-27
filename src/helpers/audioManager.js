@@ -15,6 +15,8 @@ import {
   getEffectiveReasoningModel,
   isCloudReasoningMode,
 } from "../stores/settingsStore";
+import { detectAgentName } from "../config/agentDetection";
+import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
@@ -876,17 +878,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return apiKey;
   }
 
-  async processWithReasoningModel(text, model, agentName) {
+  async processWithReasoningModel(text, model, agentName, config) {
     logger.logReasoning("CALLING_REASONING_SERVICE", {
       model,
       agentName,
       textLength: text.length,
+      hasOverrides: !!config,
     });
 
     const startTime = Date.now();
 
     try {
-      const result = await ReasoningService.processText(text, model, agentName);
+      const result = await ReasoningService.processText(text, model, agentName, config);
 
       const processingTime = Date.now() - startTime;
 
@@ -1032,16 +1035,35 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (useReasoning) {
       try {
+        const settings = getSettings();
+        const isAgentInvocation = !!agentName && detectAgentName(normalizedText, agentName);
+        const dictationAgentModel = settings.dictationAgentModel?.trim() || "";
+        const useDictationAgent = isAgentInvocation && dictationAgentModel.length > 0;
+        const targetModel = useDictationAgent ? dictationAgentModel : reasoningModel;
+
         logger.logReasoning("SENDING_TO_REASONING", {
           preparedTextLength: normalizedText.length,
-          model: reasoningModel,
+          model: targetModel,
           provider: reasoningProvider,
+          path: useDictationAgent ? "dictationAgent" : "cleanup",
         });
+
+        const reasoningConfig = useDictationAgent
+          ? {
+              systemPrompt: resolvePrompt("dictationAgent", {
+                agentName,
+                language: settings.preferredLanguage,
+                customDictionary: settings.customDictionary,
+                uiLanguage: settings.uiLanguage,
+              }),
+            }
+          : undefined;
 
         const result = await this.processWithReasoningModel(
           normalizedText,
-          reasoningModel,
-          agentName
+          targetModel,
+          agentName,
+          reasoningConfig
         );
 
         logger.logReasoning("REASONING_SUCCESS", {
@@ -1329,14 +1351,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getCustomPrompt() {
-    try {
-      const raw = localStorage.getItem("customUnifiedPrompt");
-      if (!raw) return undefined;
-      const parsed = JSON.parse(raw);
-      return typeof parsed === "string" ? parsed : undefined;
-    } catch {
-      return undefined;
-    }
+    return getSettings().customPrompts.cleanup || undefined;
   }
 
   getKeyterms() {

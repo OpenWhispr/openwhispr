@@ -1484,6 +1484,7 @@
       "description": "クリーンアップ、ノートのフォーマット、チャット用のモデルを設定",
       "tabs": {
         "dictationCleanup": "ディクテーションのクリーンアップ",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "ノートのフォーマット",
         "chatIntelligence": "チャットインテリジェンス"
       }
@@ -2099,6 +2100,26 @@
       "closeTab": "このタブを閉じてください。"
     }
   },
+  "dictationAgent": {
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+    },
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+    }
+  },
   "agentMode": {
     "settings": {
       "enabled": "エージェントモードを有効にする",
@@ -2192,7 +2213,11 @@
       "systemAudioDescription": "会議を文字起こしするには、OpenWhispr に他の参加者の音声を録音するためのシステムオーディオの権限が必要です。画面を録画することはありません。システム設定に移動して有効にします。",
       "openSettings": "システム設定を開く"
     },
-    "sections": { "calendar": "カレンダー", "api": "API", "mcp": "MCP" },
+    "sections": {
+      "calendar": "カレンダー",
+      "api": "API",
+      "mcp": "MCP"
+    },
     "api": {
       "title": "APIキー",
       "description": "プログラムからのアクセス用にAPIキーを管理",

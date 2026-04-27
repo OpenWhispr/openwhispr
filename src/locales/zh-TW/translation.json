@@ -1479,6 +1479,7 @@
       "description": "設定用於聽寫清理、筆記格式化和聊天的模型",
       "tabs": {
         "dictationCleanup": "聽寫清理",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "筆記格式化",
         "chatIntelligence": "聊天智能"
       }
@@ -2092,6 +2093,26 @@
     "oauth": {
       "redirectTitle": "正在跳轉到應用程式...",
       "closeTab": "您可以關閉此分頁。"
+    }
+  },
+  "dictationAgent": {
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+    },
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {

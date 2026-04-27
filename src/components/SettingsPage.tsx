@@ -77,6 +77,7 @@ import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
 import AgentModeSettings from "./settings/AgentModeSettings";
+import DictationAgentSettings from "./settings/DictationAgentSettings";
 import { MeetingReasoningPanel, MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
@@ -593,10 +594,15 @@ function AiModelsSection({
 }
 
 type SpeechTab = "dictation" | "noteRecording";
-type LlmTab = "dictationCleanup" | "noteFormatting" | "chatIntelligence";
+type LlmTab = "dictationCleanup" | "dictationAgent" | "noteFormatting" | "chatIntelligence";
 
 const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording"];
-const LLM_TABS: LlmTab[] = ["dictationCleanup", "noteFormatting", "chatIntelligence"];
+const LLM_TABS: LlmTab[] = [
+  "dictationCleanup",
+  "dictationAgent",
+  "noteFormatting",
+  "chatIntelligence",
+];
 
 function useSubTab<T extends string>(storageKey: string, options: readonly T[], initial?: T) {
   const [tab, setTab] = useLocalStorage<T>(storageKey, initial ?? options[0]);
@@ -651,11 +657,13 @@ function SpeechToTextTabs({
 function LlmsTabs({
   initialTab,
   renderDictationCleanup,
+  renderDictationAgent,
   renderNoteFormatting,
   renderChatIntelligence,
 }: {
   initialTab?: LlmTab;
   renderDictationCleanup: () => React.ReactNode;
+  renderDictationAgent: () => React.ReactNode;
   renderNoteFormatting: () => React.ReactNode;
   renderChatIntelligence: () => React.ReactNode;
 }) {
@@ -664,6 +672,7 @@ function LlmsTabs({
 
   const subTabs = [
     { id: "dictationCleanup", name: t("settingsPage.llms.tabs.dictationCleanup") },
+    { id: "dictationAgent", name: t("settingsPage.llms.tabs.dictationAgent") },
     { id: "noteFormatting", name: t("settingsPage.llms.tabs.noteFormatting") },
     { id: "chatIntelligence", name: t("settingsPage.llms.tabs.chatIntelligence") },
   ];
@@ -680,11 +689,13 @@ function LlmsTabs({
         onSelect={(id) => setTab(id as LlmTab)}
         renderIcon={(id) => {
           if (id === "dictationCleanup") return <Wand2 className="w-3.5 h-3.5" />;
+          if (id === "dictationAgent") return <Sparkles className="w-3.5 h-3.5" />;
           if (id === "noteFormatting") return <BookOpen className="w-3.5 h-3.5" />;
           return <MessageSquare className="w-3.5 h-3.5" />;
         }}
       />
       {tab === "dictationCleanup" && renderDictationCleanup()}
+      {tab === "dictationAgent" && renderDictationAgent()}
       {tab === "noteFormatting" && renderNoteFormatting()}
       {tab === "chatIntelligence" && renderChatIntelligence()}
     </div>
@@ -3374,6 +3385,7 @@ EOF`,
                 </div>
               </div>
             )}
+            renderDictationAgent={() => <DictationAgentSettings />}
             renderNoteFormatting={() => <MeetingReasoningPanel />}
           />
         );

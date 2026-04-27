@@ -1580,6 +1580,7 @@
       "description": "Configure models for cleanup, note formatting, and chat",
       "tabs": {
         "dictationCleanup": "Dictation Cleanup",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "Note Formatting",
         "chatIntelligence": "Chat Intelligence"
       }
@@ -2193,6 +2194,26 @@
     "oauth": {
       "redirectTitle": "Redirecting to app...",
       "closeTab": "You can close this tab."
+    }
+  },
+  "dictationAgent": {
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+    },
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {

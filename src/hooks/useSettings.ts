@@ -73,7 +73,6 @@ export interface AgentModeSettings {
   agentModel: string;
   agentProvider: string;
   agentKey: string;
-  agentSystemPrompt: string;
   agentEnabled: boolean;
   cloudAgentMode: string;
   agentInferenceMode: InferenceMode;
