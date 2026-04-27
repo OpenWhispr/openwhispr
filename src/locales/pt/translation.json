@@ -2034,9 +2034,9 @@
     "contactSupport": "Contatar suporte",
     "submitBug": "Reportar um bug"
   },
-  "tccReset": {
-    "title": "Conceder novamente as permissões do OpenWhispr",
-    "description": "Desculpe pelo incômodo. O OpenWhispr foi transferido para uma nova conta Apple Developer e o macOS apagou suas permissões. Por favor, conceda-as novamente.",
+  "postMigration": {
+    "title": "Bem-vindo de volta ao OpenWhispr",
+    "description": "Suas notas e configurações foram mantidas da versão anterior. No entanto, o macOS trata isto como um novo app, então algumas permissões precisam ser concedidas novamente.",
     "done": "Concluído",
     "remindLater": "Lembrar-me mais tarde"
   },

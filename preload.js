@@ -304,6 +304,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   downloadUpdate: () => ipcRenderer.invoke("download-update"),
   installUpdate: () => ipcRenderer.invoke("install-update"),
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  getPostMigrationState: () => ipcRenderer.invoke("get-post-migration-state"),
+  markBundleMigrated: () => ipcRenderer.invoke("mark-bundle-migrated"),
   getUpdateStatus: () => ipcRenderer.invoke("get-update-status"),
   getUpdateInfo: () => ipcRenderer.invoke("get-update-info"),
 

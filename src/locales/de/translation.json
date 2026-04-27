@@ -2034,9 +2034,9 @@
     "contactSupport": "Support kontaktieren",
     "submitBug": "Fehler melden"
   },
-  "tccReset": {
-    "title": "Berechtigungen für OpenWhispr erneut erteilen",
-    "description": "Sorry für die Umstände. OpenWhispr ist zu einem neuen Apple Developer-Konto gewechselt und macOS hat deine Berechtigungen gelöscht. Bitte erteile sie erneut.",
+  "postMigration": {
+    "title": "Willkommen zurück bei OpenWhispr",
+    "description": "Deine Notizen und Einstellungen wurden aus der vorherigen Version übernommen. macOS behandelt das hier allerdings als neue App, daher müssen ein paar Berechtigungen erneut erteilt werden.",
     "done": "Fertig",
     "remindLater": "Später erinnern"
   },
