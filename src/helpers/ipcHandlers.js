@@ -2228,7 +2228,8 @@ class IPCHandlers {
       const isUsingNativeShortcut = this.windowManager.isUsingNativeShortcutHotkeys();
       const supportsPushToTalk =
         process.platform === "linux"
-          ? this.linuxKeyManager?.isAvailable?.() === true
+          ? this.linuxKeyManager?.isAvailable?.() === true &&
+            this.linuxKeyManager?.hasInputPermissions?.() === true
           : !isUsingNativeShortcut;
 
       return {
