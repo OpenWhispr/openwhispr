@@ -161,15 +161,18 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // Only show progress for signed-up users after account creation step
   const showProgress = currentStep > 0;
 
+  const [pushToTalkSupported, setPushToTalkSupported] = useState(true);
+
   useEffect(() => {
     const checkHotkeyMode = async () => {
       try {
         const info = await window.electronAPI?.getHotkeyModeInfo();
         if (info?.isUsingNativeShortcut) {
           setIsUsingNativeShortcut(true);
-          if (!info.supportsPushToTalk) {
-            setActivationMode("tap");
-          }
+        }
+        if (info && !info.supportsPushToTalk) {
+          setPushToTalkSupported(false);
+          setActivationMode("tap");
         }
       } catch (error) {
         logger.error("Failed to check hotkey mode", { error }, "onboarding");
@@ -620,6 +623,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <ActivationModeSelector
               value={activationMode}
               onChange={setActivationMode}
+              pushDisabled={getCachedPlatform() === "linux" && !pushToTalkSupported}
               variant="compact"
             />
           </div>

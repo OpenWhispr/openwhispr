@@ -154,6 +154,25 @@ class LinuxKeyManager extends EventEmitter {
     return this.resolveListenerBinary() !== null;
   }
 
+  hasInputPermissions() {
+    if (!this.isSupported) return false;
+    try {
+      const entries = fs.readdirSync("/dev/input");
+      for (const entry of entries) {
+        if (!entry.startsWith("event")) continue;
+        try {
+          fs.accessSync(path.join("/dev/input", entry), fs.constants.R_OK);
+          return true;
+        } catch {
+          continue;
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
   reportError(error) {
     if (this.hasReportedError) return;
     this.hasReportedError = true;
