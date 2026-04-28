@@ -57,6 +57,89 @@ function getDownloadErrorMessage(t: TFunction, error: string, code?: string): st
   return t("hooks.modelDownload.errors.generic", { error });
 }
 
+// ---------------------------------------------------------------------------
+// Module-level persistent download state.
+// IPC listeners register once and keep updating this cache regardless of
+// whether a React component is mounted. When a hook mounts it reads from
+// here, so progress survives full section navigation (not just tab switches).
+// ---------------------------------------------------------------------------
+
+interface PersistentEntry {
+  modelId: string | null;
+  progress: DownloadProgress;
+  installing: boolean;
+  cancelling: boolean;
+  pendingError: { error: string; code?: string } | null;
+}
+
+const ZERO_PROGRESS: DownloadProgress = { percentage: 0, downloadedBytes: 0, totalBytes: 0 };
+
+const persistentState: Record<ModelType, PersistentEntry> = {
+  whisper: { modelId: null, progress: { ...ZERO_PROGRESS }, installing: false, cancelling: false, pendingError: null },
+  parakeet: { modelId: null, progress: { ...ZERO_PROGRESS }, installing: false, cancelling: false, pendingError: null },
+  llm: { modelId: null, progress: { ...ZERO_PROGRESS }, installing: false, cancelling: false, pendingError: null },
+};
+
+type UpdateCallback = (entry: PersistentEntry) => void;
+const activeCallbacks = new Map<ModelType, UpdateCallback>();
+let listenersReady = false;
+
+function ensurePersistentListeners() {
+  if (listenersReady || typeof window === "undefined" || !window.electronAPI) return;
+  listenersReady = true;
+
+  const throttle: Record<string, number> = {};
+
+  function onWhisperLike(type: ModelType, _e: unknown, data: WhisperDownloadProgressData) {
+    const entry = persistentState[type];
+    if (entry.cancelling) return;
+
+    if (data.type === "progress") {
+      const now = Date.now();
+      if (now - (throttle[type] || 0) < PROGRESS_THROTTLE_MS) return;
+      throttle[type] = now;
+      entry.progress = {
+        percentage: data.percentage || 0,
+        downloadedBytes: data.downloaded_bytes || 0,
+        totalBytes: data.total_bytes || 0,
+      };
+    } else if (data.type === "installing") {
+      entry.installing = true;
+    } else if (data.type === "complete") {
+      entry.installing = false;
+    } else if (data.type === "error") {
+      entry.pendingError = { error: data.error || "Unknown error", code: data.code };
+      entry.installing = false;
+      entry.modelId = null;
+      entry.progress = { ...ZERO_PROGRESS };
+    }
+    activeCallbacks.get(type)?.(entry);
+  }
+
+  window.electronAPI.onWhisperDownloadProgress(
+    (e: unknown, d: WhisperDownloadProgressData) => onWhisperLike("whisper", e, d)
+  );
+  window.electronAPI.onParakeetDownloadProgress(
+    (e: unknown, d: WhisperDownloadProgressData) => onWhisperLike("parakeet", e, d)
+  );
+  window.electronAPI.onModelDownloadProgress((_e: unknown, data: LLMDownloadProgressData) => {
+    const entry = persistentState.llm;
+    if (entry.cancelling) return;
+    const now = Date.now();
+    const isComplete = data.progress >= 100;
+    if (!isComplete && now - (throttle.llm || 0) < PROGRESS_THROTTLE_MS) return;
+    throttle.llm = now;
+    entry.progress = {
+      percentage: data.progress || 0,
+      downloadedBytes: data.downloadedSize || 0,
+      totalBytes: data.totalSize || 0,
+    };
+    activeCallbacks.get("llm")?.(entry);
+  });
+}
+
+// ---------------------------------------------------------------------------
+
 export function useModelDownload({
   modelType,
   onDownloadComplete,
@@ -99,78 +182,47 @@ export function useModelDownload({
     return () => window.removeEventListener("openwhispr-models-cleared", handleModelsCleared);
   }, []);
 
-  const handleWhisperProgress = useCallback(
-    (_event: unknown, data: WhisperDownloadProgressData) => {
-      if (data.type === "progress") {
-        const now = Date.now();
-        if (now - lastProgressUpdateRef.current < PROGRESS_THROTTLE_MS) return;
-        lastProgressUpdateRef.current = now;
-        setDownloadProgress({
-          percentage: data.percentage || 0,
-          downloadedBytes: data.downloaded_bytes || 0,
-          totalBytes: data.total_bytes || 0,
-        });
-      } else if (data.type === "installing") {
-        setIsInstalling(true);
-      } else if (data.type === "complete") {
-        if (isCancellingRef.current) return;
-        setIsInstalling(false);
-        // Don't clear downloadingModel/downloadProgress here — let downloadModel's
-        // finally block handle it after the model list has been refreshed.
-        // This prevents a flash where the model appears "not downloaded".
-      } else if (data.type === "error") {
-        if (isCancellingRef.current) return;
-        const msg = getDownloadErrorMessage(
-          t,
-          data.error || t("hooks.modelDownload.errors.unknown"),
-          data.code
-        );
-        const title =
-          data.code === "EXTRACTION_FAILED"
-            ? t("hooks.modelDownload.installationFailed.title")
-            : t("hooks.modelDownload.downloadFailed.title");
-        setDownloadError(msg);
-        showAlertDialogRef.current({ title, description: msg });
-        setIsInstalling(false);
+  // Persistent IPC listeners + restore from cache on mount
+  useEffect(() => {
+    ensurePersistentListeners();
+
+    // Restore progress from persistent cache (survives unmount/remount)
+    const cached = persistentState[modelType];
+    if (cached.modelId) {
+      setDownloadingModel(cached.modelId);
+      setDownloadProgress({ ...cached.progress });
+      setIsInstalling(cached.installing);
+    }
+
+    // Register callback so the persistent listener can push updates
+    activeCallbacks.set(modelType, (entry) => {
+      if (isCancellingRef.current) return;
+      setDownloadProgress({ ...entry.progress });
+      setIsInstalling(entry.installing);
+      if (!entry.modelId) {
         setDownloadingModel(null);
         setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
       }
-    },
-    [t]
-  );
-
-  const handleLLMProgress = useCallback((_event: unknown, data: LLMDownloadProgressData) => {
-    if (isCancellingRef.current) return;
-
-    const now = Date.now();
-    const isComplete = data.progress >= 100;
-    if (!isComplete && now - lastProgressUpdateRef.current < PROGRESS_THROTTLE_MS) {
-      return;
-    }
-    lastProgressUpdateRef.current = now;
-
-    setDownloadProgress({
-      percentage: data.progress || 0,
-      downloadedBytes: data.downloadedSize || 0,
-      totalBytes: data.totalSize || 0,
+      if (entry.pendingError) {
+        const err = entry.pendingError;
+        entry.pendingError = null;
+        const msg = getDownloadErrorMessage(
+          t,
+          err.error,
+          err.code
+        );
+        const title = err.code === "EXTRACTION_FAILED"
+          ? t("hooks.modelDownload.installationFailed.title")
+          : t("hooks.modelDownload.downloadFailed.title");
+        setDownloadError(msg);
+        showAlertDialogRef.current({ title, description: msg });
+      }
     });
-  }, []);
-
-  useEffect(() => {
-    let dispose: (() => void) | undefined;
-
-    if (modelType === "whisper") {
-      dispose = window.electronAPI?.onWhisperDownloadProgress(handleWhisperProgress);
-    } else if (modelType === "parakeet") {
-      dispose = window.electronAPI?.onParakeetDownloadProgress(handleWhisperProgress);
-    } else {
-      dispose = window.electronAPI?.onModelDownloadProgress(handleLLMProgress);
-    }
 
     return () => {
-      dispose?.();
+      activeCallbacks.delete(modelType);
     };
-  }, [handleWhisperProgress, handleLLMProgress, modelType]);
+  }, [modelType, t]);
 
   const downloadModel = useCallback(
     async (modelId: string, onSelectAfterDownload?: (id: string) => void) => {
@@ -187,6 +239,13 @@ export function useModelDownload({
         setDownloadError(null);
         setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
         lastProgressUpdateRef.current = 0; // Reset throttle timer
+
+        // Write to persistent cache so progress survives navigation
+        const pe = persistentState[modelType];
+        pe.modelId = modelId;
+        pe.progress = { ...ZERO_PROGRESS };
+        pe.installing = false;
+        pe.pendingError = null;
 
         let success = false;
 
@@ -271,6 +330,12 @@ export function useModelDownload({
         setIsInstalling(false);
         setDownloadingModel(null);
         setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
+
+        // Clear persistent cache
+        const pe = persistentState[modelType];
+        pe.modelId = null;
+        pe.progress = { ...ZERO_PROGRESS };
+        pe.installing = false;
       }
     },
     [downloadingModel, modelType, showAlertDialog, toast, t]
@@ -323,6 +388,7 @@ export function useModelDownload({
 
     setIsCancelling(true);
     isCancellingRef.current = true;
+    persistentState[modelType].cancelling = true;
     try {
       if (modelType === "whisper") {
         await window.electronAPI?.cancelWhisperDownload();
@@ -342,6 +408,13 @@ export function useModelDownload({
       isCancellingRef.current = false;
       setDownloadingModel(null);
       setDownloadProgress({ percentage: 0, downloadedBytes: 0, totalBytes: 0 });
+
+      const pe = persistentState[modelType];
+      pe.cancelling = false;
+      pe.modelId = null;
+      pe.progress = { ...ZERO_PROGRESS };
+      pe.installing = false;
+
       onDownloadCompleteRef.current?.();
     }
   }, [downloadingModel, isCancelling, modelType, toast, t]);
