@@ -2,6 +2,7 @@ import Cocoa
 import Darwin
 
 var fnIsDown = false
+var fnInterruptedThisCycle = false
 var lastModifierFlags: NSEvent.ModifierFlags = []
 
 let rightModifiers: [(UInt16, NSEvent.ModifierFlags, String)] = [
@@ -31,9 +32,11 @@ guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, h
 
     if containsFn && !fnIsDown {
         fnIsDown = true
+        fnInterruptedThisCycle = false
         emit("FN_DOWN")
     } else if !containsFn && fnIsDown {
         fnIsDown = false
+        fnInterruptedThisCycle = false
         emit("FN_UP")
     }
 
@@ -60,10 +63,23 @@ guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, h
     exit(1)
 }
 
+let keyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { _ in
+    if fnIsDown && !fnInterruptedThisCycle {
+        fnInterruptedThisCycle = true
+        emit("FN_INTERRUPTED")
+    }
+})
+if keyDownMonitor == nil {
+    FileHandle.standardError.write("Failed to create keyDown monitor — Fn interrupt detection disabled\n".data(using: .utf8)!)
+}
+
 let signalSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 signal(SIGTERM, SIG_IGN)
 signalSource.setEventHandler {
     NSEvent.removeMonitor(monitor)
+    if let keyMonitor = keyDownMonitor {
+        NSEvent.removeMonitor(keyMonitor)
+    }
     exit(0)
 }
 signalSource.resume()

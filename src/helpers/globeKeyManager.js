@@ -100,6 +100,8 @@ class GlobeKeyManager extends EventEmitter {
             this.emit("globe-down");
           } else if (line === "FN_UP") {
             this.emit("globe-up");
+          } else if (line === "FN_INTERRUPTED") {
+            this.emit("globe-interrupted");
           } else if (line.startsWith("RIGHT_MOD_DOWN:")) {
             const modifier = line.replace("RIGHT_MOD_DOWN:", "").trim();
             if (modifier) {

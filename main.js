@@ -893,6 +893,28 @@ async function startApp() {
       windowManager.handleMacPushModifierUp("fn");
     });
 
+    globeKeyManager.on("globe-interrupted", () => {
+      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
+      if (!isGlobeLikeHotkey(currentHotkey)) return;
+      if (!isLiveWindow(windowManager.mainWindow)) return;
+      if (windowManager.getActivationMode() !== "push") return;
+
+      debugLogger?.debug("[Globe] globe-interrupted received", {
+        wasRecording: globeKeyIsRecording,
+        hadPendingStart: globeKeyDownTime !== 0,
+      });
+
+      // Cancel any pending deferred recording start (within MIN_HOLD_DURATION_MS).
+      globeKeyDownTime = 0;
+
+      if (globeKeyIsRecording) {
+        globeKeyIsRecording = false;
+        // Engage cooldown so the next Fn press isn't treated as a re-trigger.
+        globeLastStopTime = Date.now();
+        windowManager.mainWindow.webContents.send("cancel-hotkey-pressed");
+      }
+    });
+
     globeKeyManager.on("modifier-up", (modifier) => {
       if (windowManager?.handleMacPushModifierUp) {
         windowManager.handleMacPushModifierUp(modifier);
