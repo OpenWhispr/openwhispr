@@ -4,6 +4,7 @@ import { useToast } from "../components/ui/useToast";
 import logger from "../utils/logger";
 import type { FolderItem } from "../types/electron";
 import { findDefaultFolder } from "../components/notes/shared";
+import { syncService } from "../services/SyncService.js";
 import {
   useActiveFolderId,
   setActiveFolderId,
@@ -163,6 +164,7 @@ export function useFolderManagement(): UseFolderManagementReturn {
     if (result.success && result.folder) {
       await loadFolders();
       setActiveFolderId(result.folder.id);
+      syncService.debouncedPush("folder", result.folder.id);
     } else if (result.error) {
       toast({
         title: t("notes.folders.couldNotCreate"),
@@ -185,6 +187,7 @@ export function useFolderManagement(): UseFolderManagementReturn {
     const result = await window.electronAPI.renameFolder(renamingFolderId, trimmed);
     if (result.success) {
       await loadFolders();
+      syncService.debouncedPush("folder", renamingFolderId);
     } else if (result.error) {
       toast({
         title: t("notes.folders.couldNotRename"),
@@ -205,6 +208,7 @@ export function useFolderManagement(): UseFolderManagementReturn {
           const personalFolder = findDefaultFolder(items);
           if (personalFolder) setActiveFolderId(personalFolder.id);
         }
+        syncService.syncAll().catch(console.error);
       } else if (result.error) {
         toast({
           title: t("notes.folders.couldNotDelete"),

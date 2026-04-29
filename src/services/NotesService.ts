@@ -60,10 +60,15 @@ async function deleteNote(id: string): Promise<void> {
   await cloudDelete("/api/notes/delete", { id });
 }
 
-async function list(limit?: number, before?: string): Promise<{ notes: CloudNote[] }> {
+async function list(
+  limit?: number,
+  before?: string,
+  since?: string
+): Promise<{ notes: CloudNote[] }> {
   const params = new URLSearchParams();
   if (limit !== undefined) params.set("limit", String(limit));
   if (before !== undefined) params.set("before", before);
+  if (since !== undefined) params.set("since", since);
   const query = params.toString();
   return cloudGet<{ notes: CloudNote[] }>(`/api/notes/list${query ? `?${query}` : ""}`);
 }

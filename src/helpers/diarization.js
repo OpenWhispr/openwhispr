@@ -414,6 +414,20 @@ class DiarizationManager {
     return segments;
   }
 
+  capSpeakerClusters(segments, cap) {
+    if (!cap || !segments?.length) return segments;
+    const totals = new Map();
+    for (const s of segments) {
+      totals.set(s.speaker, (totals.get(s.speaker) || 0) + (s.end - s.start));
+    }
+    if (totals.size <= cap) return segments;
+
+    const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+    const keep = new Set(ranked.slice(0, cap).map(([sp]) => sp));
+    const primary = ranked[0][0];
+    return segments.map((s) => (keep.has(s.speaker) ? s : { ...s, speaker: primary }));
+  }
+
   mergeWithTranscript(transcriptSegments, diarizationSegments) {
     if (!transcriptSegments || transcriptSegments.length === 0) return [];
     const deduped = dedupeMicAgainstSystem(transcriptSegments);

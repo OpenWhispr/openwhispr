@@ -15,6 +15,7 @@ import {
   getEffectiveReasoningModel,
   isCloudReasoningMode,
 } from "../stores/settingsStore";
+import { syncService } from "../services/SyncService.js";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
@@ -1870,6 +1871,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       const result = await window.electronAPI.saveTranscription(text, rawText);
+      if (result?.id) syncService.debouncedPush("transcription", result.id);
 
       // Save audio if we have a captured blob and the transcription was saved successfully
       if (result?.id && this.lastAudioBlob) {
@@ -1908,6 +1910,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         errorMessage,
         errorCode,
       });
+      if (result?.id) syncService.debouncedPush("transcription", result.id);
 
       if (result?.id && this.lastAudioBlob) {
         try {
@@ -1963,6 +1966,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
+      // Realtime WS is OpenAI-only — other providers fall through to HTTP.
+      if ((s.cloudTranscriptionProvider || "openai") !== "openai") return false;
       if (s.cloudTranscriptionMode === "byok") return !!s.openaiApiKey;
       if (s.cloudTranscriptionMode === "openwhispr") return !!(isSignedInOverride ?? s.isSignedIn);
       return false;

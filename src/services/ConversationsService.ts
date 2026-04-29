@@ -54,13 +54,15 @@ async function list(
   limit?: number,
   before?: string,
   archived?: boolean,
-  include?: string
+  include?: string,
+  since?: string
 ): Promise<{ conversations: CloudConversationWithMessages[] }> {
   const params = new URLSearchParams();
   if (limit !== undefined) params.set("limit", String(limit));
   if (before !== undefined) params.set("before", before);
   if (archived) params.set("archived", "true");
   if (include !== undefined) params.set("include", include);
+  if (since !== undefined) params.set("since", since);
   const query = params.toString();
   return cloudGet<{ conversations: CloudConversationWithMessages[] }>(
     `/api/conversations/list${query ? `?${query}` : ""}`

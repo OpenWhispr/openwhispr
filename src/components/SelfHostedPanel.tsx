@@ -26,7 +26,6 @@ export default function SelfHostedPanel({ service, url, onUrlChange }: SelfHoste
           className="h-8 text-sm"
         />
       </div>
-      <p className="text-xs text-muted-foreground/70">{t("settingsPage.selfHosted.lanHint")}</p>
     </div>
   );
 }

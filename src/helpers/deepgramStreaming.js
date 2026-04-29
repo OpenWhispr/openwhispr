@@ -82,6 +82,7 @@ class DeepgramStreaming {
     this.connectionTimeout = null;
     this.accumulatedText = "";
     this.finalSegments = [];
+    this.sessionStartedAt = null;
     this.closeResolve = null;
     this.cachedToken = null;
     this.tokenFetchedAt = null;
@@ -105,6 +106,10 @@ class DeepgramStreaming {
     this.replayBuffer = [];
     this.replayBufferSize = 0;
     this.connectionOptions = null;
+  }
+
+  get completedSegments() {
+    return this.finalSegments;
   }
 
   setTokenRefreshFn(fn) {
@@ -650,6 +655,7 @@ class DeepgramStreaming {
       // the Metadata message and jump straight to SpeechStarted/Results.
       if (this.pendingResolve) {
         this.isConnected = true;
+        this.sessionStartedAt = Date.now();
         clearTimeout(this.connectionTimeout);
         this.startKeepAlive(this.ws);
         if (message.type === "Metadata") {
@@ -685,7 +691,11 @@ class DeepgramStreaming {
             if (trimmed) {
               this.finalSegments.push(trimmed);
               this.accumulatedText = this.finalSegments.join(" ");
-              this.onFinalTranscript?.(this.accumulatedText);
+              const startedAt =
+                this.sessionStartedAt != null && typeof message.start === "number"
+                  ? this.sessionStartedAt + message.start * 1000
+                  : Date.now();
+              this.onFinalTranscript?.(this.accumulatedText, startedAt);
               debugLogger.debug("Deepgram final transcript", {
                 text: trimmed.slice(0, 100),
                 totalAccumulated: this.accumulatedText.length,

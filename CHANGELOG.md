@@ -7,11 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.6.10] - 2026-04-16
+## [1.7.0] - 2026-04-26
 
 ### Added
 
+- **Bundle ID Migration to Gizmo Labs** (macOS/Windows): App identifier renamed from `com.herotools.openwispr` to `com.gizmolabs.openwhispr` to align with the new legal entity (Gizmo Labs Inc.) and fix the long-standing typo. Existing notes, settings, API keys, and downloaded models carry over automatically on first launch (userData path is keyed by `productName`, not bundle ID). Auto-update from 1.6.x cannot reach this release — Squirrel.Mac enforces `CFBundleIdentifier` matching and the Team ID change in Gizmo Labs signing already broke the cryptographic update chain. Users must manually re-download from openwhispr.com/download
+- **Post-Migration Onboarding** (macOS): One-time modal walks returning users through re-granting Microphone, Accessibility, and System Audio after the bundle rename. Detected via a sentinel file (`.bundle-migrated`) in userData; reuses the existing `PermissionsSection` and live-polling hooks. Fresh installs write the sentinel during onboarding completion so the modal never fires for new users
+- **Interoperable Cloud Streaming Providers**: Meeting recording now supports AssemblyAI Universal-3 Pro, Deepgram, and OpenAI Realtime as interchangeable cloud streaming backends. Provider availability is server-authoritative via the `NOTE_RECORDING_PROVIDERS` env var on the API; desktop picks the active provider from the catalog returned by `/api/note-recording-config`
+- **Acoustic VAD Gate for Meeting Mic**: Drops system-dominant microphone chunks using RMS/peak thresholds against a rolling reference window, preventing cross-language hallucinations from speaker bleed into the mic
+- **Peak Escape**: Soft exception to the VAD gate when the mic peak spikes cleanly over the system-speaking window, so the user's voice onset is never clipped mid-syllable
+- **Cross-Device Delete Propagation** (#646): Deletes now propagate across devices through the sync pipeline for all object types
+
+### Changed
+
+- **Meeting Streaming Provider Authority**: Removed the desktop-side streaming provider UI picker. The authoritative list lives on the API; the desktop renders whichever providers are enabled server-side
+- **Echo Cancellation Pipeline**: AEC3 config now disables OS-level `echoCancellation` (it was double-processing) and enables the built-in high-pass filter plus `kModerate` noise suppression, giving a noticeably cleaner mic path before the VAD gate
+- **VAD Thresholds Tuned Against Measured Leak**: RMS ceiling `0.018`, peak ceiling `0.07`, lookback `500ms` — calibrated from real session traces where user speech consistently exceeded both thresholds and bleed consistently sat below
+
+### Fixed
+
+- **AssemblyAI v3 Frame Size**: Buffer audio to meet the v3 minimum 50ms frame requirement (was hitting "Input Duration Error: 45.0 ms")
+- **AssemblyAI / Deepgram `completedSegments`**: The echo-leak detector crashed on turn-end for non-OpenAI providers because `completedSegments` only existed on the OpenAI client; exposed it on AssemblyAI and Deepgram as well
+- **Streaming Token Plumbing**: Streaming client factory now passes both `apiKey` and `token` fields (OpenAI expects `apiKey`, AssemblyAI/Deepgram expect `token`)
+- **Note-Recording Config Over IPC**: Moved the `/api/note-recording-config` fetch from the renderer into the main process so Neon Auth session cookies are attached (was returning 401)
+- **Speech-Start Timestamp to Echo-Leak Detector**: AssemblyAI and Deepgram turns now pass their speech-start wall-clock time to the detector, eliminating `missing_start` drops on legitimate turns
+- **Drop Flagged-Bleed Mic Segments on Holdback Expiry**: When the echo-leak detector flags a mic turn as bleed, the segment is now dropped rather than flushed once the holdback window closes; correlation `>= 0.70` alone is sufficient evidence (in addition to the prior three-condition check)
+- **Speaker Label Cap**: UI speaker labels are now strictly capped at `expectedCount` (interpreted as the number of other attendees besides the user), preventing phantom `Speaker 3+` labels in 1-on-1 and small-group sessions
+- **Live Speaker Profile Matching Scoped to Note Attendees**: Live diarization no longer pulls in profiles from unrelated notes when identifying attendees
+- **Sync — Preserve Client `updated_at` on Note Push**: Server was overwriting `updated_at` on every push, causing spurious sync loops and stale-merge conflicts
+- **Chat Intelligence Stale Provider on Mode Switch** (#647): Switching Agent Mode from Cloud Providers to Local left the previous cloud provider cached, routing chat to the stale provider and erroring with "API key not configured" despite a local model being selected; mode changes now clear `agentProvider`/`agentModel` when incompatible with the new mode
+
+## [1.6.10] - 2026-04-20
+
+### Added
+
+- **Speaker Diarization Controls**: Global on/off toggle in Settings plus a session-scoped pill in the recording view with its own switch and a "1 other in call / 2 others in call" stepper. Unscoped recordings cap at a sensible default to prevent phantom speakers; calendar attendees or the stepper value override. When labeling is off, transcripts fall back to "You"/"Others" labels derived from audio source
 - **Auto-Label 1-on-1 Speakers**: Automatically label system audio speakers in 1-on-1 meetings when exactly two participants are detected (user + one other), creating voice fingerprint profiles and triggering retroactive mapping across past notes
+- **Integrations View**: New top-level Integrations surface hosting API key management (relocated from Settings) and a new MCP integration card with a copyable server URL chip for paid users
+- **Dedicated Meetings Settings**: Separate Speech-to-Text and Language Model selectors for meeting recording, independent from dictation
+- **Streaming-Only Engine Filter**: Note Recording picker now filters to streaming-capable engines (OpenAI Cloud, gpt-4o-transcribe, on-device, streaming LAN servers); self-hosted stays available with a caption warning
+
+### Changed
+
+- **Settings Reorganization**: "AI Models" collapsed into Speech-to-Text and Language Models; "Speech & AI" sidebar group renamed to "AI Models"; Meetings section added with its own sub-tabs; multiple redundant headers removed (sidebar "Settings", Agent Mode, enterprise provider-tabs wrapper, system-prompt textarea wrapper)
+- **Agent Hotkey Relocated**: Moved into the Hotkeys section where it belongs, no longer orphaned under Agent Mode
+- **MCP Pro Gating**: Free users see an upgrade message on the MCP card instead of operational-looking setup steps; paid users get the full flow
+- **README Reframed**: Positions OpenWhispr as an open-source alternative to WisprFlow (dictation) and Granola (meetings)
+- **Meeting Sub-tabs Simplified**: Engine selectors now shown directly; "follow main settings" toggles dropped. A one-time migration preserves every existing user's behavior with zero breaking changes
+
+### Fixed
+
+- **Stop Binding Random Notes to 1-on-1 Attendees**: Removed over-eager calendar-event adoption that was auto-linking unassigned notes to the first active 1-on-1 calendar event, stamping unrelated recordings with that attendee's speaker profile
+- **Echo Leak Detector Pre-AEC**: Detector was receiving the AEC-cleaned mic buffer so correlation against system reference was always ~0; now runs on the raw mic buffer where the leak actually exists
+- **Cloud Sync — Transcriptions Reappear on Restart**: Clearing history hard-deleted locally while cloud rows stayed intact; now soft-deletes with tombstones pushed to cloud before hard-delete
+- **Cloud Sync — Folders Reappear on Restart**: Same delete-sync bug as transcriptions; mirrored the notes/conversations pattern with `deleted_at`, `pushFolderDeletes`, and a pull-side tombstone guard
+- **Folder Name Collision After Delete**: `UNIQUE(name)` blocked recreating a folder with the same name while its tombstone sat unsynced; tombstoned rows now get a mangled internal name that frees the slot without leaking to cloud
+- **View Plans Deep-Link**: `SettingsModal` was initializing `activeSection` to "account" regardless of `initialSection` because `prevOpen` equalled `open` on first mount; moved to lazy state initializers so the resolution branch fires correctly
+- **MCP i18n**: Setup steps corrected from OAuth to API key auth
+- **Missing Integrations i18n Keys**: Added to en, es, fr locales
+- **Legacy Prompts Deep-Link**: Now routes to the Dictation Cleanup sub-tab where PromptStudio lives, instead of falling back to the default tab
+- **Japanese / Chinese Sidebar Descriptions**: Rewritten to use the same vocabulary as the actual sub-tabs
+- **Spanish Enterprise Strings**: Aligned on "en la nube" for consistency
+- **Parakeet Model Cache**: "Open cache folder" now opens at the cache root so downloaded models are actually visible
 
 ## [1.6.9] - 2026-04-16
 
@@ -515,6 +572,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.4.8] - 2026-02-12
 
 ### Added
+
 - **Referral Program**: Invite friends to earn free Pro months with referral dashboard, email invitations, invite tracking with status badges, and animated spectrogram share card with unique referral code
 - **Notes System**: Added sidebar navigation with notes system and dictionary view for organizing transcriptions
 - **Folder Organization**: Notes can be organized into custom folders with a default Personal folder, folder management UI, and folder-aware note filtering. Upload flow now includes folder selection

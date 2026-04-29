@@ -28,7 +28,22 @@ const {
 } = require("electron");
 const path = require("path");
 const http = require("http");
+const tls = require("tls");
 require("dotenv").config({ path: path.join(__dirname, ".env") });
+
+// Extend Node's TLS trust with the OS store so ws and https.get see corporate
+// CAs that Chromium already trusts.
+try {
+  const currentCAs = tls.getCACertificates();
+  const systemCAs = tls.getCACertificates("system");
+  if (systemCAs?.length) {
+    tls.setDefaultCACertificates([...currentCAs, ...systemCAs]);
+  }
+} catch (err) {
+  require("./src/helpers/debugLogger").warn("System CA merge failed; using existing CA list", {
+    error: err?.message,
+  });
+}
 
 const VALID_CHANNELS = new Set(["development", "staging", "production"]);
 const DEFAULT_OAUTH_PROTOCOL_BY_CHANNEL = {
@@ -36,7 +51,7 @@ const DEFAULT_OAUTH_PROTOCOL_BY_CHANNEL = {
   staging: "openwhispr-staging",
   production: "openwhispr",
 };
-const BASE_WINDOWS_APP_ID = "com.herotools.openwispr";
+const BASE_WINDOWS_APP_ID = "com.gizmolabs.openwhispr";
 const DEFAULT_AUTH_BRIDGE_PORT = 5199;
 
 function isElectronBinaryExec() {
@@ -229,6 +244,7 @@ const ParakeetManager = require("./src/helpers/parakeet");
 const DiarizationManager = require("./src/helpers/diarization");
 const TrayManager = require("./src/helpers/tray");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
+const CliBridge = require("./src/helpers/cliBridge");
 const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
@@ -271,6 +287,7 @@ let linuxPortalAudioManager = null;
 let meetingAecManager = null;
 let qdrantManager = null;
 let ipcHandlers = null;
+let cliBridge = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 
@@ -583,6 +600,12 @@ async function startApp() {
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
   startAuthBridgeServer();
+
+  cliBridge = new CliBridge(ipcHandlers);
+  cliBridge.start().catch((err) => {
+    debugLogger.error("CLI bridge failed to start", { error: err.message });
+    cliBridge = null;
+  });
 
   // Electron's file:// sends no Origin header, which Neon Auth rejects.
   session.defaultSession.webRequest.onBeforeSendHeaders(
@@ -1313,6 +1336,10 @@ if (gotSingleInstanceLock) {
     if (authBridgeServer) {
       authBridgeServer.close();
       authBridgeServer = null;
+    }
+    if (cliBridge) {
+      cliBridge.stop().catch(() => {});
+      cliBridge = null;
     }
     if (windowManager && isLiveWindow(windowManager.agentWindow)) {
       windowManager.agentWindow.destroy();

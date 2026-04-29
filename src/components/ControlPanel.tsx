@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Download, RefreshCw, Loader2, AlertTriangle, Zap, ChevronLeft } from "lucide-react";
 import UpgradePrompt from "./UpgradePrompt";
+import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
 import { useDialogs } from "../hooks/useDialogs";
 import { useHotkey } from "../hooks/useHotkey";
@@ -25,6 +26,7 @@ import WindowControls from "./WindowControls";
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
 import { setActiveNoteId, setActiveFolderId, initializeNotes } from "../stores/noteStore";
+import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import HistoryView from "./HistoryView";
 import { syncService } from "../services/SyncService.js";
 
@@ -45,6 +47,7 @@ export default function ControlPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [showPostMigration, setShowPostMigration] = useState(false);
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
   const [settingsSection, setSettingsSection] = useState<string | undefined>();
@@ -117,6 +120,26 @@ export default function ControlPanel() {
       }
     })();
   }, [showAlertDialog, t]);
+
+  useEffect(() => {
+    const { noteFilesEnabled, noteFilesPath } = useSettingsStore.getState();
+    if (!noteFilesEnabled) return;
+    window.electronAPI?.noteFilesSetEnabled?.(true, noteFilesPath || undefined, {
+      skipRebuild: true,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (platform !== "darwin") return;
+    window.electronAPI?.getPostMigrationState?.().then((state) => {
+      if (state?.justMigrated) setShowPostMigration(true);
+    });
+  }, []);
+
+  const dismissPostMigrationPermanently = useCallback(async () => {
+    await window.electronAPI?.markBundleMigrated?.();
+    setShowPostMigration(false);
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -266,10 +289,10 @@ export default function ControlPanel() {
 
   // When accessibility is missing on macOS, open the permissions settings page
   useEffect(() => {
-    const cleanup = window.electronAPI?.onAccessibilityMissing?.(() => {
-      if (isAccessibilitySkipped()) {
-        return;
-      }
+    const cleanup = window.electronAPI?.onAccessibilityMissing?.(async () => {
+      if (isAccessibilitySkipped()) return;
+      const migration = await window.electronAPI?.getPostMigrationState?.();
+      if (migration?.justMigrated) return;
       setSettingsSection("privacyData");
       setShowSettings(true);
       toast({
@@ -283,6 +306,10 @@ export default function ControlPanel() {
 
   useEffect(() => {
     syncService.syncAll().catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    fetchStreamingProviders();
   }, []);
 
   const handleMeetingRecordingRequestHandled = useCallback(
@@ -326,6 +353,7 @@ export default function ControlPanel() {
             const result = await window.electronAPI.deleteTranscription(id);
             if (result.success) {
               removeFromStore(id);
+              syncService.syncAll().catch(console.error);
             } else {
               showAlertDialog({
                 title: t("controlPanel.history.couldNotDeleteTitle"),
@@ -354,6 +382,7 @@ export default function ControlPanel() {
           const result = await window.electronAPI.clearTranscriptions();
           if (result.success) {
             clearStore();
+            syncService.syncAll().catch(console.error);
             toast({
               title: t("controlPanel.history.clearAllSuccess"),
               variant: "success",
@@ -557,6 +586,12 @@ export default function ControlPanel() {
         onOpenChange={setShowUpgradePrompt}
         wordsUsed={limitData?.wordsUsed}
         limit={limitData?.limit}
+      />
+
+      <PostMigrationOnboarding
+        open={showPostMigration}
+        onOpenChange={setShowPostMigration}
+        onDone={dismissPostMigrationPermanently}
       />
 
       {showSettings && (
@@ -809,7 +844,13 @@ export default function ControlPanel() {
             )}
             {activeView === "integrations" && (
               <Suspense fallback={null}>
-                <IntegrationsView />
+                <IntegrationsView
+                  isPaid={!!(usage?.isSubscribed || usage?.isTrial)}
+                  onUpgrade={() => {
+                    setSettingsSection("plansBilling");
+                    setShowSettings(true);
+                  }}
+                />
               </Suspense>
             )}
           </div>

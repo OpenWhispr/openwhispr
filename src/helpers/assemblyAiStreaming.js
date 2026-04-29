@@ -9,6 +9,8 @@ const TOKEN_EXPIRY_MS = 300000;
 const REWARM_DELAY_MS = 2000;
 const MAX_REWARM_ATTEMPTS = 10;
 const KEEPALIVE_INTERVAL_MS = 15000;
+const MIN_FRAME_MS = 50;
+const MIN_FRAME_BYTES = (SAMPLE_RATE * 2 * MIN_FRAME_MS) / 1000;
 
 class AssemblyAiStreaming {
   constructor() {
@@ -36,6 +38,10 @@ class AssemblyAiStreaming {
     this.rewarmTimer = null;
     this.keepAliveInterval = null;
     this.isDisconnecting = false;
+    this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
+    this.completedSegments = [];
+    this.speechStartedAt = null;
   }
 
   buildWebSocketUrl(options) {
@@ -46,8 +52,14 @@ class AssemblyAiStreaming {
       format_turns: "true",
       token: options.token,
     });
-    if (options.language && options.language !== "auto") {
-      params.set("speech_model", "universal-streaming-multilingual");
+    if (options.model) {
+      params.set("speech_model", options.model);
+    }
+    if (options.minTurnSilence != null) {
+      params.set("min_turn_silence", String(options.minTurnSilence));
+    }
+    if (options.maxTurnSilence != null) {
+      params.set("max_turn_silence", String(options.maxTurnSilence));
     }
     if (options.keyterms && options.keyterms.length > 0) {
       params.set("keyterms_prompt", JSON.stringify(options.keyterms.slice(0, 100)));
@@ -385,9 +397,10 @@ class AssemblyAiStreaming {
                 // turn only when this variant is formatted, otherwise ignore duplicate.
                 if (message.turn_is_formatted && previousTurn.text !== trimmedTranscript) {
                   previousTurn.text = trimmedTranscript;
+                  this.completedSegments[this.completedSegments.length - 1] = trimmedTranscript;
                   this.lastTurnText = trimmedTranscript;
                   this.accumulatedText = this.turns.map((turn) => turn.text).join(" ");
-                  this.onFinalTranscript?.(this.accumulatedText);
+                  this.onFinalTranscript?.(this.accumulatedText, previousTurn.startedAt);
                   debugLogger.debug("AssemblyAI formatted turn update applied", {
                     text: trimmedTranscript.slice(0, 100),
                     totalAccumulated: this.accumulatedText.length,
@@ -400,13 +413,17 @@ class AssemblyAiStreaming {
                 break;
               }
 
+              const speechTimestamp = this.speechStartedAt || Date.now();
+              this.speechStartedAt = null;
               this.turns.push({
                 text: trimmedTranscript,
                 normalized: normalizedTranscript,
+                startedAt: speechTimestamp,
               });
+              this.completedSegments.push(trimmedTranscript);
               this.lastTurnText = trimmedTranscript;
               this.accumulatedText = this.turns.map((turn) => turn.text).join(" ");
-              this.onFinalTranscript?.(this.accumulatedText);
+              this.onFinalTranscript?.(this.accumulatedText, speechTimestamp);
               debugLogger.debug("AssemblyAI final transcript (end_of_turn)", {
                 text: message.transcript.slice(0, 100),
                 totalAccumulated: this.accumulatedText.length,
@@ -445,6 +462,10 @@ class AssemblyAiStreaming {
           this.onError?.(new Error(message.error));
           break;
 
+        case "SpeechStarted":
+          this.speechStartedAt = Date.now();
+          break;
+
         default:
           debugLogger.debug("AssemblyAI unknown message type", { type: message.type });
       }
@@ -466,7 +487,16 @@ class AssemblyAiStreaming {
       return false;
     }
 
-    this.ws.send(pcmBuffer);
+    this.pendingAudio.push(pcmBuffer);
+    this.pendingAudioBytes += pcmBuffer.length;
+    if (this.pendingAudioBytes < MIN_FRAME_BYTES) {
+      return true;
+    }
+
+    const frame = Buffer.concat(this.pendingAudio, this.pendingAudioBytes);
+    this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
+    this.ws.send(frame);
     return true;
   }
 
@@ -521,6 +551,11 @@ class AssemblyAiStreaming {
   cleanup() {
     clearTimeout(this.connectionTimeout);
     this.connectionTimeout = null;
+
+    this.pendingAudio = [];
+    this.pendingAudioBytes = 0;
+    this.completedSegments = [];
+    this.speechStartedAt = null;
 
     if (this.ws) {
       try {

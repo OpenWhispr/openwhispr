@@ -14,7 +14,17 @@
       "path": "Speicherort",
       "changePath": "Speicherort ändern",
       "rebuild": "Alle Dateien neu erstellen",
-      "rebuildDescription": "Alle Notizen und Transkripte erneut auf die Festplatte synchronisieren"
+      "rebuildDescription": "Alle Notizen und Transkripte erneut auf die Festplatte synchronisieren",
+      "rebuildError": {
+        "title": "Neuerstellung fehlgeschlagen",
+        "description": "Die Notizdateien konnten nicht neu erstellt werden. Stellen Sie sicher, dass die Funktion aktiviert ist und der Ordner beschreibbar ist."
+      }
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "Sprecher erkennen und beschriften",
+        "description": "Wenn deaktiviert, zeigen Transkripte „Du“ und „Andere“"
+      }
     }
   },
   "tray": {
@@ -178,7 +188,7 @@
       "systemAudioDescription": "Transkribiert Meetings, Anrufe, Vorträge, Podcasts und andere Systemaudios.",
       "optional": "Optional",
       "recommended": "Empfohlen",
-      "accessibilityTroubleshooting": "Nicht erkannt? Entferne OpenWhispr aus den Bedienungshilfen in den Systemeinstellungen, füge es erneut hinzu und aktiviere es. Du kannst dies überspringen — Text wird nur in die Zwischenablage kopiert statt automatisch eingefügt."
+      "accessibilityTroubleshooting": "Schalte in Systemeinstellungen → Bedienungshilfen den Schalter für OpenWhispr aus und wieder ein. Wenn das nicht hilft, entferne OpenWhispr aus der Liste und füge es erneut hinzu. Klappt's immer noch nicht? Schreib an support@openwhispr.com."
     },
     "transcription": {
       "title": "Transkriptions-Einrichtung",
@@ -275,8 +285,8 @@
       "rawTranscript": "Rohtranskript"
     },
     "cloudMigration": {
-      "title": "Willkommen bei OpenWhispr Pro",
-      "description": "Ihre 7-Tage-Testphase ist aktiv! Wir haben die Transkription auf OpenWhispr Cloud umgestellt für schnellere und genauere Ergebnisse. Ihre bisherigen Einstellungen sind gespeichert – wechseln Sie jederzeit in den Einstellungen zurück.",
+      "title": "Willkommen bei OpenWhispr Cloud",
+      "description": "Wir haben die Transkription auf OpenWhispr Cloud umgestellt für schnellere und genauere Ergebnisse. Ihre bisherigen Einstellungen sind gespeichert – wechseln Sie jederzeit in den Einstellungen zurück.",
       "viewSettings": "Einstellungen anzeigen"
     },
     "aiCta": {
@@ -888,7 +898,7 @@
     "groups": {
       "account": "Konto",
       "app": "App",
-      "speechAi": "Sprache & KI",
+      "aiModels": "KI-Modelle",
       "system": "System"
     },
     "sections": {
@@ -900,10 +910,6 @@
         "description": "Tarife, Nutzung & Abrechnung",
         "label": "Tarife & Abrechnung"
       },
-      "apiKeys": {
-        "label": "API-Schlüssel",
-        "description": "API-Zugriff verwalten"
-      },
       "general": {
         "description": "Darstellung, Töne & Start",
         "label": "Einstellungen"
@@ -912,13 +918,13 @@
         "description": "Diktat-Hotkey & Aktivierung",
         "label": "Hotkeys"
       },
-      "transcription": {
-        "description": "Sprache-zu-Text-Engine",
-        "label": "Transkription"
+      "speechToText": {
+        "description": "Engines für Diktat & Notizaufnahme",
+        "label": "Spracherkennung"
       },
-      "intelligence": {
-        "description": "KI-Modelle, Agent & Prompts",
-        "label": "Intelligenz"
+      "llms": {
+        "description": "Modelle für Chat, Bereinigung & Zusammenfassungen",
+        "label": "Sprachmodelle"
       },
       "privacyData": {
         "description": "Datenschutz, Berechtigungen & Analyse",
@@ -927,10 +933,6 @@
       "system": {
         "description": "Updates, Speicher & Entwicklertools",
         "label": "System"
-      },
-      "agentMode": {
-        "label": "Agent-Modus",
-        "description": "Sprach-Chat-Assistent"
       }
     },
     "title": "Einstellungen"
@@ -1136,20 +1138,12 @@
         "bulletPoints": "Hey {{agentName}}, wandle das in Stichpunkte um"
       }
     },
-    "apiKeys": {
-      "title": "API-Schlüssel",
-      "signInRequired": "Anmeldung erforderlich",
-      "signInRequiredDescription": "Melden Sie sich an, um Ihre API-Schlüssel zu verwalten.",
-      "proRequired": "API-Zugriff erfordert einen kostenpflichtigen Plan",
-      "proRequiredDescription": "Upgraden Sie auf Pro, um API-Schlüssel zu erstellen und OpenWhispr in Ihre Workflows zu integrieren.",
-      "viewPlans": "Pläne anzeigen"
-    },
     "aiModels": {
       "customSetup": "Benutzerdefinierte Einrichtung",
       "customSetupDescription": "Verwenden Sie Ihren eigenen Anbieter und API-Schlüssel.",
       "description": "Bereinigt Transkriptionen, verarbeitet Befehle und korrigiert Fehler unter Beibehaltung Ihres Stils.",
       "enableTextCleanup": "Textbereinigung aktivieren",
-      "enableTextCleanupDescription": "KI verbessert die Transkriptionsqualität",
+      "enableTextCleanupDescription": "KI formatiert Text und führt Sprachbefehle aus",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud-Anbieter",
@@ -1476,6 +1470,24 @@
       "description": "Den einheitlichen System-Prompt anzeigen, anpassen und testen, der Textbereinigung und Anweisungserkennung steuert",
       "title": "Prompt-Studio"
     },
+    "speechToText": {
+      "title": "Spracherkennung",
+      "description": "Wählen Sie eine Engine für Diktat und Notizaufnahme",
+      "tabs": {
+        "dictation": "Diktat",
+        "noteRecording": "Notizaufnahme"
+      },
+      "selfHostedStreamingNote": "Erfordert einen Server, der Streaming-Transkription unterstützt."
+    },
+    "llms": {
+      "title": "Sprachmodelle",
+      "description": "Konfigurieren Sie Modelle für Bereinigung, Notizformatierung und Chat",
+      "tabs": {
+        "dictationCleanup": "Diktat-Bereinigung",
+        "noteFormatting": "Notizformatierung",
+        "chatIntelligence": "Chat-Intelligenz"
+      }
+    },
     "transcription": {
       "customSetup": "Benutzerdefinierte Einrichtung",
       "customSetupDescription": "Verwenden Sie Ihren eigenen Anbieter und API-Schlüssel.",
@@ -1537,8 +1549,7 @@
     "selfHosted": {
       "endpointUrl": "Endpunkt-URL",
       "serverUrl": "Server-URL",
-      "apiKeyOptional": "API-Schlüssel (optional)",
-      "lanHint": "Audio bleibt in Ihrem Netzwerk — nichts verlässt Ihr LAN."
+      "apiKeyOptional": "API-Schlüssel (optional)"
     }
   },
   "models": {
@@ -1713,7 +1724,11 @@
       "folderName": "Ordnername",
       "couldNotCreate": "Ordner konnte nicht erstellt werden",
       "couldNotRename": "Ordner konnte nicht umbenannt werden",
-      "couldNotDelete": "Ordner konnte nicht gelöscht werden"
+      "couldNotDelete": "Ordner konnte nicht gelöscht werden",
+      "deleteTitle": "Ordner löschen?",
+      "deleteDescription": "Dadurch werden \"{{name}}\" und {{count}} enthaltene Notiz(en) dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "deleteDescriptionEmpty": "Dadurch wird \"{{name}}\" dauerhaft gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "deleteConfirm": "Ordner und Notizen löschen"
     },
     "list": {
       "title": "Notizen",
@@ -1922,7 +1937,19 @@
       "nameOrEmailPlaceholder": "Name oder E-Mail eingeben",
       "addContact": "Kontakt hinzufügen",
       "save": "Speichern",
-      "cancel": "Abbrechen"
+      "cancel": "Abbrechen",
+      "pill": {
+        "identifying": "Sprecher werden identifiziert",
+        "notLabeled": "Sprecher nicht beschriftet",
+        "finalizing": "Sprecher werden finalisiert…",
+        "justYou": "nur du",
+        "defaultingHint": "standardmäßig 1 weitere Person",
+        "toggleAria": "Sprechererkennung für diese Aufnahme umschalten",
+        "incAria": "Erwartete Sprecheranzahl erhöhen",
+        "decAria": "Erwartete Sprecheranzahl verringern",
+        "othersInCall_one": "{{count}} weitere Person im Gespräch",
+        "othersInCall_other": "{{count}} weitere Personen im Gespräch"
+      }
     }
   },
   "dictionary": {
@@ -2006,6 +2033,12 @@
     "contactSupport": "Support kontaktieren",
     "submitBug": "Fehler melden"
   },
+  "postMigration": {
+    "title": "Willkommen zurück bei OpenWhispr",
+    "description": "Deine Notizen und Einstellungen wurden aus der vorherigen Version übernommen. macOS behandelt das hier allerdings als neue App, daher müssen ein paar Berechtigungen erneut erteilt werden.",
+    "done": "Fertig",
+    "remindLater": "Später erinnern"
+  },
   "apiKeyInput": {
     "placeholder": "API-Schlüssel eingeben",
     "label": "API-Schlüssel",
@@ -2068,8 +2101,6 @@
   },
   "agentMode": {
     "settings": {
-      "title": "Agent-Modus",
-      "description": "Sprach-Chat-Assistent mit separatem KI-Modell",
       "enabled": "Agent-Modus aktivieren",
       "enabledDescription": "Verwende eine separate Tastenkombination, um ein Sprach-Chat-Overlay zu öffnen",
       "hotkey": "Agent-Tastenkombination",
@@ -2160,6 +2191,31 @@
       "systemAudioRequired": "Systemaudio-Berechtigung erforderlich",
       "systemAudioDescription": "Zum Transkribieren von Meetings benötigt OpenWhispr die Systemaudio-Berechtigung, um den Ton anderer Teilnehmer aufzunehmen. Wir nehmen Ihren Bildschirm nie auf. Sie werden zu den Systemeinstellungen weitergeleitet, um diese zu aktivieren.",
       "openSettings": "Systemeinstellungen öffnen"
+    },
+    "sections": {
+      "calendar": "Kalender",
+      "api": "API",
+      "mcp": "MCP"
+    },
+    "api": {
+      "title": "API-Schlüssel",
+      "description": "Verwalte API-Schlüssel für programmatischen Zugriff",
+      "proRequired": "Upgrade auf einen kostenpflichtigen Plan, um die API zu nutzen",
+      "manage": "Schlüssel verwalten",
+      "viewPlans": "Pläne ansehen",
+      "dialogTitle": "API-Schlüssel"
+    },
+    "mcp": {
+      "title": "Bring deine Notizen in deine KI-Tools",
+      "description": "Chatte, suche und arbeite mit deinen Notizen in Claude, ChatGPT und Cursor.",
+      "step1": "Füge OpenWhispr MCP in deinem KI-Tool mit der öffentlichen URL hinzu",
+      "step2": "Erstelle oben einen API-Schlüssel mit den benötigten Berechtigungen.",
+      "step3": "Füge den Schlüssel als Authorization-Header ein, um zu verbinden.",
+      "learnMore": "Mehr erfahren",
+      "viewPlans": "Pläne ansehen",
+      "copyUrl": "MCP-URL kopieren",
+      "proRequired": "Upgrade auf einen kostenpflichtigen Plan, um OpenWhispr mit Claude, ChatGPT und Cursor zu verbinden.",
+      "copied": "Kopiert"
     },
     "plan": {
       "title": "Dein Plan",
@@ -2343,5 +2399,11 @@
     "copy": "Kopieren",
     "copied": "Kopiert",
     "waitingForInput": "Sag etwas..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "Du",
+      "others": "Andere"
+    }
   }
 }

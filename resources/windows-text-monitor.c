@@ -107,6 +107,16 @@ void print_text_output(const char *name, const WCHAR *value) {
     free(utf8);
 }
 
+static BSTR read_text_pattern_value(IUIAutomationTextPattern *tp) {
+    IUIAutomationTextRange *range = NULL;
+    if (FAILED(IUIAutomationTextPattern_get_DocumentRange(tp, &range)) || !range) return NULL;
+    BSTR text = NULL;
+    HRESULT hr = IUIAutomationTextRange_GetText(range, -1, &text);
+    IUIAutomationTextRange_Release(range);
+    if (FAILED(hr)) { SysFreeString(text); return NULL; }
+    return text;
+}
+
 int main(void) {
     signal(SIGTERM, signal_handler);
     signal(SIGINT, signal_handler);
@@ -152,8 +162,10 @@ int main(void) {
         return 1;
     }
 
-    /* Try to get the Value pattern */
+    /* Try to get the Value pattern, then fall back to Text pattern */
     IUIAutomationValuePattern *valuePattern = NULL;
+    IUIAutomationTextPattern *textPattern = NULL;
+    int useTextPattern = 0;
     hr = IUIAutomationElement_GetCurrentPatternAs(
         focused, UIA_ValuePatternId,
         &IID_IUIAutomationValuePattern, (void **)&valuePattern
@@ -176,19 +188,27 @@ int main(void) {
             return 0;
         }
     } else {
-        /* No Value pattern — try getting the Name property as fallback */
-        BSTR name = NULL;
-        hr = IUIAutomationElement_get_CurrentName(focused, &name);
-        if (SUCCEEDED(hr) && name && SysStringLen(name) > 0) {
-            /* Element has a name but no editable value — not a text field */
-            SysFreeString(name);
+        /* No Value pattern — try Text pattern (RichEdit, Monaco, WinUI, Qt, Electron) */
+        hr = IUIAutomationElement_GetCurrentPatternAs(
+            focused, UIA_TextPatternId,
+            &IID_IUIAutomationTextPattern, (void **)&textPattern
+        );
+        if (SUCCEEDED(hr) && textPattern) {
+            lastValue = read_text_pattern_value(textPattern);
+            if (lastValue) {
+                useTextPattern = 1;
+                print_text_output("INITIAL_VALUE", lastValue);
+            }
         }
-        printf("NO_VALUE\n");
-        fflush(stdout);
-        IUIAutomationElement_Release(focused);
-        IUIAutomation_Release(automation);
-        CoUninitialize();
-        return 0;
+        if (!useTextPattern) {
+            printf("NO_VALUE\n");
+            fflush(stdout);
+            if (textPattern) IUIAutomationTextPattern_Release(textPattern);
+            IUIAutomationElement_Release(focused);
+            IUIAutomation_Release(automation);
+            CoUninitialize();
+            return 0;
+        }
     }
 
     /* Poll for value changes */
@@ -201,8 +221,13 @@ int main(void) {
         Sleep(POLL_INTERVAL_MS);
 
         BSTR currentValue = NULL;
-        hr = IUIAutomationValuePattern_get_CurrentValue(valuePattern, &currentValue);
-        if (FAILED(hr) || !currentValue) continue;
+        if (useTextPattern) {
+            currentValue = read_text_pattern_value(textPattern);
+        } else {
+            hr = IUIAutomationValuePattern_get_CurrentValue(valuePattern, &currentValue);
+            if (FAILED(hr)) currentValue = NULL;
+        }
+        if (!currentValue) continue;
 
         /* Compare with last known value */
         if (lastValue && wcscmp(currentValue, lastValue) != 0) {
@@ -217,6 +242,7 @@ int main(void) {
     /* Cleanup */
     if (lastValue) SysFreeString(lastValue);
     if (valuePattern) IUIAutomationValuePattern_Release(valuePattern);
+    if (textPattern) IUIAutomationTextPattern_Release(textPattern);
     if (focused) IUIAutomationElement_Release(focused);
     if (automation) IUIAutomation_Release(automation);
     CoUninitialize();

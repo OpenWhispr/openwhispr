@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { getSettings } from "../stores/settingsStore";
+import { getSettings, selectResolvedMeetingTranscription } from "../stores/settingsStore";
+import { useStreamingProvidersStore } from "../stores/streamingProvidersStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
 import {
@@ -8,6 +9,10 @@ import {
   getFallbackSystemAudioAccess,
   isRendererSystemAudioStrategy,
 } from "../utils/systemAudioAccess";
+import {
+  DEFAULT_EXPECTED_SPEAKER_COUNT,
+  MAX_SPEAKER_COUNT,
+} from "../constants/speakerDetection.json";
 import logger from "../utils/logger";
 import {
   lockTranscriptSpeaker,
@@ -56,10 +61,16 @@ interface UseMeetingTranscriptionReturn {
   systemPartialSpeakerName: string | null;
   error: string | null;
   diarizationSessionId: string | null;
+  sessionDiarizationEnabled: boolean;
+  sessionExpectedCount: number;
+  userTouchedStepper: boolean;
+  setSessionDiarizationEnabled: (enabled: boolean) => void;
+  setSessionExpectedCount: (count: number) => void;
   prepareTranscription: () => Promise<void>;
   startTranscription: (_options?: {
     seedSegments?: TranscriptSegment[];
     noteId?: number | null;
+    expectedCount?: number;
   }) => Promise<void>;
   stopTranscription: () => Promise<void>;
   lockSpeaker: (speakerId: string, displayName: string) => void;
@@ -68,12 +79,11 @@ interface UseMeetingTranscriptionReturn {
 const MEETING_AUDIO_BUFFER_SIZE = 800;
 const MEETING_STOP_FLUSH_TIMEOUT_MS = 50;
 const MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS = {
-  echoCancellation: true,
+  echoCancellation: false,
   noiseSuppression: false,
   autoGainControl: false,
 } as const;
 
-const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 const SPEAKER_IDENTIFICATION_RETENTION_MS = 30_000;
 const SYSTEM_SPEAKER_CARRY_FORWARD_MS = 8_000;
 const buildTranscriptText = (segments: TranscriptSegment[]) =>
@@ -105,32 +115,39 @@ const isSegmentWithinIdentificationWindow = (
 };
 
 const getMeetingTranscriptionOptions = () => {
-  const {
-    useLocalWhisper,
-    localTranscriptionProvider,
-    whisperModel,
-    parakeetModel,
-    cloudTranscriptionMode,
-    cloudTranscriptionModel,
-    openaiApiKey,
-  } = getSettings();
+  const state = getSettings();
+  const resolved = selectResolvedMeetingTranscription(state);
 
-  if (useLocalWhisper) {
+  if (resolved.useLocalWhisper) {
     return {
       provider: "local" as const,
-      localProvider: localTranscriptionProvider,
+      localProvider: resolved.localTranscriptionProvider,
       localModel:
-        localTranscriptionProvider === "nvidia"
-          ? parakeetModel || "parakeet-tdt-0.6b-v3"
-          : whisperModel || "base",
+        resolved.localTranscriptionProvider === "nvidia"
+          ? resolved.parakeetModel || "parakeet-tdt-0.6b-v3"
+          : resolved.whisperModel || "base",
     };
   }
 
-  const model = REALTIME_MODELS.has(cloudTranscriptionModel)
-    ? cloudTranscriptionModel
-    : "gpt-4o-mini-transcribe";
-  const mode = cloudTranscriptionMode === "byok" && !!openaiApiKey ? "byok" : "openwhispr";
-  return { provider: "openai-realtime" as const, model, mode };
+  const catalog = useStreamingProvidersStore.getState().providers;
+  const provider =
+    catalog?.find((p) => p.id === resolved.cloudTranscriptionProvider) ?? catalog?.[0];
+  const byokKeyAvailable = provider?.id === "openai" ? !!state.openaiApiKey : true;
+  const mode =
+    resolved.cloudTranscriptionMode === "byok" && byokKeyAvailable ? "byok" : "openwhispr";
+  if (!provider) {
+    logger.debug(
+      "Streaming providers catalog not loaded, falling back to OpenAI default",
+      {},
+      "meeting"
+    );
+    return { provider: "openai-realtime" as const, model: "gpt-4o-mini-transcribe", mode };
+  }
+  const model =
+    provider.models.find((m) => m.id === resolved.cloudTranscriptionModel)?.id ??
+    provider.models.find((m) => m.default)?.id ??
+    provider.models[0]?.id;
+  return { provider: `${provider.id}-realtime` as const, model, mode };
 };
 
 const stopMediaStream = (stream: MediaStream | null) => {
@@ -376,6 +393,14 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const [systemPartialSpeakerName, setSystemPartialSpeakerName] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [diarizationSessionId, setDiarizationSessionId] = useState<string | null>(null);
+  const [sessionDiarizationEnabled, _setSessionDiarizationEnabled] = useState<boolean>(
+    () =>
+      (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ?? true
+  );
+  const [sessionExpectedCount, _setSessionExpectedCount] = useState<number>(
+    DEFAULT_EXPECTED_SPEAKER_COUNT
+  );
+  const [userTouchedStepper, setUserTouchedStepper] = useState(false);
 
   const micContextRef = useRef<AudioContext | null>(null);
   const micSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -397,6 +422,39 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   const systemPartialSpeakerIdRef = useRef<string | null>(null);
   const recentSystemSpeakerRef = useRef<RecentSystemSpeaker | null>(null);
   const speakerLocksRef = useRef<Map<string, string>>(new Map());
+  const pushConfigRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const pushConfig = useCallback((enabled: boolean, expectedCount: number) => {
+    if (pushConfigRef.current) clearTimeout(pushConfigRef.current);
+    pushConfigRef.current = setTimeout(() => {
+      (
+        window.electronAPI as unknown as {
+          setMeetingSessionSpeakerConfig?: (config: {
+            enabled: boolean;
+            expectedCount: number;
+          }) => void;
+        }
+      )?.setMeetingSessionSpeakerConfig?.({ enabled, expectedCount });
+    }, 150);
+  }, []);
+
+  const setSessionDiarizationEnabled = useCallback(
+    (enabled: boolean) => {
+      _setSessionDiarizationEnabled(enabled);
+      pushConfig(enabled, sessionExpectedCount);
+    },
+    [pushConfig, sessionExpectedCount]
+  );
+
+  const setSessionExpectedCount = useCallback(
+    (count: number) => {
+      const clamped = Math.max(1, Math.min(MAX_SPEAKER_COUNT, count));
+      _setSessionExpectedCount(clamped);
+      setUserTouchedStepper(true);
+      pushConfig(sessionDiarizationEnabled, clamped);
+    },
+    [pushConfig, sessionDiarizationEnabled]
+  );
 
   const setSystemPartialSpeakerIdentity = useCallback(
     (speakerId: string | null, speakerName: string | null) => {
@@ -642,9 +700,23 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
   }, []);
 
   const startTranscription = useCallback(
-    async (_options?: { seedSegments?: TranscriptSegment[]; noteId?: number | null }) => {
+    async (_options?: {
+      seedSegments?: TranscriptSegment[];
+      noteId?: number | null;
+      expectedCount?: number;
+    }) => {
       if (isRecordingRef.current || isStartingRef.current) return;
       isStartingRef.current = true;
+      const initialEnabled =
+        (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ??
+        true;
+      const initialCount = Math.max(
+        1,
+        Math.min(MAX_SPEAKER_COUNT, _options?.expectedCount ?? DEFAULT_EXPECTED_SPEAKER_COUNT)
+      );
+      _setSessionDiarizationEnabled(initialEnabled);
+      _setSessionExpectedCount(initialCount);
+      setUserTouchedStepper(false);
       const systemAudioAccessPromise =
         window.electronAPI?.checkSystemAudioAccess?.() ??
         Promise.resolve(DEFAULT_SYSTEM_AUDIO_ACCESS);
@@ -1139,6 +1211,10 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
         pendingCleanupRef.current = null;
         void cleanup();
       }, 0);
+      if (pushConfigRef.current) {
+        clearTimeout(pushConfigRef.current);
+        pushConfigRef.current = null;
+      }
     };
   }, [cleanup]);
 
@@ -1153,6 +1229,11 @@ export function useMeetingTranscription(): UseMeetingTranscriptionReturn {
     systemPartialSpeakerName,
     error,
     diarizationSessionId,
+    sessionDiarizationEnabled,
+    sessionExpectedCount,
+    userTouchedStepper,
+    setSessionDiarizationEnabled,
+    setSessionExpectedCount,
     prepareTranscription,
     startTranscription,
     stopTranscription,

@@ -150,12 +150,17 @@ export function InferenceModeSelector({
   const { t } = useTranslation();
 
   return (
-    <SettingsPanel>
+    <SettingsPanel className="overflow-hidden">
       {modes.map((mode) => {
         const isActive = activeMode === mode.id;
         const isDisabled = !!mode.disabled;
         return (
-          <SettingsPanelRow key={mode.id}>
+          <SettingsPanelRow
+            key={mode.id}
+            className={`transition-colors ${
+              isDisabled ? "" : "hover:bg-foreground/3 dark:hover:bg-white/3"
+            }`}
+          >
             <button
               onClick={() => onSelect(mode.id)}
               className={`w-full flex items-center gap-3 text-left cursor-pointer group ${

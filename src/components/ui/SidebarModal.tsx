@@ -116,23 +116,16 @@ export default function SidebarModal<T extends string>({
             </DialogPrimitive.Close>
 
             <div ref={containerRef} className="flex h-[85vh]">
+              <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
+
               {/* Sidebar */}
               <div
                 className={`${actualSidebarWidth} shrink-0 border-r border-border/40 dark:border-border-subtle flex flex-col bg-surface-1 dark:bg-surface-0 transition-[width] duration-200 ease-out`}
               >
-                {/* Title */}
-                {!isCompact && (
-                  <div className="px-4 pt-5 pb-0.5">
-                    <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
-                      {title}
-                    </h2>
-                  </div>
-                )}
-
                 {/* Navigation */}
                 <nav
                   className={`relative flex-1 pb-2 overflow-y-auto ${
-                    isCompact ? "px-1.5 pt-4" : "px-2 pt-2.5"
+                    isCompact ? "px-1.5 pt-4" : "px-2 pt-4"
                   }`}
                 >
                   {groupedItems.map((group, groupIndex) => (

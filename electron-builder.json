@@ -1,5 +1,5 @@
 {
-  "appId": "com.herotools.openwispr",
+  "appId": "com.gizmolabs.openwhispr",
   "afterPack": "scripts/afterPack.js",
   "productName": "OpenWhispr",
   "protocols": {
@@ -19,6 +19,7 @@
     "src/dist/**/*",
     "src/helpers/**/*",
     "src/config/**/*",
+    "src/constants/**/*",
     "src/locales/**/*",
     "src/hooks/**/*",
     "src/models/**/*",
@@ -133,7 +134,7 @@
     "hardenedRuntime": true,
     "entitlements": "resources/mac/entitlements.mac.plist",
     "entitlementsInherit": "resources/mac/entitlements.mac.plist",
-    "identity": "HeroTools Inc. (9R85XFMH59)",
+    "identity": "Gizmo Labs Inc. (T832773L2J)",
     "notarize": true,
     "extraResources": [
       {
