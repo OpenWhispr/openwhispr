@@ -9,6 +9,7 @@
   },
   "scripts": {
     "compile:globe": "node scripts/build-globe-listener.js",
+    "compile:context-capture": "node scripts/build-context-capture.js",
     "compile:fast-paste": "node scripts/build-macos-fast-paste.js",
     "compile:winkeys": "node scripts/build-windows-key-listener.js",
     "compile:linuxkeys": "node scripts/build-linux-key-listener.js",
@@ -19,7 +20,8 @@
     "compile:media-remote": "node scripts/build-media-remote.js",
     "compile:mic-listener": "node scripts/build-macos-mic-listener.js",
     "compile:audio-tap": "node scripts/build-macos-audio-tap.js",
-    "compile:native": "npm run compile:globe && npm run compile:fast-paste && npm run compile:winkeys && npm run compile:linuxkeys && npm run compile:winpaste && npm run compile:linux-paste && npm run compile:linux-system-audio && npm run compile:text-monitor && npm run compile:media-remote && npm run compile:mic-listener && npm run compile:audio-tap",
+    "compile:wincontext": "node scripts/build-windows-context-capture.js",
+    "compile:native": "npm run compile:globe && npm run compile:context-capture && npm run compile:fast-paste && npm run compile:winkeys && npm run compile:linuxkeys && npm run compile:winpaste && npm run compile:linux-paste && npm run compile:linux-system-audio && npm run compile:text-monitor && npm run compile:media-remote && npm run compile:mic-listener && npm run compile:audio-tap && npm run compile:wincontext",
     "prestart": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:qdrant && npm run download:embedding-model",
     "start": "electron .",
     "predev": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:qdrant && npm run download:embedding-model",

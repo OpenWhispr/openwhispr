@@ -288,6 +288,16 @@ class EnvironmentManager {
     return result;
   }
 
+  getContextAwarenessEnabled() {
+    return this._getKey("CONTEXT_AWARENESS_ENABLED") !== "false";
+  }
+
+  saveContextAwarenessEnabled(enabled) {
+    const result = this._saveKey("CONTEXT_AWARENESS_ENABLED", String(enabled));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
   getStartMinimized() {
     return this._getKey("START_MINIMIZED") === "true";
   }
