@@ -254,6 +254,8 @@ class WhisperManager {
     const model = options.model || "base";
     const language = options.language || null;
     const initialPrompt = options.initialPrompt || null;
+    const vadEnabled = options.vadEnabled === true;
+    const vadConfig = options.vadConfig || null;
     const modelPath = this.getModelPath(model);
 
     // Check if model exists
@@ -261,19 +263,27 @@ class WhisperManager {
       throw new Error(`Whisper model "${model}" not downloaded. Please download it from Settings.`);
     }
 
-    return await this.transcribeViaServer(audioBlob, model, language, initialPrompt);
+    return await this.transcribeViaServer(audioBlob, model, language, initialPrompt, {
+      vadEnabled,
+      vadConfig,
+    });
   }
 
-  async transcribeViaServer(audioBlob, model, language, initialPrompt = null) {
+  async transcribeViaServer(audioBlob, model, language, initialPrompt = null, options = {}) {
     debugLogger.info("Transcription mode: SERVER", { model, language: language || "auto" });
     const modelPath = this.getModelPath(model);
 
-    // Start server if not running or if model changed
-    if (!this.serverManager.ready || this.currentServerModel !== model) {
-      debugLogger.debug("Starting/restarting whisper-server for model", { model });
-      await this.serverManager.start(modelPath, { useCuda: this.serverManager.useCuda });
-      this.currentServerModel = model;
-    }
+    // Delegate restart decisions to server manager (model/cuda/VAD signature aware).
+    debugLogger.debug("Ensuring whisper-server is ready", {
+      model,
+      vadEnabled: options.vadEnabled === true,
+    });
+    await this.serverManager.start(modelPath, {
+      useCuda: this.serverManager.useCuda,
+      vadEnabled: options.vadEnabled === true,
+      vadConfig: options.vadConfig || null,
+    });
+    this.currentServerModel = model;
 
     // Convert audioBlob to Buffer if needed
     let audioBuffer;

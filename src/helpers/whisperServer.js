@@ -10,12 +10,60 @@ const { killProcess } = require("../utils/process");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
 const sidecarPidFile = require("./sidecarPidFile");
+const {
+  sanitizeWhisperVadConfig,
+  DEFAULT_WHISPER_VAD_CONFIG,
+} = require("./whisperVadConfig");
 
 const PORT_RANGE_START = 8178;
 const PORT_RANGE_END = 8199;
 const STARTUP_TIMEOUT_MS = 30000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
+
+function getVadSignature(options = {}) {
+  const vadEnabled = options.vadEnabled === true;
+  if (!vadEnabled) return "vad:off";
+  const vadConfig = sanitizeWhisperVadConfig(options.vadConfig || DEFAULT_WHISPER_VAD_CONFIG);
+  return `vad:on:${JSON.stringify(vadConfig)}`;
+}
+
+function buildWhisperServerArgs({
+  modelPath,
+  port,
+  language,
+  threads,
+  vadEnabled = false,
+  vadConfig,
+}) {
+  const args = ["--model", modelPath, "--host", "127.0.0.1", "--port", String(port)];
+
+  if (threads) args.push("--threads", String(threads));
+
+  // whisper.cpp defaults to English when --language is omitted;
+  // explicitly pass "auto" to enable language auto-detection
+  args.push("--language", language || "auto");
+
+  if (vadEnabled) {
+    const cfg = sanitizeWhisperVadConfig(vadConfig || DEFAULT_WHISPER_VAD_CONFIG);
+    args.push(
+      "--vad-threshold",
+      String(cfg.threshold),
+      "--vad-min-speech-duration-ms",
+      String(cfg.minSpeechDurationMs),
+      "--vad-min-silence-duration-ms",
+      String(cfg.minSilenceDurationMs),
+      "--vad-max-speech-duration-s",
+      String(cfg.maxSpeechDurationS),
+      "--vad-speech-pad-ms",
+      String(cfg.speechPadMs),
+      "--vad-samples-overlap",
+      String(cfg.samplesOverlap)
+    );
+  }
+
+  return args;
+}
 
 class WhisperServerManager extends EventEmitter {
   constructor() {
@@ -32,6 +80,7 @@ class WhisperServerManager extends EventEmitter {
     this.cachedFFmpegPath = null;
     this.canConvert = false;
     this.useCuda = false;
+    this.vadSignature = "vad:off";
   }
 
   getFFmpegPath() {
@@ -240,7 +289,15 @@ class WhisperServerManager extends EventEmitter {
   async start(modelPath, options = {}) {
     if (this.startupPromise) return this.startupPromise;
 
-    if (this.ready && this.modelPath === modelPath && !this.isRemote) return;
+    const nextVadSignature = getVadSignature(options);
+    if (
+      this.ready &&
+      this.modelPath === modelPath &&
+      !this.isRemote &&
+      this.vadSignature === nextVadSignature
+    ) {
+      return;
+    }
 
     if (this.process || this.isRemote) {
       await this.stop();
@@ -248,6 +305,7 @@ class WhisperServerManager extends EventEmitter {
 
     this.isRemote = false;
     this.hostname = "127.0.0.1";
+    this.vadSignature = nextVadSignature;
     this.startupPromise = this._doStart(modelPath, options);
     try {
       await this.startupPromise;
@@ -285,7 +343,14 @@ class WhisperServerManager extends EventEmitter {
       spawnEnv.CUDA_VISIBLE_DEVICES = process.env.TRANSCRIPTION_GPU_INDEX;
     }
 
-    const args = ["--model", modelPath, "--host", "127.0.0.1", "--port", String(this.port)];
+    const args = buildWhisperServerArgs({
+      modelPath,
+      port: this.port,
+      language: options.language,
+      threads: options.threads,
+      vadEnabled: options.vadEnabled === true,
+      vadConfig: options.vadConfig,
+    });
 
     // FFmpeg is required for pre-converting audio to 16kHz mono WAV
     this.canConvert = !!ffmpegPath;
@@ -295,11 +360,6 @@ class WhisperServerManager extends EventEmitter {
     } else {
       debugLogger.warn("FFmpeg not found - whisper-server will only accept 16kHz mono WAV");
     }
-
-    if (options.threads) args.push("--threads", String(options.threads));
-    // whisper.cpp defaults to English when --language is omitted;
-    // explicitly pass "auto" to enable language auto-detection
-    args.push("--language", options.language || "auto");
 
     debugLogger.debug("Starting whisper-server", {
       port: this.port,
@@ -656,3 +716,5 @@ class WhisperServerManager extends EventEmitter {
 }
 
 module.exports = WhisperServerManager;
+module.exports.buildWhisperServerArgs = buildWhisperServerArgs;
+module.exports.getVadSignature = getVadSignature;

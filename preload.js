@@ -843,6 +843,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-set-speaker-diarization-enabled", { enabled }),
   setMeetingSessionSpeakerConfig: (config) =>
     ipcRenderer.invoke("meeting-set-session-speaker-config", config),
+  getWhisperVadConfig: () => ipcRenderer.invoke("whisper-vad-get-config"),
+  setWhisperVadConfig: (config) => ipcRenderer.invoke("whisper-vad-set-config", config),
+  setDictationSileroEnabled: (enabled) =>
+    ipcRenderer.invoke("whisper-vad-set-dictation-enabled", { enabled }),
+  setNoteRecordingSileroEnabled: (enabled) =>
+    ipcRenderer.invoke("whisper-vad-set-note-recording-enabled", { enabled }),
+  setMeetingSileroEnabled: (enabled) =>
+    ipcRenderer.invoke("whisper-vad-set-meeting-enabled", { enabled }),
   onMeetingDetected: registerListener(
     "meeting-detected",
     (callback) => (_event, data) => callback(data)

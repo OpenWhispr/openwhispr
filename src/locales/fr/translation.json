@@ -1591,7 +1591,33 @@
         "deleteModels": "Supprimer les modèles"
       },
       "transcriptionPreview": "Aperçu en direct",
-      "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction"
+      "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction",
+      "vad": {
+        "title": "Détection d'activité vocale Silero",
+        "description": "Contrôlez quand la transcription locale Whisper démarre et termine les segments de parole",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD pour la dictée",
+            "description": "Activer la détection d'activité vocale pour la dictée locale"
+          },
+          "noteRecording": {
+            "title": "Silero VAD pour l'enregistrement de notes",
+            "description": "Activer la détection d'activité vocale pour l'enregistrement local des notes"
+          },
+          "meeting": {
+            "title": "Silero VAD pour les réunions",
+            "description": "Activer la détection d'activité vocale pour la transcription locale des réunions"
+          }
+        },
+        "params": {
+          "threshold": "--vad-threshold",
+          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
+          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
+          "maxSpeechDurationS": "--vad-max-speech-duration-s",
+          "speechPadMs": "--vad-speech-pad-ms",
+          "samplesOverlap": "--vad-samples-overlap"
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

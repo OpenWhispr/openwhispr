@@ -1538,7 +1538,33 @@
         "deleteModels": "刪除模型"
       },
       "transcriptionPreview": "即時轉錄預覽",
-      "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行文字整理"
+      "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行文字整理",
+      "vad": {
+        "title": "Silero 語音活動偵測",
+        "description": "控制本機 Whisper 轉錄何時開始與結束語音片段",
+        "toggles": {
+          "dictation": {
+            "title": "聽寫使用 Silero VAD",
+            "description": "為本機聽寫啟用語音活動偵測"
+          },
+          "noteRecording": {
+            "title": "筆記錄音使用 Silero VAD",
+            "description": "為本機筆記錄音啟用語音活動偵測"
+          },
+          "meeting": {
+            "title": "會議使用 Silero VAD",
+            "description": "為本機會議轉錄啟用語音活動偵測"
+          }
+        },
+        "params": {
+          "threshold": "--vad-threshold",
+          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
+          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
+          "maxSpeechDurationS": "--vad-max-speech-duration-s",
+          "speechPadMs": "--vad-speech-pad-ms",
+          "samplesOverlap": "--vad-samples-overlap"
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

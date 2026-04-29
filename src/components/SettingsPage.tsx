@@ -29,6 +29,8 @@ import {
   BookOpen,
   Copy,
   Trash2,
+  Info,
+  Building2,
   MessageSquare,
   FileAudio,
   Wand2,
@@ -89,6 +91,7 @@ import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
@@ -445,6 +448,34 @@ function useSubTab<T extends string>(storageKey: string, options: readonly T[], 
   return [safeTab, setTab] as const;
 }
 
+function VADLabelWithInfo({
+  label,
+  description,
+}: {
+  label: string;
+  description: string;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+      <span>{label}</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={label}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent side="top" align="start" className="max-w-sm p-3">
+          <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
 function SpeechToTextTabs({
   initialTab,
   renderDictation,
@@ -684,6 +715,24 @@ export default function SettingsPage({
     setNoteFilesEnabled,
     noteFilesPath,
     setNoteFilesPath,
+    dictationSileroEnabled,
+    setDictationSileroEnabled,
+    noteRecordingSileroEnabled,
+    setNoteRecordingSileroEnabled,
+    meetingSileroEnabled,
+    setMeetingSileroEnabled,
+    whisperVadThreshold,
+    setWhisperVadThreshold,
+    whisperVadMinSpeechDurationMs,
+    setWhisperVadMinSpeechDurationMs,
+    whisperVadMinSilenceDurationMs,
+    setWhisperVadMinSilenceDurationMs,
+    whisperVadMaxSpeechDurationS,
+    setWhisperVadMaxSpeechDurationS,
+    whisperVadSpeechPadMs,
+    setWhisperVadSpeechPadMs,
+    whisperVadSamplesOverlap,
+    setWhisperVadSamplesOverlap,
   } = useSettings();
 
   const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
@@ -2166,6 +2215,191 @@ export default function SettingsPage({
                       }}
                     />
                   </SettingsRow>
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Voice Activity Detection */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.voiceActivityDetection.title", {
+                  defaultValue: "Voice Activity Detection",
+                })}
+                description={t("settingsPage.general.voiceActivityDetection.description", {
+                  defaultValue:
+                    "Configure how Silero VAD detects and segments speech for local Whisper transcription",
+                })}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.transcription.vad.toggles.dictation.title")}
+                    description={t("settingsPage.transcription.vad.toggles.dictation.description")}
+                  >
+                    <Toggle checked={dictationSileroEnabled} onChange={setDictationSileroEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.transcription.vad.toggles.noteRecording.title")}
+                    description={t("settingsPage.transcription.vad.toggles.noteRecording.description")}
+                  >
+                    <Toggle
+                      checked={noteRecordingSileroEnabled}
+                      onChange={setNoteRecordingSileroEnabled}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.transcription.vad.toggles.meeting.title")}
+                    description={t("settingsPage.transcription.vad.toggles.meeting.description")}
+                  >
+                    <Toggle checked={meetingSileroEnabled} onChange={setMeetingSileroEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                    <div className="space-y-1.5">
+                      <VADLabelWithInfo
+                        label={t("settingsPage.general.voiceActivityDetection.fields.threshold.label", {
+                          defaultValue: "VAD Threshold",
+                        })}
+                        description={t(
+                          "settingsPage.general.voiceActivityDetection.fields.threshold.info",
+                          {
+                            defaultValue:
+                              "Threshold probability for speech detection. A probability for a speech segment/frame above this threshold will be considered as speech.",
+                          }
+                        )}
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0.1"
+                        max="0.95"
+                        value={whisperVadThreshold}
+                        onChange={(e) => setWhisperVadThreshold(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <VADLabelWithInfo
+                        label={t(
+                          "settingsPage.general.voiceActivityDetection.fields.minSpeechDurationMs.label",
+                          { defaultValue: "Minimum Speach Duration (milli-seconds)" }
+                        )}
+                        description={t(
+                          "settingsPage.general.voiceActivityDetection.fields.minSpeechDurationMs.info",
+                          {
+                            defaultValue:
+                              "Minimum speech duration in milliseconds. Speech segments shorter than this value will be discarded to filter out brief noise or false positives.",
+                          }
+                        )}
+                      />
+                      <Input
+                        type="number"
+                        step="10"
+                        min="50"
+                        max="2000"
+                        value={whisperVadMinSpeechDurationMs}
+                        onChange={(e) => setWhisperVadMinSpeechDurationMs(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <VADLabelWithInfo
+                        label={t(
+                          "settingsPage.general.voiceActivityDetection.fields.minSilenceDurationMs.label",
+                          { defaultValue: "Minimum Silence Duration (milli-secons)" }
+                        )}
+                        description={t(
+                          "settingsPage.general.voiceActivityDetection.fields.minSilenceDurationMs.info",
+                          {
+                            defaultValue:
+                              "Minimum silence duration in milliseconds. Silence periods must be at least this long to end a speech segment. Shorter silence periods will be ignored and included as part of the speech.",
+                          }
+                        )}
+                      />
+                      <Input
+                        type="number"
+                        step="10"
+                        min="50"
+                        max="2000"
+                        value={whisperVadMinSilenceDurationMs}
+                        onChange={(e) =>
+                          setWhisperVadMinSilenceDurationMs(Number(e.target.value))
+                        }
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <VADLabelWithInfo
+                        label={t(
+                          "settingsPage.general.voiceActivityDetection.fields.maxSpeechDurationS.label",
+                          { defaultValue: "Maximum Speech Duration (seconds)" }
+                        )}
+                        description={t(
+                          "settingsPage.general.voiceActivityDetection.fields.maxSpeechDurationS.info",
+                          {
+                            defaultValue:
+                              "Maximum speech duration in seconds. Speech segments longer than this will be automatically split into multiple segments at silence points exceeding 98ms to prevent excessively long segments.",
+                          }
+                        )}
+                      />
+                      <Input
+                        type="number"
+                        step="1"
+                        min="5"
+                        max="120"
+                        value={whisperVadMaxSpeechDurationS}
+                        onChange={(e) => setWhisperVadMaxSpeechDurationS(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <VADLabelWithInfo
+                        label={t(
+                          "settingsPage.general.voiceActivityDetection.fields.speechPadMs.label",
+                          { defaultValue: "Speech Padding (milli-seconds)" }
+                        )}
+                        description={t(
+                          "settingsPage.general.voiceActivityDetection.fields.speechPadMs.info",
+                          {
+                            defaultValue:
+                              "Speech padding in milliseconds. Adds this amount of padding before and after each detected speech segment to avoid cutting off speech edges.",
+                          }
+                        )}
+                      />
+                      <Input
+                        type="number"
+                        step="10"
+                        min="0"
+                        max="1000"
+                        value={whisperVadSpeechPadMs}
+                        onChange={(e) => setWhisperVadSpeechPadMs(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <VADLabelWithInfo
+                        label={t(
+                          "settingsPage.general.voiceActivityDetection.fields.samplesOverlap.label",
+                          { defaultValue: "Samples Overlap (seconds)" }
+                        )}
+                        description={t(
+                          "settingsPage.general.voiceActivityDetection.fields.samplesOverlap.info",
+                          {
+                            defaultValue:
+                              "Amount of audio to extend from each speech segment into the next one, in seconds (e.g., 0.10 = 100ms overlap). This ensures speech isn't cut off abruptly between segments when they're concatenated together.",
+                          }
+                        )}
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="0.95"
+                        value={whisperVadSamplesOverlap}
+                        onChange={(e) => setWhisperVadSamplesOverlap(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>

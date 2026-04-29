@@ -1538,7 +1538,33 @@
         "deleteModels": "删除模型"
       },
       "transcriptionPreview": "实时转录预览",
-      "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理"
+      "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理",
+      "vad": {
+        "title": "Silero 语音活动检测",
+        "description": "控制本地 Whisper 转录在何时开始与结束语音片段",
+        "toggles": {
+          "dictation": {
+            "title": "听写使用 Silero VAD",
+            "description": "为本地听写启用语音活动检测"
+          },
+          "noteRecording": {
+            "title": "笔记录音使用 Silero VAD",
+            "description": "为本地笔记录音启用语音活动检测"
+          },
+          "meeting": {
+            "title": "会议使用 Silero VAD",
+            "description": "为本地会议转录启用语音活动检测"
+          }
+        },
+        "params": {
+          "threshold": "--vad-threshold",
+          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
+          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
+          "maxSpeechDurationS": "--vad-max-speech-duration-s",
+          "speechPadMs": "--vad-speech-pad-ms",
+          "samplesOverlap": "--vad-samples-overlap"
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

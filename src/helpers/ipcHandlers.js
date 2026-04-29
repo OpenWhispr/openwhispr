@@ -34,6 +34,11 @@ const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
+const {
+  DEFAULT_WHISPER_VAD_CONFIG,
+  sanitizeWhisperVadConfig,
+  resolveContextSileroEnabled,
+} = require("./whisperVadConfig");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
@@ -319,6 +324,12 @@ class IPCHandlers {
     this._noteFilesEnabled = false;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
+    this.whisperVadSettings = {
+      dictationSileroEnabled: true,
+      noteRecordingSileroEnabled: true,
+      meetingSileroEnabled: true,
+      ...DEFAULT_WHISPER_VAD_CONFIG,
+    };
     liveSpeakerIdentifier.setDiarizationManager(this.diarizationManager);
     this._setupTextEditMonitor();
     this._setupAudioCleanup();
@@ -330,6 +341,48 @@ class IPCHandlers {
         this.broadcastToWindows("cuda-fallback-notification", {});
       });
     }
+  }
+
+  _getWhisperVadSettings() {
+    const cfg = sanitizeWhisperVadConfig(this.whisperVadSettings || DEFAULT_WHISPER_VAD_CONFIG);
+    return {
+      dictationSileroEnabled: this.whisperVadSettings?.dictationSileroEnabled !== false,
+      noteRecordingSileroEnabled: this.whisperVadSettings?.noteRecordingSileroEnabled !== false,
+      meetingSileroEnabled: this.whisperVadSettings?.meetingSileroEnabled !== false,
+      ...cfg,
+    };
+  }
+
+  _setWhisperVadSettings(update = {}) {
+    const previous = this._getWhisperVadSettings();
+    const merged = {
+      ...previous,
+      ...(update || {}),
+    };
+
+    this.whisperVadSettings = {
+      dictationSileroEnabled: merged.dictationSileroEnabled !== false,
+      noteRecordingSileroEnabled: merged.noteRecordingSileroEnabled !== false,
+      meetingSileroEnabled: merged.meetingSileroEnabled !== false,
+      ...sanitizeWhisperVadConfig(merged),
+    };
+
+    return this._getWhisperVadSettings();
+  }
+
+  _resolveWhisperVadOptions(context) {
+    const settings = this._getWhisperVadSettings();
+    return {
+      vadEnabled: resolveContextSileroEnabled(settings, context),
+      vadConfig: {
+        threshold: settings.threshold,
+        minSpeechDurationMs: settings.minSpeechDurationMs,
+        minSilenceDurationMs: settings.minSilenceDurationMs,
+        maxSpeechDurationS: settings.maxSpeechDurationS,
+        speechPadMs: settings.speechPadMs,
+        samplesOverlap: settings.samplesOverlap,
+      },
+    };
   }
 
   _asyncVectorUpsert(note) {
@@ -1405,7 +1458,11 @@ class IPCHandlers {
           const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
           return result;
         }
-        const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, options);
+        const vadOptions = this._resolveWhisperVadOptions("noteRecording");
+        const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
+          ...options,
+          ...vadOptions,
+        });
         return result;
       } catch (error) {
         debugLogger.error("Audio file transcription error", { error: error.message });
@@ -1484,7 +1541,11 @@ class IPCHandlers {
       });
 
       try {
-        const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, options);
+        const vadOptions = this._resolveWhisperVadOptions("dictation");
+        const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, {
+          ...options,
+          ...vadOptions,
+        });
 
         debugLogger.log("Whisper result", {
           success: result.success,
@@ -3536,8 +3597,10 @@ class IPCHandlers {
               settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
             result = await this.parakeetManager.transcribeLocalParakeet(buffer, { model });
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
+            const vadOptions = this._resolveWhisperVadOptions("noteRecording");
             result = await this.whisperManager.transcribeLocalWhisper(buffer, {
               model: settings.whisperModel,
+              ...vadOptions,
             });
           }
         } else if (settings?.cloudTranscriptionMode === "openwhispr") {
@@ -4679,8 +4742,10 @@ class IPCHandlers {
             model: meetingLocalModel,
           });
         } else {
+          const vadOptions = this._resolveWhisperVadOptions("meeting");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: meetingLocalModel,
+            ...vadOptions,
           });
         }
 
@@ -4914,8 +4979,10 @@ class IPCHandlers {
             model: dictationPreviewModel,
           });
         } else {
+          const vadOptions = this._resolveWhisperVadOptions("dictation");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: dictationPreviewModel,
+            ...vadOptions,
           });
         }
 
@@ -7119,6 +7186,56 @@ class IPCHandlers {
       try {
         this.speakerDiarizationEnabled = payload?.enabled !== false;
         return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("whisper-vad-get-config", async () => {
+      try {
+        return { success: true, config: this._getWhisperVadSettings() };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("whisper-vad-set-config", async (_event, payload) => {
+      try {
+        const config = this._setWhisperVadSettings(payload || {});
+        return { success: true, config };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("whisper-vad-set-dictation-enabled", async (_event, payload) => {
+      try {
+        const config = this._setWhisperVadSettings({
+          dictationSileroEnabled: payload?.enabled !== false,
+        });
+        return { success: true, config };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("whisper-vad-set-note-recording-enabled", async (_event, payload) => {
+      try {
+        const config = this._setWhisperVadSettings({
+          noteRecordingSileroEnabled: payload?.enabled !== false,
+        });
+        return { success: true, config };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("whisper-vad-set-meeting-enabled", async (_event, payload) => {
+      try {
+        const config = this._setWhisperVadSettings({
+          meetingSileroEnabled: payload?.enabled !== false,
+        });
+        return { success: true, config };
       } catch (error) {
         return { success: false, error: error.message };
       }

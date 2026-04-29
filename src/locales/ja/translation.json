@@ -1543,7 +1543,33 @@
         "deleteModels": "モデルを削除"
       },
       "transcriptionPreview": "リアルタイム文字起こしプレビュー",
-      "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示"
+      "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示",
+      "vad": {
+        "title": "Silero 音声アクティビティ検出",
+        "description": "ローカル Whisper 文字起こしで、音声区間の開始と終了を制御します",
+        "toggles": {
+          "dictation": {
+            "title": "ディクテーションで Silero VAD を使用",
+            "description": "ローカルディクテーションで音声アクティビティ検出を有効化"
+          },
+          "noteRecording": {
+            "title": "ノート録音で Silero VAD を使用",
+            "description": "ローカルノート録音で音声アクティビティ検出を有効化"
+          },
+          "meeting": {
+            "title": "会議で Silero VAD を使用",
+            "description": "ローカル会議文字起こしで音声アクティビティ検出を有効化"
+          }
+        },
+        "params": {
+          "threshold": "--vad-threshold",
+          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
+          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
+          "maxSpeechDurationS": "--vad-max-speech-duration-s",
+          "speechPadMs": "--vad-speech-pad-ms",
+          "samplesOverlap": "--vad-samples-overlap"
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

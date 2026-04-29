@@ -1543,7 +1543,33 @@
         "deleteModels": "Modelle löschen"
       },
       "transcriptionPreview": "Live-Transkriptionsvorschau",
-      "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen"
+      "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen",
+      "vad": {
+        "title": "Silero Sprachaktivitaetserkennung",
+        "description": "Steuert, wann die lokale Whisper-Transkription Sprachsegmente startet und beendet",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD fuer Diktat",
+            "description": "Sprachaktivitaetserkennung fuer lokales Diktat aktivieren"
+          },
+          "noteRecording": {
+            "title": "Silero VAD fuer Notizaufzeichnung",
+            "description": "Sprachaktivitaetserkennung fuer lokale Notizaufzeichnung aktivieren"
+          },
+          "meeting": {
+            "title": "Silero VAD fuer Meetings",
+            "description": "Sprachaktivitaetserkennung fuer lokale Meeting-Transkription aktivieren"
+          }
+        },
+        "params": {
+          "threshold": "--vad-threshold",
+          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
+          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
+          "maxSpeechDurationS": "--vad-max-speech-duration-s",
+          "speechPadMs": "--vad-speech-pad-ms",
+          "samplesOverlap": "--vad-samples-overlap"
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

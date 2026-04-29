@@ -1585,6 +1585,41 @@ declare global {
         enabled: boolean;
         expectedCount: number;
       }) => Promise<{ success: boolean; error?: string }>;
+      getWhisperVadConfig?: () => Promise<{
+        success: boolean;
+        config?: {
+          dictationSileroEnabled: boolean;
+          noteRecordingSileroEnabled: boolean;
+          meetingSileroEnabled: boolean;
+          threshold: number;
+          minSpeechDurationMs: number;
+          minSilenceDurationMs: number;
+          maxSpeechDurationS: number;
+          speechPadMs: number;
+          samplesOverlap: number;
+        };
+        error?: string;
+      }>;
+      setWhisperVadConfig?: (config: {
+        dictationSileroEnabled?: boolean;
+        noteRecordingSileroEnabled?: boolean;
+        meetingSileroEnabled?: boolean;
+        threshold?: number;
+        minSpeechDurationMs?: number;
+        minSilenceDurationMs?: number;
+        maxSpeechDurationS?: number;
+        speechPadMs?: number;
+        samplesOverlap?: number;
+      }) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
+      setDictationSileroEnabled?: (
+        enabled: boolean
+      ) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
+      setNoteRecordingSileroEnabled?: (
+        enabled: boolean
+      ) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
+      setMeetingSileroEnabled?: (
+        enabled: boolean
+      ) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
       onMeetingDetected?: (callback: (data: any) => void) => () => void;
       onMeetingDetectedStartRecording?: (callback: (data: any) => void) => () => void;
       onMeetingNotificationData?: (callback: (data: any) => void) => () => void;

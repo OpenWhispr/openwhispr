@@ -1639,7 +1639,33 @@
         "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "Live Transcription Preview",
-      "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup"
+      "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup",
+      "vad": {
+        "title": "Silero Voice Activity Detection",
+        "description": "Control when local Whisper transcription starts and stops speech segments",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD for Dictation",
+            "description": "Enable voice activity detection for local dictation transcription"
+          },
+          "noteRecording": {
+            "title": "Silero VAD for Note Recording",
+            "description": "Enable voice activity detection for local note recording transcription"
+          },
+          "meeting": {
+            "title": "Silero VAD for Meetings",
+            "description": "Enable voice activity detection for local meeting transcription"
+          }
+        },
+        "params": {
+          "threshold": "--vad-threshold",
+          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
+          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
+          "maxSpeechDurationS": "--vad-max-speech-duration-s",
+          "speechPadMs": "--vad-speech-pad-ms",
+          "samplesOverlap": "--vad-samples-overlap"
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

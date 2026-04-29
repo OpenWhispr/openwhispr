@@ -1543,7 +1543,33 @@
         "deleteModels": "Удалить модели"
       },
       "transcriptionPreview": "Предпросмотр транскрипции",
-      "transcriptionPreviewDescription": "Показывать транскрипцию в плавающем окне перед очисткой"
+      "transcriptionPreviewDescription": "Показывать транскрипцию в плавающем окне перед очисткой",
+      "vad": {
+        "title": "Определение голосовой активности Silero",
+        "description": "Управляет тем, когда локальная транскрипция Whisper начинает и завершает речевые сегменты",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD для диктовки",
+            "description": "Включить определение голосовой активности для локальной диктовки"
+          },
+          "noteRecording": {
+            "title": "Silero VAD для записи заметок",
+            "description": "Включить определение голосовой активности для локальной записи заметок"
+          },
+          "meeting": {
+            "title": "Silero VAD для встреч",
+            "description": "Включить определение голосовой активности для локальной транскрипции встреч"
+          }
+        },
+        "params": {
+          "threshold": "--vad-threshold",
+          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
+          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
+          "maxSpeechDurationS": "--vad-max-speech-duration-s",
+          "speechPadMs": "--vad-speech-pad-ms",
+          "samplesOverlap": "--vad-samples-overlap"
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

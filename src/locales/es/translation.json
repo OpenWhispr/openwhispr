@@ -544,7 +544,7 @@
         "optionalPasteTool": "Para pegado automático, instala {{tool}}:\n\n{{installCmd}}{{waylandNote}}\n\nSin esto, aún puedes usar OpenWhispr: el texto se copiará al portapapeles y podrás pegar con Ctrl+V."
       },
       "alerts": {
-        "accessibilityNeeded": "Se requieren permisos de accesibilidad. Concédelos en la configuración del sistema."
+        "accessibilityNeeded": "¡Se necesitan permisos de accesibilidad! Concédelos en la configuración del sistema."
       },
       "notes": {
         "waylandWtype": "\n\nNota: para apps XWayland, xdotool también funciona.",
@@ -1591,7 +1591,33 @@
         "deleteModels": "Eliminar modelos"
       },
       "transcriptionPreview": "Vista previa en vivo",
-      "transcriptionPreviewDescription": "Mostrar transcripción en una ventana flotante antes de la corrección"
+      "transcriptionPreviewDescription": "Mostrar transcripción en una ventana flotante antes de la corrección",
+      "vad": {
+        "title": "Detección de actividad de voz Silero",
+        "description": "Controla cuándo la transcripción local con Whisper inicia y termina segmentos de voz",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD para dictado",
+            "description": "Activa la detección de actividad de voz para dictado local"
+          },
+          "noteRecording": {
+            "title": "Silero VAD para grabación de notas",
+            "description": "Activa la detección de actividad de voz para grabación local de notas"
+          },
+          "meeting": {
+            "title": "Silero VAD para reuniones",
+            "description": "Activa la detección de actividad de voz para transcripción local de reuniones"
+          }
+        },
+        "params": {
+          "threshold": "--vad-threshold",
+          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
+          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
+          "maxSpeechDurationS": "--vad-max-speech-duration-s",
+          "speechPadMs": "--vad-speech-pad-ms",
+          "samplesOverlap": "--vad-samples-overlap"
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {
