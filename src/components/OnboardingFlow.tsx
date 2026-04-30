@@ -91,9 +91,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     activationMode,
     setActivationMode,
     setDictationKey,
-    setOpenaiApiKey,
-    setGroqApiKey,
-    setMistralApiKey,
     updateTranscriptionSettings,
     preferredLanguage,
   } = useSettings();
