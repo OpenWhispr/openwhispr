@@ -874,27 +874,6 @@
       "modified": "已修改"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "返回登入",
-    "confirmPasswordPlaceholder": "確認新密碼",
-    "continue": "繼續",
-    "errors": {
-      "passwordMinLength": "密碼至少需要 8 個字元",
-      "passwordsDoNotMatch": "密碼不一致"
-    },
-    "goBack": "返回",
-    "newPasswordPlaceholder": "新密碼",
-    "notConfigured": "尚未設定驗證功能。",
-    "passwordMinLength": "密碼至少需要 8 個字元",
-    "resetButton": "重設密碼",
-    "resetting": "重設中...",
-    "subtitle": "請在下方輸入你的新密碼",
-    "success": {
-      "description": "你的密碼已更新。你現在已登入。",
-      "title": "密碼重設成功"
-    },
-    "title": "建立新密碼"
-  },
   "settingsModal": {
     "groups": {
       "account": "帳戶",

@@ -874,27 +874,6 @@
       "modified": "Изменён"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Вернуться к входу",
-    "confirmPasswordPlaceholder": "Подтвердите новый пароль",
-    "continue": "Продолжить",
-    "errors": {
-      "passwordMinLength": "Пароль должен содержать не менее 8 символов",
-      "passwordsDoNotMatch": "Пароли не совпадают"
-    },
-    "goBack": "Вернуться",
-    "newPasswordPlaceholder": "Новый пароль",
-    "notConfigured": "Аутентификация не настроена.",
-    "passwordMinLength": "Пароль должен содержать не менее 8 символов",
-    "resetButton": "Сбросить пароль",
-    "resetting": "Сброс...",
-    "subtitle": "Введите новый пароль ниже",
-    "success": {
-      "description": "Ваш пароль обновлён. Вы вошли в систему.",
-      "title": "Пароль успешно сброшен"
-    },
-    "title": "Создание нового пароля"
-  },
   "settingsModal": {
     "groups": {
       "account": "Аккаунт",

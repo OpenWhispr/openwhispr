@@ -846,27 +846,6 @@
       "modified": "Modificado"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Voltar para login",
-    "confirmPasswordPlaceholder": "Confirme a nova senha",
-    "continue": "Continuar",
-    "errors": {
-      "passwordMinLength": "A senha deve ter pelo menos 8 caracteres",
-      "passwordsDoNotMatch": "As senhas não coincidem"
-    },
-    "goBack": "Voltar",
-    "newPasswordPlaceholder": "Nova senha",
-    "notConfigured": "A autenticação não está configurada.",
-    "passwordMinLength": "A senha deve ter pelo menos 8 caracteres",
-    "resetButton": "Redefinir senha",
-    "resetting": "Redefinindo...",
-    "subtitle": "Digite sua nova senha abaixo",
-    "success": {
-      "description": "Sua senha foi atualizada. Você já está conectado.",
-      "title": "Senha redefinida com sucesso"
-    },
-    "title": "Criar nova senha"
-  },
   "settingsModal": {
     "groups": {
       "account": "Conta",

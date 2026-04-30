@@ -922,27 +922,6 @@
       "modified": "Modificado"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Volver a iniciar sesión",
-    "confirmPasswordPlaceholder": "Confirma la nueva contraseña",
-    "continue": "Continuar",
-    "errors": {
-      "passwordMinLength": "La contraseña debe tener al menos 8 caracteres",
-      "passwordsDoNotMatch": "Las contraseñas no coinciden"
-    },
-    "goBack": "Volver",
-    "newPasswordPlaceholder": "Nueva contraseña",
-    "notConfigured": "La autenticación no está configurada.",
-    "passwordMinLength": "La contraseña debe tener al menos 8 caracteres",
-    "resetButton": "Restablecer contraseña",
-    "resetting": "Restableciendo...",
-    "subtitle": "Introduce tu nueva contraseña a continuación",
-    "success": {
-      "description": "Tu contraseña ha sido actualizada. Ya iniciaste sesión.",
-      "title": "Contraseña restablecida"
-    },
-    "title": "Crear nueva contraseña"
-  },
   "settingsModal": {
     "groups": {
       "account": "Cuenta",

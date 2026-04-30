@@ -226,25 +226,12 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
 
 export async function requestPasswordReset(email: string): Promise<{ error?: Error }> {
   try {
-    const base = window.location.href.split("?")[0].split("#")[0];
-    const redirectTo = `${base}?panel=true&reset_password=true`;
-
-    await authClient.requestPasswordReset({ email: email.trim(), redirectTo });
+    await authClient.requestPasswordReset({
+      email: email.trim(),
+      redirectTo: "https://openwhispr.com/reset-password",
+    });
     return {};
   } catch (error) {
     return { error: error instanceof Error ? error : new Error("Failed to send reset email") };
-  }
-}
-
-export async function resetPassword(
-  newPassword: string,
-  token: string
-): Promise<{ error?: Error }> {
-  try {
-    await authClient.resetPassword({ newPassword, token });
-    updateLastSignInTime();
-    return {};
-  } catch (error) {
-    return { error: error instanceof Error ? error : new Error("Failed to reset password") };
   }
 }

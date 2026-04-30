@@ -970,27 +970,6 @@
       "modified": "Modified"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Back to sign in",
-    "confirmPasswordPlaceholder": "Confirm new password",
-    "continue": "Continue",
-    "errors": {
-      "passwordMinLength": "Password must be at least 8 characters",
-      "passwordsDoNotMatch": "Passwords do not match"
-    },
-    "goBack": "Go Back",
-    "newPasswordPlaceholder": "New password",
-    "notConfigured": "Authentication is not configured.",
-    "passwordMinLength": "Password must be at least 8 characters",
-    "resetButton": "Reset Password",
-    "resetting": "Resetting...",
-    "subtitle": "Enter your new password below",
-    "success": {
-      "description": "Your password has been updated. You're now signed in.",
-      "title": "Password reset successful"
-    },
-    "title": "Create new password"
-  },
   "settingsModal": {
     "groups": {
       "account": "Account",

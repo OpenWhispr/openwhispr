@@ -15,7 +15,6 @@ import { AlertCircle, ArrowRight, Check, Loader2, ChevronLeft } from "lucide-rea
 import logoIcon from "../assets/icon.png";
 import logger from "../utils/logger";
 import ForgotPasswordView from "./ForgotPasswordView";
-import ResetPasswordView from "./ResetPasswordView";
 
 interface AuthenticationStepProps {
   onContinueWithoutAccount: () => void;
@@ -24,7 +23,6 @@ interface AuthenticationStepProps {
 }
 
 type AuthMode = "sign-in" | "sign-up" | null;
-type PasswordResetView = "forgot" | "reset" | null;
 
 const GoogleIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -71,21 +69,9 @@ export default function AuthenticationStep({
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [isSocialLoading, setIsSocialLoading] = useState<SocialProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [passwordResetView, setPasswordResetView] = useState<PasswordResetView>(null);
-  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
 
-  const resetProcessedRef = useRef(false);
   const needsVerificationRef = useRef(false);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("token");
-    if (token && params.has("reset_password") && !resetProcessedRef.current) {
-      resetProcessedRef.current = true;
-      setResetToken(token);
-      setPasswordResetView("reset");
-    }
-  }, []);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || needsVerificationRef.current || !user?.id || !user?.email)
@@ -250,18 +236,13 @@ export default function AuthenticationStep({
   }, []);
 
   const handleForgotPassword = useCallback(() => {
-    setPasswordResetView("forgot");
+    setForgotPasswordOpen(true);
     setError(null);
   }, []);
 
-  const handleBackFromPasswordReset = useCallback(() => {
-    setPasswordResetView(null);
-    setResetToken(null);
+  const handleBackFromForgotPassword = useCallback(() => {
+    setForgotPasswordOpen(false);
     setError(null);
-    const url = new URL(window.location.href);
-    url.searchParams.delete("token");
-    url.searchParams.delete("reset_password");
-    window.history.replaceState({}, "", url.toString());
   }, []);
 
   const toggleAuthMode = useCallback(() => {
@@ -333,20 +314,8 @@ export default function AuthenticationStep({
     );
   }
 
-  // Password reset flow - show reset form if we have a token
-  if (passwordResetView === "reset" && resetToken) {
-    return (
-      <ResetPasswordView
-        token={resetToken}
-        onSuccess={onAuthComplete}
-        onBack={handleBackFromPasswordReset}
-      />
-    );
-  }
-
-  // Password reset flow - show forgot password form
-  if (passwordResetView === "forgot") {
-    return <ForgotPasswordView email={email} onBack={handleBackFromPasswordReset} />;
+  if (forgotPasswordOpen) {
+    return <ForgotPasswordView email={email} onBack={handleBackFromForgotPassword} />;
   }
 
   // Password form (after email is entered)

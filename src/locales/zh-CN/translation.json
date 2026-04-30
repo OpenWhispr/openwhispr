@@ -874,27 +874,6 @@
       "modified": "已修改"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "返回登录",
-    "confirmPasswordPlaceholder": "确认新密码",
-    "continue": "继续",
-    "errors": {
-      "passwordMinLength": "密码至少需要 8 个字符",
-      "passwordsDoNotMatch": "两次输入的密码不一致"
-    },
-    "goBack": "返回",
-    "newPasswordPlaceholder": "新密码",
-    "notConfigured": "身份验证未配置。",
-    "passwordMinLength": "密码至少需要 8 个字符",
-    "resetButton": "重置密码",
-    "resetting": "正在重置...",
-    "subtitle": "在下方输入你的新密码",
-    "success": {
-      "description": "密码已更新，你现在已登录。",
-      "title": "密码重置成功"
-    },
-    "title": "创建新密码"
-  },
   "settingsModal": {
     "groups": {
       "account": "账户",
