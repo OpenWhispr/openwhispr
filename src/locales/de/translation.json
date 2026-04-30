@@ -2094,10 +2094,6 @@
       "stopListening": "Aufnahme beenden",
       "startListening": "Aufnahme starten",
       "hideForNow": "Vorerst ausblenden"
-    },
-    "oauth": {
-      "redirectTitle": "Weiterleitung zur App...",
-      "closeTab": "Du kannst diesen Tab schließen."
     }
   },
   "agentMode": {

@@ -2089,10 +2089,6 @@
       "stopListening": "停止錄音",
       "startListening": "開始錄音",
       "hideForNow": "暫時隱藏"
-    },
-    "oauth": {
-      "redirectTitle": "正在跳轉到應用程式...",
-      "closeTab": "您可以關閉此分頁。"
     }
   },
   "agentMode": {

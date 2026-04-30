@@ -2142,10 +2142,6 @@
       "stopListening": "Arrêter l’écoute",
       "startListening": "Commencer l’écoute",
       "hideForNow": "Masquer pour l’instant"
-    },
-    "oauth": {
-      "redirectTitle": "Redirection vers l'app...",
-      "closeTab": "Vous pouvez fermer cet onglet."
     }
   },
   "agentMode": {

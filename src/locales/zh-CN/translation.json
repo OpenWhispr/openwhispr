@@ -2089,10 +2089,6 @@
       "stopListening": "停止录音",
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏"
-    },
-    "oauth": {
-      "redirectTitle": "正在跳转到应用...",
-      "closeTab": "您可以关闭此标签页。"
     }
   },
   "agentMode": {

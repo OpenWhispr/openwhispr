@@ -590,7 +590,8 @@
     },
     "social": {
       "completeInBrowser": "Complete sign-in in your browser",
-      "continueWithGoogle": "Continue with Google"
+      "continueWithGoogle": "Continue with Google",
+      "continueWithMicrosoft": "Continue with Microsoft"
     },
     "welcomeSubtitle": "Dictate anywhere using your voice",
     "welcomeTitle": "Welcome to OpenWhispr",
@@ -2189,10 +2190,6 @@
       "stopListening": "Stop listening",
       "startListening": "Start listening",
       "hideForNow": "Hide for now"
-    },
-    "oauth": {
-      "redirectTitle": "Redirecting to app...",
-      "closeTab": "You can close this tab."
     }
   },
   "agentMode": {

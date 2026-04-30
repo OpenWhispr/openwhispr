@@ -2094,10 +2094,6 @@
       "stopListening": "Smetti di ascoltare",
       "startListening": "Inizia ad ascoltare",
       "hideForNow": "Nascondi per ora"
-    },
-    "oauth": {
-      "redirectTitle": "Reindirizzamento all'app...",
-      "closeTab": "Puoi chiudere questa scheda."
     }
   },
   "agentMode": {

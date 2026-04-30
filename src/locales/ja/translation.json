@@ -2094,10 +2094,6 @@
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示"
-    },
-    "oauth": {
-      "redirectTitle": "アプリにリダイレクト中...",
-      "closeTab": "このタブを閉じてください。"
     }
   },
   "agentMode": {
