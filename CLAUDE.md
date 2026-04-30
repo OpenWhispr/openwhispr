@@ -28,6 +28,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
    - Main Process: Electron main, IPC handlers, database operations
    - Renderer Process: React app with context isolation
    - Preload Script: Secure bridge between processes
+   - ONNX Utility Process: hosts all `onnxruntime-node` inference (text embeddings, speaker embeddings, fbank). Lazy-spawned on first use via `src/helpers/onnxWorkerClient.js` → `src/workers/onnxWorker.js`. Native crashes (e.g., ORT `bad_alloc`) confine to the worker; main process rejects in-flight requests and respawns with backoff. Stopped in `will-quit`.
 
 3. **Audio Pipeline**:
    - MediaRecorder API → Blob → ArrayBuffer → IPC → File → whisper.cpp

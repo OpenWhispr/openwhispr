@@ -1437,5 +1437,7 @@ if (gotSingleInstanceLock) {
     if (qdrantManager) {
       qdrantManager.stop().catch(() => {});
     }
+    const onnxWorkerClient = require("./src/helpers/onnxWorkerClient");
+    onnxWorkerClient.stop().catch(() => {});
   });
 }
