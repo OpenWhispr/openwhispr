@@ -28,9 +28,8 @@ function killProcess(proc, signal = "SIGTERM") {
   }
 }
 
-// On Unix, signals the entire process group of a detached child so any
-// grandchildren (e.g. ffmpeg spawned by a sidecar) get reaped too.
-// On Windows, taskkill /T already includes the descendant tree.
+// Signals the whole process group on Unix so grandchildren get reaped too.
+// Windows' killProcess already passes /T, which covers the descendant tree.
 function killProcessGroup(proc, signal = "SIGTERM") {
   if (!proc || proc.exitCode !== null) return;
   if (process.platform === "win32") {

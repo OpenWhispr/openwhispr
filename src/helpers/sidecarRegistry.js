@@ -13,11 +13,13 @@ async function shutdownAll() {
 
   const deadline = new Promise((resolve) => setTimeout(resolve, SHUTDOWN_DEADLINE_MS));
   const stops = Promise.allSettled(
-    sidecars.map(({ name, stop }) =>
-      Promise.resolve()
-        .then(stop)
-        .catch((err) => debugLogger.error("sidecar stop failed", { name, error: err?.message }))
-    )
+    sidecars.map(async ({ name, stop }) => {
+      try {
+        await stop();
+      } catch (err) {
+        debugLogger.error("sidecar stop failed", { name, error: err?.message });
+      }
+    })
   );
   await Promise.race([stops, deadline]);
 }
