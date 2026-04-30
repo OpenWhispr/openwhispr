@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Self-Hosted Authentication via Better Auth**: Replaced the Neon Auth integration with a self-hosted [Better Auth](https://better-auth.com) deployment at `auth.openwhispr.com`. Sessions, OAuth, and account state now live entirely on OpenWhispr infrastructure — no third-party vendor lock-in, and the custom Electron OAuth bridge dance (protocol-handler interception, `neon_auth_session_verifier` cookie shuffling, in-browser "redirecting to app" splash) is gone. Configurable via `VITE_AUTH_URL` for self-hosters
+- **Microsoft Sign-In**: Sign in with a Microsoft account alongside Google and email/password, via Better Auth's OAuth provider
 - **Bundle ID Migration to Gizmo Labs** (macOS/Windows): App identifier renamed from `com.herotools.openwispr` to `com.gizmolabs.openwhispr` to align with the new legal entity (Gizmo Labs Inc.) and fix the long-standing typo. Existing notes, settings, API keys, and downloaded models carry over automatically on first launch (userData path is keyed by `productName`, not bundle ID). Auto-update from 1.6.x cannot reach this release — Squirrel.Mac enforces `CFBundleIdentifier` matching and the Team ID change in Gizmo Labs signing already broke the cryptographic update chain. Users must manually re-download from openwhispr.com/download
 - **Post-Migration Onboarding** (macOS): One-time modal walks returning users through re-granting Microphone, Accessibility, and System Audio after the bundle rename. Detected via a sentinel file (`.bundle-migrated`) in userData; reuses the existing `PermissionsSection` and live-polling hooks. Fresh installs write the sentinel during onboarding completion so the modal never fires for new users
 - **Interoperable Cloud Streaming Providers**: Meeting recording now supports AssemblyAI Universal-3 Pro, Deepgram, and OpenAI Realtime as interchangeable cloud streaming backends. Provider availability is server-authoritative via the `NOTE_RECORDING_PROVIDERS` env var on the API; desktop picks the active provider from the catalog returned by `/api/note-recording-config`
@@ -20,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Forgot-Password Flow Centralized on Website**: Password reset now opens `openwhispr.com/reset-password` in the browser instead of an in-app reset view. Email links land on the website where the form lives, matching how every other reset flow works. The desktop's `ResetPasswordView` and its 20-key `resetPassword.*` i18n block (× 10 languages) were removed
 - **Meeting Streaming Provider Authority**: Removed the desktop-side streaming provider UI picker. The authoritative list lives on the API; the desktop renders whichever providers are enabled server-side
 - **Echo Cancellation Pipeline**: AEC3 config now disables OS-level `echoCancellation` (it was double-processing) and enables the built-in high-pass filter plus `kModerate` noise suppression, giving a noticeably cleaner mic path before the VAD gate
 - **VAD Thresholds Tuned Against Measured Leak**: RMS ceiling `0.018`, peak ceiling `0.07`, lookback `500ms` — calibrated from real session traces where user speech consistently exceeded both thresholds and bleed consistently sat below

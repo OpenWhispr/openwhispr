@@ -590,7 +590,8 @@
     },
     "social": {
       "completeInBrowser": "在浏览器中完成登录",
-      "continueWithGoogle": "使用 Google 继续"
+      "continueWithGoogle": "使用 Google 继续",
+      "continueWithMicrosoft": "使用 Microsoft 继续"
     },
     "welcomeSubtitle": "随时随地用语音输入",
     "welcomeTitle": "欢迎使用 OpenWhispr",
@@ -873,27 +874,6 @@
       "modified": "已修改"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "返回登录",
-    "confirmPasswordPlaceholder": "确认新密码",
-    "continue": "继续",
-    "errors": {
-      "passwordMinLength": "密码至少需要 8 个字符",
-      "passwordsDoNotMatch": "两次输入的密码不一致"
-    },
-    "goBack": "返回",
-    "newPasswordPlaceholder": "新密码",
-    "notConfigured": "身份验证未配置。",
-    "passwordMinLength": "密码至少需要 8 个字符",
-    "resetButton": "重置密码",
-    "resetting": "正在重置...",
-    "subtitle": "在下方输入你的新密码",
-    "success": {
-      "description": "密码已更新，你现在已登录。",
-      "title": "密码重置成功"
-    },
-    "title": "创建新密码"
-  },
   "settingsModal": {
     "groups": {
       "account": "账户",
@@ -962,7 +942,7 @@
       },
       "disabled": "已禁用",
       "featuresDisabled": "账户功能已禁用",
-      "featuresDisabledDescription": "在 .env 文件中设置 VITE_NEON_AUTH_URL 以启用账户功能。",
+      "featuresDisabledDescription": "在 .env 文件中设置 VITE_AUTH_URL 以启用账户功能。",
       "notConfigured": "身份验证未配置",
       "notSignedIn": "未登录",
       "notSignedInDescription": "创建账户以解锁高级功能。",
@@ -2091,10 +2071,6 @@
       "stopListening": "停止录音",
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏"
-    },
-    "oauth": {
-      "redirectTitle": "正在跳转到应用...",
-      "closeTab": "您可以关闭此标签页。"
     }
   },
   "dictationAgent": {

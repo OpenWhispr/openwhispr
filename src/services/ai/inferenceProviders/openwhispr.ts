@@ -1,5 +1,5 @@
 import type { InferenceProvider } from "./types";
-import { withSessionRefresh } from "../../../lib/neonAuth";
+import { withSessionRefresh } from "../../../lib/auth";
 import { getSettings } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
 

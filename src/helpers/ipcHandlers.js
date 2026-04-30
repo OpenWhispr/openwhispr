@@ -3271,7 +3271,7 @@ class IPCHandlers {
     // Auth: clear all session cookies for sign-out.
     // This clears every cookie in the renderer session rather than targeting
     // individual auth cookies, which is acceptable because the app only sets
-    // cookies for Neon Auth. Avoids CSRF/Origin header issues that occur when
+    // cookies for Better Auth. Avoids CSRF/Origin header issues that occur when
     // the renderer tries to call the server-side sign-out endpoint directly.
     ipcMain.handle("auth-clear-session", async (event) => {
       try {
@@ -3305,10 +3305,10 @@ class IPCHandlers {
       "";
 
     const getAuthUrl = () =>
-      process.env.NEON_AUTH_URL ||
-      process.env.VITE_NEON_AUTH_URL ||
-      runtimeEnv.VITE_NEON_AUTH_URL ||
-      "";
+      process.env.AUTH_URL ||
+      process.env.VITE_AUTH_URL ||
+      runtimeEnv.VITE_AUTH_URL ||
+      "https://auth.openwhispr.com";
 
     const getSessionCookiesFromWindow = async (win) => {
       const scopedUrls = [getAuthUrl(), getApiUrl()].filter(Boolean);

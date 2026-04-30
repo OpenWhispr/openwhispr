@@ -591,7 +591,8 @@
     },
     "social": {
       "completeInBrowser": "ブラウザでサインインを完了してください",
-      "continueWithGoogle": "Google で続ける"
+      "continueWithGoogle": "Google で続ける",
+      "continueWithMicrosoft": "Microsoft で続ける"
     },
     "welcomeSubtitle": "音声でどこでもディクテーション",
     "welcomeTitle": "OpenWhispr へようこそ"
@@ -873,27 +874,6 @@
       "modified": "変更済み"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "サインインに戻る",
-    "confirmPasswordPlaceholder": "新しいパスワードを確認",
-    "continue": "続ける",
-    "errors": {
-      "passwordMinLength": "パスワードは 8 文字以上にしてください",
-      "passwordsDoNotMatch": "パスワードが一致しません"
-    },
-    "goBack": "戻る",
-    "newPasswordPlaceholder": "新しいパスワード",
-    "notConfigured": "認証が設定されていません。",
-    "passwordMinLength": "パスワードは 8 文字以上にしてください",
-    "resetButton": "パスワードをリセット",
-    "resetting": "リセット中...",
-    "subtitle": "新しいパスワードを入力してください",
-    "success": {
-      "description": "パスワードが更新されました。サインイン済みです。",
-      "title": "パスワードのリセットが完了しました"
-    },
-    "title": "新しいパスワードを作成"
-  },
   "settingsModal": {
     "groups": {
       "account": "アカウント",
@@ -962,7 +942,7 @@
       },
       "disabled": "無効",
       "featuresDisabled": "アカウント機能が無効です",
-      "featuresDisabledDescription": ".env ファイルで VITE_NEON_AUTH_URL を設定してアカウント機能を有効にしてください。",
+      "featuresDisabledDescription": ".env ファイルで VITE_AUTH_URL を設定してアカウント機能を有効にしてください。",
       "notConfigured": "認証が設定されていません",
       "notSignedIn": "サインインしていません",
       "notSignedInDescription": "アカウントを作成してプレミアム機能をアンロックしましょう。",
@@ -2096,10 +2076,6 @@
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示"
-    },
-    "oauth": {
-      "redirectTitle": "アプリにリダイレクト中...",
-      "closeTab": "このタブを閉じてください。"
     }
   },
   "dictationAgent": {
