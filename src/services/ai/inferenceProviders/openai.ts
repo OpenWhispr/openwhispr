@@ -136,7 +136,7 @@ export const openaiProvider: InferenceProvider = {
       keyLength: apiKey?.length || 0,
     });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, text);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const messages = [
       { role: "system", content: systemPrompt },
       { role: "user", content: text },

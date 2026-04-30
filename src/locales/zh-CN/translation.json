@@ -2096,6 +2096,8 @@
     }
   },
   "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
     "title": "Dictation Agent",
     "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
     "modes": {

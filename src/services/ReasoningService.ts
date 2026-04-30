@@ -146,7 +146,7 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig,
     providerName: string
   ): Promise<string> {
-    const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName, text);
+    const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName);
     const userPrompt = text;
 
     const messages = [

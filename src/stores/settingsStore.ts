@@ -107,6 +107,7 @@ const BOOLEAN_SETTINGS = new Set([
   "allowLocalFallback",
   "assemblyAiStreaming",
   "useCleanupModel",
+  "useDictationAgent",
   "preferBuiltInMic",
   "cloudBackupEnabled",
   "telemetryEnabled",
@@ -427,6 +428,7 @@ export interface SettingsState
   setCustomDictionary: (words: string[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
+  setUseDictationAgent: (value: boolean) => void;
   setCleanupModel: (value: string) => void;
   setCleanupProvider: (value: string) => void;
   setUiLanguage: (language: string) => void;
@@ -589,6 +591,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
   useCleanupModel: readBoolean("useCleanupModel", true),
+  useDictationAgent: readBoolean("useDictationAgent", true),
   cleanupModel: readString("cleanupModel", ""),
   cleanupProvider: readString("cleanupProvider", "openai"),
 
@@ -873,6 +876,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupCloudBaseUrl: createStringSetter("cleanupCloudBaseUrl"),
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
   setUseCleanupModel: createBooleanSetter("useCleanupModel"),
+  setUseDictationAgent: createBooleanSetter("useDictationAgent"),
   setCleanupProvider: createStringSetter("cleanupProvider"),
   setCleanupModel: createStringSetter("cleanupModel"),
 
@@ -1218,6 +1222,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => {
     const s = useSettingsStore.getState();
     if (settings.useCleanupModel !== undefined) s.setUseCleanupModel(settings.useCleanupModel);
+    if (settings.useDictationAgent !== undefined)
+      s.setUseDictationAgent(settings.useDictationAgent);
     if (settings.cleanupModel !== undefined) s.setCleanupModel(settings.cleanupModel);
     if (settings.cleanupProvider !== undefined) s.setCleanupProvider(settings.cleanupProvider);
     if (settings.cleanupCloudBaseUrl !== undefined)

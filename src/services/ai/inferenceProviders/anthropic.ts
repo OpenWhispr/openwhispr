@@ -13,7 +13,7 @@ export const anthropicProvider: InferenceProvider = {
 
     logger.logReasoning("ANTHROPIC_IPC_CALL", { model, textLength: text.length });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, text);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const result = await window.electronAPI.processAnthropicReasoning(text, model, agentName, {
       ...config,
       systemPrompt,

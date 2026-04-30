@@ -18,7 +18,7 @@ export const geminiProvider: InferenceProvider = {
     const apiKey = await ctx.getApiKey("gemini");
     logger.logReasoning("GEMINI_API_KEY", { hasApiKey: !!apiKey, keyLength: apiKey?.length || 0 });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, text);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
 
     const requestBody = {
       contents: [{ parts: [{ text: `${systemPrompt}\n\n${text}` }] }],

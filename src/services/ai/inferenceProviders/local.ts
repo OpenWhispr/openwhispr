@@ -13,7 +13,7 @@ export const localProvider: InferenceProvider = {
 
     logger.logReasoning("LOCAL_IPC_CALL", { model, textLength: text.length });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, text);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const result = await window.electronAPI.processLocalReasoning(text, model, agentName, {
       ...config,
       systemPrompt,

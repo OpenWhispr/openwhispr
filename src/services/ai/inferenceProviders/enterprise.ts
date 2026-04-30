@@ -22,7 +22,7 @@ export const enterpriseProvider: InferenceProvider = {
 
     logger.logReasoning("ENTERPRISE_START", { provider: enterpriseId, model, agentName });
 
-    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName, text);
+    const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const s = getSettings();
     const apiKey =
       enterpriseId === "azure" ? s.azureApiKey : enterpriseId === "vertex" ? s.vertexApiKey : "";

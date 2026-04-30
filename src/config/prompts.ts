@@ -1,6 +1,5 @@
 import promptData from "./promptData.json";
-import { resolvePrompt, type ResolvePromptOptions } from "./prompts/index";
-import { detectAgentName } from "./agentDetection";
+import { resolvePrompt } from "./prompts/index";
 
 export { resolvePrompt, getDefaultPromptText } from "./prompts/index";
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./prompts/registry";
@@ -9,17 +8,13 @@ export { detectAgentName } from "./agentDetection";
 export const CLEANUP_PROMPT = promptData.CLEANUP_PROMPT;
 export const FULL_PROMPT = promptData.FULL_PROMPT;
 
-export function getSystemPrompt(
+export function getCleanupSystemPrompt(
   agentName: string | null,
   customDictionary?: string[],
   language?: string,
-  transcript?: string,
   uiLanguage?: string
 ): string {
-  const opts: ResolvePromptOptions = { agentName, language, customDictionary, uiLanguage };
-  const name = agentName?.trim() || "Assistant";
-  const useFullPrompt = transcript ? detectAgentName(transcript, name) : false;
-  return resolvePrompt(useFullPrompt ? "dictationAgent" : "cleanup", opts);
+  return resolvePrompt("cleanup", { agentName, language, customDictionary, uiLanguage });
 }
 
 export function getWordBoost(customDictionary?: string[]): string[] {

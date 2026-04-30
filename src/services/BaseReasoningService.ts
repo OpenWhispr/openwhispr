@@ -1,4 +1,4 @@
-import { getSystemPrompt } from "../config/prompts";
+import { getCleanupSystemPrompt } from "../config/prompts";
 import { getSettings } from "../stores/settingsStore";
 
 export interface ReasoningConfig {
@@ -26,10 +26,13 @@ export abstract class BaseReasoningService {
     return getSettings().uiLanguage || "en";
   }
 
-  protected getSystemPrompt(agentName: string | null, transcript?: string): string {
-    const language = this.getPreferredLanguage();
-    const uiLanguage = this.getUiLanguage();
-    return getSystemPrompt(agentName, this.getCustomDictionary(), language, transcript, uiLanguage);
+  protected getSystemPrompt(agentName: string | null): string {
+    return getCleanupSystemPrompt(
+      agentName,
+      this.getCustomDictionary(),
+      this.getPreferredLanguage(),
+      this.getUiLanguage()
+    );
   }
 
   protected calculateMaxTokens(

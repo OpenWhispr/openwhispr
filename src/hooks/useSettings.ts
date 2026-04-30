@@ -28,6 +28,7 @@ export interface TranscriptionSettings {
 
 export interface CleanupSettings {
   useCleanupModel: boolean;
+  useDictationAgent: boolean;
   cleanupModel: string;
   cleanupProvider: string;
   cleanupCloudBaseUrl?: string;
@@ -205,6 +206,7 @@ function useSettingsInternal() {
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
     useCleanupModel: store.useCleanupModel,
+    useDictationAgent: store.useDictationAgent,
     cleanupModel: store.cleanupModel,
     cleanupProvider: store.cleanupProvider,
     openaiApiKey: store.openaiApiKey,
@@ -238,6 +240,7 @@ function useSettingsInternal() {
     setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,
     setUseCleanupModel: store.setUseCleanupModel,
+    setUseDictationAgent: store.setUseDictationAgent,
     setCleanupModel: store.setCleanupModel,
     setCleanupProvider: store.setCleanupProvider,
     setOpenaiApiKey: store.setOpenaiApiKey,
