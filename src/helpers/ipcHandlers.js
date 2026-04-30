@@ -298,6 +298,7 @@ class IPCHandlers {
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
     this.meetingAecManager = managers.meetingAecManager;
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
+    this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
@@ -6386,6 +6387,8 @@ class IPCHandlers {
     }));
 
     ipcMain.handle("get-oauth-protocol-registered", () => this.oauthProtocolRegistered);
+
+    ipcMain.handle("get-oauth-protocol", () => this.oauthProtocol);
 
     ipcMain.handle("mark-bundle-migrated", () => {
       postMigrationDetector.markBundleMigrated();

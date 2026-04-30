@@ -392,6 +392,7 @@ function initializeCoreManagers() {
     meetingAecManager,
     getTrayManager: () => trayManager,
     oauthProtocolRegistered: protocolRegistered,
+    oauthProtocol: OAUTH_PROTOCOL,
   });
 }
 
@@ -774,8 +775,7 @@ async function startApp() {
 
   // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL fallbacks after 2 releases.
   const cleanupProvider = process.env.CLEANUP_PROVIDER || process.env.REASONING_PROVIDER;
-  const cleanupLocalModel =
-    process.env.LOCAL_CLEANUP_MODEL || process.env.LOCAL_REASONING_MODEL;
+  const cleanupLocalModel = process.env.LOCAL_CLEANUP_MODEL || process.env.LOCAL_REASONING_MODEL;
   if (cleanupProvider === "local" && cleanupLocalModel) {
     const modelManager = require("./src/helpers/modelManagerBridge").default;
     modelManager.prewarmServer(cleanupLocalModel).catch((err) => {

@@ -306,6 +306,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
   getPostMigrationState: () => ipcRenderer.invoke("get-post-migration-state"),
   getOAuthProtocolRegistered: () => ipcRenderer.invoke("get-oauth-protocol-registered"),
+  getOAuthProtocol: () => ipcRenderer.invoke("get-oauth-protocol"),
   markBundleMigrated: () => ipcRenderer.invoke("mark-bundle-migrated"),
   markBundleMigrationDismissed: () => ipcRenderer.invoke("mark-bundle-migration-dismissed"),
   getUpdateStatus: () => ipcRenderer.invoke("get-update-status"),

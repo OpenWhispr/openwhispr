@@ -772,6 +772,7 @@ declare global {
       getAppVersion: () => Promise<AppVersionResult>;
       getPostMigrationState: () => Promise<{ justMigrated: boolean }>;
       getOAuthProtocolRegistered: () => Promise<boolean>;
+      getOAuthProtocol: () => Promise<string>;
       markBundleMigrated: () => Promise<void>;
       markBundleMigrationDismissed: () => Promise<void>;
       getUpdateStatus: () => Promise<UpdateStatusResult>;
