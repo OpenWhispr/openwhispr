@@ -610,11 +610,13 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const row = this.db.prepare("SELECT cloud_id FROM transcriptions WHERE id = ?").get(id);
-      if (!row) return { success: false, id };
+      const row = this.db
+        .prepare("SELECT cloud_id, deleted_at FROM transcriptions WHERE id = ?")
+        .get(id);
+      if (!row || row.deleted_at) return { success: false, id };
       const stmt = row.cloud_id
         ? this.db.prepare(
-            "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
+            "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
           )
         : this.db.prepare("DELETE FROM transcriptions WHERE id = ?");
       const result = stmt.run(id);
@@ -1045,7 +1047,7 @@ class DatabaseManager {
         throw new Error("Database not initialized");
       }
       const stmt = this.db.prepare(
-        "UPDATE notes SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now') WHERE id = ?"
+        "UPDATE notes SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL"
       );
       const result = stmt.run(id);
       return { success: result.changes > 0, id };

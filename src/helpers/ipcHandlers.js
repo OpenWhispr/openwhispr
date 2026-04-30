@@ -737,14 +737,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-delete-transcription", async (event, id) => {
-      this.audioStorageManager.deleteAudio(id);
-      const result = this.databaseManager.deleteTranscription(id);
-      if (result?.success) {
-        setImmediate(() => {
-          this.broadcastToWindows("transcription-deleted", { id });
-        });
-      }
-      return result;
+      return this.deleteTranscriptionInternal(id);
     });
 
     // Audio storage handlers
@@ -913,13 +906,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-delete-note", async (event, id) => {
-      const result = this.databaseManager.deleteNote(id);
-      if (result?.success) {
-        setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
-        this._asyncVectorDelete(id);
-        this._asyncMirrorDelete(id);
-      }
-      return result;
+      return this.deleteNoteInternal(id);
     });
 
     ipcMain.handle("db-search-notes", async (event, query, limit) => {
@@ -7748,6 +7735,27 @@ class IPCHandlers {
         }
       }
     })();
+  }
+
+  deleteTranscriptionInternal(id) {
+    this.audioStorageManager.deleteAudio(id);
+    const result = this.databaseManager.deleteTranscription(id);
+    if (result?.success) {
+      setImmediate(() => {
+        this.broadcastToWindows("transcription-deleted", { id });
+      });
+    }
+    return result;
+  }
+
+  deleteNoteInternal(id) {
+    const result = this.databaseManager.deleteNote(id);
+    if (result?.success) {
+      setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
+      this._asyncVectorDelete(id);
+      this._asyncMirrorDelete(id);
+    }
+    return result;
   }
 
   broadcastToWindows(channel, payload) {
