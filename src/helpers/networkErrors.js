@@ -1,16 +1,5 @@
 const debugLogger = require("./debugLogger");
 
-const MESSAGES = {
-  "streaming.errors.cloudUnreachable.dnsBlocked":
-    "DNS isn't resolving openwhispr.com — an ad blocker or filter may be blocking it.",
-  "streaming.errors.cloudUnreachable.refused": "Connection was refused — likely a firewall or VPN.",
-  "streaming.errors.cloudUnreachable.timeout":
-    "Network timed out — VPN, captive portal, or unstable connection.",
-  "streaming.errors.cloudUnreachable.tls":
-    "TLS handshake failed — check your system clock or for a corporate proxy.",
-  "streaming.errors.cloudUnreachable.generic": "Network request failed. Check your connection.",
-};
-
 const CODE_TO_KEY = {
   ENOTFOUND: "streaming.errors.cloudUnreachable.dnsBlocked",
   ECONNREFUSED: "streaming.errors.cloudUnreachable.refused",
@@ -40,10 +29,6 @@ function classifyNetworkError(err) {
   return { isNetworkError: false };
 }
 
-function getMessage(messageKey) {
-  return MESSAGES[messageKey] || MESSAGES["streaming.errors.cloudUnreachable.generic"];
-}
-
 function classifyAndLog(err, url) {
   const classified = classifyNetworkError(err);
   if (!classified.isNetworkError) return classified;
@@ -62,6 +47,5 @@ function classifyAndLog(err, url) {
 
 module.exports = {
   classifyNetworkError,
-  getMessage,
   classifyAndLog,
 };

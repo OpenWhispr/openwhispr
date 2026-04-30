@@ -9,7 +9,6 @@ const debugLogger = require("./debugLogger");
 const USER_AGENT = "OpenWhispr/1.0";
 const PROGRESS_THROTTLE_MS = 100;
 const MAX_REDIRECTS = 5;
-const DEFAULT_TIMEOUT = 60000;
 const DEFAULT_MAX_RETRIES = 3;
 const MAX_BACKOFF_MS = 30000;
 const STALL_TIMEOUT_MS = 30000;
@@ -265,13 +264,7 @@ function downloadAttempt(url, tempPath, options) {
 }
 
 async function downloadFile(url, destPath, options = {}) {
-  const {
-    onProgress,
-    timeout = DEFAULT_TIMEOUT,
-    maxRetries = DEFAULT_MAX_RETRIES,
-    signal,
-    expectedSize = 0,
-  } = options;
+  const { onProgress, maxRetries = DEFAULT_MAX_RETRIES, signal, expectedSize = 0 } = options;
 
   const tempPath = `${destPath}.tmp`;
 
@@ -311,7 +304,6 @@ async function downloadFile(url, destPath, options = {}) {
 
     try {
       await downloadAttempt(url, tempPath, {
-        timeout,
         onProgress,
         signal,
         startOffset,

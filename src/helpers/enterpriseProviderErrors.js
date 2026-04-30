@@ -4,7 +4,7 @@
  * an action hint and a shell command the user can copy-paste.
  */
 
-const { classifyNetworkError, getMessage } = require("./networkErrors");
+const { classifyNetworkError } = require("./networkErrors");
 
 function mapBedrockError(error, config = {}) {
   const msg = error?.message || error?.code || String(error);
@@ -64,17 +64,9 @@ function mapAzureError(error) {
       retryable: true,
     };
   }
-  const classified = classifyNetworkError(error);
-  if (
-    classified.isNetworkError ||
-    msg.includes("ENOTFOUND") ||
-    msg.includes("ECONNREFUSED") ||
-    msg.includes("fetch failed")
-  ) {
+  if (classifyNetworkError(error).isNetworkError || msg.includes("fetch failed")) {
     return {
-      message: classified.isNetworkError
-        ? getMessage(classified.messageKey)
-        : "Cannot reach Azure endpoint. Check the endpoint URL.",
+      message: "Cannot reach Azure endpoint. Check the endpoint URL.",
       action: "Ensure the URL looks like: https://yourresource.openai.azure.com",
     };
   }

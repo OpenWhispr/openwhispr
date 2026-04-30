@@ -5383,13 +5383,21 @@ class IPCHandlers {
       }
     });
 
+    const streamingStartFailure = (err) => {
+      const result = { success: false, error: err.message };
+      if (err.code) result.code = err.code;
+      if (err.messageKey) result.messageKey = err.messageKey;
+      if (err.networkCode) result.networkCode = err.networkCode;
+      return result;
+    };
+
     ipcMain.handle("dictation-realtime-warmup", async (event, options = {}) => {
       try {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
         return { success: true };
       } catch (err) {
-        return { success: false, error: err.message };
+        return streamingStartFailure(err);
       }
     });
 
@@ -5399,7 +5407,7 @@ class IPCHandlers {
         if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
         return { success: true };
       } catch (err) {
-        return { success: false, error: err.message };
+        return streamingStartFailure(err);
       }
     });
 
@@ -6545,7 +6553,7 @@ class IPCHandlers {
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
         }
-        return { success: false, error: error.message };
+        return streamingStartFailure(error);
       } finally {
         streamingStartInProgress = false;
       }
@@ -6799,7 +6807,7 @@ class IPCHandlers {
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
         }
-        return { success: false, error: error.message };
+        return streamingStartFailure(error);
       } finally {
         deepgramStreamingStartInProgress = false;
       }

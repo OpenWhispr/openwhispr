@@ -206,6 +206,25 @@
       "hotkeyToStartStop": "{{hotkey}} で開始/停止",
       "holdHotkey": "{{hotkey}} を押し続ける",
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
+    },
+    "connectivity": {
+      "title": "このネットワークから OpenWhispr Cloud に接続できません",
+      "body": "{{cause}} ローカルエンジンに切り替えるか、続行して後でもう一度お試しください。",
+      "useLocal": "ローカルエンジンを使う",
+      "continue": "そのまま続行"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "OpenWhispr Cloud に接続できません",
+        "generic": "ネットワーク要求に失敗しました。接続を確認してください。",
+        "dnsBlocked": "DNS が the server を解決できません — 広告ブロッカーやフィルターに遮断されている可能性があります。",
+        "refused": "接続が拒否されました — ファイアウォールまたは VPN の可能性があります。",
+        "timeout": "ネットワークがタイムアウトしました — VPN、キャプティブポータル、または不安定な接続。",
+        "tls": "TLS ハンドシェイクに失敗しました — システム時計または企業プロキシを確認してください。",
+        "fallback": "Cloud に接続できません — この録音にはローカルエンジンを使用します。"
+      }
     }
   },
   "controlPanel": {
@@ -408,6 +427,11 @@
       "noAudio": {
         "title": "音声が検出されませんでした",
         "description": "録音に音声が含まれていませんでした。もう一度お試しください。"
+      },
+      "errorDescriptions": {
+        "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
+        "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
+        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。"
       }
     },
     "clipboard": {
