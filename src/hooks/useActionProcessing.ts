@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import reasoningService from "../services/ReasoningService";
 import type { ActionItem } from "../types/electron";
-import { getEffectiveReasoningModel } from "../stores/settingsStore";
+import { getEffectiveCleanupModel } from "../stores/settingsStore";
 import { generateNoteTitle } from "../utils/generateTitle";
 
 export type ActionProcessingState = "idle" | "processing" | "success";
@@ -65,7 +65,7 @@ export function useActionProcessing({ onSuccess, onError }: UseActionProcessingO
     ) => {
       if (processingRef.current) return;
 
-      const modelId = getEffectiveReasoningModel() || options.modelId;
+      const modelId = getEffectiveCleanupModel() || options.modelId;
 
       if (!modelId && !options.isCloudMode) {
         onError(t("notes.actions.errors.noModel"));

@@ -79,7 +79,7 @@ export default function ControlPanel() {
   const {
     useLocalWhisper,
     localTranscriptionProvider,
-    useReasoningModel,
+    useCleanupModel,
     setUseLocalWhisper,
     setCloudTranscriptionMode,
   } = useSettings();
@@ -242,7 +242,7 @@ export default function ControlPanel() {
           if (status?.gpuInfo.hasNvidiaGpu && !status.downloaded) results.cuda = true;
         } catch {}
       }
-      if (useReasoningModel) {
+      if (useCleanupModel) {
         try {
           const [gpu, vulkan] = await Promise.all([
             window.electronAPI?.detectVulkanGpu?.(),
@@ -254,7 +254,7 @@ export default function ControlPanel() {
       setGpuAccelAvailable(results);
     };
     detect();
-  }, [useLocalWhisper, localTranscriptionProvider, useReasoningModel, gpuBannerDismissed]);
+  }, [useLocalWhisper, localTranscriptionProvider, useCleanupModel, gpuBannerDismissed]);
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onNavigateToMeetingNote?.((data) => {
@@ -447,17 +447,17 @@ export default function ControlPanel() {
           let finalTranscription = result.transcription;
 
           // Apply AI reasoning if enabled
-          if (useReasoningModel) {
+          if (useCleanupModel) {
             try {
               const [
                 { default: ReasoningService },
-                { getEffectiveReasoningModel, isCloudReasoningMode },
+                { getEffectiveCleanupModel, isCloudCleanupMode },
               ] = await Promise.all([
                 import("../services/ReasoningService"),
                 import("../stores/settingsStore"),
               ]);
-              const model = getEffectiveReasoningModel();
-              const isCloud = isCloudReasoningMode();
+              const model = getEffectiveCleanupModel();
+              const isCloud = isCloudCleanupMode();
               if (model || isCloud) {
                 const agentName = localStorage.getItem("agentName") || null;
                 const reasonedText = await ReasoningService.processText(rawText, model, agentName);
@@ -493,7 +493,7 @@ export default function ControlPanel() {
         });
       }
     },
-    [toast, t, useReasoningModel]
+    [toast, t, useCleanupModel]
   );
 
   const handleUpdateClick = async () => {
@@ -791,7 +791,7 @@ export default function ControlPanel() {
                 setShowCloudMigrationBanner={setShowCloudMigrationBanner}
                 aiCTADismissed={aiCTADismissed}
                 setAiCTADismissed={setAiCTADismissed}
-                useReasoningModel={useReasoningModel}
+                useCleanupModel={useCleanupModel}
                 copyToClipboard={copyToClipboard}
                 deleteTranscription={deleteTranscription}
                 clearAllTranscriptions={clearAllTranscriptions}

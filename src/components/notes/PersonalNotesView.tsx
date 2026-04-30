@@ -46,7 +46,7 @@ import ActionPicker from "./ActionPicker";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
-import { useSettingsStore, selectIsCloudReasoningMode } from "../../stores/settingsStore";
+import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
 import { useFolderManagement } from "../../hooks/useFolderManagement";
 import { useNoteDragAndDrop } from "../../hooks/useNoteDragAndDrop";
 import { cn } from "../lib/utils";
@@ -61,6 +61,7 @@ import {
   initializeNotes,
   setActiveNoteId,
   setActiveFolderId,
+  removeNote,
 } from "../../stores/noteStore";
 import { useMeetingTranscription } from "../../hooks/useMeetingTranscription";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
@@ -116,8 +117,8 @@ export default function PersonalNotesView({
     setSyncedNoteIdState(id);
   };
   const { toast } = useToast();
-  const isCloudMode = useSettingsStore(selectIsCloudReasoningMode);
-  const effectiveModelId = useSettingsStore((s) => s.reasoningModel);
+  const isCloudMode = useSettingsStore(selectIsCloudCleanupMode);
+  const effectiveModelId = useSettingsStore((s) => s.cleanupModel);
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const fileManagerName = navigator.platform.startsWith("Mac")
     ? "Finder"
@@ -407,11 +408,14 @@ export default function PersonalNotesView({
   const handleMoveToFolder = useCallback(
     async (noteId: number, folderId: number) => {
       await window.electronAPI.updateNote(noteId, { folder_id: folderId });
-      // Don't re-filter notes — the IPC onNoteUpdated listener updates the note
-      // in the store, and we stay on the current note. Folder counts refresh below.
+      if (noteId === activeNoteId) {
+        setActiveFolderId(folderId);
+      } else {
+        removeNote(noteId);
+      }
       loadFolders();
     },
-    [loadFolders]
+    [activeNoteId, loadFolders]
   );
 
   const { dragState, noteDragHandlers, folderDropHandlers } = useNoteDragAndDrop({

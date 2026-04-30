@@ -1512,8 +1512,9 @@
       "description": "Configurez les modèles pour le nettoyage, la mise en forme des notes et le chat",
       "tabs": {
         "dictationCleanup": "Nettoyage de la dictée",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "Mise en forme des notes",
-        "chatIntelligence": "Intelligence du chat"
+        "chatIntelligence": "Chat"
       }
     },
     "transcription": {
@@ -1603,7 +1604,6 @@
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide"
       },
       "cloud": {
-        "openai_gpt_5_4": "Modèle frontier pour le raisonnement complexe",
         "openai_gpt_5_2": "Modèle de raisonnement performant",
         "openai_gpt_5_mini": "Rapide et économique",
         "openai_gpt_5_nano": "Ultra-rapide, faible latence",
@@ -1612,7 +1612,6 @@
         "openai_gpt_4_1_nano": "GPT-4.1 à la latence la plus faible",
         "anthropic_claude_sonnet_4_5": "Performances équilibrées",
         "anthropic_claude_haiku_4_5": "Rapide avec une intelligence de pointe",
-        "anthropic_claude_opus_4_5": "Modèle Claude le plus performant",
         "gemini_gemini_3_pro_preview": "Modèle phare nouvelle génération pour le raisonnement complexe",
         "gemini_gemini_3_flash_preview": "Modèle nouvelle génération ultra-rapide et très performant",
         "gemini_gemini_2_5_flash_lite": "Latence et coût les plus faibles",
@@ -1624,7 +1623,11 @@
         "groq_llama_4_scout": "Multimodal efficace de Meta, 750 T/s",
         "groq_compound": "Système compound de Groq, 450 T/s",
         "groq_compound_mini": "Système compound rapide, 3x latence réduite",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexte 256K"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexte 256K",
+        "openai_gpt_5_5": "Modèle frontier pour le raisonnement complexe",
+        "anthropic_claude_opus_4_7": "Modèle Claude le plus performant",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Rapide et économique. Parfait pour nettoyer le texte.",
@@ -2123,10 +2126,30 @@
       "hideForNow": "Masquer pour l’instant"
     }
   },
+  "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+    },
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+    }
+  },
   "agentMode": {
     "settings": {
-      "enabled": "Activer le Mode Agent",
-      "enabledDescription": "Utiliser un raccourci clavier séparé pour ouvrir une fenêtre de chat vocal",
       "hotkey": "Raccourci Agent",
       "hotkeyDescription": "Raccourci clavier pour basculer la fenêtre agent",
       "model": "Modèle Agent",

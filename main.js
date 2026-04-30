@@ -246,6 +246,7 @@ const ParakeetManager = require("./src/helpers/parakeet");
 const DiarizationManager = require("./src/helpers/diarization");
 const TrayManager = require("./src/helpers/tray");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
+const CliBridge = require("./src/helpers/cliBridge");
 const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
@@ -287,6 +288,7 @@ let linuxPortalAudioManager = null;
 let meetingAecManager = null;
 let qdrantManager = null;
 let ipcHandlers = null;
+let cliBridge = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 
@@ -611,6 +613,12 @@ async function startApp() {
   initializeCoreManagers();
   startAuthBridgeServer();
 
+  cliBridge = new CliBridge(ipcHandlers);
+  cliBridge.start().catch((err) => {
+    debugLogger.error("CLI bridge failed to start", { error: err.message });
+    cliBridge = null;
+  });
+
   // Electron's file:// renderer sends Origin: null, which Better Auth's
   // trustedOrigins check rejects. Spoof Origin to the request's own URL so
   // calls to OpenWhispr's auth and API hosts are treated as same-origin.
@@ -763,10 +771,27 @@ async function startApp() {
     debugLogger.debug("Parakeet startup init error (non-fatal)", { error: err.message });
   });
 
-  if (process.env.REASONING_PROVIDER === "local" && process.env.LOCAL_REASONING_MODEL) {
+  // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL fallbacks after 2 releases.
+  const cleanupProvider = process.env.CLEANUP_PROVIDER || process.env.REASONING_PROVIDER;
+  const cleanupLocalModel =
+    process.env.LOCAL_CLEANUP_MODEL || process.env.LOCAL_REASONING_MODEL;
+  if (cleanupProvider === "local" && cleanupLocalModel) {
     const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.prewarmServer(process.env.LOCAL_REASONING_MODEL).catch((err) => {
+    modelManager.prewarmServer(cleanupLocalModel).catch((err) => {
       debugLogger.debug("llama-server pre-warm error (non-fatal)", { error: err.message });
+    });
+  }
+
+  if (
+    process.env.DICTATION_AGENT_PROVIDER === "local" &&
+    process.env.LOCAL_DICTATION_AGENT_MODEL &&
+    process.env.LOCAL_DICTATION_AGENT_MODEL !== cleanupLocalModel
+  ) {
+    const modelManager = require("./src/helpers/modelManagerBridge").default;
+    modelManager.prewarmServer(process.env.LOCAL_DICTATION_AGENT_MODEL).catch((err) => {
+      debugLogger.debug("dictation-agent llama-server pre-warm error (non-fatal)", {
+        error: err.message,
+      });
     });
   }
 
@@ -1345,6 +1370,10 @@ if (gotSingleInstanceLock) {
     if (authBridgeServer) {
       authBridgeServer.close();
       authBridgeServer = null;
+    }
+    if (cliBridge) {
+      cliBridge.stop().catch(() => {});
+      cliBridge = null;
     }
     if (windowManager && isLiveWindow(windowManager.agentWindow)) {
       windowManager.agentWindow.destroy();

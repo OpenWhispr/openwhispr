@@ -1464,8 +1464,9 @@
       "description": "クリーンアップ、ノートのフォーマット、チャット用のモデルを設定",
       "tabs": {
         "dictationCleanup": "ディクテーションのクリーンアップ",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "ノートのフォーマット",
-        "chatIntelligence": "チャットインテリジェンス"
+        "chatIntelligence": "チャット"
       }
     },
     "transcription": {
@@ -1555,7 +1556,6 @@
         "mistral_voxtral_mini_latest": "高速多言語文字起こし"
       },
       "cloud": {
-        "openai_gpt_5_4": "複雑な推論のためのフロンティアモデル",
         "openai_gpt_5_2": "強力な推論モデル",
         "openai_gpt_5_mini": "高速で費用対効果が高い",
         "openai_gpt_5_nano": "超高速、低レイテンシー",
@@ -1564,7 +1564,6 @@
         "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
         "anthropic_claude_sonnet_4_5": "バランスの取れた性能",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
-        "anthropic_claude_opus_4_5": "最も高性能な Claude モデル",
         "gemini_gemini_3_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
         "gemini_gemini_3_flash_preview": "超高速・高性能の次世代モデル",
         "gemini_gemini_2_5_flash_lite": "最低レイテンシーとコスト",
@@ -1576,7 +1575,11 @@
         "groq_llama_4_scout": "Meta の効率的マルチモーダル、750 T/秒",
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト",
+        "openai_gpt_5_5": "複雑な推論のためのフロンティアモデル",
+        "anthropic_claude_opus_4_7": "最も高性能な Claude モデル",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
@@ -2075,10 +2078,30 @@
       "hideForNow": "一時的に非表示"
     }
   },
+  "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+    },
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+    }
+  },
   "agentMode": {
     "settings": {
-      "enabled": "エージェントモードを有効にする",
-      "enabledDescription": "別のホットキーを使用して音声チャットオーバーレイを開く",
       "hotkey": "エージェントホットキー",
       "hotkeyDescription": "エージェントオーバーレイを切り替えるホットキー",
       "model": "エージェントモデル",

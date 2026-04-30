@@ -737,14 +737,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-delete-transcription", async (event, id) => {
-      this.audioStorageManager.deleteAudio(id);
-      const result = this.databaseManager.deleteTranscription(id);
-      if (result?.success) {
-        setImmediate(() => {
-          this.broadcastToWindows("transcription-deleted", { id });
-        });
-      }
-      return result;
+      return this.deleteTranscriptionInternal(id);
     });
 
     // Audio storage handlers
@@ -913,13 +906,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-delete-note", async (event, id) => {
-      const result = this.databaseManager.deleteNote(id);
-      if (result?.success) {
-        setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
-        this._asyncVectorDelete(id);
-        this._asyncMirrorDelete(id);
-      }
-      return result;
+      return this.deleteNoteInternal(id);
     });
 
     ipcMain.handle("db-search-notes", async (event, query, limit) => {
@@ -2748,11 +2735,41 @@ class IPCHandlers {
         });
       }
 
-      if (prefs.reasoningProvider === "local" && prefs.reasoningModel) {
-        setVars.REASONING_PROVIDER = "local";
-        setVars.LOCAL_REASONING_MODEL = prefs.reasoningModel;
-      } else if (prefs.reasoningProvider && prefs.reasoningProvider !== "local") {
+      // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL clears once
+      // the read fallback is removed (~2 releases after this lands).
+      if (prefs.cleanupProvider === "local" && prefs.cleanupModel) {
+        setVars.CLEANUP_PROVIDER = "local";
+        setVars.LOCAL_CLEANUP_MODEL = prefs.cleanupModel;
         clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
+      } else if (prefs.cleanupProvider && prefs.cleanupProvider !== "local") {
+        clearVars.push(
+          "CLEANUP_PROVIDER",
+          "LOCAL_CLEANUP_MODEL",
+          "REASONING_PROVIDER",
+          "LOCAL_REASONING_MODEL"
+        );
+      }
+
+      const dictationAgentLocal =
+        prefs.dictationAgentProvider === "local" && prefs.dictationAgentModel;
+      if (dictationAgentLocal) {
+        setVars.DICTATION_AGENT_PROVIDER = "local";
+        setVars.LOCAL_DICTATION_AGENT_MODEL = prefs.dictationAgentModel;
+      } else if (prefs.dictationAgentProvider && prefs.dictationAgentProvider !== "local") {
+        clearVars.push("DICTATION_AGENT_PROVIDER", "LOCAL_DICTATION_AGENT_MODEL");
+      }
+
+      // Stop the local llama-server only when neither cleanup nor dictation-agent
+      // still need a local model. Otherwise the still-active scope would lose
+      // its server on the next provider switch of the other scope.
+      const cleanupNeedsLocal = setVars.CLEANUP_PROVIDER === "local";
+      const dictationAgentNeedsLocal = setVars.DICTATION_AGENT_PROVIDER === "local";
+      if (
+        prefs.cleanupProvider &&
+        prefs.cleanupProvider !== "local" &&
+        !cleanupNeedsLocal &&
+        !dictationAgentNeedsLocal
+      ) {
         const modelManager = require("./modelManagerBridge").default;
         modelManager.stopServer().catch((err) => {
           debugLogger.error("Failed to stop llama-server on provider switch", {
@@ -7718,6 +7735,27 @@ class IPCHandlers {
         }
       }
     })();
+  }
+
+  deleteTranscriptionInternal(id) {
+    this.audioStorageManager.deleteAudio(id);
+    const result = this.databaseManager.deleteTranscription(id);
+    if (result?.success) {
+      setImmediate(() => {
+        this.broadcastToWindows("transcription-deleted", { id });
+      });
+    }
+    return result;
+  }
+
+  deleteNoteInternal(id) {
+    const result = this.databaseManager.deleteNote(id);
+    if (result?.success) {
+      setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
+      this._asyncVectorDelete(id);
+      this._asyncMirrorDelete(id);
+    }
+    return result;
   }
 
   broadcastToWindows(channel, payload) {

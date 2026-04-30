@@ -1560,8 +1560,9 @@
       "description": "Configure models for cleanup, note formatting, and chat",
       "tabs": {
         "dictationCleanup": "Dictation Cleanup",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "Note Formatting",
-        "chatIntelligence": "Chat Intelligence"
+        "chatIntelligence": "Chat"
       }
     },
     "transcription": {
@@ -1655,7 +1656,6 @@
         "mistral_voxtral_mini_latest": "Fast multilingual transcription"
       },
       "cloud": {
-        "openai_gpt_5_4": "Frontier model for complex reasoning",
         "openai_gpt_5_2": "Strong reasoning model",
         "openai_gpt_5_mini": "Fast and cost-efficient",
         "openai_gpt_5_nano": "Ultra-fast, low latency",
@@ -1664,7 +1664,6 @@
         "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
         "anthropic_claude_sonnet_4_5": "Balanced performance",
         "anthropic_claude_haiku_4_5": "Fast with near-frontier intelligence",
-        "anthropic_claude_opus_4_5": "Most capable Claude model",
         "gemini_gemini_3_pro_preview": "Next-gen flagship model for complex reasoning",
         "gemini_gemini_3_flash_preview": "Ultra-fast, high-capability next-gen model",
         "gemini_gemini_2_5_flash_lite": "Lowest latency and cost",
@@ -1676,7 +1675,11 @@
         "groq_llama_4_scout": "Meta's efficient multimodal, 750 T/sec",
         "groq_compound": "Groq's compound system, 450 T/sec",
         "groq_compound_mini": "Fast compound system, 3x lower latency",
-        "groq_kimi_k2_0905": "Moonshot AI's 1T MoE, 256K context"
+        "groq_kimi_k2_0905": "Moonshot AI's 1T MoE, 256K context",
+        "openai_gpt_5_5": "Frontier model for complex reasoning",
+        "anthropic_claude_opus_4_7": "Most capable Claude model",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
@@ -2171,10 +2174,30 @@
       "hideForNow": "Hide for now"
     }
   },
+  "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+    },
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+    }
+  },
   "agentMode": {
     "settings": {
-      "enabled": "Enable Agent Mode",
-      "enabledDescription": "Use a separate hotkey to open a voice chat overlay",
       "hotkey": "Agent Hotkey",
       "hotkeyDescription": "Hotkey to toggle the agent overlay",
       "model": "Agent Model",

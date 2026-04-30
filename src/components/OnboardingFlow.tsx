@@ -85,15 +85,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     openaiApiKey,
     groqApiKey,
     mistralApiKey,
-    customTranscriptionApiKey,
-    setCustomTranscriptionApiKey,
     dictationKey,
     activationMode,
     setActivationMode,
     setDictationKey,
-    setOpenaiApiKey,
-    setGroqApiKey,
-    setMistralApiKey,
     updateTranscriptionSettings,
     preferredLanguage,
   } = useSettings();
@@ -504,14 +499,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ...(!isLocal && !isSignedIn ? { cloudTranscriptionMode: "byok" } : {}),
                 });
               }}
-              openaiApiKey={openaiApiKey}
-              setOpenaiApiKey={setOpenaiApiKey}
-              groqApiKey={groqApiKey}
-              setGroqApiKey={setGroqApiKey}
-              mistralApiKey={mistralApiKey}
-              setMistralApiKey={setMistralApiKey}
-              customTranscriptionApiKey={customTranscriptionApiKey}
-              setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
               cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
               setCloudTranscriptionBaseUrl={(url) =>
                 updateTranscriptionSettings({ cloudTranscriptionBaseUrl: url })

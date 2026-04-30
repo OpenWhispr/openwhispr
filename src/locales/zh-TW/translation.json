@@ -1459,8 +1459,9 @@
       "description": "設定用於聽寫清理、筆記格式化和聊天的模型",
       "tabs": {
         "dictationCleanup": "聽寫清理",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "筆記格式化",
-        "chatIntelligence": "聊天智能"
+        "chatIntelligence": "聊天"
       }
     },
     "transcription": {
@@ -1550,7 +1551,6 @@
         "mistral_voxtral_mini_latest": "快速多語言轉錄"
       },
       "cloud": {
-        "openai_gpt_5_4": "複雜推理前沿模型",
         "openai_gpt_5_2": "強大的推理模型",
         "openai_gpt_5_mini": "快速且經濟實惠",
         "openai_gpt_5_nano": "超快速，低延遲",
@@ -1559,7 +1559,6 @@
         "openai_gpt_4_1_nano": "最低延遲的 GPT-4.1",
         "anthropic_claude_sonnet_4_5": "均衡表現",
         "anthropic_claude_haiku_4_5": "快速且接近頂尖智慧",
-        "anthropic_claude_opus_4_5": "最強大的 Claude 模型",
         "gemini_gemini_3_pro_preview": "新一代旗艦模型，擅長複雜推理",
         "gemini_gemini_3_flash_preview": "超快速、高性能的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延遲和成本",
@@ -1571,7 +1570,11 @@
         "groq_llama_4_scout": "Meta 高效多模態，750 T/sec",
         "groq_compound": "Groq Compound 系統，450 T/sec",
         "groq_compound_mini": "快速 Compound 系統，3x 更低延遲",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文",
+        "openai_gpt_5_5": "複雜推理前沿模型",
+        "anthropic_claude_opus_4_7": "最強大的 Claude 模型",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",
@@ -2070,10 +2073,30 @@
       "hideForNow": "暫時隱藏"
     }
   },
+  "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+    },
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+    }
+  },
   "agentMode": {
     "settings": {
-      "enabled": "啟用智慧助手模式",
-      "enabledDescription": "使用獨立熱鍵開啟語音聊天覆蓋層",
       "hotkey": "助手熱鍵",
       "hotkeyDescription": "切換助手覆蓋層的熱鍵",
       "model": "助手模型",
