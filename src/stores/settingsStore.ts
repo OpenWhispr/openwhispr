@@ -503,8 +503,8 @@ export interface SettingsState
   setChatAgentCloudMode: (value: string) => void;
   setChatAgentMode: (mode: InferenceMode) => void;
   setChatAgentCloudBaseUrl: (value: string) => void;
-  setChatAgentRemoteType: (type: SelfHostedType) => void;
   setChatAgentRemoteUrl: (url: string) => void;
+  setChatAgentCustomApiKey: (key: string) => void;
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => void;
@@ -803,10 +803,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   chatAgentRemoteUrl: readString("chatAgentRemoteUrl", ""),
   chatAgentCloudBaseUrl: readString("chatAgentCloudBaseUrl", ""),
-  chatAgentRemoteType: (() => {
-    const v = readString("chatAgentRemoteType", "lan");
-    return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
-  })(),
+  chatAgentCustomApiKey: readString("chatAgentCustomApiKey", ""),
 
   dictationAgentMode: (() => {
     const v = readString("dictationAgentMode", "");
@@ -1178,10 +1175,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setChatAgentCloudMode: createStringSetter("chatAgentCloudMode"),
   setChatAgentMode: createStringSetter("chatAgentMode") as (mode: InferenceMode) => void,
   setChatAgentCloudBaseUrl: createStringSetter("chatAgentCloudBaseUrl"),
-  setChatAgentRemoteType: createStringSetter("chatAgentRemoteType") as (
-    type: SelfHostedType
-  ) => void,
   setChatAgentRemoteUrl: createStringSetter("chatAgentRemoteUrl"),
+  setChatAgentCustomApiKey: createStringSetter("chatAgentCustomApiKey"),
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => {
     const s = useSettingsStore.getState();

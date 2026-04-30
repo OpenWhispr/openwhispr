@@ -77,8 +77,8 @@ export interface ChatAgentSettings {
   chatAgentCloudMode: string;
   chatAgentMode: InferenceMode;
   chatAgentCloudBaseUrl: string;
-  chatAgentRemoteType: SelfHostedType;
   chatAgentRemoteUrl: string;
+  chatAgentCustomApiKey: string;
 }
 
 function useSettingsInternal() {

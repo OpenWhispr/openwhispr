@@ -1,12 +1,8 @@
-import promptData from "./promptData.json";
 import { resolvePrompt } from "./prompts/index";
 
 export { resolvePrompt, getDefaultPromptText } from "./prompts/index";
 export { PROMPT_KINDS, PROMPT_KIND_LIST, type PromptKind } from "./prompts/registry";
 export { detectAgentName } from "./agentDetection";
-
-export const CLEANUP_PROMPT = promptData.CLEANUP_PROMPT;
-export const FULL_PROMPT = promptData.FULL_PROMPT;
 
 export function getCleanupSystemPrompt(
   agentName: string | null,

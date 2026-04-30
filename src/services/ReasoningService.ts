@@ -46,7 +46,6 @@ class ReasoningService extends BaseReasoningService {
       getCustomDictionary: this.getCustomDictionary.bind(this),
       getPreferredLanguage: this.getPreferredLanguage.bind(this),
       getUiLanguage: this.getUiLanguage.bind(this),
-      getCustomPrompt: this.getCustomPrompt.bind(this),
       callChatCompletionsApi: this.callChatCompletionsApi.bind(this),
       calculateMaxTokens: this.calculateMaxTokens.bind(this),
     };
@@ -335,10 +334,6 @@ class ReasoningService extends BaseReasoningService {
       });
       throw error;
     }
-  }
-
-  private getCustomPrompt(): string | undefined {
-    return getSettings().customPrompts.cleanup || undefined;
   }
 
   async *processTextStreaming(

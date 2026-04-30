@@ -1,5 +1,6 @@
 import type { InferenceProvider } from "./types";
 import { withSessionRefresh } from "../../../lib/neonAuth";
+import { getSettings } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
 
 export const openwhisprProvider: InferenceProvider = {
@@ -7,11 +8,15 @@ export const openwhisprProvider: InferenceProvider = {
   async call({ text, model, agentName, config, ctx }) {
     logger.logReasoning("OPENWHISPR_START", { model, agentName });
 
+    const customPrompt = config.systemPrompt
+      ? undefined
+      : getSettings().customPrompts.cleanup || undefined;
+
     const result = await withSessionRefresh(async () => {
       const res = await window.electronAPI?.cloudReason?.(text, {
         agentName,
         customDictionary: ctx.getCustomDictionary(),
-        customPrompt: ctx.getCustomPrompt(),
+        customPrompt,
         systemPrompt: config.systemPrompt,
         language: ctx.getPreferredLanguage(),
         locale: ctx.getUiLanguage(),

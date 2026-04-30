@@ -6,7 +6,6 @@ export interface ProviderContext {
   getCustomDictionary(): string[];
   getPreferredLanguage(): string;
   getUiLanguage(): string;
-  getCustomPrompt(): string | undefined;
   callChatCompletionsApi(
     endpoint: string,
     apiKey: string,

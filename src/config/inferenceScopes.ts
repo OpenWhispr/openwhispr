@@ -40,7 +40,6 @@ export const INFERENCE_SCOPES = {
       remoteUrl: "dictationAgentRemoteUrl",
       customApiKey: "dictationAgentCustomApiKey",
     },
-    fallbackScope: "dictationCleanup",
   },
   noteFormatting: {
     storeKeys: {
@@ -62,8 +61,8 @@ export const INFERENCE_SCOPES = {
       model: "chatAgentModel",
       cloudMode: "chatAgentCloudMode",
       cloudBaseUrl: "chatAgentCloudBaseUrl",
-      remoteType: "chatAgentRemoteType",
       remoteUrl: "chatAgentRemoteUrl",
+      customApiKey: "chatAgentCustomApiKey",
     },
   },
 } as const satisfies Record<string, InferenceScopeDefinition>;
