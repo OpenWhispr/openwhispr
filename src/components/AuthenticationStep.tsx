@@ -70,8 +70,16 @@ export default function AuthenticationStep({
   const [isSocialLoading, setIsSocialLoading] = useState<SocialProvider | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+  const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState(true);
 
   const needsVerificationRef = useRef(false);
+
+  useEffect(() => {
+    window.electronAPI
+      ?.getOAuthProtocolRegistered?.()
+      .then(setOauthProtocolRegistered)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn || needsVerificationRef.current || !user?.id || !user?.email)
@@ -461,7 +469,8 @@ export default function AuthenticationStep({
         type="button"
         variant="social"
         onClick={() => handleSocialSignIn("google")}
-        disabled={isSocialLoading !== null || isCheckingEmail}
+        disabled={isSocialLoading !== null || isCheckingEmail || !oauthProtocolRegistered}
+        title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
         className="w-full h-9"
       >
         {isSocialLoading === "google" ? (
@@ -483,7 +492,8 @@ export default function AuthenticationStep({
         type="button"
         variant="social"
         onClick={() => handleSocialSignIn("microsoft")}
-        disabled={isSocialLoading !== null || isCheckingEmail}
+        disabled={isSocialLoading !== null || isCheckingEmail || !oauthProtocolRegistered}
+        title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
         className="w-full h-9"
       >
         {isSocialLoading === "microsoft" ? (
@@ -500,6 +510,12 @@ export default function AuthenticationStep({
           </>
         )}
       </Button>
+
+      {!oauthProtocolRegistered && (
+        <p className="text-xs text-muted-foreground/80 leading-tight text-center">
+          {t("auth.social.protocolUnavailable")}
+        </p>
+      )}
 
       <div className="flex items-center gap-2">
         <div className="flex-1 h-px bg-border/50" />

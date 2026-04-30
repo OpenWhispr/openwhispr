@@ -1220,13 +1220,15 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 // --- Selectors (derived state, not stored) ---
 
 export const selectIsCloudCleanupMode = (state: SettingsState) =>
-  state.isSignedIn && state.cleanupCloudMode === "openwhispr";
+  state.isSignedIn && state.cleanupMode === "openwhispr" && state.cleanupCloudMode === "openwhispr";
 
 export const selectEffectiveCleanupProvider = (state: SettingsState) =>
   selectIsCloudCleanupMode(state) ? "openwhispr" : state.cleanupProvider;
 
 export const selectIsCloudChatAgentMode = (state: SettingsState) =>
-  state.isSignedIn && state.chatAgentCloudMode === "openwhispr";
+  state.isSignedIn &&
+  state.chatAgentMode === "openwhispr" &&
+  state.chatAgentCloudMode === "openwhispr";
 
 export interface ResolvedMeetingTranscription {
   useLocalWhisper: boolean;
@@ -1246,6 +1248,8 @@ export const selectResolvedMeetingTranscription = (
   state: SettingsState
 ): ResolvedMeetingTranscription => {
   const catalog = useStreamingProvidersStore.getState().providers;
+  // TODO(1.8.0): Catalog has one cloud entry today (OpenAI Realtime).
+  // When a second is added, resolve as `meetingCloudTranscriptionProvider || cloudTranscriptionProvider || catalog[0]?.id`, then validate against catalog.
   const cloudTranscriptionProvider = catalog?.[0]?.id ?? "";
 
   return {

@@ -616,7 +616,8 @@
     "social": {
       "completeInBrowser": "ブラウザでサインインを完了してください",
       "continueWithGoogle": "Google で続ける",
-      "continueWithMicrosoft": "Microsoft で続ける"
+      "continueWithMicrosoft": "Microsoft で続ける",
+      "protocolUnavailable": "ブラウザでのサインインを利用できません — システムの「既定のアプリ」設定で openwhispr:// プロトコルを再登録してください。"
     },
     "welcomeSubtitle": "音声でどこでもディクテーション",
     "welcomeTitle": "OpenWhispr へようこそ"
@@ -2107,6 +2108,7 @@
     "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
     "title": "Dictation Agent",
     "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "useCleanupModel": "クリーンアップモデルを使用",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",

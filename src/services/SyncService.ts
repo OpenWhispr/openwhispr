@@ -246,7 +246,7 @@ class SyncService {
         }
 
         if (local?.deleted_at) continue;
-        if (!local || cloudFolder.updated_at > local.created_at) {
+        if (!local || cloudFolder.updated_at > local.updated_at) {
           await window.electronAPI.upsertFolderFromCloud?.(
             cloudFolder as unknown as Record<string, unknown>
           );

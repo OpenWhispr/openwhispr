@@ -13,7 +13,7 @@ onboarding).
 | Host | Protocol | Port | Purpose |
 | --- | --- | --- | --- |
 | `api.openwhispr.com` | HTTPS | 443 | Cloud API: transcription, sync, agent reasoning, settings, usage. |
-| `*.neonauth.c-3.us-east-1.aws.neon.tech` | HTTPS | 443 | Account sign-in and session refresh (Neon Auth). |
+| `auth.openwhispr.com` | HTTPS | 443 | Account sign-in and session refresh (Better Auth). |
 | `github.com`, `objects.githubusercontent.com` | HTTPS | 443 | Application auto-update (release artifacts via electron-updater, GitHub provider). |
 
 ## Required for streaming transcription
@@ -73,6 +73,9 @@ provider. Skip any provider not in use.
   path without its root certificate trusted by the OS.
 - IP-pinning is not supported. The hosts above resolve to provider-managed
   IPs that change without notice.
+- On minimal Linux containers without a system CA bundle (Alpine, distroless),
+  set `NODE_EXTRA_CA_CERTS` to your CA bundle path so corporate TLS interception
+  is trusted.
 
 ## How to test
 
