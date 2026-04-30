@@ -34,7 +34,6 @@ export interface CleanupSettings {
   cleanupCloudBaseUrl?: string;
   cleanupCloudMode: string;
   cleanupMode: InferenceMode;
-  cleanupRemoteType: SelfHostedType;
   cleanupRemoteUrl: string;
 }
 
@@ -199,7 +198,6 @@ function useSettingsInternal() {
     remoteTranscriptionType: store.remoteTranscriptionType,
     remoteTranscriptionUrl: store.remoteTranscriptionUrl,
     cleanupMode: store.cleanupMode,
-    cleanupRemoteType: store.cleanupRemoteType,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
     customDictionary: store.customDictionary,
     assemblyAiStreaming: store.assemblyAiStreaming,
@@ -235,7 +233,6 @@ function useSettingsInternal() {
     setRemoteTranscriptionType: store.setRemoteTranscriptionType,
     setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,
     setCleanupMode: store.setCleanupMode,
-    setCleanupRemoteType: store.setCleanupRemoteType,
     setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,
     setUseCleanupModel: store.setUseCleanupModel,

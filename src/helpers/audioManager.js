@@ -27,16 +27,18 @@ function resolveReasoningRoute(text, settings, agentName) {
 
   const invoked = !!agentName && detectAgentName(text, agentName);
   if (agentReachable && (!cleanupReachable || invoked)) {
-    const isLanAgent =
-      settings.dictationAgentMode === "self-hosted" &&
-      settings.dictationAgentRemoteType === "lan" &&
-      !!settings.dictationAgentRemoteUrl;
+    const provider = settings.dictationAgentProvider?.trim() || undefined;
+    const isSelfHostedAgent =
+      settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl;
+    const isCustomAgent = settings.dictationAgentMode === "providers" && provider === "custom";
     return {
       kind: "agent",
       model: agentModel,
       config: {
-        provider: settings.dictationAgentProvider?.trim() || undefined,
-        lanUrl: isLanAgent ? settings.dictationAgentRemoteUrl : undefined,
+        provider,
+        lanUrl: isSelfHostedAgent ? settings.dictationAgentRemoteUrl : undefined,
+        baseUrl: isCustomAgent ? settings.dictationAgentCloudBaseUrl || undefined : undefined,
+        customApiKey: isCustomAgent ? settings.dictationAgentCustomApiKey || undefined : undefined,
         systemPrompt: resolvePrompt("dictationAgent", {
           agentName,
           language: settings.preferredLanguage,

@@ -97,6 +97,8 @@ export function useChatStreaming({
       const chatAgentMode = settings.chatAgentMode || "openwhispr";
       const isCloudAgent = chatAgentMode === "openwhispr" && settings.isSignedIn;
       const isLanAgent = chatAgentMode === "self-hosted" && !!settings.chatAgentRemoteUrl;
+      const isCustomAgent =
+        chatAgentMode === "providers" && settings.chatAgentProvider === "custom";
       const isLocalProvider = !["openai", "groq", "custom", "anthropic", "gemini"].includes(
         settings.chatAgentProvider
       );
@@ -189,7 +191,12 @@ export function useChatStreaming({
             llmMessages,
             settings.chatAgentModel,
             settings.chatAgentProvider,
-            { systemPrompt, lanUrl: isLanAgent ? settings.chatAgentRemoteUrl : undefined },
+            {
+              systemPrompt,
+              lanUrl: isLanAgent ? settings.chatAgentRemoteUrl : undefined,
+              baseUrl: isCustomAgent ? settings.chatAgentCloudBaseUrl || undefined : undefined,
+              customApiKey: isCustomAgent ? settings.chatAgentCustomApiKey || undefined : undefined,
+            },
             aiTools
           );
         }

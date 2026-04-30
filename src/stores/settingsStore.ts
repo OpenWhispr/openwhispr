@@ -269,14 +269,12 @@ const LLM_SCOPE_KEY_PAIRS: ReadonlyArray<[string, string]> = [
   ["cloudReasoningMode", "cleanupCloudMode"],
   ["cloudReasoningBaseUrl", "cleanupCloudBaseUrl"],
   ["customReasoningApiKey", "cleanupCustomApiKey"],
-  ["remoteReasoningType", "cleanupRemoteType"],
   ["remoteReasoningUrl", "cleanupRemoteUrl"],
   ["meetingReasoningMode", "noteFormattingMode"],
   ["meetingReasoningProvider", "noteFormattingProvider"],
   ["meetingReasoningModel", "noteFormattingModel"],
   ["meetingCloudReasoningMode", "noteFormattingCloudMode"],
   ["meetingCloudReasoningBaseUrl", "noteFormattingCloudBaseUrl"],
-  ["meetingRemoteReasoningType", "noteFormattingRemoteType"],
   ["meetingRemoteReasoningUrl", "noteFormattingRemoteUrl"],
   ["agentInferenceMode", "chatAgentMode"],
   ["agentProvider", "chatAgentProvider"],
@@ -336,7 +334,6 @@ export interface SettingsState
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
   cleanupMode: InferenceMode;
-  cleanupRemoteType: SelfHostedType;
   cleanupRemoteUrl: string;
 
   meetingTranscriptionMode: InferenceMode;
@@ -356,7 +353,6 @@ export interface SettingsState
   noteFormattingModel: string;
   noteFormattingCloudMode: string;
   noteFormattingCloudBaseUrl: string;
-  noteFormattingRemoteType: SelfHostedType;
   noteFormattingRemoteUrl: string;
   noteFormattingCustomApiKey: string;
 
@@ -365,7 +361,6 @@ export interface SettingsState
   dictationAgentModel: string;
   dictationAgentCloudMode: string;
   dictationAgentCloudBaseUrl: string;
-  dictationAgentRemoteType: SelfHostedType;
   dictationAgentRemoteUrl: string;
   dictationAgentCustomApiKey: string;
 
@@ -377,7 +372,6 @@ export interface SettingsState
   setDictationAgentModel: (value: string) => void;
   setDictationAgentCloudMode: (value: string) => void;
   setDictationAgentCloudBaseUrl: (value: string) => void;
-  setDictationAgentRemoteType: (type: SelfHostedType) => void;
   setDictationAgentRemoteUrl: (url: string) => void;
   setDictationAgentCustomApiKey: (key: string) => void;
 
@@ -385,7 +379,6 @@ export interface SettingsState
   setRemoteTranscriptionType: (type: SelfHostedType) => void;
   setRemoteTranscriptionUrl: (url: string) => void;
   setCleanupMode: (mode: InferenceMode) => void;
-  setCleanupRemoteType: (type: SelfHostedType) => void;
   setCleanupRemoteUrl: (url: string) => void;
 
   setMeetingTranscriptionMode: (mode: InferenceMode) => void;
@@ -405,7 +398,6 @@ export interface SettingsState
   setNoteFormattingModel: (value: string) => void;
   setNoteFormattingCloudMode: (value: string) => void;
   setNoteFormattingCloudBaseUrl: (value: string) => void;
-  setNoteFormattingRemoteType: (type: SelfHostedType) => void;
   setNoteFormattingRemoteUrl: (url: string) => void;
   setNoteFormattingCustomApiKey: (key: string) => void;
 
@@ -695,10 +687,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       return v;
     return "openwhispr" as InferenceMode;
   })(),
-  cleanupRemoteType: (() => {
-    const v = readString("cleanupRemoteType", "lan");
-    return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
-  })(),
   cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
 
   meetingTranscriptionMode: (() => {
@@ -739,10 +727,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   noteFormattingModel: readString("noteFormattingModel", ""),
   noteFormattingCloudMode: readString("noteFormattingCloudMode", ""),
   noteFormattingCloudBaseUrl: readString("noteFormattingCloudBaseUrl", ""),
-  noteFormattingRemoteType: (() => {
-    const v = readString("noteFormattingRemoteType", "lan");
-    return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
-  })(),
   noteFormattingRemoteUrl: readString("noteFormattingRemoteUrl", ""),
   noteFormattingCustomApiKey: readString("noteFormattingCustomApiKey", ""),
 
@@ -752,7 +736,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ) => void,
   setRemoteTranscriptionUrl: createStringSetter("remoteTranscriptionUrl"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
-  setCleanupRemoteType: createStringSetter("cleanupRemoteType") as (type: SelfHostedType) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
@@ -779,9 +762,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNoteFormattingModel: createStringSetter("noteFormattingModel"),
   setNoteFormattingCloudMode: createStringSetter("noteFormattingCloudMode"),
   setNoteFormattingCloudBaseUrl: createStringSetter("noteFormattingCloudBaseUrl"),
-  setNoteFormattingRemoteType: createStringSetter("noteFormattingRemoteType") as (
-    type: SelfHostedType
-  ) => void,
   setNoteFormattingRemoteUrl: createStringSetter("noteFormattingRemoteUrl"),
   setNoteFormattingCustomApiKey: createStringSetter("noteFormattingCustomApiKey"),
 
@@ -821,10 +801,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentModel: readString("dictationAgentModel", ""),
   dictationAgentCloudMode: readString("dictationAgentCloudMode", ""),
   dictationAgentCloudBaseUrl: readString("dictationAgentCloudBaseUrl", ""),
-  dictationAgentRemoteType: (() => {
-    const v = readString("dictationAgentRemoteType", "lan");
-    return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
-  })(),
   dictationAgentRemoteUrl: readString("dictationAgentRemoteUrl", ""),
   dictationAgentCustomApiKey: readString("dictationAgentCustomApiKey", ""),
 
@@ -844,9 +820,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setDictationAgentModel: createStringSetter("dictationAgentModel"),
   setDictationAgentCloudMode: createStringSetter("dictationAgentCloudMode"),
   setDictationAgentCloudBaseUrl: createStringSetter("dictationAgentCloudBaseUrl"),
-  setDictationAgentRemoteType: createStringSetter("dictationAgentRemoteType") as (
-    type: SelfHostedType
-  ) => void,
   setDictationAgentRemoteUrl: createStringSetter("dictationAgentRemoteUrl"),
   setDictationAgentCustomApiKey: createStringSetter("dictationAgentCustomApiKey"),
 
@@ -1297,7 +1270,6 @@ export interface ResolvedNoteFormatting {
   mode: InferenceMode;
   cloudMode: string;
   cloudBaseUrl: string;
-  remoteType: SelfHostedType;
   remoteUrl: string;
 }
 
@@ -1309,7 +1281,6 @@ export const selectResolvedNoteFormatting = (state: SettingsState): ResolvedNote
     mode: cfg.mode,
     cloudMode: cfg.cloudMode || "",
     cloudBaseUrl: cfg.cloudBaseUrl || "",
-    remoteType: cfg.remoteType ?? "lan",
     remoteUrl: cfg.remoteUrl || "",
   };
 };
@@ -1321,7 +1292,6 @@ export interface ResolvedLLMConfig {
   model: string;
   cloudMode?: string;
   cloudBaseUrl?: string;
-  remoteType?: SelfHostedType;
   remoteUrl?: string;
   customApiKey?: string;
 }
@@ -1348,10 +1318,7 @@ export const selectResolvedLLMConfig = (
     model: read("model") || fallback?.model || "",
     cloudMode: read("cloudMode") || fallback?.cloudMode,
     cloudBaseUrl: read("cloudBaseUrl") || fallback?.cloudBaseUrl,
-    remoteType: (read("remoteType") as SelfHostedType | undefined) ?? fallback?.remoteType,
     remoteUrl: read("remoteUrl") || fallback?.remoteUrl,
-    // No fallback inheritance: each scope owns its custom API key explicitly.
-    // Inheriting cleanup's key into other scopes silently was a footgun.
     customApiKey: read("customApiKey"),
   };
 };

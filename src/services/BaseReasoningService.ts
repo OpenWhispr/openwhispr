@@ -7,7 +7,8 @@ export interface ReasoningConfig {
   contextSize?: number;
   systemPrompt?: string;
   lanUrl?: string;
-  /** Overrides the model-id heuristic in `processText` when set. */
+  baseUrl?: string;
+  customApiKey?: string;
   provider?: string;
 }
 

@@ -6,7 +6,6 @@ export interface InferenceScopeStoreKeys {
   model: keyof SettingsState;
   cloudMode?: keyof SettingsState;
   cloudBaseUrl?: keyof SettingsState;
-  remoteType?: keyof SettingsState;
   remoteUrl?: keyof SettingsState;
   customApiKey?: keyof SettingsState;
 }
@@ -24,7 +23,6 @@ export const INFERENCE_SCOPES = {
       model: "cleanupModel",
       cloudMode: "cleanupCloudMode",
       cloudBaseUrl: "cleanupCloudBaseUrl",
-      remoteType: "cleanupRemoteType",
       remoteUrl: "cleanupRemoteUrl",
       customApiKey: "cleanupCustomApiKey",
     },
@@ -36,7 +34,6 @@ export const INFERENCE_SCOPES = {
       model: "dictationAgentModel",
       cloudMode: "dictationAgentCloudMode",
       cloudBaseUrl: "dictationAgentCloudBaseUrl",
-      remoteType: "dictationAgentRemoteType",
       remoteUrl: "dictationAgentRemoteUrl",
       customApiKey: "dictationAgentCustomApiKey",
     },
@@ -48,7 +45,6 @@ export const INFERENCE_SCOPES = {
       model: "noteFormattingModel",
       cloudMode: "noteFormattingCloudMode",
       cloudBaseUrl: "noteFormattingCloudBaseUrl",
-      remoteType: "noteFormattingRemoteType",
       remoteUrl: "noteFormattingRemoteUrl",
       customApiKey: "noteFormattingCustomApiKey",
     },

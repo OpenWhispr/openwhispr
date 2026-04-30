@@ -57,11 +57,7 @@ class ReasoningService extends BaseReasoningService {
 
   private isLanCleanupMode(): boolean {
     const settings = getSettings();
-    return (
-      settings.cleanupMode === "self-hosted" &&
-      settings.cleanupRemoteType === "lan" &&
-      !!settings.cleanupRemoteUrl
-    );
+    return settings.cleanupMode === "self-hosted" && !!settings.cleanupRemoteUrl;
   }
 
   private async getApiKey(
@@ -364,7 +360,8 @@ class ReasoningService extends BaseReasoningService {
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
       const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom";
-      apiKey = await this.getApiKey(providerKey);
+      const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
+      apiKey = overrideKey || (await this.getApiKey(providerKey));
 
       switch (providerKey) {
         case "groq":
@@ -375,7 +372,10 @@ class ReasoningService extends BaseReasoningService {
           break;
         case "openai":
         case "custom":
-          endpoint = buildApiUrl(getConfiguredOpenAIBase(), "/chat/completions");
+          endpoint = buildApiUrl(
+            config.baseUrl?.trim() || getConfiguredOpenAIBase(),
+            "/chat/completions"
+          );
           break;
         default:
           endpoint = buildApiUrl(API_ENDPOINTS.OPENAI_BASE, "/chat/completions");
@@ -571,8 +571,10 @@ class ReasoningService extends BaseReasoningService {
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
       const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom";
-      apiKey = await this.getApiKey(providerKey);
-      baseURL = provider === "custom" ? getConfiguredOpenAIBase() : undefined;
+      const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
+      apiKey = overrideKey || (await this.getApiKey(providerKey));
+      baseURL =
+        provider === "custom" ? config.baseUrl?.trim() || getConfiguredOpenAIBase() : undefined;
     }
     const apiConfig = getOpenAiApiConfig(model);
 

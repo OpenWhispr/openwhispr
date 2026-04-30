@@ -129,7 +129,8 @@ export const openaiProvider: InferenceProvider = {
       isCustomProvider,
     });
 
-    const apiKey = await ctx.getApiKey(isCustomProvider ? "custom" : "openai");
+    const overrideKey = isCustomProvider ? config.customApiKey?.trim() : "";
+    const apiKey = overrideKey || (await ctx.getApiKey(isCustomProvider ? "custom" : "openai"));
 
     logger.logReasoning("OPENAI_API_KEY", {
       hasApiKey: !!apiKey,
@@ -142,7 +143,7 @@ export const openaiProvider: InferenceProvider = {
       { role: "user", content: text },
     ];
 
-    const openAiBase = getConfiguredOpenAIBase();
+    const openAiBase = config.baseUrl?.trim() || getConfiguredOpenAIBase();
     await detectServerType(openAiBase);
     const endpointCandidates = getEndpointCandidates(openAiBase);
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
