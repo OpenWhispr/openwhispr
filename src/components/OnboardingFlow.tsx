@@ -85,8 +85,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     openaiApiKey,
     groqApiKey,
     mistralApiKey,
-    customTranscriptionApiKey,
-    setCustomTranscriptionApiKey,
     dictationKey,
     activationMode,
     setActivationMode,
@@ -501,8 +499,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   ...(!isLocal && !isSignedIn ? { cloudTranscriptionMode: "byok" } : {}),
                 });
               }}
-              customTranscriptionApiKey={customTranscriptionApiKey}
-              setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
               cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
               setCloudTranscriptionBaseUrl={(url) =>
                 updateTranscriptionSettings({ cloudTranscriptionBaseUrl: url })

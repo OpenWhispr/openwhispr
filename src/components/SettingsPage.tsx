@@ -189,8 +189,6 @@ interface TranscriptionSectionProps {
   setWhisperModel: (model: string) => void;
   parakeetModel: string;
   setParakeetModel: (model: string) => void;
-  customTranscriptionApiKey: string;
-  setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl: (url: string) => void;
   transcriptionMode: InferenceMode;
@@ -225,8 +223,6 @@ function TranscriptionSection({
   setWhisperModel,
   parakeetModel,
   setParakeetModel,
-  customTranscriptionApiKey,
-  setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
   setCloudTranscriptionBaseUrl,
   transcriptionMode,
@@ -338,8 +334,6 @@ function TranscriptionSection({
             }
       }
       mode={mode}
-      customTranscriptionApiKey={customTranscriptionApiKey}
-      setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
       cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
       setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
       variant="settings"
@@ -645,8 +639,6 @@ export default function SettingsPage({
     setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl,
     setUseCleanupModel,
-    customTranscriptionApiKey,
-    setCustomTranscriptionApiKey,
     setDictationKey,
     meetingKey,
     setMeetingKey,
@@ -3026,8 +3018,6 @@ EOF`,
                 setWhisperModel={setWhisperModel}
                 parakeetModel={parakeetModel}
                 setParakeetModel={setParakeetModel}
-                customTranscriptionApiKey={customTranscriptionApiKey}
-                setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
                 cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
                 setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
                 transcriptionMode={transcriptionMode}

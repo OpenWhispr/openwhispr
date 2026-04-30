@@ -59,8 +59,6 @@ export function MeetingTranscriptionPanel() {
     setMeetingCloudTranscriptionMode,
     meetingRemoteTranscriptionUrl,
     setMeetingRemoteTranscriptionUrl,
-    customTranscriptionApiKey,
-    setCustomTranscriptionApiKey,
   } = useSettingsStore();
 
   const transcriptionModes: InferenceModeOption[] = [
@@ -130,8 +128,6 @@ export function MeetingTranscriptionPanel() {
       useLocalWhisper={mode === "local"}
       onModeChange={noop}
       mode={mode}
-      customTranscriptionApiKey={customTranscriptionApiKey}
-      setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
       cloudTranscriptionBaseUrl={meetingCloudTranscriptionBaseUrl}
       setCloudTranscriptionBaseUrl={setMeetingCloudTranscriptionBaseUrl}
       variant="settings"
