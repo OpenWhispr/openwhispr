@@ -1597,7 +1597,9 @@
         "groq_compound_mini": "Schnelles Compound-System, 3x niedrigere Latenz",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, 256K Kontext",
         "openai_gpt_5_5": "Frontier-Modell für komplexes Reasoning",
-        "anthropic_claude_opus_4_7": "Leistungsstärkstes Claude-Modell"
+        "anthropic_claude_opus_4_7": "Leistungsstärkstes Claude-Modell",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",

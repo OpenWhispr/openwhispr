@@ -1592,7 +1592,9 @@
         "groq_compound_mini": "快速 Compound 系統，3x 更低延遲",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文",
         "openai_gpt_5_5": "複雜推理前沿模型",
-        "anthropic_claude_opus_4_7": "最強大的 Claude 模型"
+        "anthropic_claude_opus_4_7": "最強大的 Claude 模型",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",

@@ -266,6 +266,24 @@
           "name": "Claude Opus 4.7",
           "description": "Most capable Claude model, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7"
+        },
+        {
+          "id": "claude-opus-4-6",
+          "name": "Claude Opus 4.6",
+          "description": "Previous Opus generation, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6"
+        },
+        {
+          "id": "claude-sonnet-4-5",
+          "name": "Claude Sonnet 4.5",
+          "description": "Previous Sonnet generation",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5"
+        },
+        {
+          "id": "claude-opus-4-5",
+          "name": "Claude Opus 4.5",
+          "description": "Earlier Opus model",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5"
         }
       ]
     },

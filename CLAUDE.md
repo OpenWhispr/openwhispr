@@ -300,6 +300,9 @@ Environment variables persisted to `.env` (via `saveAllKeysToEnvFile()`):
     - Claude Opus 4.7 (`claude-opus-4-7`) - Most capable Claude model, 1M context
     - Claude Sonnet 4.6 (`claude-sonnet-4-6`) - Balanced performance
     - Claude Haiku 4.5 (`claude-haiku-4-5`) - Fast with near-frontier intelligence
+    - Claude Opus 4.6 (`claude-opus-4-6`) - Previous Opus generation, 1M context
+    - Claude Sonnet 4.5 (`claude-sonnet-4-5`) - Previous Sonnet generation
+    - Claude Opus 4.5 (`claude-opus-4-5`) - Earlier Opus model
   - **Google Gemini** (Direct API integration):
     - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
     - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
