@@ -59,12 +59,6 @@ export function MeetingTranscriptionPanel() {
     setMeetingCloudTranscriptionMode,
     meetingRemoteTranscriptionUrl,
     setMeetingRemoteTranscriptionUrl,
-    openaiApiKey,
-    setOpenaiApiKey,
-    groqApiKey,
-    setGroqApiKey,
-    mistralApiKey,
-    setMistralApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
   } = useSettingsStore();
@@ -136,12 +130,6 @@ export function MeetingTranscriptionPanel() {
       useLocalWhisper={mode === "local"}
       onModeChange={noop}
       mode={mode}
-      openaiApiKey={openaiApiKey}
-      setOpenaiApiKey={setOpenaiApiKey}
-      groqApiKey={groqApiKey}
-      setGroqApiKey={setGroqApiKey}
-      mistralApiKey={mistralApiKey}
-      setMistralApiKey={setMistralApiKey}
       customTranscriptionApiKey={customTranscriptionApiKey}
       setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
       cloudTranscriptionBaseUrl={meetingCloudTranscriptionBaseUrl}

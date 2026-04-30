@@ -528,12 +528,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           updateTranscriptionSettings({ useLocalWhisper: isLocal });
           if (isLocal) setCloudTranscriptionMode("byok");
         }}
-        openaiApiKey={openaiApiKey}
-        setOpenaiApiKey={setOpenaiApiKey}
-        groqApiKey={groqApiKey}
-        setGroqApiKey={setGroqApiKey}
-        mistralApiKey={mistralApiKey}
-        setMistralApiKey={setMistralApiKey}
         customTranscriptionApiKey={customTranscriptionApiKey}
         setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
         cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}

@@ -52,15 +52,6 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
   const config = useSettingsStore((s) => selectResolvedLLMConfig(s, scope));
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
 
-  const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
-  const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
-  const anthropicApiKey = useSettingsStore((s) => s.anthropicApiKey);
-  const setAnthropicApiKey = useSettingsStore((s) => s.setAnthropicApiKey);
-  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
-  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
-  const groqApiKey = useSettingsStore((s) => s.groqApiKey);
-  const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
-
   const prefix = MODE_LABEL_PREFIX[scope];
   const modes: InferenceModeOption[] = [
     {
@@ -144,14 +135,6 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       setLocalReasoningProvider={setProvider}
       cloudReasoningBaseUrl={config.cloudBaseUrl ?? ""}
       setCloudReasoningBaseUrl={setField("cloudBaseUrl")}
-      openaiApiKey={openaiApiKey}
-      setOpenaiApiKey={setOpenaiApiKey}
-      anthropicApiKey={anthropicApiKey}
-      setAnthropicApiKey={setAnthropicApiKey}
-      geminiApiKey={geminiApiKey}
-      setGeminiApiKey={setGeminiApiKey}
-      groqApiKey={groqApiKey}
-      setGroqApiKey={setGroqApiKey}
       customReasoningApiKey={config.customApiKey ?? ""}
       setCustomReasoningApiKey={setField("customApiKey")}
       setReasoningMode={setMode}

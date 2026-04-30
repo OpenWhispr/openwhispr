@@ -41,14 +41,6 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const setCleanupMode = useSettingsStore((s) => s.setCleanupMode);
   const cleanupCloudBaseUrl = useSettingsStore((s) => s.cleanupCloudBaseUrl);
   const setCleanupCloudBaseUrl = useSettingsStore((s) => s.setCleanupCloudBaseUrl);
-  const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
-  const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
-  const anthropicApiKey = useSettingsStore((s) => s.anthropicApiKey);
-  const setAnthropicApiKey = useSettingsStore((s) => s.setAnthropicApiKey);
-  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
-  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
-  const groqApiKey = useSettingsStore((s) => s.groqApiKey);
-  const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const cleanupCustomApiKey = useSettingsStore((s) => s.cleanupCustomApiKey);
   const setCleanupCustomApiKey = useSettingsStore((s) => s.setCleanupCustomApiKey);
 
@@ -175,14 +167,6 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                   setLocalReasoningProvider={setCleanupProvider}
                   cloudReasoningBaseUrl={cleanupCloudBaseUrl}
                   setCloudReasoningBaseUrl={setCleanupCloudBaseUrl}
-                  openaiApiKey={openaiApiKey}
-                  setOpenaiApiKey={setOpenaiApiKey}
-                  anthropicApiKey={anthropicApiKey}
-                  setAnthropicApiKey={setAnthropicApiKey}
-                  geminiApiKey={geminiApiKey}
-                  setGeminiApiKey={setGeminiApiKey}
-                  groqApiKey={groqApiKey}
-                  setGroqApiKey={setGroqApiKey}
                   customReasoningApiKey={cleanupCustomApiKey}
                   setCustomReasoningApiKey={setCleanupCustomApiKey}
                   setReasoningMode={setCleanupMode}

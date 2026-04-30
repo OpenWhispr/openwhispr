@@ -189,12 +189,6 @@ interface TranscriptionSectionProps {
   setWhisperModel: (model: string) => void;
   parakeetModel: string;
   setParakeetModel: (model: string) => void;
-  openaiApiKey: string;
-  setOpenaiApiKey: (key: string) => void;
-  groqApiKey: string;
-  setGroqApiKey: (key: string) => void;
-  mistralApiKey: string;
-  setMistralApiKey: (key: string) => void;
   customTranscriptionApiKey: string;
   setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
@@ -231,12 +225,6 @@ function TranscriptionSection({
   setWhisperModel,
   parakeetModel,
   setParakeetModel,
-  openaiApiKey,
-  setOpenaiApiKey,
-  groqApiKey,
-  setGroqApiKey,
-  mistralApiKey,
-  setMistralApiKey,
   customTranscriptionApiKey,
   setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
@@ -350,12 +338,6 @@ function TranscriptionSection({
             }
       }
       mode={mode}
-      openaiApiKey={openaiApiKey}
-      setOpenaiApiKey={setOpenaiApiKey}
-      groqApiKey={groqApiKey}
-      setGroqApiKey={setGroqApiKey}
-      mistralApiKey={mistralApiKey}
-      setMistralApiKey={setMistralApiKey}
       customTranscriptionApiKey={customTranscriptionApiKey}
       setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
       cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
@@ -647,11 +629,6 @@ export default function SettingsPage({
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
     useCleanupModel,
-    openaiApiKey,
-    anthropicApiKey,
-    geminiApiKey,
-    groqApiKey,
-    mistralApiKey,
     dictationKey,
     activationMode,
     setActivationMode,
@@ -668,11 +645,6 @@ export default function SettingsPage({
     setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl,
     setUseCleanupModel,
-    setOpenaiApiKey,
-    setAnthropicApiKey,
-    setGeminiApiKey,
-    setGroqApiKey,
-    setMistralApiKey,
     customTranscriptionApiKey,
     setCustomTranscriptionApiKey,
     setDictationKey,
@@ -3054,12 +3026,6 @@ EOF`,
                 setWhisperModel={setWhisperModel}
                 parakeetModel={parakeetModel}
                 setParakeetModel={setParakeetModel}
-                openaiApiKey={openaiApiKey}
-                setOpenaiApiKey={setOpenaiApiKey}
-                groqApiKey={groqApiKey}
-                setGroqApiKey={setGroqApiKey}
-                mistralApiKey={mistralApiKey}
-                setMistralApiKey={setMistralApiKey}
                 customTranscriptionApiKey={customTranscriptionApiKey}
                 setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
                 cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
