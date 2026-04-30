@@ -7,25 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.7.0] - 2026-04-26
+## [1.7.0] - 2026-04-30
 
 ### Added
 
 - **Self-Hosted Authentication via Better Auth**: Replaced the Neon Auth integration with a self-hosted [Better Auth](https://better-auth.com) deployment at `auth.openwhispr.com`. Sessions, OAuth, and account state now live entirely on OpenWhispr infrastructure — no third-party vendor lock-in, and the custom Electron OAuth bridge dance (protocol-handler interception, `neon_auth_session_verifier` cookie shuffling, in-browser "redirecting to app" splash) is gone. Configurable via `VITE_AUTH_URL` for self-hosters
 - **Microsoft Sign-In**: Sign in with a Microsoft account alongside Google and email/password, via Better Auth's OAuth provider
 - **Bundle ID Migration to Gizmo Labs** (macOS/Windows): App identifier renamed from `com.herotools.openwispr` to `com.gizmolabs.openwhispr` to align with the new legal entity (Gizmo Labs Inc.) and fix the long-standing typo. Existing notes, settings, API keys, and downloaded models carry over automatically on first launch (userData path is keyed by `productName`, not bundle ID). Auto-update from 1.6.x cannot reach this release — Squirrel.Mac enforces `CFBundleIdentifier` matching and the Team ID change in Gizmo Labs signing already broke the cryptographic update chain. Users must manually re-download from openwhispr.com/download
-- **Post-Migration Onboarding** (macOS): One-time modal walks returning users through re-granting Microphone, Accessibility, and System Audio after the bundle rename. Detected via a sentinel file (`.bundle-migrated`) in userData; reuses the existing `PermissionsSection` and live-polling hooks. Fresh installs write the sentinel during onboarding completion so the modal never fires for new users
+- **Post-Migration Onboarding** (macOS): One-time modal walks returning users through re-granting Microphone, Accessibility, and System Audio after the bundle rename. Detected via a sentinel file (`.bundle-migrated`) in userData; reuses the existing `PermissionsSection` and live-polling hooks. Fresh installs write the sentinel during onboarding completion so the modal never fires for new users. False-positive guard requires both the SQLite DB and `userData/.env` to exist; "Remind Me Later" now persists for 24h
 - **Interoperable Cloud Streaming Providers**: Meeting recording now supports AssemblyAI Universal-3 Pro, Deepgram, and OpenAI Realtime as interchangeable cloud streaming backends. Provider availability is server-authoritative via the `NOTE_RECORDING_PROVIDERS` env var on the API; desktop picks the active provider from the catalog returned by `/api/note-recording-config`
 - **Acoustic VAD Gate for Meeting Mic**: Drops system-dominant microphone chunks using RMS/peak thresholds against a rolling reference window, preventing cross-language hallucinations from speaker bleed into the mic
 - **Peak Escape**: Soft exception to the VAD gate when the mic peak spikes cleanly over the system-speaking window, so the user's voice onset is never clipped mid-syllable
 - **Cross-Device Delete Propagation** (#646): Deletes now propagate across devices through the sync pipeline for all object types
+- **Folder Cascade Delete with Confirmation** (`dbe1b6a`): Deleting a folder shows a confirmation dialog with the affected note count, removes its notes locally in a single SQLite transaction, and propagates to other devices (server cascades child notes server-side)
+- **Per-Scope LLM Configuration** (#677): Split the single reasoning model into four independent scopes — `dictationCleanup`, `dictationAgent`, `noteFormatting`, `chatIntelligence` — each with its own provider, model, mode, and key. New provider registry in `src/services/ai/inferenceProviders/` (OpenAI, Anthropic, Gemini, Groq, LAN, Local, Enterprise, OpenWhispr). Empty `dictationAgent` shows an inline "Use cleanup model" link to copy the cleanup config in one click. Existing single-model setups migrate via versioned `_promptsMigrated` / `_llmScopeKeysMigrated` markers
+- **Local HTTP Bridge for Unified CLI** (#676): Loopback HTTP server on ports 8200–8219 with bearer-token auth (token at `~/.openwhispr/cli-bridge.json`, 0o600 on Unix, 127.0.0.1-only). The `openwhispr` CLI now talks to a running desktop app for note/folder/transcription CRUD before falling back to the cloud API
+- **Windows Text Pattern Fallback** (#665): `windows-text-monitor` now tries UIA `TextPattern` when `ValuePattern` is unavailable, restoring rich-edit support in RichEdit, Monaco, WinUI, Qt, and Electron-hosted text controls
 
 ### Changed
 
+- **macOS Code-Signing Identity** (#639): Switched to Gizmo Labs Inc. (Team ID `T832773L2J`). Notarization and hardened runtime unchanged
 - **Forgot-Password Flow Centralized on Website**: Password reset now opens `openwhispr.com/reset-password` in the browser instead of an in-app reset view. Email links land on the website where the form lives, matching how every other reset flow works. The desktop's `ResetPasswordView` and its 20-key `resetPassword.*` i18n block (× 10 languages) were removed
 - **Meeting Streaming Provider Authority**: Removed the desktop-side streaming provider UI picker. The authoritative list lives on the API; the desktop renders whichever providers are enabled server-side
 - **Echo Cancellation Pipeline**: AEC3 config now disables OS-level `echoCancellation` (it was double-processing) and enables the built-in high-pass filter plus `kModerate` noise suppression, giving a noticeably cleaner mic path before the VAD gate
 - **VAD Thresholds Tuned Against Measured Leak**: RMS ceiling `0.018`, peak ceiling `0.07`, lookback `500ms` — calibrated from real session traces where user speech consistently exceeded both thresholds and bleed consistently sat below
+- **Network — Proxy-Aware Fetches and Actionable Connectivity Errors** (#687): Node-side fetches now honor the system proxy. Network failures surface auth-host / DNS / port-443 / TLS-cert hints to the user instead of a generic "Network error"
+- **Node TLS Trusts OS CA Store** (#657): Corporate TLS-interception with an OS-trusted root no longer breaks Node-side fetches. OpenAI realtime WebSocket is intentionally exempt (its TLS goes through Chromium and was never affected)
 
 ### Fixed
 
@@ -38,7 +45,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Speaker Label Cap**: UI speaker labels are now strictly capped at `expectedCount` (interpreted as the number of other attendees besides the user), preventing phantom `Speaker 3+` labels in 1-on-1 and small-group sessions
 - **Live Speaker Profile Matching Scoped to Note Attendees**: Live diarization no longer pulls in profiles from unrelated notes when identifying attendees
 - **Sync — Preserve Client `updated_at` on Note Push**: Server was overwriting `updated_at` on every push, causing spurious sync loops and stale-merge conflicts
+- **Sync — Folder Create / Rename Propagates to Cloud** (`2c1c521`): Folder name changes and creates now sync; previously only updates were pushed
+- **Sync — Push Transcriptions on Save** (`a06b76c`): Transcriptions sync to cloud immediately on save instead of waiting for the next app launch
+- **Sync — Folder Pull Compares Against `local.updated_at`** (`5bf449a`): Was comparing against `local.created_at`, allowing older cloud copies to overwrite locally renamed folders. Adds an `updated_at` column to the local `folders` table with an idempotent ALTER TABLE migration that backfills from `created_at`
+- **Settings — Cleanup-Mode Selectors Require Explicit Mode** (`5bf449a`): `selectIsCloudCleanupMode` and `selectIsCloudChatAgentMode` now require BOTH the scope mode AND the cloud-mode field to be `openwhispr`, so a stale `cleanupCloudMode` value can't silently route BYOK / local users through the cloud
+- **Auth — Better Auth Cookie Name Match** (`5bf449a`): Corrected the desktop's injected session cookie to `__Secure-openwhispr.session_token` to match what the auth server emits. The legacy `__Secure-neon-auth.*` name no longer applies; OAuth sessions now resume cleanly
+- **Auth — Social Sign-In Gated on Protocol Registration** (`5bf449a`): Google + Microsoft sign-in buttons disable with a tooltip when `app.setAsDefaultProtocolClient()` reports failure, preventing OAuth-without-return-path on locked-down systems with stale `openwhispr://` handlers
 - **Chat Intelligence Stale Provider on Mode Switch** (#647): Switching Agent Mode from Cloud Providers to Local left the previous cloud provider cached, routing chat to the stale provider and erroring with "API key not configured" despite a local model being selected; mode changes now clear `agentProvider`/`agentModel` when incompatible with the new mode
+- **Chat — First Message Persisted on Conversation Create** (#662): The first user message is now written to SQLite the moment the conversation row is created, eliminating the race that left the opening message orphaned if the renderer was closed too quickly
+- **Notes — Folder Selection on Move** (#678): When the active note is moved between folders, selection follows it. Non-active notes are removed from the source folder list immediately
+- **Correction Learner — Unicode Tokenization** (#666): Switched from ASCII `\w+` to Unicode property escapes (`\p{L}\p{N}_`), restoring auto-learn for Cyrillic, CJK, Arabic, Devanagari, and other non-Latin scripts
+- **Qdrant — cwd Set to STORAGE_DIR** (#640): Spawn cwd is now the writable Qdrant data dir; relative writes no longer hit the read-only macOS app bundle
 
 ### Upgrade notes
 
