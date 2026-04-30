@@ -1,6 +1,7 @@
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const speakerEmbeddings = require("./speakerEmbeddings");
+const { MAX_EMBEDDING_SECONDS } = speakerEmbeddings;
 const { downsample24kTo16k } = require("../utils/audioUtils");
 const { MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
 
@@ -20,7 +21,6 @@ const LIVE_IDENTIFICATION_INTERVAL_SECONDS = 1.0;
 const LIVE_IDENTIFICATION_INTERVAL_SAMPLES = Math.round(
   SAMPLE_RATE * LIVE_IDENTIFICATION_INTERVAL_SECONDS
 );
-const MAX_EMBEDDING_SECONDS = 8;
 const MAX_EMBEDDING_SAMPLES = SAMPLE_RATE * MAX_EMBEDDING_SECONDS;
 const SPEECH_CHUNKS_MAX_SAMPLES = MAX_EMBEDDING_SAMPLES * 4;
 const SPEECH_THRESHOLD = 0.15;

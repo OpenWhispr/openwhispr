@@ -10,6 +10,8 @@ const FBANK_FRAME_LENGTH = Math.round((FBANK_SAMPLE_RATE * FBANK_FRAME_LENGTH_MS
 const FBANK_FRAME_SHIFT = Math.round((FBANK_SAMPLE_RATE * FBANK_FRAME_SHIFT_MS) / 1000);
 const FBANK_FFT_SIZE = 512;
 
+const SPEAKER_MAX_SAMPLES = FBANK_SAMPLE_RATE * 8;
+
 const TEXT_EMBED_MAX_TOKENS = 256;
 const TEXT_EMBED_DIM = 384;
 
@@ -51,16 +53,12 @@ function openLog() {
 }
 
 function loadOrt() {
-  if (!ort) {
-    ort = require("onnxruntime-node");
-    log("info", "ort loaded");
-  }
-  return ort;
+  if (ort) return;
+  ort = require("onnxruntime-node");
+  log("info", "ort loaded");
 }
 
-function sessionOptions() {
-  return { intraOpNumThreads, executionMode: "sequential" };
-}
+const SESSION_OPTIONS = { intraOpNumThreads, executionMode: "sequential" };
 
 let _melFilterbank = null;
 function getMelFilterbank() {
@@ -187,24 +185,28 @@ function computeFbank(samples) {
 }
 
 async function speakerLoad({ modelPath }) {
-  if (speakerSession) return { inputName: speakerInputName };
-  const ortLib = loadOrt();
-  speakerSession = await ortLib.InferenceSession.create(modelPath, sessionOptions());
+  if (speakerSession) return { ok: true };
+  loadOrt();
+  speakerSession = await ort.InferenceSession.create(modelPath, SESSION_OPTIONS);
   speakerInputName = speakerSession.inputNames[0];
   log("info", "speaker session loaded", { modelPath });
-  return { inputName: speakerInputName };
+  return { ok: true };
 }
 
 async function speakerExtract({ samplesBuffer }) {
-  const ortLib = loadOrt();
   if (!speakerSession) throw new Error("speaker session not loaded");
 
-  const samples = new Float32Array(samplesBuffer);
+  const allSamples = new Float32Array(samplesBuffer);
+  const samples =
+    allSamples.length > SPEAKER_MAX_SAMPLES
+      ? allSamples.subarray(allSamples.length - SPEAKER_MAX_SAMPLES)
+      : allSamples;
+
   const fbank = computeFbank(samples);
   if (!fbank) return { embeddingBuffer: null };
 
   const feeds = {
-    [speakerInputName]: new ortLib.Tensor("float32", fbank.features, [
+    [speakerInputName]: new ort.Tensor("float32", fbank.features, [
       1,
       fbank.numFrames,
       FBANK_NUM_MELS,
@@ -305,27 +307,27 @@ function meanPoolAndNormalize(data, tokenCount, dim) {
 
 async function textLoad({ modelDir }) {
   if (textSession && textTokenizer) return { ok: true };
-  const ortLib = loadOrt();
+  loadOrt();
 
-  const tokenizerPath = path.join(modelDir, "tokenizer.json");
-  const tokenizerData = JSON.parse(fs.readFileSync(tokenizerPath, "utf-8"));
+  const tokenizerData = JSON.parse(fs.readFileSync(path.join(modelDir, "tokenizer.json"), "utf-8"));
   textTokenizer = buildTextTokenizer(tokenizerData);
 
-  const modelPath = path.join(modelDir, "model.onnx");
-  textSession = await ortLib.InferenceSession.create(modelPath, sessionOptions());
+  textSession = await ort.InferenceSession.create(
+    path.join(modelDir, "model.onnx"),
+    SESSION_OPTIONS
+  );
   log("info", "text session loaded", { modelDir });
   return { ok: true };
 }
 
 async function textEmbed({ text }) {
-  const ortLib = loadOrt();
   if (!textSession) throw new Error("text session not loaded");
 
   const { inputIds, attentionMask, tokenTypeIds, length } = tokenizeText(text);
   const feeds = {
-    input_ids: new ortLib.Tensor("int64", inputIds, [1, length]),
-    attention_mask: new ortLib.Tensor("int64", attentionMask, [1, length]),
-    token_type_ids: new ortLib.Tensor("int64", tokenTypeIds, [1, length]),
+    input_ids: new ort.Tensor("int64", inputIds, [1, length]),
+    attention_mask: new ort.Tensor("int64", attentionMask, [1, length]),
+    token_type_ids: new ort.Tensor("int64", tokenTypeIds, [1, length]),
   };
   const results = await textSession.run(feeds);
   const output = results.last_hidden_state ?? results.output_0;

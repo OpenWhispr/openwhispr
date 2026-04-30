@@ -4,16 +4,16 @@ const debugLogger = require("./debugLogger");
 const { getModelsDirForService } = require("./modelDirUtils");
 const onnxWorkerClient = require("./onnxWorkerClient");
 
+const SAMPLE_RATE = 16000;
 const EMBEDDING_DIM = 512;
 const MIN_SEGMENT_SECONDS = 1.5;
-const MIN_SEGMENT_SAMPLES = 16000 * MIN_SEGMENT_SECONDS;
+const MIN_SEGMENT_SAMPLES = SAMPLE_RATE * MIN_SEGMENT_SECONDS;
 const MAX_EMBEDDING_SECONDS = 8;
-const MAX_EMBEDDING_SAMPLES = 16000 * MAX_EMBEDDING_SECONDS;
+const MAX_EMBEDDING_SAMPLES = SAMPLE_RATE * MAX_EMBEDDING_SECONDS;
 const MODEL_FILE = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 
 class SpeakerEmbeddings {
   constructor() {
-    this.loaded = false;
     this.loadPromise = null;
   }
 
@@ -32,25 +32,22 @@ class SpeakerEmbeddings {
     return fs.existsSync(this.getModelPath());
   }
 
-  async _ensureLoaded() {
-    if (this.loaded) return;
+  _ensureLoaded() {
+    if (this.loadPromise) return this.loadPromise;
     if (!this.isAvailable()) {
-      throw new Error(`Speaker embedding model not found at ${this.getModelPath()}`);
+      return Promise.reject(
+        new Error(`Speaker embedding model not found at ${this.getModelPath()}`)
+      );
     }
-    if (!this.loadPromise) {
-      const modelPath = this.getModelPath();
-      debugLogger.debug("speaker-embeddings loading model", { modelPath });
-      this.loadPromise = onnxWorkerClient
-        .request("speaker.load", { modelPath })
-        .then(() => {
-          this.loaded = true;
-          debugLogger.debug("speaker-embeddings model loaded");
-        })
-        .catch((err) => {
-          this.loadPromise = null;
-          throw err;
-        });
-    }
+    const modelPath = this.getModelPath();
+    debugLogger.debug("speaker-embeddings loading model", { modelPath });
+    this.loadPromise = onnxWorkerClient
+      .request("speaker.load", { modelPath })
+      .then(() => debugLogger.debug("speaker-embeddings model loaded"))
+      .catch((err) => {
+        this.loadPromise = null;
+        throw err;
+      });
     return this.loadPromise;
   }
 
@@ -161,3 +158,4 @@ class SpeakerEmbeddings {
 const instance = new SpeakerEmbeddings();
 module.exports = instance;
 module.exports.SpeakerEmbeddings = SpeakerEmbeddings;
+module.exports.MAX_EMBEDDING_SECONDS = MAX_EMBEDDING_SECONDS;

@@ -8,7 +8,6 @@ const MODEL_SUBDIR = "all-MiniLM-L6-v2";
 
 class LocalEmbeddings {
   constructor() {
-    this.loaded = false;
     this.loadPromise = null;
     this.modelDir = this._resolveModelDir();
   }
@@ -50,24 +49,21 @@ class LocalEmbeddings {
     );
   }
 
-  async _ensureLoaded() {
-    if (this.loaded) return;
+  _ensureLoaded() {
+    if (this.loadPromise) return this.loadPromise;
     if (!this.isAvailable()) {
-      throw new Error("Embedding model not found. Run: node scripts/download-minilm.js");
+      return Promise.reject(
+        new Error("Embedding model not found. Run: node scripts/download-minilm.js")
+      );
     }
-    if (!this.loadPromise) {
-      debugLogger.debug("local-embeddings loading model", { modelDir: this.modelDir });
-      this.loadPromise = onnxWorkerClient
-        .request("text.load", { modelDir: this.modelDir })
-        .then(() => {
-          this.loaded = true;
-          debugLogger.debug("local-embeddings model loaded");
-        })
-        .catch((err) => {
-          this.loadPromise = null;
-          throw err;
-        });
-    }
+    debugLogger.debug("local-embeddings loading model", { modelDir: this.modelDir });
+    this.loadPromise = onnxWorkerClient
+      .request("text.load", { modelDir: this.modelDir })
+      .then(() => debugLogger.debug("local-embeddings model loaded"))
+      .catch((err) => {
+        this.loadPromise = null;
+        throw err;
+      });
     return this.loadPromise;
   }
 
