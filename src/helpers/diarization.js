@@ -9,6 +9,7 @@ const { getModelsDirForService } = require("./modelDirUtils");
 const { convertToWav } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { applyProvisionalSpeaker, applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
+const sidecarPidFile = require("./sidecarPidFile");
 const {
   transcriptsOverlap,
   transcriptsLooselyOverlap,
@@ -348,9 +349,11 @@ class DiarizationManager {
       const proc = spawn(binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
+        detached: process.platform !== "win32",
       });
 
       this._process = proc;
+      sidecarPidFile.write("diarization", proc.pid);
 
       const timeout = setTimeout(() => {
         debugLogger.warn("Diarization timed out", { timeoutMs: DIARIZATION_TIMEOUT_MS });
@@ -370,6 +373,7 @@ class DiarizationManager {
       proc.on("close", (code) => {
         clearTimeout(timeout);
         this._process = null;
+        sidecarPidFile.clear("diarization");
 
         if (code !== 0) {
           debugLogger.warn("Diarization process exited with error", {
@@ -388,6 +392,7 @@ class DiarizationManager {
       proc.on("error", (err) => {
         clearTimeout(timeout);
         this._process = null;
+        sidecarPidFile.clear("diarization");
         debugLogger.warn("Diarization process error", { error: err.message });
         resolve([]);
       });
