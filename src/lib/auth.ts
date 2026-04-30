@@ -1,15 +1,17 @@
-import { createAuthClient } from "@neondatabase/auth";
-import { BetterAuthReactAdapter } from "@neondatabase/auth/react";
+import { createAuthClient } from "better-auth/react";
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { openExternalLink } from "../utils/externalLinks";
 import logger from "../utils/logger";
 
-export const NEON_AUTH_URL = import.meta.env.VITE_NEON_AUTH_URL || "";
-export const authClient = NEON_AUTH_URL
-  ? createAuthClient(NEON_AUTH_URL, { adapter: BetterAuthReactAdapter() })
-  : null;
+export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
+export const authClient = createAuthClient({
+  baseURL: AUTH_URL,
+  fetchOptions: {
+    headers: { "x-openwhispr-source": "desktop" },
+  },
+});
 
-export type SocialProvider = "google";
+export type SocialProvider = "google" | "microsoft";
 
 const LAST_SIGN_IN_STORAGE_KEY = "openwhispr:lastSignInTime";
 const GRACE_PERIOD_MS = 60_000;
@@ -123,9 +125,7 @@ export async function signOut(): Promise<void> {
     if (window.electronAPI?.authClearSession) {
       await window.electronAPI.authClearSession();
     }
-    if (authClient) {
-      await authClient.signOut();
-    }
+    await authClient.signOut();
     markSignedOutState();
   } catch {
     markSignedOutState();
@@ -172,19 +172,18 @@ function getElectronOAuthCallbackURL(): string {
 }
 
 export async function signInWithSocial(provider: SocialProvider): Promise<{ error?: Error }> {
-  if (!authClient) {
-    return { error: new Error("Auth not configured") };
-  }
-
   try {
     const isElectron = Boolean((window as any).electronAPI);
 
     if (isElectron) {
       const callbackURL = getElectronOAuthCallbackURL();
 
-      const response = await fetch(`${NEON_AUTH_URL}/sign-in/social`, {
+      const response = await fetch(`${AUTH_URL}/api/auth/sign-in/social`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-openwhispr-source": "desktop",
+        },
         credentials: "include",
         body: JSON.stringify({
           provider,
@@ -224,58 +223,13 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
 }
 
 export async function requestPasswordReset(email: string): Promise<{ error?: Error }> {
-  if (!authClient) {
-    return { error: new Error("Auth not configured") };
-  }
-
   try {
-    if (OPENWHISPR_API_URL) {
-      const res = await fetch(`${OPENWHISPR_API_URL}/api/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to send reset email");
-      }
-
-      return {};
-    }
-
-    const base = window.location.href.split("?")[0].split("#")[0];
-    const redirectTo = `${base}?panel=true&reset_password=true`;
-
     await authClient.requestPasswordReset({
       email: email.trim(),
-      redirectTo,
+      redirectTo: "https://openwhispr.com/reset-password",
     });
-
     return {};
   } catch (error) {
     return { error: error instanceof Error ? error : new Error("Failed to send reset email") };
-  }
-}
-
-export async function resetPassword(
-  newPassword: string,
-  token: string
-): Promise<{ error?: Error }> {
-  if (!authClient) {
-    return { error: new Error("Auth not configured") };
-  }
-
-  try {
-    await authClient.resetPassword({
-      newPassword,
-      token,
-    });
-
-    updateLastSignInTime();
-
-    return {};
-  } catch (error) {
-    return { error: error instanceof Error ? error : new Error("Failed to reset password") };
   }
 }

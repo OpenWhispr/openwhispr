@@ -614,7 +614,8 @@
     },
     "social": {
       "completeInBrowser": "Завершите вход в браузере",
-      "continueWithGoogle": "Продолжить с Google"
+      "continueWithGoogle": "Продолжить с Google",
+      "continueWithMicrosoft": "Продолжить с Microsoft"
     },
     "welcomeSubtitle": "Диктуйте где угодно голосом",
     "welcomeTitle": "Добро пожаловать в OpenWhispr",
@@ -897,27 +898,6 @@
       "modified": "Изменён"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Вернуться к входу",
-    "confirmPasswordPlaceholder": "Подтвердите новый пароль",
-    "continue": "Продолжить",
-    "errors": {
-      "passwordMinLength": "Пароль должен содержать не менее 8 символов",
-      "passwordsDoNotMatch": "Пароли не совпадают"
-    },
-    "goBack": "Вернуться",
-    "newPasswordPlaceholder": "Новый пароль",
-    "notConfigured": "Аутентификация не настроена.",
-    "passwordMinLength": "Пароль должен содержать не менее 8 символов",
-    "resetButton": "Сбросить пароль",
-    "resetting": "Сброс...",
-    "subtitle": "Введите новый пароль ниже",
-    "success": {
-      "description": "Ваш пароль обновлён. Вы вошли в систему.",
-      "title": "Пароль успешно сброшен"
-    },
-    "title": "Создание нового пароля"
-  },
   "settingsModal": {
     "groups": {
       "account": "Аккаунт",
@@ -986,7 +966,7 @@
       },
       "disabled": "Отключено",
       "featuresDisabled": "Функции аккаунта отключены",
-      "featuresDisabledDescription": "Установите VITE_NEON_AUTH_URL в файле .env для включения функций аккаунта.",
+      "featuresDisabledDescription": "Установите VITE_AUTH_URL в файле .env для включения функций аккаунта.",
       "notConfigured": "Аутентификация не настроена",
       "notSignedIn": "Вы не вошли в систему",
       "notSignedInDescription": "Создайте аккаунт, чтобы разблокировать премиум-функции.",
@@ -2122,10 +2102,6 @@
       "stopListening": "Остановить запись",
       "startListening": "Начать запись",
       "hideForNow": "Скрыть"
-    },
-    "oauth": {
-      "redirectTitle": "Перенаправление в приложение...",
-      "closeTab": "Можете закрыть эту вкладку."
     }
   },
   "dictationAgent": {

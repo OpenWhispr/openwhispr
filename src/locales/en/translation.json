@@ -614,7 +614,8 @@
     },
     "social": {
       "completeInBrowser": "Complete sign-in in your browser",
-      "continueWithGoogle": "Continue with Google"
+      "continueWithGoogle": "Continue with Google",
+      "continueWithMicrosoft": "Continue with Microsoft"
     },
     "welcomeSubtitle": "Dictate anywhere using your voice",
     "welcomeTitle": "Welcome to OpenWhispr",
@@ -993,27 +994,6 @@
       "modified": "Modified"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Back to sign in",
-    "confirmPasswordPlaceholder": "Confirm new password",
-    "continue": "Continue",
-    "errors": {
-      "passwordMinLength": "Password must be at least 8 characters",
-      "passwordsDoNotMatch": "Passwords do not match"
-    },
-    "goBack": "Go Back",
-    "newPasswordPlaceholder": "New password",
-    "notConfigured": "Authentication is not configured.",
-    "passwordMinLength": "Password must be at least 8 characters",
-    "resetButton": "Reset Password",
-    "resetting": "Resetting...",
-    "subtitle": "Enter your new password below",
-    "success": {
-      "description": "Your password has been updated. You're now signed in.",
-      "title": "Password reset successful"
-    },
-    "title": "Create new password"
-  },
   "settingsModal": {
     "groups": {
       "account": "Account",
@@ -1082,7 +1062,7 @@
       },
       "disabled": "Disabled",
       "featuresDisabled": "Account Features Disabled",
-      "featuresDisabledDescription": "Set VITE_NEON_AUTH_URL in your .env file to enable account features.",
+      "featuresDisabledDescription": "Set VITE_AUTH_URL in your .env file to enable account features.",
       "notConfigured": "Authentication is not configured",
       "notSignedIn": "Not signed in",
       "notSignedInDescription": "Create an account to unlock premium features.",
@@ -2216,10 +2196,6 @@
       "stopListening": "Stop listening",
       "startListening": "Start listening",
       "hideForNow": "Hide for now"
-    },
-    "oauth": {
-      "redirectTitle": "Redirecting to app...",
-      "closeTab": "You can close this tab."
     }
   },
   "dictationAgent": {

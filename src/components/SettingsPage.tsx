@@ -34,7 +34,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { NEON_AUTH_URL, signOut, deleteAccount } from "../lib/neonAuth";
+import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
 import PermissionCard from "./ui/PermissionCard";
@@ -1293,7 +1293,7 @@ export default function SettingsPage({
       case "account":
         return (
           <div className="space-y-5">
-            {!NEON_AUTH_URL ? (
+            {!AUTH_URL ? (
               <>
                 <SectionHeader
                   title={t("settingsPage.account.title")}
@@ -1432,7 +1432,7 @@ export default function SettingsPage({
       case "plansBilling":
         return (
           <div className="space-y-5">
-            {!NEON_AUTH_URL ? (
+            {!AUTH_URL ? (
               <>
                 <SectionHeader
                   title={t("settingsPage.account.pricing.title")}

@@ -587,7 +587,8 @@
     },
     "social": {
       "completeInBrowser": "Conclua o login no navegador",
-      "continueWithGoogle": "Continuar com o Google"
+      "continueWithGoogle": "Continuar com o Google",
+      "continueWithMicrosoft": "Continuar com a Microsoft"
     },
     "welcomeSubtitle": "Use sua voz para ditar em qualquer lugar",
     "welcomeTitle": "Boas-vindas ao OpenWhispr"
@@ -869,27 +870,6 @@
       "modified": "Modificado"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Voltar para login",
-    "confirmPasswordPlaceholder": "Confirme a nova senha",
-    "continue": "Continuar",
-    "errors": {
-      "passwordMinLength": "A senha deve ter pelo menos 8 caracteres",
-      "passwordsDoNotMatch": "As senhas não coincidem"
-    },
-    "goBack": "Voltar",
-    "newPasswordPlaceholder": "Nova senha",
-    "notConfigured": "A autenticação não está configurada.",
-    "passwordMinLength": "A senha deve ter pelo menos 8 caracteres",
-    "resetButton": "Redefinir senha",
-    "resetting": "Redefinindo...",
-    "subtitle": "Digite sua nova senha abaixo",
-    "success": {
-      "description": "Sua senha foi atualizada. Você já está conectado.",
-      "title": "Senha redefinida com sucesso"
-    },
-    "title": "Criar nova senha"
-  },
   "settingsModal": {
     "groups": {
       "account": "Conta",
@@ -958,7 +938,7 @@
       },
       "disabled": "Desabilitado",
       "featuresDisabled": "Recursos de conta desabilitados",
-      "featuresDisabledDescription": "Defina VITE_NEON_AUTH_URL no seu arquivo .env para habilitar os recursos de conta.",
+      "featuresDisabledDescription": "Defina VITE_AUTH_URL no seu arquivo .env para habilitar os recursos de conta.",
       "notConfigured": "A autenticação não está configurada",
       "notSignedIn": "Não conectado",
       "notSignedInDescription": "Crie uma conta para desbloquear recursos premium.",
@@ -2120,10 +2100,6 @@
       "stopListening": "Parar de ouvir",
       "startListening": "Começar a ouvir",
       "hideForNow": "Ocultar por agora"
-    },
-    "oauth": {
-      "redirectTitle": "Redirecionando para o app...",
-      "closeTab": "Você pode fechar esta aba."
     }
   },
   "dictationAgent": {

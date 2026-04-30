@@ -615,7 +615,8 @@
     },
     "social": {
       "completeInBrowser": "Completa l'accesso nel browser",
-      "continueWithGoogle": "Continua con Google"
+      "continueWithGoogle": "Continua con Google",
+      "continueWithMicrosoft": "Continua con Microsoft"
     },
     "welcomeSubtitle": "Detta ovunque usando la tua voce",
     "welcomeTitle": "Benvenuto in OpenWhispr"
@@ -897,27 +898,6 @@
       "modified": "Modificato"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Torna all'accesso",
-    "confirmPasswordPlaceholder": "Conferma la nuova password",
-    "continue": "Continua",
-    "errors": {
-      "passwordMinLength": "La password deve essere di almeno 8 caratteri",
-      "passwordsDoNotMatch": "Le password non corrispondono"
-    },
-    "goBack": "Torna indietro",
-    "newPasswordPlaceholder": "Nuova password",
-    "notConfigured": "L'autenticazione non è configurata.",
-    "passwordMinLength": "La password deve essere di almeno 8 caratteri",
-    "resetButton": "Reimposta password",
-    "resetting": "Reimpostazione...",
-    "subtitle": "Inserisci la nuova password qui sotto",
-    "success": {
-      "description": "La password è stata aggiornata. Hai effettuato l'accesso.",
-      "title": "Password reimpostata con successo"
-    },
-    "title": "Crea nuova password"
-  },
   "settingsModal": {
     "groups": {
       "account": "Account",
@@ -986,7 +966,7 @@
       },
       "disabled": "Disabilitato",
       "featuresDisabled": "Funzionalità account disabilitate",
-      "featuresDisabledDescription": "Imposta VITE_NEON_AUTH_URL nel file .env per abilitare le funzionalità dell'account.",
+      "featuresDisabledDescription": "Imposta VITE_AUTH_URL nel file .env per abilitare le funzionalità dell'account.",
       "notConfigured": "L'autenticazione non è configurata",
       "notSignedIn": "Non hai effettuato l'accesso",
       "notSignedInDescription": "Crea un account per sbloccare le funzionalità premium.",
@@ -2120,10 +2100,6 @@
       "stopListening": "Smetti di ascoltare",
       "startListening": "Inizia ad ascoltare",
       "hideForNow": "Nascondi per ora"
-    },
-    "oauth": {
-      "redirectTitle": "Reindirizzamento all'app...",
-      "closeTab": "Puoi chiudere questa scheda."
     }
   },
   "dictationAgent": {

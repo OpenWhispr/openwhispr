@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { requestPasswordReset, NEON_AUTH_URL, authClient } from "../lib/neonAuth";
+import { requestPasswordReset, AUTH_URL, authClient } from "../lib/auth";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { AlertCircle, ArrowLeft, Check, Loader2, Mail } from "lucide-react";
@@ -42,7 +42,7 @@ export default function ForgotPasswordView({
     [email]
   );
 
-  if (!NEON_AUTH_URL || !authClient) {
+  if (!AUTH_URL || !authClient) {
     return (
       <div className="space-y-3">
         <div className="bg-warning/5 p-2.5 rounded border border-warning/20">

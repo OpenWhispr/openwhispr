@@ -614,7 +614,8 @@
     },
     "social": {
       "completeInBrowser": "Terminez la connexion dans votre navigateur",
-      "continueWithGoogle": "Continuer avec Google"
+      "continueWithGoogle": "Continuer avec Google",
+      "continueWithMicrosoft": "Continuer avec Microsoft"
     },
     "welcomeSubtitle": "Dictez n'importe où en utilisant votre voix",
     "welcomeTitle": "Bienvenue sur OpenWhispr",
@@ -945,27 +946,6 @@
       "modified": "Modifié"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Retour à la connexion",
-    "confirmPasswordPlaceholder": "Confirmez le nouveau mot de passe",
-    "continue": "Continuer",
-    "errors": {
-      "passwordMinLength": "Le mot de passe doit contenir au moins 8 caractères",
-      "passwordsDoNotMatch": "Les mots de passe ne correspondent pas"
-    },
-    "goBack": "Retour",
-    "newPasswordPlaceholder": "Nouveau mot de passe",
-    "notConfigured": "L'authentification n'est pas configurée.",
-    "passwordMinLength": "Le mot de passe doit contenir au moins 8 caractères",
-    "resetButton": "Réinitialiser le mot de passe",
-    "resetting": "Réinitialisation...",
-    "subtitle": "Saisissez votre nouveau mot de passe ci-dessous",
-    "success": {
-      "description": "Votre mot de passe a été mis à jour. Vous êtes maintenant connecté.",
-      "title": "Mot de passe réinitialisé avec succès"
-    },
-    "title": "Créer un nouveau mot de passe"
-  },
   "settingsModal": {
     "groups": {
       "account": "Compte",
@@ -1034,7 +1014,7 @@
       },
       "disabled": "Désactivé",
       "featuresDisabled": "Fonctionnalités du compte désactivées",
-      "featuresDisabledDescription": "Définissez VITE_NEON_AUTH_URL dans votre fichier .env pour activer les fonctionnalités du compte.",
+      "featuresDisabledDescription": "Définissez VITE_AUTH_URL dans votre fichier .env pour activer les fonctionnalités du compte.",
       "notConfigured": "L'authentification n'est pas configurée",
       "notSignedIn": "Non connecté",
       "notSignedInDescription": "Créez un compte pour débloquer les fonctionnalités premium.",
@@ -2168,10 +2148,6 @@
       "stopListening": "Arrêter l’écoute",
       "startListening": "Commencer l’écoute",
       "hideForNow": "Masquer pour l’instant"
-    },
-    "oauth": {
-      "redirectTitle": "Redirection vers l'app...",
-      "closeTab": "Vous pouvez fermer cet onglet."
     }
   },
   "dictationAgent": {
