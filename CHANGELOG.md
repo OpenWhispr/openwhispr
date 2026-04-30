@@ -34,6 +34,7 @@ A big release: new sign-in options, smoother meeting recording, faster cross-dev
 - **Per-scope language model setup**: pick different providers and models for dictation cleanup, the agent, note formatting, and chat. An empty agent setting links back to your cleanup model with one click.
 - **Switching agent mode** between Cloud and Local no longer leaves stale provider state behind.
 - **More reliable ONNX inference** (speaker embeddings, semantic search): long meetings no longer crash the app from a memory allocation failure deep in the speaker model.
+- **Local helpers shut down cleanly on Quit.** Local Whisper, Parakeet, llama-server, Qdrant, and the diarization helper now stop properly when you Quit. If a previous session ever leaves one stuck, the app catches and cleans it up on the next launch — so dictation and transcription work right away without manual cleanup.
 
 ### Sync
 
