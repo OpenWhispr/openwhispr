@@ -1,9 +1,9 @@
 import { TFunction } from "i18next";
 
-export function getRecordingErrorTitle(
-  error: { code?: string; title: string },
-  t: TFunction
-): string {
+type RecordingError = { code?: string; title: string; description?: string };
+
+export function getRecordingErrorTitle(error: RecordingError, t: TFunction): string {
+  if (error.code === "NETWORK_ERROR") return t(error.title);
   return error.code === "AUTH_EXPIRED"
     ? t("hooks.audioRecording.errorTitles.sessionExpired")
     : error.code === "OFFLINE"
@@ -11,4 +11,9 @@ export function getRecordingErrorTitle(
       : error.code === "LIMIT_REACHED"
         ? t("hooks.audioRecording.errorTitles.dailyLimitReached")
         : error.title;
+}
+
+export function getRecordingErrorDescription(error: RecordingError, t: TFunction): string {
+  if (error.code === "NETWORK_ERROR" && error.description) return t(error.description);
+  return error.description ?? "";
 }

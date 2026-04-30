@@ -4,7 +4,7 @@ import AudioManager from "../helpers/audioManager";
 import logger from "../utils/logger";
 import { playStartCue, playStopCue } from "../utils/dictationCues";
 import { getSettings } from "../stores/settingsStore";
-import { getRecordingErrorTitle } from "../utils/recordingErrors";
+import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
 
 export const useAudioRecording = (toast, options = {}) => {
@@ -100,9 +100,10 @@ export const useAudioRecording = (toast, options = {}) => {
           window.electronAPI?.hideDictationPreview?.();
         }
         const title = getRecordingErrorTitle(error, t);
+        const description = getRecordingErrorDescription(error, t);
         toast({
           title,
-          description: error.description,
+          description,
           variant: "destructive",
           duration: error.code === "AUTH_EXPIRED" ? 8000 : undefined,
         });

@@ -2279,8 +2279,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (res.code === "NETWORK_ERROR" && useLocalWhisper) {
             this.onError?.({
               code: "NETWORK_ERROR",
-              title: "Can't reach OpenWhispr Cloud",
-              description: "Cloud unreachable — using local engine for this recording.",
+              title: "streaming.errors.cloudUnreachable.title",
+              description: "streaming.errors.cloudUnreachable.fallback",
             });
             return { needsFallback: true };
           }
@@ -2347,8 +2347,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         errorDescription =
           "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.";
       } else if (error.code === "NETWORK_ERROR") {
-        errorTitle = "Can't reach OpenWhispr Cloud";
-        errorDescription = error.message || "Network request failed. Check your connection.";
+        errorTitle = "streaming.errors.cloudUnreachable.title";
+        errorDescription = error.messageKey || "streaming.errors.cloudUnreachable.generic";
       }
 
       this.onError?.({
