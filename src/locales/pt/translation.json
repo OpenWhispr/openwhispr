@@ -2124,8 +2124,6 @@
   },
   "agentMode": {
     "settings": {
-      "enabled": "Ativar Modo Agente",
-      "enabledDescription": "Usar uma tecla de atalho separada para abrir uma sobreposição de chat por voz",
       "hotkey": "Tecla do Agente",
       "hotkeyDescription": "Tecla de atalho para alternar a sobreposição do agente",
       "model": "Modelo do Agente",

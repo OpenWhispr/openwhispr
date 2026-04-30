@@ -2124,8 +2124,6 @@
   },
   "agentMode": {
     "settings": {
-      "enabled": "Agent-Modus aktivieren",
-      "enabledDescription": "Verwende eine separate Tastenkombination, um ein Sprach-Chat-Overlay zu öffnen",
       "hotkey": "Agent-Tastenkombination",
       "hotkeyDescription": "Tastenkombination zum Umschalten des Agent-Overlays",
       "model": "Agent-Modell",

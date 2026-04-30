@@ -2220,8 +2220,6 @@
   },
   "agentMode": {
     "settings": {
-      "enabled": "Enable Agent Mode",
-      "enabledDescription": "Use a separate hotkey to open a voice chat overlay",
       "hotkey": "Agent Hotkey",
       "hotkeyDescription": "Hotkey to toggle the agent overlay",
       "model": "Agent Model",

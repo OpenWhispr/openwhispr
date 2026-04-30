@@ -2172,8 +2172,6 @@
   },
   "agentMode": {
     "settings": {
-      "enabled": "Activer le Mode Agent",
-      "enabledDescription": "Utiliser un raccourci clavier séparé pour ouvrir une fenêtre de chat vocal",
       "hotkey": "Raccourci Agent",
       "hotkeyDescription": "Raccourci clavier pour basculer la fenêtre agent",
       "model": "Modèle Agent",

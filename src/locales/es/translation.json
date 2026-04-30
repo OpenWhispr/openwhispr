@@ -2172,8 +2172,6 @@
   },
   "agentMode": {
     "settings": {
-      "enabled": "Activar Modo Agente",
-      "enabledDescription": "Usa una tecla de acceso rápido separada para abrir una superposición de chat por voz",
       "hotkey": "Tecla del Agente",
       "hotkeyDescription": "Tecla de acceso rápido para alternar la superposición del agente",
       "model": "Modelo del Agente",

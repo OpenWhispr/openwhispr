@@ -2124,8 +2124,6 @@
   },
   "agentMode": {
     "settings": {
-      "enabled": "Abilita Modalità Agente",
-      "enabledDescription": "Usa un tasto di scelta rapida separato per aprire un overlay di chat vocale",
       "hotkey": "Tasto Agente",
       "hotkeyDescription": "Tasto di scelta rapida per alternare l'overlay agente",
       "model": "Modello Agente",

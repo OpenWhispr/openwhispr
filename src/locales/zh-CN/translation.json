@@ -2119,8 +2119,6 @@
   },
   "agentMode": {
     "settings": {
-      "enabled": "启用智能助手模式",
-      "enabledDescription": "使用独立热键打开语音聊天覆盖层",
       "hotkey": "助手热键",
       "hotkeyDescription": "切换助手覆盖层的热键",
       "model": "助手模型",

@@ -74,7 +74,6 @@ export interface ChatAgentSettings {
   chatAgentModel: string;
   chatAgentProvider: string;
   chatAgentKey: string;
-  chatAgentEnabled: boolean;
   chatAgentCloudMode: string;
   chatAgentMode: InferenceMode;
   chatAgentCloudBaseUrl: string;

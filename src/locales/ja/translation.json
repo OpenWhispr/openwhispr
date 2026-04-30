@@ -2124,8 +2124,6 @@
   },
   "agentMode": {
     "settings": {
-      "enabled": "エージェントモードを有効にする",
-      "enabledDescription": "別のホットキーを使用して音声チャットオーバーレイを開く",
       "hotkey": "エージェントホットキー",
       "hotkeyDescription": "エージェントオーバーレイを切り替えるホットキー",
       "model": "エージェントモデル",

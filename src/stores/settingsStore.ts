@@ -119,7 +119,6 @@ const BOOLEAN_SETTINGS = new Set([
   "meetingAudioDetection",
   "speakerDiarizationEnabled",
   "isSignedIn",
-  "chatAgentEnabled",
   "autoPasteEnabled",
   "keepTranscriptionInClipboard",
   "dataRetentionEnabled",
@@ -284,7 +283,6 @@ const LLM_SCOPE_KEY_PAIRS: ReadonlyArray<[string, string]> = [
   ["agentModel", "chatAgentModel"],
   ["cloudAgentMode", "chatAgentCloudMode"],
   ["remoteAgentUrl", "chatAgentRemoteUrl"],
-  ["agentEnabled", "chatAgentEnabled"],
   ["agentKey", "chatAgentKey"],
 ];
 
@@ -502,7 +500,6 @@ export interface SettingsState
   setChatAgentModel: (value: string) => void;
   setChatAgentProvider: (value: string) => void;
   setChatAgentKey: (key: string) => void;
-  setChatAgentEnabled: (value: boolean) => void;
   setChatAgentCloudMode: (value: string) => void;
   setChatAgentMode: (mode: InferenceMode) => void;
   setChatAgentCloudBaseUrl: (value: string) => void;
@@ -791,7 +788,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   chatAgentModel: readString("chatAgentModel", "openai/gpt-oss-120b"),
   chatAgentProvider: readString("chatAgentProvider", "groq"),
   chatAgentKey: readString("chatAgentKey", ""),
-  chatAgentEnabled: readBoolean("chatAgentEnabled", true),
   chatAgentCloudMode: readString("chatAgentCloudMode", "openwhispr"),
   chatAgentMode: (() => {
     const v = readString("chatAgentMode", "openwhispr");
@@ -1179,7 +1175,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         );
       });
   },
-  setChatAgentEnabled: createBooleanSetter("chatAgentEnabled"),
   setChatAgentCloudMode: createStringSetter("chatAgentCloudMode"),
   setChatAgentMode: createStringSetter("chatAgentMode") as (mode: InferenceMode) => void,
   setChatAgentCloudBaseUrl: createStringSetter("chatAgentCloudBaseUrl"),
@@ -1249,7 +1244,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.chatAgentProvider !== undefined)
       s.setChatAgentProvider(settings.chatAgentProvider);
     if (settings.chatAgentKey !== undefined) s.setChatAgentKey(settings.chatAgentKey);
-    if (settings.chatAgentEnabled !== undefined) s.setChatAgentEnabled(settings.chatAgentEnabled);
     if (settings.chatAgentCloudMode !== undefined)
       s.setChatAgentCloudMode(settings.chatAgentCloudMode);
   },
