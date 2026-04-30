@@ -178,6 +178,25 @@
       "hotkeyToStartStop": "{{hotkey}} para iniciar/parar",
       "holdHotkey": "Segure {{hotkey}}",
       "textareaPlaceholder": "Clique aqui e use seu atalho para ditar..."
+    },
+    "connectivity": {
+      "title": "Não conseguimos acessar o OpenWhispr Cloud nesta rede",
+      "body": "{{cause}} Você pode mudar para o motor local ou continuar e tentar de novo depois.",
+      "useLocal": "Usar motor local",
+      "continue": "Continuar mesmo assim"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "Não foi possível acessar o OpenWhispr Cloud",
+        "generic": "A solicitação de rede falhou. Verifique sua conexão.",
+        "dnsBlocked": "O DNS não está resolvendo openwhispr.com — pode ser um bloqueador de anúncios ou filtro.",
+        "refused": "A conexão foi recusada — provavelmente um firewall ou VPN.",
+        "timeout": "Tempo limite da rede esgotado — VPN, portal cativo ou conexão instável.",
+        "tls": "Falha no handshake TLS — verifique o relógio do sistema ou um proxy corporativo.",
+        "fallback": "Cloud indisponível — usando o motor local para esta gravação."
+      }
     }
   },
   "controlPanel": {

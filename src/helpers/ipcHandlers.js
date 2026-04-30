@@ -1,4 +1,4 @@
-const { ipcMain, app, shell, BrowserWindow, systemPreferences } = require("electron");
+const { ipcMain, app, shell, BrowserWindow, systemPreferences, net } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -6,6 +6,7 @@ const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { classifyAndLog } = require("./networkErrors");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
@@ -2446,7 +2447,7 @@ class IPCHandlers {
           }
         }
 
-        const response = await fetch(MISTRAL_TRANSCRIPTION_URL, {
+        const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
           method: "POST",
           headers: {
             "x-api-key": apiKey,
@@ -2816,7 +2817,7 @@ class IPCHandlers {
             temperature: config?.temperature || 0.3,
           };
 
-          const response = await fetch("https://api.anthropic.com/v1/messages", {
+          const response = await proxyFetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -3362,6 +3363,11 @@ class IPCHandlers {
       return getSessionCookiesFromWindow(win);
     };
 
+    // Honors system proxy via Electron's net stack. useSessionCookies:false
+    // because we set the Cookie header manually from getSessionCookies() —
+    // letting Electron also attach session cookies risks duplicates.
+    const proxyFetch = (url, init = {}) => net.fetch(url, { ...init, useSessionCookies: false });
+
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
@@ -3443,6 +3449,35 @@ class IPCHandlers {
           return { success: false, error: error.message, code: error.code, ...error };
         }
         return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("cloud-health-check", async () => {
+      const apiUrl = getApiUrl();
+      if (!apiUrl) {
+        return {
+          ok: false,
+          code: "NO_API_URL",
+          messageKey: "streaming.errors.cloudUnreachable.generic",
+        };
+      }
+      const url = `${apiUrl}/api/health`;
+      try {
+        const res = await proxyFetch(url, {
+          method: "GET",
+          signal: AbortSignal.timeout(3000),
+        });
+        return { ok: res.ok, status: res.status };
+      } catch (err) {
+        const classified = classifyAndLog(err, url);
+        if (classified.isNetworkError) {
+          return { ok: false, code: classified.code, messageKey: classified.messageKey };
+        }
+        return {
+          ok: false,
+          code: "UNKNOWN",
+          messageKey: "streaming.errors.cloudUnreachable.generic",
+        };
       }
     });
 
@@ -3540,7 +3575,7 @@ class IPCHandlers {
             headers.Authorization = `Bearer ${apiKey}`;
           }
 
-          const response = await fetch(endpoint, { method: "POST", headers, body: formData });
+          const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
           if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
@@ -3991,11 +4026,25 @@ class IPCHandlers {
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
-        const response = await fetch(`${apiUrl}${path}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Cookie: cookieHeader },
-          body: JSON.stringify(body),
-        });
+        const url = `${apiUrl}${path}`;
+        let response;
+        try {
+          response = await proxyFetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+            body: JSON.stringify(body),
+          });
+        } catch (err) {
+          const classified = classifyAndLog(err, url);
+          if (classified.isNetworkError) {
+            throw Object.assign(new Error(err.message || "Network request failed"), {
+              code: "NETWORK_ERROR",
+              networkCode: classified.code,
+              messageKey: classified.messageKey,
+            });
+          }
+          throw err;
+        }
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
           throw new Error(err.error || `Token request failed: ${response.status}`);
@@ -4012,7 +4061,7 @@ class IPCHandlers {
             throw new Error("No AssemblyAI API key configured. Add your key in Settings.");
           }
           return dual(async () => {
-            const response = await fetch(
+            const response = await proxyFetch(
               "https://streaming.assemblyai.com/v3/token?expires_in_seconds=60",
               { headers: { Authorization: apiKey } }
             );
@@ -5475,7 +5524,7 @@ class IPCHandlers {
           "cloud-api"
         );
 
-        const response = await fetch(`${apiUrl}/api/reason`, {
+        const response = await proxyFetch(`${apiUrl}/api/reason`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -5551,7 +5600,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/agent/stream`, {
+        const response = await proxyFetch(`${apiUrl}/api/agent/stream`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -5646,7 +5695,7 @@ class IPCHandlers {
 
         debugLogger.debug("Agent web search request", { query, numResults }, "cloud-api");
 
-        const response = await fetch(`${apiUrl}/api/agent/web-search`, {
+        const response = await proxyFetch(`${apiUrl}/api/agent/web-search`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -5687,7 +5736,7 @@ class IPCHandlers {
           const cookieHeader = await getSessionCookies(event);
           if (!cookieHeader) throw new Error("No session cookies available");
 
-          const response = await fetch(`${apiUrl}/api/streaming-usage`, {
+          const response = await proxyFetch(`${apiUrl}/api/streaming-usage`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -5738,7 +5787,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/usage`, {
+        const response = await proxyFetch(`${apiUrl}/api/usage`, {
           headers: { Cookie: cookieHeader },
         });
 
@@ -5775,7 +5824,7 @@ class IPCHandlers {
           fetchOpts.body = JSON.stringify(body);
         }
 
-        const response = await fetch(`${apiUrl}${endpoint}`, fetchOpts);
+        const response = await proxyFetch(`${apiUrl}${endpoint}`, fetchOpts);
 
         if (!response.ok) {
           if (response.status === 401) {
@@ -5812,7 +5861,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/stripe/switch-plan`, {
+        const response = await proxyFetch(`${apiUrl}/api/stripe/switch-plan`, {
           method: "POST",
           headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
           body: JSON.stringify(opts),
@@ -5844,7 +5893,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/stripe/preview-switch`, {
+        const response = await proxyFetch(`${apiUrl}/api/stripe/preview-switch`, {
           method: "POST",
           headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
           body: JSON.stringify(opts),
@@ -5885,7 +5934,7 @@ class IPCHandlers {
           fetchOpts.body = JSON.stringify(opts.body);
         }
 
-        const response = await fetch(`${apiUrl}${opts.path}`, fetchOpts);
+        const response = await proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
 
         if (response.status === 401) {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
@@ -5919,7 +5968,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/stt-config`, {
+        const response = await proxyFetch(`${apiUrl}/api/stt-config`, {
           headers: { Cookie: cookieHeader },
         });
 
@@ -5949,7 +5998,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/note-recording-config`, {
+        const response = await proxyFetch(`${apiUrl}/api/note-recording-config`, {
           headers: { Cookie: cookieHeader },
         });
 
@@ -6094,7 +6143,7 @@ class IPCHandlers {
           throw new Error("No session cookies available");
         }
 
-        const response = await fetch(`${apiUrl}/api/referrals/stats`, {
+        const response = await proxyFetch(`${apiUrl}/api/referrals/stats`, {
           headers: {
             Cookie: cookieHeader,
           },
@@ -6130,7 +6179,7 @@ class IPCHandlers {
           throw new Error("No session cookies available");
         }
 
-        const response = await fetch(`${apiUrl}/api/referrals/invite`, {
+        const response = await proxyFetch(`${apiUrl}/api/referrals/invite`, {
           method: "POST",
           headers: {
             Cookie: cookieHeader,
@@ -6168,7 +6217,7 @@ class IPCHandlers {
           throw new Error("No session cookies available");
         }
 
-        const response = await fetch(`${apiUrl}/api/referrals/invites`, {
+        const response = await proxyFetch(`${apiUrl}/api/referrals/invites`, {
           headers: {
             Cookie: cookieHeader,
           },
@@ -6350,7 +6399,7 @@ class IPCHandlers {
         throw new Error("No session cookies available");
       }
 
-      const tokenResponse = await fetch(`${apiUrl}/api/streaming-token`, {
+      const tokenResponse = await proxyFetch(`${apiUrl}/api/streaming-token`, {
         method: "POST",
         headers: {
           Cookie: cookieHeader,
@@ -6551,7 +6600,7 @@ class IPCHandlers {
       const cookieHeader = await getSessionCookiesFromWindow(win);
       if (!cookieHeader) throw new Error("No session cookies available");
 
-      const tokenResponse = await fetch(`${apiUrl}/api/deepgram-streaming-token`, {
+      const tokenResponse = await proxyFetch(`${apiUrl}/api/deepgram-streaming-token`, {
         method: "POST",
         headers: { Cookie: cookieHeader },
       });
@@ -6581,7 +6630,7 @@ class IPCHandlers {
         throw new Error("No session cookies available");
       }
 
-      const tokenResponse = await fetch(`${apiUrl}/api/deepgram-streaming-token`, {
+      const tokenResponse = await proxyFetch(`${apiUrl}/api/deepgram-streaming-token`, {
         method: "POST",
         headers: {
           Cookie: cookieHeader,

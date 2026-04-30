@@ -1007,6 +1007,12 @@ declare global {
         error?: string;
         code?: string;
       }>;
+      cloudHealthCheck?: () => Promise<{
+        ok: boolean;
+        status?: number;
+        code?: string;
+        messageKey?: string;
+      }>;
       cloudUsage?: () => Promise<{
         success: boolean;
         wordsUsed?: number;

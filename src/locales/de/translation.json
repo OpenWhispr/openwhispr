@@ -206,6 +206,25 @@
       "hotkeyToStartStop": "{{hotkey}} zum Starten/Stoppen",
       "holdHotkey": "{{hotkey}} gedrückt halten",
       "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden..."
+    },
+    "connectivity": {
+      "title": "OpenWhispr Cloud ist aus diesem Netzwerk nicht erreichbar",
+      "body": "{{cause}} Sie können zur lokalen Engine wechseln oder fortfahren und es später erneut versuchen.",
+      "useLocal": "Lokale Engine verwenden",
+      "continue": "Trotzdem fortfahren"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "OpenWhispr Cloud nicht erreichbar",
+        "generic": "Die Netzwerkanfrage ist fehlgeschlagen. Prüfen Sie Ihre Verbindung.",
+        "dnsBlocked": "DNS löst openwhispr.com nicht auf — ein Werbeblocker oder Filter blockiert es möglicherweise.",
+        "refused": "Verbindung wurde abgelehnt — wahrscheinlich eine Firewall oder ein VPN.",
+        "timeout": "Netzwerk-Zeitüberschreitung — VPN, Captive Portal oder instabile Verbindung.",
+        "tls": "TLS-Handshake fehlgeschlagen — prüfen Sie Ihre Systemuhr oder einen Unternehmens-Proxy.",
+        "fallback": "Cloud nicht erreichbar — lokale Engine wird für diese Aufnahme verwendet."
+      }
     }
   },
   "controlPanel": {

@@ -206,6 +206,25 @@
       "hotkeyToStartStop": "{{hotkey}} 開始/停止",
       "holdHotkey": "按住 {{hotkey}}",
       "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入..."
+    },
+    "connectivity": {
+      "title": "無法從此網路連線到 OpenWhispr Cloud",
+      "body": "{{cause}} 你可以切換到本機引擎，或繼續並稍後再試。",
+      "useLocal": "使用本機引擎",
+      "continue": "仍然繼續"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "無法連線到 OpenWhispr Cloud",
+        "generic": "網路請求失敗，請檢查你的連線。",
+        "dnsBlocked": "DNS 無法解析 openwhispr.com — 廣告封鎖器或過濾器可能阻擋了它。",
+        "refused": "連線被拒絕 — 可能是防火牆或 VPN。",
+        "timeout": "網路逾時 — VPN、強制入口頁或連線不穩定。",
+        "tls": "TLS 交握失敗 — 請檢查系統時鐘或企業 Proxy。",
+        "fallback": "Cloud 無法連線 — 本次錄音將使用本機引擎。"
+      }
     }
   },
   "controlPanel": {

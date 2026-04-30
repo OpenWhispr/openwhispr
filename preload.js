@@ -465,6 +465,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),
 
   // OpenWhispr Cloud API
+  cloudHealthCheck: () => ipcRenderer.invoke("cloud-health-check"),
   cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
   cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
   cloudStreamingUsage: (text, audioDurationSeconds, opts) =>

@@ -206,6 +206,25 @@
       "hotkeyToStartStop": "{{hotkey}} to start/stop",
       "holdHotkey": "Hold {{hotkey}}",
       "textareaPlaceholder": "Click here and use your hotkey to dictate..."
+    },
+    "connectivity": {
+      "title": "We can't reach OpenWhispr Cloud from this network",
+      "body": "{{cause}} You can switch to the local engine, or continue and try again later.",
+      "useLocal": "Use local engine",
+      "continue": "Continue anyway"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "Can't reach OpenWhispr Cloud",
+        "generic": "Network request failed. Check your connection.",
+        "dnsBlocked": "DNS isn't resolving openwhispr.com — an ad blocker or filter may be blocking it.",
+        "refused": "Connection was refused — likely a firewall or VPN.",
+        "timeout": "Network timed out — VPN, captive portal, or unstable connection.",
+        "tls": "TLS handshake failed — check your system clock or for a corporate proxy.",
+        "fallback": "Cloud unreachable — using local engine for this recording."
+      }
     }
   },
   "controlPanel": {
