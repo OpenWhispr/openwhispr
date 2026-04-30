@@ -427,6 +427,11 @@
       "noAudio": {
         "title": "Nessun audio rilevato",
         "description": "La registrazione non contiene audio rilevabile. Riprova."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "La tua sessione OpenWhispr Cloud non è disponibile. Effettua di nuovo l'accesso dalle Impostazioni.",
+        "offline": "Sei offline. La trascrizione cloud richiede una connessione Internet.",
+        "dailyLimitReached": "Hai raggiunto il limite di trascrizioni di oggi. Riprova domani o aggiorna il tuo piano."
       }
     },
     "clipboard": {

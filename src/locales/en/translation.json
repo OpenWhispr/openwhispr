@@ -427,6 +427,11 @@
       "noAudio": {
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
+        "offline": "You're offline. Cloud transcription requires an internet connection.",
+        "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan."
       }
     },
     "clipboard": {

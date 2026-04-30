@@ -427,6 +427,11 @@
       "noAudio": {
         "title": "未偵測到音訊",
         "description": "錄音中未偵測到聲音。請再試一次。"
+      },
+      "errorDescriptions": {
+        "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
+        "offline": "你目前離線。雲端轉錄需要網際網路連線。",
+        "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。"
       }
     },
     "clipboard": {

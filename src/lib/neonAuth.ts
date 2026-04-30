@@ -63,13 +63,11 @@ function getLastSignInTime(): number | null {
 }
 
 function createAuthExpiredError(originalError: unknown): Error {
-  if (originalError instanceof Error) {
-    (originalError as Error & { code?: string }).code = "AUTH_EXPIRED";
-    return originalError;
-  }
-
-  const error = new Error("Session expired");
-  (error as Error & { code?: string }).code = "AUTH_EXPIRED";
+  const error = originalError instanceof Error ? originalError : new Error("Session expired");
+  Object.assign(error, {
+    code: "AUTH_EXPIRED",
+    messageKey: "hooks.audioRecording.errorDescriptions.sessionExpired",
+  });
   return error;
 }
 

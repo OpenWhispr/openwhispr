@@ -427,6 +427,11 @@
       "noAudio": {
         "title": "Kein Audio erkannt",
         "description": "Die Aufnahme enthielt kein erkennbares Audio. Bitte versuchen Sie es erneut."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
+        "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
+        "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan."
       }
     },
     "clipboard": {

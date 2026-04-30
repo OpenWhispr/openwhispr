@@ -427,6 +427,11 @@
       "noAudio": {
         "title": "No se detectó audio",
         "description": "La grabación no contiene audio detectable. Inténtalo de nuevo."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "Tu sesión de OpenWhispr Cloud no está disponible. Vuelve a iniciar sesión desde Ajustes.",
+        "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
+        "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan."
       }
     },
     "clipboard": {

@@ -427,6 +427,11 @@
       "noAudio": {
         "title": "Aucun audio détecté",
         "description": "L'enregistrement ne contient pas d'audio détectable. Réessayez."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "Votre session OpenWhispr Cloud est indisponible. Reconnectez-vous depuis Paramètres.",
+        "offline": "Vous êtes hors ligne. La transcription cloud nécessite une connexion Internet.",
+        "dailyLimitReached": "Vous avez atteint votre limite de transcription du jour. Réessayez demain ou améliorez votre forfait."
       }
     },
     "clipboard": {

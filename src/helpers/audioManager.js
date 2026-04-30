@@ -574,6 +574,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             "OpenWhispr Cloud requires sign-in. Please sign in again or switch to BYOK mode."
           );
           err.code = "AUTH_REQUIRED";
+          err.messageKey = "hooks.audioRecording.errorDescriptions.sessionExpired";
           throw err;
         }
         activeModel = "openwhispr-cloud";
@@ -640,6 +641,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           title: "Transcription Error",
           description: `Transcription failed: ${error.message}`,
           code: error.code,
+          messageKey: error.messageKey,
         });
 
         // Save failed transcription with audio so the user can retry later
@@ -1273,6 +1275,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (!navigator.onLine) {
       const err = new Error("You're offline. Cloud transcription requires an internet connection.");
       err.code = "OFFLINE";
+      err.messageKey = "hooks.audioRecording.errorDescriptions.offline";
       throw err;
     }
 
@@ -1587,8 +1590,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
         const err = new Error(`API Error: ${response.status} ${errorText}`);
         if (response.status === 401) err.code = "INVALID_KEY";
-        else if (response.status === 429) err.code = "LIMIT_REACHED";
-        else if (response.status >= 500) err.code = "SERVER_ERROR";
+        else if (response.status === 429) {
+          err.code = "LIMIT_REACHED";
+          err.messageKey = "hooks.audioRecording.errorDescriptions.dailyLimitReached";
+        } else if (response.status >= 500) err.code = "SERVER_ERROR";
         throw err;
       }
 
@@ -2280,7 +2285,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             this.onError?.({
               code: "NETWORK_ERROR",
               title: "streaming.errors.cloudUnreachable.title",
-              description: "streaming.errors.cloudUnreachable.fallback",
+              description: "Cloud unreachable — using local engine for this recording.",
+              messageKey: "streaming.errors.cloudUnreachable.fallback",
             });
             return { needsFallback: true };
           }

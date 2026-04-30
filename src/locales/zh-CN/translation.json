@@ -427,6 +427,11 @@
       "noAudio": {
         "title": "未检测到音频",
         "description": "录音中未检测到音频，请重试。"
+      },
+      "errorDescriptions": {
+        "sessionExpired": "OpenWhispr Cloud 会话不可用。请到「设置」中重新登录。",
+        "offline": "你目前离线。云端转录需要互联网连接。",
+        "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。"
       }
     },
     "clipboard": {
