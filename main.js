@@ -263,6 +263,8 @@ const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
+const sidecarRegistry = require("./src/helpers/sidecarRegistry");
+const { reapStaleSidecars } = require("./src/helpers/sidecarReaper");
 
 // Manager instances - initialized after app.whenReady()
 let debugLogger = null;
@@ -394,6 +396,18 @@ function initializeCoreManagers() {
     oauthProtocolRegistered: protocolRegistered,
     oauthProtocol: OAUTH_PROTOCOL,
   });
+}
+
+function registerSidecars() {
+  if (whisperManager) sidecarRegistry.register("whisper", () => whisperManager.stopServer());
+  if (parakeetManager) sidecarRegistry.register("parakeet", () => parakeetManager.stopServer());
+  if (diarizationManager) {
+    sidecarRegistry.register("diarization", () => diarizationManager.shutdown());
+  }
+  const modelManager = require("./src/helpers/modelManagerBridge").default;
+  sidecarRegistry.register("llama", () => modelManager.stopServer());
+  const onnxWorkerClient = require("./src/helpers/onnxWorkerClient");
+  sidecarRegistry.register("onnx", () => onnxWorkerClient.stop());
 }
 
 // Phase 2: Non-critical setup after windows are visible
@@ -611,8 +625,11 @@ function startAuthBridgeServer() {
 
 // Main application startup
 async function startApp() {
+  reapStaleSidecars();
+
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
+  registerSidecars();
   startAuthBridgeServer();
 
   cliBridge = new CliBridge(ipcHandlers);
@@ -810,6 +827,7 @@ async function startApp() {
 
   const QdrantManager = require("./src/helpers/qdrantManager");
   qdrantManager = new QdrantManager();
+  sidecarRegistry.register("qdrant", () => qdrantManager.stop());
   if (qdrantManager.isAvailable()) {
     qdrantManager
       .start()
@@ -1367,77 +1385,45 @@ if (gotSingleInstanceLock) {
     }
   });
 
-  app.on("will-quit", () => {
-    if (authBridgeServer) {
-      authBridgeServer.close();
-      authBridgeServer = null;
-    }
-    if (cliBridge) {
-      cliBridge.stop().catch(() => {});
-      cliBridge = null;
-    }
-    if (windowManager && isLiveWindow(windowManager.agentWindow)) {
-      windowManager.agentWindow.destroy();
-    }
-    if (windowManager && isLiveWindow(windowManager.transcriptionPreviewWindow)) {
-      windowManager.transcriptionPreviewWindow.destroy();
-    }
-    if (hotkeyManager) {
-      hotkeyManager.unregisterAll();
-    } else {
-      globalShortcut.unregisterAll();
-    }
-    if (globeKeyManager) {
-      globeKeyManager.stop();
-    }
-    if (windowsKeyManager) {
-      windowsKeyManager.stop();
-    }
-    if (linuxKeyManager) {
-      linuxKeyManager.stop();
-    }
-    if (meetingDetectionEngine) {
-      meetingDetectionEngine.stop();
-    }
-    if (googleCalendarManager) {
-      googleCalendarManager.stop();
-    }
-    if (audioTapManager) {
-      audioTapManager.stop().catch(() => {});
-    }
-    if (linuxPortalAudioManager) {
-      linuxPortalAudioManager.stop().catch(() => {});
-    }
-    if (meetingAecManager) {
-      meetingAecManager.stop().catch(() => {});
-    }
-    if (ipcHandlers) {
-      ipcHandlers._cleanupTextEditMonitor();
-    }
-    if (textEditMonitor) {
-      textEditMonitor.stopMonitoring();
-    }
-    if (updateManager) {
-      updateManager.cleanup();
-    }
-    // Stop whisper server if running
-    if (whisperManager) {
-      whisperManager.stopServer().catch(() => {});
-    }
-    // Stop parakeet WS server if running
-    if (parakeetManager) {
-      parakeetManager.stopServer().catch(() => {});
-    }
-    if (diarizationManager) {
-      diarizationManager.shutdown().catch(() => {});
-    }
-    // Stop llama-server if running
-    const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.stopServer().catch(() => {});
-    if (qdrantManager) {
-      qdrantManager.stop().catch(() => {});
-    }
-    const onnxWorkerClient = require("./src/helpers/onnxWorkerClient");
-    onnxWorkerClient.stop().catch(() => {});
+  let isShuttingDown = false;
+  app.on("before-quit", (event) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    event.preventDefault();
+    performSyncTeardown();
+    sidecarRegistry.shutdownAll().finally(() => app.exit(0));
   });
+}
+
+function performSyncTeardown() {
+  if (authBridgeServer) {
+    authBridgeServer.close();
+    authBridgeServer = null;
+  }
+  if (cliBridge) {
+    cliBridge.stop().catch(() => {});
+    cliBridge = null;
+  }
+  if (windowManager && isLiveWindow(windowManager.agentWindow)) {
+    windowManager.agentWindow.destroy();
+  }
+  if (windowManager && isLiveWindow(windowManager.transcriptionPreviewWindow)) {
+    windowManager.transcriptionPreviewWindow.destroy();
+  }
+  if (hotkeyManager) {
+    hotkeyManager.unregisterAll();
+  } else {
+    globalShortcut.unregisterAll();
+  }
+  if (globeKeyManager) globeKeyManager.stop();
+  if (windowsKeyManager) windowsKeyManager.stop();
+  if (linuxKeyManager) linuxKeyManager.stop();
+  if (meetingDetectionEngine) meetingDetectionEngine.stop();
+  if (googleCalendarManager) googleCalendarManager.stop();
+  if (audioTapManager) audioTapManager.stop().catch(() => {});
+  if (linuxPortalAudioManager) linuxPortalAudioManager.stop().catch(() => {});
+  if (meetingAecManager) meetingAecManager.stop().catch(() => {});
+  if (ipcHandlers) ipcHandlers._cleanupTextEditMonitor();
+  if (textEditMonitor) textEditMonitor.stopMonitoring();
+  if (updateManager) updateManager.cleanup();
 }
