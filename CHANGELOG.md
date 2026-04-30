@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sync — Preserve Client `updated_at` on Note Push**: Server was overwriting `updated_at` on every push, causing spurious sync loops and stale-merge conflicts
 - **Chat Intelligence Stale Provider on Mode Switch** (#647): Switching Agent Mode from Cloud Providers to Local left the previous cloud provider cached, routing chat to the stale provider and erroring with "API key not configured" despite a local model being selected; mode changes now clear `agentProvider`/`agentModel` when incompatible with the new mode
 
+### Upgrade notes
+
+- Manual download required for 1.6.x users; auto-update is intentionally broken across the bundle ID change.
+- You will be signed out and need to sign in again on first launch (Better Auth swap).
+- macOS users will be prompted to re-grant microphone access in-app and re-grant accessibility + screen-recording in System Settings.
+- Self-hosters: rename `VITE_NEON_AUTH_URL` → `VITE_AUTH_URL` in your build env; rename `REASONING_MODEL`/`REASONING_PROVIDER`/etc. → `CLEANUP_MODEL`/`CLEANUP_PROVIDER`; rename `AGENT_KEY` → `CHAT_AGENT_KEY` (the desktop reads both for two releases).
+
 ## [1.6.10] - 2026-04-20
 
 ### Added

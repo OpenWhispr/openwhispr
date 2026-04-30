@@ -391,6 +391,7 @@ function initializeCoreManagers() {
     linuxPortalAudioManager,
     meetingAecManager,
     getTrayManager: () => trayManager,
+    oauthProtocolRegistered: protocolRegistered,
   });
 }
 
@@ -464,7 +465,7 @@ async function applySessionTokenAndRefresh(token) {
   try {
     await session.defaultSession.cookies.set({
       url: "https://auth.openwhispr.com",
-      name: "__Secure-neon-auth.session_token",
+      name: "__Secure-openwhispr.session_token",
       value: token,
       domain: ".openwhispr.com",
       path: "/",

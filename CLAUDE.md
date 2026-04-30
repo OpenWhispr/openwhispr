@@ -109,12 +109,15 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **vectorIndex.js**: Qdrant collection management — upsert, delete, search, batch reindex
 - **windowConfig.js**: Centralized window configuration
 - **windowManager.js**: Window creation and lifecycle management
+- **cliBridge.js**: Loopback HTTP server on ports 8200–8219, bearer-token auth (token at `~/.openwhispr/cli-bridge.json`), 127.0.0.1-only. Used by the unified CLI to talk to a running desktop app.
+- **postMigrationDetector.js**: Detects users returning from the pre-Gizmo bundle ID via a `.bundle-migrated` sentinel in userData; consumed by `ipcHandlers.js` to drive the `PostMigrationOnboarding` modal
 
 ### React Components (src/components/)
 
 - **App.jsx**: Main dictation interface with recording states
 - **ControlPanel.tsx**: Settings, history, model management UI
 - **OnboardingFlow.tsx**: 8-step first-time setup wizard
+- **PostMigrationOnboarding.tsx**: One-time modal for users returning from the pre-Gizmo bundle ID; reuses `PermissionsSection` to walk through re-granting Microphone, Accessibility, and System Audio. Triggered by `postMigrationDetector.js` (see Helper Modules)
 - **SettingsPage.tsx**: Comprehensive settings interface
 - **WhisperModelPicker.tsx**: Model selection and download UI
 - **ui/**: Reusable UI components (buttons, cards, inputs, etc.)
@@ -136,10 +139,10 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 ### Services
 
 - **ReasoningService.ts**: AI processing for agent-addressed commands
-  - Detects when user addresses their named agent
-  - Routes to appropriate AI provider (OpenAI/Anthropic/Gemini)
-  - Removes agent name from final output
-  - Supports GPT-5, Claude 4.6 (Opus/Sonnet/Haiku), and Gemini 3.1 Pro / 3 Flash models
+  - Detects when user addresses their named agent and removes the agent name from final output
+  - Provider implementations live in a registry at `src/services/ai/inferenceProviders/index.ts` covering 8 providers (`anthropic`, `enterprise`, `gemini`, `groq`, `lan`, `local`, `openai`, `openwhispr`), each implementing the `InferenceProvider` interface from `types.ts`
+  - Per-scope LLM config: 4 scopes (`dictationCleanup`, `dictationAgent`, `noteFormatting`, `chatIntelligence`) defined in `src/config/inferenceScopes.ts`
+  - `selectResolvedLLMConfig(state, scope)` in `settingsStore.ts` resolves provider/model per scope with fallback chains
 
 ### whisper.cpp Integration
 

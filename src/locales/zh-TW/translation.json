@@ -615,7 +615,8 @@
     "social": {
       "completeInBrowser": "請在瀏覽器中完成登入",
       "continueWithGoogle": "使用 Google 繼續",
-      "continueWithMicrosoft": "使用 Microsoft 繼續"
+      "continueWithMicrosoft": "使用 Microsoft 繼續",
+      "protocolUnavailable": "無法透過瀏覽器登入 — 請在系統的「預設應用程式」設定中重新註冊 openwhispr:// 協定。"
     },
     "welcomeSubtitle": "隨時隨地用語音輸入文字",
     "welcomeTitle": "歡迎使用 OpenWhispr",
@@ -2102,6 +2103,7 @@
     "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
     "title": "Dictation Agent",
     "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "useCleanupModel": "使用清理模型",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",

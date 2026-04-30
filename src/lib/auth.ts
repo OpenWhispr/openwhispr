@@ -172,6 +172,7 @@ function getElectronOAuthCallbackURL(): string {
 }
 
 export async function signInWithSocial(provider: SocialProvider): Promise<{ error?: Error }> {
+  // State enforced server-side by Better Auth.
   try {
     const isElectron = Boolean((window as any).electronAPI);
 

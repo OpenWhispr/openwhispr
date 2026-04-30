@@ -615,7 +615,8 @@
     "social": {
       "completeInBrowser": "Complete sign-in in your browser",
       "continueWithGoogle": "Continue with Google",
-      "continueWithMicrosoft": "Continue with Microsoft"
+      "continueWithMicrosoft": "Continue with Microsoft",
+      "protocolUnavailable": "Browser sign-in unavailable — re-register the openwhispr:// protocol in your system's Default Apps settings."
     },
     "welcomeSubtitle": "Dictate anywhere using your voice",
     "welcomeTitle": "Welcome to OpenWhispr",
@@ -2203,6 +2204,7 @@
     "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
     "title": "Dictation Agent",
     "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "useCleanupModel": "Use cleanup model",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
       "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",

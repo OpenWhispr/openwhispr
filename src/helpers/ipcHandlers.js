@@ -297,6 +297,7 @@ class IPCHandlers {
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
     this.meetingAecManager = managers.meetingAecManager;
+    this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
@@ -6384,8 +6385,14 @@ class IPCHandlers {
       justMigrated: postMigrationDetector.isReturningFromOldBundle(),
     }));
 
+    ipcMain.handle("get-oauth-protocol-registered", () => this.oauthProtocolRegistered);
+
     ipcMain.handle("mark-bundle-migrated", () => {
       postMigrationDetector.markBundleMigrated();
+    });
+
+    ipcMain.handle("mark-bundle-migration-dismissed", () => {
+      postMigrationDetector.markBundleMigrationDismissed();
     });
 
     ipcMain.handle("get-update-status", async () => {

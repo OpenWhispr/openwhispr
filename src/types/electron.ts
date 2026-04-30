@@ -66,6 +66,7 @@ export interface FolderItem {
   is_default: number;
   sort_order: number;
   created_at: string;
+  updated_at: string;
   client_folder_id: string;
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
@@ -770,7 +771,9 @@ declare global {
       installUpdate: () => Promise<UpdateResult>;
       getAppVersion: () => Promise<AppVersionResult>;
       getPostMigrationState: () => Promise<{ justMigrated: boolean }>;
+      getOAuthProtocolRegistered: () => Promise<boolean>;
       markBundleMigrated: () => Promise<void>;
+      markBundleMigrationDismissed: () => Promise<void>;
       getUpdateStatus: () => Promise<UpdateStatusResult>;
       getUpdateInfo: () => Promise<UpdateInfoResult | null>;
 
