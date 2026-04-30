@@ -587,6 +587,7 @@
     },
     "social": {
       "completeInBrowser": "Conclua o login no navegador",
+      "continueWithApple": "Continuar com a Apple",
       "continueWithGoogle": "Continuar com o Google",
       "continueWithMicrosoft": "Continuar com a Microsoft",
       "protocolUnavailable": "Login pelo navegador indisponível — registre novamente o protocolo openwhispr:// nas configurações de Aplicativos Padrão do sistema."

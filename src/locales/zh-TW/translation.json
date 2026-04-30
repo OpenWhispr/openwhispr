@@ -614,6 +614,7 @@
     },
     "social": {
       "completeInBrowser": "請在瀏覽器中完成登入",
+      "continueWithApple": "使用 Apple 繼續",
       "continueWithGoogle": "使用 Google 繼續",
       "continueWithMicrosoft": "使用 Microsoft 繼續",
       "protocolUnavailable": "無法透過瀏覽器登入 — 請在系統的「預設應用程式」設定中重新註冊 openwhispr:// 協定。"

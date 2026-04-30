@@ -614,6 +614,7 @@
     },
     "social": {
       "completeInBrowser": "Complete sign-in in your browser",
+      "continueWithApple": "Continue with Apple",
       "continueWithGoogle": "Continue with Google",
       "continueWithMicrosoft": "Continue with Microsoft",
       "protocolUnavailable": "Browser sign-in unavailable — re-register the openwhispr:// protocol in your system's Default Apps settings."

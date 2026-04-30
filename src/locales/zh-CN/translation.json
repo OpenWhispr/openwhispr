@@ -614,6 +614,7 @@
     },
     "social": {
       "completeInBrowser": "在浏览器中完成登录",
+      "continueWithApple": "使用 Apple 继续",
       "continueWithGoogle": "使用 Google 继续",
       "continueWithMicrosoft": "使用 Microsoft 继续",
       "protocolUnavailable": "无法通过浏览器登录 — 请在系统的“默认应用”设置中重新注册 openwhispr:// 协议。"

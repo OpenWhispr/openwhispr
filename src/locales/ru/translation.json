@@ -614,6 +614,7 @@
     },
     "social": {
       "completeInBrowser": "Завершите вход в браузере",
+      "continueWithApple": "Продолжить с Apple",
       "continueWithGoogle": "Продолжить с Google",
       "continueWithMicrosoft": "Продолжить с Microsoft",
       "protocolUnavailable": "Вход через браузер недоступен — повторно зарегистрируйте протокол openwhispr:// в системных настройках приложений по умолчанию."

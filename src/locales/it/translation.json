@@ -615,6 +615,7 @@
     },
     "social": {
       "completeInBrowser": "Completa l'accesso nel browser",
+      "continueWithApple": "Continua con Apple",
       "continueWithGoogle": "Continua con Google",
       "continueWithMicrosoft": "Continua con Microsoft",
       "protocolUnavailable": "Accesso dal browser non disponibile — registra di nuovo il protocollo openwhispr:// nelle impostazioni Applicazioni predefinite del sistema."

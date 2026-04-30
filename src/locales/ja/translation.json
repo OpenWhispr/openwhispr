@@ -615,6 +615,7 @@
     },
     "social": {
       "completeInBrowser": "ブラウザでサインインを完了してください",
+      "continueWithApple": "Apple で続ける",
       "continueWithGoogle": "Google で続ける",
       "continueWithMicrosoft": "Microsoft で続ける",
       "protocolUnavailable": "ブラウザでのサインインを利用できません — システムの「既定のアプリ」設定で openwhispr:// プロトコルを再登録してください。"

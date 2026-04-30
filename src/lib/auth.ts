@@ -10,7 +10,7 @@ export const authClient = createAuthClient({
   },
 });
 
-export type SocialProvider = "google" | "microsoft";
+export type SocialProvider = "google" | "microsoft" | "apple";
 
 const LAST_SIGN_IN_STORAGE_KEY = "openwhispr:lastSignInTime";
 const GRACE_PERIOD_MS = 60_000;

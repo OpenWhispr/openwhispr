@@ -614,6 +614,7 @@
     },
     "social": {
       "completeInBrowser": "Terminez la connexion dans votre navigateur",
+      "continueWithApple": "Continuer avec Apple",
       "continueWithGoogle": "Continuer avec Google",
       "continueWithMicrosoft": "Continuer avec Microsoft",
       "protocolUnavailable": "Connexion par navigateur indisponible — réenregistrez le protocole openwhispr:// dans les paramètres Applications par défaut du système."

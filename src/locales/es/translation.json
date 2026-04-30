@@ -614,6 +614,7 @@
     },
     "social": {
       "completeInBrowser": "Completa el inicio de sesión en tu navegador",
+      "continueWithApple": "Continuar con Apple",
       "continueWithGoogle": "Continuar con Google",
       "continueWithMicrosoft": "Continuar con Microsoft",
       "protocolUnavailable": "Inicio de sesión por navegador no disponible — vuelve a registrar el protocolo openwhispr:// en los ajustes de Aplicaciones predeterminadas del sistema."

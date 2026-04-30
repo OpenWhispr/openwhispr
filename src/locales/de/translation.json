@@ -614,6 +614,7 @@
     },
     "social": {
       "completeInBrowser": "Anmeldung im Browser abschließen",
+      "continueWithApple": "Weiter mit Apple",
       "continueWithGoogle": "Weiter mit Google",
       "continueWithMicrosoft": "Weiter mit Microsoft",
       "protocolUnavailable": "Browser-Anmeldung nicht verfügbar — registrieren Sie das openwhispr://-Protokoll in den Standardanwendungs-Einstellungen Ihres Systems erneut."
