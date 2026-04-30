@@ -1624,7 +1624,6 @@
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida"
       },
       "cloud": {
-        "openai_gpt_5_4": "Modelo frontier para razonamiento complejo",
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",
         "openai_gpt_5_mini": "Rápido y económico",
         "openai_gpt_5_nano": "Ultrarrápido, baja latencia",
@@ -1633,7 +1632,6 @@
         "openai_gpt_4_1_nano": "GPT-4.1 de menor latencia",
         "anthropic_claude_sonnet_4_5": "Rendimiento equilibrado",
         "anthropic_claude_haiku_4_5": "Rápido con inteligencia cercana a la frontera",
-        "anthropic_claude_opus_4_5": "Modelo Claude más capaz",
         "gemini_gemini_3_pro_preview": "Modelo insignia de nueva generación para razonamiento complejo",
         "gemini_gemini_3_flash_preview": "Modelo de nueva generación ultrarrápido y de alta capacidad",
         "gemini_gemini_2_5_flash_lite": "Menor latencia y costo",
@@ -1645,7 +1643,9 @@
         "groq_llama_4_scout": "Multimodal eficiente de Meta, 750 T/seg",
         "groq_compound": "Sistema compound de Groq, 450 T/seg",
         "groq_compound_mini": "Sistema compound rápido, 3x menor latencia",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexto 256K"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexto 256K",
+        "openai_gpt_5_5": "Modelo frontier para razonamiento complejo",
+        "anthropic_claude_opus_4_7": "Modelo Claude más capaz"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Rápido y económico. Ideal para limpiar texto.",

@@ -1576,7 +1576,6 @@
         "mistral_voxtral_mini_latest": "高速多言語文字起こし"
       },
       "cloud": {
-        "openai_gpt_5_4": "複雑な推論のためのフロンティアモデル",
         "openai_gpt_5_2": "強力な推論モデル",
         "openai_gpt_5_mini": "高速で費用対効果が高い",
         "openai_gpt_5_nano": "超高速、低レイテンシー",
@@ -1585,7 +1584,6 @@
         "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
         "anthropic_claude_sonnet_4_5": "バランスの取れた性能",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
-        "anthropic_claude_opus_4_5": "最も高性能な Claude モデル",
         "gemini_gemini_3_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
         "gemini_gemini_3_flash_preview": "超高速・高性能の次世代モデル",
         "gemini_gemini_2_5_flash_lite": "最低レイテンシーとコスト",
@@ -1597,7 +1595,9 @@
         "groq_llama_4_scout": "Meta の効率的マルチモーダル、750 T/秒",
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト",
+        "openai_gpt_5_5": "複雑な推論のためのフロンティアモデル",
+        "anthropic_claude_opus_4_7": "最も高性能な Claude モデル"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",

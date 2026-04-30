@@ -1624,7 +1624,6 @@
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide"
       },
       "cloud": {
-        "openai_gpt_5_4": "Modèle frontier pour le raisonnement complexe",
         "openai_gpt_5_2": "Modèle de raisonnement performant",
         "openai_gpt_5_mini": "Rapide et économique",
         "openai_gpt_5_nano": "Ultra-rapide, faible latence",
@@ -1633,7 +1632,6 @@
         "openai_gpt_4_1_nano": "GPT-4.1 à la latence la plus faible",
         "anthropic_claude_sonnet_4_5": "Performances équilibrées",
         "anthropic_claude_haiku_4_5": "Rapide avec une intelligence de pointe",
-        "anthropic_claude_opus_4_5": "Modèle Claude le plus performant",
         "gemini_gemini_3_pro_preview": "Modèle phare nouvelle génération pour le raisonnement complexe",
         "gemini_gemini_3_flash_preview": "Modèle nouvelle génération ultra-rapide et très performant",
         "gemini_gemini_2_5_flash_lite": "Latence et coût les plus faibles",
@@ -1645,7 +1643,9 @@
         "groq_llama_4_scout": "Multimodal efficace de Meta, 750 T/s",
         "groq_compound": "Système compound de Groq, 450 T/s",
         "groq_compound_mini": "Système compound rapide, 3x latence réduite",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexte 256K"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexte 256K",
+        "openai_gpt_5_5": "Modèle frontier pour le raisonnement complexe",
+        "anthropic_claude_opus_4_7": "Modèle Claude le plus performant"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Rapide et économique. Parfait pour nettoyer le texte.",

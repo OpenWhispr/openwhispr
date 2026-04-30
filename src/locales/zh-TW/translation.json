@@ -1571,7 +1571,6 @@
         "mistral_voxtral_mini_latest": "快速多語言轉錄"
       },
       "cloud": {
-        "openai_gpt_5_4": "複雜推理前沿模型",
         "openai_gpt_5_2": "強大的推理模型",
         "openai_gpt_5_mini": "快速且經濟實惠",
         "openai_gpt_5_nano": "超快速，低延遲",
@@ -1580,7 +1579,6 @@
         "openai_gpt_4_1_nano": "最低延遲的 GPT-4.1",
         "anthropic_claude_sonnet_4_5": "均衡表現",
         "anthropic_claude_haiku_4_5": "快速且接近頂尖智慧",
-        "anthropic_claude_opus_4_5": "最強大的 Claude 模型",
         "gemini_gemini_3_pro_preview": "新一代旗艦模型，擅長複雜推理",
         "gemini_gemini_3_flash_preview": "超快速、高性能的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延遲和成本",
@@ -1592,7 +1590,9 @@
         "groq_llama_4_scout": "Meta 高效多模態，750 T/sec",
         "groq_compound": "Groq Compound 系統，450 T/sec",
         "groq_compound_mini": "快速 Compound 系統，3x 更低延遲",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文",
+        "openai_gpt_5_5": "複雜推理前沿模型",
+        "anthropic_claude_opus_4_7": "最強大的 Claude 模型"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",

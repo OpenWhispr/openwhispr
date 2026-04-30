@@ -291,14 +291,15 @@ Environment variables persisted to `.env` (via `saveAllKeysToEnvFile()`):
 - AI processes command and removes agent reference from output
 - Supports multiple AI providers (all models defined in `src/models/modelRegistryData.json`):
   - **OpenAI** (Responses API):
-    - GPT-5.2 (`gpt-5.2`) - Latest flagship reasoning model
+    - GPT-5.5 (`gpt-5.5`) - Latest flagship frontier model, 1M context
+    - GPT-5.2 (`gpt-5.2`) - Strong reasoning model
     - GPT-5 Mini (`gpt-5-mini`) - Fast and cost-efficient
     - GPT-5 Nano (`gpt-5-nano`) - Ultra-fast, low latency
     - GPT-4.1 Series (`gpt-4.1`, `gpt-4.1-mini`, `gpt-4.1-nano`) - Strong baseline with 1M context
   - **Anthropic** (Via IPC bridge to avoid CORS):
+    - Claude Opus 4.7 (`claude-opus-4-7`) - Most capable Claude model, 1M context
     - Claude Sonnet 4.6 (`claude-sonnet-4-6`) - Balanced performance
     - Claude Haiku 4.5 (`claude-haiku-4-5`) - Fast with near-frontier intelligence
-    - Claude Opus 4.6 (`claude-opus-4-6`) - Most capable Claude model
   - **Google Gemini** (Direct API integration):
     - Gemini 3.1 Pro (`gemini-3.1-pro-preview`) - Most capable Gemini model
     - Gemini 3 Flash (`gemini-3-flash-preview`) - Ultra-fast, high-capability next-gen model
