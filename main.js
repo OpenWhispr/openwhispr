@@ -24,6 +24,7 @@ const {
   dialog,
   ipcMain,
   session,
+  shell,
   systemPreferences,
 } = require("electron");
 const path = require("path");
@@ -870,8 +871,21 @@ async function startApp() {
     let globeKeyDownTime = 0;
     let globeKeyIsRecording = false;
     let globeLastStopTime = 0;
-    const MIN_HOLD_DURATION_MS = 150;
+    let pushHoldDurationMs = environmentManager.getPushHoldDurationMs();
+    let inputMonitoringGranted = false;
+    let inputMonitoringResetNoticeSent = false;
+    ipcMain.handle("get-input-monitoring-status", () => inputMonitoringGranted);
     const POST_STOP_COOLDOWN_MS = 300;
+    const PUSH_HOLD_MIN_MS = 100;
+    const PUSH_HOLD_MAX_MS = 1500;
+
+    ipcMain.on("push-hold-duration-changed", (_event, value) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return;
+      const clamped = Math.max(PUSH_HOLD_MIN_MS, Math.min(PUSH_HOLD_MAX_MS, Math.round(num)));
+      pushHoldDurationMs = clamped;
+      environmentManager.savePushHoldDurationMs(clamped);
+    });
 
     globeKeyManager.on("globe-down", async () => {
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
@@ -909,7 +923,7 @@ async function startApp() {
                 debugLogger?.debug("[Globe] Starting dictation (push hold)");
                 windowManager.sendStartDictation();
               }
-            }, MIN_HOLD_DURATION_MS);
+            }, pushHoldDurationMs);
           } else {
             windowManager.sendToggleDictation();
           }
@@ -952,6 +966,71 @@ async function startApp() {
       windowManager.handleMacPushModifierUp("fn");
     });
 
+    globeKeyManager.on("input-monitoring-status", (granted) => {
+      inputMonitoringGranted = !!granted;
+      const previouslyGranted = environmentManager.getLastInputMonitoringGranted();
+      environmentManager.saveLastInputMonitoringGranted(inputMonitoringGranted);
+
+      // Notify renderer of current state
+      const wins = [windowManager?.mainWindow, windowManager?.controlPanelWindow];
+      for (const w of wins) {
+        if (isLiveWindow(w) && w.webContents && !w.webContents.isDestroyed()) {
+          w.webContents.send("input-monitoring-status-changed", inputMonitoringGranted);
+        }
+      }
+
+      // If permission was previously granted but is now denied (e.g. after an
+      // app update reset TCC), show a one-shot non-blocking native dialog.
+      if (
+        !inputMonitoringResetNoticeSent &&
+        previouslyGranted === true &&
+        inputMonitoringGranted === false
+      ) {
+        inputMonitoringResetNoticeSent = true;
+        dialog
+          .showMessageBox({
+            type: "info",
+            title: "Input Monitoring permission reset",
+            message: "Input Monitoring permission for OpenWhispr was reset.",
+            detail:
+              "This permission is optional — only needed when using the Globe key with Hold-to-Talk to cancel recording on other key presses. Re-grant it in System Settings if you want this behavior.",
+            buttons: ["Open Settings", "Not Now"],
+            defaultId: 0,
+            cancelId: 1,
+            noLink: true,
+          })
+          .then((result) => {
+            if (result.response === 0) {
+              shell.openExternal(
+                "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+              );
+            }
+          })
+          .catch(() => {});
+      }
+    });
+
+    globeKeyManager.on("globe-interrupted", () => {
+      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
+      if (!isGlobeLikeHotkey(currentHotkey)) return;
+      if (!isLiveWindow(windowManager.mainWindow)) return;
+      if (windowManager.getActivationMode() !== "push") return;
+
+      debugLogger?.debug("[Globe] globe-interrupted received", {
+        wasRecording: globeKeyIsRecording,
+        hadPendingStart: globeKeyDownTime !== 0,
+      });
+
+      globeKeyDownTime = 0;
+
+      if (globeKeyIsRecording) {
+        globeKeyIsRecording = false;
+        // Engage cooldown so the next Fn press isn't treated as a re-trigger.
+        globeLastStopTime = Date.now();
+        windowManager.mainWindow.webContents.send("cancel-hotkey-pressed");
+      }
+    });
+
     globeKeyManager.on("modifier-up", (modifier) => {
       if (windowManager?.handleMacPushModifierUp) {
         windowManager.handleMacPushModifierUp(modifier);
@@ -989,7 +1068,7 @@ async function startApp() {
             rightModIsRecording = true;
             windowManager.sendStartDictation();
           }
-        }, MIN_HOLD_DURATION_MS);
+        }, pushHoldDurationMs);
       } else {
         windowManager.sendToggleDictation();
       }

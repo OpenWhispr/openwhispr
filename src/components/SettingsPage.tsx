@@ -7,6 +7,9 @@ import {
   RefreshCw,
   Download,
   Mic,
+  Keyboard,
+  Minus,
+  Plus,
   Shield,
   FolderOpen,
   LogOut,
@@ -68,7 +71,7 @@ import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
-import { formatHotkeyLabel } from "../utils/hotkeys";
+import { formatHotkeyLabel, isGlobeLikeHotkey } from "../utils/hotkeys";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
@@ -626,6 +629,8 @@ export default function SettingsPage({
     dictationKey,
     activationMode,
     setActivationMode,
+    pushHoldDurationMs,
+    setPushHoldDurationMs,
     preferBuiltInMic,
     selectedMicDeviceId,
     setPreferBuiltInMic,
@@ -722,6 +727,17 @@ export default function SettingsPage({
   const { checkWhisperInstallation } = useWhisper();
   const permissionsHook = usePermissions(showAlertDialog);
   const systemAudio = useSystemAudioPermission();
+  const [inputMonitoringGranted, setInputMonitoringGranted] = useState(false);
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+    window.electronAPI?.getInputMonitoringStatus?.().then((granted) => {
+      setInputMonitoringGranted(!!granted);
+    });
+    unsubscribe = window.electronAPI?.onInputMonitoringStatusChanged?.((granted) => {
+      setInputMonitoringGranted(!!granted);
+    });
+    return () => unsubscribe?.();
+  }, []);
   useClipboard(showAlertDialog);
   const { agentName, setAgentName } = useAgentName();
   const [agentNameInput, setAgentNameInput] = useState(agentName);
@@ -2939,6 +2955,74 @@ EOF`,
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
                     )}
+                    {getCachedPlatform() === "darwin" &&
+                      activationMode === "push" &&
+                      isGlobeLikeHotkey(dictationKey) &&
+                      !inputMonitoringGranted && (
+                        <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 p-2.5 text-xs">
+                          <p className="font-medium text-foreground/90">
+                            {t("settingsPage.general.hotkey.inputMonitoringHint", {
+                              defaultValue:
+                                "Grant Input Monitoring (optional) to cancel recording when you press another key while holding Globe.",
+                            })}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await window.electronAPI?.openInputMonitoringSettings?.();
+                            }}
+                            className="mt-1.5 text-[11px] font-medium text-primary hover:underline"
+                          >
+                            {t("settingsPage.permissions.openSettings", {
+                              defaultValue: "Open Settings",
+                            })}
+                          </button>
+                        </div>
+                      )}
+                    {activationMode === "push" && (
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-foreground/80">
+                            {t("settingsPage.general.hotkey.pushHoldDuration", {
+                              defaultValue: "Hold duration before recording",
+                            })}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+                            {t("settingsPage.general.hotkey.pushHoldDurationHint", {
+                              defaultValue:
+                                "How long to hold the hotkey before recording starts. Higher values reduce accidental recordings when using the key for other shortcuts.",
+                            })}
+                          </p>
+                        </div>
+                        <div className="shrink-0 flex items-center gap-1">
+                          <button
+                            type="button"
+                            aria-label="Decrease"
+                            onClick={() => setPushHoldDurationMs(pushHoldDurationMs - 50)}
+                            disabled={pushHoldDurationMs <= 100}
+                            className="h-7 w-7 inline-flex items-center justify-center rounded border border-border/70 bg-surface-1/80 text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <div
+                            className="h-7 min-w-[3.5rem] inline-flex items-center justify-center rounded border border-border/70 bg-surface-1/60 px-2 text-xs font-medium text-foreground tabular-nums select-none"
+                            aria-live="polite"
+                          >
+                            {pushHoldDurationMs}
+                          </div>
+                          <button
+                            type="button"
+                            aria-label="Increase"
+                            onClick={() => setPushHoldDurationMs(pushHoldDurationMs + 50)}
+                            disabled={pushHoldDurationMs >= 1500}
+                            className="h-7 w-7 inline-flex items-center justify-center rounded border border-border/70 bg-surface-1/80 text-foreground shadow-sm backdrop-blur-sm hover:border-border-hover hover:bg-surface-2/70 focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors duration-200"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                          <span className="ml-1 text-[11px] text-muted-foreground/70">ms</span>
+                        </div>
+                      </div>
+                    )}
                   </SettingsPanelRow>
                 )}
               </SettingsPanel>
@@ -3367,6 +3451,26 @@ EOF`,
                         granted={permissionsHook.accessibilityPermissionGranted}
                         onRequest={permissionsHook.requestAccessibilityPermission}
                         buttonText={t("settingsPage.permissions.grantAccess")}
+                      />
+                    )}
+                    {platform === "darwin" && (
+                      <PermissionCard
+                        icon={Keyboard}
+                        title={t("settingsPage.permissions.inputMonitoringTitle", {
+                          defaultValue: "Input Monitoring",
+                        })}
+                        description={t("settingsPage.permissions.inputMonitoringDescription", {
+                          defaultValue:
+                            "Optional. Needed only when using the Globe key with Hold-to-Talk to cancel recording on other key presses.",
+                        })}
+                        granted={inputMonitoringGranted}
+                        onRequest={async () => {
+                          await window.electronAPI?.openInputMonitoringSettings?.();
+                        }}
+                        buttonText={t("settingsPage.permissions.openSettings", {
+                          defaultValue: "Open Settings",
+                        })}
+                        badge={t("settingsPage.permissions.optional")}
                       />
                     )}
                     {canManageSystemAudioInApp(systemAudio) && (

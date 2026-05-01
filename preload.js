@@ -460,6 +460,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openMicrophoneSettings: () => ipcRenderer.invoke("open-microphone-settings"),
   openSoundInputSettings: () => ipcRenderer.invoke("open-sound-input-settings"),
   openAccessibilitySettings: () => ipcRenderer.invoke("open-accessibility-settings"),
+  openInputMonitoringSettings: () => ipcRenderer.invoke("open-input-monitoring-settings"),
+  getInputMonitoringStatus: () => ipcRenderer.invoke("get-input-monitoring-status"),
+  onInputMonitoringStatusChanged: (cb) => {
+    const handler = (_event, granted) => cb(granted);
+    ipcRenderer.on("input-monitoring-status-changed", handler);
+    return () => ipcRenderer.removeListener("input-monitoring-status-changed", handler);
+  },
+  onInputMonitoringPermissionReset: (cb) => {
+    const handler = () => cb();
+    ipcRenderer.on("input-monitoring-permission-reset", handler);
+    return () => ipcRenderer.removeListener("input-monitoring-permission-reset", handler);
+  },
   openSystemAudioSettings: () => ipcRenderer.invoke("open-system-audio-settings"),
   toggleMediaPlayback: () => ipcRenderer.invoke("toggle-media-playback"),
   pauseMediaPlayback: () => ipcRenderer.invoke("pause-media-playback"),
@@ -652,6 +664,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   notifyActivationModeChanged: (mode) => ipcRenderer.send("activation-mode-changed", mode),
   notifyHotkeyChanged: (hotkey) => ipcRenderer.send("hotkey-changed", hotkey),
   registerMeetingHotkey: (hotkey) => ipcRenderer.invoke("register-meeting-hotkey", hotkey),
+
+  // Push-to-talk hold duration (ms before recording starts)
+  notifyPushHoldDurationChanged: (value) =>
+    ipcRenderer.send("push-hold-duration-changed", value),
 
   // Floating icon auto-hide
   notifyFloatingIconAutoHideChanged: (enabled) =>

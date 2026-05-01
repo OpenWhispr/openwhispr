@@ -934,6 +934,10 @@ declare global {
       openMicrophoneSettings?: () => Promise<{ success: boolean; error?: string }>;
       openSoundInputSettings?: () => Promise<{ success: boolean; error?: string }>;
       openAccessibilitySettings?: () => Promise<{ success: boolean; error?: string }>;
+      openInputMonitoringSettings?: () => Promise<{ success: boolean; error?: string }>;
+      getInputMonitoringStatus?: () => Promise<boolean>;
+      onInputMonitoringStatusChanged?: (cb: (granted: boolean) => void) => () => void;
+      onInputMonitoringPermissionReset?: (cb: () => void) => () => void;
       openSystemAudioSettings?: () => Promise<{ success: boolean; error?: string }>;
       toggleMediaPlayback?: () => Promise<boolean>;
       pauseMediaPlayback?: () => Promise<boolean>;
