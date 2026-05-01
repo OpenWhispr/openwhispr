@@ -232,6 +232,9 @@ export const useAudioRecording = (toast, options = {}) => {
     });
 
     const handleNoAudioDetected = () => {
+      if (getSettings().pauseMediaOnDictation) {
+        window.electronAPI?.resumeMediaPlayback?.();
+      }
       toast({
         title: t("hooks.audioRecording.noAudio.title"),
         description: t("hooks.audioRecording.noAudio.description"),
