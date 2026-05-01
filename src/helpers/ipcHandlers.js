@@ -2946,6 +2946,16 @@ class IPCHandlers {
           this._llamaVulkanManager = new LlamaVulkanManager();
         }
 
+        // Stop Vulkan server before downloading to release file locks on DLLs (Windows EBUSY)
+        const modelManager = require("./modelManagerBridge").default;
+        if (modelManager.serverManager.activeBackend === "vulkan") {
+          await modelManager.stopServer().catch((err) => {
+            debugLogger.warn("Failed to stop Vulkan server before download", {
+              error: err.message,
+            });
+          });
+        }
+
         const result = await this._llamaVulkanManager.download((downloaded, total) => {
           if (!event.sender.isDestroyed()) {
             event.sender.send("llama-vulkan-download-progress", {
@@ -2959,10 +2969,9 @@ class IPCHandlers {
         if (result.success) {
           process.env.LLAMA_VULKAN_ENABLED = "true";
           delete process.env.LLAMA_GPU_BACKEND;
-          const modelManager = require("./modelManagerBridge").default;
           modelManager.serverManager.cachedServerBinaryPaths = null;
           await this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
-          // Restart llama server so it picks up the Vulkan binary
+          // Stop server so next inference picks up the new Vulkan binary
           await modelManager.stopServer().catch(() => {});
         }
 
