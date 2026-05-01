@@ -1376,6 +1376,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       limitReached: result.limitReached,
       wordsUsed: result.wordsUsed,
       wordsRemaining: result.wordsRemaining,
+      clientTranscriptionId: result.clientTranscriptionId,
     };
   }
 
@@ -1909,7 +1910,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async saveTranscription(text, rawText = null) {
+  async saveTranscription(text, rawText = null, { clientTranscriptionId } = {}) {
     if (!getSettings().dataRetentionEnabled) {
       logger.debug("Skipping transcription save — data retention disabled", {}, "audio");
       this.lastAudioBlob = null;
@@ -1918,7 +1919,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     try {
-      const result = await window.electronAPI.saveTranscription(text, rawText);
+      const result = await window.electronAPI.saveTranscription(
+        text,
+        rawText,
+        clientTranscriptionId ? { clientTranscriptionId } : undefined
+      );
       if (result?.id) syncService.debouncedPush("transcription", result.id);
 
       // Save audio if we have a captured blob and the transcription was saved successfully

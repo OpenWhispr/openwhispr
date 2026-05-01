@@ -389,6 +389,7 @@ declare global {
           status?: TranscriptionStatus;
           errorMessage?: string | null;
           errorCode?: TranscriptionErrorCode;
+          clientTranscriptionId?: string;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
       getTranscriptions: (limit?: number) => Promise<TranscriptionItem[]>;
@@ -963,6 +964,7 @@ declare global {
       ) => Promise<{
         success: boolean;
         text?: string;
+        clientTranscriptionId?: string;
         wordsUsed?: number;
         wordsRemaining?: number;
         limitReached?: boolean;
