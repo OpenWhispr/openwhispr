@@ -41,6 +41,7 @@ export interface HotkeySettings {
   dictationKey: string;
   meetingKey: string;
   activationMode: "tap" | "push";
+  pushHoldDurationMs: number;
 }
 
 export interface MicrophoneSettings {
@@ -247,6 +248,8 @@ function useSettingsInternal() {
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
+    pushHoldDurationMs: store.pushHoldDurationMs,
+    setPushHoldDurationMs: store.setPushHoldDurationMs,
     audioCuesEnabled: store.audioCuesEnabled,
     setAudioCuesEnabled: store.setAudioCuesEnabled,
     pauseMediaOnDictation: store.pauseMediaOnDictation,

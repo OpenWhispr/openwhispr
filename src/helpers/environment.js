@@ -44,6 +44,8 @@ const PERSISTED_KEYS = [
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
   "VERTEX_API_KEY",
+  "PUSH_HOLD_DURATION_MS",
+  "LAST_INPUT_MONITORING_GRANTED",
 ];
 
 class EnvironmentManager {
@@ -274,6 +276,32 @@ class EnvironmentManager {
   saveActivationMode(mode) {
     const validMode = mode === "push" ? "push" : "tap";
     const result = this._saveKey("ACTIVATION_MODE", validMode);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getLastInputMonitoringGranted() {
+    const v = this._getKey("LAST_INPUT_MONITORING_GRANTED");
+    if (v === "true") return true;
+    if (v === "false") return false;
+    return null;
+  }
+
+  saveLastInputMonitoringGranted(granted) {
+    const result = this._saveKey("LAST_INPUT_MONITORING_GRANTED", String(!!granted));
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getPushHoldDurationMs() {
+    const raw = this._getKey("PUSH_HOLD_DURATION_MS");
+    const parsed = parseInt(raw, 10);
+    if (!Number.isFinite(parsed)) return 150;
+    return Math.max(100, Math.min(1500, parsed));
+  }
+
+  savePushHoldDurationMs(ms) {
+    const result = this._saveKey("PUSH_HOLD_DURATION_MS", String(ms));
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

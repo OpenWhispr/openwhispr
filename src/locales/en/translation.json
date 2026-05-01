@@ -1356,6 +1356,8 @@
       },
       "hotkey": {
         "activationMode": "Activation Mode",
+        "pushHoldDuration": "Hold duration before recording",
+        "pushHoldDurationHint": "How long to hold the hotkey before recording starts. Higher values reduce accidental recordings when using the key for other shortcuts.",
         "description": "The key combination that starts and stops voice dictation",
         "resetToDefault": "Reset to {{hotkey}}",
         "title": "Dictation Hotkey",

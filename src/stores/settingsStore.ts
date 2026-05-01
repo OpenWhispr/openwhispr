@@ -121,7 +121,7 @@ const BOOLEAN_SETTINGS = new Set([
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
 
-const NUMERIC_SETTINGS = new Set(["audioRetentionDays"]);
+const NUMERIC_SETTINGS = new Set(["audioRetentionDays", "pushHoldDurationMs"]);
 
 const LANGUAGE_MIGRATIONS: Record<string, string> = { zh: "zh-CN" };
 
@@ -234,6 +234,7 @@ export interface SettingsState
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   pauseMediaOnDictation: boolean;
+  pushHoldDurationMs: number;
   floatingIconAutoHide: boolean;
   startMinimized: boolean;
   gcalAccounts: GoogleCalendarAccount[];
@@ -376,6 +377,7 @@ export interface SettingsState
   setDataRetentionEnabled: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
   setPauseMediaOnDictation: (value: boolean) => void;
+  setPushHoldDurationMs: (ms: number) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
   setGcalAccounts: (accounts: GoogleCalendarAccount[]) => void;
@@ -513,6 +515,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
     | "tap"
     | "push",
+  pushHoldDurationMs: (() => {
+    if (!isBrowser) return 150;
+    const stored = localStorage.getItem("pushHoldDurationMs");
+    if (stored === null) return 150;
+    const parsed = parseInt(stored, 10);
+    if (!Number.isFinite(parsed)) return 150;
+    return Math.max(100, Math.min(1500, parsed));
+  })(),
 
   preferBuiltInMic: readBoolean("preferBuiltInMic", true),
   selectedMicDeviceId: readString("selectedMicDeviceId", ""),
@@ -928,6 +938,16 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
   setPauseMediaOnDictation: createBooleanSetter("pauseMediaOnDictation"),
+
+  setPushHoldDurationMs: (ms: number) => {
+    const clamped = Math.max(100, Math.min(1500, Math.round(ms)));
+    if (get().pushHoldDurationMs === clamped) return;
+    if (isBrowser) localStorage.setItem("pushHoldDurationMs", String(clamped));
+    set({ pushHoldDurationMs: clamped });
+    if (isBrowser) {
+      window.electronAPI?.notifyPushHoldDurationChanged?.(clamped);
+    }
+  },
 
   setFloatingIconAutoHide: (enabled: boolean) => {
     if (get().floatingIconAutoHide === enabled) return;

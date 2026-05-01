@@ -1,5 +1,7 @@
 import Cocoa
+import CoreGraphics
 import Darwin
+import IOKit.hid
 
 var fnIsDown = false
 var fnInterruptedThisCycle = false
@@ -63,22 +65,76 @@ guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged, h
     exit(1)
 }
 
-let keyDownMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { _ in
+// Proactively request Input Monitoring permission so the user sees the TCC
+// prompt (or the app appears in System Settings → Privacy & Security → Input
+// Monitoring) instead of the listener silently no-op'ing.
+_ = IOHIDRequestAccess(kIOHIDRequestTypeListenEvent)
+
+// CGEventTap delivers global keyDown reliably (NSEvent global keyDown monitor
+// is gated by Input Monitoring TCC and silently no-ops without it).
+let keyDownTapCallback: CGEventTapCallBack = { _, _, event, _ in
     if fnIsDown && !fnInterruptedThisCycle {
         fnInterruptedThisCycle = true
         emit("FN_INTERRUPTED")
     }
-})
-if keyDownMonitor == nil {
-    FileHandle.standardError.write("Failed to create keyDown monitor — Fn interrupt detection disabled\n".data(using: .utf8)!)
+    return Unmanaged.passUnretained(event)
 }
+
+let keyDownEventMask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
+
+var keyDownTapRef: CFMachPort? = nil
+var keyDownRunLoopSource: CFRunLoopSource? = nil
+var inputMonitoringGranted = false
+
+func tryAttachKeyDownTap() -> Bool {
+    let tap = CGEvent.tapCreate(
+        tap: .cghidEventTap,
+        place: .headInsertEventTap,
+        options: .listenOnly,
+        eventsOfInterest: keyDownEventMask,
+        callback: keyDownTapCallback,
+        userInfo: nil
+    )
+    guard let tap = tap else { return false }
+    let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+    if let source = source {
+        CFRunLoopAddSource(CFRunLoopGetCurrent(), source, .commonModes)
+        CGEvent.tapEnable(tap: tap, enable: true)
+        keyDownTapRef = tap
+        keyDownRunLoopSource = source
+        return true
+    }
+    return false
+}
+
+if tryAttachKeyDownTap() {
+    inputMonitoringGranted = true
+    emit("INPUT_MONITORING:granted")
+} else {
+    FileHandle.standardError.write("Failed to create keyDown event tap — Fn interrupt detection disabled (grant Input Monitoring permission)\n".data(using: .utf8)!)
+    emit("INPUT_MONITORING:denied")
+}
+
+// Re-probe periodically so a newly-granted permission is picked up without
+// requiring an app restart. Stops probing once granted.
+let probeTimer = Timer(timeInterval: 3.0, repeats: true) { _ in
+    if inputMonitoringGranted { return }
+    if tryAttachKeyDownTap() {
+        inputMonitoringGranted = true
+        emit("INPUT_MONITORING:granted")
+    }
+}
+RunLoop.main.add(probeTimer, forMode: .common)
 
 let signalSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 signal(SIGTERM, SIG_IGN)
 signalSource.setEventHandler {
     NSEvent.removeMonitor(monitor)
-    if let keyMonitor = keyDownMonitor {
-        NSEvent.removeMonitor(keyMonitor)
+    if let tap = keyDownTapRef {
+        CGEvent.tapEnable(tap: tap, enable: false)
+    }
+    if let source = keyDownRunLoopSource {
+        CFRunLoopRemoveSource(CFRunLoopGetCurrent(), source, .commonModes)
     }
     exit(0)
 }

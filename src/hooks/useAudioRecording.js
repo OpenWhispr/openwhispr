@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import AudioManager from "../helpers/audioManager";
 import logger from "../utils/logger";
-import { playStartCue, playStopCue } from "../utils/dictationCues";
+import { playStartCue, playStopCue, playCancelCue } from "../utils/dictationCues";
 import { getSettings } from "../stores/settingsStore";
 import { getRecordingErrorTitle } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
@@ -254,6 +254,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
   const cancelRecording = useCallback(async () => {
     if (audioManagerRef.current) {
+      void playCancelCue();
       window.electronAPI?.unregisterCancelHotkey?.();
       const state = audioManagerRef.current.getState();
       if (getSettings().pauseMediaOnDictation) {
