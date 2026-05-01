@@ -1919,11 +1919,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     try {
-      const result = await window.electronAPI.saveTranscription(
-        text,
-        rawText,
-        clientTranscriptionId ? { clientTranscriptionId } : undefined
-      );
+      const result = await window.electronAPI.saveTranscription(text, rawText, {
+        clientTranscriptionId,
+      });
       if (result?.id) syncService.debouncedPush("transcription", result.id);
 
       // Save audio if we have a captured blob and the transcription was saved successfully

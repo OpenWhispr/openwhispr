@@ -552,18 +552,24 @@ class DatabaseManager {
       status = "completed",
       errorMessage = null,
       errorCode = null,
-      clientTranscriptionId = null,
+      clientTranscriptionId = randomUUID(),
     } = {}
   ) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const txId = clientTranscriptionId || randomUUID();
       const stmt = this.db.prepare(
         "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, client_transcription_id) VALUES (?, ?, ?, ?, ?, ?)"
       );
-      const result = stmt.run(text, rawText, status, errorMessage, errorCode, txId);
+      const result = stmt.run(
+        text,
+        rawText,
+        status,
+        errorMessage,
+        errorCode,
+        clientTranscriptionId
+      );
 
       const fetchStmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");
       const transcription = fetchStmt.get(result.lastInsertRowid);
