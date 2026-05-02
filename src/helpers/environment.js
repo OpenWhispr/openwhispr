@@ -321,12 +321,12 @@ class EnvironmentManager {
     return this._saveKey("CUSTOM_TRANSCRIPTION_API_KEY", key);
   }
 
-  getCustomReasoningKey() {
+  getCleanupCustomKey() {
     // TODO: drop CUSTOM_REASONING_API_KEY fallback after 2 releases.
     return this._getKey("CUSTOM_CLEANUP_API_KEY") || this._getKey("CUSTOM_REASONING_API_KEY");
   }
 
-  saveCustomReasoningKey(key) {
+  saveCleanupCustomKey(key) {
     delete process.env.CUSTOM_REASONING_API_KEY;
     return this._saveKey("CUSTOM_CLEANUP_API_KEY", key);
   }
@@ -494,11 +494,6 @@ class EnvironmentManager {
     const result = this._saveKey("UI_LANGUAGE", normalized);
     this.saveAllKeysToEnvFile().catch(() => {});
     return { ...result, language: normalized };
-  }
-
-  async createProductionEnvFile(apiKey) {
-    this._saveKey("OPENAI_API_KEY", apiKey);
-    return this.saveAllKeysToEnvFile();
   }
 
   async saveAllKeysToEnvFile() {

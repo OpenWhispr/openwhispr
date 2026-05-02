@@ -708,10 +708,6 @@ class IPCHandlers {
       return this.environmentManager.saveOpenAIKey(key);
     });
 
-    ipcMain.handle("create-production-env-file", async (event, apiKey) => {
-      return this.environmentManager.createProductionEnvFile(apiKey);
-    });
-
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
       if (result?.success && result?.transcription) {
@@ -2474,12 +2470,12 @@ class IPCHandlers {
       return this.environmentManager.saveCustomTranscriptionKey(key);
     });
 
-    ipcMain.handle("get-custom-reasoning-key", async () => {
-      return this.environmentManager.getCustomReasoningKey();
+    ipcMain.handle("get-cleanup-custom-key", async () => {
+      return this.environmentManager.getCleanupCustomKey();
     });
 
-    ipcMain.handle("save-custom-reasoning-key", async (event, key) => {
-      return this.environmentManager.saveCustomReasoningKey(key);
+    ipcMain.handle("save-cleanup-custom-key", async (event, key) => {
+      return this.environmentManager.saveCleanupCustomKey(key);
     });
 
     // Enterprise provider key handlers

@@ -540,7 +540,7 @@ const SECRET_IPC_SAVERS = {
   groq: "saveGroqKey",
   mistral: "saveMistralKey",
   customTranscription: "saveCustomTranscriptionKey",
-  customReasoning: "saveCustomReasoningKey",
+  cleanupCustom: "saveCleanupCustomKey",
   bedrockAccessKeyId: "saveBedrockAccessKeyId",
   bedrockSecretAccessKey: "saveBedrockSecretAccessKey",
   bedrockSessionToken: "saveBedrockSessionToken",
@@ -953,7 +953,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setCleanupCustomApiKey: (key: string) => {
     set({ cleanupCustomApiKey: key });
-    debouncedSaveSecret("customReasoning", key);
+    debouncedSaveSecret("cleanupCustom", key);
     invalidateApiKeyCaches("custom");
   },
 
@@ -1434,7 +1434,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getGroqKey?.(),
         window.electronAPI.getMistralKey?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
-        window.electronAPI.getCustomReasoningKey?.(),
+        window.electronAPI.getCleanupCustomKey?.(),
         window.electronAPI.getBedrockAccessKeyId?.(),
         window.electronAPI.getBedrockSecretAccessKey?.(),
         window.electronAPI.getBedrockSessionToken?.(),
