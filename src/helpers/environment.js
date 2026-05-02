@@ -136,7 +136,7 @@ class EnvironmentManager {
       if (error.code === "ENOENT") return;
       debugLogger.error(
         "Failed to decrypt secret — user must re-enter",
-        { key: envVarName, error: error.message },
+        { key: envVarName, code: error.code, error: error.message },
         "environment"
       );
     }
@@ -203,10 +203,7 @@ class EnvironmentManager {
       return;
     }
 
-    // Sentinel before .env rewrite: if the rewrite fails, next launch loads
-    // stale plaintext but encrypted values overwrite it on _loadAllSecrets,
-    // and the next saveAllKeysToEnvFile cleans the .env. Reverse order risks
-    // stripping plaintext for secrets that haven't been encrypted yet.
+    // Write sentinel before stripping plaintext from .env so a crash mid-rewrite is recoverable.
     await fsPromises.writeFile(this._getMigrationSentinelPath(), "");
     const envPath = path.join(app.getPath("userData"), ".env");
     if (fs.existsSync(envPath)) await this._writeEnvFileAtomic(envPath);
@@ -240,8 +237,6 @@ class EnvironmentManager {
 
   _saveKey(envVarName, key) {
     if (SECRET_KEY_SET.has(envVarName) && this._encryptionAvailable()) {
-      // _saveSecretKey updates process.env before its first await, so
-      // in-process reads see the new value while the encrypted write lands.
       this._saveSecretKey(envVarName, key).catch((error) => {
         debugLogger.error(
           "Failed to persist encrypted secret",
