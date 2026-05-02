@@ -1,7 +1,6 @@
-export const hasStoredByokKey = () =>
-  !!(
-    localStorage.getItem("openaiApiKey") ||
-    localStorage.getItem("groqApiKey") ||
-    localStorage.getItem("mistralApiKey") ||
-    localStorage.getItem("customTranscriptionApiKey")
-  );
+import { useSettingsStore } from "../stores/settingsStore";
+
+export const hasStoredByokKey = () => {
+  const s = useSettingsStore.getState();
+  return !!(s.openaiApiKey || s.groqApiKey || s.mistralApiKey || s.customTranscriptionApiKey);
+};

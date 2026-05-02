@@ -655,6 +655,7 @@ async function startApp() {
 
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
+  await environmentManager.init();
   registerSidecars();
   startAuthBridgeServer();
 
