@@ -658,6 +658,10 @@ class IPCHandlers {
       return false;
     });
 
+    ipcMain.handle("snap-to-meeting-mode", () => {
+      this.windowManager.snapControlPanelToMeetingMode();
+    });
+
     ipcMain.handle("restore-from-meeting-mode", () => {
       this.windowManager.restoreControlPanelFromMeetingMode();
       this.meetingDetectionEngine?.setMeetingModeActive(false);

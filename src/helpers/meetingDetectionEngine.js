@@ -201,11 +201,11 @@ class MeetingDetectionEngine {
         }
 
         await this.windowManager.createControlPanelWindow();
-        this.windowManager.snapControlPanelToMeetingMode();
         this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
           noteId: noteResult.note.id,
           folderId: meetingsFolder.id,
           event: detection.event,
+          trigger: "calendar-join",
         });
 
         this.audioActivityDetector.resetPrompt();
@@ -270,7 +270,6 @@ class MeetingDetectionEngine {
 
     await this.windowManager.createControlPanelWindow();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    this.windowManager.snapControlPanelToMeetingMode();
     this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
       noteId: noteResult.note.id,
       folderId: meetingsFolder.id,
@@ -313,7 +312,6 @@ class MeetingDetectionEngine {
 
     await this.windowManager.createControlPanelWindow();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    this.windowManager.snapControlPanelToMeetingMode();
     this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
       noteId: noteResult.note.id,
       folderId: meetingsFolder.id,

@@ -22,9 +22,8 @@ import {
 import { useSettingsStore } from "../stores/settingsStore";
 import {
   useIsMeetingMode,
+  useIsNarrowWindow,
   useMeetingRecordingStore,
-  stopRecording as stopMeetingRecording,
-  type RecordingTrigger,
 } from "../stores/meetingRecordingStore";
 import ControlPanelSidebar, { type ControlPanelView } from "./ControlPanelSidebar";
 import MeetingRecordingMount from "./MeetingRecordingMount";
@@ -72,6 +71,7 @@ export default function ControlPanel() {
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
   const isMeetingMode = useIsMeetingMode();
+  const isNarrowWindow = useIsNarrowWindow();
   const activeNoteId = useActiveNoteId();
   const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
   const recordingFolderId = useMeetingRecordingStore((s) => s.recordingFolderId);
@@ -79,7 +79,6 @@ export default function ControlPanel() {
     noteId: number;
     folderId: number;
     event: any;
-    trigger: RecordingTrigger;
   } | null>(null);
   const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{ cuda: boolean; vulkan: boolean }>({
     cuda: false,
@@ -282,9 +281,14 @@ export default function ControlPanel() {
         noteId: data.noteId,
         folderId: data.folderId,
         event: data.event,
-        trigger: data.trigger ?? "manual",
       });
       initializeNotes(null, 50, data.folderId);
+      if (
+        data.trigger === "hotkey" &&
+        useSettingsStore.getState().meetingHotkeyLayoutMode === "side-panel"
+      ) {
+        window.electronAPI?.snapToMeetingMode?.();
+      }
     });
     return () => cleanup?.();
   }, []);
@@ -338,10 +342,7 @@ export default function ControlPanel() {
     []
   );
 
-  // Exiting meeting mode = stopping the recording. The window-restore IPC
-  // brings back the panel size after the snap-to-meeting layout.
   const handleExitMeetingMode = useCallback(() => {
-    void stopMeetingRecording();
     window.electronAPI?.restoreFromMeetingMode?.();
   }, []);
 
@@ -714,7 +715,7 @@ export default function ControlPanel() {
             className="flex items-center justify-between w-full h-10 shrink-0"
             style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
           >
-            {isMeetingMode && (
+            {isNarrowWindow && (
               <div
                 className={platform === "darwin" ? "ml-[84px] mt-[16px]" : "ml-2"}
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}

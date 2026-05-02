@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getSettings, selectResolvedMeetingTranscription, useSettingsStore } from "./settingsStore";
+import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
@@ -36,10 +36,6 @@ export interface TranscriptSegment {
   speakerLockSource?: TranscriptSpeakerLockSource;
 }
 
-export type RecordingTrigger = "hotkey" | "manual" | "calendar-join";
-
-// 1024px matches the project's narrow-window threshold: below this, the
-// outer nav must collapse so the meeting transcript has breathing room.
 export const SIDE_PANEL_BREAKPOINT_PX = 1024;
 
 interface SpeakerIdentification {
@@ -62,7 +58,6 @@ interface MeetingRecordingState {
   recordingNoteId: number | null;
   recordingNoteTitle: string | null;
   recordingFolderId: number | null;
-  recordingTrigger: RecordingTrigger | null;
   segments: TranscriptSegment[];
   transcript: string;
   micPartial: string;
@@ -414,7 +409,6 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   recordingNoteId: null,
   recordingNoteTitle: null,
   recordingFolderId: null,
-  recordingTrigger: null,
   segments: [],
   transcript: "",
   micPartial: "",
@@ -659,7 +653,6 @@ export async function prepareTranscription(): Promise<void> {
 }
 
 export interface StartRecordingArgs {
-  trigger: RecordingTrigger;
   noteId: number | null;
   noteTitle: string | null;
   folderId: number | null;
@@ -706,7 +699,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
     recordingNoteId: args.noteId,
     recordingNoteTitle: args.noteTitle,
     recordingFolderId: args.folderId,
-    recordingTrigger: args.trigger,
     sessionDiarizationEnabled: initialEnabled,
     sessionExpectedCount: initialCount,
     userTouchedStepper: false,
@@ -1181,7 +1173,6 @@ export async function stopRecording(): Promise<StopRecordingResult> {
   }
 
   useMeetingRecordingStore.setState({
-    recordingTrigger: null,
     micPartial: "",
     systemPartial: "",
     systemPartialSpeakerId: null,
@@ -1238,14 +1229,13 @@ if (typeof window !== "undefined") {
   });
 }
 
+export function useIsNarrowWindow(): boolean {
+  const windowWidth = useMeetingRecordingStore((s) => s.windowWidth);
+  return windowWidth < SIDE_PANEL_BREAKPOINT_PX;
+}
+
 export function useIsMeetingMode(): boolean {
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
-  const recordingTrigger = useMeetingRecordingStore((s) => s.recordingTrigger);
-  const windowWidth = useMeetingRecordingStore((s) => s.windowWidth);
-  const meetingHotkeyLayoutMode = useSettingsStore((s) => s.meetingHotkeyLayoutMode);
-
-  if (!isRecording) return false;
-  const userPickedSidePanel =
-    recordingTrigger === "hotkey" && meetingHotkeyLayoutMode === "side-panel";
-  return userPickedSidePanel || windowWidth < SIDE_PANEL_BREAKPOINT_PX;
+  const isNarrow = useIsNarrowWindow();
+  return isRecording && isNarrow;
 }

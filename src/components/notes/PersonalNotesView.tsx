@@ -71,7 +71,6 @@ import {
   lockSpeaker,
   setSessionDiarizationEnabled,
   setSessionExpectedCount,
-  type RecordingTrigger,
 } from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import NotesOnboarding from "./NotesOnboarding";
@@ -90,7 +89,6 @@ interface PersonalNotesViewProps {
     noteId: number;
     folderId: number;
     event: any;
-    trigger: RecordingTrigger;
   } | null;
   onMeetingRecordingRequestHandled?: () => void;
 }
@@ -218,7 +216,6 @@ export default function PersonalNotesView({
     const note = notes.find((n) => n.id === noteId);
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
     await storeStartRecording({
-      trigger: "manual",
       noteId,
       noteTitle: note?.title ?? null,
       folderId: note?.folder_id ?? null,
@@ -525,7 +522,6 @@ export default function PersonalNotesView({
     const note = notes.find((n) => n.id === meetingRecordingRequest.noteId);
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
     storeStartRecording({
-      trigger: meetingRecordingRequest.trigger,
       noteId: meetingRecordingRequest.noteId,
       noteTitle: note?.title ?? null,
       folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
