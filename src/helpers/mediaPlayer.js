@@ -417,18 +417,38 @@ class MediaPlayer {
 
   // --- Windows: GSMTC-aware pause/resume ---
 
+  // WinRT IAsyncOperation objects appear as opaque System.__ComObject in
+  // PowerShell, so .GetAwaiter() isn't available directly. This preamble
+  // loads the System.Runtime.WindowsRuntime bridge and defines an Await
+  // helper that converts IAsyncOperation<T> to a .NET Task via AsTask().
+  _gsmtcPreamble() {
+    return `Add-Type -AssemblyName System.Runtime.WindowsRuntime
+  $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and
+    $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1'
+  })[0]
+  function Await($WinRtTask, $ResultType) {
+    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+    $netTask = $asTask.Invoke($null, @($WinRtTask))
+    $netTask.Wait(-1) | Out-Null
+    $netTask.Result
+  }
+  $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime]
+  $m = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])`;
+  }
+
   _gsmtcPauseScript() {
+    const preamble = this._gsmtcPreamble();
     return `
 try {
-  $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime]
-  $m = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync().GetAwaiter().GetResult()
+  ${preamble}
   $paused = @()
   foreach ($s in $m.GetSessions()) {
     try {
       $pi = $s.GetPlaybackInfo()
       if ($pi.PlaybackStatus -eq 4) {
-        $null = $s.TryPauseAsync().GetAwaiter().GetResult()
-        $paused += $s.SourceAppUserModelId
+        $ok = Await ($s.TryPauseAsync()) ([bool])
+        if ($ok) { $paused += $s.SourceAppUserModelId }
       }
     } catch { continue }
   }
@@ -440,15 +460,15 @@ try {
 
   _gsmtcResumeScript(appIds) {
     const idList = appIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(",");
+    const preamble = this._gsmtcPreamble();
     return `
 try {
+  ${preamble}
   $ids = @(${idList})
-  $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime]
-  $m = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync().GetAwaiter().GetResult()
   foreach ($s in $m.GetSessions()) {
     try {
       if ($ids -contains $s.SourceAppUserModelId) {
-        $null = $s.TryPlayAsync().GetAwaiter().GetResult()
+        $null = Await ($s.TryPlayAsync()) ([bool])
       }
     } catch { continue }
   }
