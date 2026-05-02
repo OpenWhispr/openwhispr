@@ -471,27 +471,53 @@ app.on("open-url", (event, url) => {
   }
 });
 
-// Inject the Better Auth session cookie into Electron's session, then reload
-// the control panel so the renderer's authClient picks up the new session.
+// One-time bridge for users upgrading from a build that injected the session
+// cookie into Electron's jar: exchange the existing cookie for a raw bearer
+// token, store it, and remove the cookie. Non-fatal — failures fall through
+// to the normal sign-in flow.
+async function migrateCookieToBearerToken() {
+  const tokenStore = require("./src/helpers/tokenStore");
+  if (tokenStore.get()) return;
+
+  const cookieName =
+    process.env.NODE_ENV === "production"
+      ? "__Secure-openwhispr.session_token"
+      : "openwhispr.session_token";
+  const authUrl = "https://auth.openwhispr.com";
+
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url: authUrl, name: cookieName });
+    if (!cookies.length) return;
+
+    const res = await fetch(`${authUrl}/api/auth/get-session`, {
+      headers: { Cookie: `${cookieName}=${cookies[0].value}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const token = data?.session?.token;
+    if (!token) return;
+
+    tokenStore.set(token);
+    await session.defaultSession.cookies.remove(authUrl, cookieName);
+    if (debugLogger) debugLogger.debug("Migrated cookie to bearer token");
+  } catch (err) {
+    if (debugLogger) {
+      debugLogger.warn("Cookie→bearer token migration failed (non-fatal)", {
+        error: err?.message,
+      });
+    }
+  }
+}
+
+// Persist the bearer token and reload the control panel so the renderer's
+// authClient sends `Authorization: Bearer <token>` on its next request.
 async function applySessionTokenAndRefresh(token) {
   if (!token) return;
   if (!isLiveWindow(windowManager?.controlPanelWindow)) return;
 
-  try {
-    await session.defaultSession.cookies.set({
-      url: "https://auth.openwhispr.com",
-      name: "__Secure-openwhispr.session_token",
-      value: token,
-      domain: ".openwhispr.com",
-      path: "/",
-      secure: true,
-      httpOnly: true,
-      sameSite: "lax",
-    });
-  } catch (err) {
-    if (debugLogger) debugLogger.error("Failed to set OAuth session cookie:", err);
-    return;
-  }
+  const tokenStore = require("./src/helpers/tokenStore");
+  tokenStore.set(token);
 
   const appUrl = DevServerManager.getAppUrl(true);
   if (appUrl) {
@@ -504,7 +530,7 @@ async function applySessionTokenAndRefresh(token) {
   }
 
   if (debugLogger) {
-    debugLogger.debug("Applied OAuth session cookie and reloaded control panel", {
+    debugLogger.debug("Applied bearer token and reloaded control panel", {
       appChannel: APP_CHANNEL,
       oauthProtocol: OAUTH_PROTOCOL,
     });
@@ -637,6 +663,8 @@ async function startApp() {
     debugLogger.error("CLI bridge failed to start", { error: err.message });
     cliBridge = null;
   });
+
+  await migrateCookieToBearerToken();
 
   // Electron's file:// renderer sends Origin: null, which Better Auth's
   // trustedOrigins check rejects. Spoof Origin to the request's own URL so

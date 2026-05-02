@@ -6,7 +6,15 @@ export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhisp
 export const authClient = createAuthClient({
   baseURL: AUTH_URL,
   fetchOptions: {
+    auth: {
+      type: "Bearer",
+      token: async () => (await window.electronAPI?.authGetToken?.()) ?? "",
+    },
     headers: { "x-openwhispr-source": "desktop" },
+    onSuccess: async (ctx: { response: Response }) => {
+      const newToken = ctx.response.headers.get("set-auth-token");
+      if (newToken) await window.electronAPI?.authSetToken?.(newToken);
+    },
   },
 });
 
@@ -121,10 +129,10 @@ export async function deleteAccount(): Promise<{ error?: Error }> {
 
 export async function signOut(): Promise<void> {
   try {
+    await authClient.signOut();
     if (window.electronAPI?.authClearSession) {
       await window.electronAPI.authClearSession();
     }
-    await authClient.signOut();
     markSignedOutState();
   } catch {
     markSignedOutState();
