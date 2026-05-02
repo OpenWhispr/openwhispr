@@ -48,10 +48,13 @@ class LocalReasoningService {
       });
 
       const result = await modelManager.runInference(modelId, text, inferenceConfig);
-      const cleanResult = result
-        .replace(/<think>[\s\S]*?<\/think>/g, "")
-        .replace(/<think>[\s\S]*$/, "")
-        .trim();
+      const stripThinking = config.disableThinking !== false;
+      const cleanResult = stripThinking
+        ? result
+            .replace(/<think>[\s\S]*?<\/think>/g, "")
+            .replace(/<think>[\s\S]*$/, "")
+            .trim()
+        : result.trim();
 
       const processingTime = Date.now() - startTime;
 

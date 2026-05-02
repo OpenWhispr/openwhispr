@@ -10,10 +10,16 @@ import { InferenceModeSelector } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
-import SelfHostedPanel from "../SelfHostedPanel";
+import OpenAICompatiblePanel from "../OpenAICompatiblePanel";
+import { Toggle } from "../ui/toggle";
 import type { InferenceMode } from "../../types/electron";
 import type { InferenceScope } from "../../config/inferenceScopes";
-import { modelRegistry, isEnterpriseProvider } from "../../models/ModelRegistry";
+import {
+  modelRegistry,
+  isEnterpriseProvider,
+  getCloudModel,
+  getLocalModel,
+} from "../../models/ModelRegistry";
 
 function isProviderValidForMode(provider: string, mode: InferenceMode): boolean {
   switch (mode) {
@@ -142,6 +148,12 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
     />
   );
 
+  const showThinkingToggle =
+    config.mode === "self-hosted" ||
+    (config.mode === "providers" &&
+      (config.provider === "custom" || !!getCloudModel(config.model)?.supportsThinking)) ||
+    (config.mode === "local" && !!getLocalModel(config.model)?.supportsThinking);
+
   return (
     <div className="space-y-3">
       <InferenceModeSelector modes={modes} activeMode={config.mode} onSelect={handleModeSelect} />
@@ -150,11 +162,32 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       {config.mode === "local" && renderModelSelector("local")}
 
       {config.mode === "self-hosted" && (
-        <SelfHostedPanel
-          service="reasoning"
-          url={config.remoteUrl ?? ""}
-          onUrlChange={setField("remoteUrl")}
+        <OpenAICompatiblePanel
+          baseUrl={config.remoteUrl ?? ""}
+          setBaseUrl={setField("remoteUrl")}
+          apiKey={config.customApiKey ?? ""}
+          setApiKey={setField("customApiKey")}
+          model={config.model}
+          setModel={setModel}
+          baseUrlPlaceholder="http://192.168.1.126:11434/v1"
+          helpExamples={
+            <p className="text-xs text-muted-foreground">
+              {t("reasoning.selfHosted.endpointHelp")}
+            </p>
+          }
         />
+      )}
+
+      {showThinkingToggle && (
+        <div className="flex items-start justify-between gap-3 pt-1">
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-medium text-foreground">
+              {t("reasoning.disableThinking.label")}
+            </h4>
+            <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
+          </div>
+          <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
+        </div>
       )}
 
       {config.mode === "enterprise" && (

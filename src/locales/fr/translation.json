@@ -355,6 +355,13 @@
     "getApiKey": "Obtenir la clé API ->",
     "selectModel": "Sélectionner un modèle",
     "availableModels": "Modèles disponibles",
+    "disableThinking": {
+      "label": "Désactiver la sortie de raisonnement",
+      "help": "Ignore les jetons de raisonnement pour une sortie plus propre. Recommandé pour le nettoyage. Certains serveurs ignorent cette indication."
+    },
+    "selfHosted": {
+      "endpointHelp": "Pointez vers un serveur compatible OpenAI sur votre réseau local (par ex. Ollama, LM Studio, vLLM ou llama-server)."
+    },
     "enterprise": {
       "title": "Fournisseurs Enterprise",
       "description": "Connectez-vous aux fournisseurs cloud avec les identifiants de votre organisation.",

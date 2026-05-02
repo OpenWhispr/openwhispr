@@ -355,6 +355,13 @@
     "getApiKey": "取得 API Key ->",
     "selectModel": "選擇模型",
     "availableModels": "可用模型",
+    "disableThinking": {
+      "label": "停用思考輸出",
+      "help": "略過推理權杖以獲得更乾淨的輸出。建議用於清理。某些伺服器會忽略此提示。"
+    },
+    "selfHosted": {
+      "endpointHelp": "指向本地網路中相容 OpenAI 的伺服器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
+    },
     "enterprise": {
       "title": "企業級提供商",
       "description": "使用你組織的憑證連線到雲端提供商。",

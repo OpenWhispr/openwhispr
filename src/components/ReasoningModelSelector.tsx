@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type {
   LlamaServerStatus,
@@ -8,18 +8,17 @@ import type {
   InferenceMode,
 } from "../types/electron";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
 import { Cloud, Lock, Zap } from "lucide-react";
 import ApiKeyInput from "./ui/ApiKeyInput";
 import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
 import { ProviderTabs } from "./ui/ProviderTabs";
-import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
+import OpenAICompatiblePanel from "./OpenAICompatiblePanel";
+import { API_ENDPOINTS } from "../config/constants";
 import logger from "../utils/logger";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { modelRegistry } from "../models/ModelRegistry";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
-import { isSecureEndpoint } from "../utils/urlUtils";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -324,173 +323,6 @@ export default function ReasoningModelSelector({
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">(mode || "cloud");
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");
-  const [customModelOptions, setCustomModelOptions] = useState<CloudModelOption[]>([]);
-  const [customModelsLoading, setCustomModelsLoading] = useState(false);
-  const [customModelsError, setCustomModelsError] = useState<string | null>(null);
-  const [customBaseInput, setCustomBaseInput] = useState(cloudReasoningBaseUrl);
-  const lastLoadedBaseRef = useRef<string | null>(null);
-  const pendingBaseRef = useRef<string | null>(null);
-  const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    setCustomBaseInput(cloudReasoningBaseUrl);
-  }, [cloudReasoningBaseUrl]);
-
-  const defaultOpenAIBase = useMemo(() => normalizeBaseUrl(API_ENDPOINTS.OPENAI_BASE), []);
-  const normalizedCustomReasoningBase = useMemo(
-    () => normalizeBaseUrl(cloudReasoningBaseUrl),
-    [cloudReasoningBaseUrl]
-  );
-  const latestReasoningBaseRef = useRef(normalizedCustomReasoningBase);
-
-  useEffect(() => {
-    latestReasoningBaseRef.current = normalizedCustomReasoningBase;
-  }, [normalizedCustomReasoningBase]);
-
-  const hasCustomBase = normalizedCustomReasoningBase !== "";
-  const effectiveReasoningBase = hasCustomBase ? normalizedCustomReasoningBase : defaultOpenAIBase;
-
-  const loadRemoteModels = useCallback(
-    async (baseOverride?: string, force = false) => {
-      const rawBase = (baseOverride ?? cloudReasoningBaseUrl) || "";
-      const normalizedBase = normalizeBaseUrl(rawBase);
-
-      if (!normalizedBase) {
-        if (isMountedRef.current) {
-          setCustomModelsLoading(false);
-          setCustomModelsError(null);
-          setCustomModelOptions([]);
-        }
-        return;
-      }
-
-      if (!force && lastLoadedBaseRef.current === normalizedBase) return;
-      if (!force && pendingBaseRef.current === normalizedBase) return;
-
-      if (baseOverride !== undefined) {
-        latestReasoningBaseRef.current = normalizedBase;
-      }
-
-      pendingBaseRef.current = normalizedBase;
-
-      if (isMountedRef.current) {
-        setCustomModelsLoading(true);
-        setCustomModelsError(null);
-        setCustomModelOptions([]);
-      }
-
-      let apiKey: string | undefined;
-
-      try {
-        // Use the custom reasoning API key for custom endpoints
-        const keyFromState = customReasoningApiKey?.trim();
-        apiKey = keyFromState && keyFromState.length > 0 ? keyFromState : undefined;
-
-        if (!normalizedBase.includes("://")) {
-          if (isMountedRef.current && latestReasoningBaseRef.current === normalizedBase) {
-            setCustomModelsError(t("reasoning.custom.endpointWithProtocol"));
-            setCustomModelsLoading(false);
-          }
-          return;
-        }
-
-        if (!isSecureEndpoint(normalizedBase)) {
-          if (isMountedRef.current && latestReasoningBaseRef.current === normalizedBase) {
-            setCustomModelsError(t("reasoning.custom.httpsRequired"));
-            setCustomModelsLoading(false);
-          }
-          return;
-        }
-
-        const headers: Record<string, string> = {};
-        if (apiKey) {
-          headers.Authorization = `Bearer ${apiKey}`;
-        }
-
-        const modelsUrl = buildApiUrl(normalizedBase, "/models");
-        const response = await fetch(modelsUrl, { method: "GET", headers });
-
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => "");
-          const summary = errorText
-            ? `${response.status} ${errorText.slice(0, 200)}`
-            : `${response.status} ${response.statusText}`;
-          throw new Error(summary.trim());
-        }
-
-        const payload = await response.json().catch(() => ({}));
-        const rawModels = Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload?.models)
-            ? payload.models
-            : [];
-
-        const mappedModels = (rawModels as Array<Record<string, unknown>>)
-          .map((item) => {
-            const value = (item?.id || item?.name) as string | undefined;
-            if (!value) return null;
-            const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
-            return {
-              value,
-              label: (item?.id || item?.name || value) as string,
-              description:
-                (item?.description as string) ||
-                (ownedBy ? t("reasoning.custom.ownerLabel", { owner: ownedBy }) : undefined),
-              ownedBy,
-            } as CloudModelOption;
-          })
-          .filter(Boolean) as CloudModelOption[];
-
-        if (isMountedRef.current && latestReasoningBaseRef.current === normalizedBase) {
-          setCustomModelOptions(mappedModels);
-          if (
-            reasoningModel &&
-            mappedModels.length > 0 &&
-            !mappedModels.some((model) => model.value === reasoningModel)
-          ) {
-            setReasoningModel("");
-          }
-          setCustomModelsError(null);
-          lastLoadedBaseRef.current = normalizedBase;
-        }
-      } catch (error) {
-        if (isMountedRef.current && latestReasoningBaseRef.current === normalizedBase) {
-          const message = (error as Error).message || t("reasoning.custom.unableToLoadModels");
-          const unauthorized = /\b(401|403)\b/.test(message);
-          if (unauthorized && !apiKey) {
-            setCustomModelsError(t("reasoning.custom.endpointUnauthorized"));
-          } else {
-            setCustomModelsError(message);
-          }
-          setCustomModelOptions([]);
-        }
-      } finally {
-        if (pendingBaseRef.current === normalizedBase) {
-          pendingBaseRef.current = null;
-        }
-        if (isMountedRef.current && latestReasoningBaseRef.current === normalizedBase) {
-          setCustomModelsLoading(false);
-        }
-      }
-    },
-    [cloudReasoningBaseUrl, customReasoningApiKey, reasoningModel, setReasoningModel, t]
-  );
-
-  const trimmedCustomBase = customBaseInput.trim();
-  const hasSavedCustomBase = Boolean((cloudReasoningBaseUrl || "").trim());
-  const isCustomBaseDirty = trimmedCustomBase !== (cloudReasoningBaseUrl || "").trim();
-
-  const displayedCustomModels = useMemo<CloudModelOption[]>(() => {
-    if (isCustomBaseDirty) return [];
-    return customModelOptions;
-  }, [isCustomBaseDirty, customModelOptions]);
 
   const effectiveMode = mode || selectedMode;
 
@@ -533,7 +365,7 @@ export default function ReasoningModelSelector({
 
   const selectedCloudModels = useMemo<CloudModelOption[]>(() => {
     if (selectedCloudProvider === "openai") return openaiModelOptions;
-    if (selectedCloudProvider === "custom") return displayedCustomModels;
+    if (selectedCloudProvider === "custom") return [];
 
     const provider = REASONING_PROVIDERS[selectedCloudProvider as keyof typeof REASONING_PROVIDERS];
     if (!provider?.models) return [];
@@ -548,43 +380,7 @@ export default function ReasoningModelSelector({
       icon: iconUrl,
       invertInDark,
     }));
-  }, [selectedCloudProvider, openaiModelOptions, displayedCustomModels, t]);
-
-  const handleApplyCustomBase = useCallback(() => {
-    const trimmedBase = customBaseInput.trim();
-    const normalized = trimmedBase ? normalizeBaseUrl(trimmedBase) : trimmedBase;
-    setCustomBaseInput(normalized);
-    setCloudReasoningBaseUrl(normalized);
-    lastLoadedBaseRef.current = null;
-    loadRemoteModels(normalized, true);
-  }, [customBaseInput, setCloudReasoningBaseUrl, loadRemoteModels]);
-
-  const handleBaseUrlBlur = useCallback(() => {
-    const trimmedBase = customBaseInput.trim();
-    if (!trimmedBase) return;
-
-    // Auto-apply on blur if changed
-    if (trimmedBase !== (cloudReasoningBaseUrl || "").trim()) {
-      handleApplyCustomBase();
-    }
-  }, [customBaseInput, cloudReasoningBaseUrl, handleApplyCustomBase]);
-
-  const handleResetCustomBase = useCallback(() => {
-    const defaultBase = API_ENDPOINTS.OPENAI_BASE;
-    setCustomBaseInput(defaultBase);
-    setCloudReasoningBaseUrl(defaultBase);
-    lastLoadedBaseRef.current = null;
-    loadRemoteModels(defaultBase, true);
-  }, [setCloudReasoningBaseUrl, loadRemoteModels]);
-
-  const handleRefreshCustomModels = useCallback(() => {
-    if (isCustomBaseDirty) {
-      handleApplyCustomBase();
-      return;
-    }
-    if (!trimmedCustomBase) return;
-    loadRemoteModels(undefined, true);
-  }, [handleApplyCustomBase, isCustomBaseDirty, trimmedCustomBase, loadRemoteModels]);
+  }, [selectedCloudProvider, openaiModelOptions, t]);
 
   useEffect(() => {
     const localProviderIds = localProviders.map((p) => p.id);
@@ -596,24 +392,6 @@ export default function ReasoningModelSelector({
       setSelectedCloudProvider(localReasoningProvider);
     }
   }, [localProviders, localReasoningProvider]);
-
-  useEffect(() => {
-    if (selectedCloudProvider !== "custom") return;
-    if (!hasCustomBase) {
-      setCustomModelsError(null);
-      setCustomModelOptions([]);
-      setCustomModelsLoading(false);
-      lastLoadedBaseRef.current = null;
-      return;
-    }
-
-    const normalizedBase = normalizedCustomReasoningBase;
-    if (!normalizedBase) return;
-    if (pendingBaseRef.current === normalizedBase || lastLoadedBaseRef.current === normalizedBase)
-      return;
-
-    loadRemoteModels();
-  }, [selectedCloudProvider, hasCustomBase, normalizedCustomReasoningBase, loadRemoteModels]);
 
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
 
@@ -647,18 +425,7 @@ export default function ReasoningModelSelector({
       window.electronAPI?.llamaServerStop?.();
       setLocalReasoningProvider(selectedCloudProvider);
 
-      if (selectedCloudProvider === "custom") {
-        setCustomBaseInput(cloudReasoningBaseUrl);
-        lastLoadedBaseRef.current = null;
-        pendingBaseRef.current = null;
-
-        if (customModelOptions.length > 0) {
-          setReasoningModel(customModelOptions[0].value);
-        } else if (hasCustomBase) {
-          loadRemoteModels();
-        }
-        return;
-      }
+      if (selectedCloudProvider === "custom") return;
 
       const provider =
         REASONING_PROVIDERS[selectedCloudProvider as keyof typeof REASONING_PROVIDERS];
@@ -685,18 +452,7 @@ export default function ReasoningModelSelector({
     setSelectedCloudProvider(provider);
     setLocalReasoningProvider(provider);
 
-    if (provider === "custom") {
-      setCustomBaseInput(cloudReasoningBaseUrl);
-      lastLoadedBaseRef.current = null;
-      pendingBaseRef.current = null;
-
-      if (customModelOptions.length > 0) {
-        setReasoningModel(customModelOptions[0].value);
-      } else if (hasCustomBase) {
-        loadRemoteModels();
-      }
-      return;
-    }
+    if (provider === "custom") return;
 
     const providerData = REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS];
     if (providerData?.models?.length > 0) {
@@ -760,111 +516,15 @@ export default function ReasoningModelSelector({
 
           <div>
             {selectedCloudProvider === "custom" ? (
-              <>
-                <div className="space-y-2">
-                  <h4 className="font-medium text-foreground">
-                    {t("reasoning.custom.endpointTitle")}
-                  </h4>
-                  <Input
-                    value={customBaseInput}
-                    onChange={(event) => setCustomBaseInput(event.target.value)}
-                    onBlur={handleBaseUrlBlur}
-                    placeholder="https://api.openai.com/v1"
-                    className="text-sm"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {t("reasoning.custom.endpointExamples")}{" "}
-                    <code className="text-primary">http://localhost:11434/v1</code>{" "}
-                    {t("reasoning.custom.ollama")},{" "}
-                    <code className="text-primary">http://localhost:8080/v1</code>{" "}
-                    {t("reasoning.custom.localAi")}.
-                  </p>
-                </div>
-
-                <div className="space-y-2 pt-3">
-                  <h4 className="font-medium text-foreground">
-                    {t("reasoning.custom.apiKeyOptional")}
-                  </h4>
-                  <ApiKeyInput
-                    apiKey={customReasoningApiKey}
-                    setApiKey={setCustomReasoningApiKey || (() => {})}
-                    label=""
-                    helpText={t("reasoning.custom.apiKeyHelp")}
-                  />
-                </div>
-
-                <div className="space-y-2 pt-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium text-foreground">
-                      {t("reasoning.availableModels")}
-                    </h4>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={handleResetCustomBase}
-                        className="text-xs"
-                      >
-                        {t("common.reset")}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={handleRefreshCustomModels}
-                        disabled={
-                          customModelsLoading || (!trimmedCustomBase && !hasSavedCustomBase)
-                        }
-                        className="text-xs"
-                      >
-                        {customModelsLoading
-                          ? t("common.loading")
-                          : isCustomBaseDirty
-                            ? t("reasoning.custom.applyAndRefresh")
-                            : t("common.refresh")}
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {t("reasoning.custom.queryPrefix")}{" "}
-                    <code className="break-all">
-                      {hasCustomBase
-                        ? `${effectiveReasoningBase}/models`
-                        : `${defaultOpenAIBase}/models`}
-                    </code>{" "}
-                    {t("reasoning.custom.querySuffix")}
-                  </p>
-                  {isCustomBaseDirty && (
-                    <p className="text-xs text-primary">{t("reasoning.custom.modelsReloadHint")}</p>
-                  )}
-                  {!hasCustomBase && (
-                    <p className="text-xs text-warning">{t("reasoning.custom.enterEndpoint")}</p>
-                  )}
-                  {hasCustomBase && (
-                    <>
-                      {customModelsLoading && (
-                        <p className="text-xs text-primary">
-                          {t("reasoning.custom.fetchingModels")}
-                        </p>
-                      )}
-                      {customModelsError && (
-                        <p className="text-xs text-destructive">{customModelsError}</p>
-                      )}
-                      {!customModelsLoading &&
-                        !customModelsError &&
-                        customModelOptions.length === 0 && (
-                          <p className="text-xs text-warning">{t("reasoning.custom.noModels")}</p>
-                        )}
-                    </>
-                  )}
-                  <ModelCardList
-                    models={selectedCloudModels}
-                    selectedModel={reasoningModel}
-                    onModelSelect={setReasoningModel}
-                  />
-                </div>
-              </>
+              <OpenAICompatiblePanel
+                baseUrl={cloudReasoningBaseUrl}
+                setBaseUrl={setCloudReasoningBaseUrl}
+                apiKey={customReasoningApiKey}
+                setApiKey={setCustomReasoningApiKey || (() => {})}
+                model={reasoningModel}
+                setModel={setReasoningModel}
+                defaultBaseUrl={API_ENDPOINTS.OPENAI_BASE}
+              />
             ) : (
               <>
                 {selectedCloudProvider === "openai" && (

@@ -327,6 +327,13 @@
     "getApiKey": "Obter chave API ->",
     "selectModel": "Selecionar modelo",
     "availableModels": "Modelos disponíveis",
+    "disableThinking": {
+      "label": "Desativar saída de raciocínio",
+      "help": "Ignora tokens de raciocínio para uma saída mais limpa. Recomendado para limpeza. Alguns servidores ignoram esta dica."
+    },
+    "selfHosted": {
+      "endpointHelp": "Aponte para um servidor compatível com OpenAI na sua rede local (ex.: Ollama, LM Studio, vLLM ou llama-server)."
+    },
     "enterprise": {
       "title": "Provedores corporativos",
       "description": "Conecte-se a provedores de nuvem usando as credenciais da sua organização.",

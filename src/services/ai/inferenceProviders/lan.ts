@@ -5,17 +5,19 @@ import logger from "../../../utils/logger";
 
 export const lanProvider: InferenceProvider = {
   id: "lan",
-  async call({ text, agentName, config, ctx }) {
+  async call({ text, model, agentName, config, ctx }) {
     const lanUrl = (config.lanUrl || getSettings().cleanupRemoteUrl).trim();
-    logger.logReasoning("LAN_START", { url: lanUrl, agentName });
+    logger.logReasoning("LAN_START", { url: lanUrl, agentName, model });
 
     try {
       const baseUrl = normalizeBaseUrl(lanUrl) || lanUrl;
       const endpoint = buildApiUrl(baseUrl, "/v1/chat/completions");
+      const apiKey = config.customApiKey?.trim() || getSettings().cleanupCustomApiKey?.trim() || "";
+      const resolvedModel = model?.trim() || "default";
       return await ctx.callChatCompletionsApi(
         endpoint,
-        "",
-        "default",
+        apiKey,
+        resolvedModel,
         text,
         agentName,
         config,

@@ -355,6 +355,13 @@
     "getApiKey": "API-Schlüssel holen ->",
     "selectModel": "Modell auswählen",
     "availableModels": "Verfügbare Modelle",
+    "disableThinking": {
+      "label": "Denkausgabe deaktivieren",
+      "help": "Überspringt Reasoning-Token für eine sauberere Ausgabe. Empfohlen für Bereinigung. Einige Server ignorieren diesen Hinweis."
+    },
+    "selfHosted": {
+      "endpointHelp": "Zeige auf einen OpenAI-kompatiblen Server in deinem lokalen Netzwerk (z. B. Ollama, LM Studio, vLLM oder llama-server)."
+    },
     "enterprise": {
       "title": "Enterprise-Anbieter",
       "description": "Verbinden Sie sich mit Cloud-Anbietern über die Zugangsdaten Ihrer Organisation.",

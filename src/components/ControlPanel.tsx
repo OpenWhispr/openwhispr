@@ -475,7 +475,7 @@ export default function ControlPanel() {
             try {
               const [
                 { default: ReasoningService },
-                { getEffectiveCleanupModel, isCloudCleanupMode },
+                { getEffectiveCleanupModel, isCloudCleanupMode, getSettings },
               ] = await Promise.all([
                 import("../services/ReasoningService"),
                 import("../stores/settingsStore"),
@@ -484,7 +484,9 @@ export default function ControlPanel() {
               const isCloud = isCloudCleanupMode();
               if (model || isCloud) {
                 const agentName = localStorage.getItem("agentName") || null;
-                const reasonedText = await ReasoningService.processText(rawText, model, agentName);
+                const reasonedText = await ReasoningService.processText(rawText, model, agentName, {
+                  disableThinking: getSettings().cleanupDisableThinking,
+                });
                 if (reasonedText && reasonedText !== rawText) {
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
