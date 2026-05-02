@@ -2,25 +2,16 @@ import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Square } from "lucide-react";
-import {
-  stopRecording,
-  useMeetingRecordingStore,
-} from "../../stores/meetingRecordingStore";
+import { stopRecording, useMeetingRecordingStore } from "../../stores/meetingRecordingStore";
 import { cn } from "../lib/utils";
 
 interface MeetingRecordingPillProps {
-  /** Current top-level view in ControlPanel — owned by ControlPanel local state. */
   activeView: string;
-  /** Currently-open note id — read from noteStore by the parent. */
   activeNoteId: number | null;
-  /** Navigate back to the recording note. Parent dispatches the same triplet
-   * (`setActiveView("personal-notes") + setActiveFolderId + setActiveNoteId`)
-   * used by `onNavigateToNote` in ControlPanel.tsx. */
   onReturnToNote: () => void;
 }
 
 const BAR_COUNT = 4;
-// Bars stay readable at silence; 20% floor matches the spec.
 const BAR_FLOOR = 20;
 
 const isControlPanelWindow = () => {

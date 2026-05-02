@@ -348,10 +348,8 @@ const createAudioPipeline = async ({
   return { source, processor };
 };
 
-// Detach an AudioContext from hardware output to avoid Bluetooth routing issues.
-// When BT headphones become the default output, the AudioContext can stall due to
-// HFP sample-rate mismatches. Using a "none" sink keeps processing running without
-// coupling to any physical device.
+// Detach the AudioContext from hardware output — when BT headphones switch to
+// HFP, the default-output context can stall on the sample-rate mismatch.
 const detachFromOutputDevice = async (ctx: AudioContext) => {
   if ("setSinkId" in ctx) {
     try {
@@ -378,9 +376,8 @@ const flushAndDisconnectProcessor = async (processor: AudioWorkletNode | null) =
 
 let segmentCounter = 0;
 
-// Module-scoped pipeline state. The audio nodes/streams are stored here (not on
-// React refs) because the audio pipeline outlives any single React component:
-// the same pipeline must survive view changes / re-mounts of the consumer view.
+// Pipeline lives in module scope — not on React refs — so it survives
+// view changes and re-mounts of the consumer view.
 let micContext: AudioContext | null = null;
 let micSource: MediaStreamAudioSourceNode | null = null;
 let micProcessor: AudioWorkletNode | null = null;
@@ -470,9 +467,7 @@ function applySpeakerIdentification(
   if (
     segment.source !== "system" ||
     !isSegmentWithinIdentificationWindow(segment, identification) ||
-    (segment.speaker &&
-      !segment.speakerIsPlaceholder &&
-      segment.speakerStatus !== "provisional") ||
+    (segment.speaker && !segment.speakerIsPlaceholder && segment.speakerStatus !== "provisional") ||
     segment.speakerLocked
   ) {
     return segment;
@@ -885,9 +880,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
 
         const provisional = assignProvisionalSpeaker(rawSegment);
         reserveSpeakerIndex(provisional.speaker);
-        const lockedName = provisional.speaker
-          ? speakerLocks.get(provisional.speaker)
-          : undefined;
+        const lockedName = provisional.speaker ? speakerLocks.get(provisional.speaker) : undefined;
         const seg = lockedName
           ? lockTranscriptSpeaker(provisional, {
               speakerName: lockedName,
@@ -905,8 +898,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
           i === prev.length ? [...prev, seg] : [...prev.slice(0, i), seg, ...prev.slice(i)];
         segmentsRefValue = next;
 
-        const partialPatch =
-          data.source === "mic" ? { micPartial: "" } : { systemPartial: "" };
+        const partialPatch = data.source === "mic" ? { micPartial: "" } : { systemPartial: "" };
         useMeetingRecordingStore.setState({
           segments: next,
           transcript: buildTranscriptText(next),
@@ -1165,11 +1157,7 @@ export async function stopRecording(): Promise<StopRecordingResult> {
     }
   } catch (err) {
     useMeetingRecordingStore.setState({ error: (err as Error).message });
-    logger.error(
-      "Meeting transcription stop failed",
-      { error: (err as Error).message },
-      "meeting"
-    );
+    logger.error("Meeting transcription stop failed", { error: (err as Error).message }, "meeting");
   }
 
   useMeetingRecordingStore.setState({
@@ -1215,9 +1203,8 @@ export function cancelPreparedTranscription(): void {
   window.electronAPI?.meetingTranscriptionCancel?.();
 }
 
-// Module-load resize subscription. Throttled to ~60ms so layout reflows during
-// drag don't thrash React. The store is module-scoped (Phase 1's pattern), so
-// registering here once is correct — the listener outlives any view.
+// Throttled resize listener — keeps layout reflows during drag from thrashing
+// React. Registered once at module load; the store outlives any view.
 if (typeof window !== "undefined") {
   let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
   window.addEventListener("resize", () => {
