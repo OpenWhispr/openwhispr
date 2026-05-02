@@ -359,6 +359,9 @@
       "label": "思考出力を無効にする",
       "help": "推論トークンをスキップして出力をクリーンに保ちます。クリーンアップに推奨。一部のサーバーはこのヒントを無視します。"
     },
+    "selfHosted": {
+      "endpointHelp": "ローカルネットワーク上の OpenAI 互換サーバーを指定します（例: Ollama、LM Studio、vLLM、llama-server）。"
+    },
     "enterprise": {
       "title": "エンタープライズプロバイダー",
       "description": "組織のクラウドプロバイダー認証情報を使用して接続します。",

@@ -251,10 +251,8 @@ export default function OpenAICompatiblePanel({
         {helpExamples ?? (
           <p className="text-xs text-muted-foreground">
             {t("reasoning.custom.endpointExamples")}{" "}
-            <code className="text-primary">http://localhost:11434/v1</code>{" "}
-            {t("reasoning.custom.ollama")},{" "}
-            <code className="text-primary">http://localhost:8080/v1</code>{" "}
-            {t("reasoning.custom.localAi")}.
+            <code className="text-primary">https://openrouter.ai/api/v1</code> (OpenRouter),{" "}
+            <code className="text-primary">https://api.together.xyz/v1</code> (Together).
           </p>
         )}
       </div>

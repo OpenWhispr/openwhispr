@@ -359,6 +359,9 @@
       "label": "Disable thinking output",
       "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."
     },
+    "selfHosted": {
+      "endpointHelp": "Point to an OpenAI-compatible server on your local network (e.g. Ollama, LM Studio, vLLM, or llama-server)."
+    },
     "enterprise": {
       "title": "Enterprise Providers",
       "description": "Connect to cloud providers using your organization's credentials.",

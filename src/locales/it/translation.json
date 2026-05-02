@@ -359,6 +359,9 @@
       "label": "Disattiva output di ragionamento",
       "help": "Salta i token di ragionamento per un output più pulito. Consigliato per la pulizia. Alcuni server ignorano questo suggerimento."
     },
+    "selfHosted": {
+      "endpointHelp": "Punta a un server compatibile con OpenAI sulla tua rete locale (es. Ollama, LM Studio, vLLM o llama-server)."
+    },
     "enterprise": {
       "title": "Provider Enterprise",
       "description": "Connettiti ai provider cloud usando le credenziali della tua organizzazione.",
