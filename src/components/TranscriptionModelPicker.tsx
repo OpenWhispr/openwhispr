@@ -23,6 +23,7 @@ import {
   type ColorScheme,
   type ModelPickerStyles,
 } from "../utils/modelPickerStyles";
+import { useSettingsStore } from "../stores/settingsStore";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { createExternalLinkHandler } from "../utils/externalLinks";
@@ -189,14 +190,6 @@ interface TranscriptionModelPickerProps {
   onLocalProviderSelect?: (providerId: string) => void;
   useLocalWhisper: boolean;
   onModeChange: (useLocal: boolean) => void;
-  openaiApiKey: string;
-  setOpenaiApiKey: (key: string) => void;
-  groqApiKey: string;
-  setGroqApiKey: (key: string) => void;
-  mistralApiKey: string;
-  setMistralApiKey: (key: string) => void;
-  customTranscriptionApiKey?: string;
-  setCustomTranscriptionApiKey?: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl?: (url: string) => void;
   className?: string;
@@ -266,14 +259,6 @@ export default function TranscriptionModelPicker({
   onLocalProviderSelect,
   useLocalWhisper,
   onModeChange,
-  openaiApiKey,
-  setOpenaiApiKey,
-  groqApiKey,
-  setGroqApiKey,
-  mistralApiKey,
-  setMistralApiKey,
-  customTranscriptionApiKey = "",
-  setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl = "",
   setCloudTranscriptionBaseUrl,
   className = "",
@@ -282,6 +267,14 @@ export default function TranscriptionModelPicker({
   streamingOnly = false,
 }: TranscriptionModelPickerProps) {
   const { t } = useTranslation();
+  const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
+  const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
+  const groqApiKey = useSettingsStore((s) => s.groqApiKey);
+  const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
+  const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
+  const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
+  const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
   const [localModels, setLocalModels] = useState<LocalModel[]>([]);
   const [parakeetModels, setParakeetModels] = useState<LocalModel[]>([]);
@@ -847,7 +840,7 @@ export default function TranscriptionModelPicker({
 
                 <ApiKeyInput
                   apiKey={customTranscriptionApiKey}
-                  setApiKey={setCustomTranscriptionApiKey || (() => {})}
+                  setApiKey={setCustomTranscriptionApiKey}
                   label={t("transcription.apiKeyOptional")}
                   helpText=""
                 />

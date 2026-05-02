@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
@@ -19,11 +19,12 @@ import { useAgentName } from "../../utils/agentName";
 import ReasoningService from "../../services/ReasoningService";
 import { getModelProvider } from "../../models/ModelRegistry";
 import logger from "../../utils/logger";
-import { UNIFIED_SYSTEM_PROMPT } from "../../config/prompts";
-import { useSettingsStore, selectIsCloudReasoningMode } from "../../stores/settingsStore";
+import { getDefaultPromptText, type PromptKind } from "../../config/prompts";
+import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
 
 interface PromptStudioProps {
   className?: string;
+  kind?: PromptKind;
 }
 
 type ProviderConfig = {
@@ -41,27 +42,14 @@ const PROVIDER_CONFIG: Record<string, ProviderConfig> = {
   custom: {
     label: "Custom endpoint",
     apiKeyStorageKey: "openaiApiKey",
-    baseStorageKey: "cloudReasoningBaseUrl",
+    baseStorageKey: "cleanupCloudBaseUrl",
   },
   local: { label: "Local" },
 };
 
-function getCurrentPrompt(): string {
-  const customPrompt = localStorage.getItem("customUnifiedPrompt");
-  if (customPrompt) {
-    try {
-      return JSON.parse(customPrompt);
-    } catch {
-      return UNIFIED_SYSTEM_PROMPT;
-    }
-  }
-  return UNIFIED_SYSTEM_PROMPT;
-}
-
-export default function PromptStudio({ className = "" }: PromptStudioProps) {
+export default function PromptStudio({ className = "", kind = "cleanup" }: PromptStudioProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"current" | "edit" | "test">("current");
-  const [editedPrompt, setEditedPrompt] = useState(UNIFIED_SYSTEM_PROMPT);
   const [testText, setTestText] = useState(() => t("promptStudio.defaultTestInput"));
   const [testResult, setTestResult] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -69,38 +57,19 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
 
   const { alertDialog, showAlertDialog, hideAlertDialog } = useDialogs();
   const { agentName } = useAgentName();
+  const uiLanguage = useSettingsStore((s) => s.uiLanguage);
 
-  const effectiveModel = useSettingsStore((s) => s.reasoningModel);
-  const isCloudMode = useSettingsStore(selectIsCloudReasoningMode);
-  const useReasoningModel = useSettingsStore((s) => s.useReasoningModel);
-  const reasoningModel = useSettingsStore((s) => s.reasoningModel);
+  const isCloudMode = useSettingsStore(selectIsCloudCleanupMode);
+  const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
+  const cleanupModel = useSettingsStore((s) => s.cleanupModel);
 
-  useEffect(() => {
-    const legacyPrompts = localStorage.getItem("customPrompts");
-    if (legacyPrompts && !localStorage.getItem("customUnifiedPrompt")) {
-      try {
-        const parsed = JSON.parse(legacyPrompts);
-        if (parsed.agent) {
-          localStorage.setItem("customUnifiedPrompt", JSON.stringify(parsed.agent));
-          localStorage.removeItem("customPrompts");
-        }
-      } catch (e) {
-        logger.error("Failed to migrate legacy custom prompts", { error: e }, "prompts");
-      }
-    }
-
-    const customPrompt = localStorage.getItem("customUnifiedPrompt");
-    if (customPrompt) {
-      try {
-        setEditedPrompt(JSON.parse(customPrompt));
-      } catch (error) {
-        logger.error("Failed to load custom prompt", { error }, "prompts");
-      }
-    }
-  }, []);
+  const customPrompt = useSettingsStore((s) => s.customPrompts[kind]);
+  const setCustomPrompt = useSettingsStore((s) => s.setCustomPrompt);
+  const defaultPrompt = getDefaultPromptText(kind, uiLanguage);
+  const [editedPrompt, setEditedPrompt] = useState(customPrompt || defaultPrompt);
 
   const savePrompt = () => {
-    localStorage.setItem("customUnifiedPrompt", JSON.stringify(editedPrompt));
+    setCustomPrompt(kind, editedPrompt);
     showAlertDialog({
       title: t("promptStudio.dialogs.saved.title"),
       description: t("promptStudio.dialogs.saved.description"),
@@ -108,8 +77,8 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
   };
 
   const resetToDefault = () => {
-    setEditedPrompt(UNIFIED_SYSTEM_PROMPT);
-    localStorage.removeItem("customUnifiedPrompt");
+    setEditedPrompt(defaultPrompt);
+    setCustomPrompt(kind, "");
     showAlertDialog({
       title: t("promptStudio.dialogs.reset.title"),
       description: t("promptStudio.dialogs.reset.description"),
@@ -129,47 +98,47 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
     setTestResult("");
 
     try {
-      const reasoningProvider = isCloudMode
+      const cleanupProvider = isCloudMode
         ? "openwhispr"
-        : reasoningModel
-          ? getModelProvider(reasoningModel)
+        : cleanupModel
+          ? getModelProvider(cleanupModel)
           : "openai";
 
       logger.debug(
         "PromptStudio test starting",
         {
-          useReasoningModel,
+          useCleanupModel,
           isCloudMode,
-          reasoningModel,
-          reasoningProvider,
+          cleanupModel,
+          cleanupProvider,
           testTextLength: testText.length,
           agentName,
         },
         "prompt-studio"
       );
 
-      if (!useReasoningModel) {
+      if (!useCleanupModel) {
         setTestResult(t("promptStudio.test.disabledReasoning"));
         return;
       }
 
-      if (!isCloudMode && !reasoningModel) {
+      if (!isCloudMode && !cleanupModel) {
         setTestResult(t("promptStudio.test.noModelSelected"));
         return;
       }
 
       if (!isCloudMode) {
-        const providerConfig = PROVIDER_CONFIG[reasoningProvider] || {
-          label: reasoningProvider.charAt(0).toUpperCase() + reasoningProvider.slice(1),
+        const providerConfig = PROVIDER_CONFIG[cleanupProvider] || {
+          label: cleanupProvider.charAt(0).toUpperCase() + cleanupProvider.slice(1),
         };
 
         if (providerConfig.baseStorageKey) {
-          const baseUrl = (useSettingsStore.getState().cloudReasoningBaseUrl || "").trim();
+          const baseUrl = (useSettingsStore.getState().cleanupCloudBaseUrl || "").trim();
           if (!baseUrl) {
             setTestResult(
               t("promptStudio.test.baseUrlMissing", {
                 provider:
-                  reasoningProvider === "custom"
+                  cleanupProvider === "custom"
                     ? t("promptStudio.test.customEndpoint")
                     : providerConfig.label,
               })
@@ -179,20 +148,15 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
         }
       }
 
-      const modelToUse = isCloudMode ? effectiveModel || "auto" : reasoningModel;
+      const modelToUse = isCloudMode ? cleanupModel || "auto" : cleanupModel;
 
-      const currentCustomPrompt = localStorage.getItem("customUnifiedPrompt");
-      localStorage.setItem("customUnifiedPrompt", JSON.stringify(editedPrompt));
-
+      const previous = customPrompt;
+      setCustomPrompt(kind, editedPrompt);
       try {
         const result = await ReasoningService.processText(testText, modelToUse, agentName, {});
         setTestResult(result);
       } finally {
-        if (currentCustomPrompt) {
-          localStorage.setItem("customUnifiedPrompt", currentCustomPrompt);
-        } else {
-          localStorage.removeItem("customUnifiedPrompt");
-        }
+        setCustomPrompt(kind, previous);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -204,7 +168,8 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
   };
 
   const isAgentAddressed = testText.toLowerCase().includes(agentName.toLowerCase());
-  const isCustomPrompt = getCurrentPrompt() !== UNIFIED_SYSTEM_PROMPT;
+  const isCustomPrompt = customPrompt.length > 0;
+  const currentPrompt = customPrompt || defaultPrompt;
 
   const tabs = [
     { id: "current" as const, label: t("promptStudio.tabs.view"), icon: Eye },
@@ -285,7 +250,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                   )}
                 </div>
                 <Button
-                  onClick={() => copyText(getCurrentPrompt())}
+                  onClick={() => copyText(currentPrompt)}
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2 text-xs"
@@ -304,7 +269,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
               </div>
               <div className="bg-muted/30 dark:bg-surface-raised/30 border border-border/30 rounded-lg p-4 max-h-80 overflow-y-auto">
                 <pre className="text-xs font-mono text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                  {getCurrentPrompt().replace(/\{\{agentName\}\}/g, agentName)}
+                  {currentPrompt.replace(/\{\{agentName\}\}/g, agentName)}
                 </pre>
               </div>
             </div>
@@ -359,26 +324,26 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
         {/* ── Test Tab ── */}
         {activeTab === "test" &&
           (() => {
-            const reasoningProvider = isCloudMode
+            const cleanupProvider = isCloudMode
               ? "openwhispr"
-              : reasoningModel
-                ? getModelProvider(reasoningModel)
+              : cleanupModel
+                ? getModelProvider(cleanupModel)
                 : "openai";
-            const providerConfig = PROVIDER_CONFIG[reasoningProvider] || {
-              label: reasoningProvider.charAt(0).toUpperCase() + reasoningProvider.slice(1),
+            const providerConfig = PROVIDER_CONFIG[cleanupProvider] || {
+              label: cleanupProvider.charAt(0).toUpperCase() + cleanupProvider.slice(1),
             };
 
             const displayModel = isCloudMode
               ? t("promptStudio.test.openwhisprCloud")
-              : reasoningModel || t("promptStudio.test.none");
+              : cleanupModel || t("promptStudio.test.none");
             const displayProvider =
-              reasoningProvider === "custom"
+              cleanupProvider === "custom"
                 ? t("promptStudio.test.customEndpoint")
                 : providerConfig.label;
 
             return (
               <div className="divide-y divide-border/40 dark:divide-border-subtle">
-                {!useReasoningModel && (
+                {!useCleanupModel && (
                   <div className="px-5 py-4">
                     <div className="rounded-lg border border-warning/20 bg-warning/5 dark:bg-warning/10 px-4 py-3">
                       <div className="flex items-start gap-2.5">
@@ -449,7 +414,7 @@ export default function PromptStudio({ className = "" }: PromptStudioProps) {
                 <div className="px-5 py-4">
                   <Button
                     onClick={testPrompt}
-                    disabled={!testText.trim() || isLoading || !useReasoningModel}
+                    disabled={!testText.trim() || isLoading || !useCleanupModel}
                     size="sm"
                     className="w-full"
                   >

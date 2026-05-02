@@ -1,15 +1,16 @@
-import { createAuthClient } from "@neondatabase/auth";
-import { BetterAuthReactAdapter } from "@neondatabase/auth/react";
+import { createAuthClient } from "better-auth/react";
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { openExternalLink } from "../utils/externalLinks";
-import logger from "../utils/logger";
 
-export const NEON_AUTH_URL = import.meta.env.VITE_NEON_AUTH_URL || "";
-export const authClient = NEON_AUTH_URL
-  ? createAuthClient(NEON_AUTH_URL, { adapter: BetterAuthReactAdapter() })
-  : null;
+export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
+export const authClient = createAuthClient({
+  baseURL: AUTH_URL,
+  fetchOptions: {
+    headers: { "x-openwhispr-source": "desktop" },
+  },
+});
 
-export type SocialProvider = "google";
+export type SocialProvider = "google" | "microsoft" | "apple";
 
 const LAST_SIGN_IN_STORAGE_KEY = "openwhispr:lastSignInTime";
 const GRACE_PERIOD_MS = 60_000;
@@ -63,13 +64,11 @@ function getLastSignInTime(): number | null {
 }
 
 function createAuthExpiredError(originalError: unknown): Error {
-  if (originalError instanceof Error) {
-    (originalError as Error & { code?: string }).code = "AUTH_EXPIRED";
-    return originalError;
-  }
-
-  const error = new Error("Session expired");
-  (error as Error & { code?: string }).code = "AUTH_EXPIRED";
+  const error = originalError instanceof Error ? originalError : new Error("Session expired");
+  Object.assign(error, {
+    code: "AUTH_EXPIRED",
+    messageKey: "hooks.audioRecording.errorDescriptions.sessionExpired",
+  });
   return error;
 }
 
@@ -125,9 +124,7 @@ export async function signOut(): Promise<void> {
     if (window.electronAPI?.authClearSession) {
       await window.electronAPI.authClearSession();
     }
-    if (authClient) {
-      await authClient.signOut();
-    }
+    await authClient.signOut();
     markSignedOutState();
   } catch {
     markSignedOutState();
@@ -163,57 +160,21 @@ export async function withSessionRefresh<T>(operation: () => Promise<T>): Promis
   }
 }
 
-function getElectronOAuthCallbackURL(): string {
-  const configuredUrl = (import.meta.env.VITE_OPENWHISPR_OAUTH_CALLBACK_URL || "").trim();
-  if (configuredUrl) return configuredUrl;
-
-  if (window.location.protocol !== "file:") return `${window.location.origin}/?panel=true`;
-
-  const port = import.meta.env.VITE_DEV_SERVER_PORT || "5183";
-  return `http://localhost:${port}/?panel=true`;
-}
+const DESKTOP_OAUTH_CALLBACK_URL = "https://openwhispr.com/auth/desktop-callback";
 
 export async function signInWithSocial(provider: SocialProvider): Promise<{ error?: Error }> {
-  if (!authClient) {
-    return { error: new Error("Auth not configured") };
-  }
-
   try {
     const isElectron = Boolean((window as any).electronAPI);
 
     if (isElectron) {
-      const callbackURL = getElectronOAuthCallbackURL();
-
-      const response = await fetch(`${NEON_AUTH_URL}/sign-in/social`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          provider,
-          callbackURL,
-          newUserCallbackURL: callbackURL,
-          disableRedirect: true,
-        }),
-      });
-
-      const text = await response.text();
-
-      if (!response.ok) {
-        logger.error(`Social sign-in failed: ${response.status}`, text.slice(0, 200), "auth");
-        return { error: new Error("Failed to initiate sign-in") };
-      }
-
-      let data: { url?: string };
-      try {
-        data = JSON.parse(text);
-      } catch {
-        logger.error("Non-JSON response from auth server", text.slice(0, 200), "auth");
-        return { error: new Error("Unexpected response from auth server") };
-      }
-
-      if (!data.url) return { error: new Error("Failed to get OAuth URL") };
-
-      openExternalLink(data.url);
+      // OAuth must be initiated from the user's browser, not the renderer:
+      // the state cookie Better Auth sets has to land in the same cookie jar
+      // that handles the /api/auth/callback/* round-trip. The shim endpoint
+      // does the POST server-side and 302s with the cookies attached.
+      const protocol = (await window.electronAPI?.getOAuthProtocol?.()) || "openwhispr";
+      const url = new URL(`${AUTH_URL}/api/desktop-signin/${provider}`);
+      url.searchParams.set("callbackURL", `${DESKTOP_OAUTH_CALLBACK_URL}?protocol=${protocol}`);
+      openExternalLink(url.toString());
       return {};
     }
 
@@ -226,58 +187,13 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
 }
 
 export async function requestPasswordReset(email: string): Promise<{ error?: Error }> {
-  if (!authClient) {
-    return { error: new Error("Auth not configured") };
-  }
-
   try {
-    if (OPENWHISPR_API_URL) {
-      const res = await fetch(`${OPENWHISPR_API_URL}/api/auth/forgot-password`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim() }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to send reset email");
-      }
-
-      return {};
-    }
-
-    const base = window.location.href.split("?")[0].split("#")[0];
-    const redirectTo = `${base}?panel=true&reset_password=true`;
-
     await authClient.requestPasswordReset({
       email: email.trim(),
-      redirectTo,
+      redirectTo: "https://openwhispr.com/reset-password",
     });
-
     return {};
   } catch (error) {
     return { error: error instanceof Error ? error : new Error("Failed to send reset email") };
-  }
-}
-
-export async function resetPassword(
-  newPassword: string,
-  token: string
-): Promise<{ error?: Error }> {
-  if (!authClient) {
-    return { error: new Error("Auth not configured") };
-  }
-
-  try {
-    await authClient.resetPassword({
-      newPassword,
-      token,
-    });
-
-    updateLastSignInTime();
-
-    return {};
-  } catch (error) {
-    return { error: error instanceof Error ? error : new Error("Failed to reset password") };
   }
 }

@@ -9,6 +9,7 @@ const {
   resolveBinaryPath,
   gracefulStopProcess,
 } = require("../utils/serverUtils");
+const sidecarPidFile = require("./sidecarPidFile");
 
 const PORT_RANGE_START = 6333;
 const PORT_RANGE_END = 6350;
@@ -91,7 +92,9 @@ class QdrantManager {
       cwd: STORAGE_DIR,
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
+      detached: process.platform !== "win32",
     });
+    sidecarPidFile.write("qdrant", this.process.pid);
 
     let stderrBuffer = "";
     let exitCode = null;
@@ -116,6 +119,7 @@ class QdrantManager {
       this.ready = false;
       this.process = null;
       this._stopHealthCheck();
+      sidecarPidFile.clear("qdrant");
     });
 
     await this._waitForReady(() => ({ stderr: stderrBuffer, exitCode }));

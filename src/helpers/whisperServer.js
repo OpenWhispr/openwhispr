@@ -9,6 +9,7 @@ const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
+const sidecarPidFile = require("./sidecarPidFile");
 
 const PORT_RANGE_START = 8178;
 const PORT_RANGE_END = 8199;
@@ -315,7 +316,9 @@ class WhisperServerManager extends EventEmitter {
       windowsHide: true,
       env: spawnEnv,
       cwd: serverBinaryDir,
+      detached: process.platform !== "win32",
     });
+    sidecarPidFile.write("whisper", this.process.pid);
 
     let stderrBuffer = "";
     let exitCode = null;
@@ -342,6 +345,7 @@ class WhisperServerManager extends EventEmitter {
       this.ready = false;
       this.process = null;
       this.stopHealthCheck();
+      sidecarPidFile.clear("whisper");
     });
 
     try {

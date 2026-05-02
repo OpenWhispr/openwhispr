@@ -1,4 +1,4 @@
-const { ipcMain, app, shell, BrowserWindow, systemPreferences } = require("electron");
+const { ipcMain, app, shell, BrowserWindow, systemPreferences, net } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -6,6 +6,7 @@ const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { classifyAndLog } = require("./networkErrors");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
@@ -27,6 +28,7 @@ const {
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
+const postMigrationDetector = require("./postMigrationDetector");
 const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
@@ -295,6 +297,8 @@ class IPCHandlers {
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
     this.meetingAecManager = managers.meetingAecManager;
+    this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
+    this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
@@ -736,14 +740,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-delete-transcription", async (event, id) => {
-      this.audioStorageManager.deleteAudio(id);
-      const result = this.databaseManager.deleteTranscription(id);
-      if (result?.success) {
-        setImmediate(() => {
-          this.broadcastToWindows("transcription-deleted", { id });
-        });
-      }
-      return result;
+      return this.deleteTranscriptionInternal(id);
     });
 
     // Audio storage handlers
@@ -912,13 +909,7 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-delete-note", async (event, id) => {
-      const result = this.databaseManager.deleteNote(id);
-      if (result?.success) {
-        setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
-        this._asyncVectorDelete(id);
-        this._asyncMirrorDelete(id);
-      }
-      return result;
+      return this.deleteNoteInternal(id);
     });
 
     ipcMain.handle("db-search-notes", async (event, query, limit) => {
@@ -2458,7 +2449,7 @@ class IPCHandlers {
           }
         }
 
-        const response = await fetch(MISTRAL_TRANSCRIPTION_URL, {
+        const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
           method: "POST",
           headers: {
             "x-api-key": apiKey,
@@ -2747,11 +2738,41 @@ class IPCHandlers {
         });
       }
 
-      if (prefs.reasoningProvider === "local" && prefs.reasoningModel) {
-        setVars.REASONING_PROVIDER = "local";
-        setVars.LOCAL_REASONING_MODEL = prefs.reasoningModel;
-      } else if (prefs.reasoningProvider && prefs.reasoningProvider !== "local") {
+      // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL clears once
+      // the read fallback is removed (~2 releases after this lands).
+      if (prefs.cleanupProvider === "local" && prefs.cleanupModel) {
+        setVars.CLEANUP_PROVIDER = "local";
+        setVars.LOCAL_CLEANUP_MODEL = prefs.cleanupModel;
         clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
+      } else if (prefs.cleanupProvider && prefs.cleanupProvider !== "local") {
+        clearVars.push(
+          "CLEANUP_PROVIDER",
+          "LOCAL_CLEANUP_MODEL",
+          "REASONING_PROVIDER",
+          "LOCAL_REASONING_MODEL"
+        );
+      }
+
+      const dictationAgentLocal =
+        prefs.dictationAgentProvider === "local" && prefs.dictationAgentModel;
+      if (dictationAgentLocal) {
+        setVars.DICTATION_AGENT_PROVIDER = "local";
+        setVars.LOCAL_DICTATION_AGENT_MODEL = prefs.dictationAgentModel;
+      } else if (prefs.dictationAgentProvider && prefs.dictationAgentProvider !== "local") {
+        clearVars.push("DICTATION_AGENT_PROVIDER", "LOCAL_DICTATION_AGENT_MODEL");
+      }
+
+      // Stop the local llama-server only when neither cleanup nor dictation-agent
+      // still need a local model. Otherwise the still-active scope would lose
+      // its server on the next provider switch of the other scope.
+      const cleanupNeedsLocal = setVars.CLEANUP_PROVIDER === "local";
+      const dictationAgentNeedsLocal = setVars.DICTATION_AGENT_PROVIDER === "local";
+      if (
+        prefs.cleanupProvider &&
+        prefs.cleanupProvider !== "local" &&
+        !cleanupNeedsLocal &&
+        !dictationAgentNeedsLocal
+      ) {
         const modelManager = require("./modelManagerBridge").default;
         modelManager.stopServer().catch((err) => {
           debugLogger.error("Failed to stop llama-server on provider switch", {
@@ -2798,7 +2819,7 @@ class IPCHandlers {
             temperature: config?.temperature || 0.3,
           };
 
-          const response = await fetch("https://api.anthropic.com/v1/messages", {
+          const response = await proxyFetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -2958,6 +2979,16 @@ class IPCHandlers {
           this._llamaVulkanManager = new LlamaVulkanManager();
         }
 
+        // Stop Vulkan server before downloading to release file locks on DLLs (Windows EBUSY)
+        const modelManager = require("./modelManagerBridge").default;
+        if (modelManager.serverManager.activeBackend === "vulkan") {
+          await modelManager.stopServer().catch((err) => {
+            debugLogger.warn("Failed to stop Vulkan server before download", {
+              error: err.message,
+            });
+          });
+        }
+
         const result = await this._llamaVulkanManager.download((downloaded, total) => {
           if (!event.sender.isDestroyed()) {
             event.sender.send("llama-vulkan-download-progress", {
@@ -2971,10 +3002,9 @@ class IPCHandlers {
         if (result.success) {
           process.env.LLAMA_VULKAN_ENABLED = "true";
           delete process.env.LLAMA_GPU_BACKEND;
-          const modelManager = require("./modelManagerBridge").default;
           modelManager.serverManager.cachedServerBinaryPaths = null;
           await this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
-          // Restart llama server so it picks up the Vulkan binary
+          // Stop server so next inference picks up the new Vulkan binary
           await modelManager.stopServer().catch(() => {});
         }
 
@@ -3253,7 +3283,7 @@ class IPCHandlers {
     // Auth: clear all session cookies for sign-out.
     // This clears every cookie in the renderer session rather than targeting
     // individual auth cookies, which is acceptable because the app only sets
-    // cookies for Neon Auth. Avoids CSRF/Origin header issues that occur when
+    // cookies for Better Auth. Avoids CSRF/Origin header issues that occur when
     // the renderer tries to call the server-side sign-out endpoint directly.
     ipcMain.handle("auth-clear-session", async (event) => {
       try {
@@ -3287,10 +3317,10 @@ class IPCHandlers {
       "";
 
     const getAuthUrl = () =>
-      process.env.NEON_AUTH_URL ||
-      process.env.VITE_NEON_AUTH_URL ||
-      runtimeEnv.VITE_NEON_AUTH_URL ||
-      "";
+      process.env.AUTH_URL ||
+      process.env.VITE_AUTH_URL ||
+      runtimeEnv.VITE_AUTH_URL ||
+      "https://auth.openwhispr.com";
 
     const getSessionCookiesFromWindow = async (win) => {
       const scopedUrls = [getAuthUrl(), getApiUrl()].filter(Boolean);
@@ -3344,6 +3374,11 @@ class IPCHandlers {
       return getSessionCookiesFromWindow(win);
     };
 
+    // Honors system proxy via Electron's net stack. useSessionCookies:false
+    // because we set the Cookie header manually from getSessionCookies() —
+    // letting Electron also attach session cookies risks duplicates.
+    const proxyFetch = (url, init = {}) => net.fetch(url, { ...init, useSessionCookies: false });
+
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
@@ -3353,6 +3388,9 @@ class IPCHandlers {
         if (!cookieHeader) throw new Error("No session cookies available");
 
         const audioData = Buffer.from(audioBuffer);
+        // Reused for the local SQLite row so SyncService upserts the existing
+        // cloud row (filling in text) instead of creating a duplicate.
+        const clientTranscriptionId = crypto.randomUUID();
         const multipartFields = {
           language: opts.language,
           prompt: opts.prompt,
@@ -3361,6 +3399,7 @@ class IPCHandlers {
           appVersion: app.getVersion(),
           clientVersion: app.getVersion(),
           sessionId: this.sessionId,
+          clientTranscriptionId,
         };
 
         debugLogger.debug("Cloud transcribe request", { audioSize: audioData.length }, "cloud-api");
@@ -3376,6 +3415,7 @@ class IPCHandlers {
           return {
             success: true,
             text,
+            clientTranscriptionId,
             wordsUsed: lastResponse?.wordsUsed,
             wordsRemaining: lastResponse?.wordsRemaining,
             plan: lastResponse?.plan,
@@ -3408,6 +3448,7 @@ class IPCHandlers {
         return {
           success: true,
           text: result.text,
+          clientTranscriptionId,
           wordsUsed: result.wordsUsed,
           wordsRemaining: result.wordsRemaining,
           plan: result.plan,
@@ -3425,6 +3466,35 @@ class IPCHandlers {
           return { success: false, error: error.message, code: error.code, ...error };
         }
         return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("cloud-health-check", async () => {
+      const apiUrl = getApiUrl();
+      if (!apiUrl) {
+        return {
+          ok: false,
+          code: "NO_API_URL",
+          messageKey: "streaming.errors.cloudUnreachable.generic",
+        };
+      }
+      const url = `${apiUrl}/api/health`;
+      try {
+        const res = await proxyFetch(url, {
+          method: "GET",
+          signal: AbortSignal.timeout(3000),
+        });
+        return { ok: res.ok, status: res.status };
+      } catch (err) {
+        const classified = classifyAndLog(err, url);
+        if (classified.isNetworkError) {
+          return { ok: false, code: classified.code, messageKey: classified.messageKey };
+        }
+        return {
+          ok: false,
+          code: "UNKNOWN",
+          messageKey: "streaming.errors.cloudUnreachable.generic",
+        };
       }
     });
 
@@ -3522,7 +3592,7 @@ class IPCHandlers {
             headers.Authorization = `Bearer ${apiKey}`;
           }
 
-          const response = await fetch(endpoint, { method: "POST", headers, body: formData });
+          const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
           if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
@@ -3973,11 +4043,25 @@ class IPCHandlers {
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
-        const response = await fetch(`${apiUrl}${path}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Cookie: cookieHeader },
-          body: JSON.stringify(body),
-        });
+        const url = `${apiUrl}${path}`;
+        let response;
+        try {
+          response = await proxyFetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+            body: JSON.stringify(body),
+          });
+        } catch (err) {
+          const classified = classifyAndLog(err, url);
+          if (classified.isNetworkError) {
+            throw Object.assign(new Error(err.message || "Network request failed"), {
+              code: "NETWORK_ERROR",
+              networkCode: classified.code,
+              messageKey: classified.messageKey,
+            });
+          }
+          throw err;
+        }
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
           throw new Error(err.error || `Token request failed: ${response.status}`);
@@ -3994,7 +4078,7 @@ class IPCHandlers {
             throw new Error("No AssemblyAI API key configured. Add your key in Settings.");
           }
           return dual(async () => {
-            const response = await fetch(
+            const response = await proxyFetch(
               "https://streaming.assemblyai.com/v3/token?expires_in_seconds=60",
               { headers: { Authorization: apiKey } }
             );
@@ -5316,13 +5400,21 @@ class IPCHandlers {
       }
     });
 
+    const streamingStartFailure = (err) => {
+      const result = { success: false, error: err.message };
+      if (err.code) result.code = err.code;
+      if (err.messageKey) result.messageKey = err.messageKey;
+      if (err.networkCode) result.networkCode = err.networkCode;
+      return result;
+    };
+
     ipcMain.handle("dictation-realtime-warmup", async (event, options = {}) => {
       try {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
         return { success: true };
       } catch (err) {
-        return { success: false, error: err.message };
+        return streamingStartFailure(err);
       }
     });
 
@@ -5332,7 +5424,7 @@ class IPCHandlers {
         if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
         return { success: true };
       } catch (err) {
-        return { success: false, error: err.message };
+        return streamingStartFailure(err);
       }
     });
 
@@ -5457,7 +5549,7 @@ class IPCHandlers {
           "cloud-api"
         );
 
-        const response = await fetch(`${apiUrl}/api/reason`, {
+        const response = await proxyFetch(`${apiUrl}/api/reason`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -5533,7 +5625,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/agent/stream`, {
+        const response = await proxyFetch(`${apiUrl}/api/agent/stream`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -5628,7 +5720,7 @@ class IPCHandlers {
 
         debugLogger.debug("Agent web search request", { query, numResults }, "cloud-api");
 
-        const response = await fetch(`${apiUrl}/api/agent/web-search`, {
+        const response = await proxyFetch(`${apiUrl}/api/agent/web-search`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -5669,7 +5761,7 @@ class IPCHandlers {
           const cookieHeader = await getSessionCookies(event);
           if (!cookieHeader) throw new Error("No session cookies available");
 
-          const response = await fetch(`${apiUrl}/api/streaming-usage`, {
+          const response = await proxyFetch(`${apiUrl}/api/streaming-usage`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -5720,7 +5812,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/usage`, {
+        const response = await proxyFetch(`${apiUrl}/api/usage`, {
           headers: { Cookie: cookieHeader },
         });
 
@@ -5757,7 +5849,7 @@ class IPCHandlers {
           fetchOpts.body = JSON.stringify(body);
         }
 
-        const response = await fetch(`${apiUrl}${endpoint}`, fetchOpts);
+        const response = await proxyFetch(`${apiUrl}${endpoint}`, fetchOpts);
 
         if (!response.ok) {
           if (response.status === 401) {
@@ -5794,7 +5886,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/stripe/switch-plan`, {
+        const response = await proxyFetch(`${apiUrl}/api/stripe/switch-plan`, {
           method: "POST",
           headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
           body: JSON.stringify(opts),
@@ -5826,7 +5918,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/stripe/preview-switch`, {
+        const response = await proxyFetch(`${apiUrl}/api/stripe/preview-switch`, {
           method: "POST",
           headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
           body: JSON.stringify(opts),
@@ -5867,7 +5959,7 @@ class IPCHandlers {
           fetchOpts.body = JSON.stringify(opts.body);
         }
 
-        const response = await fetch(`${apiUrl}${opts.path}`, fetchOpts);
+        const response = await proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
 
         if (response.status === 401) {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
@@ -5901,7 +5993,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/stt-config`, {
+        const response = await proxyFetch(`${apiUrl}/api/stt-config`, {
           headers: { Cookie: cookieHeader },
         });
 
@@ -5931,7 +6023,7 @@ class IPCHandlers {
         const cookieHeader = await getSessionCookies(event);
         if (!cookieHeader) throw new Error("No session cookies available");
 
-        const response = await fetch(`${apiUrl}/api/note-recording-config`, {
+        const response = await proxyFetch(`${apiUrl}/api/note-recording-config`, {
           headers: { Cookie: cookieHeader },
         });
 
@@ -6076,7 +6168,7 @@ class IPCHandlers {
           throw new Error("No session cookies available");
         }
 
-        const response = await fetch(`${apiUrl}/api/referrals/stats`, {
+        const response = await proxyFetch(`${apiUrl}/api/referrals/stats`, {
           headers: {
             Cookie: cookieHeader,
           },
@@ -6112,7 +6204,7 @@ class IPCHandlers {
           throw new Error("No session cookies available");
         }
 
-        const response = await fetch(`${apiUrl}/api/referrals/invite`, {
+        const response = await proxyFetch(`${apiUrl}/api/referrals/invite`, {
           method: "POST",
           headers: {
             Cookie: cookieHeader,
@@ -6150,7 +6242,7 @@ class IPCHandlers {
           throw new Error("No session cookies available");
         }
 
-        const response = await fetch(`${apiUrl}/api/referrals/invites`, {
+        const response = await proxyFetch(`${apiUrl}/api/referrals/invites`, {
           headers: {
             Cookie: cookieHeader,
           },
@@ -6305,6 +6397,22 @@ class IPCHandlers {
       return this.updateManager.getAppVersion();
     });
 
+    ipcMain.handle("get-post-migration-state", () => ({
+      justMigrated: postMigrationDetector.isReturningFromOldBundle(),
+    }));
+
+    ipcMain.handle("get-oauth-protocol-registered", () => this.oauthProtocolRegistered);
+
+    ipcMain.handle("get-oauth-protocol", () => this.oauthProtocol);
+
+    ipcMain.handle("mark-bundle-migrated", () => {
+      postMigrationDetector.markBundleMigrated();
+    });
+
+    ipcMain.handle("mark-bundle-migration-dismissed", () => {
+      postMigrationDetector.markBundleMigrationDismissed();
+    });
+
     ipcMain.handle("get-update-status", async () => {
       return this.updateManager.getUpdateStatus();
     });
@@ -6324,7 +6432,7 @@ class IPCHandlers {
         throw new Error("No session cookies available");
       }
 
-      const tokenResponse = await fetch(`${apiUrl}/api/streaming-token`, {
+      const tokenResponse = await proxyFetch(`${apiUrl}/api/streaming-token`, {
         method: "POST",
         headers: {
           Cookie: cookieHeader,
@@ -6470,7 +6578,7 @@ class IPCHandlers {
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
         }
-        return { success: false, error: error.message };
+        return streamingStartFailure(error);
       } finally {
         streamingStartInProgress = false;
       }
@@ -6525,7 +6633,7 @@ class IPCHandlers {
       const cookieHeader = await getSessionCookiesFromWindow(win);
       if (!cookieHeader) throw new Error("No session cookies available");
 
-      const tokenResponse = await fetch(`${apiUrl}/api/deepgram-streaming-token`, {
+      const tokenResponse = await proxyFetch(`${apiUrl}/api/deepgram-streaming-token`, {
         method: "POST",
         headers: { Cookie: cookieHeader },
       });
@@ -6555,7 +6663,7 @@ class IPCHandlers {
         throw new Error("No session cookies available");
       }
 
-      const tokenResponse = await fetch(`${apiUrl}/api/deepgram-streaming-token`, {
+      const tokenResponse = await proxyFetch(`${apiUrl}/api/deepgram-streaming-token`, {
         method: "POST",
         headers: {
           Cookie: cookieHeader,
@@ -6724,7 +6832,7 @@ class IPCHandlers {
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
         }
-        return { success: false, error: error.message };
+        return streamingStartFailure(error);
       } finally {
         deepgramStreamingStartInProgress = false;
       }
@@ -7709,6 +7817,27 @@ class IPCHandlers {
         }
       }
     })();
+  }
+
+  deleteTranscriptionInternal(id) {
+    this.audioStorageManager.deleteAudio(id);
+    const result = this.databaseManager.deleteTranscription(id);
+    if (result?.success) {
+      setImmediate(() => {
+        this.broadcastToWindows("transcription-deleted", { id });
+      });
+    }
+    return result;
+  }
+
+  deleteNoteInternal(id) {
+    const result = this.databaseManager.deleteNote(id);
+    if (result?.success) {
+      setImmediate(() => this.broadcastToWindows("note-deleted", { id }));
+      this._asyncVectorDelete(id);
+      this._asyncMirrorDelete(id);
+    }
+    return result;
   }
 
   broadcastToWindows(channel, payload) {

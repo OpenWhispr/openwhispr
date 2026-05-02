@@ -12,33 +12,42 @@ import PermissionsSection from "./ui/PermissionsSection";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 
-interface TccResetModalProps {
+interface PostMigrationOnboardingProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDone: () => void;
 }
 
-export default function TccResetModal({ open, onOpenChange, onDone }: TccResetModalProps) {
+export default function PostMigrationOnboarding({
+  open,
+  onOpenChange,
+  onDone,
+}: PostMigrationOnboardingProps) {
   const { t } = useTranslation();
   const permissions = usePermissions();
   const systemAudio = useSystemAudioPermission();
+
+  const remindLater = () => {
+    window.electronAPI?.markBundleMigrationDismissed?.();
+    onOpenChange(false);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("tccReset.title")}</DialogTitle>
-          <DialogDescription>{t("tccReset.description")}</DialogDescription>
+          <DialogTitle>{t("postMigration.title")}</DialogTitle>
+          <DialogDescription>{t("postMigration.description")}</DialogDescription>
         </DialogHeader>
 
         <PermissionsSection permissions={permissions} systemAudio={systemAudio} />
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            {t("tccReset.remindLater")}
+          <Button variant="ghost" onClick={remindLater}>
+            {t("postMigration.remindLater")}
           </Button>
           <Button onClick={onDone} disabled={!permissions.micPermissionGranted}>
-            {t("tccReset.done")}
+            {t("postMigration.done")}
           </Button>
         </DialogFooter>
       </DialogContent>

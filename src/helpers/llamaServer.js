@@ -7,11 +7,12 @@ const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
 const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
+const sidecarPidFile = require("./sidecarPidFile");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8220;
 const STARTUP_TIMEOUT_MS = 60000;
-const VULKAN_STARTUP_TIMEOUT_MS = 10000;
+const VULKAN_STARTUP_TIMEOUT_MS = 60000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
@@ -231,7 +232,9 @@ class LlamaServerManager {
         windowsHide: true,
         cwd: getSafeTempDir(),
         env,
+        detached: process.platform !== "win32",
       });
+      sidecarPidFile.write("llama", this.process.pid);
 
       let stderrBuffer = "";
       let exitCode = null;
@@ -266,6 +269,7 @@ class LlamaServerManager {
         this.ready = false;
         this.process = null;
         this.stopHealthCheck();
+        sidecarPidFile.clear("llama");
       });
 
       const getProcessInfo = () => ({ stderr: stderrBuffer, exitCode, exitSignal });

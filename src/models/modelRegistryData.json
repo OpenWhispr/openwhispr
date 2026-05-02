@@ -188,10 +188,10 @@
       "name": "OpenAI",
       "models": [
         {
-          "id": "gpt-5.4",
-          "name": "GPT-5.4",
-          "description": "Frontier model for complex reasoning",
-          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_4",
+          "id": "gpt-5.5",
+          "name": "GPT-5.5",
+          "description": "Frontier model for complex reasoning, 1M context",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_5",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false
         },
@@ -262,10 +262,28 @@
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5"
         },
         {
+          "id": "claude-opus-4-7",
+          "name": "Claude Opus 4.7",
+          "description": "Most capable Claude model, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7"
+        },
+        {
           "id": "claude-opus-4-6",
           "name": "Claude Opus 4.6",
-          "description": "Most capable Claude model",
+          "description": "Previous Opus generation, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6"
+        },
+        {
+          "id": "claude-sonnet-4-5",
+          "name": "Claude Sonnet 4.5",
+          "description": "Previous Sonnet generation",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5"
+        },
+        {
+          "id": "claude-opus-4-5",
+          "name": "Claude Opus 4.5",
+          "description": "Earlier Opus model",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5"
         }
       ]
     },

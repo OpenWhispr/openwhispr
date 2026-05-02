@@ -206,6 +206,25 @@
       "hotkeyToStartStop": "{{hotkey}} para iniciar/detener",
       "holdHotkey": "Mantener {{hotkey}}",
       "textareaPlaceholder": "Haz clic aquí y usa tu atajo para dictar..."
+    },
+    "connectivity": {
+      "title": "No podemos conectar con OpenWhispr Cloud desde esta red",
+      "body": "{{cause}} Puedes cambiar al motor local o continuar e intentarlo más tarde.",
+      "useLocal": "Usar motor local",
+      "continue": "Continuar de todos modos"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "No se puede conectar con OpenWhispr Cloud",
+        "generic": "La solicitud de red falló. Comprueba tu conexión.",
+        "dnsBlocked": "El DNS no resuelve openwhispr.com: puede que un bloqueador de anuncios o un filtro lo esté bloqueando.",
+        "refused": "La conexión fue rechazada: probablemente un firewall o una VPN.",
+        "timeout": "Se agotó el tiempo de la red: VPN, portal cautivo o conexión inestable.",
+        "tls": "Falló el handshake TLS: revisa el reloj del sistema o un proxy corporativo.",
+        "fallback": "Cloud no disponible: usando el motor local para esta grabación."
+      }
     }
   },
   "controlPanel": {
@@ -408,6 +427,11 @@
       "noAudio": {
         "title": "No se detectó audio",
         "description": "La grabación no contiene audio detectable. Inténtalo de nuevo."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "Tu sesión de OpenWhispr Cloud no está disponible. Vuelve a iniciar sesión desde Ajustes.",
+        "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
+        "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan."
       }
     },
     "clipboard": {
@@ -590,7 +614,10 @@
     },
     "social": {
       "completeInBrowser": "Completa el inicio de sesión en tu navegador",
-      "continueWithGoogle": "Continuar con Google"
+      "continueWithApple": "Continuar con Apple",
+      "continueWithGoogle": "Continuar con Google",
+      "continueWithMicrosoft": "Continuar con Microsoft",
+      "protocolUnavailable": "Inicio de sesión por navegador no disponible — vuelve a registrar el protocolo openwhispr:// en los ajustes de Aplicaciones predeterminadas del sistema."
     },
     "welcomeSubtitle": "Dicta en cualquier lugar usando tu voz",
     "welcomeTitle": "Bienvenido a OpenWhispr",
@@ -921,27 +948,6 @@
       "modified": "Modificado"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Volver a iniciar sesión",
-    "confirmPasswordPlaceholder": "Confirma la nueva contraseña",
-    "continue": "Continuar",
-    "errors": {
-      "passwordMinLength": "La contraseña debe tener al menos 8 caracteres",
-      "passwordsDoNotMatch": "Las contraseñas no coinciden"
-    },
-    "goBack": "Volver",
-    "newPasswordPlaceholder": "Nueva contraseña",
-    "notConfigured": "La autenticación no está configurada.",
-    "passwordMinLength": "La contraseña debe tener al menos 8 caracteres",
-    "resetButton": "Restablecer contraseña",
-    "resetting": "Restableciendo...",
-    "subtitle": "Introduce tu nueva contraseña a continuación",
-    "success": {
-      "description": "Tu contraseña ha sido actualizada. Ya iniciaste sesión.",
-      "title": "Contraseña restablecida"
-    },
-    "title": "Crear nueva contraseña"
-  },
   "settingsModal": {
     "groups": {
       "account": "Cuenta",
@@ -1010,7 +1016,7 @@
       },
       "disabled": "Desactivado",
       "featuresDisabled": "Funciones de cuenta desactivadas",
-      "featuresDisabledDescription": "Configura VITE_NEON_AUTH_URL en tu archivo .env para habilitar las funciones de cuenta.",
+      "featuresDisabledDescription": "Configura VITE_AUTH_URL en tu archivo .env para habilitar las funciones de cuenta.",
       "notConfigured": "La autenticación no está configurada",
       "notSignedIn": "Sin sesión iniciada",
       "notSignedInDescription": "Crea una cuenta para desbloquear funciones premium.",
@@ -1532,8 +1538,9 @@
       "description": "Configura modelos para limpieza, formato de notas y chat",
       "tabs": {
         "dictationCleanup": "Limpieza de dictado",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "Formato de notas",
-        "chatIntelligence": "Inteligencia de chat"
+        "chatIntelligence": "Chat"
       }
     },
     "transcription": {
@@ -1623,7 +1630,6 @@
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida"
       },
       "cloud": {
-        "openai_gpt_5_4": "Modelo frontier para razonamiento complejo",
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",
         "openai_gpt_5_mini": "Rápido y económico",
         "openai_gpt_5_nano": "Ultrarrápido, baja latencia",
@@ -1632,7 +1638,6 @@
         "openai_gpt_4_1_nano": "GPT-4.1 de menor latencia",
         "anthropic_claude_sonnet_4_5": "Rendimiento equilibrado",
         "anthropic_claude_haiku_4_5": "Rápido con inteligencia cercana a la frontera",
-        "anthropic_claude_opus_4_5": "Modelo Claude más capaz",
         "gemini_gemini_3_pro_preview": "Modelo insignia de nueva generación para razonamiento complejo",
         "gemini_gemini_3_flash_preview": "Modelo de nueva generación ultrarrápido y de alta capacidad",
         "gemini_gemini_2_5_flash_lite": "Menor latencia y costo",
@@ -1644,7 +1649,11 @@
         "groq_llama_4_scout": "Multimodal eficiente de Meta, 750 T/seg",
         "groq_compound": "Sistema compound de Groq, 450 T/seg",
         "groq_compound_mini": "Sistema compound rápido, 3x menor latencia",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexto 256K"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexto 256K",
+        "openai_gpt_5_5": "Modelo frontier para razonamiento complejo",
+        "anthropic_claude_opus_4_7": "Modelo Claude más capaz",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Rápido y económico. Ideal para limpiar texto.",
@@ -2081,9 +2090,9 @@
     "contactSupport": "Contactar soporte",
     "submitBug": "Reportar un error"
   },
-  "tccReset": {
-    "title": "Vuelve a conceder los permisos de OpenWhispr",
-    "description": "Perdona las molestias. OpenWhispr se ha trasladado a una nueva cuenta de Apple Developer y macOS ha borrado tus permisos. Vuelve a concederlos, por favor.",
+  "postMigration": {
+    "title": "Te damos la bienvenida de nuevo a OpenWhispr",
+    "description": "Tus notas y ajustes se han trasladado desde la versión anterior. Eso sí, macOS lo trata como una app nueva, así que tendrás que volver a conceder algunos permisos.",
     "done": "Hecho",
     "remindLater": "Recordármelo más tarde"
   },
@@ -2141,16 +2150,33 @@
       "stopListening": "Dejar de escuchar",
       "startListening": "Empezar a escuchar",
       "hideForNow": "Ocultar por ahora"
+    }
+  },
+  "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "useCleanupModel": "Usar modelo de limpieza",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
-    "oauth": {
-      "redirectTitle": "Redirigiendo a la app...",
-      "closeTab": "Puedes cerrar esta pestaña."
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {
     "settings": {
-      "enabled": "Activar Modo Agente",
-      "enabledDescription": "Usa una tecla de acceso rápido separada para abrir una superposición de chat por voz",
       "hotkey": "Tecla del Agente",
       "hotkeyDescription": "Tecla de acceso rápido para alternar la superposición del agente",
       "model": "Modelo del Agente",

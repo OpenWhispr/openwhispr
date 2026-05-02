@@ -206,6 +206,25 @@
       "hotkeyToStartStop": "{{hotkey}} zum Starten/Stoppen",
       "holdHotkey": "{{hotkey}} gedrückt halten",
       "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden..."
+    },
+    "connectivity": {
+      "title": "OpenWhispr Cloud ist aus diesem Netzwerk nicht erreichbar",
+      "body": "{{cause}} Sie können zur lokalen Engine wechseln oder fortfahren und es später erneut versuchen.",
+      "useLocal": "Lokale Engine verwenden",
+      "continue": "Trotzdem fortfahren"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "OpenWhispr Cloud nicht erreichbar",
+        "generic": "Die Netzwerkanfrage ist fehlgeschlagen. Prüfen Sie Ihre Verbindung.",
+        "dnsBlocked": "DNS löst openwhispr.com nicht auf — ein Werbeblocker oder Filter blockiert es möglicherweise.",
+        "refused": "Verbindung wurde abgelehnt — wahrscheinlich eine Firewall oder ein VPN.",
+        "timeout": "Netzwerk-Zeitüberschreitung — VPN, Captive Portal oder instabile Verbindung.",
+        "tls": "TLS-Handshake fehlgeschlagen — prüfen Sie Ihre Systemuhr oder einen Unternehmens-Proxy.",
+        "fallback": "Cloud nicht erreichbar — lokale Engine wird für diese Aufnahme verwendet."
+      }
     }
   },
   "controlPanel": {
@@ -408,6 +427,11 @@
       "noAudio": {
         "title": "Kein Audio erkannt",
         "description": "Die Aufnahme enthielt kein erkennbares Audio. Bitte versuchen Sie es erneut."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
+        "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
+        "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan."
       }
     },
     "clipboard": {
@@ -590,7 +614,10 @@
     },
     "social": {
       "completeInBrowser": "Anmeldung im Browser abschließen",
-      "continueWithGoogle": "Weiter mit Google"
+      "continueWithApple": "Weiter mit Apple",
+      "continueWithGoogle": "Weiter mit Google",
+      "continueWithMicrosoft": "Weiter mit Microsoft",
+      "protocolUnavailable": "Browser-Anmeldung nicht verfügbar — registrieren Sie das openwhispr://-Protokoll in den Standardanwendungs-Einstellungen Ihres Systems erneut."
     },
     "welcomeSubtitle": "Diktieren Sie überall mit Ihrer Stimme",
     "welcomeTitle": "Willkommen bei OpenWhispr",
@@ -873,27 +900,6 @@
       "modified": "Geändert"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Zurück zur Anmeldung",
-    "confirmPasswordPlaceholder": "Neues Passwort bestätigen",
-    "continue": "Weiter",
-    "errors": {
-      "passwordMinLength": "Passwort muss mindestens 8 Zeichen lang sein",
-      "passwordsDoNotMatch": "Passwörter stimmen nicht überein"
-    },
-    "goBack": "Zurück",
-    "newPasswordPlaceholder": "Neues Passwort",
-    "notConfigured": "Authentifizierung ist nicht konfiguriert.",
-    "passwordMinLength": "Passwort muss mindestens 8 Zeichen lang sein",
-    "resetButton": "Passwort zurücksetzen",
-    "resetting": "Wird zurückgesetzt...",
-    "subtitle": "Geben Sie unten Ihr neues Passwort ein",
-    "success": {
-      "description": "Ihr Passwort wurde aktualisiert. Sie sind jetzt angemeldet.",
-      "title": "Passwort erfolgreich zurückgesetzt"
-    },
-    "title": "Neues Passwort erstellen"
-  },
   "settingsModal": {
     "groups": {
       "account": "Konto",
@@ -962,7 +968,7 @@
       },
       "disabled": "Deaktiviert",
       "featuresDisabled": "Kontofunktionen deaktiviert",
-      "featuresDisabledDescription": "Setzen Sie VITE_NEON_AUTH_URL in Ihrer .env-Datei, um Kontofunktionen zu aktivieren.",
+      "featuresDisabledDescription": "Setzen Sie VITE_AUTH_URL in Ihrer .env-Datei, um Kontofunktionen zu aktivieren.",
       "notConfigured": "Authentifizierung ist nicht konfiguriert",
       "notSignedIn": "Nicht angemeldet",
       "notSignedInDescription": "Erstellen Sie ein Konto, um Premium-Funktionen freizuschalten.",
@@ -1484,8 +1490,9 @@
       "description": "Konfigurieren Sie Modelle für Bereinigung, Notizformatierung und Chat",
       "tabs": {
         "dictationCleanup": "Diktat-Bereinigung",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "Notizformatierung",
-        "chatIntelligence": "Chat-Intelligenz"
+        "chatIntelligence": "Chat"
       }
     },
     "transcription": {
@@ -1575,7 +1582,6 @@
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription"
       },
       "cloud": {
-        "openai_gpt_5_4": "Frontier-Modell für komplexes Reasoning",
         "openai_gpt_5_2": "Starkes Reasoning-Modell",
         "openai_gpt_5_mini": "Schnell und kosteneffizient",
         "openai_gpt_5_nano": "Ultraschnell, niedrige Latenz",
@@ -1584,7 +1590,6 @@
         "openai_gpt_4_1_nano": "GPT-4.1 mit der niedrigsten Latenz",
         "anthropic_claude_sonnet_4_5": "Ausgewogene Leistung",
         "anthropic_claude_haiku_4_5": "Schnell mit nahezu Frontier-Intelligenz",
-        "anthropic_claude_opus_4_5": "Leistungsstärkstes Claude-Modell",
         "gemini_gemini_3_pro_preview": "Flaggschiff der nächsten Generation für komplexes Reasoning",
         "gemini_gemini_3_flash_preview": "Ultraschnelles Modell der nächsten Generation mit hoher Leistungsfähigkeit",
         "gemini_gemini_2_5_flash_lite": "Niedrigste Latenz und Kosten",
@@ -1596,7 +1601,11 @@
         "groq_llama_4_scout": "Effizientes Multimodal von Meta, 750 T/s",
         "groq_compound": "Groqs Compound-System, 450 T/s",
         "groq_compound_mini": "Schnelles Compound-System, 3x niedrigere Latenz",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, 256K Kontext"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, 256K Kontext",
+        "openai_gpt_5_5": "Frontier-Modell für komplexes Reasoning",
+        "anthropic_claude_opus_4_7": "Leistungsstärkstes Claude-Modell",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",
@@ -2033,9 +2042,9 @@
     "contactSupport": "Support kontaktieren",
     "submitBug": "Fehler melden"
   },
-  "tccReset": {
-    "title": "Berechtigungen für OpenWhispr erneut erteilen",
-    "description": "Sorry für die Umstände. OpenWhispr ist zu einem neuen Apple Developer-Konto gewechselt und macOS hat deine Berechtigungen gelöscht. Bitte erteile sie erneut.",
+  "postMigration": {
+    "title": "Willkommen zurück bei OpenWhispr",
+    "description": "Deine Notizen und Einstellungen wurden aus der vorherigen Version übernommen. macOS behandelt das hier allerdings als neue App, daher müssen ein paar Berechtigungen erneut erteilt werden.",
     "done": "Fertig",
     "remindLater": "Später erinnern"
   },
@@ -2093,16 +2102,33 @@
       "stopListening": "Aufnahme beenden",
       "startListening": "Aufnahme starten",
       "hideForNow": "Vorerst ausblenden"
+    }
+  },
+  "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "useCleanupModel": "Bereinigungsmodell verwenden",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
-    "oauth": {
-      "redirectTitle": "Weiterleitung zur App...",
-      "closeTab": "Du kannst diesen Tab schließen."
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {
     "settings": {
-      "enabled": "Agent-Modus aktivieren",
-      "enabledDescription": "Verwende eine separate Tastenkombination, um ein Sprach-Chat-Overlay zu öffnen",
       "hotkey": "Agent-Tastenkombination",
       "hotkeyDescription": "Tastenkombination zum Umschalten des Agent-Overlays",
       "model": "Agent-Modell",

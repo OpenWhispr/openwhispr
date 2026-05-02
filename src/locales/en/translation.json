@@ -206,6 +206,25 @@
       "hotkeyToStartStop": "{{hotkey}} to start/stop",
       "holdHotkey": "Hold {{hotkey}}",
       "textareaPlaceholder": "Click here and use your hotkey to dictate..."
+    },
+    "connectivity": {
+      "title": "We can't reach OpenWhispr Cloud from this network",
+      "body": "{{cause}} You can switch to the local engine, or continue and try again later.",
+      "useLocal": "Use local engine",
+      "continue": "Continue anyway"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "Can't reach OpenWhispr Cloud",
+        "generic": "Network request failed. Check your connection.",
+        "dnsBlocked": "DNS isn't resolving openwhispr.com — an ad blocker or filter may be blocking it.",
+        "refused": "Connection was refused — likely a firewall or VPN.",
+        "timeout": "Network timed out — VPN, captive portal, or unstable connection.",
+        "tls": "TLS handshake failed — check your system clock or for a corporate proxy.",
+        "fallback": "Cloud unreachable — using local engine for this recording."
+      }
     }
   },
   "controlPanel": {
@@ -408,6 +427,11 @@
       "noAudio": {
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
+        "offline": "You're offline. Cloud transcription requires an internet connection.",
+        "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan."
       }
     },
     "clipboard": {
@@ -590,7 +614,10 @@
     },
     "social": {
       "completeInBrowser": "Complete sign-in in your browser",
-      "continueWithGoogle": "Continue with Google"
+      "continueWithApple": "Continue with Apple",
+      "continueWithGoogle": "Continue with Google",
+      "continueWithMicrosoft": "Continue with Microsoft",
+      "protocolUnavailable": "Browser sign-in unavailable — re-register the openwhispr:// protocol in your system's Default Apps settings."
     },
     "welcomeSubtitle": "Dictate anywhere using your voice",
     "welcomeTitle": "Welcome to OpenWhispr",
@@ -969,27 +996,6 @@
       "modified": "Modified"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Back to sign in",
-    "confirmPasswordPlaceholder": "Confirm new password",
-    "continue": "Continue",
-    "errors": {
-      "passwordMinLength": "Password must be at least 8 characters",
-      "passwordsDoNotMatch": "Passwords do not match"
-    },
-    "goBack": "Go Back",
-    "newPasswordPlaceholder": "New password",
-    "notConfigured": "Authentication is not configured.",
-    "passwordMinLength": "Password must be at least 8 characters",
-    "resetButton": "Reset Password",
-    "resetting": "Resetting...",
-    "subtitle": "Enter your new password below",
-    "success": {
-      "description": "Your password has been updated. You're now signed in.",
-      "title": "Password reset successful"
-    },
-    "title": "Create new password"
-  },
   "settingsModal": {
     "groups": {
       "account": "Account",
@@ -1058,7 +1064,7 @@
       },
       "disabled": "Disabled",
       "featuresDisabled": "Account Features Disabled",
-      "featuresDisabledDescription": "Set VITE_NEON_AUTH_URL in your .env file to enable account features.",
+      "featuresDisabledDescription": "Set VITE_AUTH_URL in your .env file to enable account features.",
       "notConfigured": "Authentication is not configured",
       "notSignedIn": "Not signed in",
       "notSignedInDescription": "Create an account to unlock premium features.",
@@ -1580,8 +1586,9 @@
       "description": "Configure models for cleanup, note formatting, and chat",
       "tabs": {
         "dictationCleanup": "Dictation Cleanup",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "Note Formatting",
-        "chatIntelligence": "Chat Intelligence"
+        "chatIntelligence": "Chat"
       }
     },
     "transcription": {
@@ -1675,7 +1682,6 @@
         "mistral_voxtral_mini_latest": "Fast multilingual transcription"
       },
       "cloud": {
-        "openai_gpt_5_4": "Frontier model for complex reasoning",
         "openai_gpt_5_2": "Strong reasoning model",
         "openai_gpt_5_mini": "Fast and cost-efficient",
         "openai_gpt_5_nano": "Ultra-fast, low latency",
@@ -1684,7 +1690,6 @@
         "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
         "anthropic_claude_sonnet_4_5": "Balanced performance",
         "anthropic_claude_haiku_4_5": "Fast with near-frontier intelligence",
-        "anthropic_claude_opus_4_5": "Most capable Claude model",
         "gemini_gemini_3_pro_preview": "Next-gen flagship model for complex reasoning",
         "gemini_gemini_3_flash_preview": "Ultra-fast, high-capability next-gen model",
         "gemini_gemini_2_5_flash_lite": "Lowest latency and cost",
@@ -1696,7 +1701,11 @@
         "groq_llama_4_scout": "Meta's efficient multimodal, 750 T/sec",
         "groq_compound": "Groq's compound system, 450 T/sec",
         "groq_compound_mini": "Fast compound system, 3x lower latency",
-        "groq_kimi_k2_0905": "Moonshot AI's 1T MoE, 256K context"
+        "groq_kimi_k2_0905": "Moonshot AI's 1T MoE, 256K context",
+        "openai_gpt_5_5": "Frontier model for complex reasoning",
+        "anthropic_claude_opus_4_7": "Most capable Claude model",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
@@ -2129,9 +2138,9 @@
     "contactSupport": "Contact Support",
     "submitBug": "Submit Bug"
   },
-  "tccReset": {
-    "title": "Re-grant OpenWhispr's permissions",
-    "description": "Sorry about this. OpenWhispr moved to a new Apple Developer account and macOS cleared your permissions. Please grant them again.",
+  "postMigration": {
+    "title": "Welcome back to OpenWhispr",
+    "description": "Your notes and settings carried over from the previous version. macOS treats this as a new app though, so a few permissions need to be granted again.",
     "done": "Done",
     "remindLater": "Remind Me Later"
   },
@@ -2189,16 +2198,33 @@
       "stopListening": "Stop listening",
       "startListening": "Start listening",
       "hideForNow": "Hide for now"
+    }
+  },
+  "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "useCleanupModel": "Use cleanup model",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
-    "oauth": {
-      "redirectTitle": "Redirecting to app...",
-      "closeTab": "You can close this tab."
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {
     "settings": {
-      "enabled": "Enable Agent Mode",
-      "enabledDescription": "Use a separate hotkey to open a voice chat overlay",
       "hotkey": "Agent Hotkey",
       "hotkeyDescription": "Hotkey to toggle the agent overlay",
       "model": "Agent Model",

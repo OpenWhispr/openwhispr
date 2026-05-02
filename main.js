@@ -51,7 +51,7 @@ const DEFAULT_OAUTH_PROTOCOL_BY_CHANNEL = {
   staging: "openwhispr-staging",
   production: "openwhispr",
 };
-const BASE_WINDOWS_APP_ID = "com.herotools.openwispr";
+const BASE_WINDOWS_APP_ID = "com.gizmolabs.openwhispr";
 const DEFAULT_AUTH_BRIDGE_PORT = 5199;
 
 function isElectronBinaryExec() {
@@ -155,10 +155,12 @@ function shouldRegisterProtocolWithAppArg() {
 function getDefaultHtmlHandler() {
   try {
     const { execFileSync } = require("child_process");
-    return execFileSync("xdg-mime", ["query", "default", "text/html"], {
-      encoding: "utf8",
-      timeout: 3000,
-    }).trim() || null;
+    return (
+      execFileSync("xdg-mime", ["query", "default", "text/html"], {
+        encoding: "utf8",
+        timeout: 3000,
+      }).trim() || null
+    );
   } catch {
     return null;
   }
@@ -244,6 +246,7 @@ const ParakeetManager = require("./src/helpers/parakeet");
 const DiarizationManager = require("./src/helpers/diarization");
 const TrayManager = require("./src/helpers/tray");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
+const CliBridge = require("./src/helpers/cliBridge");
 const UpdateManager = require("./src/updater");
 const GlobeKeyManager = require("./src/helpers/globeKeyManager");
 const DevServerManager = require("./src/helpers/devServerManager");
@@ -260,6 +263,8 @@ const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
+const sidecarRegistry = require("./src/helpers/sidecarRegistry");
+const { reapStaleSidecars } = require("./src/helpers/sidecarReaper");
 
 // Manager instances - initialized after app.whenReady()
 let debugLogger = null;
@@ -285,6 +290,7 @@ let linuxPortalAudioManager = null;
 let meetingAecManager = null;
 let qdrantManager = null;
 let ipcHandlers = null;
+let cliBridge = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
 
@@ -387,7 +393,21 @@ function initializeCoreManagers() {
     linuxPortalAudioManager,
     meetingAecManager,
     getTrayManager: () => trayManager,
+    oauthProtocolRegistered: protocolRegistered,
+    oauthProtocol: OAUTH_PROTOCOL,
   });
+}
+
+function registerSidecars() {
+  if (whisperManager) sidecarRegistry.register("whisper", () => whisperManager.stopServer());
+  if (parakeetManager) sidecarRegistry.register("parakeet", () => parakeetManager.stopServer());
+  if (diarizationManager) {
+    sidecarRegistry.register("diarization", () => diarizationManager.shutdown());
+  }
+  const modelManager = require("./src/helpers/modelManagerBridge").default;
+  sidecarRegistry.register("llama", () => modelManager.stopServer());
+  const onnxWorkerClient = require("./src/helpers/onnxWorkerClient");
+  sidecarRegistry.register("onnx", () => onnxWorkerClient.stop());
 }
 
 // Phase 2: Non-critical setup after windows are visible
@@ -451,28 +471,40 @@ app.on("open-url", (event, url) => {
   }
 });
 
-// Extract the session verifier from the deep link and navigate the control
-// panel to its app URL with the verifier param so the Neon Auth SDK can
-// read it from window.location.search and complete authentication.
-function navigateControlPanelWithVerifier(verifier) {
-  if (!verifier) return;
+// Inject the Better Auth session cookie into Electron's session, then reload
+// the control panel so the renderer's authClient picks up the new session.
+async function applySessionTokenAndRefresh(token) {
+  if (!token) return;
   if (!isLiveWindow(windowManager?.controlPanelWindow)) return;
 
-  const appUrl = DevServerManager.getAppUrl(true);
+  try {
+    await session.defaultSession.cookies.set({
+      url: "https://auth.openwhispr.com",
+      name: "__Secure-openwhispr.session_token",
+      value: token,
+      domain: ".openwhispr.com",
+      path: "/",
+      secure: true,
+      httpOnly: true,
+      sameSite: "lax",
+    });
+  } catch (err) {
+    if (debugLogger) debugLogger.error("Failed to set OAuth session cookie:", err);
+    return;
+  }
 
+  const appUrl = DevServerManager.getAppUrl(true);
   if (appUrl) {
-    const separator = appUrl.includes("?") ? "&" : "?";
-    const urlWithVerifier = `${appUrl}${separator}neon_auth_session_verifier=${encodeURIComponent(verifier)}`;
-    windowManager.controlPanelWindow.loadURL(urlWithVerifier);
+    windowManager.controlPanelWindow.loadURL(appUrl);
   } else {
     const fileInfo = DevServerManager.getAppFilePath(true);
-    if (!fileInfo) return;
-    fileInfo.query.neon_auth_session_verifier = verifier;
-    windowManager.controlPanelWindow.loadFile(fileInfo.path, { query: fileInfo.query });
+    if (fileInfo) {
+      windowManager.controlPanelWindow.loadFile(fileInfo.path, { query: fileInfo.query });
+    }
   }
 
   if (debugLogger) {
-    debugLogger.debug("Navigating control panel with OAuth verifier", {
+    debugLogger.debug("Applied OAuth session cookie and reloaded control panel", {
       appChannel: APP_CHANNEL,
       oauthProtocol: OAUTH_PROTOCOL,
     });
@@ -484,9 +516,9 @@ function navigateControlPanelWithVerifier(verifier) {
 function handleOAuthDeepLink(deepLinkUrl) {
   try {
     const parsed = new URL(deepLinkUrl);
-    const verifier = parsed.searchParams.get("neon_auth_session_verifier");
-    if (!verifier) return;
-    navigateControlPanelWithVerifier(verifier);
+    const token = parsed.searchParams.get("token");
+    if (!token) return;
+    void applySessionTokenAndRefresh(token);
   } catch (err) {
     if (debugLogger) debugLogger.error("Failed to handle OAuth deep link:", err);
   }
@@ -550,11 +582,11 @@ function startAuthBridgeServer() {
       return;
     }
 
-    let verifier = requestUrl.searchParams.get("neon_auth_session_verifier");
-    if (!verifier && req.method === "POST") {
+    let token = requestUrl.searchParams.get("token");
+    if (!token && req.method === "POST") {
       try {
         const body = await parseJsonBody(req);
-        verifier = body?.neon_auth_session_verifier || body?.verifier || null;
+        token = body?.token || null;
       } catch (error) {
         res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
         res.end(error.message || "Invalid request");
@@ -562,13 +594,13 @@ function startAuthBridgeServer() {
       }
     }
 
-    if (!verifier) {
+    if (!token) {
       res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
-      res.end("Missing neon_auth_session_verifier");
+      res.end("Missing token");
       return;
     }
 
-    navigateControlPanelWithVerifier(verifier);
+    void applySessionTokenAndRefresh(token);
 
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(
@@ -593,19 +625,37 @@ function startAuthBridgeServer() {
 
 // Main application startup
 async function startApp() {
+  reapStaleSidecars();
+
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
   await environmentManager.init();
+  registerSidecars();
   startAuthBridgeServer();
 
-  // Electron's file:// sends no Origin header, which Neon Auth rejects.
+  cliBridge = new CliBridge(ipcHandlers);
+  cliBridge.start().catch((err) => {
+    debugLogger.error("CLI bridge failed to start", { error: err.message });
+    cliBridge = null;
+  });
+
+  // Electron's file:// renderer sends Origin: null, which Better Auth's
+  // trustedOrigins check rejects. Spoof Origin to the request's own URL so
+  // calls to OpenWhispr's auth and API hosts are treated as same-origin.
   session.defaultSession.webRequest.onBeforeSendHeaders(
-    { urls: ["https://*.neon.tech/*"] },
+    {
+      urls: [
+        "https://auth.openwhispr.com/*",
+        "https://api.openwhispr.com/*",
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*",
+      ],
+    },
     (details, callback) => {
       try {
         details.requestHeaders["Origin"] = new URL(details.url).origin;
       } catch {
-        /* malformed URL — leave Origin as-is */
+        // malformed URL — leave Origin as-is
       }
       callback({ requestHeaders: details.requestHeaders });
     }
@@ -741,10 +791,26 @@ async function startApp() {
     debugLogger.debug("Parakeet startup init error (non-fatal)", { error: err.message });
   });
 
-  if (process.env.REASONING_PROVIDER === "local" && process.env.LOCAL_REASONING_MODEL) {
+  // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL fallbacks after 2 releases.
+  const cleanupProvider = process.env.CLEANUP_PROVIDER || process.env.REASONING_PROVIDER;
+  const cleanupLocalModel = process.env.LOCAL_CLEANUP_MODEL || process.env.LOCAL_REASONING_MODEL;
+  if (cleanupProvider === "local" && cleanupLocalModel) {
     const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.prewarmServer(process.env.LOCAL_REASONING_MODEL).catch((err) => {
+    modelManager.prewarmServer(cleanupLocalModel).catch((err) => {
       debugLogger.debug("llama-server pre-warm error (non-fatal)", { error: err.message });
+    });
+  }
+
+  if (
+    process.env.DICTATION_AGENT_PROVIDER === "local" &&
+    process.env.LOCAL_DICTATION_AGENT_MODEL &&
+    process.env.LOCAL_DICTATION_AGENT_MODEL !== cleanupLocalModel
+  ) {
+    const modelManager = require("./src/helpers/modelManagerBridge").default;
+    modelManager.prewarmServer(process.env.LOCAL_DICTATION_AGENT_MODEL).catch((err) => {
+      debugLogger.debug("dictation-agent llama-server pre-warm error (non-fatal)", {
+        error: err.message,
+      });
     });
   }
 
@@ -762,6 +828,7 @@ async function startApp() {
 
   const QdrantManager = require("./src/helpers/qdrantManager");
   qdrantManager = new QdrantManager();
+  sidecarRegistry.register("qdrant", () => qdrantManager.stop());
   if (qdrantManager.isAvailable()) {
     qdrantManager
       .start()
@@ -1136,7 +1203,9 @@ async function startApp() {
     });
 
     linuxKeyManager.on("permission-denied", () => {
-      debugLogger.warn("[Push-to-Talk] Linux key listener has no permission to access input devices");
+      debugLogger.warn(
+        "[Push-to-Talk] Linux key listener has no permission to access input devices"
+      );
       if (isLiveWindow(windowManager.mainWindow)) {
         windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
       }
@@ -1317,71 +1386,45 @@ if (gotSingleInstanceLock) {
     }
   });
 
-  app.on("will-quit", () => {
-    if (authBridgeServer) {
-      authBridgeServer.close();
-      authBridgeServer = null;
-    }
-    if (windowManager && isLiveWindow(windowManager.agentWindow)) {
-      windowManager.agentWindow.destroy();
-    }
-    if (windowManager && isLiveWindow(windowManager.transcriptionPreviewWindow)) {
-      windowManager.transcriptionPreviewWindow.destroy();
-    }
-    if (hotkeyManager) {
-      hotkeyManager.unregisterAll();
-    } else {
-      globalShortcut.unregisterAll();
-    }
-    if (globeKeyManager) {
-      globeKeyManager.stop();
-    }
-    if (windowsKeyManager) {
-      windowsKeyManager.stop();
-    }
-    if (linuxKeyManager) {
-      linuxKeyManager.stop();
-    }
-    if (meetingDetectionEngine) {
-      meetingDetectionEngine.stop();
-    }
-    if (googleCalendarManager) {
-      googleCalendarManager.stop();
-    }
-    if (audioTapManager) {
-      audioTapManager.stop().catch(() => {});
-    }
-    if (linuxPortalAudioManager) {
-      linuxPortalAudioManager.stop().catch(() => {});
-    }
-    if (meetingAecManager) {
-      meetingAecManager.stop().catch(() => {});
-    }
-    if (ipcHandlers) {
-      ipcHandlers._cleanupTextEditMonitor();
-    }
-    if (textEditMonitor) {
-      textEditMonitor.stopMonitoring();
-    }
-    if (updateManager) {
-      updateManager.cleanup();
-    }
-    // Stop whisper server if running
-    if (whisperManager) {
-      whisperManager.stopServer().catch(() => {});
-    }
-    // Stop parakeet WS server if running
-    if (parakeetManager) {
-      parakeetManager.stopServer().catch(() => {});
-    }
-    if (diarizationManager) {
-      diarizationManager.shutdown().catch(() => {});
-    }
-    // Stop llama-server if running
-    const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.stopServer().catch(() => {});
-    if (qdrantManager) {
-      qdrantManager.stop().catch(() => {});
-    }
+  let isShuttingDown = false;
+  app.on("before-quit", (event) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    event.preventDefault();
+    performSyncTeardown();
+    sidecarRegistry.shutdownAll().finally(() => app.exit(0));
   });
+}
+
+function performSyncTeardown() {
+  if (authBridgeServer) {
+    authBridgeServer.close();
+    authBridgeServer = null;
+  }
+  if (cliBridge) {
+    cliBridge.stop().catch(() => {});
+    cliBridge = null;
+  }
+  if (windowManager && isLiveWindow(windowManager.agentWindow)) {
+    windowManager.agentWindow.destroy();
+  }
+  if (windowManager && isLiveWindow(windowManager.transcriptionPreviewWindow)) {
+    windowManager.transcriptionPreviewWindow.destroy();
+  }
+  if (hotkeyManager) {
+    hotkeyManager.unregisterAll();
+  } else {
+    globalShortcut.unregisterAll();
+  }
+  if (globeKeyManager) globeKeyManager.stop();
+  if (windowsKeyManager) windowsKeyManager.stop();
+  if (linuxKeyManager) linuxKeyManager.stop();
+  if (meetingDetectionEngine) meetingDetectionEngine.stop();
+  if (googleCalendarManager) googleCalendarManager.stop();
+  if (audioTapManager) audioTapManager.stop().catch(() => {});
+  if (linuxPortalAudioManager) linuxPortalAudioManager.stop().catch(() => {});
+  if (meetingAecManager) meetingAecManager.stop().catch(() => {});
+  if (ipcHandlers) ipcHandlers._cleanupTextEditMonitor();
+  if (textEditMonitor) textEditMonitor.stopMonitoring();
+  if (updateManager) updateManager.cleanup();
 }

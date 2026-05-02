@@ -1,5 +1,5 @@
 import modelDataRaw from "./modelRegistryData.json";
-import { isCloudReasoningMode, getSettings } from "../stores/settingsStore";
+import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 
 export interface ModelDefinition {
   id: string;
@@ -282,11 +282,11 @@ export function getReasoningModelLabel(modelId: string): string {
 }
 
 export function getModelProvider(modelId: string): string {
-  if (isCloudReasoningMode()) {
+  if (isCloudCleanupMode()) {
     return "openwhispr";
   }
 
-  const storedProvider = getSettings().reasoningProvider;
+  const storedProvider = getSettings().cleanupProvider;
 
   if (storedProvider === "custom") {
     return "custom";

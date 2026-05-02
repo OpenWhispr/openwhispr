@@ -304,6 +304,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   downloadUpdate: () => ipcRenderer.invoke("download-update"),
   installUpdate: () => ipcRenderer.invoke("install-update"),
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  getPostMigrationState: () => ipcRenderer.invoke("get-post-migration-state"),
+  getOAuthProtocolRegistered: () => ipcRenderer.invoke("get-oauth-protocol-registered"),
+  getOAuthProtocol: () => ipcRenderer.invoke("get-oauth-protocol"),
+  markBundleMigrated: () => ipcRenderer.invoke("mark-bundle-migrated"),
+  markBundleMigrationDismissed: () => ipcRenderer.invoke("mark-bundle-migration-dismissed"),
   getUpdateStatus: () => ipcRenderer.invoke("get-update-status"),
   getUpdateInfo: () => ipcRenderer.invoke("get-update-info"),
 
@@ -463,6 +468,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),
 
   // OpenWhispr Cloud API
+  cloudHealthCheck: () => ipcRenderer.invoke("cloud-health-check"),
   cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
   cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
   cloudStreamingUsage: (text, audioDurationSeconds, opts) =>

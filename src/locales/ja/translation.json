@@ -206,6 +206,25 @@
       "hotkeyToStartStop": "{{hotkey}} で開始/停止",
       "holdHotkey": "{{hotkey}} を押し続ける",
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
+    },
+    "connectivity": {
+      "title": "このネットワークから OpenWhispr Cloud に接続できません",
+      "body": "{{cause}} ローカルエンジンに切り替えるか、続行して後でもう一度お試しください。",
+      "useLocal": "ローカルエンジンを使う",
+      "continue": "そのまま続行"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "OpenWhispr Cloud に接続できません",
+        "generic": "ネットワーク要求に失敗しました。接続を確認してください。",
+        "dnsBlocked": "DNS が the server を解決できません — 広告ブロッカーやフィルターに遮断されている可能性があります。",
+        "refused": "接続が拒否されました — ファイアウォールまたは VPN の可能性があります。",
+        "timeout": "ネットワークがタイムアウトしました — VPN、キャプティブポータル、または不安定な接続。",
+        "tls": "TLS ハンドシェイクに失敗しました — システム時計または企業プロキシを確認してください。",
+        "fallback": "Cloud に接続できません — この録音にはローカルエンジンを使用します。"
+      }
     }
   },
   "controlPanel": {
@@ -408,6 +427,11 @@
       "noAudio": {
         "title": "音声が検出されませんでした",
         "description": "録音に音声が含まれていませんでした。もう一度お試しください。"
+      },
+      "errorDescriptions": {
+        "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
+        "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
+        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。"
       }
     },
     "clipboard": {
@@ -591,7 +615,10 @@
     },
     "social": {
       "completeInBrowser": "ブラウザでサインインを完了してください",
-      "continueWithGoogle": "Google で続ける"
+      "continueWithApple": "Apple で続ける",
+      "continueWithGoogle": "Google で続ける",
+      "continueWithMicrosoft": "Microsoft で続ける",
+      "protocolUnavailable": "ブラウザでのサインインを利用できません — システムの「既定のアプリ」設定で openwhispr:// プロトコルを再登録してください。"
     },
     "welcomeSubtitle": "音声でどこでもディクテーション",
     "welcomeTitle": "OpenWhispr へようこそ"
@@ -873,27 +900,6 @@
       "modified": "変更済み"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "サインインに戻る",
-    "confirmPasswordPlaceholder": "新しいパスワードを確認",
-    "continue": "続ける",
-    "errors": {
-      "passwordMinLength": "パスワードは 8 文字以上にしてください",
-      "passwordsDoNotMatch": "パスワードが一致しません"
-    },
-    "goBack": "戻る",
-    "newPasswordPlaceholder": "新しいパスワード",
-    "notConfigured": "認証が設定されていません。",
-    "passwordMinLength": "パスワードは 8 文字以上にしてください",
-    "resetButton": "パスワードをリセット",
-    "resetting": "リセット中...",
-    "subtitle": "新しいパスワードを入力してください",
-    "success": {
-      "description": "パスワードが更新されました。サインイン済みです。",
-      "title": "パスワードのリセットが完了しました"
-    },
-    "title": "新しいパスワードを作成"
-  },
   "settingsModal": {
     "groups": {
       "account": "アカウント",
@@ -962,7 +968,7 @@
       },
       "disabled": "無効",
       "featuresDisabled": "アカウント機能が無効です",
-      "featuresDisabledDescription": ".env ファイルで VITE_NEON_AUTH_URL を設定してアカウント機能を有効にしてください。",
+      "featuresDisabledDescription": ".env ファイルで VITE_AUTH_URL を設定してアカウント機能を有効にしてください。",
       "notConfigured": "認証が設定されていません",
       "notSignedIn": "サインインしていません",
       "notSignedInDescription": "アカウントを作成してプレミアム機能をアンロックしましょう。",
@@ -1484,8 +1490,9 @@
       "description": "クリーンアップ、ノートのフォーマット、チャット用のモデルを設定",
       "tabs": {
         "dictationCleanup": "ディクテーションのクリーンアップ",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "ノートのフォーマット",
-        "chatIntelligence": "チャットインテリジェンス"
+        "chatIntelligence": "チャット"
       }
     },
     "transcription": {
@@ -1575,7 +1582,6 @@
         "mistral_voxtral_mini_latest": "高速多言語文字起こし"
       },
       "cloud": {
-        "openai_gpt_5_4": "複雑な推論のためのフロンティアモデル",
         "openai_gpt_5_2": "強力な推論モデル",
         "openai_gpt_5_mini": "高速で費用対効果が高い",
         "openai_gpt_5_nano": "超高速、低レイテンシー",
@@ -1584,7 +1590,6 @@
         "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
         "anthropic_claude_sonnet_4_5": "バランスの取れた性能",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
-        "anthropic_claude_opus_4_5": "最も高性能な Claude モデル",
         "gemini_gemini_3_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
         "gemini_gemini_3_flash_preview": "超高速・高性能の次世代モデル",
         "gemini_gemini_2_5_flash_lite": "最低レイテンシーとコスト",
@@ -1596,7 +1601,11 @@
         "groq_llama_4_scout": "Meta の効率的マルチモーダル、750 T/秒",
         "groq_compound": "Groq の Compound システム、450 T/秒",
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト",
+        "openai_gpt_5_5": "複雑な推論のためのフロンティアモデル",
+        "anthropic_claude_opus_4_7": "最も高性能な Claude モデル",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
@@ -2033,9 +2042,9 @@
     "contactSupport": "サポートに問い合わせ",
     "submitBug": "バグを報告"
   },
-  "tccReset": {
-    "title": "OpenWhispr の権限を再付与してください",
-    "description": "ご不便をおかけしてすみません。OpenWhispr が新しい Apple Developer アカウントに移行したため、macOS が権限をリセットしました。お手数ですが、もう一度権限を付与してください。",
+  "postMigration": {
+    "title": "OpenWhispr へおかえりなさい",
+    "description": "ノートと設定は以前のバージョンから引き継がれています。ただし macOS はこれを新しいアプリとして扱うため、いくつかの権限を改めて付与していただく必要があります。",
     "done": "完了",
     "remindLater": "後で通知"
   },
@@ -2093,16 +2102,33 @@
       "stopListening": "録音を停止",
       "startListening": "録音を開始",
       "hideForNow": "一時的に非表示"
+    }
+  },
+  "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "useCleanupModel": "クリーンアップモデルを使用",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
-    "oauth": {
-      "redirectTitle": "アプリにリダイレクト中...",
-      "closeTab": "このタブを閉じてください。"
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {
     "settings": {
-      "enabled": "エージェントモードを有効にする",
-      "enabledDescription": "別のホットキーを使用して音声チャットオーバーレイを開く",
       "hotkey": "エージェントホットキー",
       "hotkeyDescription": "エージェントオーバーレイを切り替えるホットキー",
       "model": "エージェントモデル",
@@ -2192,7 +2218,11 @@
       "systemAudioDescription": "会議を文字起こしするには、OpenWhispr に他の参加者の音声を録音するためのシステムオーディオの権限が必要です。画面を録画することはありません。システム設定に移動して有効にします。",
       "openSettings": "システム設定を開く"
     },
-    "sections": { "calendar": "カレンダー", "api": "API", "mcp": "MCP" },
+    "sections": {
+      "calendar": "カレンダー",
+      "api": "API",
+      "mcp": "MCP"
+    },
     "api": {
       "title": "APIキー",
       "description": "プログラムからのアクセス用にAPIキーを管理",

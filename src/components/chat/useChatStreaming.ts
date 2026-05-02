@@ -94,14 +94,16 @@ export function useChatStreaming({
       setAgentState("thinking");
 
       const settings = getSettings();
-      const agentMode = settings.agentInferenceMode || "openwhispr";
-      const isCloudAgent = agentMode === "openwhispr" && settings.isSignedIn;
-      const isLanAgent = agentMode === "self-hosted" && !!settings.remoteAgentUrl;
+      const chatAgentMode = settings.chatAgentMode || "openwhispr";
+      const isCloudAgent = chatAgentMode === "openwhispr" && settings.isSignedIn;
+      const isLanAgent = chatAgentMode === "self-hosted" && !!settings.chatAgentRemoteUrl;
+      const isCustomAgent =
+        chatAgentMode === "providers" && settings.chatAgentProvider === "custom";
       const isLocalProvider = !["openai", "groq", "custom", "anthropic", "gemini"].includes(
-        settings.agentProvider
+        settings.chatAgentProvider
       );
       const localModelCanUseTool =
-        isLocalProvider && estimateModelSizeB(settings.agentModel) >= LOCAL_TOOL_MIN_PARAMS_B;
+        isLocalProvider && estimateModelSizeB(settings.chatAgentModel) >= LOCAL_TOOL_MIN_PARAMS_B;
       const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
 
       let registry: ToolRegistry | null = null;
@@ -187,9 +189,14 @@ export function useChatStreaming({
           const aiTools = registry?.toAISDKFormat();
           stream = ReasoningService.processTextStreamingAI(
             llmMessages,
-            settings.agentModel,
-            settings.agentProvider,
-            { systemPrompt, lanUrl: isLanAgent ? settings.remoteAgentUrl : undefined },
+            settings.chatAgentModel,
+            settings.chatAgentProvider,
+            {
+              systemPrompt,
+              lanUrl: isLanAgent ? settings.chatAgentRemoteUrl : undefined,
+              baseUrl: isCustomAgent ? settings.chatAgentCloudBaseUrl || undefined : undefined,
+              customApiKey: isCustomAgent ? settings.chatAgentCustomApiKey || undefined : undefined,
+            },
             aiTools
           );
         }

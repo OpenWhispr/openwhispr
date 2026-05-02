@@ -22,6 +22,7 @@ import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
+import { useSettingsStore } from "../stores/settingsStore";
 
 type CloudModelOption = {
   value: string;
@@ -42,14 +43,6 @@ interface ReasoningModelSelectorProps {
   setLocalReasoningProvider: (provider: string) => void;
   cloudReasoningBaseUrl: string;
   setCloudReasoningBaseUrl: (value: string) => void;
-  openaiApiKey: string;
-  setOpenaiApiKey: (key: string) => void;
-  anthropicApiKey: string;
-  setAnthropicApiKey: (key: string) => void;
-  geminiApiKey: string;
-  setGeminiApiKey: (key: string) => void;
-  groqApiKey: string;
-  setGroqApiKey: (key: string) => void;
   customReasoningApiKey?: string;
   setCustomReasoningApiKey?: (key: string) => void;
   setReasoningMode?: (mode: InferenceMode) => void;
@@ -314,20 +307,20 @@ export default function ReasoningModelSelector({
   setLocalReasoningProvider,
   cloudReasoningBaseUrl,
   setCloudReasoningBaseUrl,
-  openaiApiKey,
-  setOpenaiApiKey,
-  anthropicApiKey,
-  setAnthropicApiKey,
-  geminiApiKey,
-  setGeminiApiKey,
-  groqApiKey,
-  setGroqApiKey,
   customReasoningApiKey = "",
   setCustomReasoningApiKey,
   setReasoningMode: setReasoningModeProp,
   mode,
 }: ReasoningModelSelectorProps) {
   const { t } = useTranslation();
+  const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
+  const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
+  const anthropicApiKey = useSettingsStore((s) => s.anthropicApiKey);
+  const setAnthropicApiKey = useSettingsStore((s) => s.setAnthropicApiKey);
+  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
+  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
+  const groqApiKey = useSettingsStore((s) => s.groqApiKey);
+  const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">(mode || "cloud");
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");

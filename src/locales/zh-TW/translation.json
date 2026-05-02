@@ -206,6 +206,25 @@
       "hotkeyToStartStop": "{{hotkey}} 開始/停止",
       "holdHotkey": "按住 {{hotkey}}",
       "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入..."
+    },
+    "connectivity": {
+      "title": "無法從此網路連線到 OpenWhispr Cloud",
+      "body": "{{cause}} 你可以切換到本機引擎，或繼續並稍後再試。",
+      "useLocal": "使用本機引擎",
+      "continue": "仍然繼續"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "無法連線到 OpenWhispr Cloud",
+        "generic": "網路請求失敗，請檢查你的連線。",
+        "dnsBlocked": "DNS 無法解析 openwhispr.com — 廣告封鎖器或過濾器可能阻擋了它。",
+        "refused": "連線被拒絕 — 可能是防火牆或 VPN。",
+        "timeout": "網路逾時 — VPN、強制入口頁或連線不穩定。",
+        "tls": "TLS 交握失敗 — 請檢查系統時鐘或企業 Proxy。",
+        "fallback": "Cloud 無法連線 — 本次錄音將使用本機引擎。"
+      }
     }
   },
   "controlPanel": {
@@ -408,6 +427,11 @@
       "noAudio": {
         "title": "未偵測到音訊",
         "description": "錄音中未偵測到聲音。請再試一次。"
+      },
+      "errorDescriptions": {
+        "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
+        "offline": "你目前離線。雲端轉錄需要網際網路連線。",
+        "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。"
       }
     },
     "clipboard": {
@@ -590,7 +614,10 @@
     },
     "social": {
       "completeInBrowser": "請在瀏覽器中完成登入",
-      "continueWithGoogle": "使用 Google 繼續"
+      "continueWithApple": "使用 Apple 繼續",
+      "continueWithGoogle": "使用 Google 繼續",
+      "continueWithMicrosoft": "使用 Microsoft 繼續",
+      "protocolUnavailable": "無法透過瀏覽器登入 — 請在系統的「預設應用程式」設定中重新註冊 openwhispr:// 協定。"
     },
     "welcomeSubtitle": "隨時隨地用語音輸入文字",
     "welcomeTitle": "歡迎使用 OpenWhispr",
@@ -873,27 +900,6 @@
       "modified": "已修改"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "返回登入",
-    "confirmPasswordPlaceholder": "確認新密碼",
-    "continue": "繼續",
-    "errors": {
-      "passwordMinLength": "密碼至少需要 8 個字元",
-      "passwordsDoNotMatch": "密碼不一致"
-    },
-    "goBack": "返回",
-    "newPasswordPlaceholder": "新密碼",
-    "notConfigured": "尚未設定驗證功能。",
-    "passwordMinLength": "密碼至少需要 8 個字元",
-    "resetButton": "重設密碼",
-    "resetting": "重設中...",
-    "subtitle": "請在下方輸入你的新密碼",
-    "success": {
-      "description": "你的密碼已更新。你現在已登入。",
-      "title": "密碼重設成功"
-    },
-    "title": "建立新密碼"
-  },
   "settingsModal": {
     "groups": {
       "account": "帳戶",
@@ -962,7 +968,7 @@
       },
       "disabled": "已停用",
       "featuresDisabled": "帳號功能已停用",
-      "featuresDisabledDescription": "請在 .env 檔案中設定 VITE_NEON_AUTH_URL 以啟用帳號功能。",
+      "featuresDisabledDescription": "請在 .env 檔案中設定 VITE_AUTH_URL 以啟用帳號功能。",
       "notConfigured": "尚未設定驗證功能",
       "notSignedIn": "尚未登入",
       "notSignedInDescription": "建立帳號以解鎖進階功能。",
@@ -1479,8 +1485,9 @@
       "description": "設定用於聽寫清理、筆記格式化和聊天的模型",
       "tabs": {
         "dictationCleanup": "聽寫清理",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "筆記格式化",
-        "chatIntelligence": "聊天智能"
+        "chatIntelligence": "聊天"
       }
     },
     "transcription": {
@@ -1570,7 +1577,6 @@
         "mistral_voxtral_mini_latest": "快速多語言轉錄"
       },
       "cloud": {
-        "openai_gpt_5_4": "複雜推理前沿模型",
         "openai_gpt_5_2": "強大的推理模型",
         "openai_gpt_5_mini": "快速且經濟實惠",
         "openai_gpt_5_nano": "超快速，低延遲",
@@ -1579,7 +1585,6 @@
         "openai_gpt_4_1_nano": "最低延遲的 GPT-4.1",
         "anthropic_claude_sonnet_4_5": "均衡表現",
         "anthropic_claude_haiku_4_5": "快速且接近頂尖智慧",
-        "anthropic_claude_opus_4_5": "最強大的 Claude 模型",
         "gemini_gemini_3_pro_preview": "新一代旗艦模型，擅長複雜推理",
         "gemini_gemini_3_flash_preview": "超快速、高性能的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延遲和成本",
@@ -1591,7 +1596,11 @@
         "groq_llama_4_scout": "Meta 高效多模態，750 T/sec",
         "groq_compound": "Groq Compound 系統，450 T/sec",
         "groq_compound_mini": "快速 Compound 系統，3x 更低延遲",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文",
+        "openai_gpt_5_5": "複雜推理前沿模型",
+        "anthropic_claude_opus_4_7": "最強大的 Claude 模型",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",
@@ -2028,9 +2037,9 @@
     "contactSupport": "聯絡支援",
     "submitBug": "提交 Bug"
   },
-  "tccReset": {
-    "title": "重新授予 OpenWhispr 權限",
-    "description": "抱歉造成不便。OpenWhispr 已遷移至新的 Apple Developer 帳號，macOS 已清除您的權限。請重新授予這些權限。",
+  "postMigration": {
+    "title": "歡迎回到 OpenWhispr",
+    "description": "您的筆記與設定已從先前版本保留下來。不過 macOS 會將此視為一款全新的應用程式，因此需要您重新授予部分權限。",
     "done": "完成",
     "remindLater": "稍後提醒我"
   },
@@ -2088,16 +2097,33 @@
       "stopListening": "停止錄音",
       "startListening": "開始錄音",
       "hideForNow": "暫時隱藏"
+    }
+  },
+  "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "useCleanupModel": "使用清理模型",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
-    "oauth": {
-      "redirectTitle": "正在跳轉到應用程式...",
-      "closeTab": "您可以關閉此分頁。"
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {
     "settings": {
-      "enabled": "啟用智慧助手模式",
-      "enabledDescription": "使用獨立熱鍵開啟語音聊天覆蓋層",
       "hotkey": "助手熱鍵",
       "hotkeyDescription": "切換助手覆蓋層的熱鍵",
       "model": "助手模型",

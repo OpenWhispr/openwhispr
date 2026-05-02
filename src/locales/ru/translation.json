@@ -206,6 +206,25 @@
       "hotkeyToStartStop": "{{hotkey}} для старта/остановки",
       "holdHotkey": "Удерживайте {{hotkey}}",
       "textareaPlaceholder": "Нажмите сюда и используйте горячую клавишу для диктовки..."
+    },
+    "connectivity": {
+      "title": "Не удаётся подключиться к OpenWhispr Cloud из этой сети",
+      "body": "{{cause}} Вы можете переключиться на локальный движок или продолжить и повторить попытку позже.",
+      "useLocal": "Использовать локальный движок",
+      "continue": "Продолжить всё равно"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "Не удаётся подключиться к OpenWhispr Cloud",
+        "generic": "Сетевой запрос не выполнен. Проверьте подключение.",
+        "dnsBlocked": "DNS не разрешает openwhispr.com — возможно, его блокирует блокировщик рекламы или фильтр.",
+        "refused": "Соединение отклонено — вероятно, межсетевой экран или VPN.",
+        "timeout": "Тайм-аут сети — VPN, captive-портал или нестабильное соединение.",
+        "tls": "Сбой TLS-рукопожатия — проверьте системные часы или корпоративный прокси.",
+        "fallback": "Облако недоступно — используется локальный движок для этой записи."
+      }
     }
   },
   "controlPanel": {
@@ -408,6 +427,11 @@
       "noAudio": {
         "title": "Звук не обнаружен",
         "description": "В записи не обнаружен звук. Попробуйте ещё раз."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "Сессия OpenWhispr Cloud недоступна. Войдите снова из Настроек.",
+        "offline": "Вы офлайн. Облачная транскрипция требует подключения к интернету.",
+        "dailyLimitReached": "Достигнут дневной лимит транскрипций. Попробуйте завтра или обновите тариф."
       }
     },
     "clipboard": {
@@ -590,7 +614,10 @@
     },
     "social": {
       "completeInBrowser": "Завершите вход в браузере",
-      "continueWithGoogle": "Продолжить с Google"
+      "continueWithApple": "Продолжить с Apple",
+      "continueWithGoogle": "Продолжить с Google",
+      "continueWithMicrosoft": "Продолжить с Microsoft",
+      "protocolUnavailable": "Вход через браузер недоступен — повторно зарегистрируйте протокол openwhispr:// в системных настройках приложений по умолчанию."
     },
     "welcomeSubtitle": "Диктуйте где угодно голосом",
     "welcomeTitle": "Добро пожаловать в OpenWhispr",
@@ -873,27 +900,6 @@
       "modified": "Изменён"
     }
   },
-  "resetPassword": {
-    "backToSignIn": "Вернуться к входу",
-    "confirmPasswordPlaceholder": "Подтвердите новый пароль",
-    "continue": "Продолжить",
-    "errors": {
-      "passwordMinLength": "Пароль должен содержать не менее 8 символов",
-      "passwordsDoNotMatch": "Пароли не совпадают"
-    },
-    "goBack": "Вернуться",
-    "newPasswordPlaceholder": "Новый пароль",
-    "notConfigured": "Аутентификация не настроена.",
-    "passwordMinLength": "Пароль должен содержать не менее 8 символов",
-    "resetButton": "Сбросить пароль",
-    "resetting": "Сброс...",
-    "subtitle": "Введите новый пароль ниже",
-    "success": {
-      "description": "Ваш пароль обновлён. Вы вошли в систему.",
-      "title": "Пароль успешно сброшен"
-    },
-    "title": "Создание нового пароля"
-  },
   "settingsModal": {
     "groups": {
       "account": "Аккаунт",
@@ -962,7 +968,7 @@
       },
       "disabled": "Отключено",
       "featuresDisabled": "Функции аккаунта отключены",
-      "featuresDisabledDescription": "Установите VITE_NEON_AUTH_URL в файле .env для включения функций аккаунта.",
+      "featuresDisabledDescription": "Установите VITE_AUTH_URL в файле .env для включения функций аккаунта.",
       "notConfigured": "Аутентификация не настроена",
       "notSignedIn": "Вы не вошли в систему",
       "notSignedInDescription": "Создайте аккаунт, чтобы разблокировать премиум-функции.",
@@ -1484,8 +1490,9 @@
       "description": "Настройка моделей для очистки, форматирования заметок и чата",
       "tabs": {
         "dictationCleanup": "Очистка диктовки",
+        "dictationAgent": "Dictation Agent",
         "noteFormatting": "Форматирование заметок",
-        "chatIntelligence": "Интеллект чата"
+        "chatIntelligence": "Чат"
       }
     },
     "transcription": {
@@ -1575,7 +1582,6 @@
         "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция"
       },
       "cloud": {
-        "openai_gpt_5_4": "Фронтирная модель для сложного рассуждения",
         "openai_gpt_5_2": "Сильная модель рассуждения",
         "openai_gpt_5_mini": "Быстрая и экономичная",
         "openai_gpt_5_nano": "Сверхбыстрая, низкая задержка",
@@ -1584,7 +1590,6 @@
         "openai_gpt_4_1_nano": "Минимальная задержка GPT-4.1",
         "anthropic_claude_sonnet_4_5": "Сбалансированная производительность",
         "anthropic_claude_haiku_4_5": "Быстрая с почти передовым интеллектом",
-        "anthropic_claude_opus_4_5": "Самая мощная модель Claude",
         "gemini_gemini_3_pro_preview": "Флагманская модель нового поколения для сложных рассуждений",
         "gemini_gemini_3_flash_preview": "Сверхбыстрая высокопроизводительная модель нового поколения",
         "gemini_gemini_2_5_flash_lite": "Минимальная задержка и стоимость",
@@ -1596,7 +1601,11 @@
         "groq_llama_4_scout": "Эффективная мультимодальная Meta, 750 т/с",
         "groq_compound": "Система Compound от Groq, 450 т/с",
         "groq_compound_mini": "Быстрая система Compound, 3x ниже задержка",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, контекст 256K"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, контекст 256K",
+        "openai_gpt_5_5": "Фронтирная модель для сложного рассуждения",
+        "anthropic_claude_opus_4_7": "Самая мощная модель Claude",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Быстрая и дешёвая. Отлично подходит для очистки текста.",
@@ -2035,9 +2044,9 @@
     "contactSupport": "Связаться с поддержкой",
     "submitBug": "Сообщить об ошибке"
   },
-  "tccReset": {
-    "title": "Повторно предоставьте разрешения для OpenWhispr",
-    "description": "Извините за неудобства. OpenWhispr перешёл на новую учётную запись Apple Developer, и macOS сбросил ваши разрешения. Пожалуйста, предоставьте их заново.",
+  "postMigration": {
+    "title": "С возвращением в OpenWhispr",
+    "description": "Ваши заметки и настройки перенесены из предыдущей версии. Однако macOS считает это новым приложением, поэтому потребуется заново предоставить несколько разрешений.",
     "done": "Готово",
     "remindLater": "Напомнить позже"
   },
@@ -2095,16 +2104,33 @@
       "stopListening": "Остановить запись",
       "startListening": "Начать запись",
       "hideForNow": "Скрыть"
+    }
+  },
+  "dictationAgent": {
+    "enabled": "Enable dictation agent",
+    "enabledDescription": "Route dictation through a dedicated agent. With cleanup also on, the agent runs only when you address it by name; with cleanup off, it runs on every dictation.",
+    "title": "Dictation Agent",
+    "description": "Configure a dedicated model and prompt used when you address your agent by name during dictation.",
+    "useCleanupModel": "Использовать модель очистки",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
-    "oauth": {
-      "redirectTitle": "Перенаправление в приложение...",
-      "closeTab": "Можете закрыть эту вкладку."
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {
     "settings": {
-      "enabled": "Включить режим агента",
-      "enabledDescription": "Используйте отдельную горячую клавишу для открытия наложения голосового чата",
       "hotkey": "Горячая клавиша агента",
       "hotkeyDescription": "Горячая клавиша для переключения наложения агента",
       "model": "Модель агента",

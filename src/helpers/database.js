@@ -165,7 +165,8 @@ class DatabaseManager {
           name TEXT NOT NULL UNIQUE,
           is_default INTEGER NOT NULL DEFAULT 0,
           sort_order INTEGER NOT NULL DEFAULT 0,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
 
@@ -461,6 +462,12 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        this.db.exec("ALTER TABLE folders ADD COLUMN updated_at DATETIME");
+        this.db.exec("UPDATE folders SET updated_at = created_at WHERE updated_at IS NULL");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       // Sync columns for agent_conversations
       try {
@@ -541,13 +548,17 @@ class DatabaseManager {
   saveTranscription(
     text,
     rawText = null,
-    { status = "completed", errorMessage = null, errorCode = null } = {}
+    {
+      status = "completed",
+      errorMessage = null,
+      errorCode = null,
+      clientTranscriptionId = randomUUID(),
+    } = {}
   ) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const clientTranscriptionId = randomUUID();
       const stmt = this.db.prepare(
         "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, client_transcription_id) VALUES (?, ?, ?, ?, ?, ?)"
       );
@@ -610,11 +621,13 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const row = this.db.prepare("SELECT cloud_id FROM transcriptions WHERE id = ?").get(id);
-      if (!row) return { success: false, id };
+      const row = this.db
+        .prepare("SELECT cloud_id, deleted_at FROM transcriptions WHERE id = ?")
+        .get(id);
+      if (!row || row.deleted_at) return { success: false, id };
       const stmt = row.cloud_id
         ? this.db.prepare(
-            "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
+            "UPDATE transcriptions SET deleted_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
           )
         : this.db.prepare("DELETE FROM transcriptions WHERE id = ?");
       const result = stmt.run(id);
@@ -903,9 +916,10 @@ class DatabaseManager {
         .prepare("SELECT id FROM notes WHERE folder_id = ?")
         .all(id)
         .map((row) => row.id);
+      // Server cascades note deletes on folder delete; sync pull picks up note tombstones.
       const hardDeleteNotes = this.db.prepare("DELETE FROM notes WHERE folder_id = ?");
       const tombstoneFolder = this.db.prepare(
-        "UPDATE folders SET deleted_at = datetime('now'), sync_status = 'pending', name = '__deleted_' || id || '_' || name WHERE id = ?"
+        "UPDATE folders SET deleted_at = datetime('now'), updated_at = datetime('now'), sync_status = 'pending', name = '__deleted_' || id || '_' || name WHERE id = ?"
       );
       const hardDeleteFolder = this.db.prepare("DELETE FROM folders WHERE id = ?");
       this.db.transaction(() => {
@@ -933,7 +947,9 @@ class DatabaseManager {
         .get(trimmed, id);
       if (existing) return { success: false, error: "A folder with that name already exists" };
       this.db
-        .prepare("UPDATE folders SET name = ?, sync_status = 'pending' WHERE id = ?")
+        .prepare(
+          "UPDATE folders SET name = ?, sync_status = 'pending', updated_at = datetime('now') WHERE id = ?"
+        )
         .run(trimmed, id);
       const updated = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
       return { success: true, folder: updated };
@@ -1045,7 +1061,7 @@ class DatabaseManager {
         throw new Error("Database not initialized");
       }
       const stmt = this.db.prepare(
-        "UPDATE notes SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now') WHERE id = ?"
+        "UPDATE notes SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL"
       );
       const result = stmt.run(id);
       return { success: result.changes > 0, id };
@@ -2126,13 +2142,14 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const stmt = this.db.prepare(`
-        INSERT INTO folders (client_folder_id, cloud_id, name, is_default, sort_order, sync_status, created_at)
-        VALUES (?, ?, ?, ?, ?, 'synced', ?)
+        INSERT INTO folders (client_folder_id, cloud_id, name, is_default, sort_order, sync_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'synced', ?, ?)
         ON CONFLICT(client_folder_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           name = excluded.name,
           sort_order = excluded.sort_order,
-          sync_status = 'synced'
+          sync_status = 'synced',
+          updated_at = excluded.updated_at
       `);
       stmt.run(
         cloudFolder.client_folder_id,
@@ -2140,7 +2157,8 @@ class DatabaseManager {
         cloudFolder.name,
         cloudFolder.is_default ? 1 : 0,
         cloudFolder.sort_order || 0,
-        cloudFolder.created_at
+        cloudFolder.created_at,
+        cloudFolder.updated_at || cloudFolder.created_at
       );
       return this.db
         .prepare("SELECT * FROM folders WHERE client_folder_id = ?")

@@ -13,6 +13,7 @@ class MediaPlayer {
     this._macBinaryPath = null;
     this._pausedPlayers = []; // MPRIS players we paused (Linux)
     this._didPause = false; // Whether we sent a pause via toggle fallback
+    this._pausedWinApps = []; // GSMTC app IDs we paused (Windows)
   }
 
   _resolveLinuxFastPaste() {
@@ -423,11 +424,13 @@ try {
   $m = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync().GetAwaiter().GetResult()
   $paused = @()
   foreach ($s in $m.GetSessions()) {
-    $pi = $s.GetPlaybackInfo()
-    if ($pi.PlaybackStatus -eq 4) {
-      $null = $s.TryPauseAsync().GetAwaiter().GetResult()
-      $paused += $s.SourceAppUserModelId
-    }
+    try {
+      $pi = $s.GetPlaybackInfo()
+      if ($pi.PlaybackStatus -eq 4) {
+        $null = $s.TryPauseAsync().GetAwaiter().GetResult()
+        $paused += $s.SourceAppUserModelId
+      }
+    } catch { continue }
   }
   $paused -join '|'
 } catch {
@@ -443,9 +446,11 @@ try {
   $null = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType=WindowsRuntime]
   $m = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync().GetAwaiter().GetResult()
   foreach ($s in $m.GetSessions()) {
-    if ($ids -contains $s.SourceAppUserModelId) {
-      $null = $s.TryPlayAsync().GetAwaiter().GetResult()
-    }
+    try {
+      if ($ids -contains $s.SourceAppUserModelId) {
+        $null = $s.TryPlayAsync().GetAwaiter().GetResult()
+      }
+    } catch { continue }
   }
   Write-Output 'OK'
 } catch {
@@ -481,6 +486,7 @@ try {
 
   _pauseWindows() {
     this._pausedWinApps = [];
+    this._didPause = false;
 
     // Use GSMTC (Windows 10 1809+) — state-aware, targets specific apps
     const result = spawnSync(
@@ -492,8 +498,8 @@ try {
     if (result.status === 0) {
       const output = (result.stdout?.toString() || "").trim();
       if (output === "GSMTC_FAIL") {
-        debugLogger.debug("GSMTC unavailable on this system", {}, "media");
-        return false;
+        debugLogger.debug("GSMTC unavailable, falling back to media key", {}, "media");
+        return this._pauseWindowsFallback();
       }
       this._pausedWinApps = output.split("|").filter(Boolean);
       if (this._pausedWinApps.length > 0) {
@@ -504,7 +510,21 @@ try {
       return false;
     }
 
-    debugLogger.debug("GSMTC PowerShell failed to execute", { status: result.status }, "media");
+    const stderr = (result.stderr?.toString() || "").trim();
+    debugLogger.debug("GSMTC PowerShell failed, falling back to media key", {
+      status: result.status,
+      signal: result.signal,
+      stderr: stderr ? stderr.slice(0, 200) : undefined,
+    }, "media");
+    return this._pauseWindowsFallback();
+  }
+
+  _pauseWindowsFallback() {
+    if (this._sendWindowsMediaKey()) {
+      this._didPause = true;
+      debugLogger.debug("Media paused via media key fallback", {}, "media");
+      return true;
+    }
     return false;
   }
 
@@ -524,7 +544,19 @@ try {
         debugLogger.debug("Media resumed via GSMTC", { apps }, "media");
         return true;
       }
-      return false;
+
+      // GSMTC resume failed, fall back to media key
+      debugLogger.debug("GSMTC resume failed, falling back to media key", {}, "media");
+      return this._sendWindowsMediaKey();
+    }
+
+    // Resume via media key toggle if we paused with the fallback
+    if (this._didPause) {
+      this._didPause = false;
+      if (this._sendWindowsMediaKey()) {
+        debugLogger.debug("Media resumed via media key fallback", {}, "media");
+        return true;
+      }
     }
 
     return false;
