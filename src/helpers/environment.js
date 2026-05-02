@@ -174,6 +174,13 @@ class EnvironmentManager {
     const dir = this._getSecureKeysDir();
     await fsPromises.mkdir(dir, { recursive: true });
 
+    // Adopt renamed key so the value survives migration. Old releases stored
+    // it under CUSTOM_REASONING_API_KEY; new code only encrypts CUSTOM_CLEANUP_API_KEY.
+    if (process.env.CUSTOM_REASONING_API_KEY && !process.env.CUSTOM_CLEANUP_API_KEY) {
+      process.env.CUSTOM_CLEANUP_API_KEY = process.env.CUSTOM_REASONING_API_KEY;
+    }
+    delete process.env.CUSTOM_REASONING_API_KEY;
+
     const migrated = [];
     try {
       for (const name of SECRET_KEYS) {
@@ -196,9 +203,13 @@ class EnvironmentManager {
       return;
     }
 
+    // Sentinel before .env rewrite: if the rewrite fails, next launch loads
+    // stale plaintext but encrypted values overwrite it on _loadAllSecrets,
+    // and the next saveAllKeysToEnvFile cleans the .env. Reverse order risks
+    // stripping plaintext for secrets that haven't been encrypted yet.
+    await fsPromises.writeFile(this._getMigrationSentinelPath(), "");
     const envPath = path.join(app.getPath("userData"), ".env");
     if (fs.existsSync(envPath)) await this._writeEnvFileAtomic(envPath);
-    await fsPromises.writeFile(this._getMigrationSentinelPath(), "");
     debugLogger.info(
       "Migrated secrets to encrypted storage",
       { count: migrated.length },
@@ -207,9 +218,13 @@ class EnvironmentManager {
   }
 
   async _writeEnvFileAtomic(envPath) {
+    // Only strip plaintext secrets once migration has fully completed —
+    // otherwise a partial-migration recovery can lose unencrypted secrets.
+    const stripSecrets =
+      this._encryptionAvailable() && fs.existsSync(this._getMigrationSentinelPath());
     let envContent = "# OpenWhispr Environment Variables\n";
     for (const key of PERSISTED_KEYS) {
-      if (SECRET_KEY_SET.has(key) && this._encryptionAvailable()) continue;
+      if (stripSecrets && SECRET_KEY_SET.has(key)) continue;
       if (process.env[key]) {
         envContent += `${key}=${process.env[key]}\n`;
       }
