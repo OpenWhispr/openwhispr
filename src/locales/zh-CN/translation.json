@@ -360,7 +360,7 @@
       "help": "跳过推理令牌以获得更清晰的输出。推荐用于清理。某些服务器会忽略此提示。"
     },
     "selfHosted": {
-      "endpointHelp": "指向你本地网络中兼容 OpenAI 的服务器（例如 Ollama、LM Studio、vLLM 或 llama-server)。"
+      "endpointHelp": "指向本地网络中兼容 OpenAI 的服务器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
     },
     "enterprise": {
       "title": "企业级提供商",
