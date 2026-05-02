@@ -463,13 +463,59 @@ app.on("open-url", (event, url) => {
     return;
   }
 
-  handleOAuthDeepLink(url);
+  void handleOAuthDeepLink(url);
 
   if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
     windowManager.controlPanelWindow.show();
     windowManager.controlPanelWindow.focus();
   }
 });
+
+// Mirror the channel-aware URL resolution used by ipcHandlers.js getAuthUrl()
+// and the renderer's AUTH_URL: env wins, then runtime-env.json baked in by
+// Vite, then fall back to the production host.
+function resolveAuthUrl() {
+  const fs = require("fs");
+  const envPath = path.join(__dirname, "src", "dist", "runtime-env.json");
+  let runtimeEnv = {};
+  try {
+    if (fs.existsSync(envPath)) runtimeEnv = JSON.parse(fs.readFileSync(envPath, "utf8"));
+  } catch {}
+  return (
+    process.env.AUTH_URL ||
+    process.env.VITE_AUTH_URL ||
+    runtimeEnv.VITE_AUTH_URL ||
+    "https://auth.openwhispr.com"
+  );
+}
+
+function getOauthCookieName() {
+  return process.env.NODE_ENV === "production"
+    ? "__Secure-openwhispr.session_token"
+    : "openwhispr.session_token";
+}
+
+// Older website builds send `?token=` as the signed cookie value rather than
+// the raw session.token the bearer plugin expects. Trade the signed value
+// for the raw token via Better Auth's get-session endpoint.
+async function exchangeSignedTokenForRawBearer(signedToken) {
+  try {
+    const res = await fetch(`${resolveAuthUrl()}/api/auth/get-session`, {
+      headers: { Cookie: `${getOauthCookieName()}=${signedToken}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.session?.token || null;
+  } catch (err) {
+    if (debugLogger) {
+      debugLogger.warn("Signed-token bearer exchange failed (non-fatal)", {
+        error: err?.message,
+      });
+    }
+    return null;
+  }
+}
 
 // One-time bridge for users upgrading from a build that injected the session
 // cookie into Electron's jar: exchange the existing cookie for a raw bearer
@@ -479,42 +525,17 @@ async function migrateCookieToBearerToken() {
   const tokenStore = require("./src/helpers/tokenStore");
   if (tokenStore.get()) return;
 
-  const cookieName =
-    process.env.NODE_ENV === "production"
-      ? "__Secure-openwhispr.session_token"
-      : "openwhispr.session_token";
-
-  // Mirror the channel-aware URL resolution used by ipcHandlers.js getAuthUrl()
-  // and the renderer's AUTH_URL: env wins, then runtime-env.json baked in by
-  // Vite, then fall back to the production host.
-  const runtimeEnv = (() => {
-    const fs = require("fs");
-    const envPath = path.join(__dirname, "src", "dist", "runtime-env.json");
-    try {
-      if (fs.existsSync(envPath)) return JSON.parse(fs.readFileSync(envPath, "utf8"));
-    } catch {}
-    return {};
-  })();
-  const authUrl =
-    process.env.AUTH_URL ||
-    process.env.VITE_AUTH_URL ||
-    runtimeEnv.VITE_AUTH_URL ||
-    "https://auth.openwhispr.com";
+  const cookieName = getOauthCookieName();
+  const authUrl = resolveAuthUrl();
 
   try {
     const cookies = await session.defaultSession.cookies.get({ url: authUrl, name: cookieName });
     if (!cookies.length) return;
 
-    const res = await fetch(`${authUrl}/api/auth/get-session`, {
-      headers: { Cookie: `${cookieName}=${cookies[0].value}` },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return;
-    const data = await res.json();
-    const token = data?.session?.token;
-    if (!token) return;
+    const rawToken = await exchangeSignedTokenForRawBearer(cookies[0].value);
+    if (!rawToken) return;
 
-    tokenStore.set(token);
+    tokenStore.set(rawToken);
     await session.defaultSession.cookies.remove(authUrl, cookieName);
     if (debugLogger) debugLogger.debug("Migrated cookie to bearer token");
   } catch (err) {
@@ -555,12 +576,20 @@ async function applySessionTokenAndRefresh(token) {
   windowManager.controlPanelWindow.focus();
 }
 
-function handleOAuthDeepLink(deepLinkUrl) {
+async function handleOAuthDeepLink(deepLinkUrl) {
   try {
     const parsed = new URL(deepLinkUrl);
-    const token = parsed.searchParams.get("token");
-    if (!token) return;
-    void applySessionTokenAndRefresh(token);
+    const bearerToken = parsed.searchParams.get("bearer_token");
+    if (bearerToken) {
+      void applySessionTokenAndRefresh(bearerToken);
+      return;
+    }
+    // Older website builds only send `?token=` carrying the signed cookie value;
+    // exchange it for a raw session.token before storing.
+    const signedToken = parsed.searchParams.get("token");
+    if (!signedToken) return;
+    const rawToken = await exchangeSignedTokenForRawBearer(signedToken);
+    if (rawToken) void applySessionTokenAndRefresh(rawToken);
   } catch (err) {
     if (debugLogger) debugLogger.error("Failed to handle OAuth deep link:", err);
   }
@@ -624,11 +653,12 @@ function startAuthBridgeServer() {
       return;
     }
 
-    let token = requestUrl.searchParams.get("token");
+    let token =
+      requestUrl.searchParams.get("bearer_token") || requestUrl.searchParams.get("token");
     if (!token && req.method === "POST") {
       try {
         const body = await parseJsonBody(req);
-        token = body?.token || null;
+        token = body?.bearer_token || body?.token || null;
       } catch (error) {
         res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
         res.end(error.message || "Invalid request");
@@ -1344,7 +1374,7 @@ if (gotSingleInstanceLock) {
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
       } else {
-        handleOAuthDeepLink(url);
+        void handleOAuthDeepLink(url);
       }
     }
   });
