@@ -511,11 +511,15 @@ try {
     }
 
     const stderr = (result.stderr?.toString() || "").trim();
-    debugLogger.debug("GSMTC PowerShell failed, falling back to media key", {
-      status: result.status,
-      signal: result.signal,
-      stderr: stderr ? stderr.slice(0, 200) : undefined,
-    }, "media");
+    debugLogger.debug(
+      "GSMTC PowerShell failed, falling back to media key",
+      {
+        status: result.status,
+        signal: result.signal,
+        stderr: stderr ? stderr.slice(0, 200) : undefined,
+      },
+      "media"
+    );
     return this._pauseWindowsFallback();
   }
 
