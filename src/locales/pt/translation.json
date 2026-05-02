@@ -1250,7 +1250,10 @@
       "meetingHotkey": {
         "title": "Atalho modo reunião",
         "description": "Iniciar modo reunião e posicionar o painel ao lado da tela",
-        "clear": "Remover atalho"
+        "clear": "Remover atalho",
+        "layoutLabel": "Ao acionar pelo atalho, abrir em:",
+        "layoutFullWidth": "Largura total",
+        "layoutSidePanel": "Painel lateral"
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
@@ -1833,6 +1836,9 @@
       "description": "Transcrições e resumos estruturados",
       "comingSoon": "Em breve",
       "back": "Voltar"
+    },
+    "meetingPill": {
+      "returnToNote": "Voltar à gravação"
     },
     "context": {
       "moveToFolder": "Mover para pasta",

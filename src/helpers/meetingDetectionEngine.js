@@ -234,7 +234,7 @@ class MeetingDetectionEngine {
 
     const activeEvents = this.databaseManager.getActiveEvents();
     if (activeEvents?.length > 0) {
-      return this.joinCalendarMeeting(activeEvents[0].id);
+      return this.joinCalendarMeeting(activeEvents[0].id, "hotkey");
     }
 
     this._meetingModeActive = true;
@@ -275,12 +275,13 @@ class MeetingDetectionEngine {
       noteId: noteResult.note.id,
       folderId: meetingsFolder.id,
       event,
+      trigger: "hotkey",
     });
   }
 
-  async joinCalendarMeeting(eventId) {
+  async joinCalendarMeeting(eventId, trigger = "calendar-join") {
     this._meetingModeActive = true;
-    debugLogger.info("Joining calendar meeting", { eventId }, "meeting");
+    debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
 
     const calEvent = this.databaseManager.getCalendarEventById(eventId);
     if (!calEvent) {
@@ -317,6 +318,7 @@ class MeetingDetectionEngine {
       noteId: noteResult.note.id,
       folderId: meetingsFolder.id,
       event: calEvent,
+      trigger,
     });
   }
 

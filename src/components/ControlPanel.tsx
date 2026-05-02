@@ -20,12 +20,25 @@ import {
   clearTranscriptions as clearStore,
 } from "../stores/transcriptionStore";
 import { useSettingsStore } from "../stores/settingsStore";
+import {
+  useIsMeetingMode,
+  useMeetingRecordingStore,
+  stopRecording as stopMeetingRecording,
+  type RecordingTrigger,
+} from "../stores/meetingRecordingStore";
 import ControlPanelSidebar, { type ControlPanelView } from "./ControlPanelSidebar";
+import MeetingRecordingMount from "./MeetingRecordingMount";
+import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import WindowControls from "./WindowControls";
 
 import { getCachedPlatform } from "../utils/platform";
 import { isAccessibilitySkipped } from "../utils/permissions";
-import { setActiveNoteId, setActiveFolderId, initializeNotes } from "../stores/noteStore";
+import {
+  setActiveNoteId,
+  setActiveFolderId,
+  useActiveNoteId,
+  initializeNotes,
+} from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import HistoryView from "./HistoryView";
 import { syncService } from "../services/SyncService.js";
@@ -58,11 +71,15 @@ export default function ControlPanel() {
   const [showSearch, setShowSearch] = useState(false);
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
-  const [isMeetingMode, setIsMeetingMode] = useState(false);
+  const isMeetingMode = useIsMeetingMode();
+  const activeNoteId = useActiveNoteId();
+  const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
+  const recordingFolderId = useMeetingRecordingStore((s) => s.recordingFolderId);
   const [meetingRecordingRequest, setMeetingRecordingRequest] = useState<{
     noteId: number;
     folderId: number;
     event: any;
+    trigger: RecordingTrigger;
   } | null>(null);
   const [gpuAccelAvailable, setGpuAccelAvailable] = useState<{ cuda: boolean; vulkan: boolean }>({
     cuda: false,
@@ -261,8 +278,12 @@ export default function ControlPanel() {
       setActiveFolderId(data.folderId);
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
-      setIsMeetingMode(true);
-      setMeetingRecordingRequest(data);
+      setMeetingRecordingRequest({
+        noteId: data.noteId,
+        folderId: data.folderId,
+        event: data.event,
+        trigger: data.trigger ?? "manual",
+      });
       initializeNotes(null, 50, data.folderId);
     });
     return () => cleanup?.();
@@ -317,8 +338,10 @@ export default function ControlPanel() {
     []
   );
 
+  // Exiting meeting mode = stopping the recording. The window-restore IPC
+  // brings back the panel size after the snap-to-meeting layout.
   const handleExitMeetingMode = useCallback(() => {
-    setIsMeetingMode(false);
+    void stopMeetingRecording();
     window.electronAPI?.restoreFromMeetingMode?.();
   }, []);
 
@@ -564,6 +587,16 @@ export default function ControlPanel() {
 
   return (
     <div className="h-screen bg-background flex flex-col">
+      <MeetingRecordingMount />
+      <MeetingRecordingPill
+        activeView={activeView}
+        activeNoteId={activeNoteId}
+        onReturnToNote={() => {
+          setActiveView("personal-notes");
+          setActiveFolderId(recordingFolderId);
+          setActiveNoteId(recordingNoteId);
+        }}
+      />
       <ConfirmDialog
         open={confirmDialog.open}
         onOpenChange={hideConfirmDialog}
@@ -818,7 +851,6 @@ export default function ControlPanel() {
                   onOpenSearch={() => setShowSearch(true)}
                   meetingRecordingRequest={meetingRecordingRequest}
                   onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
-                  isMeetingMode={isMeetingMode}
                 />
               </Suspense>
             )}

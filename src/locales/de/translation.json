@@ -1278,7 +1278,10 @@
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
         "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben",
-        "clear": "Hotkey entfernen"
+        "clear": "Hotkey entfernen",
+        "layoutLabel": "Beim Auslösen per Hotkey öffnen in:",
+        "layoutFullWidth": "Volle Breite",
+        "layoutSidePanel": "Seitenleiste"
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
@@ -1833,6 +1836,9 @@
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "comingSoon": "Demnächst verfügbar",
       "back": "Zurück"
+    },
+    "meetingPill": {
+      "returnToNote": "Zurück zur Aufnahme"
     },
     "context": {
       "moveToFolder": "In Ordner verschieben",

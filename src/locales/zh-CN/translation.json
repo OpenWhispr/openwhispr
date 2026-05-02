@@ -1273,7 +1273,10 @@
       "meetingHotkey": {
         "title": "会议模式快捷键",
         "description": "启动会议模式并将面板固定到屏幕侧边",
-        "clear": "移除快捷键"
+        "clear": "移除快捷键",
+        "layoutLabel": "通过快捷键触发时,打开方式:",
+        "layoutFullWidth": "全宽",
+        "layoutSidePanel": "侧边栏"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",
@@ -1828,6 +1831,9 @@
       "description": "转录与结构化摘要",
       "comingSoon": "即将推出",
       "back": "返回"
+    },
+    "meetingPill": {
+      "returnToNote": "返回到录音"
     },
     "context": {
       "moveToFolder": "移动到文件夹",

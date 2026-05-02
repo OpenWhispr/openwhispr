@@ -1278,7 +1278,10 @@
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",
         "description": "Avvia la modalità meeting e posiziona il pannello a lato dello schermo",
-        "clear": "Rimuovi scorciatoia"
+        "clear": "Rimuovi scorciatoia",
+        "layoutLabel": "Quando attivata da scorciatoia, apri in:",
+        "layoutFullWidth": "Larghezza completa",
+        "layoutSidePanel": "Pannello laterale"
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",
@@ -1833,6 +1836,9 @@
       "description": "Trascrizioni e riassunti strutturati",
       "comingSoon": "Prossimamente",
       "back": "Indietro"
+    },
+    "meetingPill": {
+      "returnToNote": "Torna alla registrazione"
     },
     "context": {
       "moveToFolder": "Sposta nella cartella",

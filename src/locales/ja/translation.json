@@ -1278,7 +1278,10 @@
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",
         "description": "ミーティングモードを開始し、パネルを画面の横に配置する",
-        "clear": "ホットキーを削除"
+        "clear": "ホットキーを削除",
+        "layoutLabel": "ホットキーで起動したときに開く:",
+        "layoutFullWidth": "全幅",
+        "layoutSidePanel": "サイドパネル"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -1816,6 +1819,9 @@
       "description": "文字起こしと構造化されたサマリー",
       "comingSoon": "近日公開",
       "back": "戻る"
+    },
+    "meetingPill": {
+      "returnToNote": "録音に戻る"
     },
     "onboarding": {
       "llm": {

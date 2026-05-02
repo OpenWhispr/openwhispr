@@ -40,6 +40,7 @@ export interface CleanupSettings {
 export interface HotkeySettings {
   dictationKey: string;
   meetingKey: string;
+  meetingHotkeyLayoutMode: "side-panel" | "full-width";
   activationMode: "tap" | "push";
 }
 
@@ -213,6 +214,8 @@ function useSettingsInternal() {
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
+    meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
+    setMeetingHotkeyLayoutMode: store.setMeetingHotkeyLayoutMode,
     theme: store.theme,
     setUseLocalWhisper: store.setUseLocalWhisper,
     setWhisperModel: store.setWhisperModel,

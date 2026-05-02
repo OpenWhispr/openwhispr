@@ -1326,7 +1326,10 @@
       "meetingHotkey": {
         "title": "Atajo modo reunión",
         "description": "Iniciar modo reunión y ajustar el panel al lado de la pantalla",
-        "clear": "Eliminar atajo"
+        "clear": "Eliminar atajo",
+        "layoutLabel": "Al activarse con el atajo, abrir en:",
+        "layoutFullWidth": "Ancho completo",
+        "layoutSidePanel": "Panel lateral"
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
@@ -1881,6 +1884,9 @@
       "description": "Transcripciones y resúmenes estructurados",
       "comingSoon": "Próximamente",
       "back": "Atrás"
+    },
+    "meetingPill": {
+      "returnToNote": "Volver a la grabación"
     },
     "context": {
       "moveToFolder": "Mover a carpeta",

@@ -1326,7 +1326,10 @@
       "meetingHotkey": {
         "title": "Raccourci mode réunion",
         "description": "Démarrer le mode réunion et ancrer le panneau sur le côté de l'écran",
-        "clear": "Supprimer le raccourci"
+        "clear": "Supprimer le raccourci",
+        "layoutLabel": "Lors du déclenchement par raccourci, ouvrir en :",
+        "layoutFullWidth": "Pleine largeur",
+        "layoutSidePanel": "Panneau latéral"
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
@@ -1942,6 +1945,9 @@
       "description": "Transcriptions et résumés structurés",
       "comingSoon": "Bientôt disponible",
       "back": "Retour"
+    },
+    "meetingPill": {
+      "returnToNote": "Revenir à l'enregistrement"
     },
     "empty": {
       "title": "Aucune note ici pour l'instant",

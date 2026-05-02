@@ -17,7 +17,7 @@ import {
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
-import type { TranscriptSegment } from "../../hooks/useMeetingTranscription";
+import type { TranscriptSegment } from "../../stores/meetingRecordingStore";
 import {
   DropdownMenu,
   DropdownMenuTrigger,

@@ -1374,7 +1374,10 @@
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",
         "description": "Start meeting mode and snap the panel to the side of the screen",
-        "clear": "Remove hotkey"
+        "clear": "Remove hotkey",
+        "layoutLabel": "When triggered by hotkey, open in:",
+        "layoutFullWidth": "Full width",
+        "layoutSidePanel": "Side panel"
       },
       "microphone": {
         "description": "Select which input device to use for dictation",
@@ -1990,6 +1993,9 @@
       "description": "Transcriptions & structured summaries",
       "comingSoon": "Coming Soon",
       "back": "Back"
+    },
+    "meetingPill": {
+      "returnToNote": "Return to recording"
     },
     "empty": {
       "title": "No notes here yet",
