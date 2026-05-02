@@ -471,9 +471,6 @@ app.on("open-url", (event, url) => {
   }
 });
 
-// Mirror the channel-aware URL resolution used by ipcHandlers.js getAuthUrl()
-// and the renderer's AUTH_URL: env wins, then runtime-env.json baked in by
-// Vite, then fall back to the production host.
 function resolveAuthUrl() {
   const fs = require("fs");
   const envPath = path.join(__dirname, "src", "dist", "runtime-env.json");
@@ -495,9 +492,8 @@ function getOauthCookieName() {
     : "openwhispr.session_token";
 }
 
-// Older website builds send `?token=` as the signed cookie value rather than
-// the raw session.token the bearer plugin expects. Trade the signed value
-// for the raw token via Better Auth's get-session endpoint.
+// Older website builds send the signed cookie value as `?token=`; trade it
+// for the raw session.token the bearer plugin expects.
 async function exchangeSignedTokenForRawBearer(signedToken) {
   try {
     const res = await fetch(`${resolveAuthUrl()}/api/auth/get-session`, {
@@ -584,8 +580,6 @@ async function handleOAuthDeepLink(deepLinkUrl) {
       void applySessionTokenAndRefresh(bearerToken);
       return;
     }
-    // Older website builds only send `?token=` carrying the signed cookie value;
-    // exchange it for a raw session.token before storing.
     const signedToken = parsed.searchParams.get("token");
     if (!signedToken) return;
     const rawToken = await exchangeSignedTokenForRawBearer(signedToken);
@@ -653,8 +647,7 @@ function startAuthBridgeServer() {
       return;
     }
 
-    let token =
-      requestUrl.searchParams.get("bearer_token") || requestUrl.searchParams.get("token");
+    let token = requestUrl.searchParams.get("bearer_token") || requestUrl.searchParams.get("token");
     if (!token && req.method === "POST") {
       try {
         const body = await parseJsonBody(req);
