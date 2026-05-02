@@ -14,6 +14,7 @@ import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
 import { getConfiguredOpenAIBase } from "./ai/openaiBase";
+import { applyThinkingSuppression } from "./ai/thinkingSuppression";
 
 export type AgentStreamChunk =
   | { type: "content"; text: string }
@@ -166,11 +167,7 @@ class ReasoningService extends BaseReasoningService {
         ),
     };
 
-    // Disable thinking for Groq Qwen models
-    const modelDef = getCloudModel(model);
-    if (modelDef?.disableThinking && providerName.toLowerCase() === "groq") {
-      requestBody.reasoning_effort = "none";
-    }
+    applyThinkingSuppression(requestBody, model, providerName, config);
 
     logger.logReasoning(`${providerName.toUpperCase()}_REQUEST`, {
       endpoint,
@@ -404,6 +401,8 @@ class ReasoningService extends BaseReasoningService {
       }
     }
 
+    applyThinkingSuppression(requestBody, model, provider, config);
+
     logger.logReasoning("AGENT_STREAM_REQUEST", {
       endpoint,
       model,
@@ -485,8 +484,9 @@ class ReasoningService extends BaseReasoningService {
             let content = parsed.choices?.[0]?.delta?.content;
             if (!content) continue;
 
-            // Strip Qwen3 <think> blocks from streamed output
-            if (isLocalProvider || isLanCleanup) {
+            const stripThinking =
+              (isLocalProvider || isLanCleanup) && config.disableThinking !== false;
+            if (stripThinking) {
               if (insideThinkBlock) {
                 const endIdx = content.indexOf("</think>");
                 if (endIdx !== -1) {
@@ -582,7 +582,9 @@ class ReasoningService extends BaseReasoningService {
     const aiModel = getAIModel(aiProvider, model, apiKey, baseURL);
 
     const modelDef = getCloudModel(model);
-    const needsDisableThinking = provider === "groq" && modelDef?.disableThinking;
+    const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
+    const needsDisableThinking =
+      provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
 
     logger.logReasoning("AGENT_AI_SDK_STREAM_REQUEST", {
       model,

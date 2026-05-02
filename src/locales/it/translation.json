@@ -355,6 +355,10 @@
     "getApiKey": "Ottieni la chiave API ->",
     "selectModel": "Seleziona modello",
     "availableModels": "Modelli disponibili",
+    "disableThinking": {
+      "label": "Disattiva output di ragionamento",
+      "help": "Salta i token di ragionamento per un output più pulito. Consigliato per la pulizia. Alcuni server ignorano questo suggerimento."
+    },
     "enterprise": {
       "title": "Provider Enterprise",
       "description": "Connettiti ai provider cloud usando le credenziali della tua organizzazione.",

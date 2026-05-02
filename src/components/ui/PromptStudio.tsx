@@ -153,7 +153,9 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
       const previous = customPrompt;
       setCustomPrompt(kind, editedPrompt);
       try {
-        const result = await ReasoningService.processText(testText, modelToUse, agentName, {});
+        const result = await ReasoningService.processText(testText, modelToUse, agentName, {
+          disableThinking: useSettingsStore.getState().cleanupDisableThinking,
+        });
         setTestResult(result);
       } finally {
         setCustomPrompt(kind, previous);

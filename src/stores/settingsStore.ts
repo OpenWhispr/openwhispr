@@ -124,6 +124,10 @@ const BOOLEAN_SETTINGS = new Set([
   "dataRetentionEnabled",
   "noteFilesEnabled",
   "showTranscriptionPreview",
+  "cleanupDisableThinking",
+  "dictationAgentDisableThinking",
+  "noteFormattingDisableThinking",
+  "chatAgentDisableThinking",
 ]);
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
@@ -364,6 +368,11 @@ export interface SettingsState
   dictationAgentRemoteUrl: string;
   dictationAgentCustomApiKey: string;
 
+  cleanupDisableThinking: boolean;
+  dictationAgentDisableThinking: boolean;
+  noteFormattingDisableThinking: boolean;
+  chatAgentDisableThinking: boolean;
+
   customPrompts: Record<PromptKind, string>;
   setCustomPrompt: (kind: PromptKind, value: string) => void;
 
@@ -400,6 +409,11 @@ export interface SettingsState
   setNoteFormattingCloudBaseUrl: (value: string) => void;
   setNoteFormattingRemoteUrl: (url: string) => void;
   setNoteFormattingCustomApiKey: (key: string) => void;
+
+  setCleanupDisableThinking: (value: boolean) => void;
+  setDictationAgentDisableThinking: (value: boolean) => void;
+  setNoteFormattingDisableThinking: (value: boolean) => void;
+  setChatAgentDisableThinking: (value: boolean) => void;
 
   setUseLocalWhisper: (value: boolean) => void;
   setWhisperModel: (value: string) => void;
@@ -857,6 +871,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationAgentRemoteUrl: readString("dictationAgentRemoteUrl", ""),
   dictationAgentCustomApiKey: readString("dictationAgentCustomApiKey", ""),
 
+  cleanupDisableThinking: readBoolean("cleanupDisableThinking", true),
+  dictationAgentDisableThinking: readBoolean("dictationAgentDisableThinking", true),
+  noteFormattingDisableThinking: readBoolean("noteFormattingDisableThinking", true),
+  chatAgentDisableThinking: readBoolean("chatAgentDisableThinking", true),
+
   customPrompts: PROMPT_KIND_LIST.reduce(
     (acc, kind) => ({ ...acc, [kind]: readString(`customPrompt.${kind}`, "") }),
     {} as Record<PromptKind, string>
@@ -875,6 +894,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setDictationAgentCloudBaseUrl: createStringSetter("dictationAgentCloudBaseUrl"),
   setDictationAgentRemoteUrl: createStringSetter("dictationAgentRemoteUrl"),
   setDictationAgentCustomApiKey: createStringSetter("dictationAgentCustomApiKey"),
+
+  setCleanupDisableThinking: createBooleanSetter("cleanupDisableThinking"),
+  setDictationAgentDisableThinking: createBooleanSetter("dictationAgentDisableThinking"),
+  setNoteFormattingDisableThinking: createBooleanSetter("noteFormattingDisableThinking"),
+  setChatAgentDisableThinking: createBooleanSetter("chatAgentDisableThinking"),
 
   setUseLocalWhisper: createBooleanSetter("useLocalWhisper"),
   setWhisperModel: createStringSetter("whisperModel"),
@@ -1339,6 +1363,7 @@ export interface ResolvedLLMConfig {
   cloudBaseUrl?: string;
   remoteUrl?: string;
   customApiKey?: string;
+  disableThinking: boolean;
 }
 
 export const selectResolvedLLMConfig = (
@@ -1356,6 +1381,9 @@ export const selectResolvedLLMConfig = (
     return (state[key] as string | undefined) || undefined;
   };
 
+  const disableThinkingKey = def.storeKeys.disableThinking;
+  const disableThinking = disableThinkingKey ? (state[disableThinkingKey] as boolean) : true;
+
   return {
     scope,
     mode: state[def.storeKeys.mode] as InferenceMode,
@@ -1365,6 +1393,7 @@ export const selectResolvedLLMConfig = (
     cloudBaseUrl: read("cloudBaseUrl") || fallback?.cloudBaseUrl,
     remoteUrl: read("remoteUrl") || fallback?.remoteUrl,
     customApiKey: read("customApiKey"),
+    disableThinking,
   };
 };
 
@@ -1378,7 +1407,12 @@ export function setResolvedLLMConfig(
     if (value === undefined) continue;
     const storeKey = def.storeKeys[field as keyof InferenceScopeStoreKeys];
     if (!storeKey) continue;
-    if (isBrowser) localStorage.setItem(storeKey as string, value as string);
+    if (isBrowser) {
+      localStorage.setItem(
+        storeKey as string,
+        typeof value === "boolean" ? String(value) : (value as string)
+      );
+    }
     (updates as Record<string, unknown>)[storeKey as string] = value;
   }
   if (Object.keys(updates).length > 0) useSettingsStore.setState(updates);

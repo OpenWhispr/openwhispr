@@ -5,6 +5,7 @@ import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { getConfiguredOpenAIBase } from "../openaiBase";
+import { applyThinkingSuppression } from "../thinkingSuppression";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -194,6 +195,7 @@ export const openaiProvider: InferenceProvider = {
           } else {
             requestBody.messages = messages;
             requestBody[apiConfig.tokenParam] = maxTokens;
+            applyThinkingSuppression(requestBody, model, resolvedProvider, config);
           }
 
           if (apiConfig.supportsTemperature) {

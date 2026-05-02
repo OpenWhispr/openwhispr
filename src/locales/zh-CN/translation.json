@@ -355,6 +355,10 @@
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
     "availableModels": "可用模型",
+    "disableThinking": {
+      "label": "禁用思考输出",
+      "help": "跳过推理令牌以获得更清晰的输出。推荐用于清理。某些服务器会忽略此提示。"
+    },
     "enterprise": {
       "title": "企业级提供商",
       "description": "使用你组织的凭据连接云端提供商。",

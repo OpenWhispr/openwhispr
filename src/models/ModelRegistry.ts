@@ -13,6 +13,7 @@ export interface ModelDefinition {
   contextLength: number;
   hfRepo: string;
   recommended?: boolean;
+  supportsThinking?: boolean;
 }
 
 export interface LocalProviderData {
@@ -38,6 +39,7 @@ export interface CloudModelDefinition {
   description: string;
   descriptionKey?: string;
   disableThinking?: boolean;
+  supportsThinking?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
 }
@@ -372,6 +374,10 @@ export function getCloudModel(modelId: string): CloudModelDefinition | undefined
     if (model) return model;
   }
   return undefined;
+}
+
+export function getLocalModel(modelId: string): ModelDefinition | undefined {
+  return modelRegistry.getModel(modelId)?.model;
 }
 
 export interface OpenAiApiConfig {

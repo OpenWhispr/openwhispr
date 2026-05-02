@@ -327,6 +327,10 @@
     "getApiKey": "Obter chave API ->",
     "selectModel": "Selecionar modelo",
     "availableModels": "Modelos disponíveis",
+    "disableThinking": {
+      "label": "Desativar saída de raciocínio",
+      "help": "Ignora tokens de raciocínio para uma saída mais limpa. Recomendado para limpeza. Alguns servidores ignoram esta dica."
+    },
     "enterprise": {
       "title": "Provedores corporativos",
       "description": "Conecte-se a provedores de nuvem usando as credenciais da sua organização.",

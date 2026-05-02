@@ -10,6 +10,7 @@ export interface ReasoningConfig {
   baseUrl?: string;
   customApiKey?: string;
   provider?: string;
+  disableThinking?: boolean;
 }
 
 export abstract class BaseReasoningService {

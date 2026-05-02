@@ -355,6 +355,10 @@
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
     "availableModels": "Available Models",
+    "disableThinking": {
+      "label": "Disable thinking output",
+      "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."
+    },
     "enterprise": {
       "title": "Enterprise Providers",
       "description": "Connect to cloud providers using your organization's credentials.",

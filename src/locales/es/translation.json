@@ -355,6 +355,10 @@
     "getApiKey": "Obtener clave API ->",
     "selectModel": "Seleccionar modelo",
     "availableModels": "Modelos disponibles",
+    "disableThinking": {
+      "label": "Desactivar salida de razonamiento",
+      "help": "Omite los tokens de razonamiento para una salida más limpia. Recomendado para limpieza. Algunos servidores ignoran esta indicación."
+    },
     "enterprise": {
       "title": "Proveedores empresariales",
       "description": "Conecta con proveedores de nube usando las credenciales de tu organización.",

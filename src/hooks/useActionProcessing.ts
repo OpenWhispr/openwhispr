@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import reasoningService from "../services/ReasoningService";
 import type { ActionItem } from "../types/electron";
-import { getEffectiveCleanupModel } from "../stores/settingsStore";
+import { getEffectiveCleanupModel, getSettings } from "../stores/settingsStore";
 import { generateNoteTitle } from "../utils/generateTitle";
 
 export type ActionProcessingState = "idle" | "processing" | "success";
@@ -83,6 +83,7 @@ export function useActionProcessing({ onSuccess, onError }: UseActionProcessingO
         const enhanced = await reasoningService.processText(noteContent, modelId, null, {
           systemPrompt,
           temperature: 0.3,
+          disableThinking: getSettings().noteFormattingDisableThinking,
         });
 
         if (cancelledRef.current) return;
