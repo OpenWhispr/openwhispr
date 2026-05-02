@@ -66,7 +66,7 @@ class ReasoningService extends BaseReasoningService {
     if (provider === "custom") {
       let customKey = "";
       try {
-        customKey = (await window.electronAPI?.getCustomReasoningKey?.()) || "";
+        customKey = (await window.electronAPI?.getCleanupCustomKey?.()) || "";
       } catch (err) {
         logger.logReasoning("CUSTOM_KEY_IPC_FALLBACK", { error: (err as Error)?.message });
       }
