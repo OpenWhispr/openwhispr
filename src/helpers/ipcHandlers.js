@@ -6,6 +6,7 @@ const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const tokenStore = require("./tokenStore");
 const { classifyAndLog } = require("./networkErrors");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
@@ -165,7 +166,7 @@ async function chunkedCloudTranscribe({
   buffer = null,
   filePath = null,
   apiUrl,
-  cookieHeader,
+  authHeader,
   multipartFields = {},
   onProgress,
   concurrencyLimit = CLOUD_CHUNK_CONCURRENCY,
@@ -208,7 +209,7 @@ async function chunkedCloudTranscribe({
         multipartFields
       );
       const url = new URL(`${apiUrl}/api/transcribe`);
-      const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
+      const data = await postMultipart(url, body, boundary, authHeader);
 
       results[index] = interpretTranscribeResponse(data);
       completedCount++;
@@ -3276,13 +3277,9 @@ class IPCHandlers {
       });
     });
 
-    // Auth: clear all session cookies for sign-out.
-    // This clears every cookie in the renderer session rather than targeting
-    // individual auth cookies, which is acceptable because the app only sets
-    // cookies for Better Auth. Avoids CSRF/Origin header issues that occur when
-    // the renderer tries to call the server-side sign-out endpoint directly.
     ipcMain.handle("auth-clear-session", async (event) => {
       try {
+        tokenStore.clear();
         const win = BrowserWindow.fromWebContents(event.sender);
         if (win) {
           await win.webContents.session.clearStorageData({ storages: ["cookies"] });
@@ -3291,6 +3288,19 @@ class IPCHandlers {
       } catch (error) {
         debugLogger.error("Failed to clear auth session:", error);
         return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("auth-get-token", () => tokenStore.get());
+    ipcMain.handle("auth-set-token", (_event, token) => {
+      if (typeof token === "string" && token) {
+        tokenStore.set(token);
+      } else {
+        // Surface silent rotation-to-empty so we can spot regressions where the
+        // renderer thinks it's persisting a token but the value never lands.
+        debugLogger.debug("auth-set-token ignored: empty or non-string token", {
+          type: typeof token,
+        });
       }
     });
 
@@ -3370,9 +3380,22 @@ class IPCHandlers {
       return getSessionCookiesFromWindow(win);
     };
 
-    // Honors system proxy via Electron's net stack. useSessionCookies:false
-    // because we set the Cookie header manually from getSessionCookies() —
-    // letting Electron also attach session cookies risks duplicates.
+    // Bearer auth is preferred. Cookie fallback covers the brief window before
+    // main.js's startup migration bridge runs (or if it failed for this user).
+    const getAuthHeaderFromWindow = async (win) => {
+      const token = tokenStore.get();
+      if (token) return { Authorization: `Bearer ${token}` };
+      const cookieHeader = win ? await getSessionCookiesFromWindow(win) : "";
+      return cookieHeader ? { Cookie: cookieHeader } : {};
+    };
+
+    const getAuthHeader = async (event) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      return getAuthHeaderFromWindow(win);
+    };
+
+    // Honors system proxy via Electron's net stack. useSessionCookies:false so
+    // Electron doesn't auto-attach jar cookies on top of our explicit headers.
     const proxyFetch = (url, init = {}) => net.fetch(url, { ...init, useSessionCookies: false });
 
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
@@ -3380,8 +3403,8 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const audioData = Buffer.from(audioBuffer);
         // Reused for the local SQLite row so SyncService upserts the existing
@@ -3404,7 +3427,7 @@ class IPCHandlers {
           const { text, responses, lastResponse } = await chunkedCloudTranscribe({
             buffer: audioData,
             apiUrl,
-            cookieHeader,
+            authHeader,
             multipartFields,
           });
           const sum = (field) => responses.reduce((s, r) => s + (r?.[field] || 0), 0);
@@ -3432,7 +3455,7 @@ class IPCHandlers {
           multipartFields
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
-        const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
+        const data = await postMultipart(url, body, boundary, authHeader);
 
         debugLogger.debug(
           "Cloud transcribe response",
@@ -3513,8 +3536,8 @@ class IPCHandlers {
         } else if (settings?.cloudTranscriptionMode === "openwhispr") {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
-            const cookieHeader = await getSessionCookiesFromWindow(win);
-            if (cookieHeader) {
+            const authHeader = await getAuthHeaderFromWindow(win);
+            if (Object.keys(authHeader).length) {
               const apiUrl = getApiUrl();
               if (apiUrl) {
                 const multipartFields = {
@@ -3526,7 +3549,7 @@ class IPCHandlers {
                   const { text } = await chunkedCloudTranscribe({
                     buffer,
                     apiUrl,
-                    cookieHeader,
+                    authHeader,
                     multipartFields,
                   });
                   result = { text, source: "openwhispr", model: "cloud" };
@@ -3538,9 +3561,7 @@ class IPCHandlers {
                     multipartFields
                   );
                   const url = new URL(`${apiUrl}/api/transcribe`);
-                  const data = await postMultipart(url, body, boundary, {
-                    Cookie: cookieHeader,
-                  });
+                  const data = await postMultipart(url, body, boundary, authHeader);
                   const responseData = interpretTranscribeResponse(data);
                   result = {
                     text: responseData.text,
@@ -4037,14 +4058,14 @@ class IPCHandlers {
       const postServerToken = async (path, body = {}) => {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
         const url = `${apiUrl}${path}`;
         let response;
         try {
           response = await proxyFetch(url, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Cookie: cookieHeader },
+            headers: { "Content-Type": "application/json", ...authHeader },
             body: JSON.stringify(body),
           });
         } catch (err) {
@@ -5532,8 +5553,8 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         debugLogger.debug(
           "Cloud reason request",
@@ -5549,7 +5570,7 @@ class IPCHandlers {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Cookie: cookieHeader,
+            ...authHeader,
           },
           body: JSON.stringify({
             text,
@@ -5618,14 +5639,14 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const response = await proxyFetch(`${apiUrl}/api/agent/stream`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Cookie: cookieHeader,
+            ...authHeader,
           },
           body: JSON.stringify({
             messages,
@@ -5711,8 +5732,8 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         debugLogger.debug("Agent web search request", { query, numResults }, "cloud-api");
 
@@ -5720,7 +5741,7 @@ class IPCHandlers {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Cookie: cookieHeader,
+            ...authHeader,
           },
           body: JSON.stringify({ query, numResults }),
         });
@@ -5754,14 +5775,14 @@ class IPCHandlers {
           const apiUrl = getApiUrl();
           if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-          const cookieHeader = await getSessionCookies(event);
-          if (!cookieHeader) throw new Error("No session cookies available");
+          const authHeader = await getAuthHeader(event);
+          if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
           const response = await proxyFetch(`${apiUrl}/api/streaming-usage`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Cookie: cookieHeader,
+              ...authHeader,
             },
             body: JSON.stringify({
               text,
@@ -5805,11 +5826,11 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const response = await proxyFetch(`${apiUrl}/api/usage`, {
-          headers: { Cookie: cookieHeader },
+          headers: authHeader,
         });
 
         if (!response.ok) {
@@ -5835,10 +5856,10 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        const headers = { Cookie: cookieHeader };
+        const headers = { ...authHeader };
         const fetchOpts = { method: "POST", headers };
         if (body) {
           headers["Content-Type"] = "application/json";
@@ -5879,12 +5900,12 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const response = await proxyFetch(`${apiUrl}/api/stripe/switch-plan`, {
           method: "POST",
-          headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
+          headers: { ...authHeader, "Content-Type": "application/json" },
           body: JSON.stringify(opts),
         });
 
@@ -5911,12 +5932,12 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const response = await proxyFetch(`${apiUrl}/api/stripe/preview-switch`, {
           method: "POST",
-          headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
+          headers: { ...authHeader, "Content-Type": "application/json" },
           body: JSON.stringify(opts),
         });
 
@@ -5943,11 +5964,11 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const method = (opts.method || "GET").toUpperCase();
-        const headers = { Cookie: cookieHeader };
+        const headers = { ...authHeader };
         const fetchOpts = { method, headers };
 
         if (opts.body !== undefined) {
@@ -5986,11 +6007,11 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const response = await proxyFetch(`${apiUrl}/api/stt-config`, {
-          headers: { Cookie: cookieHeader },
+          headers: authHeader,
         });
 
         if (!response.ok) {
@@ -6016,11 +6037,11 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const response = await proxyFetch(`${apiUrl}/api/note-recording-config`, {
-          headers: { Cookie: cookieHeader },
+          headers: authHeader,
         });
 
         if (!response.ok) {
@@ -6043,8 +6064,8 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const multipartFields = {
           source: "file_upload",
@@ -6064,7 +6085,7 @@ class IPCHandlers {
           const { text, warning } = await chunkedCloudTranscribe({
             filePath,
             apiUrl,
-            cookieHeader,
+            authHeader,
             multipartFields,
             onProgress: (payload) => event.sender.send("upload-transcription-progress", payload),
           });
@@ -6083,7 +6104,7 @@ class IPCHandlers {
           multipartFields
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
-        const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
+        const data = await postMultipart(url, body, boundary, authHeader);
         const result = interpretTranscribeResponse(data);
 
         return { success: true, text: result.text };
@@ -6159,14 +6180,14 @@ class IPCHandlers {
           throw new Error("OpenWhispr API URL not configured");
         }
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) {
-          throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) {
+          throw new Error("Not authenticated");
         }
 
         const response = await proxyFetch(`${apiUrl}/api/referrals/stats`, {
           headers: {
-            Cookie: cookieHeader,
+            ...authHeader,
           },
         });
 
@@ -6195,15 +6216,15 @@ class IPCHandlers {
           throw new Error("OpenWhispr API URL not configured");
         }
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) {
-          throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) {
+          throw new Error("Not authenticated");
         }
 
         const response = await proxyFetch(`${apiUrl}/api/referrals/invite`, {
           method: "POST",
           headers: {
-            Cookie: cookieHeader,
+            ...authHeader,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ email }),
@@ -6233,14 +6254,14 @@ class IPCHandlers {
           throw new Error("OpenWhispr API URL not configured");
         }
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) {
-          throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) {
+          throw new Error("Not authenticated");
         }
 
         const response = await proxyFetch(`${apiUrl}/api/referrals/invites`, {
           headers: {
-            Cookie: cookieHeader,
+            ...authHeader,
           },
         });
 
@@ -6423,15 +6444,15 @@ class IPCHandlers {
         throw new Error("OpenWhispr API URL not configured");
       }
 
-      const cookieHeader = await getSessionCookies(event);
-      if (!cookieHeader) {
-        throw new Error("No session cookies available");
+      const authHeader = await getAuthHeader(event);
+      if (!Object.keys(authHeader).length) {
+        throw new Error("Not authenticated");
       }
 
       const tokenResponse = await proxyFetch(`${apiUrl}/api/streaming-token`, {
         method: "POST",
         headers: {
-          Cookie: cookieHeader,
+          ...authHeader,
         },
       });
 
@@ -6626,12 +6647,12 @@ class IPCHandlers {
       const win = BrowserWindow.fromId(windowId);
       if (!win || win.isDestroyed()) throw new Error("Window not available for token refresh");
 
-      const cookieHeader = await getSessionCookiesFromWindow(win);
-      if (!cookieHeader) throw new Error("No session cookies available");
+      const authHeader = await getAuthHeaderFromWindow(win);
+      if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
       const tokenResponse = await proxyFetch(`${apiUrl}/api/deepgram-streaming-token`, {
         method: "POST",
-        headers: { Cookie: cookieHeader },
+        headers: authHeader,
       });
 
       if (!tokenResponse.ok) {
@@ -6654,15 +6675,15 @@ class IPCHandlers {
         throw new Error("OpenWhispr API URL not configured");
       }
 
-      const cookieHeader = await getSessionCookies(event);
-      if (!cookieHeader) {
-        throw new Error("No session cookies available");
+      const authHeader = await getAuthHeader(event);
+      if (!Object.keys(authHeader).length) {
+        throw new Error("Not authenticated");
       }
 
       const tokenResponse = await proxyFetch(`${apiUrl}/api/deepgram-streaming-token`, {
         method: "POST",
         headers: {
-          Cookie: cookieHeader,
+          ...authHeader,
         },
       });
 

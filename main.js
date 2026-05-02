@@ -463,7 +463,7 @@ app.on("open-url", (event, url) => {
     return;
   }
 
-  handleOAuthDeepLink(url);
+  void handleOAuthDeepLink(url);
 
   if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
     windowManager.controlPanelWindow.show();
@@ -471,27 +471,86 @@ app.on("open-url", (event, url) => {
   }
 });
 
-// Inject the Better Auth session cookie into Electron's session, then reload
-// the control panel so the renderer's authClient picks up the new session.
+function resolveAuthUrl() {
+  const fs = require("fs");
+  const envPath = path.join(__dirname, "src", "dist", "runtime-env.json");
+  let runtimeEnv = {};
+  try {
+    if (fs.existsSync(envPath)) runtimeEnv = JSON.parse(fs.readFileSync(envPath, "utf8"));
+  } catch {}
+  return (
+    process.env.AUTH_URL ||
+    process.env.VITE_AUTH_URL ||
+    runtimeEnv.VITE_AUTH_URL ||
+    "https://auth.openwhispr.com"
+  );
+}
+
+function getOauthCookieName() {
+  return process.env.NODE_ENV === "production"
+    ? "__Secure-openwhispr.session_token"
+    : "openwhispr.session_token";
+}
+
+// Older website builds send the signed cookie value as `?token=`; trade it
+// for the raw session.token the bearer plugin expects.
+async function exchangeSignedTokenForRawBearer(signedToken) {
+  try {
+    const res = await fetch(`${resolveAuthUrl()}/api/auth/get-session`, {
+      headers: { Cookie: `${getOauthCookieName()}=${signedToken}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.session?.token || null;
+  } catch (err) {
+    if (debugLogger) {
+      debugLogger.warn("Signed-token bearer exchange failed (non-fatal)", {
+        error: err?.message,
+      });
+    }
+    return null;
+  }
+}
+
+// One-time bridge for users upgrading from a build that injected the session
+// cookie into Electron's jar: exchange the existing cookie for a raw bearer
+// token, store it, and remove the cookie. Non-fatal — failures fall through
+// to the normal sign-in flow.
+async function migrateCookieToBearerToken() {
+  const tokenStore = require("./src/helpers/tokenStore");
+  if (tokenStore.get()) return;
+
+  const cookieName = getOauthCookieName();
+  const authUrl = resolveAuthUrl();
+
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url: authUrl, name: cookieName });
+    if (!cookies.length) return;
+
+    const rawToken = await exchangeSignedTokenForRawBearer(cookies[0].value);
+    if (!rawToken) return;
+
+    tokenStore.set(rawToken);
+    await session.defaultSession.cookies.remove(authUrl, cookieName);
+    if (debugLogger) debugLogger.debug("Migrated cookie to bearer token");
+  } catch (err) {
+    if (debugLogger) {
+      debugLogger.warn("Cookie→bearer token migration failed (non-fatal)", {
+        error: err?.message,
+      });
+    }
+  }
+}
+
+// Persist the bearer token and reload the control panel so the renderer's
+// authClient sends `Authorization: Bearer <token>` on its next request.
 async function applySessionTokenAndRefresh(token) {
   if (!token) return;
   if (!isLiveWindow(windowManager?.controlPanelWindow)) return;
 
-  try {
-    await session.defaultSession.cookies.set({
-      url: "https://auth.openwhispr.com",
-      name: "__Secure-openwhispr.session_token",
-      value: token,
-      domain: ".openwhispr.com",
-      path: "/",
-      secure: true,
-      httpOnly: true,
-      sameSite: "lax",
-    });
-  } catch (err) {
-    if (debugLogger) debugLogger.error("Failed to set OAuth session cookie:", err);
-    return;
-  }
+  const tokenStore = require("./src/helpers/tokenStore");
+  tokenStore.set(token);
 
   const appUrl = DevServerManager.getAppUrl(true);
   if (appUrl) {
@@ -504,7 +563,7 @@ async function applySessionTokenAndRefresh(token) {
   }
 
   if (debugLogger) {
-    debugLogger.debug("Applied OAuth session cookie and reloaded control panel", {
+    debugLogger.debug("Applied bearer token and reloaded control panel", {
       appChannel: APP_CHANNEL,
       oauthProtocol: OAUTH_PROTOCOL,
     });
@@ -513,12 +572,18 @@ async function applySessionTokenAndRefresh(token) {
   windowManager.controlPanelWindow.focus();
 }
 
-function handleOAuthDeepLink(deepLinkUrl) {
+async function handleOAuthDeepLink(deepLinkUrl) {
   try {
     const parsed = new URL(deepLinkUrl);
-    const token = parsed.searchParams.get("token");
-    if (!token) return;
-    void applySessionTokenAndRefresh(token);
+    const bearerToken = parsed.searchParams.get("bearer_token");
+    if (bearerToken) {
+      void applySessionTokenAndRefresh(bearerToken);
+      return;
+    }
+    const signedToken = parsed.searchParams.get("token");
+    if (!signedToken) return;
+    const rawToken = await exchangeSignedTokenForRawBearer(signedToken);
+    if (rawToken) void applySessionTokenAndRefresh(rawToken);
   } catch (err) {
     if (debugLogger) debugLogger.error("Failed to handle OAuth deep link:", err);
   }
@@ -582,11 +647,11 @@ function startAuthBridgeServer() {
       return;
     }
 
-    let token = requestUrl.searchParams.get("token");
+    let token = requestUrl.searchParams.get("bearer_token") || requestUrl.searchParams.get("token");
     if (!token && req.method === "POST") {
       try {
         const body = await parseJsonBody(req);
-        token = body?.token || null;
+        token = body?.bearer_token || body?.token || null;
       } catch (error) {
         res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
         res.end(error.message || "Invalid request");
@@ -638,6 +703,8 @@ async function startApp() {
     debugLogger.error("CLI bridge failed to start", { error: err.message });
     cliBridge = null;
   });
+
+  await migrateCookieToBearerToken();
 
   // Electron's file:// renderer sends Origin: null, which Better Auth's
   // trustedOrigins check rejects. Spoof Origin to the request's own URL so
@@ -1300,7 +1367,7 @@ if (gotSingleInstanceLock) {
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
       } else {
-        handleOAuthDeepLink(url);
+        void handleOAuthDeepLink(url);
       }
     }
   });

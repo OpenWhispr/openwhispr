@@ -560,7 +560,13 @@ function debouncedSaveSecret(provider: SecretProvider, key: string) {
     const save = api?.[SECRET_IPC_SAVERS[provider]] as
       | ((k: string) => Promise<unknown>)
       | undefined;
-    void save?.(key);
+    save?.(key)?.catch((err) => {
+      logger.warn(
+        "Failed to persist secret to safeStorage",
+        { provider, error: (err as Error).message },
+        "settings"
+      );
+    });
   }, 250);
 }
 
