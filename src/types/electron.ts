@@ -957,7 +957,6 @@ declare global {
       authClearSession?: () => Promise<void>;
       authGetToken?: () => Promise<string | null>;
       authSetToken?: (token: string) => Promise<void>;
-      authClearToken?: () => Promise<void>;
 
       // OpenWhispr Cloud API
       cloudTranscribe?: (

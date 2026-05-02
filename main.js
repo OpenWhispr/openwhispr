@@ -483,7 +483,23 @@ async function migrateCookieToBearerToken() {
     process.env.NODE_ENV === "production"
       ? "__Secure-openwhispr.session_token"
       : "openwhispr.session_token";
-  const authUrl = "https://auth.openwhispr.com";
+
+  // Mirror the channel-aware URL resolution used by ipcHandlers.js getAuthUrl()
+  // and the renderer's AUTH_URL: env wins, then runtime-env.json baked in by
+  // Vite, then fall back to the production host.
+  const runtimeEnv = (() => {
+    const fs = require("fs");
+    const envPath = path.join(__dirname, "src", "dist", "runtime-env.json");
+    try {
+      if (fs.existsSync(envPath)) return JSON.parse(fs.readFileSync(envPath, "utf8"));
+    } catch {}
+    return {};
+  })();
+  const authUrl =
+    process.env.AUTH_URL ||
+    process.env.VITE_AUTH_URL ||
+    runtimeEnv.VITE_AUTH_URL ||
+    "https://auth.openwhispr.com";
 
   try {
     const cookies = await session.defaultSession.cookies.get({ url: authUrl, name: cookieName });

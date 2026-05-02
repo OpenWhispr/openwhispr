@@ -3293,9 +3293,16 @@ class IPCHandlers {
 
     ipcMain.handle("auth-get-token", () => tokenStore.get());
     ipcMain.handle("auth-set-token", (_event, token) => {
-      if (typeof token === "string" && token) tokenStore.set(token);
+      if (typeof token === "string" && token) {
+        tokenStore.set(token);
+      } else {
+        // Surface silent rotation-to-empty so we can spot regressions where the
+        // renderer thinks it's persisting a token but the value never lands.
+        debugLogger.debug("auth-set-token ignored: empty or non-string token", {
+          type: typeof token,
+        });
+      }
     });
-    ipcMain.handle("auth-clear-token", () => tokenStore.clear());
 
     // In production, VITE_* env vars aren't available in the main process because
     // Vite only inlines them into the renderer bundle at build time. Load the

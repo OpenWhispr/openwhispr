@@ -467,7 +467,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),
   authGetToken: () => ipcRenderer.invoke("auth-get-token"),
   authSetToken: (token) => ipcRenderer.invoke("auth-set-token", token),
-  authClearToken: () => ipcRenderer.invoke("auth-clear-token"),
 
   // OpenWhispr Cloud API
   cloudHealthCheck: () => ipcRenderer.invoke("cloud-health-check"),
