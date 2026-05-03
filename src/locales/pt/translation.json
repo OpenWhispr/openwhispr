@@ -1542,7 +1542,8 @@
     "learnMore": "Saiba mais",
     "descriptions": {
       "parakeet": {
-        "parakeet_tdt_0_6b_v3": "ASR multilíngue rápido com detecção automática de idioma (25 idiomas)"
+        "parakeet_tdt_0_6b_v3": "ASR multilíngue rápido com detecção automática de idioma (25 idiomas)",
+        "parakeet_unified_en_0_6b": "ASR apenas em inglês com precisão de ponta (5,91% WER médio)"
       },
       "whisper": {
         "tiny": "Mais rápido, qualidade inferior",
