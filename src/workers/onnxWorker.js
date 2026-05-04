@@ -2,6 +2,21 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
+let logStream = null;
+
+function openLog() {
+  const logPath = process.env.OPENWHISPR_ONNX_WORKER_LOG;
+  if (!logPath) return;
+  try {
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    logStream = fs.createWriteStream(logPath, { flags: "a" });
+  } catch {
+    logStream = null;
+  }
+}
+
+openLog();
+
 const FBANK_SAMPLE_RATE = 16000;
 const FBANK_FRAME_LENGTH_MS = 25;
 const FBANK_FRAME_SHIFT_MS = 10;
@@ -23,7 +38,6 @@ let speakerSession = null;
 let speakerInputName = null;
 let textSession = null;
 let textTokenizer = null;
-let logStream = null;
 
 function log(level, message, extra) {
   if (!logStream) return;
@@ -38,17 +52,6 @@ function log(level, message, extra) {
     logStream.write(line + "\n");
   } catch {
     // Best-effort logging; never throw from log path.
-  }
-}
-
-function openLog() {
-  const logPath = process.env.OPENWHISPR_ONNX_WORKER_LOG;
-  if (!logPath) return;
-  try {
-    fs.mkdirSync(path.dirname(logPath), { recursive: true });
-    logStream = fs.createWriteStream(logPath, { flags: "a" });
-  } catch {
-    logStream = null;
   }
 }
 
@@ -364,6 +367,22 @@ async function dispatch({ id, method, payload }) {
   }
 }
 
+process.on("uncaughtException", (err) => {
+  log("fatal", "uncaughtException", { error: err?.message, stack: err?.stack });
+  process.stderr.write(`onnx worker uncaughtException: ${err?.stack || err?.message}\n`);
+  process.exit(1);
+});
+process.on("unhandledRejection", (err) => {
+  log("fatal", "unhandledRejection", { error: err?.message, stack: err?.stack });
+  process.stderr.write(`onnx worker unhandledRejection: ${err?.stack || err?.message}\n`);
+  process.exit(1);
+});
+
+if (!process.parentPort) {
+  process.stderr.write("onnx worker: process.parentPort is undefined\n");
+  process.exit(1);
+}
+
 process.parentPort.once("message", ({ data, ports }) => {
   if (data === "init" && ports?.length) {
     port = ports[0];
@@ -381,13 +400,4 @@ process.parentPort.once("message", ({ data, ports }) => {
   }
 });
 
-process.on("uncaughtException", (err) => {
-  log("fatal", "uncaughtException", { error: err?.message, stack: err?.stack });
-  process.exit(1);
-});
-process.on("unhandledRejection", (err) => {
-  log("fatal", "unhandledRejection", { error: err?.message, stack: err?.stack });
-  process.exit(1);
-});
-
-openLog();
+log("info", "worker boot", { intraOpNumThreads, pid: process.pid });

@@ -84,6 +84,7 @@ function downloadAttempt(url, tempPath, options) {
     let downloadedSize = startOffset;
     let totalSize = 0;
     let lastProgressUpdate = 0;
+    let isRedirecting = false;
 
     const cleanup = () => {
       if (stallTimer) {
@@ -128,6 +129,7 @@ function downloadAttempt(url, tempPath, options) {
       if (statusCode >= 300 && statusCode < 400) {
         response.resume();
         if (signal) signal.onAbort = null;
+        isRedirecting = true;
         if (request) {
           request.abort();
           request = null;
@@ -231,6 +233,7 @@ function downloadAttempt(url, tempPath, options) {
     });
 
     request.on("error", (err) => {
+      if (isRedirecting) return;
       if (signal) signal.onAbort = null;
       cleanup();
       if (signal?.aborted) {

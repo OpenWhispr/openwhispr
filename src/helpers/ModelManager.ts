@@ -2,12 +2,12 @@ import path from "path";
 import { spawn } from "child_process";
 import fs from "fs";
 import { promises as fsPromises } from "fs";
-import https from "https";
 import { app } from "electron";
 import { modelRegistry } from "../models/ModelRegistry";
 import { inferenceConfig } from "../config/InferenceConfig";
 import { MODEL_CONSTRAINTS } from "../config/constants";
 import { parseLlamaCppOutput } from "../utils/llamaOutputParser";
+const { downloadFile: runtimeDownloadFile } = require("./downloadUtils");
 
 // Error types
 export class ModelError extends Error {
@@ -83,7 +83,6 @@ class ModelManager {
 
     const { model, provider } = modelInfo;
     const modelPath = path.join(this.modelsDir, model.fileName);
-    const tempPath = `${modelPath}.tmp`;
 
     if (await this.isModelDownloaded(modelId)) {
       return modelPath;
@@ -93,43 +92,31 @@ class ModelManager {
     this.activeDownloads.set(modelId, true);
 
     try {
-      await this.downloadFile(downloadUrl, tempPath, (downloadedSize, totalSize) => {
-        const progress = (downloadedSize / totalSize) * 100;
-        this.downloadProgress.set(modelId, {
-          modelId,
-          progress,
-          downloadedSize,
-          totalSize,
-        });
-        if (onProgress) {
-          onProgress(progress, downloadedSize, totalSize);
-        }
+      await runtimeDownloadFile(downloadUrl, modelPath, {
+        onProgress: (downloadedSize: number, totalSize: number) => {
+          const progress = totalSize > 0 ? (downloadedSize / totalSize) * 100 : 0;
+          this.downloadProgress.set(modelId, {
+            modelId,
+            progress,
+            downloadedSize,
+            totalSize,
+          });
+          onProgress?.(progress, downloadedSize, totalSize);
+        },
       });
 
-      const stats = await fsPromises.stat(tempPath);
+      const stats = await fsPromises.stat(modelPath);
       if (stats.size < MODEL_CONSTRAINTS.MIN_FILE_SIZE) {
+        await fsPromises.unlink(modelPath).catch(() => {});
         throw new ModelError("Downloaded file appears to be corrupted", "DOWNLOAD_CORRUPTED", {
           size: stats.size,
         });
       }
 
-      await fsPromises.rename(tempPath, modelPath);
-
-      this.downloadProgress.delete(modelId);
-      this.activeDownloads.delete(modelId);
-
       return modelPath;
-    } catch (error) {
+    } finally {
       this.downloadProgress.delete(modelId);
       this.activeDownloads.delete(modelId);
-
-      try {
-        await fsPromises.unlink(tempPath);
-      } catch {
-        // Ignore cleanup errors
-      }
-
-      throw error;
     }
   }
 
@@ -166,53 +153,6 @@ class ModelManager {
 
   getDownloadProgress(modelId: string): DownloadProgress | undefined {
     return this.downloadProgress.get(modelId);
-  }
-
-  private async downloadFile(
-    url: string,
-    destPath: string,
-    onProgress: (downloaded: number, total: number) => void
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const file = fs.createWriteStream(destPath);
-
-      const request = https.get(url, (response) => {
-        if (response.statusCode === 301 || response.statusCode === 302) {
-          const redirectUrl = response.headers.location;
-          if (redirectUrl) {
-            this.downloadFile(redirectUrl, destPath, onProgress).then(resolve).catch(reject);
-            return;
-          }
-        }
-
-        if (response.statusCode !== 200) {
-          reject(new Error(`Download failed: ${response.statusCode}`));
-          return;
-        }
-
-        const totalSize = parseInt(response.headers["content-length"] || "0", 10);
-        let downloadedSize = 0;
-
-        response.on("data", (chunk) => {
-          downloadedSize += chunk.length;
-          onProgress(downloadedSize, totalSize);
-        });
-
-        response.pipe(file);
-
-        file.on("finish", () => {
-          file.close();
-          resolve();
-        });
-
-        file.on("error", (err) => {
-          fs.unlink(destPath, () => {});
-          reject(err);
-        });
-      });
-
-      request.on("error", reject);
-    });
   }
 
   async ensureLlamaCpp(): Promise<boolean> {
