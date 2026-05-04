@@ -18,6 +18,7 @@ const ASSEMBLYAI_UNIVERSAL3_PRO_LANGUAGES = buildLanguageSet("assemblyai");
 
 const MODEL_LANGUAGE_MAP: Record<string, Set<string>> = {
   "parakeet-tdt-0.6b-v3": PARAKEET_LANGUAGES,
+  "parakeet-unified-en-0.6b": new Set(["en"]),
 };
 
 const LANGUAGE_INSTRUCTIONS: Record<string, string> = Object.fromEntries(
