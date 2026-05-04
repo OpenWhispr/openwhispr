@@ -2235,7 +2235,8 @@
     "sections": {
       "calendar": "カレンダー",
       "api": "API",
-      "mcp": "MCP"
+      "mcp": "MCP",
+      "cli": "CLI"
     },
     "api": {
       "title": "APIキー",
@@ -2256,6 +2257,25 @@
       "copyUrl": "MCP URLをコピー",
       "proRequired": "OpenWhispr を Claude、ChatGPT、Cursor に接続するには、有料プランへのアップグレードが必要です。",
       "copied": "コピーしました"
+    },
+    "cli": {
+      "title": "コマンドラインアクセス",
+      "description": "ターミナルからエージェントにメモへのアクセスを許可します。",
+      "installLabel": "インストール",
+      "learnMore": "ドキュメントを読む",
+      "copyDocsLink": "ドキュメントリンクをコピー",
+      "docsLinkCopied": "ドキュメントリンクをコピーしました",
+      "viewPlans": "プランを表示",
+      "local": {
+        "label": "ローカル",
+        "freeBadge": "無料",
+        "description": "ローカルのメモに直接アクセスできます。ログインや API キーは不要 — OpenWhispr の起動中に利用できます。"
+      },
+      "cloud": {
+        "label": "クラウド",
+        "description": "API キーを使ってデバイス間で同期します。",
+        "proRequired": "クラウドモードで CLI を利用するには有料プランへのアップグレードが必要です。"
+      }
     },
     "plan": {
       "title": "プラン",
