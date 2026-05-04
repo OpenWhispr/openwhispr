@@ -52,6 +52,8 @@ export interface NoteItem {
   transcript: string | null;
   calendar_event_id: string | null;
   participants: string | null;
+  diarization_enabled: number | null;
+  expected_speaker_count: number | null;
   cloud_id: string | null;
   created_at: string;
   updated_at: string;
@@ -471,6 +473,8 @@ declare global {
           transcript?: string | null;
           calendar_event_id?: string | null;
           participants?: string | null;
+          diarization_enabled?: number | null;
+          expected_speaker_count?: number | null;
         }
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;

@@ -441,6 +441,10 @@ function pushConfig(enabled: boolean, expectedCount: number) {
 export function setSessionDiarizationEnabled(enabled: boolean): void {
   useMeetingRecordingStore.setState({ sessionDiarizationEnabled: enabled });
   pushConfig(enabled, useMeetingRecordingStore.getState().sessionExpectedCount);
+  const noteId = useMeetingRecordingStore.getState().recordingNoteId;
+  if (noteId != null) {
+    window.electronAPI?.updateNote?.(noteId, { diarization_enabled: enabled ? 1 : 0 });
+  }
 }
 
 export function setSessionExpectedCount(count: number): void {
@@ -450,6 +454,10 @@ export function setSessionExpectedCount(count: number): void {
     userTouchedStepper: true,
   });
   pushConfig(useMeetingRecordingStore.getState().sessionDiarizationEnabled, clamped);
+  const noteId = useMeetingRecordingStore.getState().recordingNoteId;
+  if (noteId != null) {
+    window.electronAPI?.updateNote?.(noteId, { expected_speaker_count: clamped });
+  }
 }
 
 function setSystemPartialSpeakerIdentity(speakerId: string | null, speakerName: string | null) {
@@ -652,7 +660,8 @@ export interface StartRecordingArgs {
   noteTitle: string | null;
   folderId: number | null;
   seedSegments?: TranscriptSegment[];
-  expectedCount?: number;
+  diarizationEnabled?: boolean | null;
+  expectedCount?: number | null;
 }
 
 export async function startRecording(args: StartRecordingArgs): Promise<void> {
@@ -660,7 +669,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
   isStartingFlag = true;
 
   const initialEnabled =
-    (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ?? true;
+    args.diarizationEnabled ??
+    (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ??
+    true;
   const initialCount = Math.max(
     1,
     Math.min(MAX_SPEAKER_COUNT, args.expectedCount ?? DEFAULT_EXPECTED_SPEAKER_COUNT)
@@ -696,7 +707,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
     recordingFolderId: args.folderId,
     sessionDiarizationEnabled: initialEnabled,
     sessionExpectedCount: initialCount,
-    userTouchedStepper: false,
+    userTouchedStepper: args.expectedCount != null,
     segments: seed,
     transcript: buildTranscriptText(seed),
     micPartial: "",

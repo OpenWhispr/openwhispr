@@ -380,6 +380,16 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN diarization_enabled INTEGER");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN expected_speaker_count INTEGER");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS contacts (
@@ -842,6 +852,8 @@ class DatabaseManager {
         "transcript",
         "calendar_event_id",
         "participants",
+        "diarization_enabled",
+        "expected_speaker_count",
         "sync_status",
         "deleted_at",
         "client_note_id",

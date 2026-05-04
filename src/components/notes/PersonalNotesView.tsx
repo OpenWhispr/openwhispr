@@ -220,6 +220,8 @@ export default function PersonalNotesView({
       noteTitle: note?.title ?? null,
       folderId: note?.folder_id ?? null,
       seedSegments,
+      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
+      expectedCount: note?.expected_speaker_count ?? null,
     });
   }, [notes]);
 
@@ -526,6 +528,8 @@ export default function PersonalNotesView({
       noteTitle: note?.title ?? null,
       folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
       seedSegments,
+      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
+      expectedCount: note?.expected_speaker_count ?? null,
     });
     onMeetingRecordingRequestHandled?.();
   }, [meetingRecordingRequest, activeNoteId, notes, onMeetingRecordingRequestHandled]);
