@@ -176,7 +176,7 @@ function wrapLinuxBinary(context) {
 # OpenWhispr launcher
 # User flags: ~/.config/${binaryName}-flags.conf (one per line, # = comment)
 
-HERE="\${BASH_SOURCE%/*}"
+HERE="$(dirname "$(readlink -f "\${BASH_SOURCE[0]}")")"
 FLAGS=()
 
 # Wayland: forces XWayland (overlay positioning requires X11)
