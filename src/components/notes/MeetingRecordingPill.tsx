@@ -65,7 +65,7 @@ export default function MeetingRecordingPill({
 
   return createPortal(
     <div
-      className="fixed top-12 left-1/2 -translate-x-1/2 z-20"
+      className="fixed top-2 left-1/2 -translate-x-1/2 z-30"
       style={
         {
           WebkitAppRegion: "no-drag",
@@ -76,9 +76,9 @@ export default function MeetingRecordingPill({
       <div
         className={cn(
           "flex items-center gap-2 h-9 px-3 rounded-xl",
-          "bg-primary/6 dark:bg-primary/10",
+          "bg-card/95 dark:bg-surface-2/95",
           "backdrop-blur-xl",
-          "border border-primary/20 dark:border-primary/25",
+          "border border-primary/25 dark:border-primary/30",
           "shadow-elevated"
         )}
       >
