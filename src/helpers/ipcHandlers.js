@@ -3216,7 +3216,7 @@ class IPCHandlers {
         return buildSystemAudioAccess();
       }
 
-      const result = await this.audioTapManager.verifyAccess();
+      const result = this.audioTapManager.checkAccess();
       return buildSystemAudioAccess({
         granted: result.granted,
         status: result.status,
