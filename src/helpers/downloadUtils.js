@@ -8,7 +8,6 @@ const debugLogger = require("./debugLogger");
 
 const USER_AGENT = "OpenWhispr/1.0";
 const PROGRESS_THROTTLE_MS = 100;
-const MAX_REDIRECTS = 5;
 const DEFAULT_MAX_RETRIES = 3;
 const MAX_BACKOFF_MS = 30000;
 const STALL_TIMEOUT_MS = 30000;
@@ -60,16 +59,11 @@ function sleep(ms) {
 }
 
 function downloadAttempt(url, tempPath, options) {
-  const { onProgress, signal, startOffset = 0, expectedSize = 0, _redirects = 0 } = options;
+  const { onProgress, signal, startOffset = 0, expectedSize = 0 } = options;
 
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
-      return;
-    }
-
-    if (_redirects > MAX_REDIRECTS) {
-      reject(Object.assign(new Error("Too many redirects"), { isHttpError: true }));
       return;
     }
 
@@ -109,8 +103,7 @@ function downloadAttempt(url, tempPath, options) {
       signal.onAbort = onAbort;
     }
 
-    // Manual redirects so we can reset startOffset when the new origin ignores Range.
-    request = net.request({ url, method: "GET", redirect: "manual" });
+    request = net.request({ url, method: "GET" });
     for (const [name, value] of Object.entries(headers)) {
       request.setHeader(name, value);
     }
@@ -125,28 +118,6 @@ function downloadAttempt(url, tempPath, options) {
 
       const statusCode = response.statusCode;
 
-      if (statusCode >= 300 && statusCode < 400) {
-        response.resume();
-        if (signal) signal.onAbort = null;
-        if (request) {
-          request.abort();
-          request = null;
-        }
-        const redirectUrl = headerValue(response.headers, "location");
-        if (!redirectUrl) {
-          reject(
-            Object.assign(new Error("Redirect without location header"), { isHttpError: true })
-          );
-          return;
-        }
-        downloadAttempt(redirectUrl, tempPath, { ...options, _redirects: _redirects + 1 }).then(
-          resolve,
-          reject
-        );
-        return;
-      }
-
-      // Content response — create write stream
       if (statusCode === 200 && startOffset > 0) {
         // Server doesn't support Range — restart from beginning
         downloadedSize = 0;

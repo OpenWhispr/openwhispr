@@ -2283,7 +2283,8 @@
     "sections": {
       "calendar": "Calendario",
       "api": "API",
-      "mcp": "MCP"
+      "mcp": "MCP",
+      "cli": "CLI"
     },
     "api": {
       "title": "Claves API",
@@ -2304,6 +2305,25 @@
       "copyUrl": "Copiar URL de MCP",
       "proRequired": "Actualiza a un plan de pago para conectar OpenWhispr con Claude, ChatGPT y Cursor.",
       "copied": "Copiado"
+    },
+    "cli": {
+      "title": "Acceso por línea de comandos",
+      "description": "Dale a tu agente acceso a tus notas desde la terminal.",
+      "installLabel": "Instalar",
+      "learnMore": "Leer la documentación",
+      "copyDocsLink": "Copiar enlace de la documentación",
+      "docsLinkCopied": "Enlace de la documentación copiado",
+      "viewPlans": "Ver planes",
+      "local": {
+        "label": "Local",
+        "freeBadge": "Gratis",
+        "description": "Lee tus notas locales directamente. Sin inicio de sesión ni clave API — funciona mientras OpenWhispr esté abierto."
+      },
+      "cloud": {
+        "label": "Nube",
+        "description": "Sincroniza entre dispositivos con tu clave API.",
+        "proRequired": "Actualiza a un plan de pago para usar la CLI en modo nube."
+      }
     },
     "plan": {
       "title": "Tu Plan",

@@ -5,11 +5,8 @@ import {
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
 
-// EMA factor 0.7 prefers the previous level so visual bars don't twitch on
-// noisy sub-frame samples. The 0.3 weight on the new RMS is enough to track
-// fast onsets (vowels, plosives) without lag.
-const EMA_PREV = 0.7;
-const EMA_NEXT = 0.3;
+const EMA_PREV = 0.5;
+const EMA_NEXT = 0.5;
 
 export default function MeetingRecordingMount(): null {
   const isRecording = useMeetingRecordingStore((s) => s.isRecording);
@@ -23,20 +20,21 @@ export default function MeetingRecordingMount(): null {
 
     let rafId = 0;
     let smoothed = 0;
-    const buf = new Float32Array(128);
+    let buf = new Float32Array(256);
 
     const tick = () => {
       const analyser = getMicAnalyser();
       if (analyser) {
-        const len = Math.min(buf.length, analyser.fftSize);
-        const view = len === buf.length ? buf : buf.subarray(0, len);
-        analyser.getFloatTimeDomainData(view);
+        if (buf.length !== analyser.fftSize) {
+          buf = new Float32Array(analyser.fftSize);
+        }
+        analyser.getFloatTimeDomainData(buf);
         let sumSquares = 0;
-        for (let i = 0; i < len; i++) {
-          const v = view[i];
+        for (let i = 0; i < buf.length; i++) {
+          const v = buf[i];
           sumSquares += v * v;
         }
-        const rms = Math.sqrt(sumSquares / len);
+        const rms = Math.sqrt(sumSquares / buf.length);
         smoothed = EMA_PREV * smoothed + EMA_NEXT * rms;
         const clamped = smoothed < 0 ? 0 : smoothed > 1 ? 1 : smoothed;
         useMeetingRecordingStore.setState({ currentMicLevel: clamped });

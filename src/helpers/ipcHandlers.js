@@ -308,6 +308,7 @@ class IPCHandlers {
     this._dictationIdleTimer = null;
     this._meetingMicStreaming = null;
     this._meetingSystemStreaming = null;
+    this._hotkeyCaptureMode = false;
     this._autoLearnEnabled = true; // Default on, synced from renderer
     this._autoLearnDebounceTimer = null;
     this._autoLearnLatestData = null;
@@ -2041,6 +2042,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("set-hotkey-listening-mode", async (event, enabled, newHotkey = null) => {
+      if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
+      this._hotkeyCaptureMode = enabled;
       this.windowManager.setHotkeyListeningMode(enabled);
       const hotkeyManager = this.windowManager.hotkeyManager;
 
@@ -3213,7 +3216,7 @@ class IPCHandlers {
         return buildSystemAudioAccess();
       }
 
-      const result = await this.audioTapManager.verifyAccess();
+      const result = this.audioTapManager.checkAccess();
       return buildSystemAudioAccess({
         granted: result.granted,
         status: result.status,

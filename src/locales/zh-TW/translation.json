@@ -1067,7 +1067,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最熱門",
-          "features": ["無限會議錄製", "代理模式", "與您的資料對話", "優先支援"],
+          "features": [
+            "無限會議錄製",
+            "代理模式",
+            "與您的資料對話",
+            "優先支援"
+          ],
           "cta": "開始使用",
           "switchToAnnual": "切換為年付"
         },
@@ -2230,7 +2235,8 @@
     "sections": {
       "calendar": "行事曆",
       "api": "API",
-      "mcp": "MCP"
+      "mcp": "MCP",
+      "cli": "CLI"
     },
     "api": {
       "title": "API 金鑰",
@@ -2251,6 +2257,25 @@
       "copyUrl": "複製 MCP URL",
       "proRequired": "升級到付費方案，以將 OpenWhispr 連接到 Claude、ChatGPT 和 Cursor。",
       "copied": "已複製"
+    },
+    "cli": {
+      "title": "命令列存取",
+      "description": "讓你的智慧助手透過終端機存取你的筆記。",
+      "installLabel": "安裝",
+      "learnMore": "查看文件",
+      "copyDocsLink": "複製文件連結",
+      "docsLinkCopied": "已複製文件連結",
+      "viewPlans": "查看方案",
+      "local": {
+        "label": "本機",
+        "freeBadge": "免費",
+        "description": "直接讀取你的本機筆記。無需登入或 API 金鑰 — OpenWhispr 執行時即可使用。"
+      },
+      "cloud": {
+        "label": "雲端",
+        "description": "使用 API 金鑰在多台裝置間同步。",
+        "proRequired": "升級到付費方案以在雲端模式下使用 CLI。"
+      }
     },
     "plan": {
       "title": "您的方案",

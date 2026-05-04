@@ -5,6 +5,7 @@ const debugLogger = require("./debugLogger");
 const REQUEST_TIMEOUT_MS = 30_000;
 const MAX_PENDING_REQUESTS = 1000;
 const RESPAWN_BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
+const MAX_RESPAWN_ATTEMPTS = 5;
 const SHUTDOWN_TIMEOUT_MS = 5000;
 
 const WORKER_SCRIPT = path.join(__dirname, "..", "workers", "onnxWorker.js");
@@ -31,6 +32,7 @@ class OnnxWorkerClient {
     this.nextRequestId = 1;
     this.crashCount = 0;
     this.shuttingDown = false;
+    this.gaveUp = false;
     this.spawnPromise = null;
     this.respawnTimer = null;
   }
@@ -54,10 +56,19 @@ class OnnxWorkerClient {
 
       const child = utilityProcess.fork(WORKER_SCRIPT, [], {
         serviceName: "openwhispr-onnx",
-        stdio: "ignore",
+        stdio: "pipe",
         env,
         execArgv: ["--max-old-space-size=512"],
       });
+
+      const forwardStderr = (chunk) => {
+        const text = chunk.toString();
+        for (const line of text.split(/\r?\n/)) {
+          if (line) debugLogger.warn("onnx worker stderr", { line });
+        }
+      };
+      child.stderr?.on("data", forwardStderr);
+      child.stdout?.on("data", forwardStderr);
 
       await new Promise((resolve, reject) => {
         const onSpawn = () => {
@@ -133,6 +144,11 @@ class OnnxWorkerClient {
 
     if (code !== 0) {
       this.crashCount += 1;
+      if (this.crashCount > MAX_RESPAWN_ATTEMPTS) {
+        this.gaveUp = true;
+        debugLogger.error("onnx worker giving up", { crashCount: this.crashCount });
+        return;
+      }
       const delay =
         RESPAWN_BACKOFF_MS[Math.min(this.crashCount - 1, RESPAWN_BACKOFF_MS.length - 1)];
       debugLogger.info("onnx worker respawn scheduled", {
@@ -151,6 +167,10 @@ class OnnxWorkerClient {
   async request(method, payload, transferList) {
     if (this.shuttingDown) {
       throw new WorkerCrashedError("worker shutting down");
+    }
+
+    if (this.gaveUp) {
+      throw new WorkerCrashedError("worker unavailable");
     }
 
     if (this.respawnTimer) {

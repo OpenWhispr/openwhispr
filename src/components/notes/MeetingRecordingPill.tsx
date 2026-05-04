@@ -12,7 +12,7 @@ interface MeetingRecordingPillProps {
 }
 
 const BAR_COUNT = 4;
-const BAR_FLOOR = 20;
+const BAR_FLOOR = 12;
 
 const isControlPanelWindow = () => {
   if (typeof window === "undefined") return false;
@@ -25,8 +25,10 @@ const truncateTitle = (title: string) =>
 
 const computeBarHeight = (level: number, index: number) => {
   // Per-bar phase keeps the stack from moving in lockstep at sustained levels.
+  // sqrt curve maps small RMS values (typical speech ~0.05-0.1) into a
+  // visible range — linear scaling kept bars clamped at the floor.
   const phase = 0.7 + 0.3 * Math.sin(index * 1.7);
-  const scaled = level * 100 * phase;
+  const scaled = Math.sqrt(level) * 180 * phase;
   return `${Math.max(BAR_FLOOR, Math.min(100, scaled))}%`;
 };
 
@@ -65,7 +67,7 @@ export default function MeetingRecordingPill({
 
   return createPortal(
     <div
-      className="fixed top-12 left-1/2 -translate-x-1/2 z-20"
+      className="fixed top-2 left-1/2 -translate-x-1/2 z-30"
       style={
         {
           WebkitAppRegion: "no-drag",
@@ -76,9 +78,9 @@ export default function MeetingRecordingPill({
       <div
         className={cn(
           "flex items-center gap-2 h-9 px-3 rounded-xl",
-          "bg-primary/6 dark:bg-primary/10",
+          "bg-card/95 dark:bg-surface-2/95",
           "backdrop-blur-xl",
-          "border border-primary/20 dark:border-primary/25",
+          "border border-primary/25 dark:border-primary/30",
           "shadow-elevated"
         )}
       >

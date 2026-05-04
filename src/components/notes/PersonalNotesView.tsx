@@ -943,7 +943,7 @@ export default function PersonalNotesView({
               onTitleChange={handleTitleChange}
               onContentChange={handleContentChange}
               isSaving={isSaving}
-              isRecording={isTranscribing}
+              isRecording={isActiveNoteRecording}
               isProcessing={false}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
