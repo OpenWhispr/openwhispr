@@ -2014,8 +2014,9 @@ class DatabaseManager {
       const stmt = this.db.prepare(`
         INSERT INTO notes (client_note_id, cloud_id, title, content, enhanced_content,
           enhancement_prompt, enhanced_at_content_hash, note_type, source_file,
-          audio_duration_seconds, transcript, folder_id, sync_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)
+          audio_duration_seconds, transcript, folder_id, participants, calendar_event_id,
+          diarization_enabled, expected_speaker_count, sync_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)
         ON CONFLICT(client_note_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           title = excluded.title,
@@ -2025,6 +2026,10 @@ class DatabaseManager {
           enhanced_at_content_hash = excluded.enhanced_at_content_hash,
           transcript = excluded.transcript,
           folder_id = excluded.folder_id,
+          participants = excluded.participants,
+          calendar_event_id = excluded.calendar_event_id,
+          diarization_enabled = excluded.diarization_enabled,
+          expected_speaker_count = excluded.expected_speaker_count,
           sync_status = 'synced',
           updated_at = excluded.updated_at
       `);
@@ -2041,6 +2046,10 @@ class DatabaseManager {
         cloudNote.audio_duration_seconds || null,
         cloudNote.transcript || null,
         localFolderId,
+        cloudNote.participants || null,
+        cloudNote.calendar_event_id || null,
+        cloudNote.diarization_enabled ?? null,
+        cloudNote.expected_speaker_count ?? null,
         cloudNote.created_at,
         cloudNote.updated_at
       );

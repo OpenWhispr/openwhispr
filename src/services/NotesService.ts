@@ -10,6 +10,9 @@ interface NoteInput {
   source_file?: string | null;
   audio_duration_seconds?: number | null;
   participants?: string | null;
+  calendar_event_id?: string | null;
+  diarization_enabled?: number | null;
+  expected_speaker_count?: number | null;
   transcript?: string | null;
   enhanced_at_content_hash?: string | null;
   folder_id?: string | null;
@@ -30,6 +33,10 @@ interface CloudNote {
   folder_id: string | null;
   transcript: string | null;
   enhanced_at_content_hash: string | null;
+  participants: string | null;
+  calendar_event_id: string | null;
+  diarization_enabled: number | null;
+  expected_speaker_count: number | null;
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
