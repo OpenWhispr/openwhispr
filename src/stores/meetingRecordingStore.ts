@@ -1027,9 +1027,16 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
         micSource = source;
         micProcessor = processor;
 
+        // AnalyserNode must reach the destination for Chrome's pull-based
+        // renderer to update its internal buffer; route through a muted gain.
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.4;
+        const analyserSink = ctx.createGain();
+        analyserSink.gain.value = 0;
         source.connect(analyser);
+        analyser.connect(analyserSink);
+        analyserSink.connect(ctx.destination);
         micAnalyser = analyser;
 
         const micTrack = micResult.getAudioTracks()[0];
