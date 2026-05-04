@@ -12,7 +12,7 @@ interface MeetingRecordingPillProps {
 }
 
 const BAR_COUNT = 4;
-const BAR_FLOOR = 20;
+const BAR_FLOOR = 12;
 
 const isControlPanelWindow = () => {
   if (typeof window === "undefined") return false;
@@ -25,8 +25,10 @@ const truncateTitle = (title: string) =>
 
 const computeBarHeight = (level: number, index: number) => {
   // Per-bar phase keeps the stack from moving in lockstep at sustained levels.
+  // sqrt curve maps small RMS values (typical speech ~0.05-0.1) into a
+  // visible range — linear scaling kept bars clamped at the floor.
   const phase = 0.7 + 0.3 * Math.sin(index * 1.7);
-  const scaled = level * 100 * phase;
+  const scaled = Math.sqrt(level) * 180 * phase;
   return `${Math.max(BAR_FLOOR, Math.min(100, scaled))}%`;
 };
 
