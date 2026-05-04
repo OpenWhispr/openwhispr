@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import {
   useSettingsStore,
   selectResolvedLLMConfig,
@@ -13,8 +14,12 @@ export default function DictationAgentSettings() {
   const { t } = useTranslation();
   const useDictationAgent = useSettingsStore((s) => s.useDictationAgent);
   const setUseDictationAgent = useSettingsStore((s) => s.setUseDictationAgent);
-  const agentConfig = useSettingsStore((s) => selectResolvedLLMConfig(s, "dictationAgent"));
-  const cleanupConfig = useSettingsStore((s) => selectResolvedLLMConfig(s, "dictationCleanup"));
+  const agentConfig = useSettingsStore(
+    useShallow((s) => selectResolvedLLMConfig(s, "dictationAgent"))
+  );
+  const cleanupConfig = useSettingsStore(
+    useShallow((s) => selectResolvedLLMConfig(s, "dictationCleanup"))
+  );
   const showUseCleanup = !agentConfig.provider && !agentConfig.model && !!cleanupConfig.provider;
 
   const useCleanupModel = () => {
