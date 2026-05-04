@@ -1666,7 +1666,8 @@
     "learnMore": "Learn more",
     "descriptions": {
       "parakeet": {
-        "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)"
+        "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)",
+        "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)"
       },
       "diarization": {
         "segmentation": "Speech boundary detection for speaker diarization",

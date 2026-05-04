@@ -1565,7 +1565,8 @@
     "learnMore": "了解更多",
     "descriptions": {
       "parakeet": {
-        "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）"
+        "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）",
+        "parakeet_unified_en_0_6b": "仅英语 ASR，最先进的准确度（平均 WER 5.91%）"
       },
       "whisper": {
         "tiny": "最快速度，较低质量",
