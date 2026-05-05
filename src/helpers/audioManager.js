@@ -423,7 +423,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         parakeetModel,
         preferredLanguage,
       } = getSettings();
-      if (showTranscriptionPreview && useLocalWhisper) {
+      if (showTranscriptionPreview && useLocalWhisper && localTranscriptionProvider === "nvidia") {
         try {
           this._previewAudioContext = new AudioContext({ sampleRate: 16000 });
           this._previewSource = this._previewAudioContext.createMediaStreamSource(micStream);

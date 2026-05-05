@@ -352,7 +352,7 @@ function TranscriptionSection({
       {transcriptionMode === "local" && (
         <>
           {renderTranscriptionPicker("local")}
-          {renderPreviewToggle()}
+          {localTranscriptionProvider === "nvidia" && renderPreviewToggle()}
         </>
       )}
 
