@@ -1662,6 +1662,15 @@ export async function initializeSettings(): Promise<void> {
     if (!event.key || event.storageArea !== localStorage || event.newValue === null) return;
 
     const { key, newValue } = event;
+
+    if (key.startsWith("customPrompt.")) {
+      const kind = key.slice("customPrompt.".length);
+      useSettingsStore.setState((s) => ({
+        customPrompts: { ...s.customPrompts, [kind]: newValue || "" },
+      }));
+      return;
+    }
+
     const state = useSettingsStore.getState();
     if (!(key in state) || typeof (state as unknown as Record<string, unknown>)[key] === "function")
       return;
