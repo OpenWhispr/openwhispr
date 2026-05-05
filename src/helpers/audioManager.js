@@ -421,6 +421,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         localTranscriptionProvider,
         whisperModel,
         parakeetModel,
+        preferredLanguage,
       } = getSettings();
       if (showTranscriptionPreview && useLocalWhisper) {
         try {
@@ -439,7 +440,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
           const provider = localTranscriptionProvider === "nvidia" ? "nvidia" : "whisper";
           const model = provider === "nvidia" ? parakeetModel : whisperModel;
-          window.electronAPI?.startDictationPreview?.({ provider, model });
+          window.electronAPI?.startDictationPreview?.({ provider, model, language: preferredLanguage });
         } catch (e) {
           logger.warn("Preview worklet setup failed", { error: e.message }, "audio");
         }

@@ -4865,6 +4865,7 @@ class IPCHandlers {
     let dictationPreviewTranscribing = false;
     let dictationPreviewProvider = null;
     let dictationPreviewModel = null;
+    let dictationPreviewLanguage = "auto";
     let dictationPreviewSessionActive = false;
     let dictationPreviewChunkCount = 0;
 
@@ -4881,6 +4882,7 @@ class IPCHandlers {
       dictationPreviewTranscribing = false;
       dictationPreviewProvider = null;
       dictationPreviewModel = null;
+      dictationPreviewLanguage = "auto";
     };
 
     const transcribeDictationPreviewChunk = async () => {
@@ -4912,10 +4914,12 @@ class IPCHandlers {
         if (dictationPreviewProvider === "nvidia") {
           result = await this.parakeetManager.transcribeLocalParakeet(wav, {
             model: dictationPreviewModel,
+            language: dictationPreviewLanguage,
           });
         } else {
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: dictationPreviewModel,
+            language: dictationPreviewLanguage,
           });
         }
 
@@ -5466,12 +5470,13 @@ class IPCHandlers {
       return { success: true, text: result.text || "" };
     });
 
-    ipcMain.handle("start-dictation-preview", async (_event, { provider, model }) => {
+    ipcMain.handle("start-dictation-preview", async (_event, { provider, model, language }) => {
       resetDictationPreviewState();
       dictationPreviewMode = true;
       dictationPreviewSessionActive = true;
       dictationPreviewProvider = provider;
       dictationPreviewModel = model;
+      dictationPreviewLanguage = language || "auto";
       dictationPreviewChunkCount = 0;
       this.windowManager.showTranscriptionPreview("");
       dictationPreviewTimer = setInterval(() => transcribeDictationPreviewChunk(), 1500);
