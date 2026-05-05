@@ -45,9 +45,7 @@ function fetchJson(url, redirectCount = 0) {
             reject(new Error("Redirect without location header"));
             return;
           }
-          const redirectUrl = location.startsWith("/")
-            ? new URL(location, url).href
-            : location;
+          const redirectUrl = location.startsWith("/") ? new URL(location, url).href : location;
           fetchJson(redirectUrl, redirectCount + 1)
             .then(resolve)
             .catch(reject);
@@ -76,25 +74,30 @@ function fetchJson(url, redirectCount = 0) {
 }
 
 /**
- * Fetch the latest release from a GitHub repository.
+ * Fetch a release from a GitHub repository.
  * @param {string} repo - Repository in "owner/repo" format
  * @param {object} options - Options
- * @param {string} [options.tagPrefix] - Only match releases with this tag prefix (e.g., "windows-key-listener-v")
- * @param {boolean} [options.includePrerelease=false] - Include prerelease versions
+ * @param {string} [options.tag] - Exact tag to fetch (works for any release age, no pagination)
+ * @param {string} [options.tagPrefix] - Latest release whose tag starts with this prefix (searches the 50 most recent only)
+ * @param {boolean} [options.includePrerelease=false] - Include prereleases (tagPrefix only)
  * @returns {Promise<{tag: string, assets: Array<{name: string, url: string}>, url: string} | null>}
  */
 async function fetchLatestRelease(repo, options = {}) {
-  const { tagPrefix, includePrerelease = false } = options;
+  const { tag, tagPrefix, includePrerelease = false } = options;
 
   try {
-    // If no tag prefix, use the simple /latest endpoint
+    if (tag) {
+      const url = `https://api.github.com/repos/${repo}/releases/tags/${encodeURIComponent(tag)}`;
+      const release = await fetchJson(url);
+      return formatRelease(release);
+    }
+
     if (!tagPrefix) {
       const url = `https://api.github.com/repos/${repo}/releases/latest`;
       const release = await fetchJson(url);
       return formatRelease(release);
     }
 
-    // Otherwise, fetch all releases and filter by prefix
     const url = `https://api.github.com/repos/${repo}/releases?per_page=50`;
     const releases = await fetchJson(url);
 
