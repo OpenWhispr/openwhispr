@@ -7,7 +7,13 @@ import {
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
 import { withRetry, createApiRetryStrategy } from "../utils/retry";
-import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
+import {
+  API_ENDPOINTS,
+  TOKEN_LIMITS,
+  buildApiUrl,
+  ensureV1Suffix,
+  normalizeBaseUrl,
+} from "../config/constants";
 import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { streamText, stepCountIs } from "ai";
@@ -347,7 +353,7 @@ class ReasoningService extends BaseReasoningService {
 
     if (isLanCleanup) {
       const rawUrl = lanOverride || settings.cleanupRemoteUrl.trim();
-      const baseUrl = normalizeBaseUrl(rawUrl) || rawUrl;
+      const baseUrl = ensureV1Suffix(normalizeBaseUrl(rawUrl) || rawUrl);
       endpoint = buildApiUrl(baseUrl, "/chat/completions");
     } else if (isLocalProvider) {
       const serverResult = await window.electronAPI.llamaServerStart(model);
@@ -559,10 +565,7 @@ class ReasoningService extends BaseReasoningService {
 
     if (isLanCleanup) {
       const rawUrl = lanOverride || settings.cleanupRemoteUrl.trim();
-      baseURL = normalizeBaseUrl(rawUrl) || rawUrl;
-      if (!baseURL.endsWith("/v1")) {
-        baseURL = buildApiUrl(baseURL, "/v1");
-      }
+      baseURL = ensureV1Suffix(normalizeBaseUrl(rawUrl) || rawUrl);
     } else if (isLocalProvider) {
       const serverResult = await window.electronAPI.llamaServerStart(model);
       if (!serverResult.success || !serverResult.port) {
