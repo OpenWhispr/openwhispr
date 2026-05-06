@@ -348,7 +348,7 @@ class ReasoningService extends BaseReasoningService {
     if (isLanCleanup) {
       const rawUrl = lanOverride || settings.cleanupRemoteUrl.trim();
       const baseUrl = normalizeBaseUrl(rawUrl) || rawUrl;
-      endpoint = buildApiUrl(baseUrl, "/v1/chat/completions");
+      endpoint = buildApiUrl(baseUrl, "/chat/completions");
     } else if (isLocalProvider) {
       const serverResult = await window.electronAPI.llamaServerStart(model);
       if (!serverResult.success || !serverResult.port) {
