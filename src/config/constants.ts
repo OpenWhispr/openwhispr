@@ -37,8 +37,11 @@ export const buildApiUrl = (base: string, path: string): string => {
   return `${normalizedBase}${normalizedPath}`;
 };
 
-export const ensureV1Suffix = (base: string): string =>
-  base.endsWith("/v1") ? base : buildApiUrl(base, "/v1");
+export const ensureV1Suffix = (base: string): string => {
+  if (!base) return base;
+  const normalized = normalizeBaseUrl(base) || base;
+  return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`;
+};
 
 const env = (typeof import.meta !== "undefined" && (import.meta as any).env) || {};
 
