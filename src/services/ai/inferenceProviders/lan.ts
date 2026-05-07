@@ -1,5 +1,5 @@
 import type { InferenceProvider } from "./types";
-import { buildApiUrl, normalizeBaseUrl } from "../../../config/constants";
+import { buildApiUrl, ensureV1Suffix } from "../../../config/constants";
 import { getSettings } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
 
@@ -10,7 +10,7 @@ export const lanProvider: InferenceProvider = {
     logger.logReasoning("LAN_START", { url: lanUrl, agentName, model });
 
     try {
-      const baseUrl = normalizeBaseUrl(lanUrl) || lanUrl;
+      const baseUrl = ensureV1Suffix(lanUrl);
       const endpoint = buildApiUrl(baseUrl, "/chat/completions");
       const apiKey = config.customApiKey?.trim() || getSettings().cleanupCustomApiKey?.trim() || "";
       const resolvedModel = model?.trim() || "default";
