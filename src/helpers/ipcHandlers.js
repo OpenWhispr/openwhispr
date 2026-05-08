@@ -4064,7 +4064,11 @@ class IPCHandlers {
     const fetchRealtimeToken = async (event, options, { streams } = {}) => {
       const postServerToken = async (path, body = {}) => {
         const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+        if (!apiUrl) {
+          const err = new Error("OpenWhispr API URL not configured");
+          err.code = "NO_API";
+          throw err;
+        }
         const authHeader = await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
         const url = `${apiUrl}${path}`;
