@@ -21,13 +21,13 @@ function _backupPath() {
 
 function _saveMasterKeyBackup() {
   if (!masterKey || !safeStorage.isEncryptionAvailable()) return;
+  const target = _backupPath();
   try {
-    const dir = path.dirname(_backupPath());
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(path.dirname(target), { recursive: true });
     const encrypted = safeStorage.encryptString(masterKey.toString("base64"));
-    const tmp = _backupPath() + ".tmp";
+    const tmp = target + ".tmp";
     fs.writeFileSync(tmp, encrypted, { mode: 0o600 });
-    fs.renameSync(tmp, _backupPath());
+    fs.renameSync(tmp, target);
   } catch (error) {
     debugLogger.warn("failed to save master key backup", { error: error?.message }, "secretCrypto");
   }
