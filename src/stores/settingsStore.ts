@@ -1664,9 +1664,10 @@ export async function initializeSettings(): Promise<void> {
     const { key, newValue } = event;
 
     if (key.startsWith("customPrompt.")) {
-      const kind = key.slice("customPrompt.".length);
+      const kind = key.slice("customPrompt.".length) as PromptKind;
+      if (!PROMPT_KIND_LIST.includes(kind)) return;
       useSettingsStore.setState((s) => ({
-        customPrompts: { ...s.customPrompts, [kind]: newValue || "" },
+        customPrompts: { ...s.customPrompts, [kind]: newValue },
       }));
       return;
     }
