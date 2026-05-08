@@ -1493,6 +1493,10 @@
         "chatIntelligence": "チャット"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "ノートのタイトルを自動生成",
+      "autoGenerateTitleDescription": "文字起こしや改善後にAIを使用してノートの短いタイトルを生成します"
+    },
     "transcription": {
       "customSetup": "カスタム設定",
       "customSetupDescription": "独自のプロバイダーと API キーを使用。",

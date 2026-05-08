@@ -1493,6 +1493,10 @@
         "chatIntelligence": "Чат"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "Автоматически генерировать заголовки заметок",
+      "autoGenerateTitleDescription": "Использовать ИИ для создания краткого заголовка заметок после транскрипции или улучшения"
+    },
     "transcription": {
       "customSetup": "Пользовательская настройка",
       "customSetupDescription": "Используйте собственного провайдера и API-ключ.",

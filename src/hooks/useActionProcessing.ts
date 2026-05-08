@@ -89,8 +89,10 @@ export function useActionProcessing({ onSuccess, onError }: UseActionProcessingO
         if (cancelledRef.current) return;
 
         let title: string | undefined;
-        const generated = await generateNoteTitle(enhanced, modelId);
-        if (generated) title = generated;
+        if (getSettings().autoGenerateNoteTitle) {
+          const generated = await generateNoteTitle(enhanced, modelId);
+          if (generated) title = generated;
+        }
 
         if (cancelledRef.current) return;
 
