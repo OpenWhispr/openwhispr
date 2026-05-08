@@ -4,7 +4,7 @@ import logger from "../utils/logger";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
-import { getBaseLanguageCode, validateLanguageForModel } from "../utils/languageSupport";
+import { getBaseLanguageCode } from "../utils/languageSupport";
 import {
   createLocalSpeechGateState,
   getLocalSpeechGateDecision,
@@ -439,7 +439,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
           const provider = localTranscriptionProvider === "nvidia" ? "nvidia" : "whisper";
           const model = provider === "nvidia" ? parakeetModel : whisperModel;
-          window.electronAPI?.startDictationPreview?.({ provider, model });
+          const language = getBaseLanguageCode(getSettings().preferredLanguage);
+          window.electronAPI?.startDictationPreview?.({ provider, model, language });
         } catch (e) {
           logger.warn("Preview worklet setup failed", { error: e.message }, "audio");
         }
@@ -743,11 +744,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       const arrayBuffer = await audioBlob.arrayBuffer();
-      const language = validateLanguageForModel(getSettings().preferredLanguage, model);
-      const options = { model };
-      if (language) {
-        options.language = language;
-      }
 
       logger.debug(
         "Parakeet transcription starting",
@@ -760,7 +756,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
 
       const transcriptionStart = performance.now();
-      const result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, options);
+      const result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, { model });
       timings.transcriptionProcessingDurationMs = Math.round(
         performance.now() - transcriptionStart
       );
