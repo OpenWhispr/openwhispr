@@ -422,6 +422,7 @@ declare global {
           cloudTranscriptionBaseUrl?: string;
           parakeetModel: string;
           whisperModel: string;
+          preferredLanguage?: string;
           transcriptionMode?: InferenceMode;
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
@@ -644,7 +645,7 @@ declare global {
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
         audioBlob: ArrayBuffer,
-        options?: { model?: string; language?: string }
+        options?: { model?: string }
       ) => Promise<ParakeetTranscriptionResult>;
       checkParakeetInstallation: () => Promise<ParakeetCheckResult>;
       downloadParakeetModel: (modelName: string) => Promise<ParakeetModelResult>;
@@ -1623,6 +1624,7 @@ declare global {
       startDictationPreview?: (opts: {
         provider: string;
         model: string;
+        language?: string;
       }) => Promise<{ success: boolean }>;
       stopDictationPreview?: (opts?: { showCleanup?: boolean }) => Promise<{ success: boolean }>;
       dismissDictationPreview?: () => Promise<{ success: boolean }>;
