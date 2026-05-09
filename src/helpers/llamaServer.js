@@ -443,12 +443,30 @@ class LlamaServerManager {
 
     this.clearIdleTimer();
 
-    const body = JSON.stringify({
+    const requestBody = {
       messages,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.max_tokens ?? 512,
       stream: false,
-    });
+    };
+    
+    // Suppress thinking for local llama.cpp/Qwen-compatible chat templates.
+    // Different OpenAI-compatible servers use different hints:
+    // - reasoning_effort: OpenAI/Groq-style
+    // - think: Ollama-style
+    // - chat_template_kwargs.enable_thinking: llama.cpp/Qwen chat-template style
+    //
+    // Unknown fields should be ignored by servers that do not support them.
+    if (options.disableThinking !== false) {
+      requestBody.reasoning_effort = "none";
+      requestBody.think = false;
+      requestBody.chat_template_kwargs = {
+        ...(requestBody.chat_template_kwargs || {}),
+        enable_thinking: false,
+      };
+    }
+    
+    const body = JSON.stringify(requestBody);
 
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
