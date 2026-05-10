@@ -56,15 +56,21 @@ test("clusterEmbeddings auto-detects speaker count with threshold", () => {
   assert.equal(unique.size, 2);
 });
 
-test("buildSegmentsFromWindows produces time-stamped speaker segments", () => {
-  const numSpeakers = 2;
+test("buildSegmentsFromWindows produces time-stamped speaker segments with powerset encoding", () => {
+  const numClasses = 7;
   const framesPerSpeaker = 20;
   const data = [];
-  for (let i = 0; i < framesPerSpeaker; i++) data.push(0.9, 0.1);
-  for (let i = 0; i < framesPerSpeaker; i++) data.push(0.1, 0.9);
+  // 20 frames of speaker 0 (class 1 = high logit)
+  for (let i = 0; i < framesPerSpeaker; i++) {
+    data.push(-5, 5, -5, -5, -5, -5, -5); // class 1 (speaker 0) wins
+  }
+  // 20 frames of speaker 1 (class 2 = high logit)
+  for (let i = 0; i < framesPerSpeaker; i++) {
+    data.push(-5, -5, 5, -5, -5, -5, -5); // class 2 (speaker 1) wins
+  }
   const numFrames = framesPerSpeaker * 2;
   const windows = [
-    { offset: 0, data, dims: [1, numFrames, numSpeakers] },
+    { offset: 0, data, dims: [1, numFrames, numClasses] },
   ];
   const segments = buildSegmentsFromWindows(windows, 16000);
   assert.ok(segments.length >= 1);
@@ -78,12 +84,31 @@ test("buildSegmentsFromWindows returns empty for no windows", () => {
   assert.equal(segments.length, 0);
 });
 
-test("buildSegmentsFromWindows merges adjacent same-speaker frames", () => {
+test("buildSegmentsFromWindows skips non-speech frames (class 0)", () => {
+  const numClasses = 7;
   const numFrames = 30;
-  const numSpeakers = 1;
-  const data = Array(numFrames).fill(0.9);
+  const data = [];
+  // All frames are non-speech (class 0 = high logit)
+  for (let i = 0; i < numFrames; i++) {
+    data.push(5, -5, -5, -5, -5, -5, -5);
+  }
   const windows = [
-    { offset: 0, data, dims: [1, numFrames, numSpeakers] },
+    { offset: 0, data, dims: [1, numFrames, numClasses] },
+  ];
+  const segments = buildSegmentsFromWindows(windows, 16000);
+  assert.equal(segments.length, 0);
+});
+
+test("buildSegmentsFromWindows merges adjacent same-speaker frames", () => {
+  const numClasses = 7;
+  const numFrames = 30;
+  const data = [];
+  // All frames are speaker 0 (class 1)
+  for (let i = 0; i < numFrames; i++) {
+    data.push(-5, 5, -5, -5, -5, -5, -5);
+  }
+  const windows = [
+    { offset: 0, data, dims: [1, numFrames, numClasses] },
   ];
   const segments = buildSegmentsFromWindows(windows, 16000);
   assert.equal(segments.length, 1);

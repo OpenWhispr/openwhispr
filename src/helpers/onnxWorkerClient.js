@@ -239,12 +239,11 @@ class OnnxWorkerClient {
   }
 
   async diarizeSegment(samplesBuffer, sampleRate) {
-    return this.request("diarize.segment", { samplesBuffer, sampleRate }, [samplesBuffer], 300_000);
+    return this.request("diarize.segment", { samplesBuffer, sampleRate }, [], 300_000);
   }
 
   async diarizeEmbedBatch(segments) {
-    const transferList = segments.map((s) => s.samplesBuffer).filter(Boolean);
-    return this.request("diarize.embedBatch", { segments }, transferList, 300_000);
+    return this.request("diarize.embedBatch", { segments }, [], 300_000);
   }
 
   async stop() {
