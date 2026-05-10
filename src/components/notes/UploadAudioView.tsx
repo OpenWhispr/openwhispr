@@ -64,6 +64,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     path: string;
     size: string;
     sizeBytes: number;
+    fromUrl?: boolean;
   } | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [noteId, setNoteId] = useState<number | null>(null);
@@ -395,7 +396,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setResult(res.text);
 
         let title: string;
-        if (downloadedTempPath) {
+        if (file.fromUrl) {
           title = file.name;
         } else {
           const textFallback = res.text.trim().split(/\s+/).slice(0, 6).join(" ");
@@ -497,6 +498,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         path: res.tempPath,
         size: formatFileSize(res.sizeBytes),
         sizeBytes: res.sizeBytes,
+        fromUrl: true,
       });
       const videosFolder = folders.find(
         (f) => f.name === VIDEOS_FOLDER_NAME && f.is_default
