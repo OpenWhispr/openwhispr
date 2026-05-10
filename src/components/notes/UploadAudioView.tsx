@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Plus,
   Settings,
+  Link2,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
@@ -25,7 +26,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Input } from "../ui/input";
 import type { FolderItem } from "../../types/electron";
-import { findDefaultFolder, MEETINGS_FOLDER_NAME } from "./shared";
+import { findDefaultFolder, MEETINGS_FOLDER_NAME, VIDEOS_FOLDER_NAME } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
@@ -36,7 +37,7 @@ import { generateNoteTitle } from "../../utils/generateTitle";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
 
-type UploadState = "idle" | "selected" | "transcribing" | "complete" | "error";
+type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
 const SUPPORTED_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"];
 
@@ -75,6 +76,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     chunksCompleted: number;
   } | null>(null);
   const progressCleanupRef = useRef<(() => void) | null>(null);
+
+  const [urlInput, setUrlInput] = useState("");
+  const [downloadProgress, setDownloadProgress] = useState<{
+    stage: string;
+    percent: number;
+    title?: string;
+  } | null>(null);
+  const [downloadedTempPath, setDownloadedTempPath] = useState<string | null>(null);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
@@ -301,6 +310,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (progressRef.current) clearInterval(progressRef.current);
     if (progressCleanupRef.current) progressCleanupRef.current();
     progressCleanupRef.current = null;
+    if (downloadedTempPath) {
+      window.electronAPI.deleteTempFile(downloadedTempPath);
+      setDownloadedTempPath(null);
+    }
     setState("idle");
     setFile(null);
     setResult(null);
@@ -308,6 +321,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setError(null);
     setProgress(0);
     setChunkProgress(null);
+    setUrlInput("");
+    setDownloadProgress(null);
     const personal = findDefaultFolder(folders);
     if (personal) setSelectedFolderId(String(personal.id));
   };
@@ -379,13 +394,18 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setProgress(100);
         setResult(res.text);
 
-        const textFallback = res.text.trim().split(/\s+/).slice(0, 6).join(" ");
-        const fallbackTitle =
-          textFallback.length > 0
-            ? textFallback + (res.text.trim().split(/\s+/).length > 6 ? "..." : "")
-            : file.name.replace(/\.[^.]+$/, "");
-        const aiTitle = await generateTitle(res.text);
-        const title = aiTitle || fallbackTitle;
+        let title: string;
+        if (downloadedTempPath) {
+          title = file.name;
+        } else {
+          const textFallback = res.text.trim().split(/\s+/).slice(0, 6).join(" ");
+          const fallbackTitle =
+            textFallback.length > 0
+              ? textFallback + (res.text.trim().split(/\s+/).length > 6 ? "..." : "")
+              : file.name.replace(/\.[^.]+$/, "");
+          const aiTitle = await generateTitle(res.text);
+          title = aiTitle || fallbackTitle;
+        }
 
         const folderId = selectedFolderId ? Number(selectedFolderId) : null;
         const noteRes = await window.electronAPI.saveNote(
@@ -397,6 +417,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           folderId
         );
         if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);
+        if (downloadedTempPath) {
+          window.electronAPI.deleteTempFile(downloadedTempPath);
+          setDownloadedTempPath(null);
+        }
         setState("complete");
       } else {
         setProgress(0);
@@ -415,6 +439,81 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       setError(err instanceof Error ? err.message : t("notes.upload.errorOccurred"));
       setState("error");
     }
+  };
+
+  const handleUrlSubmit = async () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+
+    try {
+      new URL(trimmed);
+    } catch {
+      setError(t("notes.upload.urlInvalid"));
+      setState("error");
+      return;
+    }
+
+    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+      setError(t("notes.upload.urlInvalid"));
+      setState("error");
+      return;
+    }
+
+    setState("downloading");
+    setError(null);
+    setDownloadProgress({ stage: "resolving", percent: 0 });
+
+    const cleanupProgress = window.electronAPI.onUrlDownloadProgress?.((data) => {
+      setDownloadProgress(data);
+    });
+
+    try {
+      const res = await window.electronAPI.downloadUrlAudio(trimmed);
+
+      if (!res.success) {
+        const fail = res as { success: false; error: string; code?: string };
+        const errorMap: Record<string, string> = {
+          INVALID_URL: t("notes.upload.urlInvalid"),
+          VIDEO_UNAVAILABLE: t("notes.upload.urlVideoUnavailable"),
+          PLAYLIST_URL: t("notes.upload.urlPlaylistNotSupported"),
+          CONTENT_TYPE_INVALID: t("notes.upload.urlContentTypeInvalid"),
+          DOWNLOAD_FAILED: t("notes.upload.urlDownloadFailed"),
+          DOWNLOAD_CANCELLED: "",
+        };
+
+        if (fail.code === "DOWNLOAD_CANCELLED") {
+          setState("idle");
+          return;
+        }
+
+        setError(errorMap[fail.code || ""] || fail.error || t("notes.upload.urlDownloadFailed"));
+        setState("error");
+        return;
+      }
+
+      setDownloadedTempPath(res.tempPath);
+      setFile({
+        name: res.title,
+        path: res.tempPath,
+        size: formatFileSize(res.sizeBytes),
+        sizeBytes: res.sizeBytes,
+      });
+      const videosFolder = folders.find(
+        (f) => f.name === VIDEOS_FOLDER_NAME && f.is_default
+      );
+      if (videosFolder) setSelectedFolderId(String(videosFolder.id));
+      setState("selected");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("notes.upload.urlDownloadFailed"));
+      setState("error");
+    } finally {
+      cleanupProgress?.();
+      setDownloadProgress(null);
+    }
+  };
+
+  const handleCancelDownload = () => {
+    window.electronAPI.cancelUrlDownload();
   };
 
   const dismissSetup = () => {
@@ -575,14 +674,62 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           )}
 
           {state === "idle" && providerReady !== false && (
-            <IdleView
-              t={t}
-              getActiveModelLabel={getActiveModelLabel}
-              handleDrop={handleDrop}
-              handleBrowse={handleBrowse}
-              isDragOver={isDragOver}
-              setIsDragOver={setIsDragOver}
-            />
+            <>
+              <IdleView
+                t={t}
+                getActiveModelLabel={getActiveModelLabel}
+                handleDrop={handleDrop}
+                handleBrowse={handleBrowse}
+                isDragOver={isDragOver}
+                setIsDragOver={setIsDragOver}
+              />
+
+              <div className="flex items-center gap-3 my-3">
+                <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
+                <span className="text-[10px] text-foreground/20 uppercase tracking-wider">
+                  {t("notes.upload.orDivider")}
+                </span>
+                <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Link2
+                    size={13}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20"
+                  />
+                  <input
+                    type="url"
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleUrlSubmit();
+                      }
+                    }}
+                    placeholder={t("notes.upload.urlPlaceholder")}
+                    className={cn(
+                      "w-full h-8 pl-8 pr-3 rounded-lg text-xs",
+                      "bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm",
+                      "border border-foreground/6 dark:border-white/6",
+                      "text-foreground/70 placeholder:text-foreground/20",
+                      "focus:outline-none focus:border-foreground/12 dark:focus:border-white/10",
+                      "transition-colors"
+                    )}
+                  />
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleUrlSubmit}
+                  disabled={!urlInput.trim()}
+                  className="h-8 w-8 p-0 shrink-0"
+                >
+                  <ChevronRight size={14} />
+                </Button>
+              </div>
+            </>
           )}
 
           {state === "selected" && file && (
@@ -603,6 +750,63 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               onCreateAccount={handleCreateAccount}
               onSwitchToCloud={switchToCloud}
             />
+          )}
+
+          {state === "downloading" && downloadProgress && (
+            <div
+              className="flex flex-col items-center"
+              style={{ animation: "float-up 0.3s ease-out" }}
+            >
+              <div className="flex items-end justify-center gap-[3px] h-10 mb-5">
+                {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="w-[3px] rounded-full bg-primary/40 dark:bg-primary/50 origin-bottom"
+                    style={{
+                      height: "100%",
+                      animation: `waveform-bar ${0.8 + i * 0.12}s ease-in-out infinite`,
+                      animationDelay: `${i * 0.08}s`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div className="w-full max-w-[200px] h-[3px] rounded-full bg-foreground/5 dark:bg-white/5 overflow-hidden mb-3">
+                <div
+                  className={cn(
+                    "h-full rounded-full bg-primary/50 transition-[width] duration-500 ease-out",
+                    downloadProgress.stage !== "downloading" && "animate-pulse"
+                  )}
+                  style={{
+                    width:
+                      downloadProgress.stage === "downloading"
+                        ? `${Math.min(downloadProgress.percent, 100)}%`
+                        : "100%",
+                  }}
+                />
+              </div>
+
+              <p className="text-xs text-foreground/50 font-medium">
+                {downloadProgress.stage === "resolving" && t("notes.upload.urlResolving")}
+                {downloadProgress.stage === "downloading" && t("notes.upload.urlDownloading")}
+                {downloadProgress.stage === "converting" && t("notes.upload.urlConverting")}
+              </p>
+
+              {downloadProgress.title && (
+                <p className="text-xs text-foreground/20 mt-1 truncate max-w-50">
+                  {downloadProgress.title}
+                </p>
+              )}
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancelDownload}
+                className="mt-3 h-7 text-xs text-foreground/30"
+              >
+                {t("notes.upload.urlCancelDownload")}
+              </Button>
+            </div>
           )}
 
           {state === "transcribing" && (

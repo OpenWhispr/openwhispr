@@ -1825,7 +1825,19 @@
       "switchToCloudForLargeFiles": "Passa a OpenWhispr Cloud per trascrivere questo file.",
       "createAccount": "Crea account",
       "upgrade": "Aggiorna",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "oppure",
+      "urlPlaceholder": "Incolla un URL di YouTube o audio",
+      "urlDownloading": "Download dell'audio in corso...",
+      "urlResolving": "Risoluzione URL...",
+      "urlConverting": "Elaborazione audio...",
+      "urlInvalid": "URL non valido. Incolla un link di YouTube o un URL diretto a un file audio.",
+      "urlVideoUnavailable": "Questo video non è disponibile. Potrebbe essere privato, rimosso o bloccato geograficamente.",
+      "urlLiveNotSupported": "Le dirette non sono supportate. Riprova al termine della trasmissione.",
+      "urlPlaylistNotSupported": "Le playlist non sono supportate. Incolla l'URL di un singolo video.",
+      "urlContentTypeInvalid": "Questo URL non punta a un file audio o video.",
+      "urlDownloadFailed": "Download fallito. Controlla l'URL e riprova.",
+      "urlCancelDownload": "Annulla download"
     },
     "meeting": {
       "title": "Note delle riunioni",

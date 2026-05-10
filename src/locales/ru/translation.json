@@ -1825,7 +1825,19 @@
       "switchToCloudForLargeFiles": "Переключитесь на OpenWhispr Cloud, чтобы транскрибировать этот файл.",
       "createAccount": "Создать аккаунт",
       "upgrade": "Обновить",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "или",
+      "urlPlaceholder": "Вставьте URL YouTube или аудиофайла",
+      "urlDownloading": "Загрузка аудио...",
+      "urlResolving": "Определение URL...",
+      "urlConverting": "Обработка аудио...",
+      "urlInvalid": "Недопустимый URL. Вставьте ссылку на YouTube или прямой URL аудиофайла.",
+      "urlVideoUnavailable": "Это видео недоступно. Возможно, оно приватное, удалено или заблокировано в вашем регионе.",
+      "urlLiveNotSupported": "Прямые трансляции не поддерживаются. Попробуйте после завершения трансляции.",
+      "urlPlaylistNotSupported": "Плейлисты не поддерживаются. Вставьте URL одного видео.",
+      "urlContentTypeInvalid": "Этот URL не указывает на аудио- или видеофайл.",
+      "urlDownloadFailed": "Ошибка загрузки. Проверьте URL и попробуйте снова.",
+      "urlCancelDownload": "Отменить загрузку"
     },
     "meeting": {
       "title": "Заметки со встреч",

@@ -128,6 +128,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("transcribe-audio-file", filePath, options),
   getPathForFile: (file) => webUtils.getPathForFile(file),
 
+  // URL audio download
+  downloadUrlAudio: (url) => ipcRenderer.invoke("download-url-audio", url),
+  cancelUrlDownload: () => ipcRenderer.invoke("cancel-url-download"),
+  deleteTempFile: (filePath) => ipcRenderer.invoke("delete-temp-file", filePath),
+  onUrlDownloadProgress: registerListener(
+    "url-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
+
   onNoteAdded: (callback) => {
     const listener = (_event, note) => callback?.(note);
     ipcRenderer.on("note-added", listener);

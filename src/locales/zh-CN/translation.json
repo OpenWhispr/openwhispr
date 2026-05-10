@@ -1820,7 +1820,19 @@
       "switchToCloudForLargeFiles": "切换到 OpenWhispr Cloud 来转录此文件。",
       "createAccount": "创建账户",
       "upgrade": "升级",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "或",
+      "urlPlaceholder": "粘贴 YouTube 或音频 URL",
+      "urlDownloading": "正在下载音频...",
+      "urlResolving": "正在解析 URL...",
+      "urlConverting": "正在处理音频...",
+      "urlInvalid": "无效的 URL。请粘贴 YouTube 链接或直接音频文件 URL。",
+      "urlVideoUnavailable": "此视频不可用。可能是私密、已删除或受地区限制。",
+      "urlLiveNotSupported": "不支持直播。请在直播结束后重试。",
+      "urlPlaylistNotSupported": "不支持播放列表。请粘贴单个视频的 URL。",
+      "urlContentTypeInvalid": "此 URL 不指向音频或视频文件。",
+      "urlDownloadFailed": "下载失败。请检查 URL 后重试。",
+      "urlCancelDownload": "取消下载"
     },
     "meeting": {
       "title": "会议笔记",

@@ -558,6 +558,27 @@ declare global {
       ) => Promise<{ success: boolean; text?: string; error?: string }>;
       getPathForFile: (file: File) => string;
 
+      // URL audio download
+      downloadUrlAudio: (url: string) => Promise<
+        | {
+            success: true;
+            tempPath: string;
+            title: string;
+            durationSeconds: number | null;
+            sizeBytes: number;
+          }
+        | { success: false; error: string; code?: string }
+      >;
+      cancelUrlDownload: () => Promise<{ success: boolean }>;
+      deleteTempFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+      onUrlDownloadProgress?: (
+        callback: (data: {
+          stage: "resolving" | "downloading" | "converting" | "ready";
+          percent: number;
+          title?: string;
+        }) => void
+      ) => () => void;
+
       // Note event listeners
       onNoteAdded?: (callback: (note: NoteItem) => void) => () => void;
       onNoteUpdated?: (callback: (note: NoteItem) => void) => () => void;

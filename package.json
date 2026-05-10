@@ -165,6 +165,7 @@
     "unbzip2-stream": "^1.4.3",
     "unzipper": "^0.12.3",
     "ws": "^8.19.0",
+    "youtube-dl-exec": "^3.1.6",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
   }

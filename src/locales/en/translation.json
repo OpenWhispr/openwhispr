@@ -1982,7 +1982,19 @@
       "switchToCloudForLargeFiles": "Switch to OpenWhispr Cloud to transcribe this file.",
       "createAccount": "Create Account",
       "upgrade": "Upgrade",
-      "switchToCloud": "OpenWhispr Cloud"
+      "switchToCloud": "OpenWhispr Cloud",
+      "orDivider": "or",
+      "urlPlaceholder": "Paste a YouTube or audio URL",
+      "urlDownloading": "Downloading audio...",
+      "urlResolving": "Resolving URL...",
+      "urlConverting": "Processing audio...",
+      "urlInvalid": "Not a valid URL. Paste a YouTube link or a direct audio file URL.",
+      "urlVideoUnavailable": "This video is unavailable. It may be private, removed, or geo-blocked.",
+      "urlLiveNotSupported": "Live streams are not supported. Try again after the stream ends.",
+      "urlPlaylistNotSupported": "Playlists are not supported. Paste a single video URL.",
+      "urlContentTypeInvalid": "This URL does not point to an audio or video file.",
+      "urlDownloadFailed": "Download failed. Check the URL and try again.",
+      "urlCancelDownload": "Cancel download"
     },
     "meeting": {
       "title": "Meeting Notes",

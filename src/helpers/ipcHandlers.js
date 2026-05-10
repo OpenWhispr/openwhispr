@@ -1397,6 +1397,66 @@ class IPCHandlers {
       }
     });
 
+    let activeUrlDownloadAbort = null;
+
+    ipcMain.handle("download-url-audio", async (event, url) => {
+      const { download } = require("./urlAudioDownloader");
+
+      if (activeUrlDownloadAbort) {
+        activeUrlDownloadAbort.abort();
+        activeUrlDownloadAbort = null;
+      }
+
+      const abortController = new AbortController();
+      activeUrlDownloadAbort = abortController;
+
+      try {
+        const result = await download(
+          url,
+          (progress) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send("url-download-progress", progress);
+            }
+          },
+          abortController.signal
+        );
+        return { success: true, ...result };
+      } catch (error) {
+        debugLogger.error("URL audio download error", { error: error.message, code: error.code });
+        return { success: false, error: error.message, code: error.code || "DOWNLOAD_FAILED" };
+      } finally {
+        if (activeUrlDownloadAbort === abortController) {
+          activeUrlDownloadAbort = null;
+        }
+      }
+    });
+
+    ipcMain.handle("cancel-url-download", async () => {
+      if (activeUrlDownloadAbort) {
+        activeUrlDownloadAbort.abort();
+        activeUrlDownloadAbort = null;
+        return { success: true };
+      }
+      return { success: false };
+    });
+
+    ipcMain.handle("delete-temp-file", async (event, filePath) => {
+      try {
+        const { getSafeTempDir } = require("./safeTempDir");
+        const resolved = path.resolve(filePath);
+        const tempDir = getSafeTempDir();
+        const basename = path.basename(resolved);
+        if (!resolved.startsWith(tempDir) || !basename.startsWith("ow-url-")) {
+          return { success: false, error: "Not an OpenWhispr temp file" };
+        }
+        fs.unlinkSync(resolved);
+        return { success: true };
+      } catch (error) {
+        debugLogger.warn("Failed to delete temp file", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
       const fs = require("fs");
       try {
