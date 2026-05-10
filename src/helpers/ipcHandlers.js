@@ -1686,6 +1686,29 @@ class IPCHandlers {
       return this.whisperManager.getServerStatus();
     });
 
+    ipcMain.handle("check-cuda-diarization-ready", async () => {
+      if (process.platform !== "linux") {
+        return { isLinux: false, hasGpu: false, hasCuda: false, hasCudnn: false, ready: process.platform === "darwin" || process.platform === "win32" };
+      }
+      const { detectNvidiaGpu } = require("../utils/gpuDetection");
+      const gpuInfo = await detectNvidiaGpu();
+      const hasGpu = gpuInfo?.hasNvidiaGpu ?? false;
+      if (!hasGpu) return { isLinux: true, hasGpu: false, hasCuda: false, hasCudnn: false, ready: false };
+
+      const { execSync } = require("child_process");
+      let hasCuda = false;
+      try {
+        const ldcache = execSync("ldconfig -p 2>/dev/null", { encoding: "utf8" });
+        hasCuda = ldcache.includes("libcublas.so.12");
+      } catch {}
+
+      const onnxClient = require("./onnxWorkerClient");
+      const cudnnPath = onnxClient._cudnnLibPath?.() ?? null;
+      const hasCudnn = cudnnPath !== null;
+
+      return { isLinux: true, hasGpu: true, hasCuda, hasCudnn, ready: hasCuda && hasCudnn };
+    });
+
     ipcMain.handle("detect-gpu", async () => {
       const { detectNvidiaGpu } = require("../utils/gpuDetection");
       return detectNvidiaGpu();

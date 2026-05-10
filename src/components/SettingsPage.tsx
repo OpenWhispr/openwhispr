@@ -780,6 +780,21 @@ export default function SettingsPage({
     refreshYdotoolStatus();
   }, [refreshYdotoolStatus]);
 
+  const [cudaDiarStatus, setCudaDiarStatus] = useState<{
+    isLinux: boolean;
+    hasGpu: boolean;
+    hasCuda: boolean;
+    hasCudnn: boolean;
+    ready: boolean;
+  } | null>(null);
+  const [cudaGuideKey, setCudaGuideKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.electronAPI?.checkCudaDiarizationReady?.().then((s: any) => {
+      if (s) setCudaDiarStatus(s);
+    }).catch(() => {});
+  }, []);
+
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
   const hasShownApproachingToast = useRef(false);
@@ -2856,6 +2871,153 @@ EOF`,
                           )}
                         </DialogContent>
                       </Dialog>
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+
+            {cudaDiarStatus?.isLinux && cudaDiarStatus?.hasGpu && (
+              <div>
+                <SectionHeader
+                  title="GPU Speaker Diarization"
+                  description="NVIDIA GPU detected. GPU acceleration for speaker detection."
+                />
+                {(() => {
+                  const checks = [
+                    {
+                      key: "hasCuda",
+                      label: "CUDA Runtime",
+                      ok: cudaDiarStatus.hasCuda,
+                      desc: "GPU acceleration libraries",
+                      steps: [
+                        {
+                          title: "Install CUDA runtime",
+                          desc: "Use your distribution's package manager.",
+                          cmds: [
+                            { label: "Ubuntu / Debian", cmd: "sudo apt install libcudart12 libcublas12 libcufft11 libcurand10" },
+                            { label: "Fedora", cmd: "sudo dnf install cuda-cudart libcublas libcufft libcurand" },
+                            { label: "openSUSE", cmd: "sudo zypper install cuda-cudart libcublas libcufft libcurand" },
+                            { label: "Arch", cmd: "sudo pacman -S cuda" },
+                          ],
+                        },
+                      ],
+                    },
+                    {
+                      key: "hasCudnn",
+                      label: "cuDNN",
+                      ok: cudaDiarStatus.hasCudnn,
+                      desc: "GPU inference library",
+                      steps: [
+                        {
+                          title: "cuDNN is bundled with the app",
+                          desc: "If missing, reinstall OpenWhispr from the latest package.",
+                          cmds: [],
+                        },
+                      ],
+                    },
+                  ];
+
+                  const allOk = checks.every((c) => c.ok);
+                  const activeGuide = checks.find((c) => c.key === cudaGuideKey);
+
+                  return (
+                    <>
+                      {allOk ? (
+                        <SettingsPanel>
+                          <SettingsPanelRow>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <CircleCheck className="h-4 w-4 text-emerald-500" />
+                                <span className="text-sm">GPU speaker diarization is ready.</span>
+                              </div>
+                            </div>
+                          </SettingsPanelRow>
+                        </SettingsPanel>
+                      ) : (
+                        <>
+                          <div className="rounded-xl border border-border overflow-hidden">
+                            <div className="divide-y divide-border">
+                              {checks.map((item) => (
+                                <div key={item.key} className="px-4 py-3">
+                                  <div className="flex items-center gap-2.5">
+                                    {item.ok ? (
+                                      <CircleCheck className="h-4 w-4 shrink-0 text-emerald-500" />
+                                    ) : (
+                                      <CircleX className="h-4 w-4 shrink-0 text-red-500" />
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <span className="text-sm font-medium">{item.label}</span>
+                                      <span className="text-xs text-muted-foreground ml-2">{item.desc}</span>
+                                    </div>
+                                    {!item.ok && item.steps.length > 0 && (
+                                      <button
+                                        onClick={() => setCudaGuideKey(item.key)}
+                                        className="shrink-0 flex items-center gap-1 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-muted transition-colors text-foreground"
+                                      >
+                                        <BookOpen className="w-3 h-3" />
+                                        Guide
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <Dialog open={!!cudaGuideKey} onOpenChange={() => setCudaGuideKey(null)}>
+                            <DialogContent className="sm:max-w-lg">
+                              {activeGuide && (
+                                <>
+                                  <DialogHeader>
+                                    <DialogTitle>{activeGuide.label}</DialogTitle>
+                                  </DialogHeader>
+                                  <div className="space-y-5 mt-2">
+                                    {activeGuide.steps.map((step: any, i: number) => (
+                                      <div key={i}>
+                                        <div className="flex items-start gap-3">
+                                          <span className="shrink-0 w-6 h-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-semibold">
+                                            {i + 1}
+                                          </span>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium">{step.title}</p>
+                                            {step.desc && (
+                                              <p className="text-xs text-muted-foreground mt-0.5">{step.desc}</p>
+                                            )}
+                                            {step.cmds && step.cmds.length > 0 && (
+                                              <div className="mt-2 space-y-2">
+                                                {step.cmds.map((c: any, j: number) => (
+                                                  <div key={j}>
+                                                    {c.label && (
+                                                      <p className="text-[11px] text-muted-foreground mb-1">{c.label}</p>
+                                                    )}
+                                                    <div className="flex items-start gap-1.5">
+                                                      <pre className="flex-1 text-[11px] bg-muted/60 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-all select-all overflow-x-auto">
+                                                        {c.cmd}
+                                                      </pre>
+                                                      <button
+                                                        onClick={() => navigator.clipboard.writeText(c.cmd)}
+                                                        className="shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                                                        title="Copy"
+                                                      >
+                                                        <Copy className="w-3.5 h-3.5" />
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                            </DialogContent>
+                          </Dialog>
+                        </>
+                      )}
                     </>
                   );
                 })()}
