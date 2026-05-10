@@ -45,6 +45,26 @@ class OnnxWorkerClient {
     }
   }
 
+  _cudnnLibPath() {
+    if (process.platform !== "linux") return null;
+    const fs = require("fs");
+    const candidates = [
+      path.join(__dirname, "..", "..", "resources", "bin", "cudnn-linux-x64"),
+    ];
+    try {
+      candidates.push(path.join(process.resourcesPath, "bin", "cudnn-linux-x64"));
+    } catch {}
+    candidates.push(
+      path.join(app.getPath("home"), ".cache", "openwhispr", "cudnn", "lib")
+    );
+    for (const dir of candidates) {
+      try {
+        if (fs.existsSync(path.join(dir, "libcudnn.so.9"))) return dir;
+      } catch {}
+    }
+    return null;
+  }
+
   async _spawn() {
     if (this.child) return;
     if (this.spawnPromise) return this.spawnPromise;
@@ -53,6 +73,12 @@ class OnnxWorkerClient {
       const env = { ...process.env };
       const logPath = this._logPath();
       if (logPath) env.OPENWHISPR_ONNX_WORKER_LOG = logPath;
+
+      const cudnnPath = this._cudnnLibPath();
+      if (cudnnPath) {
+        env.LD_LIBRARY_PATH = cudnnPath + (env.LD_LIBRARY_PATH ? `:${env.LD_LIBRARY_PATH}` : "");
+        debugLogger.info("ONNX worker cuDNN path set", { cudnnPath });
+      }
 
       const child = utilityProcess.fork(WORKER_SCRIPT, [], {
         serviceName: "openwhispr-onnx",

@@ -86,4 +86,38 @@ if [ -n "$REAL_USER" ]; then
   fi
 fi
 
+# 5. NVIDIA CUDA runtime for GPU-accelerated speaker diarization
+# Only installs if NVIDIA GPU is detected. cuDNN is bundled with the app.
+# Falls back silently on failure; the app uses CPU diarization as fallback.
+if lspci 2>/dev/null | grep -qi nvidia; then
+  if ! ldconfig -p 2>/dev/null | grep -q libcublas.so.12; then
+    if [ -f /etc/debian_version ]; then
+      # Debian/Ubuntu: CUDA runtime libs available in standard repos
+      apt-get install -y --no-install-recommends \
+        libcudart12 libcublas12 libcufft11 libcurand10 2>/dev/null || true
+    elif [ -f /etc/fedora-release ] || [ -f /etc/redhat-release ]; then
+      # Fedora/RHEL: needs NVIDIA CUDA repo (try current version, fall back to older)
+      if ! dnf repolist 2>/dev/null | grep -qi cuda; then
+        FEDORA_VER=$(rpm -E %fedora 2>/dev/null || echo "41")
+        for VER in "$FEDORA_VER" $((FEDORA_VER - 1)) $((FEDORA_VER - 2)) $((FEDORA_VER - 3)); do
+          REPO_URL="https://developer.download.nvidia.com/compute/cuda/repos/fedora${VER}/x86_64/cuda-fedora${VER}.repo"
+          if dnf config-manager addrepo --from-repofile="$REPO_URL" 2>/dev/null; then
+            break
+          fi
+        done
+      fi
+      dnf install -y --setopt=install_weak_deps=False \
+        cuda-cudart libcublas libcufft libcurand 2>/dev/null || true
+    elif [ -f /etc/SuSE-release ] || [ -f /etc/SUSE-brand ] || grep -qi suse /etc/os-release 2>/dev/null; then
+      # openSUSE: needs NVIDIA CUDA repo
+      if ! zypper repos 2>/dev/null | grep -qi cuda; then
+        SUSE_VER=$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID%%.*}" || echo "15")
+        zypper addrepo "https://developer.download.nvidia.com/compute/cuda/repos/opensuse${SUSE_VER}/x86_64/cuda-opensuse${SUSE_VER}.repo" 2>/dev/null || true
+      fi
+      zypper install -y --no-recommends \
+        cuda-cudart libcublas libcufft libcurand 2>/dev/null || true
+    fi
+  fi
+fi
+
 exit 0

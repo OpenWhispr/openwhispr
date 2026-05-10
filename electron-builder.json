@@ -119,6 +119,7 @@
         "windows-fast-paste*",
         "all-MiniLM-L6-v2/**/*",
         "diarization-models/**/*",
+        "cudnn-linux-x64/**/*",
         "*.dylib",
         "*.dll",
         "*.so*"
@@ -206,7 +207,9 @@
       "--deb-recommends",
       "xclip",
       "--deb-suggests",
-      "xsel"
+      "xsel",
+      "--deb-suggests",
+      "nvidia-cuda-toolkit"
     ]
   },
   "rpm": {
@@ -226,7 +229,9 @@
       "--rpm-tag",
       "Recommends: xclip",
       "--rpm-tag",
-      "Suggests: xsel"
+      "Suggests: xsel",
+      "--rpm-tag",
+      "Suggests: cuda-toolkit"
     ]
   },
   "nsis": {

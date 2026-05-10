@@ -68,31 +68,45 @@ const SESSION_OPTIONS = { intraOpNumThreads, executionMode: "sequential" };
 function buildGpuSessionOptions() {
   const providers = [];
   if (process.platform === "darwin") {
-    providers.push({ name: "CoreMLExecutionProvider" });
+    providers.push("coreml");
   } else if (process.platform === "win32") {
-    providers.push({ name: "DmlExecutionProvider" });
+    providers.push("dml");
   } else {
-    providers.push({ name: "CUDAExecutionProvider" });
+    providers.push("cuda");
   }
-  providers.push({ name: "CPUExecutionProvider" });
+  providers.push("cpu");
+
+  log("info", "EP selection", { selected: providers });
   return { executionProviders: providers, intraOpNumThreads };
 }
 
 const DIARIZE_WINDOW_SAMPLES = 160000;
 const DIARIZE_WINDOW_SHIFT = 80000;
 
+async function createSessionWithFallback(modelPath) {
+  const gpuOpts = buildGpuSessionOptions();
+  try {
+    const session = await ort.InferenceSession.create(modelPath, gpuOpts);
+    log("info", "session loaded with GPU EP", { modelPath });
+    return session;
+  } catch (gpuErr) {
+    log("warn", "GPU EP failed, falling back to CPU", { modelPath, error: gpuErr.message });
+    const cpuOpts = { executionProviders: ["cpu"], intraOpNumThreads };
+    return ort.InferenceSession.create(modelPath, cpuOpts);
+  }
+}
+
 async function diarizeLoad({ segModelPath, embModelPath }) {
   loadOrt();
-  const opts = buildGpuSessionOptions();
 
   if (!diarizeSegSession && segModelPath) {
-    diarizeSegSession = await ort.InferenceSession.create(segModelPath, opts);
-    log("info", "diarize segmentation session loaded", { segModelPath });
+    diarizeSegSession = await createSessionWithFallback(segModelPath);
+    log("info", "diarize segmentation session ready", { segModelPath });
   }
 
   if (!diarizeEmbSession && embModelPath) {
-    diarizeEmbSession = await ort.InferenceSession.create(embModelPath, opts);
-    log("info", "diarize embedding session loaded", { embModelPath });
+    diarizeEmbSession = await createSessionWithFallback(embModelPath);
+    log("info", "diarize embedding session ready", { embModelPath });
   }
 
   return { ok: true };

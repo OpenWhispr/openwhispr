@@ -205,7 +205,10 @@ async function gpuDiarize(filePath, onnxWorkerClient, diarizationManager, option
   });
 
   const segStart = performance.now();
-  const { windows } = await onnxWorkerClient.diarizeSegment(samples.buffer, 16000);
+  const transferBuffer = samples.buffer.slice(
+    samples.byteOffset, samples.byteOffset + samples.byteLength
+  );
+  const { windows } = await onnxWorkerClient.diarizeSegment(transferBuffer, 16000);
   debugLogger.info("[diarization] Segmentation complete", {
     windows: windows.length,
     elapsed: Math.round(performance.now() - segStart),
@@ -227,7 +230,10 @@ async function gpuDiarize(filePath, onnxWorkerClient, diarizationManager, option
       const startSample = Math.floor(seg.start * 16000);
       const endSample = Math.min(Math.floor(seg.end * 16000), samples.length);
       const segSamples = samples.slice(startSample, endSample);
-      return { samplesBuffer: segSamples.buffer };
+      const ab = segSamples.buffer.slice(
+        segSamples.byteOffset, segSamples.byteOffset + segSamples.byteLength
+      );
+      return { samplesBuffer: ab };
     });
 
     const { embeddings } = await onnxWorkerClient.diarizeEmbedBatch(batch);

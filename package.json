@@ -64,6 +64,7 @@
     "download:qdrant:all": "node scripts/download-qdrant.js --all",
     "download:embedding-model": "node scripts/download-minilm.js",
     "download:diarization-models": "node scripts/download-diarization-models.js",
+    "download:cudnn": "node scripts/download-cudnn.js",
     "format:js": "eslint . --fix && cd src && eslint . --fix && prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "format": "npm run format:js",
     "format:check": "eslint . && cd src && eslint . && prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
