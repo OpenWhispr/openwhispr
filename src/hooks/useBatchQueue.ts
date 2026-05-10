@@ -162,19 +162,11 @@ export function useBatchQueue() {
 
           updateItem(item.id, { status: "transcribing", progress: 0 });
 
-          let transcriptionResult: {
-            success: boolean;
-            text?: string;
-            error?: string;
-            code?: string;
-          };
-
-          if (transcribeOpts.isOpenWhisprCloud) {
-            transcriptionResult =
-              await window.electronAPI.transcribeAudioFileCloud!(filePath);
-          } else if (transcribeOpts.useLocalWhisper) {
-            transcriptionResult =
-              await window.electronAPI.transcribeAudioFile(filePath, {
+          const transcribePromise = (async () => {
+            if (transcribeOpts.isOpenWhisprCloud) {
+              return window.electronAPI.transcribeAudioFileCloud!(filePath);
+            } else if (transcribeOpts.useLocalWhisper) {
+              return window.electronAPI.transcribeAudioFile(filePath, {
                 provider: transcribeOpts.localTranscriptionProvider as
                   | "whisper"
                   | "nvidia",
@@ -183,15 +175,26 @@ export function useBatchQueue() {
                     ? transcribeOpts.parakeetModel
                     : transcribeOpts.whisperModel,
               });
-          } else {
-            transcriptionResult =
-              await window.electronAPI.transcribeAudioFileByok!({
+            } else {
+              return window.electronAPI.transcribeAudioFileByok!({
                 filePath,
                 apiKey: transcribeOpts.getActiveApiKey(),
                 baseUrl: transcribeOpts.cloudTranscriptionBaseUrl || "",
                 model: transcribeOpts.cloudTranscriptionModel,
               });
-          }
+            }
+          })();
+
+          const diarizePromise = diarizationOpts.enabled && filePath
+            ? window.electronAPI.diarizeAudioFile?.(filePath, {
+                numSpeakers: diarizationOpts.numSpeakers ?? undefined,
+              }).catch(() => null)
+            : Promise.resolve(null);
+
+          const [transcriptionResult, diarResult] = await Promise.all([
+            transcribePromise,
+            diarizePromise,
+          ]);
 
           if (!transcriptionResult.success || !transcriptionResult.text) {
             updateItem(item.id, {
@@ -203,32 +206,24 @@ export function useBatchQueue() {
 
           let finalText = transcriptionResult.text;
 
-          if (diarizationOpts.enabled && filePath) {
-            updateItem(item.id, { status: "diarizing" });
+          if (
+            diarResult?.success &&
+            diarResult.segments &&
+            diarResult.segments.length > 0
+          ) {
             try {
-              const diarResult =
-                await window.electronAPI.diarizeAudioFile?.(filePath, {
-                  numSpeakers: diarizationOpts.numSpeakers ?? undefined,
-                });
-
-              if (
-                diarResult?.success &&
-                diarResult.segments &&
-                diarResult.segments.length > 0
-              ) {
-                const { mergeSpeakersWithText, formatSpeakerTranscript } =
-                  await import("../helpers/speakerMerge.js");
-                const duration =
-                  diarResult.segments[diarResult.segments.length - 1]?.end || 0;
-                const merged = mergeSpeakersWithText(
-                  diarResult.segments,
-                  finalText,
-                  duration
-                );
-                finalText = formatSpeakerTranscript(merged);
-              }
+              const { mergeSpeakersWithText, formatSpeakerTranscript } =
+                await import("../helpers/speakerMerge.js");
+              const duration =
+                diarResult.segments[diarResult.segments.length - 1]?.end || 0;
+              const merged = mergeSpeakersWithText(
+                diarResult.segments,
+                finalText,
+                duration
+              );
+              finalText = formatSpeakerTranscript(merged);
             } catch {
-              // Diarization failed, save without speaker labels
+              // Merge failed, save without speaker labels
             }
           }
 

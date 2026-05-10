@@ -164,7 +164,7 @@ class OnnxWorkerClient {
     }
   }
 
-  async request(method, payload, transferList) {
+  async request(method, payload, transferList, timeoutMs) {
     if (this.shuttingDown) {
       throw new WorkerCrashedError("worker shutting down");
     }
@@ -191,11 +191,12 @@ class OnnxWorkerClient {
 
     const id = this.nextRequestId++;
     return new Promise((resolve, reject) => {
+      const effectiveTimeout = timeoutMs || REQUEST_TIMEOUT_MS;
       const timeout = setTimeout(() => {
         if (this.pending.delete(id)) {
           reject(new Error(`onnx worker request timeout: ${method}`));
         }
-      }, REQUEST_TIMEOUT_MS);
+      }, effectiveTimeout);
       this.pending.set(id, { resolve, reject, timeout });
       try {
         this.port.postMessage({ id, method, payload }, transferList || []);
@@ -205,6 +206,19 @@ class OnnxWorkerClient {
         reject(err);
       }
     });
+  }
+
+  async diarizeLoad(segModelPath, embModelPath) {
+    return this.request("diarize.load", { segModelPath, embModelPath });
+  }
+
+  async diarizeSegment(samplesBuffer, sampleRate) {
+    return this.request("diarize.segment", { samplesBuffer, sampleRate }, [samplesBuffer], 300_000);
+  }
+
+  async diarizeEmbedBatch(segments) {
+    const transferList = segments.map((s) => s.samplesBuffer).filter(Boolean);
+    return this.request("diarize.embedBatch", { segments }, transferList, 300_000);
   }
 
   async stop() {

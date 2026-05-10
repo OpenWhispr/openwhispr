@@ -399,6 +399,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
 
     try {
+      const diarizePromise =
+        diarizationEnabled && diarizationModelsReady
+          ? window.electronAPI.diarizeAudioFile?.(file.path, {
+              numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : undefined,
+            }).catch(() => null)
+          : null;
+
       let res: { success: boolean; text?: string; error?: string; code?: string };
 
       if (isOpenWhisprCloud) {
@@ -447,11 +454,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         }
 
         let finalText = res.text;
-        if (diarizationEnabled && diarizationModelsReady) {
+        if (diarizePromise) {
           try {
-            const diarResult = await window.electronAPI.diarizeAudioFile?.(file.path, {
-              numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : undefined,
-            });
+            const diarResult = await diarizePromise;
             if (diarResult?.success && diarResult.segments && diarResult.segments.length > 0) {
               const { mergeSpeakersWithText, formatSpeakerTranscript } =
                 await import("../../helpers/speakerMerge.js");

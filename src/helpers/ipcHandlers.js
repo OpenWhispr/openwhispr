@@ -1999,15 +1999,36 @@ class IPCHandlers {
           return { success: false, error: "Diarization models not downloaded" };
         }
 
+        const diarOpts = {
+          numSpeakers: options.numSpeakers ?? -1,
+          threshold: options.threshold ?? 0.55,
+        };
+
+        // Try GPU pipeline first
+        try {
+          const { gpuDiarize } = require("./gpuDiarization");
+          const onnxWorkerClient = require("./onnxWorkerClient");
+          const segments = await gpuDiarize(
+            filePath, onnxWorkerClient, this.diarizationManager, diarOpts
+          );
+          if (segments && segments.length > 0) {
+            debugLogger.info("[diarization] GPU pipeline succeeded", { segments: segments.length });
+            return { success: true, segments };
+          }
+        } catch (gpuErr) {
+          debugLogger.warn("[diarization] GPU pipeline failed, falling back to binary", {
+            error: gpuErr.message,
+          });
+        }
+
+        // Fallback: existing sherpa-onnx binary
+        debugLogger.info("[diarization] Using binary fallback");
         const { convertToWav } = require("./ffmpegUtils");
         const wavPath = filePath.replace(/\.[^.]+$/, "") + "-diarize.wav";
 
         await convertToWav(filePath, wavPath, { sampleRate: 16000, channels: 1 });
 
-        const segments = await this.diarizationManager.diarize(wavPath, {
-          numSpeakers: options.numSpeakers ?? -1,
-          threshold: options.threshold ?? 0.55,
-        });
+        const segments = await this.diarizationManager.diarize(wavPath, diarOpts);
 
         try { fs.unlinkSync(wavPath); } catch {}
 

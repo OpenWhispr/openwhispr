@@ -38,6 +38,8 @@ let speakerSession = null;
 let speakerInputName = null;
 let textSession = null;
 let textTokenizer = null;
+let diarizeSegSession = null;
+let diarizeEmbSession = null;
 
 function log(level, message, extra) {
   if (!logStream) return;
@@ -62,6 +64,93 @@ function loadOrt() {
 }
 
 const SESSION_OPTIONS = { intraOpNumThreads, executionMode: "sequential" };
+
+function buildGpuSessionOptions() {
+  const providers = [];
+  if (process.platform === "darwin") {
+    providers.push({ name: "CoreMLExecutionProvider" });
+  } else if (process.platform === "win32") {
+    providers.push({ name: "DmlExecutionProvider" });
+  } else {
+    providers.push({ name: "CUDAExecutionProvider" });
+  }
+  providers.push({ name: "CPUExecutionProvider" });
+  return { executionProviders: providers, intraOpNumThreads };
+}
+
+const DIARIZE_WINDOW_SAMPLES = 160000;
+const DIARIZE_WINDOW_SHIFT = 80000;
+
+async function diarizeLoad({ segModelPath, embModelPath }) {
+  loadOrt();
+  const opts = buildGpuSessionOptions();
+
+  if (!diarizeSegSession && segModelPath) {
+    diarizeSegSession = await ort.InferenceSession.create(segModelPath, opts);
+    log("info", "diarize segmentation session loaded", { segModelPath });
+  }
+
+  if (!diarizeEmbSession && embModelPath) {
+    diarizeEmbSession = await ort.InferenceSession.create(embModelPath, opts);
+    log("info", "diarize embedding session loaded", { embModelPath });
+  }
+
+  return { ok: true };
+}
+
+async function diarizeSegment({ samplesBuffer, sampleRate: _sampleRate }) {
+  if (!diarizeSegSession) throw new Error("segmentation session not loaded");
+
+  const samples = new Float32Array(samplesBuffer);
+  const totalSamples = samples.length;
+  const windows = [];
+
+  for (let offset = 0; offset < totalSamples; offset += DIARIZE_WINDOW_SHIFT) {
+    const end = Math.min(offset + DIARIZE_WINDOW_SAMPLES, totalSamples);
+    const windowSamples = new Float32Array(DIARIZE_WINDOW_SAMPLES);
+    windowSamples.set(samples.subarray(offset, end));
+
+    const inputTensor = new ort.Tensor("float32", windowSamples, [1, 1, DIARIZE_WINDOW_SAMPLES]);
+    const feeds = { [diarizeSegSession.inputNames[0]]: inputTensor };
+    const results = await diarizeSegSession.run(feeds);
+    const output = results[diarizeSegSession.outputNames[0]];
+
+    windows.push({
+      offset,
+      data: Array.from(output.data),
+      dims: Array.from(output.dims),
+    });
+  }
+
+  return { windows };
+}
+
+async function diarizeEmbedBatch({ segments }) {
+  if (!diarizeEmbSession) throw new Error("embedding session not loaded");
+
+  const embeddings = [];
+  const inputName = diarizeEmbSession.inputNames[0];
+
+  for (const seg of segments) {
+    const samples = new Float32Array(seg.samplesBuffer);
+    const trimmed = samples.length > SPEAKER_MAX_SAMPLES
+      ? samples.subarray(samples.length - SPEAKER_MAX_SAMPLES)
+      : samples;
+
+    const fbank = computeFbank(trimmed);
+    if (!fbank) {
+      embeddings.push(null);
+      continue;
+    }
+
+    const inputTensor = new ort.Tensor("float32", fbank.features, [1, fbank.numFrames, FBANK_NUM_MELS]);
+    const results = await diarizeEmbSession.run({ [inputName]: inputTensor });
+    const output = results[diarizeEmbSession.outputNames[0]];
+    embeddings.push(Array.from(output.data));
+  }
+
+  return { embeddings };
+}
 
 let _melFilterbank = null;
 function getMelFilterbank() {
@@ -344,6 +433,9 @@ const handlers = {
   "speaker.extract": speakerExtract,
   "text.load": textLoad,
   "text.embed": textEmbed,
+  "diarize.load": diarizeLoad,
+  "diarize.segment": diarizeSegment,
+  "diarize.embedBatch": diarizeEmbedBatch,
   shutdown: () => {
     log("info", "shutdown requested");
     setImmediate(() => process.exit(0));
