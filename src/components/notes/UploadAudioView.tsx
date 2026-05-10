@@ -33,6 +33,9 @@ import { useSettings } from "../../hooks/useSettings";
 import { withSessionRefresh } from "../../lib/auth";
 import { getAllReasoningModels } from "../../models/ModelRegistry";
 import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
+import { useBatchQueue } from "../../hooks/useBatchQueue";
+import type { TranscribeOptions, DiarizationOptions } from "../../hooks/useBatchQueue";
+import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
@@ -85,6 +88,31 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     title?: string;
   } | null>(null);
   const [downloadedTempPath, setDownloadedTempPath] = useState<string | null>(null);
+  const [urlExpanded, setUrlExpanded] = useState(false);
+
+  const batch = useBatchQueue();
+
+  const [diarizationEnabled, setDiarizationEnabled] = useState(
+    () => localStorage.getItem("uploadDiarizationEnabled") === "true"
+  );
+  const [diarizationNumSpeakers, setDiarizationNumSpeakers] = useState<string>(
+    () => localStorage.getItem("uploadDiarizationNumSpeakers") || ""
+  );
+  const [diarizationModelsReady, setDiarizationModelsReady] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem("uploadDiarizationEnabled", String(diarizationEnabled));
+  }, [diarizationEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem("uploadDiarizationNumSpeakers", diarizationNumSpeakers);
+  }, [diarizationNumSpeakers]);
+
+  useEffect(() => {
+    window.electronAPI.getDiarizationModelStatus?.().then((status) => {
+      setDiarizationModelsReady(status?.modelsDownloaded ?? false);
+    });
+  }, []);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
@@ -277,19 +305,29 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const handleBrowse = async () => {
-    const res = await window.electronAPI.selectAudioFile();
-    if (!res.canceled && res.filePath) {
-      const name = res.filePath.split(/[/\\]/).pop() || "audio";
-      const sizeBytes = (await window.electronAPI.getFileSize?.(res.filePath)) ?? 0;
-      setFile({
-        name,
-        path: res.filePath,
-        size: sizeBytes ? formatFileSize(sizeBytes) : "",
-        sizeBytes,
-      });
+    const res = await window.electronAPI.selectAudioFile({ multiple: true });
+    if (res.canceled) return;
+
+    const filePaths: string[] = res.filePaths || (res.filePath ? [res.filePath] : []);
+    if (filePaths.length === 0) return;
+
+    if (filePaths.length === 1) {
+      const fp = filePaths[0];
+      const name = fp.split(/[/\\]/).pop() || "audio";
+      const sizeBytes = (await window.electronAPI.getFileSize?.(fp)) ?? 0;
+      setFile({ name, path: fp, size: sizeBytes ? formatFileSize(sizeBytes) : "", sizeBytes });
       setState("selected");
       setError(null);
+      return;
     }
+
+    const items: Array<{ name: string; path: string; sizeBytes: number }> = [];
+    for (const fp of filePaths) {
+      const name = fp.split(/[/\\]/).pop() || "audio";
+      const sizeBytes = (await window.electronAPI.getFileSize?.(fp)) ?? 0;
+      items.push({ name, path: fp, sizeBytes });
+    }
+    batch.addFiles(items);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -408,10 +446,28 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           title = aiTitle || fallbackTitle;
         }
 
+        let finalText = res.text;
+        if (diarizationEnabled && diarizationModelsReady) {
+          try {
+            const diarResult = await window.electronAPI.diarizeAudioFile?.(file.path, {
+              numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : undefined,
+            });
+            if (diarResult?.success && diarResult.segments && diarResult.segments.length > 0) {
+              const { mergeSpeakersWithText, formatSpeakerTranscript } =
+                await import("../../helpers/speakerMerge.js");
+              const duration = diarResult.segments[diarResult.segments.length - 1]?.end || 0;
+              const merged = mergeSpeakersWithText(diarResult.segments, finalText, duration);
+              finalText = formatSpeakerTranscript(merged);
+            }
+          } catch {
+            // Diarization failed, save without speaker labels
+          }
+        }
+
         const folderId = selectedFolderId ? Number(selectedFolderId) : null;
         const noteRes = await window.electronAPI.saveNote(
           title,
-          res.text,
+          finalText,
           "upload",
           file.name,
           null,
@@ -516,6 +572,54 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const handleCancelDownload = () => {
     window.electronAPI.cancelUrlDownload();
+  };
+
+  const handleBatchUrlSubmit = () => {
+    const lines = urlInput
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const validUrls: string[] = [];
+    for (const line of lines) {
+      try {
+        const parsed = new URL(line);
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          validUrls.push(line);
+        }
+      } catch {
+        // skip invalid
+      }
+    }
+
+    if (validUrls.length > 0) {
+      batch.addUrls(validUrls);
+      setUrlInput("");
+      setUrlExpanded(false);
+    }
+  };
+
+  const startBatchProcessing = () => {
+    const folderId = selectedFolderId ? Number(selectedFolderId) : null;
+
+    const transcribeOpts: TranscribeOptions = {
+      useLocalWhisper,
+      localTranscriptionProvider: localTranscriptionProvider as string,
+      whisperModel,
+      parakeetModel,
+      isOpenWhisprCloud,
+      getActiveApiKey,
+      cloudTranscriptionBaseUrl: cloudTranscriptionBaseUrl || "",
+      cloudTranscriptionModel,
+      folderId,
+    };
+
+    const diarizationOpts: DiarizationOptions = {
+      enabled: diarizationEnabled && !!diarizationModelsReady,
+      numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
+    };
+
+    batch.processQueue(transcribeOpts, diarizationOpts);
   };
 
   const dismissSetup = () => {
@@ -694,44 +798,149 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Link2
-                    size={13}
-                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20"
-                  />
-                  <input
-                    type="url"
+              {urlExpanded ? (
+                <div>
+                  <textarea
                     value={urlInput}
                     onChange={(e) => setUrlInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleUrlSubmit();
-                      }
-                    }}
-                    placeholder={t("notes.upload.urlPlaceholder")}
+                    placeholder={t("notes.upload.pasteUrls")}
+                    rows={4}
                     className={cn(
-                      "w-full h-8 pl-8 pr-3 rounded-lg text-xs",
+                      "w-full px-3 py-2 rounded-lg text-xs resize-none",
                       "bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm",
                       "border border-foreground/6 dark:border-white/6",
                       "text-foreground/70 placeholder:text-foreground/20",
                       "focus:outline-none focus:border-foreground/12 dark:focus:border-white/10",
                       "transition-colors"
                     )}
+                    autoFocus
                   />
+                  <div className="flex items-center gap-2 mt-2 justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setUrlExpanded(false); setUrlInput(""); }}
+                      className="h-7 text-xs text-foreground/30"
+                    >
+                      {t("notes.upload.cancel")}
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleBatchUrlSubmit}
+                      disabled={!urlInput.trim()}
+                      className="h-7 text-xs"
+                    >
+                      {t("notes.upload.addToQueue")}
+                    </Button>
+                  </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleUrlSubmit}
-                  disabled={!urlInput.trim()}
-                  className="h-8 w-8 p-0 shrink-0"
-                >
-                  <ChevronRight size={14} />
-                </Button>
-              </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Link2
+                      size={13}
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20"
+                    />
+                    <input
+                      type="url"
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleUrlSubmit();
+                        }
+                      }}
+                      onFocus={() => {
+                        if (urlInput.includes("\n")) setUrlExpanded(true);
+                      }}
+                      onPaste={(e) => {
+                        const pasted = e.clipboardData.getData("text");
+                        if (pasted.includes("\n")) {
+                          e.preventDefault();
+                          setUrlInput(pasted);
+                          setUrlExpanded(true);
+                        }
+                      }}
+                      placeholder={t("notes.upload.urlPlaceholder")}
+                      className={cn(
+                        "w-full h-8 pl-8 pr-3 rounded-lg text-xs",
+                        "bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm",
+                        "border border-foreground/6 dark:border-white/6",
+                        "text-foreground/70 placeholder:text-foreground/20",
+                        "focus:outline-none focus:border-foreground/12 dark:focus:border-white/10",
+                        "transition-colors"
+                      )}
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleUrlSubmit}
+                    disabled={!urlInput.trim()}
+                    className="h-8 w-8 p-0 shrink-0"
+                  >
+                    <ChevronRight size={14} />
+                  </Button>
+                </div>
+              )}
             </>
+          )}
+
+          {batch.hasQueue && (
+            <div className="mt-3">
+              <BatchQueueView
+                queue={batch.queue}
+                completedCount={batch.completedCount}
+                totalCount={batch.totalCount}
+                isProcessing={batch.isProcessing}
+                onRemoveItem={batch.removeItem}
+                onCancelAll={batch.cancelAll}
+                onClearQueue={batch.clearQueue}
+                onOpenNote={(noteId) => onNoteCreated?.(noteId, null)}
+              />
+
+              {!batch.isProcessing && batch.queue.some((i) => i.status === "queued") && (
+                <div className="mt-3 space-y-2">
+                  {folders.length > 0 && (
+                    <div className="flex items-center justify-center gap-2">
+                      <FolderOpen size={12} className="text-foreground/20 shrink-0" />
+                      <Select value={selectedFolderId} onValueChange={handleFolderChange}>
+                        <SelectTrigger className="h-7 w-44 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                          <SelectValue placeholder={t("notes.upload.selectFolder")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {folders.map((f) => {
+                            const isMeetings = f.name === MEETINGS_FOLDER_NAME && !!f.is_default;
+                            return (
+                              <SelectItem
+                                key={f.id}
+                                value={String(f.id)}
+                                disabled={isMeetings}
+                                className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
+                              >
+                                {f.name}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div className="flex justify-center">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={startBatchProcessing}
+                      className="h-8 text-xs px-5"
+                    >
+                      {t("notes.upload.transcribe")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {state === "selected" && file && (
@@ -840,7 +1049,85 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         </div>
 
         {!showSetup && (state === "idle" || state === "selected") && (
-          <div className="mx-auto mt-5" style={{ maxWidth: advancedOpen ? "448px" : "320px" }}>
+          <div className="max-w-[320px] mx-auto mt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-foreground/40 font-medium">
+                  {t("notes.upload.speakerDetection")}
+                </p>
+                <p className="text-[10px] text-foreground/20 mt-0.5">
+                  {t("notes.upload.speakerDetectionDescription")}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  if (!diarizationModelsReady) return;
+                  setDiarizationEnabled(!diarizationEnabled);
+                }}
+                className={cn(
+                  "w-8 h-[18px] rounded-full transition-colors relative shrink-0",
+                  diarizationEnabled && diarizationModelsReady
+                    ? "bg-primary/60"
+                    : "bg-foreground/10"
+                )}
+                disabled={!diarizationModelsReady}
+              >
+                <div
+                  className={cn(
+                    "absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform",
+                    diarizationEnabled && diarizationModelsReady
+                      ? "translate-x-[14px]"
+                      : "translate-x-0.5"
+                  )}
+                />
+              </button>
+            </div>
+
+            {!diarizationModelsReady && diarizationModelsReady !== null && (
+              <div className="mt-2 flex items-center gap-2">
+                <p className="text-[10px] text-foreground/20">
+                  {t("notes.upload.downloadModelsRequired")}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-[10px]"
+                  onClick={async () => {
+                    await window.electronAPI.downloadDiarizationModels?.();
+                    const status = await window.electronAPI.getDiarizationModelStatus?.();
+                    setDiarizationModelsReady(status?.modelsDownloaded ?? false);
+                  }}
+                >
+                  {t("notes.upload.downloadModels")}
+                </Button>
+              </div>
+            )}
+
+            {diarizationEnabled && diarizationModelsReady && (
+              <div className="mt-2">
+                <input
+                  type="number"
+                  min="2"
+                  max="20"
+                  value={diarizationNumSpeakers}
+                  onChange={(e) => setDiarizationNumSpeakers(e.target.value)}
+                  placeholder={t("notes.upload.numSpeakersPlaceholder")}
+                  className={cn(
+                    "w-full h-7 px-2.5 rounded-md text-xs",
+                    "bg-surface-1/40 dark:bg-white/[0.03]",
+                    "border border-foreground/6 dark:border-white/6",
+                    "text-foreground/70 placeholder:text-foreground/20",
+                    "focus:outline-none focus:border-foreground/12",
+                    "transition-colors"
+                  )}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {!showSetup && (state === "idle" || state === "selected") && (
+          <div className="mx-auto mt-3" style={{ maxWidth: advancedOpen ? "448px" : "320px" }}>
             <button
               onClick={() => setAdvancedOpen(!advancedOpen)}
               className="flex items-center gap-1.5 text-xs text-foreground/25 hover:text-foreground/40 transition-colors mx-auto"

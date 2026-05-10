@@ -1373,16 +1373,21 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("select-audio-file", async () => {
+    ipcMain.handle("select-audio-file", async (event, options = {}) => {
       const { dialog } = require("electron");
+      const properties = ["openFile"];
+      if (options.multiple) properties.push("multiSelections");
       const result = await dialog.showOpenDialog({
-        properties: ["openFile"],
+        properties,
         filters: [
           { name: "Audio Files", extensions: ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"] },
         ],
       });
       if (result.canceled || !result.filePaths.length) {
         return { canceled: true };
+      }
+      if (options.multiple) {
+        return { canceled: false, filePaths: result.filePaths };
       }
       return { canceled: false, filePath: result.filePaths[0] };
     });
@@ -1981,6 +1986,34 @@ class IPCHandlers {
         return { success: true };
       } catch (error) {
         debugLogger.error("Failed to delete diarization models", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("diarize-audio-file", async (event, filePath, options = {}) => {
+      try {
+        if (!this.diarizationManager) {
+          return { success: false, error: "Diarization not available" };
+        }
+        if (!this.diarizationManager.isModelDownloaded()) {
+          return { success: false, error: "Diarization models not downloaded" };
+        }
+
+        const { convertToWav } = require("./ffmpegUtils");
+        const wavPath = filePath.replace(/\.[^.]+$/, "") + "-diarize.wav";
+
+        await convertToWav(filePath, wavPath, { sampleRate: 16000, channels: 1 });
+
+        const segments = await this.diarizationManager.diarize(wavPath, {
+          numSpeakers: options.numSpeakers ?? -1,
+          threshold: options.threshold ?? 0.55,
+        });
+
+        try { fs.unlinkSync(wavPath); } catch {}
+
+        return { success: true, segments };
+      } catch (error) {
+        debugLogger.error("Diarization error", { error: error.message });
         return { success: false, error: error.message };
       }
     });

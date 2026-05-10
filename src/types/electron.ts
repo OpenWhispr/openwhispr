@@ -545,7 +545,11 @@ declare global {
       onActionDeleted?: (callback: (payload: { id: number }) => void) => () => void;
 
       // Audio file operations
-      selectAudioFile: () => Promise<{ canceled: boolean; filePath?: string }>;
+      selectAudioFile: (options?: { multiple?: boolean }) => Promise<{
+        canceled: boolean;
+        filePath?: string;
+        filePaths?: string[];
+      }>;
       getFileSize?: (filePath: string) => Promise<number>;
       transcribeAudioFile: (
         filePath: string,
@@ -1504,6 +1508,14 @@ declare global {
       cancelDiarizationDownload?: () => Promise<{
         success: boolean;
         message?: string;
+        error?: string;
+      }>;
+      diarizeAudioFile?: (
+        filePath: string,
+        options?: { numSpeakers?: number; threshold?: number }
+      ) => Promise<{
+        success: boolean;
+        segments?: Array<{ start: number; end: number; speaker: string }>;
         error?: string;
       }>;
       onDiarizationDownloadProgress?: (callback: (data: any) => void) => () => void;
