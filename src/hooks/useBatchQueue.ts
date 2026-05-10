@@ -176,16 +176,23 @@ export function useBatchQueue() {
                     : transcribeOpts.whisperModel,
               });
             } else {
+              const byokUseDiarize = diarizationOpts.enabled &&
+                (transcribeOpts.cloudTranscriptionBaseUrl?.includes("openai.com") ||
+                 transcribeOpts.cloudTranscriptionBaseUrl?.includes("mistral"));
               return window.electronAPI.transcribeAudioFileByok!({
                 filePath,
                 apiKey: transcribeOpts.getActiveApiKey(),
                 baseUrl: transcribeOpts.cloudTranscriptionBaseUrl || "",
                 model: transcribeOpts.cloudTranscriptionModel,
+                diarize: byokUseDiarize || undefined,
               });
             }
           })();
 
-          const diarizePromise = diarizationOpts.enabled && filePath
+          const skipLocalDiarize = !transcribeOpts.useLocalWhisper &&
+            !transcribeOpts.isOpenWhisprCloud;
+
+          const diarizePromise = diarizationOpts.enabled && filePath && !skipLocalDiarize
             ? window.electronAPI.diarizeAudioFile?.(filePath, {
                 numSpeakers: diarizationOpts.numSpeakers ?? undefined,
               }).catch(() => null)
@@ -206,7 +213,9 @@ export function useBatchQueue() {
 
           let finalText = transcriptionResult.text;
 
-          if (
+          if ((transcriptionResult as any).diarized) {
+            // Cloud diarization already applied, skip local
+          } else if (
             diarResult?.success &&
             diarResult.segments &&
             diarResult.segments.length > 0

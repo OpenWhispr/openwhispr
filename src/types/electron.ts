@@ -1139,10 +1139,12 @@ declare global {
         apiKey: string;
         baseUrl: string;
         model: string;
+        diarize?: boolean;
       }) => Promise<{
         success: boolean;
         text?: string;
         error?: string;
+        diarized?: boolean;
       }>;
 
       // Usage limit events

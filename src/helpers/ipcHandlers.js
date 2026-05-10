@@ -77,6 +77,12 @@ const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 const CLOUD_CHUNK_CONCURRENCY = 5;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
+function formatDiarTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${String(secs).padStart(2, "0")}`;
+}
+
 function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   const boundary = `----OpenWhispr${Date.now()}`;
   const parts = [];
@@ -6283,7 +6289,7 @@ class IPCHandlers {
 
     ipcMain.handle(
       "transcribe-audio-file-byok",
-      async (event, { filePath, apiKey, baseUrl, model }) => {
+      async (event, { filePath, apiKey, baseUrl, model, diarize }) => {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
@@ -6291,7 +6297,7 @@ class IPCHandlers {
           if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
           const fileSize = fs.statSync(filePath).size;
-          if (fileSize > BYOK_FILE_SIZE_LIMIT) {
+          if (!diarize && fileSize > BYOK_FILE_SIZE_LIMIT) {
             return {
               success: false,
               error: "File too large. Maximum size for bring-your-own-key is 25 MB.",
@@ -6308,9 +6314,22 @@ class IPCHandlers {
             transcriptionUrl += "/audio/transcriptions";
           }
 
-          const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, {
-            model: model || "whisper-1",
-          });
+          const isMistral = baseUrl.includes("mistral");
+          const fields = {};
+
+          if (diarize && isMistral) {
+            fields.model = model || "voxtral-mini-latest";
+            fields.diarize = "true";
+            fields.timestamp_granularities = "segment";
+          } else if (diarize) {
+            fields.model = "gpt-4o-transcribe-diarize";
+            fields.response_format = "verbose_json";
+            fields.chunking_strategy = "auto";
+          } else {
+            fields.model = model || "whisper-1";
+          }
+
+          const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, fields);
 
           const url = new URL(transcriptionUrl);
           const data = await postMultipart(url, body, boundary, {
@@ -6327,6 +6346,32 @@ class IPCHandlers {
             throw new Error(
               data.data?.error?.message || data.data?.error || `API error: ${data.statusCode}`
             );
+          }
+
+          if (diarize && data.data?.speakers) {
+            const segments = (data.data.speakers || []).map((s) => ({
+              speaker: s.id || `Speaker ${s.speaker || "?"}`,
+              text: s.text || "",
+              start: s.start || 0,
+              end: s.end || 0,
+            }));
+            const formatted = segments
+              .map((s) => `[${s.speaker}] ${formatDiarTime(s.start)} - ${formatDiarTime(s.end)}\n${s.text}`)
+              .join("\n\n");
+            return { success: true, text: formatted, diarized: true };
+          }
+
+          if (diarize && data.data?.segments) {
+            const segments = data.data.segments || [];
+            const formatted = segments
+              .map((s) => {
+                const speaker = s.speaker || "Speaker ?";
+                const start = formatDiarTime(s.start || 0);
+                const end = formatDiarTime(s.end || 0);
+                return `[${speaker}] ${start} - ${end}\n${s.text || ""}`;
+              })
+              .join("\n\n");
+            return { success: true, text: formatted, diarized: true };
           }
 
           return { success: true, text: data.data.text };

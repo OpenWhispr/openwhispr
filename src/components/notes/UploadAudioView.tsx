@@ -399,14 +399,18 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
 
     try {
+      const byokUseDiarize = diarizationEnabled &&
+        !useLocalWhisper && !isOpenWhisprCloud &&
+        (cloudTranscriptionProvider === "openai" || cloudTranscriptionProvider === "mistral");
+
       const diarizePromise =
-        diarizationEnabled && diarizationModelsReady
+        diarizationEnabled && diarizationModelsReady && !byokUseDiarize
           ? window.electronAPI.diarizeAudioFile?.(file.path, {
               numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : undefined,
             }).catch(() => null)
           : null;
 
-      let res: { success: boolean; text?: string; error?: string; code?: string };
+      let res: { success: boolean; text?: string; error?: string; code?: string; diarized?: boolean };
 
       if (isOpenWhisprCloud) {
         res = await withSessionRefresh(async () => {
@@ -429,6 +433,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           apiKey: getActiveApiKey(),
           baseUrl: cloudTranscriptionBaseUrl || "",
           model: cloudTranscriptionModel,
+          diarize: byokUseDiarize || undefined,
         });
       }
 
@@ -454,7 +459,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         }
 
         let finalText = res.text;
-        if (diarizePromise) {
+        if (res.diarized) {
+          // Cloud diarization already applied
+        } else if (diarizePromise) {
           try {
             const diarResult = await diarizePromise;
             if (diarResult?.success && diarResult.segments && diarResult.segments.length > 0) {
@@ -1101,6 +1108,25 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 />
               </button>
             </div>
+
+            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
+              cloudTranscriptionProvider === "openai" && (
+              <p className="text-[10px] text-foreground/25 mt-1.5">
+                Overrides your transcription model with gpt-4o-transcribe-diarize, the only OpenAI model with speaker detection. Costs may differ from your selected model.
+              </p>
+            )}
+            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
+              cloudTranscriptionProvider === "mistral" && (
+              <p className="text-[10px] text-foreground/25 mt-1.5">
+                Speaker detection included at no extra cost with Voxtral.
+              </p>
+            )}
+            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
+              cloudTranscriptionProvider === "groq" && (
+              <p className="text-[10px] text-amber-500/60 mt-1.5">
+                Speaker detection is not available with Groq. Local diarization will be used instead.
+              </p>
+            )}
 
             {!diarizationModelsReady && diarizationModelsReady !== null && (
               <div className="mt-2 flex items-center gap-2">
