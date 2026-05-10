@@ -841,53 +841,67 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
+                <div className="relative">
+                  {urlInput.includes("youtube.com") || urlInput.includes("youtu.be") ? (
+                    <svg viewBox="0 0 28 20" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[18px] h-[13px] z-10 pointer-events-none">
+                      <rect width="28" height="20" rx="4" fill="#FF0000" />
+                      <polygon points="11,4 11,16 21,10" fill="white" />
+                    </svg>
+                  ) : /\.(mp3|wav|m4a|ogg|flac|aac|webm|opus)(\?|$)/i.test(urlInput) ? (
+                    <FileAudio
+                      size={13}
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20 z-10 pointer-events-none"
+                    />
+                  ) : (
                     <Link2
                       size={13}
-                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20"
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20 z-10 pointer-events-none"
                     />
-                    <input
-                      type="url"
-                      value={urlInput}
-                      onChange={(e) => setUrlInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleUrlSubmit();
-                        }
-                      }}
-                      onFocus={() => {
-                        if (urlInput.includes("\n")) setUrlExpanded(true);
-                      }}
-                      onPaste={(e) => {
-                        const pasted = e.clipboardData.getData("text");
-                        if (pasted.includes("\n")) {
-                          e.preventDefault();
-                          setUrlInput(pasted);
-                          setUrlExpanded(true);
-                        }
-                      }}
-                      placeholder={t("notes.upload.urlPlaceholder")}
-                      className={cn(
-                        "w-full h-8 pl-8 pr-3 rounded-lg text-xs",
-                        "bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm",
-                        "border border-foreground/6 dark:border-white/6",
-                        "text-foreground/70 placeholder:text-foreground/20",
-                        "focus:outline-none focus:border-foreground/12 dark:focus:border-white/10",
-                        "transition-colors"
-                      )}
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  )}
+                  <input
+                    type="url"
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleUrlSubmit();
+                      }
+                    }}
+                    onFocus={() => {
+                      if (urlInput.includes("\n")) setUrlExpanded(true);
+                    }}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData("text");
+                      if (pasted.includes("\n")) {
+                        e.preventDefault();
+                        setUrlInput(pasted);
+                        setUrlExpanded(true);
+                      }
+                    }}
+                    placeholder={t("notes.upload.urlPlaceholder")}
+                    className={cn(
+                      "w-full h-8 pl-8 pr-9 rounded-lg text-xs",
+                      "bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm",
+                      "border border-foreground/6 dark:border-white/6",
+                      "text-foreground/70 placeholder:text-foreground/20",
+                      "focus:outline-none focus:border-foreground/12 dark:focus:border-white/10",
+                      "transition-colors"
+                    )}
+                  />
+                  <button
                     onClick={handleUrlSubmit}
                     disabled={!urlInput.trim()}
-                    className="h-8 w-8 p-0 shrink-0"
+                    className={cn(
+                      "absolute right-px top-px bottom-px w-7 rounded-r-[7px] flex items-center justify-center transition-colors",
+                      "border-l border-foreground/6 dark:border-white/6",
+                      urlInput.trim()
+                        ? "text-foreground/40 hover:text-foreground/60 hover:bg-foreground/[0.03] dark:hover:bg-white/[0.03]"
+                        : "text-foreground/10"
+                    )}
                   >
                     <ChevronRight size={14} />
-                  </Button>
+                  </button>
                 </div>
               )}
             </>
@@ -1070,19 +1084,19 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   setDiarizationEnabled(!diarizationEnabled);
                 }}
                 className={cn(
-                  "w-8 h-[18px] rounded-full transition-colors relative shrink-0",
+                  "relative w-7 h-4 rounded-full transition-colors shrink-0",
                   diarizationEnabled && diarizationModelsReady
-                    ? "bg-primary/60"
-                    : "bg-foreground/10"
+                    ? "bg-primary"
+                    : "bg-muted"
                 )}
                 disabled={!diarizationModelsReady}
               >
                 <div
                   className={cn(
-                    "absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow transition-transform",
+                    "absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform",
                     diarizationEnabled && diarizationModelsReady
-                      ? "translate-x-[14px]"
-                      : "translate-x-0.5"
+                      ? "translate-x-3"
+                      : ""
                   )}
                 />
               </button>
@@ -1118,7 +1132,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   onChange={(e) => setDiarizationNumSpeakers(e.target.value)}
                   placeholder={t("notes.upload.numSpeakersPlaceholder")}
                   className={cn(
-                    "w-full h-7 px-2.5 rounded-md text-xs",
+                    "w-full h-8 px-2.5 rounded-lg text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
                     "bg-surface-1/40 dark:bg-white/[0.03]",
                     "border border-foreground/6 dark:border-white/6",
                     "text-foreground/70 placeholder:text-foreground/20",
