@@ -87,6 +87,31 @@ function clusterEmbeddings(embeddings, { numSpeakers = -1, threshold = 0.55 } = 
   return labels.map((l) => labelMap.get(l));
 }
 
+const POWERSET_CLASSES = [
+  [],        // class 0: non-speech
+  [0],       // class 1: speaker 0
+  [1],       // class 2: speaker 1
+  [2],       // class 3: speaker 2
+  [0, 1],    // class 4: speakers 0+1
+  [0, 2],    // class 5: speakers 0+2
+  [1, 2],    // class 6: speakers 1+2
+];
+
+function softmax(logits, numClasses) {
+  let maxVal = -Infinity;
+  for (let i = 0; i < numClasses; i++) {
+    if (logits[i] > maxVal) maxVal = logits[i];
+  }
+  let sum = 0;
+  const probs = new Float64Array(numClasses);
+  for (let i = 0; i < numClasses; i++) {
+    probs[i] = Math.exp(logits[i] - maxVal);
+    sum += probs[i];
+  }
+  for (let i = 0; i < numClasses; i++) probs[i] /= sum;
+  return probs;
+}
+
 function buildSegmentsFromWindows(windows, sampleRate) {
   if (windows.length === 0) return [];
 
@@ -94,31 +119,39 @@ function buildSegmentsFromWindows(windows, sampleRate) {
   const frameShiftSec = FRAME_SHIFT_SAMPLES / sampleRate;
 
   for (const win of windows) {
-    const [, numFrames, numLocalSpeakers] = win.dims;
+    const [, numFrames, numClasses] = win.dims;
     const offsetSec = win.offset / sampleRate;
 
     for (let f = 0; f < numFrames; f++) {
-      let bestSpeaker = -1;
-      let bestScore = 0.5;
+      const logits = [];
+      for (let c = 0; c < numClasses; c++) {
+        logits.push(win.data[f * numClasses + c]);
+      }
 
-      for (let s = 0; s < numLocalSpeakers; s++) {
-        const score = win.data[f * numLocalSpeakers + s];
-        if (score > bestScore) {
-          bestScore = score;
-          bestSpeaker = s;
+      const probs = softmax(logits, numClasses);
+
+      let bestClass = 0;
+      let bestProb = probs[0];
+      for (let c = 1; c < numClasses; c++) {
+        if (probs[c] > bestProb) {
+          bestProb = probs[c];
+          bestClass = c;
         }
       }
 
-      if (bestSpeaker < 0) continue;
+      if (bestClass === 0) continue;
+
+      const speakers = POWERSET_CLASSES[bestClass] || [bestClass - 1];
+      const speakerIdx = speakers[0];
 
       const start = offsetSec + f * frameShiftSec;
       const end = start + frameShiftSec;
       const prev = segments[segments.length - 1];
 
-      if (prev && prev.speakerIdx === bestSpeaker && Math.abs(start - prev.end) < frameShiftSec * 1.5) {
+      if (prev && prev.speakerIdx === speakerIdx && Math.abs(start - prev.end) < frameShiftSec * 1.5) {
         prev.end = end;
       } else {
-        segments.push({ start, end, speakerIdx: bestSpeaker });
+        segments.push({ start, end, speakerIdx });
       }
     }
   }
@@ -222,74 +255,23 @@ async function gpuDiarize(filePath, onnxWorkerClient, diarizationManager, option
     return [];
   }
 
-  const embStart = performance.now();
-  const allEmbeddings = [];
-
-  for (let i = 0; i < rawSegments.length; i += EMBED_BATCH_SIZE) {
-    const batch = rawSegments.slice(i, i + EMBED_BATCH_SIZE).map((seg) => {
-      const startSample = Math.floor(seg.start * 16000);
-      const endSample = Math.min(Math.floor(seg.end * 16000), samples.length);
-      const segSamples = samples.slice(startSample, endSample);
-      const ab = segSamples.buffer.slice(
-        segSamples.byteOffset, segSamples.byteOffset + segSamples.byteLength
-      );
-      return { samplesBuffer: ab };
-    });
-
-    const { embeddings } = await onnxWorkerClient.diarizeEmbedBatch(batch);
-    allEmbeddings.push(...embeddings);
-  }
-
-  const validIndices = [];
-  const validEmbeddings = [];
-  for (let i = 0; i < allEmbeddings.length; i++) {
-    if (allEmbeddings[i]) {
-      validIndices.push(i);
-      validEmbeddings.push(allEmbeddings[i]);
-    }
-  }
-
-  debugLogger.info("[diarization] Embeddings extracted", {
-    total: rawSegments.length,
-    valid: validEmbeddings.length,
-    elapsed: Math.round(performance.now() - embStart),
-  });
-
-  if (validEmbeddings.length === 0) {
-    debugLogger.warn("[diarization] No valid embeddings extracted");
-    return [];
-  }
-
-  const clusterStart = performance.now();
-  const labels = clusterEmbeddings(validEmbeddings, { numSpeakers, threshold });
-  const speakerCount = new Set(labels).size;
-  debugLogger.info("[diarization] Clustering complete", {
-    speakers: speakerCount,
-    elapsed: Math.round(performance.now() - clusterStart),
-  });
-
-  const result = [];
-  for (let i = 0; i < validIndices.length; i++) {
-    const seg = rawSegments[validIndices[i]];
-    result.push({
-      start: seg.start,
-      end: seg.end,
-      speaker: `speaker_${labels[i]}`,
-    });
-  }
-
+  // Fast path: use segmentation speaker indices directly (no embeddings)
+  // The powerset model assigns local speaker IDs per window. With 50% overlap,
+  // adjacent windows produce consistent assignments for 2-3 speaker conversations.
   const merged = [];
-  for (const seg of result) {
+  for (const seg of rawSegments) {
     const prev = merged[merged.length - 1];
-    if (prev && prev.speaker === seg.speaker && seg.start - prev.end < 1.0) {
+    const speaker = `speaker_${seg.speakerIdx}`;
+    if (prev && prev.speaker === speaker && seg.start - prev.end < 1.0) {
       prev.end = seg.end;
     } else {
-      merged.push({ ...seg });
+      merged.push({ start: seg.start, end: seg.end, speaker });
     }
   }
 
   const totalElapsed = Math.round(performance.now() - startTime);
-  debugLogger.info("[diarization] GPU pipeline complete", {
+  const speakerCount = new Set(merged.map((s) => s.speaker)).size;
+  debugLogger.info("[diarization] GPU pipeline complete (fast path)", {
     speakers: speakerCount,
     segments: merged.length,
     audioDurationSec: Math.round(audioDuration),

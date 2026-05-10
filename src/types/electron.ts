@@ -1519,6 +1519,11 @@ declare global {
         message?: string;
         error?: string;
       }>;
+      mergeSpeakerText?: (
+        segments: Array<{ start: number; end: number; speaker: string }>,
+        text: string,
+        duration: number
+      ) => Promise<{ success: boolean; text?: string; error?: string }>;
       diarizeAudioFile?: (
         filePath: string,
         options?: { numSpeakers?: number; threshold?: number }

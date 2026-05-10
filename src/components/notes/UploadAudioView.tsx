@@ -465,11 +465,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           try {
             const diarResult = await diarizePromise;
             if (diarResult?.success && diarResult.segments && diarResult.segments.length > 0) {
-              const { mergeSpeakersWithText, formatSpeakerTranscript } =
-                await import("../../helpers/speakerMerge.js");
               const duration = diarResult.segments[diarResult.segments.length - 1]?.end || 0;
-              const merged = mergeSpeakersWithText(diarResult.segments, finalText, duration);
-              finalText = formatSpeakerTranscript(merged);
+              const mergeResult = await window.electronAPI.mergeSpeakerText?.(
+                diarResult.segments, finalText, duration
+              );
+              if (mergeResult?.success && mergeResult.text) {
+                finalText = mergeResult.text;
+              }
             }
           } catch {
             // Diarization failed, save without speaker labels

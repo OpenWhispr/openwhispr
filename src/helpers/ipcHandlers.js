@@ -2033,6 +2033,8 @@ class IPCHandlers {
           threshold: options.threshold ?? 0.55,
         };
 
+        const { mergeSpeakersWithText, formatSpeakerTranscript } = require("./speakerMerge");
+
         // Try GPU pipeline first
         try {
           const { gpuDiarize } = require("./gpuDiarization");
@@ -2042,7 +2044,7 @@ class IPCHandlers {
           );
           if (segments && segments.length > 0) {
             debugLogger.info("[diarization] GPU pipeline succeeded", { segments: segments.length });
-            return { success: true, segments };
+            return { success: true, segments, formattedText: formatSpeakerTranscript(segments) };
           }
         } catch (gpuErr) {
           debugLogger.warn("[diarization] GPU pipeline failed, falling back to binary", {
@@ -2061,9 +2063,20 @@ class IPCHandlers {
 
         try { fs.unlinkSync(wavPath); } catch {}
 
-        return { success: true, segments };
+        return { success: true, segments, formattedText: segments.length > 0 ? formatSpeakerTranscript(segments) : null };
       } catch (error) {
         debugLogger.error("Diarization error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("merge-speaker-text", async (event, { segments, text, duration }) => {
+      try {
+        const { mergeSpeakersWithText, formatSpeakerTranscript } = require("./speakerMerge");
+        const merged = mergeSpeakersWithText(segments, text, duration);
+        return { success: true, text: formatSpeakerTranscript(merged) };
+      } catch (error) {
+        debugLogger.error("Speaker merge error", { error: error.message });
         return { success: false, error: error.message };
       }
     });

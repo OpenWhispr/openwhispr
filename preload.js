@@ -266,6 +266,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cancelDiarizationDownload: () => ipcRenderer.invoke("cancel-diarization-download"),
   diarizeAudioFile: (filePath, options) =>
     ipcRenderer.invoke("diarize-audio-file", filePath, options),
+  mergeSpeakerText: (segments, text, duration) =>
+    ipcRenderer.invoke("merge-speaker-text", { segments, text, duration }),
   onDiarizationDownloadProgress: registerListener(
     "diarization-download-progress",
     (callback) => (_event, data) => callback(data)

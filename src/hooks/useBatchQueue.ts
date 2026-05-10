@@ -214,23 +214,16 @@ export function useBatchQueue() {
           let finalText = transcriptionResult.text;
 
           if ((transcriptionResult as any).diarized) {
-            // Cloud diarization already applied, skip local
-          } else if (
-            diarResult?.success &&
-            diarResult.segments &&
-            diarResult.segments.length > 0
-          ) {
+            // Cloud diarization already applied
+          } else if (diarResult?.success && diarResult.segments && diarResult.segments.length > 0) {
             try {
-              const { mergeSpeakersWithText, formatSpeakerTranscript } =
-                await import("../helpers/speakerMerge.js");
-              const duration =
-                diarResult.segments[diarResult.segments.length - 1]?.end || 0;
-              const merged = mergeSpeakersWithText(
-                diarResult.segments,
-                finalText,
-                duration
+              const duration = diarResult.segments[diarResult.segments.length - 1]?.end || 0;
+              const mergeResult = await window.electronAPI.mergeSpeakerText?.(
+                diarResult.segments, finalText, duration
               );
-              finalText = formatSpeakerTranscript(merged);
+              if (mergeResult?.success && mergeResult.text) {
+                finalText = mergeResult.text;
+              }
             } catch {
               // Merge failed, save without speaker labels
             }
