@@ -780,20 +780,8 @@ export default function SettingsPage({
     refreshYdotoolStatus();
   }, [refreshYdotoolStatus]);
 
-  const [cudaDiarStatus, setCudaDiarStatus] = useState<{
-    isLinux: boolean;
-    hasGpu: boolean;
-    hasCuda: boolean;
-    hasCudnn: boolean;
-    ready: boolean;
-  } | null>(null);
   const [cudaGuideKey, setCudaGuideKey] = useState<string | null>(null);
-
-  useEffect(() => {
-    window.electronAPI?.checkCudaDiarizationReady?.().then((s: any) => {
-      if (s) setCudaDiarStatus(s);
-    }).catch(() => {});
-  }, []);
+  const cudaDiarStatus = null as null;
 
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
