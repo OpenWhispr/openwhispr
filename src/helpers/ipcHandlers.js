@@ -7677,10 +7677,8 @@ class IPCHandlers {
   _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
     if (sessionConfig?.expectedCount) {
       const total = Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT);
-      return {
-        numSpeakers: Math.max(1, total - 1),
-        cap: null,
-      };
+      const numSpeakers = Math.max(1, total - 1);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     let attendees = [];
@@ -7693,17 +7691,13 @@ class IPCHandlers {
       }
     }
     if (attendees.length >= 2) {
-      return {
-        numSpeakers: Math.min(attendees.length, MAX_SPEAKER_COUNT),
-        cap: null,
-      };
+      const numSpeakers = Math.min(attendees.length, MAX_SPEAKER_COUNT);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     if (observedSpeakerIds.size >= 2) {
-      return {
-        numSpeakers: Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT),
-        cap: null,
-      };
+      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
