@@ -1970,7 +1970,11 @@
     "description": "教 AI 学习你的词汇 — 名字、行话和它可能遗漏的术语",
     "clearTitle": "清空词典？",
     "clearDescription": "这将删除自定义词典中的所有词汇，此操作无法撤销。",
-    "addPlaceholder": "添加词语或短语..."
+    "addPlaceholder": "添加词语或短语...",
+    "replaceFrom": "Replace from",
+    "replaceTo": "with",
+    "addReplacement": "Add replacement",
+    "removeReplacement": "Remove replacement"
   },
   "sidebar": {
     "home": "首页",

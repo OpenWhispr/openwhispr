@@ -1903,7 +1903,11 @@
     "description": "AIに語彙を学習させましょう — 名前、専門用語、見落とされがちな表現など",
     "clearTitle": "辞書をクリアしますか？",
     "clearDescription": "カスタム辞書のすべての単語が削除されます。この操作は元に戻せません。",
-    "addPlaceholder": "単語やフレーズを追加..."
+    "addPlaceholder": "単語やフレーズを追加...",
+    "replaceFrom": "Replace from",
+    "replaceTo": "with",
+    "addReplacement": "Add replacement",
+    "removeReplacement": "Remove replacement"
   },
   "referral": {
     "title": "紹介して特典をゲット",

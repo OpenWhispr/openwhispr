@@ -14,6 +14,7 @@ import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../st
 import { detectAgentName } from "../config/agentDetection";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
+import { applyDictionaryReplacements } from "../utils/dictionaryReplacements";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
@@ -1014,6 +1015,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async processTranscription(text, source) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
+    const applyReplacementRules = (value) =>
+      applyDictionaryReplacements(value, getSettings().customDictionaryReplacements);
 
     if (!normalizedText) {
       logger.logReasoning("TRANSCRIPTION_EMPTY_SKIPPING_REASONING", {
@@ -1028,7 +1031,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         source,
         reason: "skipReasoning is set (agent mode) — returning raw transcription",
       });
-      return normalizedText;
+      return applyReplacementRules(normalizedText);
     }
 
     logger.logReasoning("TRANSCRIPTION_RECEIVED", {
@@ -1068,7 +1071,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (useReasoning) {
       try {
         const route = resolveReasoningRoute(normalizedText, getSettings(), agentName);
-        if (route.kind === "skip") return normalizedText;
+        if (route.kind === "skip") return applyReplacementRules(normalizedText);
 
         const targetModel = route.kind === "agent" ? route.model : cleanupModel;
         const reasoningConfig = route.kind === "agent" ? route.config : undefined;
@@ -1093,7 +1096,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           processingTime: new Date().toISOString(),
         });
 
-        return result;
+        return applyReplacementRules(result);
       } catch (error) {
         logger.logReasoning("REASONING_FAILED", {
           error: error.message,
@@ -1108,7 +1111,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       reason: useReasoning ? "Reasoning failed" : "Reasoning not enabled",
     });
 
-    return normalizedText;
+    return applyReplacementRules(normalizedText);
   }
 
   shouldStreamTranscription(model, provider) {
@@ -2598,6 +2601,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     if (finalText) {
+      finalText = applyDictionaryReplacements(
+        finalText,
+        getSettings().customDictionaryReplacements
+      );
       const tBeforePaste = performance.now();
       const clientTotalMs = Math.round(tBeforePaste - t0);
       this.lastAudioMetadata = {

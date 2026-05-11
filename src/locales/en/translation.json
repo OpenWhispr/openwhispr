@@ -2124,15 +2124,19 @@
     "title": "Custom Dictionary",
     "description": "Teach the AI your vocabulary — names, jargon, and terms it might otherwise miss",
     "clearTitle": "Clear dictionary?",
-    "clearDescription": "This will remove all words from your custom dictionary. This action cannot be undone.",
+    "clearDescription": "This will remove all words and replacement rules from your custom dictionary. This action cannot be undone.",
     "addWord": "Add word",
     "addPlaceholder": "Add a word or phrase...",
+    "replaceFrom": "Replace from",
+    "replaceTo": "with",
+    "addReplacement": "Add replacement",
     "removeWord": "Remove {{word}}",
+    "removeReplacement": "Remove replacement",
     "clearAll": "Clear all",
     "howItWorks": "How it works",
     "howItWorksDetail": "Words are fed as context hints to the speech model, helping it recognize uncommon terms. For difficult words, try adding context like \"The word is Synty\" alongside the word itself.",
     "autoManaged": "Auto-managed — synced from agent name",
-    "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition."
+    "inputHint": "Separate multiple words with commas. Replacement rules run after transcription."
   },
   "support": {
     "documentation": "Documentation",
