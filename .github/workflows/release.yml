@@ -63,9 +63,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 
-      - name: Download cuDNN for GPU diarization
-        run: node scripts/download-cudnn.js
-
       - name: Cache Electron
         uses: actions/cache@v4
         with:
