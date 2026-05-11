@@ -2054,10 +2054,12 @@ class IPCHandlers {
         isGlobeLikeHotkey,
         isModifierOnlyHotkey,
         isRightSideModifier,
+        isMouseButtonHotkey,
       } = require("./hotkeyManager");
       const usesNativeListener = (hotkey) =>
         !hotkey ||
         isGlobeLikeHotkey(hotkey) ||
+        isMouseButtonHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
         isRightSideModifier(hotkey);
 

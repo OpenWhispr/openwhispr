@@ -1,4 +1,4 @@
-import { formatHotkeyLabelForPlatform, isGlobeLikeHotkey } from "./hotkeys";
+import { formatHotkeyLabelForPlatform, isGlobeLikeHotkey, isMouseButtonHotkey } from "./hotkeys";
 
 export type Platform = "darwin" | "win32" | "linux";
 
@@ -61,6 +61,8 @@ const SPECIAL_KEYS = new Set(
     "Pause",
     "ScrollLock",
     "NumLock",
+    "MouseButton4",
+    "MouseButton5",
   ].concat(Array.from({ length: 24 }, (_, i) => `F${i + 1}`))
 );
 
@@ -374,6 +376,12 @@ function normalizeKeyToken(part: string): string {
   if (lowered === "backspace") return "Backspace";
   if (lowered === "globe") return "GLOBE";
   if (lowered === "fn") return "Fn";
+  if (lowered === "mousebutton4" || lowered === "button4" || lowered === "backbutton") {
+    return "MouseButton4";
+  }
+  if (lowered === "mousebutton5" || lowered === "button5" || lowered === "forwardbutton") {
+    return "MouseButton5";
+  }
 
   const functionMatch = lowered.match(/^f(\d{1,2})$/);
   if (functionMatch) {
@@ -523,6 +531,16 @@ export function validateHotkey(
         valid: false,
         error: "The Globe/Fn key is only available on macOS.",
         errorCode: "INVALID_GLOBE",
+      };
+    }
+    return { valid: true };
+  }
+
+  if (isMouseButtonHotkey(hotkey)) {
+    if (platform !== "darwin") {
+      return {
+        valid: false,
+        error: "Mouse button hotkeys are currently supported on macOS only.",
       };
     }
     return { valid: true };

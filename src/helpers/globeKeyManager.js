@@ -26,6 +26,25 @@ class GlobeKeyManager extends EventEmitter {
     this._isStopping = false;
     this._restartCount = 0;
     this._restartResetTimer = null;
+    this.suppressedMouseButtons = [];
+  }
+
+  setSuppressedMouseButtons(buttons = []) {
+    const normalized = [...new Set(buttons.filter((button) => /^MouseButton[45]$/i.test(button)))];
+    const unchanged =
+      normalized.length === this.suppressedMouseButtons.length &&
+      normalized.every((button, index) => button === this.suppressedMouseButtons[index]);
+
+    if (unchanged) {
+      return;
+    }
+
+    this.suppressedMouseButtons = normalized;
+
+    if (this.process) {
+      this.stop();
+      this.start();
+    }
   }
 
   start() {
@@ -75,8 +94,11 @@ class GlobeKeyManager extends EventEmitter {
     }
 
     this.hasReportedError = false;
-    this.process = spawn(listenerPath);
-    debugLogger.info("[GlobeKeyManager] Process spawned", { pid: this.process.pid });
+    this.process = spawn(listenerPath, this.suppressedMouseButtons);
+    debugLogger.info("[GlobeKeyManager] Process spawned", {
+      pid: this.process.pid,
+      suppressedMouseButtons: this.suppressedMouseButtons,
+    });
 
     // After sustained uptime, reset the restart counter so future sleep/wake
     // cycles get a fresh set of restart attempts
@@ -114,6 +136,16 @@ class GlobeKeyManager extends EventEmitter {
             const modifier = line.replace("MODIFIER_UP:", "").trim().toLowerCase();
             if (modifier) {
               this.emit("modifier-up", modifier);
+            }
+          } else if (line.startsWith("MOUSE_BUTTON_DOWN:")) {
+            const button = line.replace("MOUSE_BUTTON_DOWN:", "").trim();
+            if (button) {
+              this.emit("mouse-button-down", button);
+            }
+          } else if (line.startsWith("MOUSE_BUTTON_UP:")) {
+            const button = line.replace("MOUSE_BUTTON_UP:", "").trim();
+            if (button) {
+              this.emit("mouse-button-up", button);
             }
           }
         });

@@ -934,7 +934,7 @@ async function startApp() {
   updateManager.checkForUpdatesOnStartup();
 
   if (process.platform === "darwin") {
-    const { isGlobeLikeHotkey } = require("./src/helpers/hotkeyManager");
+    const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");
     let globeKeyDownTime = 0;
     let globeKeyIsRecording = false;
     let globeLastStopTime = 0;
@@ -1094,7 +1094,81 @@ async function startApp() {
       }
     });
 
+    const syncSuppressedMouseButtons = () => {
+      const buttons = [];
+      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
+      if (isMouseButtonHotkey(currentHotkey)) buttons.push(currentHotkey);
+
+      const agentHotkey = hotkeyManager.getSlotHotkey("agent");
+      if (isMouseButtonHotkey(agentHotkey)) buttons.push(agentHotkey);
+
+      globeKeyManager.setSuppressedMouseButtons?.(buttons);
+    };
+
+    // Mouse Button 4/5 handling (e.g., Logitech MX Master side buttons)
+    let mouseButtonDownTime = 0;
+    let mouseButtonIsRecording = false;
+    let mouseButtonLastStopTime = 0;
+
+    globeKeyManager.on("mouse-button-down", async (button) => {
+      if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
+      if (!isMouseButtonHotkey(button)) return;
+
+      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
+      const agentHotkey = hotkeyManager.getSlotHotkey("agent");
+
+      if (agentHotkey === button) {
+        windowManager.toggleAgentOverlay();
+      }
+
+      if (currentHotkey !== button) return;
+      if (!isLiveWindow(windowManager.mainWindow)) return;
+
+      const activationMode = windowManager.getActivationMode();
+      if (textEditMonitor) textEditMonitor.captureTargetPid();
+
+      if (activationMode === "push") {
+        const now = Date.now();
+        if (now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS) return;
+        windowManager.showDictationPanel();
+        const pressTime = now;
+        mouseButtonDownTime = pressTime;
+        mouseButtonIsRecording = false;
+        setTimeout(() => {
+          if (mouseButtonDownTime === pressTime && !mouseButtonIsRecording) {
+            mouseButtonIsRecording = true;
+            windowManager.sendStartDictation();
+          }
+        }, MIN_HOLD_DURATION_MS);
+      } else {
+        windowManager.sendToggleDictation();
+      }
+    });
+
+    globeKeyManager.on("mouse-button-up", async (button) => {
+      if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
+      if (!isMouseButtonHotkey(button)) return;
+
+      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
+      if (currentHotkey !== button) return;
+      if (!isLiveWindow(windowManager.mainWindow)) return;
+
+      const activationMode = windowManager.getActivationMode();
+      if (activationMode === "push") {
+        mouseButtonDownTime = 0;
+        mouseButtonLastStopTime = Date.now();
+        if (mouseButtonIsRecording) {
+          mouseButtonIsRecording = false;
+          windowManager.sendStopDictation();
+        } else {
+          windowManager.hideDictationPanel();
+        }
+      }
+    });
+
+    syncSuppressedMouseButtons();
     globeKeyManager.start();
+    setTimeout(syncSuppressedMouseButtons, 1500);
 
     // After starting globe-listener, check if accessibility is granted.
     // If not, notify the control panel so it can prompt the user.
@@ -1128,6 +1202,10 @@ async function startApp() {
       rightModDownTime = 0;
       rightModIsRecording = false;
       rightModLastStopTime = 0;
+      mouseButtonDownTime = 0;
+      mouseButtonIsRecording = false;
+      mouseButtonLastStopTime = 0;
+      syncSuppressedMouseButtons();
     });
   }
 

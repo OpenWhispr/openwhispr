@@ -9,6 +9,10 @@ export function isGlobeLikeHotkey(hotkey: string): boolean {
   return hotkey === "GLOBE" || hotkey === "Fn";
 }
 
+export function isMouseButtonHotkey(hotkey: string): boolean {
+  return /^MouseButton[45]$/i.test(hotkey || "");
+}
+
 function formatModifierPart(part: string, platform: Platform): string {
   switch (part) {
     case "CommandOrControl":
@@ -62,6 +66,10 @@ export function formatHotkeyLabelForPlatform(hotkey: string, platform: Platform)
 
   if (isGlobeLikeHotkey(hotkey)) {
     return "Globe/Fn";
+  }
+
+  if (isMouseButtonHotkey(hotkey)) {
+    return hotkey === "MouseButton4" ? "Mouse Button 4" : "Mouse Button 5";
   }
 
   // Right-side single modifiers
@@ -148,7 +156,7 @@ export function isValidHotkeyFormat(hotkey: string): boolean {
     return false;
   }
 
-  if (isGlobeLikeHotkey(hotkey)) {
+  if (isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) {
     return true;
   }
 

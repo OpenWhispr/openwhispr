@@ -396,6 +396,20 @@ export function HotkeyInput({
     [disabled, buildModifierOnlyHotkey, finalizeCapture]
   );
 
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (disabled || !isCapturing) return;
+
+      const mouseHotkey = e.button === 3 ? "MouseButton4" : e.button === 4 ? "MouseButton5" : null;
+      if (!mouseHotkey) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      finalizeCapture(mouseHotkey);
+    },
+    [disabled, isCapturing, finalizeCapture]
+  );
+
   const handleFocus = useCallback(() => {
     if (!disabled) {
       setIsCapturing(true);
@@ -469,6 +483,7 @@ export function HotkeyInput({
         data-capturing={isCapturing || undefined}
         onKeyDown={handleKeyDown}
         onKeyUp={handleKeyUp}
+        onMouseDown={handleMouseDown}
         onFocus={handleFocus}
         onBlur={handleBlur}
         className={`
@@ -573,6 +588,7 @@ export function HotkeyInput({
       data-capturing={isCapturing || undefined}
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
+      onMouseDown={handleMouseDown}
       onFocus={handleFocus}
       onBlur={handleBlur}
       className={`
