@@ -1839,7 +1839,16 @@
       "downloadModels": "モデルをダウンロード",
       "downloadingModels": "モデルをダウンロード中...",
       "diarizing": "話者を検出中...",
-      "diarizationFailed": "話者検出に失敗しました。話者ラベルなしでノートを保存しました。"
+      "diarizationFailed": "話者検出に失敗しました。話者ラベルなしでノートを保存しました。",
+      "openaiDiarizeNote": "話者検出をサポートする唯一のOpenAIモデルであるgpt-4o-transcribe-diarizeに切り替わります。選択したモデルとコストが異なる場合があります。",
+      "mistralDiarizeNote": "Voxtralでの話者検出は追加料金なしで利用できます。",
+      "groqDiarizeNote": "Groqでは話者検出を利用できません。代わりにローカルダイアライゼーションが使用されます。",
+      "cudaSetupDescription": "NVIDIA GPUが検出されました。話者検出のGPUアクセラレーション。",
+      "cudaRuntime": "CUDA Runtime",
+      "installCudaRuntime": "CUDA runtimeをインストール",
+      "cudnn": "cuDNN",
+      "cudnnBundled": "cuDNNはアプリに同梱されています",
+      "gpuDiarizationReady": "GPU話者ダイアライゼーションの準備ができました。"
     },
     "meeting": {
       "title": "議事録",

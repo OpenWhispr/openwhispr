@@ -78,8 +78,12 @@ const CLOUD_CHUNK_CONCURRENCY = 5;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
 function formatDiarTime(seconds) {
-  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
+  if (hrs > 0) {
+    return `${hrs}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 
@@ -1457,10 +1461,15 @@ class IPCHandlers {
         const resolved = path.resolve(filePath);
         const tempDir = getSafeTempDir();
         const basename = path.basename(resolved);
-        if (!resolved.startsWith(tempDir) || !basename.startsWith("ow-url-")) {
+        if (!basename.startsWith("ow-url-")) {
           return { success: false, error: "Not an OpenWhispr temp file" };
         }
-        fs.unlinkSync(resolved);
+        const real = fs.realpathSync(resolved);
+        const rel = path.relative(tempDir, real);
+        if (rel.startsWith("..") || path.isAbsolute(rel)) {
+          return { success: false, error: "Not an OpenWhispr temp file" };
+        }
+        fs.unlinkSync(real);
         return { success: true };
       } catch (error) {
         debugLogger.warn("Failed to delete temp file", { error: error.message });
@@ -1694,7 +1703,7 @@ class IPCHandlers {
 
     ipcMain.handle("check-cuda-diarization-ready", async () => {
       if (process.platform !== "linux") {
-        return { isLinux: false, hasGpu: false, hasCuda: false, hasCudnn: false, ready: process.platform === "darwin" || process.platform === "win32" };
+        return { isLinux: false, hasGpu: false, hasCuda: false, hasCudnn: false, ready: false };
       }
       const { detectNvidiaGpu } = require("../utils/gpuDetection");
       const gpuInfo = await detectNvidiaGpu();
@@ -2035,13 +2044,17 @@ class IPCHandlers {
 
         const { mergeSpeakersWithText, formatSpeakerTranscript } = require("./speakerMerge");
 
-        // Try GPU pipeline first
         try {
           const { gpuDiarize } = require("./gpuDiarization");
           const onnxWorkerClient = require("./onnxWorkerClient");
-          const segments = await gpuDiarize(
+          const GPU_DIARIZE_TIMEOUT = 600_000;
+          const gpuPromise = gpuDiarize(
             filePath, onnxWorkerClient, this.diarizationManager, diarOpts
           );
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("GPU diarization timed out")), GPU_DIARIZE_TIMEOUT)
+          );
+          const segments = await Promise.race([gpuPromise, timeoutPromise]);
           if (segments && segments.length > 0) {
             debugLogger.info("[diarization] GPU pipeline succeeded", { segments: segments.length });
             return { success: true, segments, formattedText: formatSpeakerTranscript(segments) };
@@ -6328,17 +6341,24 @@ class IPCHandlers {
           }
 
           let isMistral = false;
-          try { const h = new URL(baseUrl).hostname; isMistral = h.endsWith(".mistral.ai") || h === "mistral.ai"; } catch {}
+          let isOpenAi = false;
+          try {
+            const h = new URL(baseUrl).hostname;
+            isMistral = h.endsWith(".mistral.ai") || h === "mistral.ai";
+            isOpenAi = h.endsWith(".openai.com") || h === "openai.com";
+          } catch {}
           const fields = {};
 
           if (diarize && isMistral) {
             fields.model = model || "voxtral-mini-latest";
             fields.diarize = "true";
             fields.timestamp_granularities = "segment";
-          } else if (diarize) {
+          } else if (diarize && isOpenAi) {
             fields.model = "gpt-4o-transcribe-diarize";
             fields.response_format = "verbose_json";
             fields.chunking_strategy = "auto";
+          } else if (diarize) {
+            return { success: false, error: "Speaker diarization is only supported with OpenAI and Mistral APIs." };
           } else {
             fields.model = model || "whisper-1";
           }

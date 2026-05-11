@@ -594,11 +594,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
 
+    const seen = new Set<string>();
     const validUrls: string[] = [];
     for (const line of lines) {
       try {
         const parsed = new URL(line);
-        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        if ((parsed.protocol === "http:" || parsed.protocol === "https:") && !seen.has(line)) {
+          seen.add(line);
           validUrls.push(line);
         }
       } catch {
@@ -606,8 +608,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       }
     }
 
+    const MAX_BATCH_URLS = 50;
     if (validUrls.length > 0) {
-      batch.addUrls(validUrls);
+      batch.addUrls(validUrls.slice(0, MAX_BATCH_URLS));
       setUrlInput("");
       setUrlExpanded(false);
     }
@@ -1114,19 +1117,19 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
               cloudTranscriptionProvider === "openai" && (
               <p className="text-[10px] text-foreground/25 mt-1.5">
-                Overrides your transcription model with gpt-4o-transcribe-diarize, the only OpenAI model with speaker detection. Costs may differ from your selected model.
+                {t("notes.upload.openaiDiarizeNote")}
               </p>
             )}
             {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
               cloudTranscriptionProvider === "mistral" && (
               <p className="text-[10px] text-foreground/25 mt-1.5">
-                Speaker detection included at no extra cost with Voxtral.
+                {t("notes.upload.mistralDiarizeNote")}
               </p>
             )}
             {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
               cloudTranscriptionProvider === "groq" && (
               <p className="text-[10px] text-amber-500/60 mt-1.5">
-                Speaker detection is not available with Groq. Local diarization will be used instead.
+                {t("notes.upload.groqDiarizeNote")}
               </p>
             )}
 

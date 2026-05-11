@@ -1856,7 +1856,16 @@
       "downloadModels": "Baixar modelos",
       "downloadingModels": "Baixando modelos...",
       "diarizing": "Detectando locutores...",
-      "diarizationFailed": "A detecção de locutores falhou. Nota salva sem rótulos de locutor."
+      "diarizationFailed": "A detecção de locutores falhou. Nota salva sem rótulos de locutor.",
+      "openaiDiarizeNote": "Substitui seu modelo de transcrição por gpt-4o-transcribe-diarize, o único modelo OpenAI com detecção de falantes. Os custos podem diferir do modelo selecionado.",
+      "mistralDiarizeNote": "Detecção de falantes incluída sem custo adicional com Voxtral.",
+      "groqDiarizeNote": "A detecção de falantes não está disponível com Groq. A diarização local será usada.",
+      "cudaSetupDescription": "GPU NVIDIA detectada. Aceleração GPU para detecção de falantes.",
+      "cudaRuntime": "CUDA Runtime",
+      "installCudaRuntime": "Instalar CUDA runtime",
+      "cudnn": "cuDNN",
+      "cudnnBundled": "cuDNN está incluído no app",
+      "gpuDiarizationReady": "A diarização GPU está pronta."
     },
     "meeting": {
       "title": "Notas de reunião",

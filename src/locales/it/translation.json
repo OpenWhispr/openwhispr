@@ -1856,7 +1856,16 @@
       "downloadModels": "Scarica modelli",
       "downloadingModels": "Download modelli in corso...",
       "diarizing": "Rilevamento parlanti...",
-      "diarizationFailed": "Rilevamento parlanti fallito. Nota salvata senza etichette parlante."
+      "diarizationFailed": "Rilevamento parlanti fallito. Nota salvata senza etichette parlante.",
+      "openaiDiarizeNote": "Sostituisce il tuo modello di trascrizione con gpt-4o-transcribe-diarize, l’unico modello OpenAI con rilevamento dei parlanti. I costi potrebbero differire dal modello selezionato.",
+      "mistralDiarizeNote": "Rilevamento dei parlanti incluso senza costi aggiuntivi con Voxtral.",
+      "groqDiarizeNote": "Il rilevamento dei parlanti non è disponibile con Groq. Verrà usata la diarizzazione locale.",
+      "cudaSetupDescription": "GPU NVIDIA rilevata. Accelerazione GPU per il rilevamento dei parlanti.",
+      "cudaRuntime": "CUDA Runtime",
+      "installCudaRuntime": "Installa CUDA runtime",
+      "cudnn": "cuDNN",
+      "cudnnBundled": "cuDNN è incluso nell’app",
+      "gpuDiarizationReady": "La diarizzazione GPU è pronta."
     },
     "meeting": {
       "title": "Note delle riunioni",

@@ -2013,7 +2013,16 @@
       "downloadModels": "Download models",
       "downloadingModels": "Downloading models...",
       "diarizing": "Detecting speakers...",
-      "diarizationFailed": "Speaker detection failed. Note saved without speaker labels."
+      "diarizationFailed": "Speaker detection failed. Note saved without speaker labels.",
+      "openaiDiarizeNote": "Overrides your transcription model with gpt-4o-transcribe-diarize, the only OpenAI model with speaker detection. Costs may differ from your selected model.",
+      "mistralDiarizeNote": "Speaker detection included at no extra cost with Voxtral.",
+      "groqDiarizeNote": "Speaker detection is not available with Groq. Local diarization will be used instead.",
+      "cudaSetupDescription": "NVIDIA GPU detected. GPU acceleration for speaker detection.",
+      "cudaRuntime": "CUDA Runtime",
+      "installCudaRuntime": "Install CUDA runtime",
+      "cudnn": "cuDNN",
+      "cudnnBundled": "cuDNN is bundled with the app",
+      "gpuDiarizationReady": "GPU speaker diarization is ready."
     },
     "meeting": {
       "title": "Meeting Notes",

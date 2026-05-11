@@ -112,38 +112,107 @@ function softmax(logits, numClasses) {
   return probs;
 }
 
+function classifyFrames(win) {
+  const [, numFrames, numClasses] = win.dims;
+  const assignments = new Int8Array(numFrames);
+  for (let f = 0; f < numFrames; f++) {
+    const base = f * numClasses;
+    const logits = new Float64Array(numClasses);
+    for (let c = 0; c < numClasses; c++) logits[c] = win.data[base + c];
+    const probs = softmax(logits, numClasses);
+    let bestClass = 0, bestProb = probs[0];
+    for (let c = 1; c < numClasses; c++) {
+      if (probs[c] > bestProb) { bestProb = probs[c]; bestClass = c; }
+    }
+    const speakers = POWERSET_CLASSES[bestClass] || [];
+    assignments[f] = speakers.length > 0 ? speakers[0] : -1;
+  }
+  return assignments;
+}
+
+function alignOverlap(prev, curr, overlapFrames, prevMap) {
+  const prevStart = prev.length - overlapFrames;
+  const cooccurrence = new Map();
+
+  for (let f = 0; f < overlapFrames && f < curr.length; f++) {
+    const pi = prevStart + f;
+    if (pi < 0 || pi >= prev.length) continue;
+    const ps = prev[pi], cs = curr[f];
+    if (ps === -1 || cs === -1) continue;
+    if (!cooccurrence.has(cs)) cooccurrence.set(cs, new Map());
+    const inner = cooccurrence.get(cs);
+    inner.set(ps, (inner.get(ps) || 0) + 1);
+  }
+
+  const currMap = new Map();
+  const usedGlobal = new Set();
+  let nextId = 0;
+  for (const m of prevMap.values()) { if (m >= nextId) nextId = m + 1; }
+
+  const ranked = [...cooccurrence.entries()]
+    .sort((a, b) => {
+      const aT = [...a[1].values()].reduce((s, v) => s + v, 0);
+      const bT = [...b[1].values()].reduce((s, v) => s + v, 0);
+      return bT - aT;
+    });
+
+  for (const [cs, matches] of ranked) {
+    const sorted = [...matches.entries()].sort((a, b) => b[1] - a[1]);
+    let mapped = false;
+    for (const [ps] of sorted) {
+      const gid = prevMap.get(ps);
+      if (gid !== undefined && !usedGlobal.has(gid)) {
+        currMap.set(cs, gid);
+        usedGlobal.add(gid);
+        mapped = true;
+        break;
+      }
+    }
+    if (!mapped) {
+      currMap.set(cs, nextId);
+      usedGlobal.add(nextId);
+      nextId++;
+    }
+  }
+
+  for (let s = 0; s < 3; s++) {
+    if (!currMap.has(s)) { currMap.set(s, nextId++); }
+  }
+  return { currMap, nextGlobalId: nextId };
+}
+
 function buildSegmentsFromWindows(windows, sampleRate) {
   if (windows.length === 0) return [];
 
-  const segments = [];
   const frameShiftSec = FRAME_SHIFT_SAMPLES / sampleRate;
+  const SHIFT_SAMPLES = 80000;
+  const overlapFrames = Math.floor(SHIFT_SAMPLES / FRAME_SHIFT_SAMPLES);
 
-  for (const win of windows) {
-    const [, numFrames, numClasses] = win.dims;
+  const allAssignments = windows.map(classifyFrames);
+
+  const speakerMaps = [new Map([[0, 0], [1, 1], [2, 2]])];
+  let nextGlobalId = 3;
+
+  for (let w = 1; w < allAssignments.length; w++) {
+    const { currMap, nextGlobalId: nid } = alignOverlap(
+      allAssignments[w - 1], allAssignments[w], overlapFrames, speakerMaps[w - 1]
+    );
+    speakerMaps.push(currMap);
+    nextGlobalId = Math.max(nextGlobalId, nid);
+  }
+
+  const segments = [];
+  for (let w = 0; w < windows.length; w++) {
+    const win = windows[w];
+    const assignments = allAssignments[w];
+    const sMap = speakerMaps[w];
+    const [, numFrames] = win.dims;
     const offsetSec = win.offset / sampleRate;
 
     for (let f = 0; f < numFrames; f++) {
-      const logits = [];
-      for (let c = 0; c < numClasses; c++) {
-        logits.push(win.data[f * numClasses + c]);
-      }
-
-      const probs = softmax(logits, numClasses);
-
-      let bestClass = 0;
-      let bestProb = probs[0];
-      for (let c = 1; c < numClasses; c++) {
-        if (probs[c] > bestProb) {
-          bestProb = probs[c];
-          bestClass = c;
-        }
-      }
-
-      if (bestClass === 0) continue;
-
-      const speakers = POWERSET_CLASSES[bestClass] || [bestClass - 1];
-      const speakerIdx = speakers[0];
-
+      const local = assignments[f];
+      if (local === -1) continue;
+      const speakerIdx = sMap.get(local) ?? local;
       const start = offsetSec + f * frameShiftSec;
       const end = start + frameShiftSec;
       const prev = segments[segments.length - 1];
@@ -255,9 +324,6 @@ async function gpuDiarize(filePath, onnxWorkerClient, diarizationManager, option
     return [];
   }
 
-  // Fast path: use segmentation speaker indices directly (no embeddings)
-  // The powerset model assigns local speaker IDs per window. With 50% overlap,
-  // adjacent windows produce consistent assignments for 2-3 speaker conversations.
   const merged = [];
   for (const seg of rawSegments) {
     const prev = merged[merged.length - 1];
@@ -271,7 +337,7 @@ async function gpuDiarize(filePath, onnxWorkerClient, diarizationManager, option
 
   const totalElapsed = Math.round(performance.now() - startTime);
   const speakerCount = new Set(merged.map((s) => s.speaker)).size;
-  debugLogger.info("[diarization] GPU pipeline complete (fast path)", {
+  debugLogger.info("[diarization] GPU pipeline complete", {
     speakers: speakerCount,
     segments: merged.length,
     audioDurationSec: Math.round(audioDuration),

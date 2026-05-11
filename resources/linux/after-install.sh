@@ -112,10 +112,12 @@ if lspci 2>/dev/null | grep -qi nvidia; then
       # openSUSE: needs NVIDIA CUDA repo
       if ! zypper repos 2>/dev/null | grep -qi cuda; then
         SUSE_VER=$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID%%.*}" || echo "15")
-        zypper addrepo "https://developer.download.nvidia.com/compute/cuda/repos/opensuse${SUSE_VER}/x86_64/cuda-opensuse${SUSE_VER}.repo" 2>/dev/null || true
+        zypper addrepo "https://developer.download.nvidia.com/compute/cuda/repos/opensuse$SUSE_VER/x86_64/cuda-opensuse$SUSE_VER.repo" 2>/dev/null || true
       fi
       zypper install -y --no-recommends \
         cuda-cudart libcublas libcufft libcurand 2>/dev/null || true
+    elif command -v pacman >/dev/null 2>&1; then
+      pacman -S --noconfirm --needed cuda 2>/dev/null || true
     fi
   fi
 fi

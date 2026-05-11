@@ -1851,7 +1851,16 @@
       "downloadModels": "下载模型",
       "downloadingModels": "正在下载模型...",
       "diarizing": "正在检测说话人...",
-      "diarizationFailed": "说话人检测失败。笔记已保存，但没有说话人标签。"
+      "diarizationFailed": "说话人检测失败。笔记已保存，但没有说话人标签。",
+      "openaiDiarizeNote": "将替换您的转录模型为 gpt-4o-transcribe-diarize，这是唯一支持说话人检测的 OpenAI 模型。费用可能与您选择的模型不同。",
+      "mistralDiarizeNote": "使用 Voxtral 时说话人检测无需额外费用。",
+      "groqDiarizeNote": "Groq 不支持说话人检测。将改用本地分离。",
+      "cudaSetupDescription": "检测到 NVIDIA GPU。用于说话人检测的 GPU 加速。",
+      "cudaRuntime": "CUDA Runtime",
+      "installCudaRuntime": "安装 CUDA runtime",
+      "cudnn": "cuDNN",
+      "cudnnBundled": "cuDNN 已随应用捆绑",
+      "gpuDiarizationReady": "GPU 说话人分离已就绪。"
     },
     "meeting": {
       "title": "会议笔记",

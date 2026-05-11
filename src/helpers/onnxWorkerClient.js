@@ -54,9 +54,6 @@ class OnnxWorkerClient {
     try {
       candidates.push(path.join(process.resourcesPath, "bin", "cudnn-linux-x64"));
     } catch {}
-    candidates.push(
-      path.join(app.getPath("home"), ".cache", "openwhispr", "cudnn", "lib")
-    );
     for (const dir of candidates) {
       try {
         if (fs.existsSync(path.join(dir, "libcudnn.so.9"))) return dir;
@@ -84,7 +81,7 @@ class OnnxWorkerClient {
         serviceName: "openwhispr-onnx",
         stdio: "pipe",
         env,
-        execArgv: ["--max-old-space-size=512"],
+        execArgv: ["--max-old-space-size=2048"],
       });
 
       const forwardStderr = (chunk) => {
@@ -235,7 +232,7 @@ class OnnxWorkerClient {
   }
 
   async diarizeLoad(segModelPath, embModelPath) {
-    return this.request("diarize.load", { segModelPath, embModelPath });
+    return this.request("diarize.load", { segModelPath, embModelPath }, [], 600_000);
   }
 
   async diarizeSegment(samplesBuffer, sampleRate) {

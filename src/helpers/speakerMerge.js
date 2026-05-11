@@ -1,4 +1,12 @@
 function splitIntoSentences(text) {
+  if (typeof Intl !== "undefined" && Intl.Segmenter) {
+    try {
+      const segmenter = new Intl.Segmenter(undefined, { granularity: "sentence" });
+      return Array.from(segmenter.segment(text), (s) => s.segment.trim()).filter((s) => s.length > 0);
+    } catch {
+      // fall through to regex
+    }
+  }
   return text
     .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
@@ -6,8 +14,12 @@ function splitIntoSentences(text) {
 }
 
 function formatTimestamp(seconds) {
-  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
   const secs = Math.floor(seconds % 60);
+  if (hrs > 0) {
+    return `${hrs}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
   return `${mins}:${String(secs).padStart(2, "0")}`;
 }
 

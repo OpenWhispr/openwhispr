@@ -1851,7 +1851,16 @@
       "downloadModels": "下載模型",
       "downloadingModels": "正在下載模型...",
       "diarizing": "正在偵測說話者...",
-      "diarizationFailed": "說話者偵測失敗。筆記已儲存，但沒有說話者標籤。"
+      "diarizationFailed": "說話者偵測失敗。筆記已儲存，但沒有說話者標籤。",
+      "openaiDiarizeNote": "將替換您的轉錄模型為 gpt-4o-transcribe-diarize，這是唯一支援說話人偵測的 OpenAI 模型。費用可能與您選擇的模型不同。",
+      "mistralDiarizeNote": "使用 Voxtral 時說話人偵測無需額外費用。",
+      "groqDiarizeNote": "Groq 不支援說話人偵測。將改用本地分離。",
+      "cudaSetupDescription": "偵測到 NVIDIA GPU。用於說話人偵測的 GPU 加速。",
+      "cudaRuntime": "CUDA Runtime",
+      "installCudaRuntime": "安裝 CUDA runtime",
+      "cudnn": "cuDNN",
+      "cudnnBundled": "cuDNN 已隨應用程式捆綁",
+      "gpuDiarizationReady": "GPU 說話人分離已就緒。"
     },
     "meeting": {
       "title": "會議筆記",

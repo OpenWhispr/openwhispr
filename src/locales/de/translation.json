@@ -1856,7 +1856,16 @@
       "downloadModels": "Modelle herunterladen",
       "downloadingModels": "Modelle werden heruntergeladen...",
       "diarizing": "Sprecher werden erkannt...",
-      "diarizationFailed": "Sprechererkennung fehlgeschlagen. Notiz ohne Sprecherkennzeichnung gespeichert."
+      "diarizationFailed": "Sprechererkennung fehlgeschlagen. Notiz ohne Sprecherkennzeichnung gespeichert.",
+      "openaiDiarizeNote": "Überschreibt Ihr Transkriptionsmodell mit gpt-4o-transcribe-diarize, dem einzigen OpenAI-Modell mit Sprechererkennung. Die Kosten können von Ihrem gewählten Modell abweichen.",
+      "mistralDiarizeNote": "Sprechererkennung ohne Zusatzkosten mit Voxtral enthalten.",
+      "groqDiarizeNote": "Sprechererkennung ist mit Groq nicht verfügbar. Stattdessen wird die lokale Diarisierung verwendet.",
+      "cudaSetupDescription": "NVIDIA GPU erkannt. GPU-Beschleunigung für Sprechererkennung.",
+      "cudaRuntime": "CUDA Runtime",
+      "installCudaRuntime": "CUDA Runtime installieren",
+      "cudnn": "cuDNN",
+      "cudnnBundled": "cuDNN ist in der App enthalten",
+      "gpuDiarizationReady": "GPU-Sprecherdiarisierung ist bereit."
     },
     "meeting": {
       "title": "Besprechungsnotizen",

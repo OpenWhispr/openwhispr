@@ -1856,7 +1856,16 @@
       "downloadModels": "Загрузить модели",
       "downloadingModels": "Загрузка моделей...",
       "diarizing": "Определение говорящих...",
-      "diarizationFailed": "Определение говорящих не удалось. Заметка сохранена без меток говорящих."
+      "diarizationFailed": "Определение говорящих не удалось. Заметка сохранена без меток говорящих.",
+      "openaiDiarizeNote": "Заменяет вашу модель транскрипции на gpt-4o-transcribe-diarize — единственную модель OpenAI с определением говорящих. Стоимость может отличаться от выбранной модели.",
+      "mistralDiarizeNote": "Определение говорящих включено без дополнительной оплаты с Voxtral.",
+      "groqDiarizeNote": "Определение говорящих недоступно с Groq. Вместо этого будет использована локальная диаризация.",
+      "cudaSetupDescription": "Обнаружен GPU NVIDIA. GPU-ускорение для определения говорящих.",
+      "cudaRuntime": "CUDA Runtime",
+      "installCudaRuntime": "Установить CUDA runtime",
+      "cudnn": "cuDNN",
+      "cudnnBundled": "cuDNN включён в приложение",
+      "gpuDiarizationReady": "GPU-диаризация готова к работе."
     },
     "meeting": {
       "title": "Заметки со встреч",

@@ -1,5 +1,7 @@
 const https = require("https");
 const http = require("http");
+const dns = require("dns");
+const { isIP } = require("net");
 const fs = require("fs");
 const path = require("path");
 const debugLogger = require("./debugLogger");
@@ -15,6 +17,45 @@ const YOUTUBE_HOSTS = new Set([
 
 const STALL_TIMEOUT_MS = 30_000;
 const CONNECT_TIMEOUT_MS = 30_000;
+const MAX_DOWNLOAD_BYTES = 500 * 1024 * 1024;
+const MAX_REDIRECTS = 3;
+
+function isPrivateIp(ip) {
+  if (ip === "0.0.0.0" || ip === "::1" || ip === "::") return true;
+  if (isIP(ip) === 4) {
+    const parts = ip.split(".").map(Number);
+    if (parts[0] === 127) return true;
+    if (parts[0] === 10) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    return false;
+  }
+  if (isIP(ip) === 6) {
+    const lower = ip.toLowerCase();
+    if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
+    if (lower.startsWith("fe80")) return true;
+    return false;
+  }
+  return false;
+}
+
+async function validateHostname(hostname) {
+  if (isIP(hostname)) {
+    if (isPrivateIp(hostname)) {
+      const err = new Error("Direct downloads from private/internal addresses are not allowed");
+      err.code = "SSRF_BLOCKED";
+      throw err;
+    }
+    return;
+  }
+  const { address } = await dns.promises.lookup(hostname);
+  if (isPrivateIp(address)) {
+    const err = new Error("Direct downloads from private/internal addresses are not allowed");
+    err.code = "SSRF_BLOCKED";
+    throw err;
+  }
+}
 
 function detectUrlType(urlString) {
   if (!urlString || typeof urlString !== "string") {
@@ -201,19 +242,25 @@ function httpRequest(parsed, options) {
   });
 }
 
-async function downloadDirect(url, onProgress, abortSignal) {
+async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
   onProgress?.({ stage: "resolving", percent: 0 });
 
   const parsed = new URL(url);
+
+  if (parsed.protocol !== "https:") {
+    const err = new Error("Only HTTPS URLs are supported for direct downloads");
+    err.code = "INVALID_URL";
+    throw err;
+  }
+
+  await validateHostname(parsed.hostname);
 
   const headResponse = await httpRequest(parsed, { method: "HEAD" });
 
   const contentType = (headResponse.headers["content-type"] || "").toLowerCase();
   const isAudioVideo =
     contentType.startsWith("audio/") ||
-    contentType.startsWith("video/") ||
-    contentType === "application/octet-stream" ||
-    contentType === "binary/octet-stream";
+    contentType.startsWith("video/");
 
   if (!isAudioVideo) {
     const err = new Error(`URL does not point to an audio file (content-type: ${contentType})`);
@@ -224,6 +271,12 @@ async function downloadDirect(url, onProgress, abortSignal) {
   const contentLength = headResponse.headers["content-length"]
     ? Number(headResponse.headers["content-length"])
     : null;
+
+  if (contentLength && contentLength > MAX_DOWNLOAD_BYTES) {
+    const err = new Error("File too large. Maximum download size is 500 MB.");
+    err.code = "FILE_TOO_LARGE";
+    throw err;
+  }
 
   const urlPath = parsed.pathname;
   const extMatch = urlPath.match(/\.([a-zA-Z0-9]{2,5})$/);
@@ -238,7 +291,12 @@ async function downloadDirect(url, onProgress, abortSignal) {
 
   if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
     response.destroy();
-    return downloadDirect(response.headers.location, onProgress, abortSignal);
+    if (redirectCount >= MAX_REDIRECTS) {
+      const err = new Error("Too many redirects");
+      err.code = "DOWNLOAD_FAILED";
+      throw err;
+    }
+    return downloadDirect(response.headers.location, onProgress, abortSignal, redirectCount + 1);
   }
 
   if (response.statusCode !== 200) {
@@ -266,6 +324,12 @@ async function downloadDirect(url, onProgress, abortSignal) {
 
         stall.touch();
         downloaded += chunk.length;
+
+        if (downloaded > MAX_DOWNLOAD_BYTES) {
+          response.destroy();
+          reject(Object.assign(new Error("File too large. Maximum download size is 500 MB."), { code: "FILE_TOO_LARGE" }));
+          return;
+        }
 
         if (contentLength) {
           const percent = Math.min(99, Math.round((downloaded / contentLength) * 100));

@@ -2881,18 +2881,18 @@ EOF`,
               <div>
                 <SectionHeader
                   title="GPU Speaker Diarization"
-                  description="NVIDIA GPU detected. GPU acceleration for speaker detection."
+                  description={t("notes.upload.cudaSetupDescription")}
                 />
                 {(() => {
                   const checks = [
                     {
                       key: "hasCuda",
-                      label: "CUDA Runtime",
+                      label: t("notes.upload.cudaRuntime"),
                       ok: cudaDiarStatus.hasCuda,
                       desc: "GPU acceleration libraries",
                       steps: [
                         {
-                          title: "Install CUDA runtime",
+                          title: t("notes.upload.installCudaRuntime"),
                           desc: "Use your distribution's package manager.",
                           cmds: [
                             { label: "Ubuntu / Debian", cmd: "sudo apt install libcudart12 libcublas12 libcufft11 libcurand10" },
@@ -2905,12 +2905,12 @@ EOF`,
                     },
                     {
                       key: "hasCudnn",
-                      label: "cuDNN",
+                      label: t("notes.upload.cudnn"),
                       ok: cudaDiarStatus.hasCudnn,
                       desc: "GPU inference library",
                       steps: [
                         {
-                          title: "cuDNN is bundled with the app",
+                          title: t("notes.upload.cudnnBundled"),
                           desc: "If missing, reinstall OpenWhispr from the latest package.",
                           cmds: [],
                         },
@@ -2929,7 +2929,7 @@ EOF`,
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <CircleCheck className="h-4 w-4 text-emerald-500" />
-                                <span className="text-sm">GPU speaker diarization is ready.</span>
+                                <span className="text-sm">{t("notes.upload.gpuDiarizationReady")}</span>
                               </div>
                             </div>
                           </SettingsPanelRow>

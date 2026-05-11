@@ -47,7 +47,9 @@ export function useBatchQueue() {
   const cancelledRef = useRef(false);
   const queueRef = useRef<QueueItem[]>([]);
 
-  queueRef.current = queue;
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
 
   const addFiles = useCallback(
     (files: Array<{ name: string; path: string; sizeBytes: number }>) => {
@@ -104,11 +106,9 @@ export function useBatchQueue() {
   }, []);
 
   const clearQueue = useCallback(() => {
+    cancelledRef.current = true;
     setQueue([]);
-    setIsProcessing(false);
     setCurrentItemId(null);
-    processingRef.current = false;
-    cancelledRef.current = false;
   }, []);
 
   const processQueue = useCallback(
@@ -217,7 +217,7 @@ export function useBatchQueue() {
 
           let finalText = transcriptionResult.text;
 
-          if ((transcriptionResult as any).diarized) {
+          if ("diarized" in transcriptionResult && transcriptionResult.diarized) {
             // Cloud diarization already applied
           } else if (diarResult?.success && diarResult.segments && diarResult.segments.length > 0) {
             try {
@@ -263,17 +263,18 @@ export function useBatchQueue() {
         }
       };
 
-      const snapshot = [...queueRef.current];
-
-      for (const item of snapshot) {
-        if (cancelledRef.current) break;
-        if (item.status !== "queued") continue;
-        await processItem(item);
+      let next: QueueItem | undefined;
+      while (
+        !cancelledRef.current &&
+        (next = queueRef.current.find((i) => i.status === "queued"))
+      ) {
+        await processItem(next);
       }
 
       setCurrentItemId(null);
       setIsProcessing(false);
       processingRef.current = false;
+      cancelledRef.current = false;
     },
     [updateItem]
   );
