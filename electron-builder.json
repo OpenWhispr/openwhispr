@@ -119,7 +119,6 @@
         "windows-fast-paste*",
         "all-MiniLM-L6-v2/**/*",
         "diarization-models/**/*",
-        "cudnn-linux-x64/**/*",
         "*.dylib",
         "*.dll",
         "*.so*"
