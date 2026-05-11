@@ -100,7 +100,7 @@ if lspci 2>/dev/null | grep -qi nvidia; then
       if ! dnf repolist 2>/dev/null | grep -qi cuda; then
         FEDORA_VER=$(rpm -E %fedora 2>/dev/null || echo "41")
         for VER in "$FEDORA_VER" $((FEDORA_VER - 1)) $((FEDORA_VER - 2)) $((FEDORA_VER - 3)); do
-          REPO_URL="https://developer.download.nvidia.com/compute/cuda/repos/fedora${VER}/x86_64/cuda-fedora${VER}.repo"
+          REPO_URL="https://developer.download.nvidia.com/compute/cuda/repos/fedora$VER/x86_64/cuda-fedora$VER.repo"
           if dnf config-manager addrepo --from-repofile="$REPO_URL" 2>/dev/null; then
             break
           fi
