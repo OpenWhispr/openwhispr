@@ -122,13 +122,6 @@ export interface RunActionOptions {
  * Start processing an action on a note. Runs in the background — survives
  * component unmounts and navigation. On completion the result is persisted
  * directly via IPC.
- *
- * @param noteId          The note being processed.
- * @param noteContent     The assembled note text (notes + transcript).
- * @param contentHash     Hash of the raw content at invocation time (for enhanced_at_content_hash).
- * @param action          The action definition to run.
- * @param options         Cloud/model config.
- * @param errorLabel      i18n-resolved fallback error string.
  */
 export function runBackgroundAction(
   noteId: number,
@@ -169,7 +162,6 @@ export function runBackgroundAction(
 
       if (cancelledFlags.get(noteId)) return;
 
-      // Persist directly to DB via IPC — no component needed
       const updates: Record<string, string> = {
         enhanced_content: enhanced,
         enhancement_prompt: action.prompt,
@@ -178,7 +170,6 @@ export function runBackgroundAction(
       if (title) updates.title = title;
       await window.electronAPI.updateNote(noteId, updates);
 
-      // Transition to success state briefly
       setNoteState(noteId, { status: "success", actionName: action.name });
       pushCompletionEvent({ noteId, type: "success" });
 
@@ -194,6 +185,8 @@ export function runBackgroundAction(
       clearNoteState(noteId);
       const message = err instanceof Error ? err.message : errorLabel;
       pushCompletionEvent({ noteId, type: "error", message });
+    } finally {
+      cancelledFlags.delete(noteId);
     }
   })();
 }

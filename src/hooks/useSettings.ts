@@ -27,6 +27,7 @@ export interface TranscriptionSettings {
 }
 
 export interface CleanupSettings {
+  autoGenerateNoteTitle: boolean;
   useCleanupModel: boolean;
   useDictationAgent: boolean;
   cleanupModel: string;
