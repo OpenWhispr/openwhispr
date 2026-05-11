@@ -480,7 +480,8 @@ function SpeechToTextTabs({
           )
         }
       />
-      {tab === "dictation" ? renderDictation() : renderNoteRecording()}
+      <div className={tab !== "dictation" ? "hidden" : undefined}>{renderDictation()}</div>
+      <div className={tab !== "noteRecording" ? "hidden" : undefined}>{renderNoteRecording()}</div>
     </div>
   );
 }
@@ -525,10 +526,10 @@ function LlmsTabs({
           return <MessageSquare className="w-3.5 h-3.5" />;
         }}
       />
-      {tab === "dictationCleanup" && renderDictationCleanup()}
-      {tab === "dictationAgent" && renderDictationAgent()}
-      {tab === "noteFormatting" && renderNoteFormatting()}
-      {tab === "chatIntelligence" && renderChatIntelligence()}
+      <div className={tab !== "dictationCleanup" ? "hidden" : undefined}>{renderDictationCleanup()}</div>
+      <div className={tab !== "dictationAgent" ? "hidden" : undefined}>{renderDictationAgent()}</div>
+      <div className={tab !== "noteFormatting" ? "hidden" : undefined}>{renderNoteFormatting()}</div>
+      <div className={tab !== "chatIntelligence" ? "hidden" : undefined}>{renderChatIntelligence()}</div>
     </div>
   );
 }
@@ -2993,71 +2994,8 @@ EOF`,
         );
 
       case "speechToText":
-        return (
-          <SpeechToTextTabs
-            initialTab={initialSubTab as SpeechTab | undefined}
-            renderDictation={() => (
-              <TranscriptionSection
-                isSignedIn={isSignedIn ?? false}
-                startOnboarding={startOnboarding}
-                cloudTranscriptionMode={cloudTranscriptionMode}
-                setCloudTranscriptionMode={setCloudTranscriptionMode}
-                useLocalWhisper={useLocalWhisper}
-                setUseLocalWhisper={setUseLocalWhisper}
-                updateTranscriptionSettings={updateTranscriptionSettings}
-                cloudTranscriptionProvider={cloudTranscriptionProvider}
-                setCloudTranscriptionProvider={setCloudTranscriptionProvider}
-                cloudTranscriptionModel={cloudTranscriptionModel}
-                setCloudTranscriptionModel={setCloudTranscriptionModel}
-                localTranscriptionProvider={localTranscriptionProvider}
-                setLocalTranscriptionProvider={setLocalTranscriptionProvider}
-                whisperModel={whisperModel}
-                setWhisperModel={setWhisperModel}
-                parakeetModel={parakeetModel}
-                setParakeetModel={setParakeetModel}
-                cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
-                setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
-                transcriptionMode={transcriptionMode}
-                setTranscriptionMode={setTranscriptionMode}
-                remoteTranscriptionUrl={remoteTranscriptionUrl}
-                setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
-                showTranscriptionPreview={showTranscriptionPreview}
-                setShowTranscriptionPreview={setShowTranscriptionPreview}
-                toast={toast}
-              />
-            )}
-            renderNoteRecording={() => <MeetingTranscriptionPanel />}
-          />
-        );
-
       case "llms":
-        return (
-          <LlmsTabs
-            initialTab={initialSubTab as LlmTab | undefined}
-            renderChatIntelligence={() => <ChatAgentSettings />}
-            renderDictationCleanup={() => (
-              <div className="space-y-6">
-                <AiModelsSection
-                  useCleanupModel={useCleanupModel}
-                  setUseCleanupModel={(value) => {
-                    updateCleanupSettings({ useCleanupModel: value });
-                  }}
-                  toast={toast}
-                />
-
-                <div className="border-t border-border/40 pt-6">
-                  <SectionHeader
-                    title={t("settingsPage.prompts.title")}
-                    description={t("settingsPage.prompts.description")}
-                  />
-                  <PromptStudio />
-                </div>
-              </div>
-            )}
-            renderDictationAgent={() => <DictationAgentSettings />}
-            renderNoteFormatting={() => <InferenceConfigEditor scope="noteFormatting" />}
-          />
-        );
+        return null;
 
       case "privacyData":
         return (
@@ -3627,6 +3565,68 @@ EOF`,
         onOk={() => {}}
       />
 
+      <div className={activeSection !== "speechToText" ? "hidden" : undefined}>
+        <SpeechToTextTabs
+          initialTab={initialSubTab as SpeechTab | undefined}
+          renderDictation={() => (
+            <TranscriptionSection
+              isSignedIn={isSignedIn ?? false}
+              startOnboarding={startOnboarding}
+              cloudTranscriptionMode={cloudTranscriptionMode}
+              setCloudTranscriptionMode={setCloudTranscriptionMode}
+              useLocalWhisper={useLocalWhisper}
+              setUseLocalWhisper={setUseLocalWhisper}
+              updateTranscriptionSettings={updateTranscriptionSettings}
+              cloudTranscriptionProvider={cloudTranscriptionProvider}
+              setCloudTranscriptionProvider={setCloudTranscriptionProvider}
+              cloudTranscriptionModel={cloudTranscriptionModel}
+              setCloudTranscriptionModel={setCloudTranscriptionModel}
+              localTranscriptionProvider={localTranscriptionProvider}
+              setLocalTranscriptionProvider={setLocalTranscriptionProvider}
+              whisperModel={whisperModel}
+              setWhisperModel={setWhisperModel}
+              parakeetModel={parakeetModel}
+              setParakeetModel={setParakeetModel}
+              cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
+              setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+              transcriptionMode={transcriptionMode}
+              setTranscriptionMode={setTranscriptionMode}
+              remoteTranscriptionUrl={remoteTranscriptionUrl}
+              setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+              showTranscriptionPreview={showTranscriptionPreview}
+              setShowTranscriptionPreview={setShowTranscriptionPreview}
+              toast={toast}
+            />
+          )}
+          renderNoteRecording={() => <MeetingTranscriptionPanel />}
+        />
+      </div>
+      <div className={activeSection !== "llms" ? "hidden" : undefined}>
+        <LlmsTabs
+          initialTab={initialSubTab as LlmTab | undefined}
+          renderChatIntelligence={() => <ChatAgentSettings />}
+          renderDictationCleanup={() => (
+            <div className="space-y-6">
+              <AiModelsSection
+                useCleanupModel={useCleanupModel}
+                setUseCleanupModel={(value) => {
+                  updateCleanupSettings({ useCleanupModel: value });
+                }}
+                toast={toast}
+              />
+              <div className="border-t border-border/40 pt-6">
+                <SectionHeader
+                  title={t("settingsPage.prompts.title")}
+                  description={t("settingsPage.prompts.description")}
+                />
+                <PromptStudio />
+              </div>
+            </div>
+          )}
+          renderDictationAgent={() => <DictationAgentSettings />}
+          renderNoteFormatting={() => <InferenceConfigEditor scope="noteFormatting" />}
+        />
+      </div>
       {renderSectionContent()}
     </>
   );
