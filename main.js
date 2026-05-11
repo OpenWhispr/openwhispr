@@ -6,7 +6,7 @@ if (
   !process.argv.includes("--ozone-platform=x11")
 ) {
   const desktop = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase();
-  if (desktop.includes("kde") || /gnome|ubuntu|unity/.test(desktop)) {
+  if (desktop.includes("kde") || /gnome|ubuntu|unity|cosmic/.test(desktop)) {
     const { spawn } = require("child_process");
     spawn(process.execPath, [...process.argv.slice(1), "--ozone-platform=x11"], {
       stdio: "inherit",
