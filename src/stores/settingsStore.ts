@@ -5,6 +5,7 @@ import { hasStoredByokKey } from "../utils/byokDetection";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import logger from "../utils/logger";
+import whisperVadConstants from "../constants/whisperVad.json";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
@@ -145,40 +146,18 @@ const NUMERIC_SETTINGS = new Set([
   "whisperVadSamplesOverlap",
 ]);
 
-const WHISPER_VAD_DEFAULTS = {
-  threshold: 0.5,
-  minSpeechDurationMs: 250,
-  minSilenceDurationMs: 200,
-  maxSpeechDurationS: 30,
-  speechPadMs: 100,
-  samplesOverlap: 0.5,
-} as const;
+const WHISPER_VAD_DEFAULTS = whisperVadConstants.DEFAULTS;
+const WHISPER_VAD_LIMITS = whisperVadConstants.LIMITS;
 
-const clampVadValue = (key: keyof typeof WHISPER_VAD_DEFAULTS, raw: unknown): number => {
-  const n = Number(raw);
+type WhisperVadKey = keyof typeof WHISPER_VAD_DEFAULTS;
+
+const clampVadValue = (key: WhisperVadKey, raw: unknown): number => {
   const fallback = WHISPER_VAD_DEFAULTS[key];
+  const n = raw === null || raw === undefined || raw === "" ? fallback : Number(raw);
   if (!Number.isFinite(n)) return fallback;
-
-  const ranges: Record<keyof typeof WHISPER_VAD_DEFAULTS, [number, number]> = {
-    threshold: [0.1, 0.95],
-    minSpeechDurationMs: [50, 2000],
-    minSilenceDurationMs: [50, 2000],
-    maxSpeechDurationS: [5, 120],
-    speechPadMs: [0, 1000],
-    samplesOverlap: [0, 0.95],
-  };
-
-  const [min, max] = ranges[key];
+  const { min, max, round } = WHISPER_VAD_LIMITS[key];
   const clamped = Math.min(max, Math.max(min, n));
-  if (
-    key === "minSpeechDurationMs" ||
-    key === "minSilenceDurationMs" ||
-    key === "maxSpeechDurationS" ||
-    key === "speechPadMs"
-  ) {
-    return Math.round(clamped);
-  }
-  return clamped;
+  return round ? Math.round(clamped) : clamped;
 };
 
 const LANGUAGE_MIGRATIONS: Record<string, string> = { zh: "zh-CN" };
@@ -1247,21 +1226,21 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) localStorage.setItem("dictationSileroEnabled", String(value));
     useSettingsStore.setState({ dictationSileroEnabled: value });
     if (isBrowser) {
-      window.electronAPI?.setDictationSileroEnabled?.(value);
+      window.electronAPI?.setWhisperVadConfig?.({ dictationSileroEnabled: value });
     }
   },
   setNoteRecordingSileroEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("noteRecordingSileroEnabled", String(value));
     useSettingsStore.setState({ noteRecordingSileroEnabled: value });
     if (isBrowser) {
-      window.electronAPI?.setNoteRecordingSileroEnabled?.(value);
+      window.electronAPI?.setWhisperVadConfig?.({ noteRecordingSileroEnabled: value });
     }
   },
   setMeetingSileroEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("meetingSileroEnabled", String(value));
     useSettingsStore.setState({ meetingSileroEnabled: value });
     if (isBrowser) {
-      window.electronAPI?.setMeetingSileroEnabled?.(value);
+      window.electronAPI?.setWhisperVadConfig?.({ meetingSileroEnabled: value });
     }
   },
   setWhisperVadThreshold: (value: number) => {
@@ -1855,7 +1834,8 @@ export async function initializeSettings(): Promise<void> {
     } else if (NUMERIC_SETTINGS.has(key)) {
       const parsed = Number(newValue);
       if (Number.isNaN(parsed)) {
-        value = key === "audioRetentionDays" ? 30 : (state as unknown as Record<string, unknown>)[key];
+        value =
+          key === "audioRetentionDays" ? 30 : (state as unknown as Record<string, unknown>)[key];
       } else {
         value = key === "audioRetentionDays" ? Math.round(parsed) : parsed;
       }

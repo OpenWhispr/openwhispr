@@ -344,44 +344,31 @@ class IPCHandlers {
   }
 
   _getWhisperVadSettings() {
-    const cfg = sanitizeWhisperVadConfig(this.whisperVadSettings || DEFAULT_WHISPER_VAD_CONFIG);
+    const current = this.whisperVadSettings || {};
     return {
-      dictationSileroEnabled: this.whisperVadSettings?.dictationSileroEnabled !== false,
-      noteRecordingSileroEnabled: this.whisperVadSettings?.noteRecordingSileroEnabled !== false,
-      meetingSileroEnabled: this.whisperVadSettings?.meetingSileroEnabled !== false,
-      ...cfg,
+      dictationSileroEnabled: current.dictationSileroEnabled !== false,
+      noteRecordingSileroEnabled: current.noteRecordingSileroEnabled !== false,
+      meetingSileroEnabled: current.meetingSileroEnabled !== false,
+      ...sanitizeWhisperVadConfig(current),
     };
   }
 
   _setWhisperVadSettings(update = {}) {
-    const previous = this._getWhisperVadSettings();
-    const merged = {
-      ...previous,
-      ...(update || {}),
-    };
-
-    this.whisperVadSettings = {
-      dictationSileroEnabled: merged.dictationSileroEnabled !== false,
-      noteRecordingSileroEnabled: merged.noteRecordingSileroEnabled !== false,
-      meetingSileroEnabled: merged.meetingSileroEnabled !== false,
-      ...sanitizeWhisperVadConfig(merged),
-    };
-
+    this.whisperVadSettings = { ...this._getWhisperVadSettings(), ...update };
     return this._getWhisperVadSettings();
   }
 
   _resolveWhisperVadOptions(context) {
     const settings = this._getWhisperVadSettings();
+    const {
+      dictationSileroEnabled,
+      noteRecordingSileroEnabled,
+      meetingSileroEnabled,
+      ...vadConfig
+    } = settings;
     return {
       vadEnabled: resolveContextSileroEnabled(settings, context),
-      vadConfig: {
-        threshold: settings.threshold,
-        minSpeechDurationMs: settings.minSpeechDurationMs,
-        minSilenceDurationMs: settings.minSilenceDurationMs,
-        maxSpeechDurationS: settings.maxSpeechDurationS,
-        speechPadMs: settings.speechPadMs,
-        samplesOverlap: settings.samplesOverlap,
-      },
+      vadConfig,
     };
   }
 
@@ -7202,39 +7189,6 @@ class IPCHandlers {
     ipcMain.handle("whisper-vad-set-config", async (_event, payload) => {
       try {
         const config = this._setWhisperVadSettings(payload || {});
-        return { success: true, config };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle("whisper-vad-set-dictation-enabled", async (_event, payload) => {
-      try {
-        const config = this._setWhisperVadSettings({
-          dictationSileroEnabled: payload?.enabled !== false,
-        });
-        return { success: true, config };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle("whisper-vad-set-note-recording-enabled", async (_event, payload) => {
-      try {
-        const config = this._setWhisperVadSettings({
-          noteRecordingSileroEnabled: payload?.enabled !== false,
-        });
-        return { success: true, config };
-      } catch (error) {
-        return { success: false, error: error.message };
-      }
-    });
-
-    ipcMain.handle("whisper-vad-set-meeting-enabled", async (_event, payload) => {
-      try {
-        const config = this._setWhisperVadSettings({
-          meetingSileroEnabled: payload?.enabled !== false,
-        });
         return { success: true, config };
       } catch (error) {
         return { success: false, error: error.message };

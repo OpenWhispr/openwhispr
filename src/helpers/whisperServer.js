@@ -10,10 +10,7 @@ const { killProcess } = require("../utils/process");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
 const sidecarPidFile = require("./sidecarPidFile");
-const {
-  sanitizeWhisperVadConfig,
-  DEFAULT_WHISPER_VAD_CONFIG,
-} = require("./whisperVadConfig");
+const { sanitizeWhisperVadConfig, DEFAULT_WHISPER_VAD_CONFIG } = require("./whisperVadConfig");
 
 const PORT_RANGE_START = 8178;
 const PORT_RANGE_END = 8199;
@@ -21,11 +18,14 @@ const STARTUP_TIMEOUT_MS = 30000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 
+function isVadActive(options = {}) {
+  return options.vadEnabled === true && !!options.vadModelPath;
+}
+
 function getVadSignature(options = {}) {
-  const vadEnabled = options.vadEnabled === true;
-  if (!vadEnabled) return "vad:off";
+  if (!isVadActive(options)) return "vad:off";
   const vadConfig = sanitizeWhisperVadConfig(options.vadConfig || DEFAULT_WHISPER_VAD_CONFIG);
-  return `vad:on:${JSON.stringify(vadConfig)}`;
+  return `vad:on:${options.vadModelPath}:${JSON.stringify(vadConfig)}`;
 }
 
 function buildWhisperServerArgs({
@@ -34,6 +34,7 @@ function buildWhisperServerArgs({
   language,
   threads,
   vadEnabled = false,
+  vadModelPath = null,
   vadConfig,
 }) {
   const args = ["--model", modelPath, "--host", "127.0.0.1", "--port", String(port)];
@@ -44,9 +45,12 @@ function buildWhisperServerArgs({
   // explicitly pass "auto" to enable language auto-detection
   args.push("--language", language || "auto");
 
-  if (vadEnabled) {
+  if (isVadActive({ vadEnabled, vadModelPath })) {
     const cfg = sanitizeWhisperVadConfig(vadConfig || DEFAULT_WHISPER_VAD_CONFIG);
     args.push(
+      "--vad",
+      "--vad-model",
+      vadModelPath,
       "--vad-threshold",
       String(cfg.threshold),
       "--vad-min-speech-duration-ms",
@@ -349,6 +353,7 @@ class WhisperServerManager extends EventEmitter {
       language: options.language,
       threads: options.threads,
       vadEnabled: options.vadEnabled === true,
+      vadModelPath: options.vadModelPath || null,
       vadConfig: options.vadConfig,
     });
 

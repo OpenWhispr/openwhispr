@@ -1540,8 +1540,8 @@
       "transcriptionPreview": "实时转录预览",
       "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理",
       "vad": {
-        "title": "Silero 语音活动检测",
-        "description": "控制本地 Whisper 转录在何时开始与结束语音片段",
+        "title": "语音活动检测",
+        "description": "配置 Silero VAD 如何为本地 Whisper 转录检测并切分语音",
         "toggles": {
           "dictation": {
             "title": "听写使用 Silero VAD",
@@ -1556,13 +1556,31 @@
             "description": "为本地会议转录启用语音活动检测"
           }
         },
-        "params": {
-          "threshold": "--vad-threshold",
-          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
-          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
-          "maxSpeechDurationS": "--vad-max-speech-duration-s",
-          "speechPadMs": "--vad-speech-pad-ms",
-          "samplesOverlap": "--vad-samples-overlap"
+        "fields": {
+          "threshold": {
+            "label": "VAD 阈值",
+            "info": "高于该概率的帧会被判定为语音。"
+          },
+          "minSpeechDurationMs": {
+            "label": "最小语音时长 (毫秒)",
+            "info": "短于此时长的语音片段会作为噪声或误判被丢弃。"
+          },
+          "minSilenceDurationMs": {
+            "label": "最小静音时长 (毫秒)",
+            "info": "静音必须达到该时长才会结束一个语音片段。更短的停顿会保留在片段内。"
+          },
+          "maxSpeechDurationS": {
+            "label": "最大语音时长 (秒)",
+            "info": "更长的片段会在静音处自动拆分，以便保持可控大小。"
+          },
+          "speechPadMs": {
+            "label": "语音填充 (毫秒)",
+            "info": "在每个语音片段前后添加的填充，避免切断词语边缘。"
+          },
+          "samplesOverlap": {
+            "label": "样本重叠 (秒)",
+            "info": "将每个片段延伸到下一个片段的音频量，避免拼接时出现突兀的截断。"
+          }
         }
       }
     },

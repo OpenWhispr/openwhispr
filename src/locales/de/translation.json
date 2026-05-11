@@ -1545,29 +1545,47 @@
       "transcriptionPreview": "Live-Transkriptionsvorschau",
       "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen",
       "vad": {
-        "title": "Silero Sprachaktivitaetserkennung",
-        "description": "Steuert, wann die lokale Whisper-Transkription Sprachsegmente startet und beendet",
+        "title": "Sprachaktivitätserkennung",
+        "description": "Konfiguriere, wie Silero VAD Sprache für die lokale Whisper-Transkription erkennt und segmentiert",
         "toggles": {
           "dictation": {
-            "title": "Silero VAD fuer Diktat",
-            "description": "Sprachaktivitaetserkennung fuer lokales Diktat aktivieren"
+            "title": "Silero VAD für Diktat",
+            "description": "Sprachaktivitätserkennung für lokales Diktat aktivieren"
           },
           "noteRecording": {
-            "title": "Silero VAD fuer Notizaufzeichnung",
-            "description": "Sprachaktivitaetserkennung fuer lokale Notizaufzeichnung aktivieren"
+            "title": "Silero VAD für Notizaufnahme",
+            "description": "Sprachaktivitätserkennung für lokale Notizaufnahme aktivieren"
           },
           "meeting": {
-            "title": "Silero VAD fuer Meetings",
-            "description": "Sprachaktivitaetserkennung fuer lokale Meeting-Transkription aktivieren"
+            "title": "Silero VAD für Meetings",
+            "description": "Sprachaktivitätserkennung für lokale Meeting-Transkription aktivieren"
           }
         },
-        "params": {
-          "threshold": "--vad-threshold",
-          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
-          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
-          "maxSpeechDurationS": "--vad-max-speech-duration-s",
-          "speechPadMs": "--vad-speech-pad-ms",
-          "samplesOverlap": "--vad-samples-overlap"
+        "fields": {
+          "threshold": {
+            "label": "VAD-Schwellenwert",
+            "info": "Wahrscheinlichkeit, ab der ein Frame als Sprache eingestuft wird."
+          },
+          "minSpeechDurationMs": {
+            "label": "Minimale Sprachdauer (ms)",
+            "info": "Kürzere Sprachsegmente werden als Rauschen oder Falscherkennung verworfen."
+          },
+          "minSilenceDurationMs": {
+            "label": "Minimale Pausendauer (ms)",
+            "info": "Eine Pause muss mindestens so lang sein, um ein Sprachsegment zu beenden. Kürzere Pausen bleiben Teil des Segments."
+          },
+          "maxSpeechDurationS": {
+            "label": "Maximale Sprachdauer (s)",
+            "info": "Längere Segmente werden an Pausen aufgeteilt, damit einzelne Stücke handhabbar bleiben."
+          },
+          "speechPadMs": {
+            "label": "Sprach-Polsterung (ms)",
+            "info": "Zusätzliche Polsterung vor und nach jedem Segment, damit Wortgrenzen nicht abgeschnitten werden."
+          },
+          "samplesOverlap": {
+            "label": "Sample-Überlappung (s)",
+            "info": "Audio, das von einem Segment ins nächste übertragen wird, um abrupte Schnitte beim Zusammenfügen zu vermeiden."
+          }
         }
       }
     },

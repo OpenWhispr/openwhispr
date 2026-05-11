@@ -1540,8 +1540,8 @@
       "transcriptionPreview": "即時轉錄預覽",
       "transcriptionPreviewDescription": "在浮動視窗中顯示轉錄結果，再進行文字整理",
       "vad": {
-        "title": "Silero 語音活動偵測",
-        "description": "控制本機 Whisper 轉錄何時開始與結束語音片段",
+        "title": "語音活動偵測",
+        "description": "設定 Silero VAD 如何為本機 Whisper 轉錄偵測並切分語音",
         "toggles": {
           "dictation": {
             "title": "聽寫使用 Silero VAD",
@@ -1556,13 +1556,31 @@
             "description": "為本機會議轉錄啟用語音活動偵測"
           }
         },
-        "params": {
-          "threshold": "--vad-threshold",
-          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
-          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
-          "maxSpeechDurationS": "--vad-max-speech-duration-s",
-          "speechPadMs": "--vad-speech-pad-ms",
-          "samplesOverlap": "--vad-samples-overlap"
+        "fields": {
+          "threshold": {
+            "label": "VAD 閾值",
+            "info": "高於此機率的音框會被判定為語音。"
+          },
+          "minSpeechDurationMs": {
+            "label": "最小語音時長 (毫秒)",
+            "info": "短於此時長的語音片段會作為雜訊或誤判被丟棄。"
+          },
+          "minSilenceDurationMs": {
+            "label": "最小靜音時長 (毫秒)",
+            "info": "靜音需達到此時長才會結束一個語音片段。較短的停頓會保留在片段內。"
+          },
+          "maxSpeechDurationS": {
+            "label": "最大語音時長 (秒)",
+            "info": "較長的片段會在靜音處自動切分，以便保持可控大小。"
+          },
+          "speechPadMs": {
+            "label": "語音填補 (毫秒)",
+            "info": "在每個語音片段前後加入的填補量，避免切到字詞邊緣。"
+          },
+          "samplesOverlap": {
+            "label": "樣本重疊 (秒)",
+            "info": "將每個片段延伸到下一個片段的音訊量，避免拼接時出現突兀截斷。"
+          }
         }
       }
     },

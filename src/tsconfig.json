@@ -16,9 +16,7 @@
     "isolatedModules": true,
     "paths": {
       "@/*": ["./*"]
-    },
-    "baseUrl": ".",
-    "ignoreDeprecations": "6.0"
+    }
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
   "exclude": ["node_modules", "dist"]

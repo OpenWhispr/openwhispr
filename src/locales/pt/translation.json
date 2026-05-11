@@ -1517,8 +1517,8 @@
       "transcriptionPreview": "Pré-visualização ao vivo",
       "transcriptionPreviewDescription": "Mostrar transcrição em janela flutuante antes da limpeza",
       "vad": {
-        "title": "Detecção de atividade de voz Silero",
-        "description": "Controla quando a transcrição local do Whisper inicia e encerra segmentos de fala",
+        "title": "Detecção de atividade de voz",
+        "description": "Configure como o Silero VAD detecta e segmenta a fala na transcrição local do Whisper",
         "toggles": {
           "dictation": {
             "title": "Silero VAD para ditado",
@@ -1533,13 +1533,31 @@
             "description": "Ativar detecção de atividade de voz para transcrição local de reuniões"
           }
         },
-        "params": {
-          "threshold": "--vad-threshold",
-          "minSpeechDurationMs": "--vad-min-speech-duration-ms",
-          "minSilenceDurationMs": "--vad-min-silence-duration-ms",
-          "maxSpeechDurationS": "--vad-max-speech-duration-s",
-          "speechPadMs": "--vad-speech-pad-ms",
-          "samplesOverlap": "--vad-samples-overlap"
+        "fields": {
+          "threshold": {
+            "label": "Limiar de VAD",
+            "info": "Probabilidade acima da qual um quadro é classificado como fala."
+          },
+          "minSpeechDurationMs": {
+            "label": "Duração mínima da fala (ms)",
+            "info": "Segmentos de fala mais curtos são descartados como ruído ou falsos positivos."
+          },
+          "minSilenceDurationMs": {
+            "label": "Duração mínima de silêncio (ms)",
+            "info": "O silêncio precisa durar pelo menos esse tempo para encerrar um segmento. Pausas mais curtas permanecem dentro do segmento."
+          },
+          "maxSpeechDurationS": {
+            "label": "Duração máxima da fala (s)",
+            "info": "Segmentos maiores são divididos em pontos de silêncio para manter pedaços gerenciáveis."
+          },
+          "speechPadMs": {
+            "label": "Preenchimento da fala (ms)",
+            "info": "Preenchimento antes e depois de cada segmento para não cortar as bordas das palavras."
+          },
+          "samplesOverlap": {
+            "label": "Sobreposição de amostras (s)",
+            "info": "Áudio estendido de um segmento para o próximo, evitando cortes bruscos na concatenação."
+          }
         }
       }
     },

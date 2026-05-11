@@ -1611,15 +1611,6 @@ declare global {
         speechPadMs?: number;
         samplesOverlap?: number;
       }) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
-      setDictationSileroEnabled?: (
-        enabled: boolean
-      ) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
-      setNoteRecordingSileroEnabled?: (
-        enabled: boolean
-      ) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
-      setMeetingSileroEnabled?: (
-        enabled: boolean
-      ) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
       onMeetingDetected?: (callback: (data: any) => void) => () => void;
       onMeetingDetectedStartRecording?: (callback: (data: any) => void) => () => void;
       onMeetingNotificationData?: (callback: (data: any) => void) => () => void;

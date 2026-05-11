@@ -30,7 +30,6 @@ import {
   Copy,
   Trash2,
   Info,
-  Building2,
   MessageSquare,
   FileAudio,
   Wand2,
@@ -448,13 +447,7 @@ function useSubTab<T extends string>(storageKey: string, options: readonly T[], 
   return [safeTab, setTab] as const;
 }
 
-function VADLabelWithInfo({
-  label,
-  description,
-}: {
-  label: string;
-  description: string;
-}) {
+function VADLabelWithInfo({ label, description }: { label: string; description: string }) {
   return (
     <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
       <span>{label}</span>
@@ -2222,13 +2215,8 @@ export default function SettingsPage({
             {/* Voice Activity Detection */}
             <div>
               <SectionHeader
-                title={t("settingsPage.general.voiceActivityDetection.title", {
-                  defaultValue: "Voice Activity Detection",
-                })}
-                description={t("settingsPage.general.voiceActivityDetection.description", {
-                  defaultValue:
-                    "Configure how Silero VAD detects and segments speech for local Whisper transcription",
-                })}
+                title={t("settingsPage.transcription.vad.title")}
+                description={t("settingsPage.transcription.vad.description")}
               />
               <SettingsPanel>
                 <SettingsPanelRow>
@@ -2242,7 +2230,9 @@ export default function SettingsPage({
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.transcription.vad.toggles.noteRecording.title")}
-                    description={t("settingsPage.transcription.vad.toggles.noteRecording.description")}
+                    description={t(
+                      "settingsPage.transcription.vad.toggles.noteRecording.description"
+                    )}
                   >
                     <Toggle
                       checked={noteRecordingSileroEnabled}
@@ -2262,16 +2252,8 @@ export default function SettingsPage({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
                     <div className="space-y-1.5">
                       <VADLabelWithInfo
-                        label={t("settingsPage.general.voiceActivityDetection.fields.threshold.label", {
-                          defaultValue: "VAD Threshold",
-                        })}
-                        description={t(
-                          "settingsPage.general.voiceActivityDetection.fields.threshold.info",
-                          {
-                            defaultValue:
-                              "Threshold probability for speech detection. A probability for a speech segment/frame above this threshold will be considered as speech.",
-                          }
-                        )}
+                        label={t("settingsPage.transcription.vad.fields.threshold.label")}
+                        description={t("settingsPage.transcription.vad.fields.threshold.info")}
                       />
                       <Input
                         type="number"
@@ -2284,16 +2266,9 @@ export default function SettingsPage({
                     </div>
                     <div className="space-y-1.5">
                       <VADLabelWithInfo
-                        label={t(
-                          "settingsPage.general.voiceActivityDetection.fields.minSpeechDurationMs.label",
-                          { defaultValue: "Minimum Speach Duration (milli-seconds)" }
-                        )}
+                        label={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.label")}
                         description={t(
-                          "settingsPage.general.voiceActivityDetection.fields.minSpeechDurationMs.info",
-                          {
-                            defaultValue:
-                              "Minimum speech duration in milliseconds. Speech segments shorter than this value will be discarded to filter out brief noise or false positives.",
-                          }
+                          "settingsPage.transcription.vad.fields.minSpeechDurationMs.info"
                         )}
                       />
                       <Input
@@ -2308,15 +2283,10 @@ export default function SettingsPage({
                     <div className="space-y-1.5">
                       <VADLabelWithInfo
                         label={t(
-                          "settingsPage.general.voiceActivityDetection.fields.minSilenceDurationMs.label",
-                          { defaultValue: "Minimum Silence Duration (milli-secons)" }
+                          "settingsPage.transcription.vad.fields.minSilenceDurationMs.label"
                         )}
                         description={t(
-                          "settingsPage.general.voiceActivityDetection.fields.minSilenceDurationMs.info",
-                          {
-                            defaultValue:
-                              "Minimum silence duration in milliseconds. Silence periods must be at least this long to end a speech segment. Shorter silence periods will be ignored and included as part of the speech.",
-                          }
+                          "settingsPage.transcription.vad.fields.minSilenceDurationMs.info"
                         )}
                       />
                       <Input
@@ -2325,23 +2295,14 @@ export default function SettingsPage({
                         min="50"
                         max="2000"
                         value={whisperVadMinSilenceDurationMs}
-                        onChange={(e) =>
-                          setWhisperVadMinSilenceDurationMs(Number(e.target.value))
-                        }
+                        onChange={(e) => setWhisperVadMinSilenceDurationMs(Number(e.target.value))}
                       />
                     </div>
                     <div className="space-y-1.5">
                       <VADLabelWithInfo
-                        label={t(
-                          "settingsPage.general.voiceActivityDetection.fields.maxSpeechDurationS.label",
-                          { defaultValue: "Maximum Speech Duration (seconds)" }
-                        )}
+                        label={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.label")}
                         description={t(
-                          "settingsPage.general.voiceActivityDetection.fields.maxSpeechDurationS.info",
-                          {
-                            defaultValue:
-                              "Maximum speech duration in seconds. Speech segments longer than this will be automatically split into multiple segments at silence points exceeding 98ms to prevent excessively long segments.",
-                          }
+                          "settingsPage.transcription.vad.fields.maxSpeechDurationS.info"
                         )}
                       />
                       <Input
@@ -2355,17 +2316,8 @@ export default function SettingsPage({
                     </div>
                     <div className="space-y-1.5">
                       <VADLabelWithInfo
-                        label={t(
-                          "settingsPage.general.voiceActivityDetection.fields.speechPadMs.label",
-                          { defaultValue: "Speech Padding (milli-seconds)" }
-                        )}
-                        description={t(
-                          "settingsPage.general.voiceActivityDetection.fields.speechPadMs.info",
-                          {
-                            defaultValue:
-                              "Speech padding in milliseconds. Adds this amount of padding before and after each detected speech segment to avoid cutting off speech edges.",
-                          }
-                        )}
+                        label={t("settingsPage.transcription.vad.fields.speechPadMs.label")}
+                        description={t("settingsPage.transcription.vad.fields.speechPadMs.info")}
                       />
                       <Input
                         type="number"
@@ -2378,17 +2330,8 @@ export default function SettingsPage({
                     </div>
                     <div className="space-y-1.5">
                       <VADLabelWithInfo
-                        label={t(
-                          "settingsPage.general.voiceActivityDetection.fields.samplesOverlap.label",
-                          { defaultValue: "Samples Overlap (seconds)" }
-                        )}
-                        description={t(
-                          "settingsPage.general.voiceActivityDetection.fields.samplesOverlap.info",
-                          {
-                            defaultValue:
-                              "Amount of audio to extend from each speech segment into the next one, in seconds (e.g., 0.10 = 100ms overlap). This ensures speech isn't cut off abruptly between segments when they're concatenated together.",
-                          }
-                        )}
+                        label={t("settingsPage.transcription.vad.fields.samplesOverlap.label")}
+                        description={t("settingsPage.transcription.vad.fields.samplesOverlap.info")}
                       />
                       <Input
                         type="number"
