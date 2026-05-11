@@ -11,7 +11,6 @@ export interface NoteActionState {
   actionName: string | null;
 }
 
-/** Event emitted when a background action completes or fails. */
 export interface ActionCompletionEvent {
   noteId: number;
   type: "success" | "error";
@@ -19,34 +18,15 @@ export interface ActionCompletionEvent {
 }
 
 interface ActionProcessingStoreState {
-  /** Processing state keyed by note ID. */
   noteStates: Record<number, NoteActionState>;
-  /**
-   * Completion events for background actions (actions that finished while the
-   * user was viewing a different note or a different view entirely).
-   * Components consume and clear these to show toast notifications.
-   */
   completionEvents: ActionCompletionEvent[];
 }
 
-// ---------- internal mutable state (not in Zustand) ----------
-
-/** Soft-cancel flags per note — mutable refs outside React. */
 const cancelledFlags = new Map<number, boolean>();
-
-/** Mutex to prevent concurrent runs on the same note. */
 const processingFlags = new Map<number, boolean>();
-
-/** Success-display timers per note. */
 const successTimers = new Map<number, NodeJS.Timeout>();
 
-// ---------- helpers ----------
-
 const IDLE_STATE: NoteActionState = { status: "idle", actionName: null };
-
-function getNoteState(state: ActionProcessingStoreState, noteId: number): NoteActionState {
-  return state.noteStates[noteId] ?? IDLE_STATE;
-}
 
 function setNoteState(noteId: number, patch: Partial<NoteActionState>) {
   const { noteStates } = useActionProcessingStore.getState();
@@ -70,14 +50,10 @@ function pushCompletionEvent(event: ActionCompletionEvent) {
   });
 }
 
-// ---------- store ----------
-
 export const useActionProcessingStore = create<ActionProcessingStoreState>()(() => ({
   noteStates: {},
   completionEvents: [],
 }));
-
-// ---------- system prompts ----------
 
 const BASE_SYSTEM_PROMPT = `You are a note enhancement assistant. The user will provide raw notes — possibly voice-transcribed, rough, or unstructured. Your job is to clean them up according to the instructions below while preserving all original meaning and information. Output clean markdown.
 
@@ -110,8 +86,6 @@ CONTENT RULES:
 
 Instructions: `;
 
-// ---------- public API ----------
-
 export interface RunActionOptions {
   isCloudMode: boolean;
   modelId: string;
@@ -131,7 +105,6 @@ export function runBackgroundAction(
   options: RunActionOptions,
   errorLabel: string
 ): void {
-  // Guard concurrent runs on same note
   if (processingFlags.get(noteId)) return;
 
   const modelId = getEffectiveCleanupModel() || options.modelId;
@@ -207,7 +180,6 @@ export function cancelAction(noteId: number): void {
   clearNoteState(noteId);
 }
 
-/** Consume and clear all pending completion events. */
 export function consumeCompletionEvents(): ActionCompletionEvent[] {
   const { completionEvents } = useActionProcessingStore.getState();
   if (completionEvents.length === 0) return [];
@@ -215,7 +187,6 @@ export function consumeCompletionEvents(): ActionCompletionEvent[] {
   return completionEvents;
 }
 
-/** Selector: get the processing state for a specific note. */
 export function selectNoteActionState(
   state: ActionProcessingStoreState,
   noteId: number | null

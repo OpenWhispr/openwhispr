@@ -16,7 +16,6 @@ export default function BackgroundActionToastListener() {
   const { t } = useTranslation();
   const { toast } = useToast();
 
-  // Subscribe to the completionEvents array length — when it changes, consume events.
   const eventCount = useActionProcessingStore((s) => s.completionEvents.length);
 
   useEffect(() => {
