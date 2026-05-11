@@ -6327,7 +6327,8 @@ class IPCHandlers {
             transcriptionUrl += "/audio/transcriptions";
           }
 
-          const isMistral = baseUrl.includes("mistral");
+          let isMistral = false;
+          try { const h = new URL(baseUrl).hostname; isMistral = h.endsWith(".mistral.ai") || h === "mistral.ai"; } catch {}
           const fields = {};
 
           if (diarize && isMistral) {

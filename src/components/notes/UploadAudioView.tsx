@@ -851,7 +851,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 </div>
               ) : (
                 <div className="relative">
-                  {urlInput.includes("youtube.com") || urlInput.includes("youtu.be") ? (
+                  {(() => { try { const h = new URL(urlInput).hostname; return h === "youtu.be" || h.endsWith(".youtube.com") || h === "youtube.com"; } catch { return false; } })() ? (
                     <svg viewBox="0 0 28 20" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[18px] h-[13px] z-10 pointer-events-none">
                       <rect width="28" height="20" rx="4" fill="#FF0000" />
                       <polygon points="11,4 11,16 21,10" fill="white" />

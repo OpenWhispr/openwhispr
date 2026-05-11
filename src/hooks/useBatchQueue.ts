@@ -176,9 +176,13 @@ export function useBatchQueue() {
                     : transcribeOpts.whisperModel,
               });
             } else {
-              const byokUseDiarize = diarizationOpts.enabled &&
-                (transcribeOpts.cloudTranscriptionBaseUrl?.includes("openai.com") ||
-                 transcribeOpts.cloudTranscriptionBaseUrl?.includes("mistral"));
+              const byokUseDiarize = diarizationOpts.enabled && (() => {
+                try {
+                  const h = new URL(transcribeOpts.cloudTranscriptionBaseUrl || "").hostname;
+                  return h.endsWith(".openai.com") || h === "openai.com" ||
+                         h.endsWith(".mistral.ai") || h === "mistral.ai";
+                } catch { return false; }
+              })();
               return window.electronAPI.transcribeAudioFileByok!({
                 filePath,
                 apiKey: transcribeOpts.getActiveApiKey(),
