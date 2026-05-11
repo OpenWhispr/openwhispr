@@ -333,15 +333,30 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    const f = e.dataTransfer.files[0];
-    if (!f) return;
-    const ext = f.name.split(".").pop()?.toLowerCase() || "";
-    if (SUPPORTED_EXTENSIONS.includes(ext)) {
-      const filePath = window.electronAPI.getPathForFile(f);
-      if (!filePath) return;
-      setFile({ name: f.name, path: filePath, size: formatFileSize(f.size), sizeBytes: f.size });
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const validFiles: Array<{ name: string; path: string; sizeBytes: number }> = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const ext = f.name.split(".").pop()?.toLowerCase() || "";
+      if (SUPPORTED_EXTENSIONS.includes(ext)) {
+        const filePath = window.electronAPI.getPathForFile(f);
+        if (filePath) {
+          validFiles.push({ name: f.name, path: filePath, sizeBytes: f.size });
+        }
+      }
+    }
+
+    if (validFiles.length === 0) return;
+
+    if (validFiles.length === 1) {
+      const f = validFiles[0];
+      setFile({ name: f.name, path: f.path, size: formatFileSize(f.sizeBytes), sizeBytes: f.sizeBytes });
       setState("selected");
       setError(null);
+    } else {
+      batch.addFiles(validFiles);
     }
   };
 
@@ -534,9 +549,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setError(null);
     setDownloadProgress({ stage: "resolving", percent: 0 });
 
-    const cleanupProgress = window.electronAPI.onUrlDownloadProgress?.((data) => {
-      setDownloadProgress(data);
-    });
+    const cleanupProgress = !batch.isProcessing
+      ? window.electronAPI.onUrlDownloadProgress?.((data) => {
+          setDownloadProgress(data);
+        })
+      : undefined;
 
     try {
       const res = await window.electronAPI.downloadUrlAudio(trimmed);
@@ -626,6 +643,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       parakeetModel,
       isOpenWhisprCloud,
       getActiveApiKey,
+      cloudTranscriptionProvider: cloudTranscriptionProvider as string,
       cloudTranscriptionBaseUrl: cloudTranscriptionBaseUrl || "",
       cloudTranscriptionModel,
       folderId,

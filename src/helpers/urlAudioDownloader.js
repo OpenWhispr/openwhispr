@@ -35,26 +35,26 @@ function isPrivateIp(ip) {
     const lower = ip.toLowerCase();
     if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
     if (lower.startsWith("fe80")) return true;
+    const v4mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (v4mapped) return isPrivateIp(v4mapped[1]);
+    const v4compat = lower.match(/^::(\d+\.\d+\.\d+\.\d+)$/);
+    if (v4compat) return isPrivateIp(v4compat[1]);
     return false;
   }
   return false;
 }
 
-async function validateHostname(hostname) {
-  if (isIP(hostname)) {
-    if (isPrivateIp(hostname)) {
-      const err = new Error("Direct downloads from private/internal addresses are not allowed");
-      err.code = "SSRF_BLOCKED";
-      throw err;
+function ssrfSafeLookup(hostname, options, callback) {
+  dns.lookup(hostname, options, (err, address, family) => {
+    if (err) return callback(err);
+    if (isPrivateIp(address)) {
+      return callback(Object.assign(
+        new Error("Direct downloads from private/internal addresses are not allowed"),
+        { code: "SSRF_BLOCKED" }
+      ));
     }
-    return;
-  }
-  const { address } = await dns.promises.lookup(hostname);
-  if (isPrivateIp(address)) {
-    const err = new Error("Direct downloads from private/internal addresses are not allowed");
-    err.code = "SSRF_BLOCKED";
-    throw err;
-  }
+    callback(null, address, family);
+  });
 }
 
 function detectUrlType(urlString) {
@@ -161,7 +161,6 @@ async function downloadYouTube(url, onProgress, abortSignal) {
   try {
     info = await youtubedl(url, {
       dumpSingleJson: true,
-      noCheckCertificates: true,
       noWarnings: true,
     });
   } catch (e) {
@@ -194,7 +193,6 @@ async function downloadYouTube(url, onProgress, abortSignal) {
       extractAudio: true,
       audioFormat: "best",
       output: `${tempBase}.%(ext)s`,
-      noCheckCertificates: true,
       noWarnings: true,
     });
 
@@ -253,9 +251,13 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
     throw err;
   }
 
-  await validateHostname(parsed.hostname);
+  if (isIP(parsed.hostname) && isPrivateIp(parsed.hostname)) {
+    const err = new Error("Direct downloads from private/internal addresses are not allowed");
+    err.code = "SSRF_BLOCKED";
+    throw err;
+  }
 
-  const headResponse = await httpRequest(parsed, { method: "HEAD" });
+  const headResponse = await httpRequest(parsed, { method: "HEAD", lookup: ssrfSafeLookup });
 
   const contentType = (headResponse.headers["content-type"] || "").toLowerCase();
   const isAudioVideo =
@@ -287,7 +289,7 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
 
   onProgress?.({ stage: "downloading", percent: 0, title });
 
-  const response = await httpRequest(parsed, { method: "GET" });
+  const response = await httpRequest(parsed, { method: "GET", lookup: ssrfSafeLookup });
 
   if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
     response.destroy();
@@ -369,4 +371,4 @@ async function download(url, onProgress, abortSignal) {
   return downloadDirect(url, onProgress, abortSignal);
 }
 
-module.exports = { detectUrlType, extractYouTubeVideoId, isPlaylistUrl, download };
+module.exports = { detectUrlType, extractYouTubeVideoId, isPlaylistUrl, download, isPrivateIp, ssrfSafeLookup };

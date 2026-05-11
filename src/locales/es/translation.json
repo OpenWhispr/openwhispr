@@ -1913,7 +1913,17 @@
       "installCudaRuntime": "Instalar CUDA runtime",
       "cudnn": "cuDNN",
       "cudnnBundled": "cuDNN viene incluido con la app",
-      "gpuDiarizationReady": "La diarización GPU está lista."
+      "gpuDiarizationReady": "La diarización GPU está lista.",
+      "batchCancelled": "Cancelado",
+      "batchTranscriptionFailed": "Error en la transcripción",
+      "batchSaveFailed": "Error al guardar la nota",
+      "batchUnknownError": "Error desconocido",
+      "removeFromQueue": "Eliminar de la cola",
+      "gpuDiarizationTitle": "Diarización de hablantes con GPU",
+      "cudaAccelLibraries": "Bibliotecas de aceleración GPU",
+      "useDistroPackageManager": "Usa el gestor de paquetes de tu distribución.",
+      "gpuInferenceLibrary": "Biblioteca de inferencia GPU",
+      "cudnnReinstallHint": "Si falta, reinstala OpenWhispr desde el paquete más reciente."
     },
     "meeting": {
       "title": "Notas de reunión",

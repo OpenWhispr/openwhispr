@@ -1057,7 +1057,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
+          "features": [
+            "无限会议录制",
+            "代理模式",
+            "与您的数据对话",
+            "优先支持"
+          ],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1860,7 +1865,17 @@
       "installCudaRuntime": "安装 CUDA runtime",
       "cudnn": "cuDNN",
       "cudnnBundled": "cuDNN 已随应用捆绑",
-      "gpuDiarizationReady": "GPU 说话人分离已就绪。"
+      "gpuDiarizationReady": "GPU 说话人分离已就绪。",
+      "batchCancelled": "已取消",
+      "batchTranscriptionFailed": "转录失败",
+      "batchSaveFailed": "保存笔记失败",
+      "batchUnknownError": "未知错误",
+      "removeFromQueue": "从队列中移除",
+      "gpuDiarizationTitle": "GPU 说话人分离",
+      "cudaAccelLibraries": "GPU 加速库",
+      "useDistroPackageManager": "请使用您发行版的包管理器。",
+      "gpuInferenceLibrary": "GPU 推理库",
+      "cudnnReinstallHint": "如果缺失，请从最新安装包重新安装 OpenWhispr。"
     },
     "meeting": {
       "title": "会议笔记",

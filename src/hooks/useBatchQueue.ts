@@ -29,6 +29,7 @@ export interface TranscribeOptions {
   parakeetModel: string;
   isOpenWhisprCloud: boolean;
   getActiveApiKey: () => string;
+  cloudTranscriptionProvider: string;
   cloudTranscriptionBaseUrl: string;
   cloudTranscriptionModel: string;
   folderId: number | null;
@@ -99,7 +100,7 @@ export function useBatchQueue() {
     setQueue((prev) =>
       prev.map((item) =>
         item.status === "queued"
-          ? { ...item, status: "error" as const, error: "Cancelled" }
+          ? { ...item, status: "error" as const, error: "batchCancelled" }
           : item
       )
     );
@@ -120,6 +121,8 @@ export function useBatchQueue() {
       processingRef.current = true;
       cancelledRef.current = false;
       setIsProcessing(true);
+
+      const snapshotApiKey = transcribeOpts.getActiveApiKey();
 
       const processItem = async (item: QueueItem) => {
         setCurrentItemId(item.id);
@@ -176,16 +179,12 @@ export function useBatchQueue() {
                     : transcribeOpts.whisperModel,
               });
             } else {
-              const byokUseDiarize = diarizationOpts.enabled && (() => {
-                try {
-                  const h = new URL(transcribeOpts.cloudTranscriptionBaseUrl || "").hostname;
-                  return h.endsWith(".openai.com") || h === "openai.com" ||
-                         h.endsWith(".mistral.ai") || h === "mistral.ai";
-                } catch { return false; }
-              })();
+              const byokUseDiarize = diarizationOpts.enabled &&
+                !transcribeOpts.useLocalWhisper && !transcribeOpts.isOpenWhisprCloud &&
+                (transcribeOpts.cloudTranscriptionProvider === "openai" || transcribeOpts.cloudTranscriptionProvider === "mistral");
               return window.electronAPI.transcribeAudioFileByok!({
                 filePath,
-                apiKey: transcribeOpts.getActiveApiKey(),
+                apiKey: snapshotApiKey,
                 baseUrl: transcribeOpts.cloudTranscriptionBaseUrl || "",
                 model: transcribeOpts.cloudTranscriptionModel,
                 diarize: byokUseDiarize || undefined,
@@ -210,7 +209,7 @@ export function useBatchQueue() {
           if (!transcriptionResult.success || !transcriptionResult.text) {
             updateItem(item.id, {
               status: "error",
-              error: transcriptionResult.error || "Transcription failed",
+              error: transcriptionResult.error || "batchTranscriptionFailed",
             });
             return;
           }
@@ -249,12 +248,12 @@ export function useBatchQueue() {
               noteId: noteRes.note.id,
             });
           } else {
-            updateItem(item.id, { status: "error", error: "Failed to save note" });
+            updateItem(item.id, { status: "error", error: "batchSaveFailed" });
           }
         } catch (err) {
           updateItem(item.id, {
             status: "error",
-            error: err instanceof Error ? err.message : "Unknown error",
+            error: err instanceof Error ? err.message : "batchUnknownError",
           });
         } finally {
           if (tempPath) {

@@ -1848,7 +1848,17 @@
       "installCudaRuntime": "CUDA runtimeをインストール",
       "cudnn": "cuDNN",
       "cudnnBundled": "cuDNNはアプリに同梱されています",
-      "gpuDiarizationReady": "GPU話者ダイアライゼーションの準備ができました。"
+      "gpuDiarizationReady": "GPU話者ダイアライゼーションの準備ができました。",
+      "batchCancelled": "キャンセル済み",
+      "batchTranscriptionFailed": "文字起こしに失敗しました",
+      "batchSaveFailed": "ノートの保存に失敗しました",
+      "batchUnknownError": "不明なエラー",
+      "removeFromQueue": "キューから削除",
+      "gpuDiarizationTitle": "GPU話者分離",
+      "cudaAccelLibraries": "GPUアクセラレーションライブラリ",
+      "useDistroPackageManager": "ディストリビューションのパッケージマネージャーをご利用ください。",
+      "gpuInferenceLibrary": "GPU推論ライブラリ",
+      "cudnnReinstallHint": "見つからない場合は、最新パッケージからOpenWhisprを再インストールしてください。"
     },
     "meeting": {
       "title": "議事録",

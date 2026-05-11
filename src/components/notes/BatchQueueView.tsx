@@ -109,17 +109,18 @@ export default function BatchQueueView({
               <button
                 onClick={() => onOpenNote(item.noteId!)}
                 className="text-[10px] text-primary/50 hover:text-primary/70"
+                aria-label={t("notes.upload.openNote")}
               >
-                open
+                {t("notes.upload.openNote")}
               </button>
             )}
 
             {item.status === "error" && item.error && (
               <span
                 className="text-[10px] text-destructive/50 truncate max-w-[80px]"
-                title={item.error}
+                title={t(`notes.upload.${item.error}`, { defaultValue: item.error })}
               >
-                {item.error}
+                {t(`notes.upload.${item.error}`, { defaultValue: item.error })}
               </span>
             )}
 
@@ -127,6 +128,7 @@ export default function BatchQueueView({
               <button
                 onClick={() => onRemoveItem(item.id)}
                 className="text-foreground/15 hover:text-foreground/40 transition-colors"
+                aria-label={t("notes.upload.removeFromQueue")}
               >
                 <Trash2 size={10} />
               </button>

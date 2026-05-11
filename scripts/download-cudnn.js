@@ -3,7 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const https = require("https");
-const { execSync } = require("child_process");
+
 const { downloadFile } = require("./lib/download-utils");
 
 const DEST_DIR = path.join(__dirname, "..", "resources", "bin", "cudnn-linux-x64");
@@ -76,9 +76,13 @@ async function main() {
     console.log(`[cudnn] Downloaded (${(stats.size / 1024 / 1024).toFixed(0)}MB)`);
 
     console.log("[cudnn] Extracting shared libraries...");
-    execSync(`tar xf "${tarPath}" --wildcards '*/lib/libcudnn*.so*' -C "${tempDir}"`, {
+    const { spawnSync } = require("child_process");
+    const tarResult = spawnSync("tar", ["xf", tarPath, "--wildcards", "*/lib/libcudnn*.so*", "-C", tempDir], {
       stdio: "pipe",
     });
+    if (tarResult.status !== 0) {
+      throw new Error(`tar extraction failed: ${tarResult.stderr?.toString() || "unknown error"}`);
+    }
 
     const extractedDir = fs.readdirSync(tempDir).find((d) => d.startsWith("cudnn-"));
     if (!extractedDir) throw new Error("Extraction failed: no cudnn directory found");

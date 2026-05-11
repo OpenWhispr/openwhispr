@@ -1865,7 +1865,17 @@
       "installCudaRuntime": "CUDA Runtime installieren",
       "cudnn": "cuDNN",
       "cudnnBundled": "cuDNN ist in der App enthalten",
-      "gpuDiarizationReady": "GPU-Sprecherdiarisierung ist bereit."
+      "gpuDiarizationReady": "GPU-Sprecherdiarisierung ist bereit.",
+      "batchCancelled": "Abgebrochen",
+      "batchTranscriptionFailed": "Transkription fehlgeschlagen",
+      "batchSaveFailed": "Notiz konnte nicht gespeichert werden",
+      "batchUnknownError": "Unbekannter Fehler",
+      "removeFromQueue": "Aus Warteschlange entfernen",
+      "gpuDiarizationTitle": "GPU-Sprechererkennung",
+      "cudaAccelLibraries": "GPU-Beschleunigungsbibliotheken",
+      "useDistroPackageManager": "Verwenden Sie den Paketmanager Ihrer Distribution.",
+      "gpuInferenceLibrary": "GPU-Inferenzbibliothek",
+      "cudnnReinstallHint": "Falls fehlend, installieren Sie OpenWhispr aus dem neuesten Paket neu."
     },
     "meeting": {
       "title": "Besprechungsnotizen",

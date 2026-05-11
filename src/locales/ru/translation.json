@@ -1865,7 +1865,17 @@
       "installCudaRuntime": "Установить CUDA runtime",
       "cudnn": "cuDNN",
       "cudnnBundled": "cuDNN включён в приложение",
-      "gpuDiarizationReady": "GPU-диаризация готова к работе."
+      "gpuDiarizationReady": "GPU-диаризация готова к работе.",
+      "batchCancelled": "Отменено",
+      "batchTranscriptionFailed": "Ошибка транскрипции",
+      "batchSaveFailed": "Не удалось сохранить заметку",
+      "batchUnknownError": "Неизвестная ошибка",
+      "removeFromQueue": "Удалить из очереди",
+      "gpuDiarizationTitle": "Диаризация говорящих с GPU",
+      "cudaAccelLibraries": "Библиотеки GPU-ускорения",
+      "useDistroPackageManager": "Используйте менеджер пакетов вашего дистрибутива.",
+      "gpuInferenceLibrary": "Библиотека GPU-вычислений",
+      "cudnnReinstallHint": "Если отсутствует, переустановите OpenWhispr из последнего пакета."
     },
     "meeting": {
       "title": "Заметки со встреч",

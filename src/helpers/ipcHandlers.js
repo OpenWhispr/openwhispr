@@ -1480,7 +1480,18 @@ class IPCHandlers {
     ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
       const fs = require("fs");
       try {
-        const audioBuffer = fs.readFileSync(filePath);
+        const resolved = path.resolve(filePath);
+        const real = fs.realpathSync(resolved);
+        const allowedDirs = [
+          require("os").tmpdir(),
+          require("./safeTempDir").getSafeTempDir(),
+          app.getPath("userData"),
+          app.getPath("home"),
+        ];
+        if (!allowedDirs.some((dir) => real.startsWith(dir + path.sep) || real === dir)) {
+          return { success: false, error: "File path not allowed" };
+        }
+        const audioBuffer = fs.readFileSync(real);
         if (options.provider === "nvidia") {
           const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
           return result;
@@ -2037,36 +2048,25 @@ class IPCHandlers {
           return { success: false, error: "Diarization models not downloaded" };
         }
 
+        const resolved = path.resolve(filePath);
+        const realPath = fs.realpathSync(resolved);
+        const allowedDirs = [
+          require("os").tmpdir(),
+          require("./safeTempDir").getSafeTempDir(),
+          app.getPath("userData"),
+          app.getPath("home"),
+        ];
+        if (!allowedDirs.some((dir) => realPath.startsWith(dir + path.sep) || realPath === dir)) {
+          return { success: false, error: "File path not allowed" };
+        }
+        filePath = realPath;
+
         const diarOpts = {
           numSpeakers: options.numSpeakers ?? -1,
           threshold: options.threshold ?? 0.55,
         };
 
         const { mergeSpeakersWithText, formatSpeakerTranscript } = require("./speakerMerge");
-
-        try {
-          const { gpuDiarize } = require("./gpuDiarization");
-          const onnxWorkerClient = require("./onnxWorkerClient");
-          const GPU_DIARIZE_TIMEOUT = 600_000;
-          const gpuPromise = gpuDiarize(
-            filePath, onnxWorkerClient, this.diarizationManager, diarOpts
-          );
-          const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("GPU diarization timed out")), GPU_DIARIZE_TIMEOUT)
-          );
-          const segments = await Promise.race([gpuPromise, timeoutPromise]);
-          if (segments && segments.length > 0) {
-            debugLogger.info("[diarization] GPU pipeline succeeded", { segments: segments.length });
-            return { success: true, segments, formattedText: formatSpeakerTranscript(segments) };
-          }
-        } catch (gpuErr) {
-          debugLogger.warn("[diarization] GPU pipeline failed, falling back to binary", {
-            error: gpuErr.message,
-          });
-        }
-
-        // Fallback: existing sherpa-onnx binary
-        debugLogger.info("[diarization] Using binary fallback");
         const { convertToWav } = require("./ffmpegUtils");
         const wavPath = filePath.replace(/\.[^.]+$/, "") + "-diarize.wav";
 
@@ -2439,6 +2439,10 @@ class IPCHandlers {
 
     ipcMain.handle("open-external", async (event, url) => {
       try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+          return { success: false, error: "Only HTTP/HTTPS URLs are allowed" };
+        }
         await shell.openExternal(url);
         return { success: true };
       } catch (error) {

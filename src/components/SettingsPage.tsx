@@ -2880,7 +2880,7 @@ EOF`,
             {cudaDiarStatus?.isLinux && cudaDiarStatus?.hasGpu && (
               <div>
                 <SectionHeader
-                  title="GPU Speaker Diarization"
+                  title={t("notes.upload.gpuDiarizationTitle")}
                   description={t("notes.upload.cudaSetupDescription")}
                 />
                 {(() => {
@@ -2889,11 +2889,11 @@ EOF`,
                       key: "hasCuda",
                       label: t("notes.upload.cudaRuntime"),
                       ok: cudaDiarStatus.hasCuda,
-                      desc: "GPU acceleration libraries",
+                      desc: t("notes.upload.cudaAccelLibraries"),
                       steps: [
                         {
                           title: t("notes.upload.installCudaRuntime"),
-                          desc: "Use your distribution's package manager.",
+                          desc: t("notes.upload.useDistroPackageManager"),
                           cmds: [
                             { label: "Ubuntu / Debian", cmd: "sudo apt install libcudart12 libcublas12 libcufft11 libcurand10" },
                             { label: "Fedora", cmd: "sudo dnf install cuda-cudart libcublas libcufft libcurand" },
@@ -2907,11 +2907,11 @@ EOF`,
                       key: "hasCudnn",
                       label: t("notes.upload.cudnn"),
                       ok: cudaDiarStatus.hasCudnn,
-                      desc: "GPU inference library",
+                      desc: t("notes.upload.gpuInferenceLibrary"),
                       steps: [
                         {
                           title: t("notes.upload.cudnnBundled"),
-                          desc: "If missing, reinstall OpenWhispr from the latest package.",
+                          desc: t("notes.upload.cudnnReinstallHint"),
                           cmds: [],
                         },
                       ],
