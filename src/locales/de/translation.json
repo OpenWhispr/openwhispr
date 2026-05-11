@@ -1875,7 +1875,8 @@
       "cudaAccelLibraries": "GPU-Beschleunigungsbibliotheken",
       "useDistroPackageManager": "Verwenden Sie den Paketmanager Ihrer Distribution.",
       "gpuInferenceLibrary": "GPU-Inferenzbibliothek",
-      "cudnnReinstallHint": "Falls fehlend, installieren Sie OpenWhispr aus dem neuesten Paket neu."
+      "cudnnReinstallHint": "Falls fehlend, installieren Sie OpenWhispr aus dem neuesten Paket neu.",
+      "diarizationRunsLocally": "Die Sprechererkennung läuft lokal auf Ihrem Gerät."
     },
     "meeting": {
       "title": "Besprechungsnotizen",

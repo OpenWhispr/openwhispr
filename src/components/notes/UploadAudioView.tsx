@@ -99,6 +99,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     () => localStorage.getItem("uploadDiarizationNumSpeakers") || ""
   );
   const [diarizationModelsReady, setDiarizationModelsReady] = useState<boolean | null>(null);
+  const [diarizationDownloading, setDiarizationDownloading] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("uploadDiarizationEnabled", String(diarizationEnabled));
@@ -1109,17 +1110,35 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 </p>
               </div>
               <button
-                onClick={() => {
-                  if (!diarizationModelsReady) return;
-                  setDiarizationEnabled(!diarizationEnabled);
+                onClick={async () => {
+                  if (diarizationDownloading) return;
+                  if (diarizationEnabled) {
+                    setDiarizationEnabled(false);
+                    return;
+                  }
+                  if (!diarizationModelsReady) {
+                    setDiarizationDownloading(true);
+                    try {
+                      await window.electronAPI.downloadDiarizationModels?.();
+                      const status = await window.electronAPI.getDiarizationModelStatus?.();
+                      setDiarizationModelsReady(status?.modelsDownloaded ?? false);
+                      if (status?.modelsDownloaded) setDiarizationEnabled(true);
+                    } finally {
+                      setDiarizationDownloading(false);
+                    }
+                    return;
+                  }
+                  setDiarizationEnabled(true);
                 }}
                 className={cn(
                   "relative w-7 h-4 rounded-full transition-colors shrink-0",
                   diarizationEnabled && diarizationModelsReady
                     ? "bg-primary"
-                    : "bg-muted"
+                    : diarizationDownloading
+                      ? "bg-primary/50 animate-pulse"
+                      : "bg-muted"
                 )}
-                disabled={!diarizationModelsReady}
+                disabled={diarizationDownloading}
               >
                 <div
                   className={cn(
@@ -1151,24 +1170,16 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               </p>
             )}
 
-            {!diarizationModelsReady && diarizationModelsReady !== null && (
-              <div className="mt-2 flex items-center gap-2">
-                <p className="text-[10px] text-foreground/20">
-                  {t("notes.upload.downloadModelsRequired")}
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 text-[10px]"
-                  onClick={async () => {
-                    await window.electronAPI.downloadDiarizationModels?.();
-                    const status = await window.electronAPI.getDiarizationModelStatus?.();
-                    setDiarizationModelsReady(status?.modelsDownloaded ?? false);
-                  }}
-                >
-                  {t("notes.upload.downloadModels")}
-                </Button>
-              </div>
+            {diarizationDownloading && (
+              <p className="text-[10px] text-primary/50 mt-1.5">
+                {t("notes.upload.downloadingModels")}
+              </p>
+            )}
+
+            {diarizationEnabled && isOpenWhisprCloud && (
+              <p className="text-[10px] text-foreground/25 mt-1.5">
+                {t("notes.upload.diarizationRunsLocally")}
+              </p>
             )}
 
             {diarizationEnabled && diarizationModelsReady && (

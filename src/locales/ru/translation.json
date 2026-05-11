@@ -1875,7 +1875,8 @@
       "cudaAccelLibraries": "Библиотеки GPU-ускорения",
       "useDistroPackageManager": "Используйте менеджер пакетов вашего дистрибутива.",
       "gpuInferenceLibrary": "Библиотека GPU-вычислений",
-      "cudnnReinstallHint": "Если отсутствует, переустановите OpenWhispr из последнего пакета."
+      "cudnnReinstallHint": "Если отсутствует, переустановите OpenWhispr из последнего пакета.",
+      "diarizationRunsLocally": "Распознавание говорящих выполняется локально на вашем устройстве."
     },
     "meeting": {
       "title": "Заметки со встреч",

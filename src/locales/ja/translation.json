@@ -1858,7 +1858,8 @@
       "cudaAccelLibraries": "GPUアクセラレーションライブラリ",
       "useDistroPackageManager": "ディストリビューションのパッケージマネージャーをご利用ください。",
       "gpuInferenceLibrary": "GPU推論ライブラリ",
-      "cudnnReinstallHint": "見つからない場合は、最新パッケージからOpenWhisprを再インストールしてください。"
+      "cudnnReinstallHint": "見つからない場合は、最新パッケージからOpenWhisprを再インストールしてください。",
+      "diarizationRunsLocally": "話者検出はお使いのデバイス上でローカルに実行されます。"
     },
     "meeting": {
       "title": "議事録",

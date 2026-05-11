@@ -2032,7 +2032,8 @@
       "cudaAccelLibraries": "GPU acceleration libraries",
       "useDistroPackageManager": "Use your distribution's package manager.",
       "gpuInferenceLibrary": "GPU inference library",
-      "cudnnReinstallHint": "If missing, reinstall OpenWhispr from the latest package."
+      "cudnnReinstallHint": "If missing, reinstall OpenWhispr from the latest package.",
+      "diarizationRunsLocally": "Speaker detection runs locally on your device."
     },
     "meeting": {
       "title": "Meeting Notes",

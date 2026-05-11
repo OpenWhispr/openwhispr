@@ -1875,7 +1875,8 @@
       "cudaAccelLibraries": "Bibliotecas de aceleração GPU",
       "useDistroPackageManager": "Use o gerenciador de pacotes da sua distribuição.",
       "gpuInferenceLibrary": "Biblioteca de inferência GPU",
-      "cudnnReinstallHint": "Se ausente, reinstale o OpenWhispr a partir do pacote mais recente."
+      "cudnnReinstallHint": "Se ausente, reinstale o OpenWhispr a partir do pacote mais recente.",
+      "diarizationRunsLocally": "A detecção de falantes é executada localmente no seu dispositivo."
     },
     "meeting": {
       "title": "Notas de reunião",

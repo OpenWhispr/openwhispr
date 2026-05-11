@@ -1875,7 +1875,8 @@
       "cudaAccelLibraries": "GPU 加速函式庫",
       "useDistroPackageManager": "請使用您發行版的套件管理器。",
       "gpuInferenceLibrary": "GPU 推論函式庫",
-      "cudnnReinstallHint": "如果缺失，請從最新安裝套件重新安裝 OpenWhispr。"
+      "cudnnReinstallHint": "如果缺失，請從最新安裝套件重新安裝 OpenWhispr。",
+      "diarizationRunsLocally": "說話人偵測在您的裝置上本機執行。"
     },
     "meeting": {
       "title": "會議筆記",
