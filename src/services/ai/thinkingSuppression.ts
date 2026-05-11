@@ -1,22 +1,30 @@
 import type { ReasoningConfig } from "../BaseReasoningService";
 import { getCloudModel, getLocalModel } from "../../models/ModelRegistry";
 
-// Sends both `reasoning_effort` (OpenAI/Groq dialect) and `think` (Ollama
-// dialect); servers ignore unknown fields. Skips known non-thinking models
-// to avoid suppressing reasoning on models like gpt-5 where the user toggle
-// is hidden but the default value still applies.
+// Groq strictly validates request bodies and rejects unknown fields like
+// `think` ("property 'think' is unsupported"). Only Ollama-dialect providers
+// accept `think`; OpenAI-compatible providers use `reasoning_effort`.
+const OLLAMA_DIALECT_PROVIDERS = new Set(["local", "lan"]);
+
+function suppressThinking(requestBody: Record<string, unknown>, providerKey: string): void {
+  if (OLLAMA_DIALECT_PROVIDERS.has(providerKey)) {
+    requestBody.think = false;
+  } else {
+    requestBody.reasoning_effort = "none";
+  }
+}
+
 export function applyThinkingSuppression(
   requestBody: Record<string, unknown>,
   model: string,
   provider: string,
   config: ReasoningConfig
 ): void {
+  const providerKey = provider.toLowerCase();
   const cloudModel = getCloudModel(model);
-  const curatedGroqSuppress = !!cloudModel?.disableThinking && provider.toLowerCase() === "groq";
 
-  if (curatedGroqSuppress) {
-    requestBody.reasoning_effort = "none";
-    requestBody.think = false;
+  if (cloudModel?.disableThinking && providerKey === "groq") {
+    suppressThinking(requestBody, providerKey);
     return;
   }
 
@@ -26,6 +34,5 @@ export function applyThinkingSuppression(
   const knownModel = cloudModel || localModel;
   if (knownModel && !knownModel.supportsThinking) return;
 
-  requestBody.reasoning_effort = "none";
-  requestBody.think = false;
+  suppressThinking(requestBody, providerKey);
 }
