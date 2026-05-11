@@ -1298,6 +1298,129 @@ export default function SettingsPage({
     });
   }, [showConfirmDialog, showAlertDialog, t]);
 
+  const renderWhisperVadSettings = () => (
+    <div>
+      <SectionHeader
+        title={t("settingsPage.transcription.vad.title")}
+        description={t("settingsPage.transcription.vad.description")}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.vad.toggles.dictation.title")}
+            description={t("settingsPage.transcription.vad.toggles.dictation.description")}
+          >
+            <Toggle checked={dictationSileroEnabled} onChange={setDictationSileroEnabled} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.vad.toggles.noteRecording.title")}
+            description={t("settingsPage.transcription.vad.toggles.noteRecording.description")}
+          >
+            <Toggle checked={noteRecordingSileroEnabled} onChange={setNoteRecordingSileroEnabled} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.vad.toggles.meeting.title")}
+            description={t("settingsPage.transcription.vad.toggles.meeting.description")}
+          >
+            <Toggle checked={meetingSileroEnabled} onChange={setMeetingSileroEnabled} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.threshold.label")}
+                description={t("settingsPage.transcription.vad.fields.threshold.info")}
+              />
+              <Input
+                type="number"
+                step="0.01"
+                min="0.1"
+                max="0.95"
+                value={whisperVadThreshold}
+                onChange={(e) => setWhisperVadThreshold(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.label")}
+                description={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.info")}
+              />
+              <Input
+                type="number"
+                step="10"
+                min="50"
+                max="2000"
+                value={whisperVadMinSpeechDurationMs}
+                onChange={(e) => setWhisperVadMinSpeechDurationMs(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.minSilenceDurationMs.label")}
+                description={t("settingsPage.transcription.vad.fields.minSilenceDurationMs.info")}
+              />
+              <Input
+                type="number"
+                step="10"
+                min="50"
+                max="2000"
+                value={whisperVadMinSilenceDurationMs}
+                onChange={(e) => setWhisperVadMinSilenceDurationMs(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.label")}
+                description={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.info")}
+              />
+              <Input
+                type="number"
+                step="1"
+                min="5"
+                max="120"
+                value={whisperVadMaxSpeechDurationS}
+                onChange={(e) => setWhisperVadMaxSpeechDurationS(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.speechPadMs.label")}
+                description={t("settingsPage.transcription.vad.fields.speechPadMs.info")}
+              />
+              <Input
+                type="number"
+                step="10"
+                min="0"
+                max="1000"
+                value={whisperVadSpeechPadMs}
+                onChange={(e) => setWhisperVadSpeechPadMs(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.samplesOverlap.label")}
+                description={t("settingsPage.transcription.vad.fields.samplesOverlap.info")}
+              />
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="0.95"
+                value={whisperVadSamplesOverlap}
+                onChange={(e) => setWhisperVadSamplesOverlap(Number(e.target.value))}
+              />
+            </div>
+          </div>
+        </SettingsPanelRow>
+      </SettingsPanel>
+    </div>
+  );
+
   const renderSectionContent = () => {
     switch (activeSection) {
       case "account":
@@ -2212,141 +2335,6 @@ export default function SettingsPage({
               </SettingsPanel>
             </div>
 
-            {/* Voice Activity Detection */}
-            <div>
-              <SectionHeader
-                title={t("settingsPage.transcription.vad.title")}
-                description={t("settingsPage.transcription.vad.description")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.transcription.vad.toggles.dictation.title")}
-                    description={t("settingsPage.transcription.vad.toggles.dictation.description")}
-                  >
-                    <Toggle checked={dictationSileroEnabled} onChange={setDictationSileroEnabled} />
-                  </SettingsRow>
-                </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.transcription.vad.toggles.noteRecording.title")}
-                    description={t(
-                      "settingsPage.transcription.vad.toggles.noteRecording.description"
-                    )}
-                  >
-                    <Toggle
-                      checked={noteRecordingSileroEnabled}
-                      onChange={setNoteRecordingSileroEnabled}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.transcription.vad.toggles.meeting.title")}
-                    description={t("settingsPage.transcription.vad.toggles.meeting.description")}
-                  >
-                    <Toggle checked={meetingSileroEnabled} onChange={setMeetingSileroEnabled} />
-                  </SettingsRow>
-                </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                    <div className="space-y-1.5">
-                      <VADLabelWithInfo
-                        label={t("settingsPage.transcription.vad.fields.threshold.label")}
-                        description={t("settingsPage.transcription.vad.fields.threshold.info")}
-                      />
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0.1"
-                        max="0.95"
-                        value={whisperVadThreshold}
-                        onChange={(e) => setWhisperVadThreshold(Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <VADLabelWithInfo
-                        label={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.label")}
-                        description={t(
-                          "settingsPage.transcription.vad.fields.minSpeechDurationMs.info"
-                        )}
-                      />
-                      <Input
-                        type="number"
-                        step="10"
-                        min="50"
-                        max="2000"
-                        value={whisperVadMinSpeechDurationMs}
-                        onChange={(e) => setWhisperVadMinSpeechDurationMs(Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <VADLabelWithInfo
-                        label={t(
-                          "settingsPage.transcription.vad.fields.minSilenceDurationMs.label"
-                        )}
-                        description={t(
-                          "settingsPage.transcription.vad.fields.minSilenceDurationMs.info"
-                        )}
-                      />
-                      <Input
-                        type="number"
-                        step="10"
-                        min="50"
-                        max="2000"
-                        value={whisperVadMinSilenceDurationMs}
-                        onChange={(e) => setWhisperVadMinSilenceDurationMs(Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <VADLabelWithInfo
-                        label={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.label")}
-                        description={t(
-                          "settingsPage.transcription.vad.fields.maxSpeechDurationS.info"
-                        )}
-                      />
-                      <Input
-                        type="number"
-                        step="1"
-                        min="5"
-                        max="120"
-                        value={whisperVadMaxSpeechDurationS}
-                        onChange={(e) => setWhisperVadMaxSpeechDurationS(Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <VADLabelWithInfo
-                        label={t("settingsPage.transcription.vad.fields.speechPadMs.label")}
-                        description={t("settingsPage.transcription.vad.fields.speechPadMs.info")}
-                      />
-                      <Input
-                        type="number"
-                        step="10"
-                        min="0"
-                        max="1000"
-                        value={whisperVadSpeechPadMs}
-                        onChange={(e) => setWhisperVadSpeechPadMs(Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <VADLabelWithInfo
-                        label={t("settingsPage.transcription.vad.fields.samplesOverlap.label")}
-                        description={t("settingsPage.transcription.vad.fields.samplesOverlap.info")}
-                      />
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="0.95"
-                        value={whisperVadSamplesOverlap}
-                        onChange={(e) => setWhisperVadSamplesOverlap(Number(e.target.value))}
-                      />
-                    </div>
-                  </div>
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
-
             {/* Clipboard */}
             <div>
               <SectionHeader title={t("settingsPage.general.clipboard.title")} />
@@ -3174,34 +3162,39 @@ EOF`,
           <SpeechToTextTabs
             initialTab={initialSubTab as SpeechTab | undefined}
             renderDictation={() => (
-              <TranscriptionSection
-                isSignedIn={isSignedIn ?? false}
-                startOnboarding={startOnboarding}
-                cloudTranscriptionMode={cloudTranscriptionMode}
-                setCloudTranscriptionMode={setCloudTranscriptionMode}
-                useLocalWhisper={useLocalWhisper}
-                setUseLocalWhisper={setUseLocalWhisper}
-                updateTranscriptionSettings={updateTranscriptionSettings}
-                cloudTranscriptionProvider={cloudTranscriptionProvider}
-                setCloudTranscriptionProvider={setCloudTranscriptionProvider}
-                cloudTranscriptionModel={cloudTranscriptionModel}
-                setCloudTranscriptionModel={setCloudTranscriptionModel}
-                localTranscriptionProvider={localTranscriptionProvider}
-                setLocalTranscriptionProvider={setLocalTranscriptionProvider}
-                whisperModel={whisperModel}
-                setWhisperModel={setWhisperModel}
-                parakeetModel={parakeetModel}
-                setParakeetModel={setParakeetModel}
-                cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
-                setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
-                transcriptionMode={transcriptionMode}
-                setTranscriptionMode={setTranscriptionMode}
-                remoteTranscriptionUrl={remoteTranscriptionUrl}
-                setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
-                showTranscriptionPreview={showTranscriptionPreview}
-                setShowTranscriptionPreview={setShowTranscriptionPreview}
-                toast={toast}
-              />
+              <div className="space-y-6">
+                <TranscriptionSection
+                  isSignedIn={isSignedIn ?? false}
+                  startOnboarding={startOnboarding}
+                  cloudTranscriptionMode={cloudTranscriptionMode}
+                  setCloudTranscriptionMode={setCloudTranscriptionMode}
+                  useLocalWhisper={useLocalWhisper}
+                  setUseLocalWhisper={setUseLocalWhisper}
+                  updateTranscriptionSettings={updateTranscriptionSettings}
+                  cloudTranscriptionProvider={cloudTranscriptionProvider}
+                  setCloudTranscriptionProvider={setCloudTranscriptionProvider}
+                  cloudTranscriptionModel={cloudTranscriptionModel}
+                  setCloudTranscriptionModel={setCloudTranscriptionModel}
+                  localTranscriptionProvider={localTranscriptionProvider}
+                  setLocalTranscriptionProvider={setLocalTranscriptionProvider}
+                  whisperModel={whisperModel}
+                  setWhisperModel={setWhisperModel}
+                  parakeetModel={parakeetModel}
+                  setParakeetModel={setParakeetModel}
+                  cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
+                  setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+                  transcriptionMode={transcriptionMode}
+                  setTranscriptionMode={setTranscriptionMode}
+                  remoteTranscriptionUrl={remoteTranscriptionUrl}
+                  setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                  showTranscriptionPreview={showTranscriptionPreview}
+                  setShowTranscriptionPreview={setShowTranscriptionPreview}
+                  toast={toast}
+                />
+                {transcriptionMode === "local" &&
+                  localTranscriptionProvider !== "nvidia" &&
+                  renderWhisperVadSettings()}
+              </div>
             )}
             renderNoteRecording={() => <MeetingTranscriptionPanel />}
           />
