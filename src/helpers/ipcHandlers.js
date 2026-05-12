@@ -1437,7 +1437,19 @@ class IPCHandlers {
     ipcMain.handle("get-file-size", async (_event, filePath) => {
       const fs = require("fs");
       try {
-        const stats = fs.statSync(filePath);
+        if (typeof filePath !== "string") return 0;
+        const resolved = path.resolve(filePath);
+        const real = fs.realpathSync(resolved);
+        const allowedDirs = [
+          require("os").tmpdir(),
+          require("./safeTempDir").getSafeTempDir(),
+          app.getPath("userData"),
+          app.getPath("home"),
+        ];
+        if (!allowedDirs.some((dir) => real.startsWith(dir + path.sep) || real === dir)) {
+          return 0;
+        }
+        const stats = fs.statSync(real);
         return stats.size;
       } catch {
         return 0;
@@ -6197,6 +6209,14 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
+        if (typeof opts?.path !== "string" || !opts.path.startsWith("/")) {
+          return { success: false, error: "Invalid API path" };
+        }
+        const targetUrl = new URL(opts.path, apiUrl);
+        if (targetUrl.origin !== new URL(apiUrl).origin) {
+          return { success: false, error: "Invalid API path" };
+        }
+
         const authHeader = await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
@@ -6209,7 +6229,7 @@ class IPCHandlers {
           fetchOpts.body = JSON.stringify(opts.body);
         }
 
-        const response = await proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
+        const response = await proxyFetch(targetUrl.href, fetchOpts);
 
         if (response.status === 401) {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
@@ -6294,6 +6314,21 @@ class IPCHandlers {
 
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
       try {
+        if (typeof filePath !== "string") {
+          return { success: false, error: "Invalid file path" };
+        }
+        const resolvedCloud = path.resolve(filePath);
+        const realCloud = fs.realpathSync(resolvedCloud);
+        const allowedCloudDirs = [
+          require("os").tmpdir(),
+          require("./safeTempDir").getSafeTempDir(),
+          app.getPath("userData"),
+          app.getPath("home"),
+        ];
+        if (!allowedCloudDirs.some((dir) => realCloud.startsWith(dir + path.sep) || realCloud === dir)) {
+          return { success: false, error: "File path not allowed" };
+        }
+
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
@@ -6308,15 +6343,15 @@ class IPCHandlers {
           sessionId: this.sessionId,
         };
 
-        const fileSize = fs.statSync(filePath).size;
+        const fileSize = fs.statSync(realCloud).size;
 
         if (fileSize > CLOUD_INLINE_LIMIT) {
           debugLogger.debug("Large file detected, using client-side chunking", {
             fileSize,
-            filePath: path.basename(filePath),
+            filePath: path.basename(realCloud),
           });
           const { text, warning } = await chunkedCloudTranscribe({
-            filePath,
+            filePath: realCloud,
             apiUrl,
             authHeader,
             multipartFields,
@@ -6325,10 +6360,10 @@ class IPCHandlers {
           return { success: true, text, ...(warning ? { warning } : {}) };
         }
 
-        const audioBuffer = fs.readFileSync(filePath);
-        const ext = path.extname(filePath).toLowerCase().replace(".", "");
+        const audioBuffer = fs.readFileSync(realCloud);
+        const ext = path.extname(realCloud).toLowerCase().replace(".", "");
         const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
-        const fileName = path.basename(filePath);
+        const fileName = path.basename(realCloud);
 
         const { body, boundary } = buildMultipartBody(
           audioBuffer,
@@ -6356,10 +6391,25 @@ class IPCHandlers {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
+          if (typeof filePath !== "string") {
+            return { success: false, error: "Invalid file path" };
+          }
+          const resolvedByok = path.resolve(filePath);
+          const realByok = fs.realpathSync(resolvedByok);
+          const allowedByokDirs = [
+            require("os").tmpdir(),
+            require("./safeTempDir").getSafeTempDir(),
+            app.getPath("userData"),
+            app.getPath("home"),
+          ];
+          if (!allowedByokDirs.some((dir) => realByok.startsWith(dir + path.sep) || realByok === dir)) {
+            return { success: false, error: "File path not allowed" };
+          }
+
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
           if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
-          const fileSize = fs.statSync(filePath).size;
+          const fileSize = fs.statSync(realByok).size;
           if (fileSize > BYOK_FILE_SIZE_LIMIT) {
             return {
               success: false,
@@ -6367,10 +6417,10 @@ class IPCHandlers {
             };
           }
 
-          const audioBuffer = fs.readFileSync(filePath);
-          const ext = path.extname(filePath).toLowerCase().replace(".", "");
+          const audioBuffer = fs.readFileSync(realByok);
+          const ext = path.extname(realByok).toLowerCase().replace(".", "");
           const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
-          const fileName = path.basename(filePath);
+          const fileName = path.basename(realByok);
 
           let transcriptionUrl = baseUrl.replace(/\/+$/, "");
           if (!transcriptionUrl.endsWith("/audio/transcriptions")) {

@@ -321,7 +321,7 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
 
   onProgress?.({ stage: "downloading", percent: 0, title });
 
-  const response = await httpRequest(parsed, { method: "GET", lookup: ssrfSafeLookup });
+  const response = await httpRequest(headParsed, { method: "GET", lookup: ssrfSafeLookup });
 
   if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
     response.destroy();
@@ -330,7 +330,7 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
       err.code = "DOWNLOAD_FAILED";
       throw err;
     }
-    const redirectUrl = new URL(response.headers.location, parsed.href).href;
+    const redirectUrl = new URL(response.headers.location, headParsed.href).href;
     return downloadDirect(redirectUrl, onProgress, abortSignal, redirectCount + 1);
   }
 
@@ -338,6 +338,14 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
     response.destroy();
     const err = new Error(`HTTP ${response.statusCode}`);
     err.code = "DOWNLOAD_FAILED";
+    throw err;
+  }
+
+  const getContentType = (response.headers["content-type"] || "").toLowerCase();
+  if (!getContentType.startsWith("audio/") && !getContentType.startsWith("video/") && getContentType !== "application/octet-stream") {
+    response.destroy();
+    const err = new Error(`URL does not point to an audio file (content-type: ${getContentType})`);
+    err.code = "CONTENT_TYPE_INVALID";
     throw err;
   }
 
@@ -350,10 +358,15 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
 
   try {
     await new Promise((resolve, reject) => {
+      let settled = false;
+      const bail = (err) => { if (!settled) { settled = true; reject(err); } };
+
       response.on("data", (chunk) => {
+        if (settled) return;
+
         if (abortSignal?.aborted) {
           response.destroy();
-          reject(Object.assign(new Error("Download cancelled"), { code: "DOWNLOAD_CANCELLED" }));
+          bail(Object.assign(new Error("Download cancelled"), { code: "DOWNLOAD_CANCELLED" }));
           return;
         }
 
@@ -362,7 +375,7 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
 
         if (downloaded > MAX_DOWNLOAD_BYTES) {
           response.destroy();
-          reject(Object.assign(new Error("File too large. Maximum download size is 500 MB."), { code: "FILE_TOO_LARGE" }));
+          bail(Object.assign(new Error("File too large. Maximum download size is 500 MB."), { code: "FILE_TOO_LARGE" }));
           return;
         }
 
@@ -372,10 +385,10 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
         }
       });
 
-      response.on("error", reject);
+      response.on("error", bail);
       response.pipe(fileStream);
-      fileStream.on("finish", resolve);
-      fileStream.on("error", reject);
+      fileStream.on("finish", () => { if (!settled) { settled = true; resolve(); } });
+      fileStream.on("error", bail);
     });
 
     const sizeBytes = fs.statSync(tempPath).size;
@@ -383,6 +396,7 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
 
     return { tempPath, title, durationSeconds: null, sizeBytes };
   } catch (e) {
+    fileStream.destroy();
     try { fs.unlinkSync(tempPath); } catch {}
     if (e.code === "DOWNLOAD_CANCELLED") throw e;
     const err = new Error(e.message || "Download failed");
