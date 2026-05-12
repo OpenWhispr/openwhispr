@@ -6205,24 +6205,13 @@ class IPCHandlers {
       "transcribe-audio-file-byok",
       async (event, { filePath, apiKey, baseUrl, model }) => {
         const fs = require("fs");
+        const { execSync } = require("child_process");
+        const os = require("os");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
-        try {
-          if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
-          if (!baseUrl) throw new Error("No transcription endpoint configured.");
+        const CHUNK_SEGMENT_SECONDS = 600; // 10 minutes per chunk
 
-          const fileSize = fs.statSync(filePath).size;
-          if (fileSize > BYOK_FILE_SIZE_LIMIT) {
-            return {
-              success: false,
-              error: "File too large. Maximum size for bring-your-own-key is 25 MB.",
-            };
-          }
-
-          const audioBuffer = fs.readFileSync(filePath);
-          const ext = path.extname(filePath).toLowerCase().replace(".", "");
-          const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
-          const fileName = path.basename(filePath);
-
+        // Helper: transcribe a single file buffer via the API
+        const transcribeSingleFile = async (audioBuffer, fileName, contentType) => {
           let transcriptionUrl = baseUrl.replace(/\/+$/, "");
           if (!transcriptionUrl.endsWith("/audio/transcriptions")) {
             transcriptionUrl += "/audio/transcriptions";
@@ -6238,10 +6227,10 @@ class IPCHandlers {
           });
 
           if (data.statusCode === 401) {
-            return { success: false, error: "Invalid API key. Check your key in Settings." };
+            throw new Error("Invalid API key. Check your key in Settings.");
           }
           if (data.statusCode === 429) {
-            return { success: false, error: "Rate limit exceeded. Please try again later." };
+            throw new Error("Rate limit exceeded. Please try again later.");
           }
           if (data.statusCode !== 200) {
             throw new Error(
@@ -6249,7 +6238,92 @@ class IPCHandlers {
             );
           }
 
-          return { success: true, text: data.data.text };
+          return data.data.text;
+        };
+
+        try {
+          if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
+          if (!baseUrl) throw new Error("No transcription endpoint configured.");
+
+          const fileSize = fs.statSync(filePath).size;
+
+          if (fileSize <= BYOK_FILE_SIZE_LIMIT) {
+            // Small file: send directly (original behaviour)
+            const audioBuffer = fs.readFileSync(filePath);
+            const ext = path.extname(filePath).toLowerCase().replace(".", "");
+            const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
+            const fileName = path.basename(filePath);
+            const text = await transcribeSingleFile(audioBuffer, fileName, contentType);
+            return { success: true, text };
+          }
+
+          // Large file: split into chunks with ffmpeg, transcribe each, reassemble
+          debugLogger.log("BYOK: File exceeds 25 MB, splitting into chunks...");
+
+          const chunkDir = path.join(os.tmpdir(), `openwhispr-chunks-${Date.now()}`);
+          fs.mkdirSync(chunkDir, { recursive: true });
+
+          try {
+            // Split audio into MP3 chunks using ffmpeg
+            execSync(
+              `ffmpeg -i "${filePath}" -f segment -segment_time ${CHUNK_SEGMENT_SECONDS} -c:a libmp3lame -q:a 4 "${path.join(chunkDir, "chunk_%03d.mp3")}" -loglevel error`,
+              { timeout: 120000 }
+            );
+
+            const chunkFiles = fs.readdirSync(chunkDir)
+              .filter((f) => f.startsWith("chunk_") && f.endsWith(".mp3"))
+              .sort();
+
+            if (chunkFiles.length === 0) {
+              throw new Error("ffmpeg produced no audio chunks. The file may be corrupted.");
+            }
+
+            debugLogger.log(`BYOK: Split into ${chunkFiles.length} chunks`);
+
+            // Send progress updates to renderer
+            const sender = event.sender;
+
+            const transcriptParts = [];
+            for (let i = 0; i < chunkFiles.length; i++) {
+              const chunkPath = path.join(chunkDir, chunkFiles[i]);
+              const chunkBuffer = fs.readFileSync(chunkPath);
+
+              debugLogger.log(`BYOK: Transcribing chunk ${i + 1}/${chunkFiles.length}`);
+
+              // Emit progress for the UI
+              try {
+                sender.send("upload-transcription-progress", {
+                  chunksTotal: chunkFiles.length,
+                  chunksCompleted: i,
+                });
+              } catch (e) {
+                // Sender may be destroyed if window closed
+              }
+
+              const text = await transcribeSingleFile(
+                chunkBuffer,
+                chunkFiles[i],
+                "audio/mpeg"
+              );
+              transcriptParts.push(text);
+            }
+
+            // Final progress update
+            try {
+              sender.send("upload-transcription-progress", {
+                chunksTotal: chunkFiles.length,
+                chunksCompleted: chunkFiles.length,
+              });
+            } catch (e) {}
+
+            const fullText = transcriptParts.join("\n\n");
+            return { success: true, text: fullText };
+          } finally {
+            // Clean up temp chunks
+            try {
+              fs.rmSync(chunkDir, { recursive: true, force: true });
+            } catch (e) {}
+          }
         } catch (error) {
           debugLogger.error("BYOK audio file transcription error", { error: error.message });
           return { success: false, error: error.message };
