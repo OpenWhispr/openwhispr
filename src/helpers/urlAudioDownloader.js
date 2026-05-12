@@ -262,8 +262,34 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
     throw err;
   }
 
-  const headResponse = await httpRequest(parsed, { method: "HEAD", lookup: ssrfSafeLookup });
-  headResponse.resume();
+  let headParsed = parsed;
+  let headRedirects = 0;
+  let headResponse;
+  while (true) {
+    headResponse = await httpRequest(headParsed, { method: "HEAD", lookup: ssrfSafeLookup });
+    headResponse.resume();
+    if (headResponse.statusCode >= 300 && headResponse.statusCode < 400 && headResponse.headers.location) {
+      if (++headRedirects > MAX_REDIRECTS) {
+        const err = new Error("Too many redirects");
+        err.code = "DOWNLOAD_FAILED";
+        throw err;
+      }
+      const nextUrl = new URL(headResponse.headers.location, headParsed.href);
+      if (nextUrl.protocol !== "https:") {
+        const err = new Error("Only HTTPS URLs are supported for direct downloads");
+        err.code = "INVALID_URL";
+        throw err;
+      }
+      if (isIP(nextUrl.hostname) && isPrivateIp(nextUrl.hostname)) {
+        const err = new Error("Direct downloads from private/internal addresses are not allowed");
+        err.code = "SSRF_BLOCKED";
+        throw err;
+      }
+      headParsed = nextUrl;
+      continue;
+    }
+    break;
+  }
 
   const contentType = (headResponse.headers["content-type"] || "").toLowerCase();
   const isAudioVideo =

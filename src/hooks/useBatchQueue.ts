@@ -262,11 +262,13 @@ export function useBatchQueue() {
         }
       };
 
+      const processed = new Set<string>();
       let next: QueueItem | undefined;
       while (
         !cancelledRef.current &&
-        (next = queueRef.current.find((i) => i.status === "queued"))
+        (next = queueRef.current.find((i) => i.status === "queued" && !processed.has(i.id)))
       ) {
+        processed.add(next.id);
         await processItem(next);
       }
 

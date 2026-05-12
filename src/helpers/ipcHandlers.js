@@ -82,15 +82,7 @@ const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 const CLOUD_CHUNK_CONCURRENCY = 5;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
-function formatDiarTime(seconds) {
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-  if (hrs > 0) {
-    return `${hrs}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  }
-  return `${mins}:${String(secs).padStart(2, "0")}`;
-}
+const { formatTimestamp: formatDiarTime } = require("./speakerMerge");
 
 function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   const boundary = `----OpenWhispr${Date.now()}`;
@@ -2090,8 +2082,8 @@ class IPCHandlers {
         filePath = realPath;
 
         const diarOpts = {
-          numSpeakers: options.numSpeakers ?? -1,
-          threshold: options.threshold ?? 0.55,
+          numSpeakers: Math.min(MAX_SPEAKER_COUNT, Math.max(-1, Math.round(Number(options.numSpeakers) || -1))),
+          threshold: Math.min(1, Math.max(0, Number(options.threshold) || 0.55)),
         };
 
         const { mergeSpeakersWithText, formatSpeakerTranscript } = require("./speakerMerge");
@@ -2114,6 +2106,9 @@ class IPCHandlers {
 
     ipcMain.handle("merge-speaker-text", async (event, { segments, text, duration }) => {
       try {
+        if (!Array.isArray(segments) || typeof text !== "string" || typeof duration !== "number") {
+          return { success: false, error: "Invalid arguments" };
+        }
         const { mergeSpeakersWithText, formatSpeakerTranscript } = require("./speakerMerge");
         const merged = mergeSpeakersWithText(segments, text, duration);
         return { success: true, text: formatSpeakerTranscript(merged) };

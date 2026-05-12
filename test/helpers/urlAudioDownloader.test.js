@@ -1,213 +1,221 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { it, expect } from "vitest";
+import dns from "dns";
+import { detectUrlType, extractYouTubeVideoId, isPlaylistUrl, isPrivateIp, ssrfSafeLookup } from "../../src/helpers/urlAudioDownloader";
 
-const { detectUrlType, extractYouTubeVideoId, isPlaylistUrl, isPrivateIp, ssrfSafeLookup } = require("../../src/helpers/urlAudioDownloader");
-
-// --- detectUrlType ---
-
-test("detectUrlType returns youtube for standard watch URL", () => {
-  assert.equal(detectUrlType("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), "youtube");
+it("detectUrlType returns youtube for standard watch URL", () => {
+  expect(detectUrlType("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBe("youtube");
 });
 
-test("detectUrlType returns youtube for youtu.be short URL", () => {
-  assert.equal(detectUrlType("https://youtu.be/dQw4w9WgXcQ"), "youtube");
+it("detectUrlType returns youtube for youtu.be short URL", () => {
+  expect(detectUrlType("https://youtu.be/dQw4w9WgXcQ")).toBe("youtube");
 });
 
-test("detectUrlType returns youtube for Shorts URL", () => {
-  assert.equal(detectUrlType("https://www.youtube.com/shorts/dQw4w9WgXcQ"), "youtube");
+it("detectUrlType returns youtube for Shorts URL", () => {
+  expect(detectUrlType("https://www.youtube.com/shorts/dQw4w9WgXcQ")).toBe("youtube");
 });
 
-test("detectUrlType returns youtube for Music URL", () => {
-  assert.equal(detectUrlType("https://music.youtube.com/watch?v=dQw4w9WgXcQ"), "youtube");
+it("detectUrlType returns youtube for Music URL", () => {
+  expect(detectUrlType("https://music.youtube.com/watch?v=dQw4w9WgXcQ")).toBe("youtube");
 });
 
-test("detectUrlType returns youtube for URL with extra params", () => {
-  assert.equal(
-    detectUrlType("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=120&list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf"),
-    "youtube"
-  );
+it("detectUrlType returns youtube for URL with extra params", () => {
+  expect(
+    detectUrlType("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=120&list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf")
+  ).toBe("youtube");
 });
 
-test("detectUrlType returns youtube for embed URL", () => {
-  assert.equal(detectUrlType("https://www.youtube.com/embed/dQw4w9WgXcQ"), "youtube");
+it("detectUrlType returns youtube for embed URL", () => {
+  expect(detectUrlType("https://www.youtube.com/embed/dQw4w9WgXcQ")).toBe("youtube");
 });
 
-test("detectUrlType returns direct for a podcast mp3 URL", () => {
-  assert.equal(detectUrlType("https://example.com/episodes/ep42.mp3"), "direct");
+it("detectUrlType returns direct for a podcast mp3 URL", () => {
+  expect(detectUrlType("https://example.com/episodes/ep42.mp3")).toBe("direct");
 });
 
-test("detectUrlType returns direct for any non-YouTube https URL", () => {
-  assert.equal(detectUrlType("https://cdn.radio.com/stream.ogg"), "direct");
+it("detectUrlType returns direct for any non-YouTube https URL", () => {
+  expect(detectUrlType("https://cdn.radio.com/stream.ogg")).toBe("direct");
 });
 
-test("detectUrlType throws INVALID_URL for non-http scheme", () => {
-  assert.throws(
-    () => detectUrlType("ftp://files.example.com/audio.mp3"),
-    (err) => err.code === "INVALID_URL"
-  );
+it("detectUrlType throws INVALID_URL for non-http scheme", () => {
+  expect(() => detectUrlType("ftp://files.example.com/audio.mp3")).toThrow();
+  try {
+    detectUrlType("ftp://files.example.com/audio.mp3");
+  } catch (err) {
+    expect(err.code).toBe("INVALID_URL");
+  }
 });
 
-test("detectUrlType throws INVALID_URL for empty string", () => {
-  assert.throws(() => detectUrlType(""), (err) => err.code === "INVALID_URL");
+it("detectUrlType throws INVALID_URL for empty string", () => {
+  expect(() => detectUrlType("")).toThrow();
+  try {
+    detectUrlType("");
+  } catch (err) {
+    expect(err.code).toBe("INVALID_URL");
+  }
 });
 
-test("detectUrlType throws INVALID_URL for garbage input", () => {
-  assert.throws(() => detectUrlType("not a url at all"), (err) => err.code === "INVALID_URL");
+it("detectUrlType throws INVALID_URL for garbage input", () => {
+  expect(() => detectUrlType("not a url at all")).toThrow();
+  try {
+    detectUrlType("not a url at all");
+  } catch (err) {
+    expect(err.code).toBe("INVALID_URL");
+  }
 });
 
-// --- extractYouTubeVideoId ---
-
-test("extractYouTubeVideoId extracts from standard watch URL", () => {
-  assert.equal(extractYouTubeVideoId("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), "dQw4w9WgXcQ");
+it("extractYouTubeVideoId extracts from standard watch URL", () => {
+  expect(extractYouTubeVideoId("https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
 });
 
-test("extractYouTubeVideoId extracts from short URL", () => {
-  assert.equal(extractYouTubeVideoId("https://youtu.be/dQw4w9WgXcQ"), "dQw4w9WgXcQ");
+it("extractYouTubeVideoId extracts from short URL", () => {
+  expect(extractYouTubeVideoId("https://youtu.be/dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
 });
 
-test("extractYouTubeVideoId extracts from Shorts URL", () => {
-  assert.equal(extractYouTubeVideoId("https://www.youtube.com/shorts/dQw4w9WgXcQ"), "dQw4w9WgXcQ");
+it("extractYouTubeVideoId extracts from Shorts URL", () => {
+  expect(extractYouTubeVideoId("https://www.youtube.com/shorts/dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
 });
 
-test("extractYouTubeVideoId extracts from embed URL", () => {
-  assert.equal(extractYouTubeVideoId("https://www.youtube.com/embed/dQw4w9WgXcQ"), "dQw4w9WgXcQ");
+it("extractYouTubeVideoId extracts from embed URL", () => {
+  expect(extractYouTubeVideoId("https://www.youtube.com/embed/dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
 });
 
-test("extractYouTubeVideoId extracts from Music URL", () => {
-  assert.equal(extractYouTubeVideoId("https://music.youtube.com/watch?v=dQw4w9WgXcQ"), "dQw4w9WgXcQ");
+it("extractYouTubeVideoId extracts from Music URL", () => {
+  expect(extractYouTubeVideoId("https://music.youtube.com/watch?v=dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
 });
 
-test("extractYouTubeVideoId returns null for playlist-only URL", () => {
-  assert.equal(extractYouTubeVideoId("https://www.youtube.com/playlist?list=PLrAXtmErZgOe"), null);
+it("extractYouTubeVideoId returns null for playlist-only URL", () => {
+  expect(extractYouTubeVideoId("https://www.youtube.com/playlist?list=PLrAXtmErZgOe")).toBeNull();
 });
 
-// --- isPlaylistUrl ---
-
-test("isPlaylistUrl returns true for playlist-only URL", () => {
-  assert.equal(isPlaylistUrl("https://www.youtube.com/playlist?list=PLrAXtmErZgOe"), true);
+it("isPlaylistUrl returns true for playlist-only URL", () => {
+  expect(isPlaylistUrl("https://www.youtube.com/playlist?list=PLrAXtmErZgOe")).toBe(true);
 });
 
-test("isPlaylistUrl returns false for watch URL with playlist param", () => {
-  assert.equal(isPlaylistUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLrAXtmErZgOe"), false);
+it("isPlaylistUrl returns false for watch URL with playlist param", () => {
+  expect(isPlaylistUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLrAXtmErZgOe")).toBe(false);
 });
 
-test("isPlaylistUrl returns false for non-YouTube URL", () => {
-  assert.equal(isPlaylistUrl("https://example.com/playlist"), false);
+it("isPlaylistUrl returns false for non-YouTube URL", () => {
+  expect(isPlaylistUrl("https://example.com/playlist")).toBe(false);
 });
 
-// --- isPrivateIp ---
-
-test("isPrivateIp blocks loopback 127.x.x.x", () => {
-  assert.equal(isPrivateIp("127.0.0.1"), true);
-  assert.equal(isPrivateIp("127.255.255.255"), true);
+it("isPrivateIp blocks loopback 127.x.x.x", () => {
+  expect(isPrivateIp("127.0.0.1")).toBe(true);
+  expect(isPrivateIp("127.255.255.255")).toBe(true);
 });
 
-test("isPrivateIp blocks 10.x.x.x", () => {
-  assert.equal(isPrivateIp("10.0.0.1"), true);
-  assert.equal(isPrivateIp("10.255.255.255"), true);
+it("isPrivateIp blocks 10.x.x.x", () => {
+  expect(isPrivateIp("10.0.0.1")).toBe(true);
+  expect(isPrivateIp("10.255.255.255")).toBe(true);
 });
 
-test("isPrivateIp blocks 172.16-31.x.x", () => {
-  assert.equal(isPrivateIp("172.16.0.1"), true);
-  assert.equal(isPrivateIp("172.31.255.255"), true);
-  assert.equal(isPrivateIp("172.15.0.1"), false);
-  assert.equal(isPrivateIp("172.32.0.1"), false);
+it("isPrivateIp blocks 172.16-31.x.x", () => {
+  expect(isPrivateIp("172.16.0.1")).toBe(true);
+  expect(isPrivateIp("172.31.255.255")).toBe(true);
+  expect(isPrivateIp("172.15.0.1")).toBe(false);
+  expect(isPrivateIp("172.32.0.1")).toBe(false);
 });
 
-test("isPrivateIp blocks 192.168.x.x", () => {
-  assert.equal(isPrivateIp("192.168.0.1"), true);
-  assert.equal(isPrivateIp("192.168.255.255"), true);
+it("isPrivateIp blocks 192.168.x.x", () => {
+  expect(isPrivateIp("192.168.0.1")).toBe(true);
+  expect(isPrivateIp("192.168.255.255")).toBe(true);
 });
 
-test("isPrivateIp blocks link-local 169.254.x.x", () => {
-  assert.equal(isPrivateIp("169.254.169.254"), true);
+it("isPrivateIp blocks link-local 169.254.x.x", () => {
+  expect(isPrivateIp("169.254.169.254")).toBe(true);
 });
 
-test("isPrivateIp blocks 0.0.0.0/8 (this network)", () => {
-  assert.equal(isPrivateIp("0.0.0.0"), true);
-  assert.equal(isPrivateIp("0.1.2.3"), true);
+it("isPrivateIp blocks 0.0.0.0/8 (this network)", () => {
+  expect(isPrivateIp("0.0.0.0")).toBe(true);
+  expect(isPrivateIp("0.1.2.3")).toBe(true);
 });
 
-test("isPrivateIp blocks CGNAT 100.64-127.x.x", () => {
-  assert.equal(isPrivateIp("100.64.0.1"), true);
-  assert.equal(isPrivateIp("100.127.255.255"), true);
-  assert.equal(isPrivateIp("100.63.0.1"), false);
-  assert.equal(isPrivateIp("100.128.0.1"), false);
+it("isPrivateIp blocks CGNAT 100.64-127.x.x", () => {
+  expect(isPrivateIp("100.64.0.1")).toBe(true);
+  expect(isPrivateIp("100.127.255.255")).toBe(true);
+  expect(isPrivateIp("100.63.0.1")).toBe(false);
+  expect(isPrivateIp("100.128.0.1")).toBe(false);
 });
 
-test("isPrivateIp blocks multicast and reserved (224+)", () => {
-  assert.equal(isPrivateIp("224.0.0.1"), true);
-  assert.equal(isPrivateIp("240.0.0.1"), true);
-  assert.equal(isPrivateIp("255.255.255.255"), true);
+it("isPrivateIp blocks multicast and reserved (224+)", () => {
+  expect(isPrivateIp("224.0.0.1")).toBe(true);
+  expect(isPrivateIp("240.0.0.1")).toBe(true);
+  expect(isPrivateIp("255.255.255.255")).toBe(true);
 });
 
-test("isPrivateIp allows public IPs", () => {
-  assert.equal(isPrivateIp("8.8.8.8"), false);
-  assert.equal(isPrivateIp("1.1.1.1"), false);
-  assert.equal(isPrivateIp("203.0.113.1"), false);
+it("isPrivateIp allows public IPs", () => {
+  expect(isPrivateIp("8.8.8.8")).toBe(false);
+  expect(isPrivateIp("1.1.1.1")).toBe(false);
+  expect(isPrivateIp("203.0.113.1")).toBe(false);
 });
 
-test("isPrivateIp blocks IPv6 loopback and unspecified", () => {
-  assert.equal(isPrivateIp("::1"), true);
-  assert.equal(isPrivateIp("::"), true);
+it("isPrivateIp blocks IPv6 loopback and unspecified", () => {
+  expect(isPrivateIp("::1")).toBe(true);
+  expect(isPrivateIp("::")).toBe(true);
 });
 
-test("isPrivateIp blocks IPv6 unique local (fc/fd)", () => {
-  assert.equal(isPrivateIp("fc00::1"), true);
-  assert.equal(isPrivateIp("fd12:3456::1"), true);
+it("isPrivateIp blocks IPv6 unique local (fc/fd)", () => {
+  expect(isPrivateIp("fc00::1")).toBe(true);
+  expect(isPrivateIp("fd12:3456::1")).toBe(true);
 });
 
-test("isPrivateIp blocks IPv6 link-local (fe80)", () => {
-  assert.equal(isPrivateIp("fe80::1"), true);
+it("isPrivateIp blocks IPv6 link-local (fe80)", () => {
+  expect(isPrivateIp("fe80::1")).toBe(true);
 });
 
-test("isPrivateIp blocks IPv6 multicast (ff)", () => {
-  assert.equal(isPrivateIp("ff02::1"), true);
+it("isPrivateIp blocks IPv6 multicast (ff)", () => {
+  expect(isPrivateIp("ff02::1")).toBe(true);
 });
 
-test("isPrivateIp blocks IPv4-mapped IPv6", () => {
-  assert.equal(isPrivateIp("::ffff:127.0.0.1"), true);
-  assert.equal(isPrivateIp("::ffff:10.0.0.1"), true);
-  assert.equal(isPrivateIp("::ffff:169.254.169.254"), true);
-  assert.equal(isPrivateIp("::ffff:8.8.8.8"), false);
+it("isPrivateIp blocks IPv4-mapped IPv6", () => {
+  expect(isPrivateIp("::ffff:127.0.0.1")).toBe(true);
+  expect(isPrivateIp("::ffff:10.0.0.1")).toBe(true);
+  expect(isPrivateIp("::ffff:169.254.169.254")).toBe(true);
+  expect(isPrivateIp("::ffff:8.8.8.8")).toBe(false);
 });
 
-test("isPrivateIp blocks IPv4-compatible IPv6", () => {
-  assert.equal(isPrivateIp("::127.0.0.1"), true);
-  assert.equal(isPrivateIp("::10.0.0.1"), true);
-  assert.equal(isPrivateIp("::8.8.8.8"), false);
+it("isPrivateIp blocks IPv4-compatible IPv6", () => {
+  expect(isPrivateIp("::127.0.0.1")).toBe(true);
+  expect(isPrivateIp("::10.0.0.1")).toBe(true);
+  expect(isPrivateIp("::8.8.8.8")).toBe(false);
 });
 
-// --- ssrfSafeLookup ---
-
-test("ssrfSafeLookup rejects private IPs via callback", (t, done) => {
-  const fakeLookup = (hostname, opts, cb) => cb(null, "127.0.0.1", 4);
-  const original = require("dns").lookup;
-  require("dns").lookup = fakeLookup;
-  ssrfSafeLookup("evil.com", {}, (err) => {
-    require("dns").lookup = original;
-    assert.ok(err);
-    assert.equal(err.code, "SSRF_BLOCKED");
-    done();
+it("ssrfSafeLookup rejects private IPs via callback", () => {
+  return new Promise((resolve, reject) => {
+    const original = dns.lookup;
+    dns.lookup = (_hostname, _opts, cb) => cb(null, "127.0.0.1", 4);
+    ssrfSafeLookup("evil.com", {}, (err) => {
+      dns.lookup = original;
+      try {
+        expect(err).toBeTruthy();
+        expect(err.code).toBe("SSRF_BLOCKED");
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
   });
 });
 
-test("ssrfSafeLookup allows public IPs via callback", (t, done) => {
-  const fakeLookup = (hostname, opts, cb) => cb(null, "93.184.216.34", 4);
-  const original = require("dns").lookup;
-  require("dns").lookup = fakeLookup;
-  ssrfSafeLookup("example.com", {}, (err, address) => {
-    require("dns").lookup = original;
-    assert.equal(err, null);
-    assert.equal(address, "93.184.216.34");
-    done();
+it("ssrfSafeLookup allows public IPs via callback", () => {
+  return new Promise((resolve, reject) => {
+    const original = dns.lookup;
+    dns.lookup = (_hostname, _opts, cb) => cb(null, "93.184.216.34", 4);
+    ssrfSafeLookup("example.com", {}, (err, address) => {
+      dns.lookup = original;
+      try {
+        expect(err).toBeNull();
+        expect(address).toBe("93.184.216.34");
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
   });
 });
 
-// --- extractYouTubeVideoId youtu.be validation ---
-
-test("extractYouTubeVideoId rejects youtu.be with non-standard ID", () => {
-  assert.equal(extractYouTubeVideoId("https://youtu.be/x%25(home)s"), null);
-  assert.equal(extractYouTubeVideoId("https://youtu.be/short"), null);
-  assert.equal(extractYouTubeVideoId("https://youtu.be/toolongvideoiddd"), null);
+it("extractYouTubeVideoId rejects youtu.be with non-standard ID", () => {
+  expect(extractYouTubeVideoId("https://youtu.be/x%25(home)s")).toBeNull();
+  expect(extractYouTubeVideoId("https://youtu.be/short")).toBeNull();
+  expect(extractYouTubeVideoId("https://youtu.be/toolongvideoiddd")).toBeNull();
 });
