@@ -2515,7 +2515,6 @@
         "revoke": "Remover",
         "invitationActions": "Ações do convite",
         "permissionRequired": "Apenas o proprietário da nota pode alterar o compartilhamento.",
-        "notSyncedYet": "Esta nota ainda não foi sincronizada com a nuvem. Tente novamente em instantes.",
         "visibility": {
           "label": "Visibilidade",
           "link": "Qualquer pessoa com o link",

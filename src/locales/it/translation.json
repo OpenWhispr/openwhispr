@@ -2515,7 +2515,6 @@
         "revoke": "Rimuovi",
         "invitationActions": "Azioni invito",
         "permissionRequired": "Solo il proprietario della nota può modificare la condivisione.",
-        "notSyncedYet": "Questa nota non è ancora stata sincronizzata con il cloud. Riprova tra poco.",
         "visibility": {
           "label": "Visibilità",
           "link": "Chiunque con il link",

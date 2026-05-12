@@ -2611,7 +2611,6 @@
         "revoke": "Remove",
         "invitationActions": "Invitation actions",
         "permissionRequired": "Only the note owner can change sharing.",
-        "notSyncedYet": "This note hasn't synced to the cloud yet. Try again in a moment.",
         "visibility": {
           "label": "Visibility",
           "link": "Anyone with the link",

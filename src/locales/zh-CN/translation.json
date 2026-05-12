@@ -2515,7 +2515,6 @@
         "revoke": "移除",
         "invitationActions": "邀请操作",
         "permissionRequired": "只有笔记的所有者可以更改分享设置。",
-        "notSyncedYet": "此笔记尚未同步到云端。请稍后再试。",
         "visibility": {
           "label": "可见性",
           "link": "拥有链接的任何人",

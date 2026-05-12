@@ -260,18 +260,9 @@ export default function ShareNoteDialog({
     }
   };
 
-  if (!cloudId) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md">
-          <DialogTitle>{t("noteEditor.share.dialog.title")}</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            {t("noteEditor.share.dialog.notSyncedYet")}
-          </p>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  // NoteEditor only renders the dialog when cloud_id is set, so cloudId is
+  // guaranteed non-null here. We early-return for type-narrowing.
+  if (!cloudId) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

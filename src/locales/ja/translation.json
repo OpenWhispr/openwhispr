@@ -2515,7 +2515,6 @@
         "revoke": "削除",
         "invitationActions": "招待の操作",
         "permissionRequired": "共有設定を変更できるのはノートのオーナーのみです。",
-        "notSyncedYet": "このノートはまだクラウドに同期されていません。少し時間をおいて再試行してください。",
         "visibility": {
           "label": "公開範囲",
           "link": "リンクを持つ全員",

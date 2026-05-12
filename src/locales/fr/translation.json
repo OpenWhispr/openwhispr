@@ -2563,7 +2563,6 @@
         "revoke": "Retirer",
         "invitationActions": "Actions de l'invitation",
         "permissionRequired": "Seul le propriétaire de la note peut modifier le partage.",
-        "notSyncedYet": "Cette note n'est pas encore synchronisée avec le cloud. Réessaie dans un instant.",
         "visibility": {
           "label": "Visibilité",
           "link": "Toute personne ayant le lien",

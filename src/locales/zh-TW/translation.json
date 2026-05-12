@@ -2515,7 +2515,6 @@
         "revoke": "移除",
         "invitationActions": "邀請操作",
         "permissionRequired": "只有筆記的擁有者可以變更分享設定。",
-        "notSyncedYet": "此筆記尚未同步至雲端。請稍後再試。",
         "visibility": {
           "label": "可見性",
           "link": "任何擁有連結的人",
