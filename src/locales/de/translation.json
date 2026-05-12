@@ -2498,7 +2498,38 @@
     "deleteNote": "Notiz löschen",
     "deleteConfirmTitle": "Notiz löschen?",
     "deleteConfirmDescription": "Diese Notiz wird dauerhaft gelöscht und kann nicht wiederhergestellt werden.",
-    "deleteConfirm": "Löschen"
+    "deleteConfirm": "Löschen",
+    "share": {
+      "button": "Teilen",
+      "dialog": {
+        "title": "Notiz teilen",
+        "searchPlaceholder": "Personen per E-Mail hinzufügen",
+        "emailLabel": "E-Mail des Empfängers",
+        "shareButton": "Teilen",
+        "copyLink": "Link kopieren",
+        "copied": "Kopiert",
+        "owner": "Eigentümer",
+        "pending": "Ausstehend",
+        "accepted": "Hat Zugriff",
+        "resend": "Einladung erneut senden",
+        "revoke": "Entfernen",
+        "invitationActions": "Einladungsaktionen",
+        "permissionRequired": "Nur der Notiz-Eigentümer kann die Freigabe ändern.",
+        "notSyncedYet": "Diese Notiz wurde noch nicht in die Cloud synchronisiert. Versuche es gleich noch einmal.",
+        "visibility": {
+          "label": "Sichtbarkeit",
+          "link": "Jeder mit dem Link",
+          "domain": "Alle bei {{domain}} mit dem Link",
+          "invited": "Nur eingeladene Personen"
+        },
+        "error": {
+          "invalidEmail": "Gib eine gültige E-Mail-Adresse ein",
+          "alreadyInvited": "{{email}} ist bereits eingeladen",
+          "inviteFailed": "Die Einladung konnte nicht gesendet werden. Versuche es erneut.",
+          "linkUnavailable": "Generiere oder rotiere den Link, um ihn zu kopieren"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "Suche",

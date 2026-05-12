@@ -2498,7 +2498,38 @@
     "deleteNote": "刪除筆記",
     "deleteConfirmTitle": "刪除筆記？",
     "deleteConfirmDescription": "此筆記將被永久刪除，無法復原。",
-    "deleteConfirm": "刪除"
+    "deleteConfirm": "刪除",
+    "share": {
+      "button": "分享",
+      "dialog": {
+        "title": "分享筆記",
+        "searchPlaceholder": "透過電子郵件新增成員",
+        "emailLabel": "收件人電子郵件",
+        "shareButton": "分享",
+        "copyLink": "複製連結",
+        "copied": "已複製",
+        "owner": "擁有者",
+        "pending": "待處理",
+        "accepted": "已取得存取權",
+        "resend": "重新傳送邀請",
+        "revoke": "移除",
+        "invitationActions": "邀請操作",
+        "permissionRequired": "只有筆記的擁有者可以變更分享設定。",
+        "notSyncedYet": "此筆記尚未同步至雲端。請稍後再試。",
+        "visibility": {
+          "label": "可見性",
+          "link": "任何擁有連結的人",
+          "domain": "{{domain}} 中擁有連結的所有人",
+          "invited": "僅限受邀者"
+        },
+        "error": {
+          "invalidEmail": "請輸入有效的電子郵件地址",
+          "alreadyInvited": "{{email}} 已被邀請",
+          "inviteFailed": "無法傳送邀請。請再試一次。",
+          "linkUnavailable": "產生或更換連結後即可複製"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "搜尋",

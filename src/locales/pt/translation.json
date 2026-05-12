@@ -2498,7 +2498,38 @@
     "deleteNote": "Excluir nota",
     "deleteConfirmTitle": "Excluir nota?",
     "deleteConfirmDescription": "Esta nota será excluída permanentemente e não poderá ser recuperada.",
-    "deleteConfirm": "Excluir"
+    "deleteConfirm": "Excluir",
+    "share": {
+      "button": "Compartilhar",
+      "dialog": {
+        "title": "Compartilhar nota",
+        "searchPlaceholder": "Adicione pessoas por e-mail",
+        "emailLabel": "E-mail do destinatário",
+        "shareButton": "Compartilhar",
+        "copyLink": "Copiar link",
+        "copied": "Copiado",
+        "owner": "Proprietário",
+        "pending": "Pendente",
+        "accepted": "Com acesso",
+        "resend": "Reenviar convite",
+        "revoke": "Remover",
+        "invitationActions": "Ações do convite",
+        "permissionRequired": "Apenas o proprietário da nota pode alterar o compartilhamento.",
+        "notSyncedYet": "Esta nota ainda não foi sincronizada com a nuvem. Tente novamente em instantes.",
+        "visibility": {
+          "label": "Visibilidade",
+          "link": "Qualquer pessoa com o link",
+          "domain": "Todos em {{domain}} com o link",
+          "invited": "Apenas pessoas convidadas"
+        },
+        "error": {
+          "invalidEmail": "Digite um endereço de e-mail válido",
+          "alreadyInvited": "{{email}} já foi convidado",
+          "inviteFailed": "Não foi possível enviar o convite. Tente novamente.",
+          "linkUnavailable": "Gere ou rotacione o link para copiá-lo"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "Pesquisar",

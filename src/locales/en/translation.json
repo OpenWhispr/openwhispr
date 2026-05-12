@@ -2594,7 +2594,38 @@
     "deleteNote": "Delete note",
     "deleteConfirmTitle": "Delete note?",
     "deleteConfirmDescription": "This note will be permanently deleted and cannot be recovered.",
-    "deleteConfirm": "Delete"
+    "deleteConfirm": "Delete",
+    "share": {
+      "button": "Share",
+      "dialog": {
+        "title": "Share note",
+        "searchPlaceholder": "Add people by email",
+        "emailLabel": "Recipient email",
+        "shareButton": "Share",
+        "copyLink": "Copy link",
+        "copied": "Copied",
+        "owner": "Owner",
+        "pending": "Pending",
+        "accepted": "Has access",
+        "resend": "Resend invite",
+        "revoke": "Remove",
+        "invitationActions": "Invitation actions",
+        "permissionRequired": "Only the note owner can change sharing.",
+        "notSyncedYet": "This note hasn't synced to the cloud yet. Try again in a moment.",
+        "visibility": {
+          "label": "Visibility",
+          "link": "Anyone with the link",
+          "domain": "Everyone at {{domain}} with the link",
+          "invited": "Only people invited"
+        },
+        "error": {
+          "invalidEmail": "Enter a valid email address",
+          "alreadyInvited": "{{email}} is already invited",
+          "inviteFailed": "Couldn't send the invitation. Try again.",
+          "linkUnavailable": "Generate or rotate the link to copy it"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "Search",

@@ -2498,7 +2498,38 @@
     "deleteNote": "删除笔记",
     "deleteConfirmTitle": "删除笔记？",
     "deleteConfirmDescription": "此笔记将被永久删除，无法恢复。",
-    "deleteConfirm": "删除"
+    "deleteConfirm": "删除",
+    "share": {
+      "button": "分享",
+      "dialog": {
+        "title": "分享笔记",
+        "searchPlaceholder": "通过电子邮件添加成员",
+        "emailLabel": "收件人邮箱",
+        "shareButton": "分享",
+        "copyLink": "复制链接",
+        "copied": "已复制",
+        "owner": "所有者",
+        "pending": "待处理",
+        "accepted": "已获得访问权限",
+        "resend": "重新发送邀请",
+        "revoke": "移除",
+        "invitationActions": "邀请操作",
+        "permissionRequired": "只有笔记的所有者可以更改分享设置。",
+        "notSyncedYet": "此笔记尚未同步到云端。请稍后再试。",
+        "visibility": {
+          "label": "可见性",
+          "link": "拥有链接的任何人",
+          "domain": "{{domain}} 内拥有链接的所有人",
+          "invited": "仅受邀者"
+        },
+        "error": {
+          "invalidEmail": "请输入有效的电子邮件地址",
+          "alreadyInvited": "{{email}} 已经被邀请",
+          "inviteFailed": "无法发送邀请。请重试。",
+          "linkUnavailable": "生成或更换链接后即可复制"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "搜索",

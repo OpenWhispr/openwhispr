@@ -2498,7 +2498,38 @@
     "deleteNote": "ノートを削除",
     "deleteConfirmTitle": "ノートを削除しますか？",
     "deleteConfirmDescription": "このノートは完全に削除され、復元できません。",
-    "deleteConfirm": "削除"
+    "deleteConfirm": "削除",
+    "share": {
+      "button": "共有",
+      "dialog": {
+        "title": "ノートを共有",
+        "searchPlaceholder": "メールアドレスでメンバーを追加",
+        "emailLabel": "受信者のメールアドレス",
+        "shareButton": "共有",
+        "copyLink": "リンクをコピー",
+        "copied": "コピーしました",
+        "owner": "オーナー",
+        "pending": "保留中",
+        "accepted": "アクセス権あり",
+        "resend": "招待を再送信",
+        "revoke": "削除",
+        "invitationActions": "招待の操作",
+        "permissionRequired": "共有設定を変更できるのはノートのオーナーのみです。",
+        "notSyncedYet": "このノートはまだクラウドに同期されていません。少し時間をおいて再試行してください。",
+        "visibility": {
+          "label": "公開範囲",
+          "link": "リンクを持つ全員",
+          "domain": "{{domain}} の全員（リンクを持つ人）",
+          "invited": "招待された人のみ"
+        },
+        "error": {
+          "invalidEmail": "有効なメールアドレスを入力してください",
+          "alreadyInvited": "{{email}} はすでに招待されています",
+          "inviteFailed": "招待を送信できませんでした。もう一度お試しください。",
+          "linkUnavailable": "リンクをコピーするには生成またはローテーションしてください"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "検索",
