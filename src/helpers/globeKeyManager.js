@@ -94,9 +94,10 @@ class GlobeKeyManager extends EventEmitter {
     }
 
     this.hasReportedError = false;
-    this.process = spawn(listenerPath, this.suppressedMouseButtons);
+    const child = spawn(listenerPath, this.suppressedMouseButtons);
+    this.process = child;
     debugLogger.info("[GlobeKeyManager] Process spawned", {
-      pid: this.process.pid,
+      pid: child.pid,
       suppressedMouseButtons: this.suppressedMouseButtons,
     });
 
@@ -111,8 +112,8 @@ class GlobeKeyManager extends EventEmitter {
       }
     }, RESTART_RESET_MS);
 
-    this.process.stdout.setEncoding("utf8");
-    this.process.stdout.on("data", (chunk) => {
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
       chunk
         .split(/\r?\n/)
         .map((line) => line.trim())
@@ -151,8 +152,8 @@ class GlobeKeyManager extends EventEmitter {
         });
     });
 
-    this.process.stderr.setEncoding("utf8");
-    this.process.stderr.on("data", (data) => {
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (data) => {
       const message = data.toString().trim();
       if (message.length > 0) {
         if (message.includes("Failed to create event monitor")) {
@@ -163,14 +164,19 @@ class GlobeKeyManager extends EventEmitter {
       }
     });
 
-    this.process.on("error", (error) => {
+    child.on("error", (error) => {
       debugLogger.info("[GlobeKeyManager] Process error", { error: error.message });
       this.reportError(error);
-      this.process = null;
+      if (this.process === child) this.process = null;
     });
 
-    this.process.on("exit", (code, signal) => {
+    child.on("exit", (code, signal) => {
       debugLogger.info("[GlobeKeyManager] Process exited", { code, signal });
+      // Only clear instance state if this is still the current process — a prior
+      // stop()+start() (e.g. setSuppressedMouseButtons) may have already replaced it.
+      if (this.process !== child) {
+        return;
+      }
       this.process = null;
       if (this._restartResetTimer) {
         clearTimeout(this._restartResetTimer);

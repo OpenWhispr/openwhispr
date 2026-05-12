@@ -940,6 +940,9 @@ async function startApp() {
     let globeLastStopTime = 0;
     const MIN_HOLD_DURATION_MS = 150;
     const POST_STOP_COOLDOWN_MS = 300;
+    // Re-sync suppression after the renderer has loaded the stored hotkey
+    // (hotkeyManager.loadSavedHotkeyOrDefault reads localStorage async via did-finish-load).
+    const HOTKEY_LOAD_GRACE_MS = 1500;
 
     globeKeyManager.on("globe-down", async () => {
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
@@ -1168,7 +1171,7 @@ async function startApp() {
 
     syncSuppressedMouseButtons();
     globeKeyManager.start();
-    setTimeout(syncSuppressedMouseButtons, 1500);
+    setTimeout(syncSuppressedMouseButtons, HOTKEY_LOAD_GRACE_MS);
 
     // After starting globe-listener, check if accessibility is granted.
     // If not, notify the control panel so it can prompt the user.

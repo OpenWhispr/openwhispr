@@ -61,8 +61,6 @@ const SPECIAL_KEYS = new Set(
     "Pause",
     "ScrollLock",
     "NumLock",
-    "MouseButton4",
-    "MouseButton5",
   ].concat(Array.from({ length: 24 }, (_, i) => `F${i + 1}`))
 );
 
@@ -376,12 +374,8 @@ function normalizeKeyToken(part: string): string {
   if (lowered === "backspace") return "Backspace";
   if (lowered === "globe") return "GLOBE";
   if (lowered === "fn") return "Fn";
-  if (lowered === "mousebutton4" || lowered === "button4" || lowered === "backbutton") {
-    return "MouseButton4";
-  }
-  if (lowered === "mousebutton5" || lowered === "button5" || lowered === "forwardbutton") {
-    return "MouseButton5";
-  }
+  if (lowered === "mousebutton4") return "MouseButton4";
+  if (lowered === "mousebutton5") return "MouseButton5";
 
   const functionMatch = lowered.match(/^f(\d{1,2})$/);
   if (functionMatch) {
@@ -544,6 +538,15 @@ export function validateHotkey(
       };
     }
     return { valid: true };
+  }
+
+  // Mouse buttons cannot be combined with keyboard modifiers — they're handled
+  // by a separate native event tap, not Electron's globalShortcut.
+  if (/mousebutton[45]/i.test(hotkey)) {
+    return {
+      valid: false,
+      error: "Mouse button hotkeys cannot be combined with other keys.",
+    };
   }
 
   const parts = hotkey
