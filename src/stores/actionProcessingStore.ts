@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import reasoningService from "../services/ReasoningService";
 import { getEffectiveCleanupModel, getSettings } from "./settingsStore";
+import { appendDictionarySuffix } from "../config/prompts";
 import { generateNoteTitle } from "../utils/generateTitle";
 import type { ActionItem } from "../types/electron";
 
@@ -121,11 +122,16 @@ export function runBackgroundAction(
   (async () => {
     try {
       const basePrompt = options.isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
-      const systemPrompt = basePrompt + action.prompt;
+      const settings = getSettings();
+      const systemPrompt = appendDictionarySuffix(
+        basePrompt + action.prompt,
+        options.isMeetingNote ? settings.customDictionary : undefined,
+        settings.uiLanguage
+      );
       const enhanced = await reasoningService.processText(noteContent, modelId, null, {
         systemPrompt,
         temperature: 0.3,
-        disableThinking: getSettings().noteFormattingDisableThinking,
+        disableThinking: settings.noteFormattingDisableThinking,
       });
 
       if (cancelledFlags.get(noteId)) return;
