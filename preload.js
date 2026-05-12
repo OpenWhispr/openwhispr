@@ -600,6 +600,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   notifyLimitReached: (data) => ipcRenderer.send("limit-reached", data),
   onLimitReached: registerListener("limit-reached", (callback) => (_event, data) => callback(data)),
 
+  // Workspace invitation deep link
+  onWorkspaceInvitationToken: registerListener(
+    "workspace-invitation-token",
+    (callback) => (_event, token) => callback(token)
+  ),
+
   // Globe key listener for hotkey capture (macOS only)
   onGlobeKeyPressed: (callback) => {
     const listener = () => callback?.();

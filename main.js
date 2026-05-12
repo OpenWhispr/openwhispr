@@ -463,6 +463,11 @@ app.on("open-url", (event, url) => {
     return;
   }
 
+  if (url.includes("/invitations/")) {
+    handleInvitationDeepLink(url);
+    return;
+  }
+
   void handleOAuthDeepLink(url);
 
   if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
@@ -470,6 +475,30 @@ app.on("open-url", (event, url) => {
     windowManager.controlPanelWindow.focus();
   }
 });
+
+function handleInvitationDeepLink(deepLinkUrl) {
+  try {
+    const match = deepLinkUrl.match(/invitations\/([^/?#]+)/);
+    const token = match?.[1];
+    if (!token) return;
+    if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
+      windowManager.controlPanelWindow.show();
+      windowManager.controlPanelWindow.focus();
+      windowManager.controlPanelWindow.webContents.send("workspace-invitation-token", token);
+    } else if (windowManager) {
+      windowManager.createControlPanelWindow();
+      // Defer the send until renderer is ready; main.js relies on `did-finish-load`
+      const win = windowManager.controlPanelWindow;
+      if (win) {
+        win.webContents.once("did-finish-load", () => {
+          win.webContents.send("workspace-invitation-token", token);
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Invitation deep link parse failed:", error);
+  }
+}
 
 function resolveAuthUrl() {
   const fs = require("fs");
@@ -1452,6 +1481,8 @@ if (gotSingleInstanceLock) {
     if (url) {
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
+      } else if (url.includes("/invitations/")) {
+        handleInvitationDeepLink(url);
       } else {
         void handleOAuthDeepLink(url);
       }

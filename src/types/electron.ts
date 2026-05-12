@@ -1214,6 +1214,9 @@ declare global {
         callback: (data: { wordsUsed: number; limit: number }) => void
       ) => () => void;
 
+      // Workspace invitation deep link
+      onWorkspaceInvitationToken?: (callback: (token: string) => void) => () => void;
+
       // AssemblyAI Streaming
       assemblyAiStreamingWarmup?: (options?: {
         sampleRate?: number;
