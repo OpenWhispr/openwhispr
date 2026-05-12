@@ -450,9 +450,8 @@ class LlamaServerManager {
       stream: false,
     };
 
-    // Qwen chat templates route output to `message.reasoning_content` and
-    // leave `message.content` empty unless `enable_thinking` is disabled.
-    // Non-Qwen templates ignore the kwarg.
+    // Without this, Qwen chat templates leave `message.content` empty and
+    // route output into `reasoning_content`. Non-Qwen templates ignore it.
     if (options.disableThinking !== false) {
       requestBody.chat_template_kwargs = { enable_thinking: false };
     }
