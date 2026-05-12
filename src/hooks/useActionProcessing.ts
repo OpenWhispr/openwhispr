@@ -22,12 +22,7 @@ export function useActionProcessing(noteId: number | null) {
   );
 
   const runAction = useCallback(
-    (
-      action: ActionItem,
-      noteContent: string,
-      contentHash: string,
-      options: RunActionOptions
-    ) => {
+    (action: ActionItem, noteContent: string, contentHash: string, options: RunActionOptions) => {
       if (noteId == null) return;
       runBackgroundAction(noteId, noteContent, contentHash, action, options, {
         noModel: t("notes.actions.errors.noModel"),

@@ -1,10 +1,7 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../ui/useToast";
-import {
-  useActionProcessingStore,
-  consumeErrorEvents,
-} from "../../stores/actionProcessingStore";
+import { useActionProcessingStore, consumeErrorEvents } from "../../stores/actionProcessingStore";
 
 /**
  * Headless. Mount once inside ToastProvider so background-action errors
