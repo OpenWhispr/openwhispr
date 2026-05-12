@@ -3,6 +3,7 @@ import type { FolderItem } from "../../types/electron";
 
 export const DEFAULT_FOLDER_NAME = "Personal";
 export const MEETINGS_FOLDER_NAME = "Meetings";
+export const VIDEOS_FOLDER_NAME = "Videos";
 
 export function findDefaultFolder(folders: FolderItem[]): FolderItem | undefined {
   return folders.find((f) => f.name === DEFAULT_FOLDER_NAME && f.is_default);

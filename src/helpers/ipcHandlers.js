@@ -82,6 +82,8 @@ const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 const CLOUD_CHUNK_CONCURRENCY = 5;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
 
+const { formatTimestamp: formatDiarTime } = require("./speakerMerge");
+
 function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   const boundary = `----OpenWhispr${Date.now()}`;
   const parts = [];
@@ -354,7 +356,15 @@ class IPCHandlers {
   }
 
   _setWhisperVadSettings(update = {}) {
-    this.whisperVadSettings = { ...this._getWhisperVadSettings(), ...update };
+    const ALLOWED_KEYS = new Set([
+      "dictationSileroEnabled", "noteRecordingSileroEnabled", "meetingSileroEnabled",
+      ...Object.keys(require("../constants/whisperVad.json").DEFAULTS),
+    ]);
+    const filtered = {};
+    for (const [k, v] of Object.entries(update)) {
+      if (ALLOWED_KEYS.has(k)) filtered[k] = v;
+    }
+    this.whisperVadSettings = { ...this._getWhisperVadSettings(), ...filtered };
     return this._getWhisperVadSettings();
   }
 
@@ -1413,10 +1423,12 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("select-audio-file", async () => {
+    ipcMain.handle("select-audio-file", async (event, options = {}) => {
       const { dialog } = require("electron");
+      const properties = ["openFile"];
+      if (options.multiple === true) properties.push("multiSelections");
       const result = await dialog.showOpenDialog({
-        properties: ["openFile"],
+        properties,
         filters: [
           { name: "Audio Files", extensions: ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"] },
         ],
@@ -1424,23 +1436,123 @@ class IPCHandlers {
       if (result.canceled || !result.filePaths.length) {
         return { canceled: true };
       }
+      if (options.multiple === true) {
+        return { canceled: false, filePaths: result.filePaths };
+      }
       return { canceled: false, filePath: result.filePaths[0] };
     });
 
     ipcMain.handle("get-file-size", async (_event, filePath) => {
       const fs = require("fs");
       try {
-        const stats = fs.statSync(filePath);
+        if (typeof filePath !== "string") return 0;
+        const resolved = path.resolve(filePath);
+        const real = fs.realpathSync(resolved);
+        const allowedDirs = [
+          require("os").tmpdir(),
+          require("./safeTempDir").getSafeTempDir(),
+          app.getPath("userData"),
+          app.getPath("home"),
+        ];
+        if (!allowedDirs.some((dir) => real.startsWith(dir + path.sep) || real === dir)) {
+          return 0;
+        }
+        const stats = fs.statSync(real);
         return stats.size;
       } catch {
         return 0;
       }
     });
 
+    let activeUrlDownloadAbort = null;
+
+    ipcMain.handle("download-url-audio", async (event, url) => {
+      if (typeof url !== "string" || url.length > 2048) {
+        return { success: false, error: "Invalid URL", code: "INVALID_URL" };
+      }
+      const { download } = require("./urlAudioDownloader");
+
+      if (activeUrlDownloadAbort) {
+        activeUrlDownloadAbort.abort();
+        activeUrlDownloadAbort = null;
+      }
+
+      const abortController = new AbortController();
+      activeUrlDownloadAbort = abortController;
+
+      try {
+        const result = await download(
+          url,
+          (progress) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send("url-download-progress", progress);
+            }
+          },
+          abortController.signal
+        );
+        return { success: true, ...result };
+      } catch (error) {
+        debugLogger.error("URL audio download error", { error: error.message, code: error.code });
+        return { success: false, error: error.message, code: error.code || "DOWNLOAD_FAILED" };
+      } finally {
+        if (activeUrlDownloadAbort === abortController) {
+          activeUrlDownloadAbort = null;
+        }
+      }
+    });
+
+    ipcMain.handle("cancel-url-download", async () => {
+      if (activeUrlDownloadAbort) {
+        activeUrlDownloadAbort.abort();
+        activeUrlDownloadAbort = null;
+        return { success: true };
+      }
+      return { success: false };
+    });
+
+    ipcMain.handle("delete-temp-file", async (event, filePath) => {
+      try {
+        if (typeof filePath !== "string") {
+          return { success: false, error: "Invalid file path" };
+        }
+        const { getSafeTempDir } = require("./safeTempDir");
+        const resolved = path.resolve(filePath);
+        const tempDir = getSafeTempDir();
+        const basename = path.basename(resolved);
+        if (!basename.startsWith("ow-url-") && !basename.startsWith("ow-diarize-")) {
+          return { success: false, error: "Not an OpenWhispr temp file" };
+        }
+        const real = fs.realpathSync(resolved);
+        const rel = path.relative(tempDir, real);
+        if (rel.startsWith("..") || path.isAbsolute(rel)) {
+          return { success: false, error: "Not an OpenWhispr temp file" };
+        }
+        fs.unlinkSync(real);
+        return { success: true };
+      } catch (error) {
+        debugLogger.warn("Failed to delete temp file", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
       const fs = require("fs");
       try {
-        const audioBuffer = fs.readFileSync(filePath);
+        if (typeof filePath !== "string") {
+          return { success: false, error: "Invalid file path" };
+        }
+        const resolved = path.resolve(filePath);
+        const real = fs.realpathSync(resolved);
+        const allowedDirs = [
+          require("os").tmpdir(),
+          require("./safeTempDir").getSafeTempDir(),
+          app.getPath("userData"),
+          app.getPath("home"),
+        ];
+        if (!allowedDirs.some((dir) => real.startsWith(dir + path.sep) || real === dir)) {
+          return { success: false, error: "File path not allowed" };
+        }
+        const audioBuffer = fs.readFileSync(real);
         if (options.provider === "nvidia") {
           const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
           return result;
@@ -1973,6 +2085,68 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("diarize-audio-file", async (event, filePath, options = {}) => {
+      try {
+        if (!this.diarizationManager) {
+          return { success: false, error: "Diarization not available" };
+        }
+        if (!this.diarizationManager.isModelDownloaded()) {
+          return { success: false, error: "Diarization models not downloaded" };
+        }
+
+        if (typeof filePath !== "string") {
+          return { success: false, error: "Invalid file path" };
+        }
+        const resolved = path.resolve(filePath);
+        const realPath = fs.realpathSync(resolved);
+        const allowedDirs = [
+          require("os").tmpdir(),
+          require("./safeTempDir").getSafeTempDir(),
+          app.getPath("userData"),
+          app.getPath("home"),
+        ];
+        if (!allowedDirs.some((dir) => realPath.startsWith(dir + path.sep) || realPath === dir)) {
+          return { success: false, error: "File path not allowed" };
+        }
+        filePath = realPath;
+
+        const diarOpts = {
+          numSpeakers: Math.min(MAX_SPEAKER_COUNT, Math.max(-1, Math.round(Number(options.numSpeakers) || -1))),
+          threshold: Math.min(1, Math.max(0, Number(options.threshold) || 0.55)),
+        };
+
+        const { mergeSpeakersWithText, formatSpeakerTranscript } = require("./speakerMerge");
+        const { convertToWav } = require("./ffmpegUtils");
+        const { getSafeTempDir } = require("./safeTempDir");
+        const wavPath = path.join(getSafeTempDir(), `ow-diarize-${Date.now()}.wav`);
+
+        try {
+          await convertToWav(filePath, wavPath, { sampleRate: 16000, channels: 1 });
+          const segments = await this.diarizationManager.diarize(wavPath, diarOpts);
+          return { success: true, segments, formattedText: segments.length > 0 ? formatSpeakerTranscript(segments) : null };
+        } finally {
+          try { fs.unlinkSync(wavPath); } catch {}
+        }
+      } catch (error) {
+        debugLogger.error("Diarization error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("merge-speaker-text", async (event, { segments, text, duration }) => {
+      try {
+        if (!Array.isArray(segments) || typeof text !== "string" || typeof duration !== "number") {
+          return { success: false, error: "Invalid arguments" };
+        }
+        const { mergeSpeakersWithText, formatSpeakerTranscript } = require("./speakerMerge");
+        const merged = mergeSpeakersWithText(segments, text, duration);
+        return { success: true, text: formatSpeakerTranscript(merged) };
+      } catch (error) {
+        debugLogger.error("Speaker merge error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("cancel-diarization-download", async () => {
       return this.diarizationManager.cancelDownload();
     });
@@ -2321,6 +2495,10 @@ class IPCHandlers {
 
     ipcMain.handle("open-external", async (event, url) => {
       try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+          return { success: false, error: "Only HTTP/HTTPS URLs are allowed" };
+        }
         await shell.openExternal(url);
         return { success: true };
       } catch (error) {
@@ -6048,6 +6226,14 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
+        if (typeof opts?.path !== "string" || !opts.path.startsWith("/")) {
+          return { success: false, error: "Invalid API path" };
+        }
+        const targetUrl = new URL(opts.path, apiUrl);
+        if (targetUrl.origin !== new URL(apiUrl).origin) {
+          return { success: false, error: "Invalid API path" };
+        }
+
         const authHeader = await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
@@ -6060,7 +6246,7 @@ class IPCHandlers {
           fetchOpts.body = JSON.stringify(opts.body);
         }
 
-        const response = await proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
+        const response = await proxyFetch(targetUrl.href, fetchOpts);
 
         if (response.status === 401) {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
@@ -6145,6 +6331,21 @@ class IPCHandlers {
 
     ipcMain.handle("transcribe-audio-file-cloud", async (event, filePath) => {
       try {
+        if (typeof filePath !== "string") {
+          return { success: false, error: "Invalid file path" };
+        }
+        const resolvedCloud = path.resolve(filePath);
+        const realCloud = fs.realpathSync(resolvedCloud);
+        const allowedCloudDirs = [
+          require("os").tmpdir(),
+          require("./safeTempDir").getSafeTempDir(),
+          app.getPath("userData"),
+          app.getPath("home"),
+        ];
+        if (!allowedCloudDirs.some((dir) => realCloud.startsWith(dir + path.sep) || realCloud === dir)) {
+          return { success: false, error: "File path not allowed" };
+        }
+
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
@@ -6159,15 +6360,15 @@ class IPCHandlers {
           sessionId: this.sessionId,
         };
 
-        const fileSize = fs.statSync(filePath).size;
+        const fileSize = fs.statSync(realCloud).size;
 
         if (fileSize > CLOUD_INLINE_LIMIT) {
           debugLogger.debug("Large file detected, using client-side chunking", {
             fileSize,
-            filePath: path.basename(filePath),
+            filePath: path.basename(realCloud),
           });
           const { text, warning } = await chunkedCloudTranscribe({
-            filePath,
+            filePath: realCloud,
             apiUrl,
             authHeader,
             multipartFields,
@@ -6176,10 +6377,10 @@ class IPCHandlers {
           return { success: true, text, ...(warning ? { warning } : {}) };
         }
 
-        const audioBuffer = fs.readFileSync(filePath);
-        const ext = path.extname(filePath).toLowerCase().replace(".", "");
+        const audioBuffer = fs.readFileSync(realCloud);
+        const ext = path.extname(realCloud).toLowerCase().replace(".", "");
         const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
-        const fileName = path.basename(filePath);
+        const fileName = path.basename(realCloud);
 
         const { body, boundary } = buildMultipartBody(
           audioBuffer,
@@ -6203,14 +6404,29 @@ class IPCHandlers {
 
     ipcMain.handle(
       "transcribe-audio-file-byok",
-      async (event, { filePath, apiKey, baseUrl, model }) => {
+      async (event, { filePath, apiKey, baseUrl, model, diarize }) => {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
+          if (typeof filePath !== "string") {
+            return { success: false, error: "Invalid file path" };
+          }
+          const resolvedByok = path.resolve(filePath);
+          const realByok = fs.realpathSync(resolvedByok);
+          const allowedByokDirs = [
+            require("os").tmpdir(),
+            require("./safeTempDir").getSafeTempDir(),
+            app.getPath("userData"),
+            app.getPath("home"),
+          ];
+          if (!allowedByokDirs.some((dir) => realByok.startsWith(dir + path.sep) || realByok === dir)) {
+            return { success: false, error: "File path not allowed" };
+          }
+
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
           if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
-          const fileSize = fs.statSync(filePath).size;
+          const fileSize = fs.statSync(realByok).size;
           if (fileSize > BYOK_FILE_SIZE_LIMIT) {
             return {
               success: false,
@@ -6218,19 +6434,40 @@ class IPCHandlers {
             };
           }
 
-          const audioBuffer = fs.readFileSync(filePath);
-          const ext = path.extname(filePath).toLowerCase().replace(".", "");
+          const audioBuffer = fs.readFileSync(realByok);
+          const ext = path.extname(realByok).toLowerCase().replace(".", "");
           const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
-          const fileName = path.basename(filePath);
+          const fileName = path.basename(realByok);
 
           let transcriptionUrl = baseUrl.replace(/\/+$/, "");
           if (!transcriptionUrl.endsWith("/audio/transcriptions")) {
             transcriptionUrl += "/audio/transcriptions";
           }
 
-          const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, {
-            model: model || "whisper-1",
-          });
+          let isMistral = false;
+          let isOpenAi = false;
+          try {
+            const h = new URL(baseUrl).hostname;
+            isMistral = h.endsWith(".mistral.ai") || h === "mistral.ai";
+            isOpenAi = h.endsWith(".openai.com") || h === "openai.com";
+          } catch {}
+          const fields = {};
+
+          if (diarize && isMistral) {
+            fields.model = model || "voxtral-mini-latest";
+            fields.diarize = "true";
+            fields.timestamp_granularities = "segment";
+          } else if (diarize && isOpenAi) {
+            fields.model = "gpt-4o-transcribe-diarize";
+            fields.response_format = "verbose_json";
+            fields.chunking_strategy = "auto";
+          } else if (diarize) {
+            return { success: false, error: "Speaker diarization is only supported with OpenAI and Mistral APIs." };
+          } else {
+            fields.model = model || "whisper-1";
+          }
+
+          const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, fields);
 
           const url = new URL(transcriptionUrl);
           const data = await postMultipart(url, body, boundary, {
@@ -6247,6 +6484,32 @@ class IPCHandlers {
             throw new Error(
               data.data?.error?.message || data.data?.error || `API error: ${data.statusCode}`
             );
+          }
+
+          if (diarize && data.data?.speakers) {
+            const segments = (data.data.speakers || []).map((s) => ({
+              speaker: s.id || `Speaker ${s.speaker || "?"}`,
+              text: s.text || "",
+              start: s.start || 0,
+              end: s.end || 0,
+            }));
+            const formatted = segments
+              .map((s) => `[${s.speaker}] ${formatDiarTime(s.start)} - ${formatDiarTime(s.end)}\n${s.text}`)
+              .join("\n\n");
+            return { success: true, text: formatted, diarized: true };
+          }
+
+          if (diarize && data.data?.segments) {
+            const segments = data.data.segments || [];
+            const formatted = segments
+              .map((s) => {
+                const speaker = s.speaker || "Speaker ?";
+                const start = formatDiarTime(s.start || 0);
+                const end = formatDiarTime(s.end || 0);
+                return `[${speaker}] ${start} - ${end}\n${s.text || ""}`;
+              })
+              .join("\n\n");
+            return { success: true, text: formatted, diarized: true };
           }
 
           return { success: true, text: data.data.text };

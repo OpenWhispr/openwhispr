@@ -846,6 +846,7 @@ export default function SettingsPage({
     refreshYdotoolStatus();
   }, [refreshYdotoolStatus]);
 
+
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
   const hasShownApproachingToast = useRef(false);

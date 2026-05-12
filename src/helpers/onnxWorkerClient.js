@@ -164,7 +164,7 @@ class OnnxWorkerClient {
     }
   }
 
-  async request(method, payload, transferList) {
+  async request(method, payload, transferList, timeoutMs) {
     if (this.shuttingDown) {
       throw new WorkerCrashedError("worker shutting down");
     }
@@ -191,11 +191,12 @@ class OnnxWorkerClient {
 
     const id = this.nextRequestId++;
     return new Promise((resolve, reject) => {
+      const effectiveTimeout = timeoutMs || REQUEST_TIMEOUT_MS;
       const timeout = setTimeout(() => {
         if (this.pending.delete(id)) {
           reject(new Error(`onnx worker request timeout: ${method}`));
         }
-      }, REQUEST_TIMEOUT_MS);
+      }, effectiveTimeout);
       this.pending.set(id, { resolve, reject, timeout });
       try {
         this.port.postMessage({ id, method, payload }, transferList || []);

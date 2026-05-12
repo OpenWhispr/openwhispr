@@ -122,11 +122,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteAction: (id) => ipcRenderer.invoke("db-delete-action", id),
 
   // Audio file operations
-  selectAudioFile: () => ipcRenderer.invoke("select-audio-file"),
+  selectAudioFile: (options) => ipcRenderer.invoke("select-audio-file", options),
   getFileSize: (filePath) => ipcRenderer.invoke("get-file-size", filePath),
   transcribeAudioFile: (filePath, options) =>
     ipcRenderer.invoke("transcribe-audio-file", filePath, options),
   getPathForFile: (file) => webUtils.getPathForFile(file),
+
+  // URL audio download
+  downloadUrlAudio: (url) => ipcRenderer.invoke("download-url-audio", url),
+  cancelUrlDownload: () => ipcRenderer.invoke("cancel-url-download"),
+  deleteTempFile: (filePath) => ipcRenderer.invoke("delete-temp-file", filePath),
+  onUrlDownloadProgress: registerListener(
+    "url-download-progress",
+    (callback) => (_event, data) => callback(data)
+  ),
 
   onNoteAdded: (callback) => {
     const listener = (_event, note) => callback?.(note);
@@ -254,6 +263,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getDiarizationModelStatus: () => ipcRenderer.invoke("get-diarization-model-status"),
   deleteDiarizationModels: () => ipcRenderer.invoke("delete-diarization-models"),
   cancelDiarizationDownload: () => ipcRenderer.invoke("cancel-diarization-download"),
+  diarizeAudioFile: (filePath, options) =>
+    ipcRenderer.invoke("diarize-audio-file", filePath, options),
+  mergeSpeakerText: (segments, text, duration) =>
+    ipcRenderer.invoke("merge-speaker-text", { segments, text, duration }),
   onDiarizationDownloadProgress: registerListener(
     "diarization-download-progress",
     (callback) => (_event, data) => callback(data)

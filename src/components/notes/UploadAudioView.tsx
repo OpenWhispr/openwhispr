@@ -11,6 +11,7 @@ import {
   FolderOpen,
   Plus,
   Settings,
+  Link2,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
@@ -25,7 +26,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import { Input } from "../ui/input";
 import type { FolderItem } from "../../types/electron";
-import { findDefaultFolder, MEETINGS_FOLDER_NAME } from "./shared";
+import { findDefaultFolder, MEETINGS_FOLDER_NAME, VIDEOS_FOLDER_NAME } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
@@ -36,11 +37,14 @@ import {
   selectIsCloudCleanupMode,
   getSettings,
 } from "../../stores/settingsStore";
+import { useBatchQueue } from "../../hooks/useBatchQueue";
+import type { TranscribeOptions, DiarizationOptions } from "../../hooks/useBatchQueue";
+import BatchQueueView from "./BatchQueueView";
 import { generateNoteTitle } from "../../utils/generateTitle";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
 
-type UploadState = "idle" | "selected" | "transcribing" | "complete" | "error";
+type UploadState = "idle" | "selected" | "downloading" | "transcribing" | "complete" | "error";
 
 const SUPPORTED_EXTENSIONS = ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"];
 
@@ -67,6 +71,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     path: string;
     size: string;
     sizeBytes: number;
+    fromUrl?: boolean;
   } | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [noteId, setNoteId] = useState<number | null>(null);
@@ -79,6 +84,42 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     chunksCompleted: number;
   } | null>(null);
   const progressCleanupRef = useRef<(() => void) | null>(null);
+
+  const [urlInput, setUrlInput] = useState("");
+  const [downloadProgress, setDownloadProgress] = useState<{
+    stage: string;
+    percent: number;
+    title?: string;
+  } | null>(null);
+  const [downloadedTempPath, setDownloadedTempPath] = useState<string | null>(null);
+  const downloadedTempPathRef = useRef(downloadedTempPath);
+  downloadedTempPathRef.current = downloadedTempPath;
+  const [urlExpanded, setUrlExpanded] = useState(false);
+
+  const batch = useBatchQueue();
+
+  const [diarizationEnabled, setDiarizationEnabled] = useState(
+    () => localStorage.getItem("uploadDiarizationEnabled") === "true"
+  );
+  const [diarizationNumSpeakers, setDiarizationNumSpeakers] = useState<string>(
+    () => localStorage.getItem("uploadDiarizationNumSpeakers") || ""
+  );
+  const [diarizationModelsReady, setDiarizationModelsReady] = useState<boolean | null>(null);
+  const [diarizationDownloading, setDiarizationDownloading] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem("uploadDiarizationEnabled", String(diarizationEnabled));
+  }, [diarizationEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem("uploadDiarizationNumSpeakers", diarizationNumSpeakers);
+  }, [diarizationNumSpeakers]);
+
+  useEffect(() => {
+    window.electronAPI.getDiarizationModelStatus?.().then((status) => {
+      setDiarizationModelsReady(status?.modelsDownloaded ?? false);
+    });
+  }, []);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
@@ -169,6 +210,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   useEffect(() => {
     return () => {
       if (progressRef.current) clearInterval(progressRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (downloadedTempPathRef.current) {
+        window.electronAPI.deleteTempFile(downloadedTempPathRef.current);
+      }
     };
   }, []);
 
@@ -272,33 +321,58 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   };
 
   const handleBrowse = async () => {
-    const res = await window.electronAPI.selectAudioFile();
-    if (!res.canceled && res.filePath) {
-      const name = res.filePath.split(/[/\\]/).pop() || "audio";
-      const sizeBytes = (await window.electronAPI.getFileSize?.(res.filePath)) ?? 0;
-      setFile({
-        name,
-        path: res.filePath,
-        size: sizeBytes ? formatFileSize(sizeBytes) : "",
-        sizeBytes,
-      });
+    const res = await window.electronAPI.selectAudioFile({ multiple: true });
+    if (res.canceled) return;
+
+    const filePaths: string[] = res.filePaths || (res.filePath ? [res.filePath] : []);
+    if (filePaths.length === 0) return;
+
+    if (filePaths.length === 1) {
+      const fp = filePaths[0];
+      const name = fp.split(/[/\\]/).pop() || "audio";
+      const sizeBytes = (await window.electronAPI.getFileSize?.(fp)) ?? 0;
+      setFile({ name, path: fp, size: sizeBytes ? formatFileSize(sizeBytes) : "", sizeBytes });
       setState("selected");
       setError(null);
+      return;
     }
+
+    const items: Array<{ name: string; path: string; sizeBytes: number }> = [];
+    for (const fp of filePaths) {
+      const name = fp.split(/[/\\]/).pop() || "audio";
+      const sizeBytes = (await window.electronAPI.getFileSize?.(fp)) ?? 0;
+      items.push({ name, path: fp, sizeBytes });
+    }
+    batch.addFiles(items);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    const f = e.dataTransfer.files[0];
-    if (!f) return;
-    const ext = f.name.split(".").pop()?.toLowerCase() || "";
-    if (SUPPORTED_EXTENSIONS.includes(ext)) {
-      const filePath = window.electronAPI.getPathForFile(f);
-      if (!filePath) return;
-      setFile({ name: f.name, path: filePath, size: formatFileSize(f.size), sizeBytes: f.size });
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+
+    const validFiles: Array<{ name: string; path: string; sizeBytes: number }> = [];
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const ext = f.name.split(".").pop()?.toLowerCase() || "";
+      if (SUPPORTED_EXTENSIONS.includes(ext)) {
+        const filePath = window.electronAPI.getPathForFile(f);
+        if (filePath) {
+          validFiles.push({ name: f.name, path: filePath, sizeBytes: f.size });
+        }
+      }
+    }
+
+    if (validFiles.length === 0) return;
+
+    if (validFiles.length === 1) {
+      const f = validFiles[0];
+      setFile({ name: f.name, path: f.path, size: formatFileSize(f.sizeBytes), sizeBytes: f.sizeBytes });
       setState("selected");
       setError(null);
+    } else {
+      batch.addFiles(validFiles);
     }
   };
 
@@ -306,6 +380,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (progressRef.current) clearInterval(progressRef.current);
     if (progressCleanupRef.current) progressCleanupRef.current();
     progressCleanupRef.current = null;
+    if (downloadedTempPath) {
+      window.electronAPI.deleteTempFile(downloadedTempPath);
+      setDownloadedTempPath(null);
+    }
     setState("idle");
     setFile(null);
     setResult(null);
@@ -313,6 +391,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setError(null);
     setProgress(0);
     setChunkProgress(null);
+    setUrlInput("");
+    setDownloadProgress(null);
     const personal = findDefaultFolder(folders);
     if (personal) setSelectedFolderId(String(personal.id));
   };
@@ -350,7 +430,18 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
 
     try {
-      let res: { success: boolean; text?: string; error?: string; code?: string };
+      const byokUseDiarize = diarizationEnabled &&
+        !useLocalWhisper && !isOpenWhisprCloud &&
+        (cloudTranscriptionProvider === "openai" || cloudTranscriptionProvider === "mistral");
+
+      const diarizePromise =
+        diarizationEnabled && diarizationModelsReady && !byokUseDiarize
+          ? window.electronAPI.diarizeAudioFile?.(file.path, {
+              numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : undefined,
+            }).catch(() => null)
+          : null;
+
+      let res: { success: boolean; text?: string; error?: string; code?: string; diarized?: boolean };
 
       if (isOpenWhisprCloud) {
         res = await withSessionRefresh(async () => {
@@ -373,6 +464,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           apiKey: getActiveApiKey(),
           baseUrl: cloudTranscriptionBaseUrl || "",
           model: cloudTranscriptionModel,
+          diarize: byokUseDiarize || undefined,
         });
       }
 
@@ -384,24 +476,53 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setProgress(100);
         setResult(res.text);
 
-        const textFallback = res.text.trim().split(/\s+/).slice(0, 6).join(" ");
-        const fallbackTitle =
-          textFallback.length > 0
-            ? textFallback + (res.text.trim().split(/\s+/).length > 6 ? "..." : "")
-            : file.name.replace(/\.[^.]+$/, "");
-        const aiTitle = await generateTitle(res.text);
-        const title = aiTitle || fallbackTitle;
+        let title: string;
+        if (file.fromUrl) {
+          title = file.name;
+        } else {
+          const textFallback = res.text.trim().split(/\s+/).slice(0, 6).join(" ");
+          const fallbackTitle =
+            textFallback.length > 0
+              ? textFallback + (res.text.trim().split(/\s+/).length > 6 ? "..." : "")
+              : file.name.replace(/\.[^.]+$/, "");
+          const aiTitle = await generateTitle(res.text);
+          title = aiTitle || fallbackTitle;
+        }
+
+        let finalText = res.text;
+        if (res.diarized) {
+          // Cloud diarization already applied
+        } else if (diarizePromise) {
+          try {
+            const diarResult = await diarizePromise;
+            if (diarResult?.success && diarResult.segments && diarResult.segments.length > 0) {
+              const duration = diarResult.segments[diarResult.segments.length - 1]?.end || 0;
+              const mergeResult = await window.electronAPI.mergeSpeakerText?.(
+                diarResult.segments, finalText, duration
+              );
+              if (mergeResult?.success && mergeResult.text) {
+                finalText = mergeResult.text;
+              }
+            }
+          } catch {
+            // Diarization failed, save without speaker labels
+          }
+        }
 
         const folderId = selectedFolderId ? Number(selectedFolderId) : null;
         const noteRes = await window.electronAPI.saveNote(
           title,
-          res.text,
+          finalText,
           "upload",
           file.name,
           null,
           folderId
         );
         if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);
+        if (downloadedTempPath) {
+          window.electronAPI.deleteTempFile(downloadedTempPath);
+          setDownloadedTempPath(null);
+        }
         setState("complete");
       } else {
         setProgress(0);
@@ -420,6 +541,136 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       setError(err instanceof Error ? err.message : t("notes.upload.errorOccurred"));
       setState("error");
     }
+  };
+
+  const handleUrlSubmit = async () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed || batch.isProcessing) return;
+
+    try {
+      new URL(trimmed);
+    } catch {
+      setError(t("notes.upload.urlInvalid"));
+      setState("error");
+      return;
+    }
+
+    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+      setError(t("notes.upload.urlInvalid"));
+      setState("error");
+      return;
+    }
+
+    setState("downloading");
+    setError(null);
+    setDownloadProgress({ stage: "resolving", percent: 0 });
+
+    const cleanupProgress = !batch.isProcessing
+      ? window.electronAPI.onUrlDownloadProgress?.((data) => {
+          setDownloadProgress(data);
+        })
+      : undefined;
+
+    try {
+      const res = await window.electronAPI.downloadUrlAudio(trimmed);
+
+      if (!res.success) {
+        const fail = res as { success: false; error: string; code?: string };
+        const errorMap: Record<string, string> = {
+          INVALID_URL: t("notes.upload.urlInvalid"),
+          VIDEO_UNAVAILABLE: t("notes.upload.urlVideoUnavailable"),
+          PLAYLIST_URL: t("notes.upload.urlPlaylistNotSupported"),
+          CONTENT_TYPE_INVALID: t("notes.upload.urlContentTypeInvalid"),
+          DOWNLOAD_FAILED: t("notes.upload.urlDownloadFailed"),
+          DOWNLOAD_CANCELLED: "",
+        };
+
+        if (fail.code === "DOWNLOAD_CANCELLED") {
+          setState("idle");
+          return;
+        }
+
+        setError(errorMap[fail.code || ""] || fail.error || t("notes.upload.urlDownloadFailed"));
+        setState("error");
+        return;
+      }
+
+      setDownloadedTempPath(res.tempPath);
+      setFile({
+        name: res.title,
+        path: res.tempPath,
+        size: formatFileSize(res.sizeBytes),
+        sizeBytes: res.sizeBytes,
+        fromUrl: true,
+      });
+      const videosFolder = folders.find(
+        (f) => f.name === VIDEOS_FOLDER_NAME && f.is_default
+      );
+      if (videosFolder) setSelectedFolderId(String(videosFolder.id));
+      setState("selected");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("notes.upload.urlDownloadFailed"));
+      setState("error");
+    } finally {
+      cleanupProgress?.();
+      setDownloadProgress(null);
+    }
+  };
+
+  const handleCancelDownload = () => {
+    window.electronAPI.cancelUrlDownload();
+  };
+
+  const handleBatchUrlSubmit = () => {
+    const lines = urlInput
+      .split("\n")
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const seen = new Set<string>();
+    const validUrls: string[] = [];
+    for (const line of lines) {
+      try {
+        const parsed = new URL(line);
+        if ((parsed.protocol === "http:" || parsed.protocol === "https:") && !seen.has(line)) {
+          seen.add(line);
+          validUrls.push(line);
+        }
+      } catch {
+        // skip invalid
+      }
+    }
+
+    const MAX_BATCH_URLS = 50;
+    if (validUrls.length > 0) {
+      batch.addUrls(validUrls.slice(0, MAX_BATCH_URLS));
+      setUrlInput("");
+      setUrlExpanded(false);
+    }
+  };
+
+  const startBatchProcessing = () => {
+    const folderId = selectedFolderId ? Number(selectedFolderId) : null;
+
+    const transcribeOpts: TranscribeOptions = {
+      useLocalWhisper,
+      localTranscriptionProvider: localTranscriptionProvider as string,
+      whisperModel,
+      parakeetModel,
+      isOpenWhisprCloud,
+      getActiveApiKey,
+      cloudTranscriptionProvider: cloudTranscriptionProvider as string,
+      cloudTranscriptionBaseUrl: cloudTranscriptionBaseUrl || "",
+      cloudTranscriptionModel,
+      folderId,
+    };
+
+    const diarizationOpts: DiarizationOptions = {
+      enabled: diarizationEnabled && !!diarizationModelsReady,
+      numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : null,
+    };
+
+    batch.processQueue(transcribeOpts, diarizationOpts);
   };
 
   const dismissSetup = () => {
@@ -580,14 +831,181 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           )}
 
           {state === "idle" && providerReady !== false && (
-            <IdleView
-              t={t}
-              getActiveModelLabel={getActiveModelLabel}
-              handleDrop={handleDrop}
-              handleBrowse={handleBrowse}
-              isDragOver={isDragOver}
-              setIsDragOver={setIsDragOver}
-            />
+            <>
+              <IdleView
+                t={t}
+                getActiveModelLabel={getActiveModelLabel}
+                handleDrop={handleDrop}
+                handleBrowse={handleBrowse}
+                isDragOver={isDragOver}
+                setIsDragOver={setIsDragOver}
+              />
+
+              <div className="flex items-center gap-3 my-3">
+                <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
+                <span className="text-[10px] text-foreground/20 uppercase tracking-wider">
+                  {t("notes.upload.orDivider")}
+                </span>
+                <div className="h-px flex-1 bg-foreground/5 dark:bg-white/5" />
+              </div>
+
+              {urlExpanded ? (
+                <div>
+                  <textarea
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    placeholder={t("notes.upload.pasteUrls")}
+                    rows={4}
+                    className={cn(
+                      "w-full px-3 py-2 rounded-lg text-xs resize-none",
+                      "bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm",
+                      "border border-foreground/6 dark:border-white/6",
+                      "text-foreground/70 placeholder:text-foreground/20",
+                      "focus:outline-none focus:border-foreground/12 dark:focus:border-white/10",
+                      "transition-colors"
+                    )}
+                    autoFocus
+                  />
+                  <div className="flex items-center gap-2 mt-2 justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => { setUrlExpanded(false); setUrlInput(""); }}
+                      className="h-7 text-xs text-foreground/30"
+                    >
+                      {t("notes.upload.cancel")}
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleBatchUrlSubmit}
+                      disabled={!urlInput.trim()}
+                      className="h-7 text-xs"
+                    >
+                      {t("notes.upload.addToQueue")}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="relative">
+                  {(() => { try { const h = new URL(urlInput).hostname; return h === "youtu.be" || h.endsWith(".youtube.com") || h === "youtube.com"; } catch { return false; } })() ? (
+                    <svg viewBox="0 0 28 20" className="absolute left-2.5 top-1/2 -translate-y-1/2 w-[18px] h-[13px] z-10 pointer-events-none">
+                      <rect width="28" height="20" rx="4" fill="#FF0000" />
+                      <polygon points="11,4 11,16 21,10" fill="white" />
+                    </svg>
+                  ) : /\.(mp3|wav|m4a|ogg|flac|aac|webm|opus)(\?|$)/i.test(urlInput) ? (
+                    <FileAudio
+                      size={13}
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20 z-10 pointer-events-none"
+                    />
+                  ) : (
+                    <Link2
+                      size={13}
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-foreground/20 z-10 pointer-events-none"
+                    />
+                  )}
+                  <input
+                    type="url"
+                    value={urlInput}
+                    onChange={(e) => setUrlInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleUrlSubmit();
+                      }
+                    }}
+                    onFocus={() => {
+                      if (urlInput.includes("\n")) setUrlExpanded(true);
+                    }}
+                    onPaste={(e) => {
+                      const pasted = e.clipboardData.getData("text");
+                      if (pasted.includes("\n")) {
+                        e.preventDefault();
+                        setUrlInput(pasted);
+                        setUrlExpanded(true);
+                      }
+                    }}
+                    placeholder={t("notes.upload.urlPlaceholder")}
+                    className={cn(
+                      "w-full h-8 pl-8 pr-9 rounded-lg text-xs",
+                      "bg-surface-1/40 dark:bg-white/[0.03] backdrop-blur-sm",
+                      "border border-foreground/6 dark:border-white/6",
+                      "text-foreground/70 placeholder:text-foreground/20",
+                      "focus:outline-none focus:border-foreground/12 dark:focus:border-white/10",
+                      "transition-colors"
+                    )}
+                  />
+                  <button
+                    onClick={handleUrlSubmit}
+                    disabled={!urlInput.trim() || batch.isProcessing}
+                    className={cn(
+                      "absolute right-px top-px bottom-px w-7 rounded-r-[7px] flex items-center justify-center transition-colors",
+                      "border-l border-foreground/6 dark:border-white/6",
+                      urlInput.trim()
+                        ? "text-foreground/40 hover:text-foreground/60 hover:bg-foreground/[0.03] dark:hover:bg-white/[0.03]"
+                        : "text-foreground/10"
+                    )}
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {batch.hasQueue && (
+            <div className="mt-3">
+              <BatchQueueView
+                queue={batch.queue}
+                completedCount={batch.completedCount}
+                totalCount={batch.totalCount}
+                isProcessing={batch.isProcessing}
+                onRemoveItem={batch.removeItem}
+                onCancelAll={batch.cancelAll}
+                onClearQueue={batch.clearQueue}
+                onOpenNote={(noteId) => onNoteCreated?.(noteId, null)}
+              />
+
+              {!batch.isProcessing && batch.queue.some((i) => i.status === "queued") && (
+                <div className="mt-3 space-y-2">
+                  {folders.length > 0 && (
+                    <div className="flex items-center justify-center gap-2">
+                      <FolderOpen size={12} className="text-foreground/20 shrink-0" />
+                      <Select value={selectedFolderId} onValueChange={handleFolderChange}>
+                        <SelectTrigger className="h-7 w-44 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                          <SelectValue placeholder={t("notes.upload.selectFolder")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {folders.map((f) => {
+                            const isMeetings = f.name === MEETINGS_FOLDER_NAME && !!f.is_default;
+                            return (
+                              <SelectItem
+                                key={f.id}
+                                value={String(f.id)}
+                                disabled={isMeetings}
+                                className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
+                              >
+                                {f.name}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <div className="flex justify-center">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={startBatchProcessing}
+                      className="h-8 text-xs px-5"
+                    >
+                      {t("notes.upload.transcribe")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
 
           {state === "selected" && file && (
@@ -608,6 +1026,63 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               onCreateAccount={handleCreateAccount}
               onSwitchToCloud={switchToCloud}
             />
+          )}
+
+          {state === "downloading" && downloadProgress && (
+            <div
+              className="flex flex-col items-center"
+              style={{ animation: "float-up 0.3s ease-out" }}
+            >
+              <div className="flex items-end justify-center gap-[3px] h-10 mb-5">
+                {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+                  <div
+                    key={i}
+                    className="w-[3px] rounded-full bg-primary/40 dark:bg-primary/50 origin-bottom"
+                    style={{
+                      height: "100%",
+                      animation: `waveform-bar ${0.8 + i * 0.12}s ease-in-out infinite`,
+                      animationDelay: `${i * 0.08}s`,
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div className="w-full max-w-[200px] h-[3px] rounded-full bg-foreground/5 dark:bg-white/5 overflow-hidden mb-3">
+                <div
+                  className={cn(
+                    "h-full rounded-full bg-primary/50 transition-[width] duration-500 ease-out",
+                    downloadProgress.stage !== "downloading" && "animate-pulse"
+                  )}
+                  style={{
+                    width:
+                      downloadProgress.stage === "downloading"
+                        ? `${Math.min(downloadProgress.percent, 100)}%`
+                        : "100%",
+                  }}
+                />
+              </div>
+
+              <p className="text-xs text-foreground/50 font-medium">
+                {downloadProgress.stage === "resolving" && t("notes.upload.urlResolving")}
+                {downloadProgress.stage === "downloading" && t("notes.upload.urlDownloading")}
+                {downloadProgress.stage === "converting" && t("notes.upload.urlConverting")}
+              </p>
+
+              {downloadProgress.title && (
+                <p className="text-xs text-foreground/20 mt-1 truncate max-w-50">
+                  {downloadProgress.title}
+                </p>
+              )}
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleCancelDownload}
+                className="mt-3 h-7 text-xs text-foreground/30"
+              >
+                {t("notes.upload.urlCancelDownload")}
+              </Button>
+            </div>
           )}
 
           {state === "transcribing" && (
@@ -639,7 +1114,119 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         </div>
 
         {!showSetup && (state === "idle" || state === "selected") && (
-          <div className="mx-auto mt-5" style={{ maxWidth: advancedOpen ? "448px" : "320px" }}>
+          <div className="max-w-[320px] mx-auto mt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-foreground/40 font-medium">
+                  {t("notes.upload.speakerDetection")}
+                </p>
+                <p className="text-[10px] text-foreground/20 mt-0.5">
+                  {t("notes.upload.speakerDetectionDescription")}
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (diarizationDownloading) return;
+                  if (diarizationEnabled) {
+                    setDiarizationEnabled(false);
+                    return;
+                  }
+                  if (!diarizationModelsReady) {
+                    setDiarizationDownloading(true);
+                    try {
+                      await window.electronAPI.downloadDiarizationModels?.();
+                      const status = await window.electronAPI.getDiarizationModelStatus?.();
+                      setDiarizationModelsReady(status?.modelsDownloaded ?? false);
+                      if (status?.modelsDownloaded) setDiarizationEnabled(true);
+                    } finally {
+                      setDiarizationDownloading(false);
+                    }
+                    return;
+                  }
+                  setDiarizationEnabled(true);
+                }}
+                className={cn(
+                  "relative w-7 h-4 rounded-full transition-colors shrink-0",
+                  diarizationEnabled && diarizationModelsReady
+                    ? "bg-primary"
+                    : diarizationDownloading
+                      ? "bg-primary/50 animate-pulse"
+                      : "bg-muted"
+                )}
+                disabled={diarizationDownloading}
+              >
+                <div
+                  className={cn(
+                    "absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform",
+                    diarizationEnabled && diarizationModelsReady
+                      ? "translate-x-3"
+                      : ""
+                  )}
+                />
+              </button>
+            </div>
+
+            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
+              cloudTranscriptionProvider === "openai" && (
+              <p className="text-[10px] text-foreground/25 mt-1.5">
+                {t("notes.upload.openaiDiarizeNote")}
+              </p>
+            )}
+            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
+              cloudTranscriptionProvider === "mistral" && (
+              <p className="text-[10px] text-foreground/25 mt-1.5">
+                {t("notes.upload.mistralDiarizeNote")}
+              </p>
+            )}
+            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
+              cloudTranscriptionProvider === "groq" && (
+              <p className="text-[10px] text-amber-500/60 mt-1.5">
+                {t("notes.upload.groqDiarizeNote")}
+              </p>
+            )}
+
+            {diarizationDownloading && (
+              <p className="text-[10px] text-primary/50 mt-1.5">
+                {t("notes.upload.downloadingModels")}
+              </p>
+            )}
+
+            {diarizationEnabled && isOpenWhisprCloud && (
+              <p className="text-[10px] text-foreground/25 mt-1.5">
+                {t("notes.upload.diarizationRunsLocally")}
+              </p>
+            )}
+
+            {diarizationEnabled && diarizationModelsReady && (
+              <div className="mt-2">
+                <input
+                  type="number"
+                  min="2"
+                  max="20"
+                  value={diarizationNumSpeakers}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") { setDiarizationNumSpeakers(""); return; }
+                    const n = Math.max(2, Math.min(20, Number(raw)));
+                    setDiarizationNumSpeakers(String(isNaN(n) ? "" : n));
+                  }}
+                  placeholder={t("notes.upload.numSpeakersPlaceholder")}
+                  className={cn(
+                    "w-full h-8 px-2.5 rounded-lg text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+                    "bg-surface-1/40 dark:bg-white/[0.03]",
+                    "border border-foreground/6 dark:border-white/6",
+                    "text-foreground/70 placeholder:text-foreground/20",
+                    "focus:outline-none focus:border-foreground/12",
+                    "transition-colors"
+                  )}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {!showSetup && (state === "idle" || state === "selected") && (
+          <div className="mx-auto mt-3" style={{ maxWidth: advancedOpen ? "448px" : "320px" }}>
             <button
               onClick={() => setAdvancedOpen(!advancedOpen)}
               className="flex items-center gap-1.5 text-xs text-foreground/25 hover:text-foreground/40 transition-colors mx-auto"

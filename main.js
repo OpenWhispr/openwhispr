@@ -463,7 +463,8 @@ app.on("open-url", (event, url) => {
     return;
   }
 
-  if (url.includes("/invitations/")) {
+  const invitationPath = url.replace(/^[a-z]+:\/\//, "");
+  if (invitationPath.startsWith("invitations/")) {
     handleInvitationDeepLink(url);
     return;
   }
@@ -1481,7 +1482,7 @@ if (gotSingleInstanceLock) {
     if (url) {
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
-      } else if (url.includes("/invitations/")) {
+      } else if (url.replace(/^[a-z]+:\/\//, "").startsWith("invitations/")) {
         handleInvitationDeepLink(url);
       } else {
         void handleOAuthDeepLink(url);

@@ -88,7 +88,8 @@
     "**/node_modules/ffmpeg-static/**/*",
     "**/node_modules/better-sqlite3/**/*",
     "**/node_modules/onnxruntime-node/**/*",
-    "**/node_modules/@napi-rs/keyring/**/*"
+    "**/node_modules/@napi-rs/keyring/**/*",
+    "**/node_modules/youtube-dl-exec/**/*"
   ],
   "extraResources": [
     ".env",
@@ -119,6 +120,7 @@
         "windows-fast-paste*",
         "all-MiniLM-L6-v2/**/*",
         "diarization-models/**/*",
+        "whisper-vad/**/*",
         "*.dylib",
         "*.dll",
         "*.so*"

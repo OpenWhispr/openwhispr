@@ -16,7 +16,7 @@ const {
   buildMergedCandidates,
 } = require("./transcriptText");
 
-const DIARIZATION_TIMEOUT_MS = 300000; // 5 minutes
+const DIARIZATION_TIMEOUT_MS = 3600000; // 60 minutes
 const POST_MERGE_CONTEXT_WINDOW_MS = 6000;
 const POST_MERGE_CONTEXT_MERGE_LIMIT = 3;
 

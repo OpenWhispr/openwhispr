@@ -177,6 +177,7 @@ class DatabaseManager {
         );
         seedFolder.run("Personal", 0);
         seedFolder.run("Meetings", 1);
+        seedFolder.run("Videos", 2);
       }
 
       try {
@@ -192,6 +193,20 @@ class DatabaseManager {
         this.db
           .prepare("UPDATE notes SET folder_id = ? WHERE folder_id IS NULL")
           .run(personalFolder.id);
+      }
+
+      const videosFolder = this.db
+        .prepare("SELECT id, is_default FROM folders WHERE name = 'Videos'")
+        .get();
+      if (!videosFolder) {
+        const maxOrder = this.db
+          .prepare("SELECT MAX(sort_order) as m FROM folders")
+          .get();
+        this.db
+          .prepare("INSERT OR IGNORE INTO folders (name, is_default, sort_order) VALUES ('Videos', 1, ?)")
+          .run((maxOrder?.m ?? 1) + 1);
+      } else if (!videosFolder.is_default) {
+        this.db.prepare("UPDATE folders SET is_default = 1 WHERE name = 'Videos'").run();
       }
 
       this.db.exec(`
