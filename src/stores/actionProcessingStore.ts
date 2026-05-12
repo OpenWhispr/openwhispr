@@ -11,15 +11,14 @@ export interface NoteActionState {
   actionName: string | null;
 }
 
-export interface ActionCompletionEvent {
+export interface ActionErrorEvent {
   noteId: number;
-  type: "success" | "error";
-  message?: string;
+  message: string;
 }
 
 interface ActionProcessingStoreState {
   noteStates: Record<number, NoteActionState>;
-  completionEvents: ActionCompletionEvent[];
+  errorEvents: ActionErrorEvent[];
 }
 
 const cancelledFlags = new Map<number, boolean>();
@@ -43,16 +42,14 @@ function clearNoteState(noteId: number) {
   useActionProcessingStore.setState({ noteStates: next });
 }
 
-function pushCompletionEvent(event: ActionCompletionEvent) {
-  const { completionEvents } = useActionProcessingStore.getState();
-  useActionProcessingStore.setState({
-    completionEvents: [...completionEvents, event],
-  });
+function pushErrorEvent(event: ActionErrorEvent) {
+  const { errorEvents } = useActionProcessingStore.getState();
+  useActionProcessingStore.setState({ errorEvents: [...errorEvents, event] });
 }
 
 export const useActionProcessingStore = create<ActionProcessingStoreState>()(() => ({
   noteStates: {},
-  completionEvents: [],
+  errorEvents: [],
 }));
 
 const BASE_SYSTEM_PROMPT = `You are a note enhancement assistant. The user will provide raw notes — possibly voice-transcribed, rough, or unstructured. Your job is to clean them up according to the instructions below while preserving all original meaning and information. Output clean markdown.
@@ -92,10 +89,14 @@ export interface RunActionOptions {
   isMeetingNote?: boolean;
 }
 
+export interface RunActionLabels {
+  noModel: string;
+  actionFailed: string;
+}
+
 /**
  * Start processing an action on a note. Runs in the background — survives
- * component unmounts and navigation. On completion the result is persisted
- * directly via IPC.
+ * component unmounts and navigation so the user can switch notes mid-action.
  */
 export function runBackgroundAction(
   noteId: number,
@@ -103,18 +104,20 @@ export function runBackgroundAction(
   contentHash: string,
   action: ActionItem,
   options: RunActionOptions,
-  errorLabel: string
+  labels: RunActionLabels
 ): void {
   if (processingFlags.get(noteId)) return;
 
   const modelId = getEffectiveCleanupModel() || options.modelId;
-  if (!modelId && !options.isCloudMode) return;
+  if (!modelId && !options.isCloudMode) {
+    pushErrorEvent({ noteId, message: labels.noModel });
+    return;
+  }
 
   cancelledFlags.set(noteId, false);
   processingFlags.set(noteId, true);
   setNoteState(noteId, { status: "processing", actionName: action.name });
 
-  // Fire-and-forget async — intentionally not awaited
   (async () => {
     try {
       const basePrompt = options.isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
@@ -144,7 +147,6 @@ export function runBackgroundAction(
       await window.electronAPI.updateNote(noteId, updates);
 
       setNoteState(noteId, { status: "success", actionName: action.name });
-      pushCompletionEvent({ noteId, type: "success" });
 
       const timer = setTimeout(() => {
         processingFlags.set(noteId, false);
@@ -156,19 +158,15 @@ export function runBackgroundAction(
       if (cancelledFlags.get(noteId)) return;
       processingFlags.set(noteId, false);
       clearNoteState(noteId);
-      const message = err instanceof Error ? err.message : errorLabel;
-      pushCompletionEvent({ noteId, type: "error", message });
+      const message = err instanceof Error ? err.message : labels.actionFailed;
+      pushErrorEvent({ noteId, message });
     } finally {
       cancelledFlags.delete(noteId);
     }
   })();
 }
 
-/**
- * Manually cancel an in-progress action on a note (e.g. user clicks a cancel
- * button). This is a soft cancel — the HTTP request continues but results are
- * discarded.
- */
+/** Soft cancel: the HTTP request continues but the result is discarded. */
 export function cancelAction(noteId: number): void {
   cancelledFlags.set(noteId, true);
   processingFlags.set(noteId, false);
@@ -180,11 +178,11 @@ export function cancelAction(noteId: number): void {
   clearNoteState(noteId);
 }
 
-export function consumeCompletionEvents(): ActionCompletionEvent[] {
-  const { completionEvents } = useActionProcessingStore.getState();
-  if (completionEvents.length === 0) return [];
-  useActionProcessingStore.setState({ completionEvents: [] });
-  return completionEvents;
+export function consumeErrorEvents(): ActionErrorEvent[] {
+  const { errorEvents } = useActionProcessingStore.getState();
+  if (errorEvents.length === 0) return [];
+  useActionProcessingStore.setState({ errorEvents: [] });
+  return errorEvents;
 }
 
 export function selectNoteActionState(

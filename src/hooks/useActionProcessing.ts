@@ -13,13 +13,7 @@ import {
 
 export type ActionProcessingState = ActionProcessingStatus;
 
-/**
- * Thin hook that delegates to the global actionProcessingStore.
- *
- * The store owns the async lifecycle so that actions survive component
- * unmounts and navigation. This hook just provides a React-friendly
- * interface for reading state and dispatching actions for a given note.
- */
+/** React binding for the global actionProcessingStore, scoped to one note. */
 export function useActionProcessing(noteId: number | null) {
   const { t } = useTranslation();
 
@@ -35,14 +29,10 @@ export function useActionProcessing(noteId: number | null) {
       options: RunActionOptions
     ) => {
       if (noteId == null) return;
-      runBackgroundAction(
-        noteId,
-        noteContent,
-        contentHash,
-        action,
-        options,
-        t("notes.actions.errors.actionFailed")
-      );
+      runBackgroundAction(noteId, noteContent, contentHash, action, options, {
+        noModel: t("notes.actions.errors.noModel"),
+        actionFailed: t("notes.actions.errors.actionFailed"),
+      });
     },
     [noteId, t]
   );

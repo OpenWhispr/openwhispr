@@ -3,37 +3,29 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "../ui/useToast";
 import {
   useActionProcessingStore,
-  consumeCompletionEvents,
+  consumeErrorEvents,
 } from "../../stores/actionProcessingStore";
 
 /**
- * Headless component that watches for background action completion events
- * and shows toast notifications. Mount once near the app root (inside
- * ToastProvider) so toasts fire even when the user has navigated away from
- * the notes view.
+ * Headless. Mount once inside ToastProvider so background-action errors
+ * surface even after the user navigates away from the notes view.
  */
 export default function BackgroundActionToastListener() {
   const { t } = useTranslation();
   const { toast } = useToast();
 
-  const eventCount = useActionProcessingStore((s) => s.completionEvents.length);
+  const errorCount = useActionProcessingStore((s) => s.errorEvents.length);
 
   useEffect(() => {
-    if (eventCount === 0) return;
-    const events = consumeCompletionEvents();
-    for (const event of events) {
-      if (event.type === "error") {
-        toast({
-          title: t("notes.enhance.title"),
-          description: event.message ?? t("notes.actions.errors.actionFailed"),
-          variant: "destructive",
-        });
-      }
-      // Success events don't need a toast — the overlay animation in NoteEditor
-      // handles the in-view case, and the note is already persisted to DB for
-      // the navigated-away case (user will see updated content when they return).
+    if (errorCount === 0) return;
+    for (const event of consumeErrorEvents()) {
+      toast({
+        title: t("notes.enhance.title"),
+        description: event.message,
+        variant: "destructive",
+      });
     }
-  }, [eventCount, toast, t]);
+  }, [errorCount, toast, t]);
 
   return null;
 }
