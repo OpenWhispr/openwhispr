@@ -1,4 +1,4 @@
-import { API_ENDPOINTS, normalizeBaseUrl } from "../../config/constants";
+import { API_ENDPOINTS, ensureV1Suffix } from "../../config/constants";
 import { getSettings } from "../../stores/settingsStore";
 import { isSecureEndpoint } from "../../utils/urlUtils";
 import logger from "../../utils/logger";
@@ -36,7 +36,7 @@ export function getConfiguredOpenAIBase(): string {
       return API_ENDPOINTS.OPENAI_BASE;
     }
 
-    const normalized = normalizeBaseUrl(trimmed) || API_ENDPOINTS.OPENAI_BASE;
+    const normalized = ensureV1Suffix(trimmed) || API_ENDPOINTS.OPENAI_BASE;
 
     logger.logReasoning("CUSTOM_CLEANUP_ENDPOINT_CHECK", {
       hasCustomUrl: true,

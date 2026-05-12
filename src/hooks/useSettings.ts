@@ -27,6 +27,7 @@ export interface TranscriptionSettings {
 }
 
 export interface CleanupSettings {
+  autoGenerateNoteTitle: boolean;
   useCleanupModel: boolean;
   useDictationAgent: boolean;
   cleanupModel: string;
@@ -203,6 +204,8 @@ function useSettingsInternal() {
     customDictionary: store.customDictionary,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
+    autoGenerateNoteTitle: store.autoGenerateNoteTitle,
+    setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
     useCleanupModel: store.useCleanupModel,
     useDictationAgent: store.useDictationAgent,
     cleanupModel: store.cleanupModel,

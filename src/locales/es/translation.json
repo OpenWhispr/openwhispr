@@ -1541,6 +1541,10 @@
         "chatIntelligence": "Chat"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "Generar títulos de notas automáticamente",
+      "autoGenerateTitleDescription": "Usar IA para generar un título corto para las notas después de la transcripción o mejora"
+    },
     "transcription": {
       "customSetup": "Configuración personalizada",
       "customSetupDescription": "Usa tu propio proveedor y clave API.",

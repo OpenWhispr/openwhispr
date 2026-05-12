@@ -83,7 +83,7 @@ class ParakeetServerManager {
   }
 
   async transcribe(audioBuffer, options = {}) {
-    const { modelName = "parakeet-tdt-0.6b-v3", language = "auto" } = options;
+    const { modelName = "parakeet-tdt-0.6b-v3" } = options;
 
     const modelDir = path.join(this.getModelsDir(), modelName);
     if (!this.isModelDownloaded(modelName)) {
@@ -92,7 +92,6 @@ class ParakeetServerManager {
 
     debugLogger.debug("Parakeet transcription request", {
       modelName,
-      language,
       audioSize: audioBuffer?.length || 0,
       isWavFormat: isWavFormat(audioBuffer),
     });
@@ -109,7 +108,7 @@ class ParakeetServerManager {
       const rms = computeFloat32RMS(samples);
       debugLogger.debug("Parakeet audio analysis", { durationSeconds, rms });
       if (rms < SILENCE_RMS_THRESHOLD) {
-        return { text: "", elapsed: 0, language };
+        return { text: "", elapsed: 0 };
       }
 
       if (samples.length <= MAX_SEGMENT_BYTES) {
@@ -121,7 +120,7 @@ class ParakeetServerManager {
             samplesBytes: samples.length,
           });
         }
-        return { ...result, language };
+        return result;
       }
 
       debugLogger.debug("Parakeet segmenting long audio", {
@@ -147,7 +146,7 @@ class ParakeetServerManager {
         }
       }
 
-      return { text: texts.join(" "), elapsed: totalElapsed, language };
+      return { text: texts.join(" "), elapsed: totalElapsed };
     } finally {
       this._cleanupFiles(filesToCleanup);
     }

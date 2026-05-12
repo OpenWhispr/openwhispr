@@ -390,6 +390,28 @@ const CLEANUP_MODE_TOAST_KEY: Record<InferenceMode, string> = {
   enterprise: "switchedEnterprise",
 };
 
+function NoteFormattingSettings() {
+  const { t } = useTranslation();
+  const autoGenerateNoteTitle = useSettingsStore((s) => s.autoGenerateNoteTitle);
+  const setAutoGenerateNoteTitle = useSettingsStore((s) => s.setAutoGenerateNoteTitle);
+
+  return (
+    <div className="space-y-4">
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.noteFormatting.autoGenerateTitle")}
+            description={t("settingsPage.noteFormatting.autoGenerateTitleDescription")}
+          >
+            <Toggle checked={autoGenerateNoteTitle} onChange={setAutoGenerateNoteTitle} />
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+      <InferenceConfigEditor scope="noteFormatting" />
+    </div>
+  );
+}
+
 function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModelsSectionProps) {
   const { t } = useTranslation();
 
@@ -3225,7 +3247,7 @@ EOF`,
               </div>
             )}
             renderDictationAgent={() => <DictationAgentSettings />}
-            renderNoteFormatting={() => <InferenceConfigEditor scope="noteFormatting" />}
+            renderNoteFormatting={() => <NoteFormattingSettings />}
           />
         );
 

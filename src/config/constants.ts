@@ -37,6 +37,12 @@ export const buildApiUrl = (base: string, path: string): string => {
   return `${normalizedBase}${normalizedPath}`;
 };
 
+export const ensureV1Suffix = (base: string): string => {
+  if (!base) return base;
+  const normalized = normalizeBaseUrl(base) || base;
+  return normalized.endsWith("/v1") ? normalized : `${normalized}/v1`;
+};
+
 const env = (typeof import.meta !== "undefined" && (import.meta as any).env) || {};
 
 const computeBaseUrl = (candidates: Array<string | undefined>, fallback: string): string => {
