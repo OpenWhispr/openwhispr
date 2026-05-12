@@ -155,7 +155,17 @@
     "private": "Privé",
     "tap": "Appui",
     "close": "Fermer",
-    "dismiss": "Ignorer"
+    "dismiss": "Ignorer",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "create": "Créer",
+    "delete": "Supprimer",
+    "actions": "Actions",
+    "error": "Une erreur s'est produite",
+    "unknownError": "Une erreur inconnue s'est produite",
+    "copy": "Copier",
+    "copied": "Copié",
+    "done": "Terminé"
   },
   "onboarding": {
     "steps": {
@@ -985,6 +995,10 @@
       "system": {
         "description": "Mises à jour, stockage & outils de développement",
         "label": "Système"
+      },
+      "workspace": {
+        "label": "Espace de travail",
+        "description": "Membres, équipes, facturation et clés API"
       }
     },
     "title": "Paramètres"
@@ -1652,6 +1666,91 @@
       "endpointUrl": "URL du point d'accès",
       "serverUrl": "URL du serveur",
       "apiKeyOptional": "Clé API (facultative)"
+    },
+    "workspace": {
+      "title": "Espace de travail",
+      "description": "Collaborez, partagez des notes et gérez la facturation au même endroit.",
+      "empty": {
+        "title": "Créez votre premier espace de travail",
+        "description": "Les espaces de travail vous permettent de collaborer et partager des notes.",
+        "create": "Créer un espace"
+      },
+      "tab": {
+        "general": "Général",
+        "members": "Membres",
+        "teams": "Équipes",
+        "billing": "Facturation",
+        "developer": "Développeur"
+      },
+      "role": {
+        "owner": "Propriétaire",
+        "admin": "Administrateur",
+        "member": "Membre"
+      },
+      "general": {
+        "nameLabel": "Nom",
+        "slugLabel": "Slug",
+        "slugHint": "Utilisé dans les URL. Minuscules, chiffres et tirets uniquement.",
+        "saved": "Espace mis à jour",
+        "dangerTitle": "Supprimer l'espace",
+        "dangerDescription": "Toutes les notes, dossiers et intégrations partagés seront supprimés. Cette action est irréversible.",
+        "delete": "Supprimer l'espace",
+        "confirmTitle": "Supprimer {{name}} ?",
+        "confirmDescription": "Cela annule l'abonnement et supprime définitivement toutes les données."
+      },
+      "members": {
+        "title": "Membres",
+        "description": "{{count}} sur {{seats}} sièges utilisés.",
+        "invite": "Inviter",
+        "empty": "Aucun membre pour l'instant.",
+        "roleUpdated": "Rôle mis à jour",
+        "promote": "Promouvoir administrateur",
+        "demote": "Rétrograder membre",
+        "transferOwnership": "Transférer la propriété",
+        "remove": "Retirer de l'espace"
+      },
+      "invites": {
+        "title": "Invitations en attente",
+        "resend": "Renvoyer",
+        "revoke": "Révoquer",
+        "resent": "Invitation renvoyée"
+      },
+      "teams": {
+        "title": "Équipes",
+        "description": "Groupez les membres pour un partage ciblé.",
+        "new": "Nouvelle équipe",
+        "empty": "Aucune équipe.",
+        "createFirst": "Créez votre première équipe",
+        "createTitle": "Créer une équipe",
+        "nameLabel": "Nom de l'équipe",
+        "descriptionLabel": "Description",
+        "memberCount": "{{count}} membres"
+      },
+      "billing": {
+        "title": "Facturation",
+        "description": "Plan, sièges et paiement.",
+        "plan": "Plan",
+        "seats": "Sièges",
+        "nextInvoice": "Prochaine facture",
+        "manageStripe": "Gérer dans Stripe",
+        "startSubscription": "Démarrer l'abonnement"
+      },
+      "developer": {
+        "title": "Clés API",
+        "description": "Accès programmatique limité à cet espace.",
+        "empty": "Aucune clé API. Créez-en une pour vous intégrer.",
+        "new": "Nouvelle clé",
+        "create": "Créer la clé",
+        "createTitle": "Créer une clé API",
+        "createDescription": "Choisissez les permissions. Vous pouvez la révoquer à tout moment.",
+        "nameLabel": "Nom de la clé",
+        "namePlaceholder": "Intégration production",
+        "revoke": "Révoquer la clé",
+        "lastUsed": "Dernière utilisation {{date}}",
+        "neverUsed": "Jamais utilisée",
+        "keyCreatedTitle": "Clé API créée",
+        "keyCreatedDescription": "Copiez cette clé maintenant — vous ne pourrez plus la voir."
+      }
     }
   },
   "models": {
@@ -1762,7 +1861,9 @@
     "integrations": "Intégrations",
     "defaultUser": "Utilisateur",
     "notSignedIn": "Non connecté",
-    "chat": "Chat"
+    "chat": "Chat",
+    "inviteTeammate": "Inviter un coéquipier",
+    "createWorkspace": "Créer un espace de travail"
   },
   "chat": {
     "newChat": "Nouveau chat",
@@ -2498,6 +2599,54 @@
     "speaker": {
       "you": "Vous",
       "others": "Autres"
+    }
+  },
+  "workspaces": {
+    "switcher": {
+      "personal": "Personnel",
+      "workspaces": "Espaces de travail",
+      "empty": "Aucun espace de travail",
+      "create": "Créer un espace de travail…"
+    },
+    "create": {
+      "title": "Créer un espace de travail",
+      "description": "Les espaces de travail vous permettent de collaborer, partager des notes et gérer la facturation.",
+      "nameLabel": "Nom de l'espace de travail",
+      "namePlaceholder": "Acme Corp",
+      "submit": "Créer l'espace",
+      "submitting": "Création…",
+      "errorTitle": "Impossible de créer l'espace"
+    },
+    "created": {
+      "title": "Espace de travail créé",
+      "description": "Vous êtes maintenant propriétaire de {{name}}."
+    },
+    "invite": {
+      "title": "Inviter dans {{workspace}}",
+      "description": "Ajoutez des coéquipiers par e-mail. Ils recevront un lien pour rejoindre.",
+      "emailLabel": "E-mail",
+      "roleLabel": "Rôle",
+      "teamsLabel": "Ajouter aux équipes",
+      "submit": "Envoyer l'invitation",
+      "submitting": "Envoi…",
+      "sentTitle": "Invitation envoyée",
+      "sentDescription": "Nous avons envoyé une invitation à {{email}}.",
+      "errorTitle": "Impossible d'envoyer l'invitation",
+      "role": {
+        "admin": "Administrateur",
+        "member": "Membre"
+      }
+    },
+    "accept": {
+      "title": "Rejoindre l'espace",
+      "description": "{{inviter}} vous a invité à rejoindre {{workspace}} en tant que {{role}}.",
+      "loading": "Chargement…",
+      "accept": "Accepter l'invitation",
+      "accepting": "Acceptation…",
+      "signInToAccept": "Connectez-vous pour accepter",
+      "successTitle": "Vous êtes membre",
+      "successDescription": "Bienvenue dans {{name}}.",
+      "errorTitle": "Impossible d'accepter l'invitation"
     }
   }
 }
