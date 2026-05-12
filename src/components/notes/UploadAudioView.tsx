@@ -31,7 +31,7 @@ import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
 import { withSessionRefresh } from "../../lib/auth";
 import { getAllReasoningModels } from "../../models/ModelRegistry";
-import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
+import { useSettingsStore, selectIsCloudCleanupMode, getSettings } from "../../stores/settingsStore";
 import { generateNoteTitle } from "../../utils/generateTitle";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
@@ -261,6 +261,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const generateTitle = async (text: string): Promise<string> => {
     if (!useCleanupModel) return "";
+    if (!getSettings().autoGenerateNoteTitle) return "";
     const model = isCloudCleanup ? "" : effectiveCleanupModel || getAllReasoningModels()[0]?.value;
     if (!model && !isCloudCleanup) return "";
     return generateNoteTitle(text, model);

@@ -106,6 +106,7 @@ const BOOLEAN_SETTINGS = new Set([
   "allowOpenAIFallback",
   "allowLocalFallback",
   "assemblyAiStreaming",
+  "autoGenerateNoteTitle",
   "useCleanupModel",
   "useDictationAgent",
   "preferBuiltInMic",
@@ -431,6 +432,7 @@ export interface SettingsState
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
+  setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
   setUseDictationAgent: (value: boolean) => void;
   setCleanupModel: (value: string) => void;
@@ -646,6 +648,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   customDictionary: readStringArray("customDictionary", []),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
+  autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
   useCleanupModel: readBoolean("useCleanupModel", true),
   useDictationAgent: readBoolean("useDictationAgent", true),
   cleanupModel: readString("cleanupModel", ""),
@@ -922,6 +925,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupCloudMode: createStringSetter("cleanupCloudMode"),
   setCleanupCloudBaseUrl: createStringSetter("cleanupCloudBaseUrl"),
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
+  setAutoGenerateNoteTitle: createBooleanSetter("autoGenerateNoteTitle"),
   setUseCleanupModel: createBooleanSetter("useCleanupModel"),
   setUseDictationAgent: createBooleanSetter("useDictationAgent"),
   setCleanupProvider: createStringSetter("cleanupProvider"),

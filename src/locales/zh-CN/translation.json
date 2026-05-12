@@ -1488,6 +1488,10 @@
         "chatIntelligence": "聊天"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "自动生成笔记标题",
+      "autoGenerateTitleDescription": "使用 AI 在转录或增强后为笔记生成简短标题"
+    },
     "transcription": {
       "customSetup": "自定义设置",
       "customSetupDescription": "使用你自己的服务商和 API Key。",
