@@ -1547,7 +1547,51 @@
         "deleteModels": "Elimina modelli"
       },
       "transcriptionPreview": "Anteprima dal vivo",
-      "transcriptionPreviewDescription": "Mostra la trascrizione in una finestra flottante prima della correzione"
+      "transcriptionPreviewDescription": "Mostra la trascrizione in una finestra flottante prima della correzione",
+      "vad": {
+        "title": "Rilevamento attività vocale",
+        "description": "Configura come Silero VAD rileva e segmenta il parlato per la trascrizione locale Whisper",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD per dettatura",
+            "description": "Abilita il rilevamento di attività vocale per la dettatura locale"
+          },
+          "noteRecording": {
+            "title": "Silero VAD per registrazione note",
+            "description": "Abilita il rilevamento di attività vocale per la registrazione locale delle note"
+          },
+          "meeting": {
+            "title": "Silero VAD per riunioni",
+            "description": "Abilita il rilevamento di attività vocale per la trascrizione locale delle riunioni"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "Soglia VAD",
+            "info": "Probabilità oltre la quale un frame viene classificato come parlato."
+          },
+          "minSpeechDurationMs": {
+            "label": "Durata minima del parlato (ms)",
+            "info": "I segmenti di parlato più brevi vengono scartati come rumore o falsi positivi."
+          },
+          "minSilenceDurationMs": {
+            "label": "Durata minima di silenzio (ms)",
+            "info": "Il silenzio deve durare almeno questo tempo per terminare un segmento. Pause più brevi restano nel segmento."
+          },
+          "maxSpeechDurationS": {
+            "label": "Durata massima del parlato (s)",
+            "info": "I segmenti più lunghi vengono divisi nei punti di silenzio per mantenere blocchi gestibili."
+          },
+          "speechPadMs": {
+            "label": "Riempimento del parlato (ms)",
+            "info": "Riempimento aggiunto prima e dopo ogni segmento per non tagliare i bordi delle parole."
+          },
+          "samplesOverlap": {
+            "label": "Sovrapposizione campioni (s)",
+            "info": "Audio esteso da un segmento al successivo per evitare tagli netti nella concatenazione."
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

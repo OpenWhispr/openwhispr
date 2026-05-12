@@ -1643,7 +1643,51 @@
         "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "Live Transcription Preview",
-      "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup"
+      "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup",
+      "vad": {
+        "title": "Voice Activity Detection",
+        "description": "Configure how Silero VAD detects and segments speech for local Whisper transcription",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD for Dictation",
+            "description": "Enable voice activity detection for local dictation transcription"
+          },
+          "noteRecording": {
+            "title": "Silero VAD for Note Recording",
+            "description": "Enable voice activity detection for local note recording transcription"
+          },
+          "meeting": {
+            "title": "Silero VAD for Meetings",
+            "description": "Enable voice activity detection for local meeting transcription"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "VAD threshold",
+            "info": "Probability above which a frame is classified as speech."
+          },
+          "minSpeechDurationMs": {
+            "label": "Minimum speech duration (ms)",
+            "info": "Speech segments shorter than this are discarded as noise or false positives."
+          },
+          "minSilenceDurationMs": {
+            "label": "Minimum silence duration (ms)",
+            "info": "Silence must last at least this long to end a speech segment. Shorter pauses are kept inside the segment."
+          },
+          "maxSpeechDurationS": {
+            "label": "Maximum speech duration (s)",
+            "info": "Segments longer than this are split at silence points to keep individual chunks manageable."
+          },
+          "speechPadMs": {
+            "label": "Speech padding (ms)",
+            "info": "Padding added before and after each detected segment so word edges are not clipped."
+          },
+          "samplesOverlap": {
+            "label": "Samples overlap (s)",
+            "info": "Audio carried from each segment into the next to avoid abrupt cuts when concatenating."
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

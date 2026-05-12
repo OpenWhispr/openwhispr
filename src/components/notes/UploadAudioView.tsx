@@ -31,7 +31,11 @@ import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
 import { withSessionRefresh } from "../../lib/auth";
 import { getAllReasoningModels } from "../../models/ModelRegistry";
-import { useSettingsStore, selectIsCloudCleanupMode, getSettings } from "../../stores/settingsStore";
+import {
+  useSettingsStore,
+  selectIsCloudCleanupMode,
+  getSettings,
+} from "../../stores/settingsStore";
 import { generateNoteTitle } from "../../utils/generateTitle";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));

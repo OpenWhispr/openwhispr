@@ -1595,7 +1595,51 @@
         "deleteModels": "Supprimer les modèles"
       },
       "transcriptionPreview": "Aperçu en direct",
-      "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction"
+      "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction",
+      "vad": {
+        "title": "Détection d'activité vocale",
+        "description": "Configurez la manière dont Silero VAD détecte et segmente la parole pour la transcription locale Whisper",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD pour la dictée",
+            "description": "Activer la détection d'activité vocale pour la dictée locale"
+          },
+          "noteRecording": {
+            "title": "Silero VAD pour l'enregistrement de notes",
+            "description": "Activer la détection d'activité vocale pour l'enregistrement local des notes"
+          },
+          "meeting": {
+            "title": "Silero VAD pour les réunions",
+            "description": "Activer la détection d'activité vocale pour la transcription locale des réunions"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "Seuil VAD",
+            "info": "Probabilité au-delà de laquelle une trame est classée comme parole."
+          },
+          "minSpeechDurationMs": {
+            "label": "Durée minimale de parole (ms)",
+            "info": "Les segments plus courts sont rejetés comme bruit ou faux positifs."
+          },
+          "minSilenceDurationMs": {
+            "label": "Durée minimale de silence (ms)",
+            "info": "Un silence doit durer au moins ce temps pour terminer un segment. Les pauses plus courtes restent dans le segment."
+          },
+          "maxSpeechDurationS": {
+            "label": "Durée maximale de parole (s)",
+            "info": "Les segments plus longs sont divisés aux points de silence pour rester manipulables."
+          },
+          "speechPadMs": {
+            "label": "Marge de parole (ms)",
+            "info": "Marge ajoutée avant et après chaque segment pour ne pas couper les bords des mots."
+          },
+          "samplesOverlap": {
+            "label": "Chevauchement (s)",
+            "info": "Audio prolongé d'un segment au suivant pour éviter les coupures brusques lors de la concaténation."
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

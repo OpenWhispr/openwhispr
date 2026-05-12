@@ -544,7 +544,7 @@
         "optionalPasteTool": "Para pegado automático, instala {{tool}}:\n\n{{installCmd}}{{waylandNote}}\n\nSin esto, aún puedes usar OpenWhispr: el texto se copiará al portapapeles y podrás pegar con Ctrl+V."
       },
       "alerts": {
-        "accessibilityNeeded": "Se requieren permisos de accesibilidad. Concédelos en la configuración del sistema."
+        "accessibilityNeeded": "¡Se necesitan permisos de accesibilidad! Concédelos en la configuración del sistema."
       },
       "notes": {
         "waylandWtype": "\n\nNota: para apps XWayland, xdotool también funciona.",
@@ -1595,7 +1595,51 @@
         "deleteModels": "Eliminar modelos"
       },
       "transcriptionPreview": "Vista previa en vivo",
-      "transcriptionPreviewDescription": "Mostrar transcripción en una ventana flotante antes de la corrección"
+      "transcriptionPreviewDescription": "Mostrar transcripción en una ventana flotante antes de la corrección",
+      "vad": {
+        "title": "Detección de actividad de voz",
+        "description": "Configura cómo Silero VAD detecta y segmenta el habla para la transcripción local con Whisper",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD para dictado",
+            "description": "Activa la detección de actividad de voz para dictado local"
+          },
+          "noteRecording": {
+            "title": "Silero VAD para grabación de notas",
+            "description": "Activa la detección de actividad de voz para grabación local de notas"
+          },
+          "meeting": {
+            "title": "Silero VAD para reuniones",
+            "description": "Activa la detección de actividad de voz para transcripción local de reuniones"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "Umbral de VAD",
+            "info": "Probabilidad a partir de la cual un fragmento se clasifica como voz."
+          },
+          "minSpeechDurationMs": {
+            "label": "Duración mínima de voz (ms)",
+            "info": "Segmentos de voz más cortos se descartan como ruido o falsos positivos."
+          },
+          "minSilenceDurationMs": {
+            "label": "Duración mínima de silencio (ms)",
+            "info": "El silencio debe durar al menos esto para cerrar un segmento. Pausas más cortas se incluyen dentro del segmento."
+          },
+          "maxSpeechDurationS": {
+            "label": "Duración máxima de voz (s)",
+            "info": "Segmentos más largos se dividen en puntos de silencio para mantener piezas manejables."
+          },
+          "speechPadMs": {
+            "label": "Relleno de voz (ms)",
+            "info": "Relleno añadido antes y después de cada segmento para no recortar los bordes de las palabras."
+          },
+          "samplesOverlap": {
+            "label": "Solapamiento de muestras (s)",
+            "info": "Audio que se extiende de un segmento al siguiente para evitar cortes bruscos al concatenarlos."
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

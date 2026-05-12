@@ -39,6 +39,7 @@ class WhisperManager {
     // Server manager for HTTP-based transcription
     this.serverManager = new WhisperServerManager();
     this.currentServerModel = null;
+    this.cachedVadModelPath = undefined;
   }
 
   getModelsDir() {
@@ -58,6 +59,22 @@ class WhisperManager {
     this.validateModelName(modelName);
     const config = getWhisperModelConfig(modelName);
     return path.join(this.getModelsDir(), config.fileName);
+  }
+
+  getVadModelPath() {
+    if (this.cachedVadModelPath !== undefined) return this.cachedVadModelPath;
+
+    const fileName = "ggml-silero-v5.1.2.bin";
+    const candidates = [];
+
+    if (process.resourcesPath) {
+      candidates.push(path.join(process.resourcesPath, "bin", "whisper-vad", fileName));
+    }
+    candidates.push(path.join(__dirname, "..", "..", "resources", "bin", "whisper-vad", fileName));
+
+    const resolved = candidates.find((p) => fs.existsSync(p)) || null;
+    this.cachedVadModelPath = resolved;
+    return resolved;
   }
 
   async initializeAtStartup(settings = {}) {
@@ -254,26 +271,37 @@ class WhisperManager {
     const model = options.model || "base";
     const language = options.language || null;
     const initialPrompt = options.initialPrompt || null;
+    const vadEnabled = options.vadEnabled === true;
+    const vadConfig = options.vadConfig || null;
     const modelPath = this.getModelPath(model);
 
-    // Check if model exists
     if (!fs.existsSync(modelPath)) {
       throw new Error(`Whisper model "${model}" not downloaded. Please download it from Settings.`);
     }
 
-    return await this.transcribeViaServer(audioBlob, model, language, initialPrompt);
+    return await this.transcribeViaServer(audioBlob, model, language, initialPrompt, {
+      vadEnabled,
+      vadConfig,
+    });
   }
 
-  async transcribeViaServer(audioBlob, model, language, initialPrompt = null) {
+  async transcribeViaServer(audioBlob, model, language, initialPrompt = null, options = {}) {
     debugLogger.info("Transcription mode: SERVER", { model, language: language || "auto" });
     const modelPath = this.getModelPath(model);
 
-    // Start server if not running or if model changed
-    if (!this.serverManager.ready || this.currentServerModel !== model) {
-      debugLogger.debug("Starting/restarting whisper-server for model", { model });
-      await this.serverManager.start(modelPath, { useCuda: this.serverManager.useCuda });
-      this.currentServerModel = model;
+    const vadEnabled = options.vadEnabled === true;
+    const vadModelPath = vadEnabled ? this.getVadModelPath() : null;
+    if (vadEnabled && !vadModelPath) {
+      debugLogger.warn("VAD requested but ggml-silero model not found; running without VAD");
     }
+
+    await this.serverManager.start(modelPath, {
+      useCuda: this.serverManager.useCuda,
+      vadEnabled,
+      vadModelPath,
+      vadConfig: options.vadConfig || null,
+    });
+    this.currentServerModel = model;
 
     // Convert audioBlob to Buffer if needed
     let audioBuffer;
