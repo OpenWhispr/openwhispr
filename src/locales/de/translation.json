@@ -87,6 +87,7 @@
     "errors": {
       "callbackRequired": "Eine Callback-Funktion ist für das Hotkey-Setup erforderlich",
       "globeOnlyMac": "Die Globe-Taste ist nur auf macOS verfügbar.",
+      "mouseButtonOnlyMac": "Maustasten-Hotkeys werden derzeit nur auf macOS unterstützt.",
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
@@ -154,7 +155,17 @@
     "private": "Privat",
     "tap": "Tippen",
     "close": "Schließen",
-    "dismiss": "Verwerfen"
+    "dismiss": "Verwerfen",
+    "save": "Speichern",
+    "saving": "Speichern…",
+    "create": "Erstellen",
+    "delete": "Löschen",
+    "actions": "Aktionen",
+    "error": "Etwas ist schiefgelaufen",
+    "unknownError": "Ein unbekannter Fehler ist aufgetreten",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "done": "Fertig"
   },
   "onboarding": {
     "steps": {
@@ -936,6 +947,10 @@
       "system": {
         "description": "Updates, Speicher & Entwicklertools",
         "label": "System"
+      },
+      "workspace": {
+        "label": "Workspace",
+        "description": "Mitglieder, Teams, Abrechnung und API-Schlüssel"
       }
     },
     "title": "Einstellungen"
@@ -1493,6 +1508,10 @@
         "chatIntelligence": "Chat"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "Notiztitel automatisch generieren",
+      "autoGenerateTitleDescription": "KI verwenden, um nach der Transkription oder Verbesserung einen kurzen Titel für Notizen zu generieren"
+    },
     "transcription": {
       "customSetup": "Benutzerdefinierte Einrichtung",
       "customSetupDescription": "Verwenden Sie Ihren eigenen Anbieter und API-Schlüssel.",
@@ -1543,7 +1562,51 @@
         "deleteModels": "Modelle löschen"
       },
       "transcriptionPreview": "Live-Transkriptionsvorschau",
-      "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen"
+      "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen",
+      "vad": {
+        "title": "Sprachaktivitätserkennung",
+        "description": "Konfiguriere, wie Silero VAD Sprache für die lokale Whisper-Transkription erkennt und segmentiert",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD für Diktat",
+            "description": "Sprachaktivitätserkennung für lokales Diktat aktivieren"
+          },
+          "noteRecording": {
+            "title": "Silero VAD für Notizaufnahme",
+            "description": "Sprachaktivitätserkennung für lokale Notizaufnahme aktivieren"
+          },
+          "meeting": {
+            "title": "Silero VAD für Meetings",
+            "description": "Sprachaktivitätserkennung für lokale Meeting-Transkription aktivieren"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "VAD-Schwellenwert",
+            "info": "Wahrscheinlichkeit, ab der ein Frame als Sprache eingestuft wird."
+          },
+          "minSpeechDurationMs": {
+            "label": "Minimale Sprachdauer (ms)",
+            "info": "Kürzere Sprachsegmente werden als Rauschen oder Falscherkennung verworfen."
+          },
+          "minSilenceDurationMs": {
+            "label": "Minimale Pausendauer (ms)",
+            "info": "Eine Pause muss mindestens so lang sein, um ein Sprachsegment zu beenden. Kürzere Pausen bleiben Teil des Segments."
+          },
+          "maxSpeechDurationS": {
+            "label": "Maximale Sprachdauer (s)",
+            "info": "Längere Segmente werden an Pausen aufgeteilt, damit einzelne Stücke handhabbar bleiben."
+          },
+          "speechPadMs": {
+            "label": "Sprach-Polsterung (ms)",
+            "info": "Zusätzliche Polsterung vor und nach jedem Segment, damit Wortgrenzen nicht abgeschnitten werden."
+          },
+          "samplesOverlap": {
+            "label": "Sample-Überlappung (s)",
+            "info": "Audio, das von einem Segment ins nächste übertragen wird, um abrupte Schnitte beim Zusammenfügen zu vermeiden."
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -1555,6 +1618,91 @@
       "endpointUrl": "Endpunkt-URL",
       "serverUrl": "Server-URL",
       "apiKeyOptional": "API-Schlüssel (optional)"
+    },
+    "workspace": {
+      "title": "Workspace",
+      "description": "Arbeiten Sie zusammen, teilen Sie Notizen und verwalten Sie die Abrechnung an einem Ort.",
+      "empty": {
+        "title": "Ersten Workspace erstellen",
+        "description": "Workspaces ermöglichen die Zusammenarbeit und das Teilen von Notizen.",
+        "create": "Workspace erstellen"
+      },
+      "tab": {
+        "general": "Allgemein",
+        "members": "Mitglieder",
+        "teams": "Teams",
+        "billing": "Abrechnung",
+        "developer": "Entwickler"
+      },
+      "role": {
+        "owner": "Inhaber",
+        "admin": "Administrator",
+        "member": "Mitglied"
+      },
+      "general": {
+        "nameLabel": "Workspace-Name",
+        "slugLabel": "Slug",
+        "slugHint": "Wird in URLs verwendet. Nur Kleinbuchstaben, Ziffern und Bindestriche.",
+        "saved": "Workspace aktualisiert",
+        "dangerTitle": "Workspace löschen",
+        "dangerDescription": "Alle geteilten Notizen, Ordner und Integrationen werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
+        "delete": "Workspace löschen",
+        "confirmTitle": "{{name}} löschen?",
+        "confirmDescription": "Dies kündigt das Abonnement und entfernt alle Workspace-Daten dauerhaft."
+      },
+      "members": {
+        "title": "Mitglieder",
+        "description": "{{count}} von {{seats}} Plätzen belegt.",
+        "invite": "Einladen",
+        "empty": "Noch keine Mitglieder.",
+        "roleUpdated": "Rolle aktualisiert",
+        "promote": "Zum Administrator machen",
+        "demote": "Zum Mitglied machen",
+        "transferOwnership": "Eigentum übertragen",
+        "remove": "Aus Workspace entfernen"
+      },
+      "invites": {
+        "title": "Ausstehende Einladungen",
+        "resend": "Erneut senden",
+        "revoke": "Widerrufen",
+        "resent": "Einladung erneut gesendet"
+      },
+      "teams": {
+        "title": "Teams",
+        "description": "Mitglieder gruppieren für gezieltes Teilen.",
+        "new": "Neues Team",
+        "empty": "Noch keine Teams.",
+        "createFirst": "Erstellen Sie Ihr erstes Team",
+        "createTitle": "Team erstellen",
+        "nameLabel": "Team-Name",
+        "descriptionLabel": "Beschreibung",
+        "memberCount": "{{count}} Mitglieder"
+      },
+      "billing": {
+        "title": "Abrechnung",
+        "description": "Plan, Plätze und Zahlung.",
+        "plan": "Plan",
+        "seats": "Plätze",
+        "nextInvoice": "Nächste Rechnung",
+        "manageStripe": "In Stripe verwalten",
+        "startSubscription": "Abonnement starten"
+      },
+      "developer": {
+        "title": "API-Schlüssel",
+        "description": "Programmatischer Zugriff auf diesen Workspace.",
+        "empty": "Noch keine API-Schlüssel. Erstellen Sie einen für Integrationen.",
+        "new": "Neuer Schlüssel",
+        "create": "Schlüssel erstellen",
+        "createTitle": "API-Schlüssel erstellen",
+        "createDescription": "Wählen Sie die Berechtigungen. Sie können den Schlüssel jederzeit widerrufen.",
+        "nameLabel": "Schlüsselname",
+        "namePlaceholder": "Produktionsintegration",
+        "revoke": "Schlüssel widerrufen",
+        "lastUsed": "Zuletzt verwendet {{date}}",
+        "neverUsed": "Nie verwendet",
+        "keyCreatedTitle": "API-Schlüssel erstellt",
+        "keyCreatedDescription": "Kopieren Sie diesen Schlüssel jetzt — Sie können ihn nicht erneut sehen."
+      }
     }
   },
   "models": {
@@ -2034,7 +2182,9 @@
     "integrations": "Integrationen",
     "defaultUser": "Benutzer",
     "notSignedIn": "Nicht angemeldet",
-    "chat": "Chat"
+    "chat": "Chat",
+    "inviteTeammate": "Teammitglied einladen",
+    "createWorkspace": "Workspace erstellen"
   },
   "chat": {
     "newChat": "Neuer Chat",
@@ -2388,7 +2538,37 @@
     "deleteNote": "Notiz löschen",
     "deleteConfirmTitle": "Notiz löschen?",
     "deleteConfirmDescription": "Diese Notiz wird dauerhaft gelöscht und kann nicht wiederhergestellt werden.",
-    "deleteConfirm": "Löschen"
+    "deleteConfirm": "Löschen",
+    "share": {
+      "button": "Teilen",
+      "dialog": {
+        "title": "Notiz teilen",
+        "searchPlaceholder": "Personen per E-Mail hinzufügen",
+        "emailLabel": "E-Mail des Empfängers",
+        "shareButton": "Teilen",
+        "copyLink": "Link kopieren",
+        "copied": "Kopiert",
+        "owner": "Eigentümer",
+        "pending": "Ausstehend",
+        "accepted": "Hat Zugriff",
+        "resend": "Einladung erneut senden",
+        "revoke": "Entfernen",
+        "invitationActions": "Einladungsaktionen",
+        "permissionRequired": "Nur der Notiz-Eigentümer kann die Freigabe ändern.",
+        "visibility": {
+          "label": "Sichtbarkeit",
+          "link": "Jeder mit dem Link",
+          "domain": "Alle bei {{domain}} mit dem Link",
+          "invited": "Nur eingeladene Personen"
+        },
+        "error": {
+          "invalidEmail": "Gib eine gültige E-Mail-Adresse ein",
+          "alreadyInvited": "{{email}} ist bereits eingeladen",
+          "inviteFailed": "Die Einladung konnte nicht gesendet werden. Versuche es erneut.",
+          "linkUnavailable": "Generiere oder rotiere den Link, um ihn zu kopieren"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "Suche",
@@ -2489,6 +2669,54 @@
     "speaker": {
       "you": "Du",
       "others": "Andere"
+    }
+  },
+  "workspaces": {
+    "switcher": {
+      "personal": "Persönlich",
+      "workspaces": "Workspaces",
+      "empty": "Noch keine Workspaces",
+      "create": "Workspace erstellen…"
+    },
+    "create": {
+      "title": "Workspace erstellen",
+      "description": "Workspaces ermöglichen Zusammenarbeit, geteilte Notizen und gemeinsame Abrechnung.",
+      "nameLabel": "Workspace-Name",
+      "namePlaceholder": "Acme Corp",
+      "submit": "Workspace erstellen",
+      "submitting": "Erstelle…",
+      "errorTitle": "Workspace konnte nicht erstellt werden"
+    },
+    "created": {
+      "title": "Workspace erstellt",
+      "description": "Sie sind nun Inhaber von {{name}}."
+    },
+    "invite": {
+      "title": "Zu {{workspace}} einladen",
+      "description": "Fügen Sie Teammitglieder per E-Mail hinzu. Sie erhalten einen Beitrittslink.",
+      "emailLabel": "E-Mail",
+      "roleLabel": "Rolle",
+      "teamsLabel": "Zu Teams hinzufügen",
+      "submit": "Einladung senden",
+      "submitting": "Sende…",
+      "sentTitle": "Einladung gesendet",
+      "sentDescription": "Einladung an {{email}} gesendet.",
+      "errorTitle": "Einladung konnte nicht gesendet werden",
+      "role": {
+        "admin": "Administrator",
+        "member": "Mitglied"
+      }
+    },
+    "accept": {
+      "title": "Workspace beitreten",
+      "description": "{{inviter}} hat Sie eingeladen, {{workspace}} als {{role}} beizutreten.",
+      "loading": "Lade Einladung…",
+      "accept": "Einladung annehmen",
+      "accepting": "Annehmen…",
+      "signInToAccept": "Anmelden zum Annehmen",
+      "successTitle": "Beigetreten",
+      "successDescription": "Willkommen bei {{name}}.",
+      "errorTitle": "Einladung konnte nicht angenommen werden"
     }
   }
 }

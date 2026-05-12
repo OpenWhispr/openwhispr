@@ -1448,10 +1448,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("language", language);
       }
 
-      // Add custom dictionary as prompt hint for cloud transcription
-      // Groq Whisper API limits prompt to 896 chars; OpenAI ~900 chars.
-      // Truncate at last comma boundary so we never send a partial word.
-      const MAX_PROMPT_CHARS = provider === "groq" ? 896 : 900;
+      const endpoint = this.getTranscriptionEndpoint();
+
+      // Groq rejects prompts > 896 chars (incl. when reached via "custom" provider).
+      // 890 leaves margin for UTF-16 vs codepoint counting drift.
+      const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
+      const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
       let dictionaryPrompt = this.getCustomDictionaryPrompt();
       if (dictionaryPrompt) {
         if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
@@ -1477,7 +1479,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("stream", "true");
       }
 
-      const endpoint = this.getTranscriptionEndpoint();
       const isCustomEndpoint =
         provider === "custom" ||
         (!endpoint.includes("api.openai.com") &&

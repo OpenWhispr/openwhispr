@@ -87,6 +87,7 @@
     "errors": {
       "callbackRequired": "Callback function is required for hotkey setup",
       "globeOnlyMac": "The Globe key is only available on macOS.",
+      "mouseButtonOnlyMac": "Mouse button hotkeys are currently supported on macOS only.",
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
@@ -154,7 +155,17 @@
     "private": "Private",
     "tap": "Tap",
     "close": "Close",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "save": "Save",
+    "saving": "Saving…",
+    "create": "Create",
+    "delete": "Delete",
+    "actions": "Actions",
+    "error": "Something went wrong",
+    "unknownError": "An unknown error occurred",
+    "copy": "Copy",
+    "copied": "Copied",
+    "done": "Done"
   },
   "onboarding": {
     "steps": {
@@ -1009,6 +1020,10 @@
         "description": "Plans, usage & billing",
         "label": "Plans & Billing"
       },
+      "workspace": {
+        "description": "Members, teams, billing & API keys",
+        "label": "Workspace"
+      },
       "general": {
         "description": "Appearance, sounds & startup",
         "label": "Preferences"
@@ -1037,6 +1052,91 @@
     "title": "Settings"
   },
   "settingsPage": {
+    "workspace": {
+      "title": "Workspace",
+      "description": "Collaborate with teammates, share notes, and manage billing in one place.",
+      "empty": {
+        "title": "Create your first workspace",
+        "description": "Workspaces let you collaborate with teammates and share notes.",
+        "create": "Create workspace"
+      },
+      "tab": {
+        "general": "General",
+        "members": "Members",
+        "teams": "Teams",
+        "billing": "Billing",
+        "developer": "Developer"
+      },
+      "role": {
+        "owner": "Owner",
+        "admin": "Admin",
+        "member": "Member"
+      },
+      "general": {
+        "nameLabel": "Workspace name",
+        "slugLabel": "Slug",
+        "slugHint": "Used in URLs and invite links. Lowercase letters, digits, and dashes only.",
+        "saved": "Workspace updated",
+        "dangerTitle": "Delete workspace",
+        "dangerDescription": "All shared notes, folders, and integrations will be deleted. This cannot be undone.",
+        "delete": "Delete workspace",
+        "confirmTitle": "Delete {{name}}?",
+        "confirmDescription": "This cancels the subscription and removes all workspace data permanently."
+      },
+      "members": {
+        "title": "Members",
+        "description": "{{count}} of {{seats}} seats used.",
+        "invite": "Invite",
+        "empty": "No members yet.",
+        "roleUpdated": "Role updated",
+        "promote": "Make admin",
+        "demote": "Make member",
+        "transferOwnership": "Transfer ownership",
+        "remove": "Remove from workspace"
+      },
+      "invites": {
+        "title": "Pending invitations",
+        "resend": "Resend",
+        "revoke": "Revoke",
+        "resent": "Invitation resent"
+      },
+      "teams": {
+        "title": "Teams",
+        "description": "Group members for scoped sharing.",
+        "new": "New team",
+        "empty": "No teams yet.",
+        "createFirst": "Create your first team",
+        "createTitle": "Create team",
+        "nameLabel": "Team name",
+        "descriptionLabel": "Description",
+        "memberCount": "{{count}} members"
+      },
+      "billing": {
+        "title": "Billing",
+        "description": "Plan, seats, and payment.",
+        "plan": "Plan",
+        "seats": "Seats",
+        "nextInvoice": "Next invoice",
+        "manageStripe": "Manage in Stripe",
+        "startSubscription": "Start subscription"
+      },
+      "developer": {
+        "title": "API keys",
+        "description": "Programmatic access scoped to this workspace.",
+        "empty": "No API keys yet. Create one to integrate with this workspace.",
+        "new": "New key",
+        "create": "Create key",
+        "createTitle": "Create API key",
+        "createDescription": "Choose the permissions this key needs. You can revoke it any time.",
+        "nameLabel": "Key name",
+        "namePlaceholder": "Production integration",
+        "revoke": "Revoke key",
+        "lastUsed": "Last used {{date}}",
+        "neverUsed": "Never used",
+        "keyCreatedTitle": "API key created",
+        "keyCreatedDescription": "Copy this key now — you won't be able to see it again."
+      }
+    },
     "account": {
       "badges": {
         "free": "Free",
@@ -1589,6 +1689,10 @@
         "chatIntelligence": "Chat"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "Auto-generate note titles",
+      "autoGenerateTitleDescription": "Use AI to generate a short title for notes after transcription or enhancement"
+    },
     "transcription": {
       "customSetup": "Custom Setup",
       "customSetupDescription": "Use your own provider and API key.",
@@ -1639,7 +1743,51 @@
         "deleteModels": "Delete Models"
       },
       "transcriptionPreview": "Live Transcription Preview",
-      "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup"
+      "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup",
+      "vad": {
+        "title": "Voice Activity Detection",
+        "description": "Configure how Silero VAD detects and segments speech for local Whisper transcription",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD for Dictation",
+            "description": "Enable voice activity detection for local dictation transcription"
+          },
+          "noteRecording": {
+            "title": "Silero VAD for Note Recording",
+            "description": "Enable voice activity detection for local note recording transcription"
+          },
+          "meeting": {
+            "title": "Silero VAD for Meetings",
+            "description": "Enable voice activity detection for local meeting transcription"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "VAD threshold",
+            "info": "Probability above which a frame is classified as speech."
+          },
+          "minSpeechDurationMs": {
+            "label": "Minimum speech duration (ms)",
+            "info": "Speech segments shorter than this are discarded as noise or false positives."
+          },
+          "minSilenceDurationMs": {
+            "label": "Minimum silence duration (ms)",
+            "info": "Silence must last at least this long to end a speech segment. Shorter pauses are kept inside the segment."
+          },
+          "maxSpeechDurationS": {
+            "label": "Maximum speech duration (s)",
+            "info": "Segments longer than this are split at silence points to keep individual chunks manageable."
+          },
+          "speechPadMs": {
+            "label": "Speech padding (ms)",
+            "info": "Padding added before and after each detected segment so word edges are not clipped."
+          },
+          "samplesOverlap": {
+            "label": "Samples overlap (s)",
+            "info": "Audio carried from each segment into the next to avoid abrupt cuts when concatenating."
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -1761,7 +1909,57 @@
     "integrations": "Integrations",
     "defaultUser": "User",
     "notSignedIn": "Not signed in",
-    "chat": "Chat"
+    "chat": "Chat",
+    "inviteTeammate": "Invite teammate",
+    "createWorkspace": "Create workspace"
+  },
+  "workspaces": {
+    "switcher": {
+      "personal": "Personal",
+      "workspaces": "Workspaces",
+      "empty": "No workspaces yet",
+      "create": "Create workspace…"
+    },
+    "create": {
+      "title": "Create workspace",
+      "description": "Workspaces let you collaborate, share notes, and manage billing in one place.",
+      "nameLabel": "Workspace name",
+      "namePlaceholder": "Acme Corp",
+      "submit": "Create workspace",
+      "submitting": "Creating…",
+      "errorTitle": "Couldn't create workspace"
+    },
+    "created": {
+      "title": "Workspace created",
+      "description": "You're now the owner of {{name}}."
+    },
+    "invite": {
+      "title": "Invite to {{workspace}}",
+      "description": "Add teammates by email. They'll get a link to join.",
+      "emailLabel": "Email",
+      "roleLabel": "Role",
+      "teamsLabel": "Add to teams",
+      "submit": "Send invite",
+      "submitting": "Sending…",
+      "sentTitle": "Invite sent",
+      "sentDescription": "We sent an invitation to {{email}}.",
+      "errorTitle": "Couldn't send invitation",
+      "role": {
+        "admin": "Admin",
+        "member": "Member"
+      }
+    },
+    "accept": {
+      "title": "Join workspace",
+      "description": "{{inviter}} invited you to join {{workspace}} as a {{role}}.",
+      "loading": "Loading invitation…",
+      "accept": "Accept invitation",
+      "accepting": "Accepting…",
+      "signInToAccept": "Sign in to accept",
+      "successTitle": "You're in",
+      "successDescription": "Welcome to {{name}}.",
+      "errorTitle": "Couldn't accept invitation"
+    }
   },
   "chat": {
     "newChat": "New chat",
@@ -2436,7 +2634,37 @@
     "deleteNote": "Delete note",
     "deleteConfirmTitle": "Delete note?",
     "deleteConfirmDescription": "This note will be permanently deleted and cannot be recovered.",
-    "deleteConfirm": "Delete"
+    "deleteConfirm": "Delete",
+    "share": {
+      "button": "Share",
+      "dialog": {
+        "title": "Share note",
+        "searchPlaceholder": "Add people by email",
+        "emailLabel": "Recipient email",
+        "shareButton": "Share",
+        "copyLink": "Copy link",
+        "copied": "Copied",
+        "owner": "Owner",
+        "pending": "Pending",
+        "accepted": "Has access",
+        "resend": "Resend invite",
+        "revoke": "Remove",
+        "invitationActions": "Invitation actions",
+        "permissionRequired": "Only the note owner can change sharing.",
+        "visibility": {
+          "label": "Visibility",
+          "link": "Anyone with the link",
+          "domain": "Everyone at {{domain}} with the link",
+          "invited": "Only people invited"
+        },
+        "error": {
+          "invalidEmail": "Enter a valid email address",
+          "alreadyInvited": "{{email}} is already invited",
+          "inviteFailed": "Couldn't send the invitation. Try again.",
+          "linkUnavailable": "Generate or rotate the link to copy it"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "Search",

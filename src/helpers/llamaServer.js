@@ -443,12 +443,20 @@ class LlamaServerManager {
 
     this.clearIdleTimer();
 
-    const body = JSON.stringify({
+    const requestBody = {
       messages,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.max_tokens ?? 512,
       stream: false,
-    });
+    };
+
+    // Without this, Qwen chat templates leave `message.content` empty and
+    // route output into `reasoning_content`. Non-Qwen templates ignore it.
+    if (options.disableThinking !== false) {
+      requestBody.chat_template_kwargs = { enable_thinking: false };
+    }
+
+    const body = JSON.stringify(requestBody);
 
     return new Promise((resolve, reject) => {
       const startTime = Date.now();

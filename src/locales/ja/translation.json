@@ -87,6 +87,7 @@
     "errors": {
       "callbackRequired": "ホットキー設定にはコールバック関数が必要です",
       "globeOnlyMac": "Globe キーは macOS でのみ利用できます。",
+      "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
@@ -154,7 +155,17 @@
     "private": "プライベート",
     "tap": "タップ",
     "close": "閉じる",
-    "dismiss": "閉じる"
+    "dismiss": "閉じる",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "create": "Crear",
+    "delete": "Eliminar",
+    "actions": "Acciones",
+    "error": "Algo salió mal",
+    "unknownError": "Ocurrió un error desconocido",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "done": "Listo"
   },
   "onboarding": {
     "steps": {
@@ -936,6 +947,10 @@
       "system": {
         "description": "更新、ストレージ、開発者ツール",
         "label": "システム"
+      },
+      "workspace": {
+        "label": "Espacio de trabajo",
+        "description": "Miembros, equipos, facturación y claves API"
       }
     },
     "title": "設定"
@@ -1493,6 +1508,10 @@
         "chatIntelligence": "チャット"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "ノートのタイトルを自動生成",
+      "autoGenerateTitleDescription": "文字起こしや改善後にAIを使用してノートの短いタイトルを生成します"
+    },
     "transcription": {
       "customSetup": "カスタム設定",
       "customSetupDescription": "独自のプロバイダーと API キーを使用。",
@@ -1543,7 +1562,51 @@
         "deleteModels": "モデルを削除"
       },
       "transcriptionPreview": "リアルタイム文字起こしプレビュー",
-      "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示"
+      "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示",
+      "vad": {
+        "title": "音声アクティビティ検出",
+        "description": "ローカル Whisper 文字起こしで Silero VAD が発話を検出・分割する方法を設定します",
+        "toggles": {
+          "dictation": {
+            "title": "ディクテーションで Silero VAD を使用",
+            "description": "ローカルディクテーションで音声アクティビティ検出を有効化"
+          },
+          "noteRecording": {
+            "title": "ノート録音で Silero VAD を使用",
+            "description": "ローカルノート録音で音声アクティビティ検出を有効化"
+          },
+          "meeting": {
+            "title": "会議で Silero VAD を使用",
+            "description": "ローカル会議文字起こしで音声アクティビティ検出を有効化"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "VAD しきい値",
+            "info": "フレームを音声として分類する確率のしきい値です。"
+          },
+          "minSpeechDurationMs": {
+            "label": "最小発話時間 (ms)",
+            "info": "これより短い発話区間はノイズや誤検出として破棄されます。"
+          },
+          "minSilenceDurationMs": {
+            "label": "最小無音時間 (ms)",
+            "info": "発話区間を終了するには最低この長さの無音が必要です。短い無音は区間に含まれます。"
+          },
+          "maxSpeechDurationS": {
+            "label": "最大発話時間 (秒)",
+            "info": "これより長い区間は無音の位置で分割され、扱いやすい長さに保たれます。"
+          },
+          "speechPadMs": {
+            "label": "発話パディング (ms)",
+            "info": "単語の端が切れないよう、各区間の前後に追加されるパディングです。"
+          },
+          "samplesOverlap": {
+            "label": "サンプル重なり (秒)",
+            "info": "区間を連結するときに途切れないよう、次の区間に延長する音声の長さです。"
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -1555,6 +1618,91 @@
       "endpointUrl": "エンドポイント URL",
       "serverUrl": "サーバー URL",
       "apiKeyOptional": "API キー（任意）"
+    },
+    "workspace": {
+      "title": "Espacio de trabajo",
+      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "empty": {
+        "title": "Crea tu primer espacio de trabajo",
+        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
+        "create": "Crear espacio de trabajo"
+      },
+      "tab": {
+        "general": "General",
+        "members": "Miembros",
+        "teams": "Equipos",
+        "billing": "Facturación",
+        "developer": "Desarrollador"
+      },
+      "role": {
+        "owner": "Propietario",
+        "admin": "Administrador",
+        "member": "Miembro"
+      },
+      "general": {
+        "nameLabel": "Nombre del espacio de trabajo",
+        "slugLabel": "Slug",
+        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
+        "saved": "Espacio de trabajo actualizado",
+        "dangerTitle": "Eliminar espacio de trabajo",
+        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
+        "delete": "Eliminar espacio de trabajo",
+        "confirmTitle": "¿Eliminar {{name}}?",
+        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+      },
+      "members": {
+        "title": "Miembros",
+        "description": "{{count}} de {{seats}} asientos utilizados.",
+        "invite": "Invitar",
+        "empty": "Aún no hay miembros.",
+        "roleUpdated": "Rol actualizado",
+        "promote": "Hacer administrador",
+        "demote": "Hacer miembro",
+        "transferOwnership": "Transferir propiedad",
+        "remove": "Quitar del espacio de trabajo"
+      },
+      "invites": {
+        "title": "Invitaciones pendientes",
+        "resend": "Reenviar",
+        "revoke": "Revocar",
+        "resent": "Invitación reenviada"
+      },
+      "teams": {
+        "title": "Equipos",
+        "description": "Agrupa miembros para compartir con alcance limitado.",
+        "new": "Nuevo equipo",
+        "empty": "Aún no hay equipos.",
+        "createFirst": "Crea tu primer equipo",
+        "createTitle": "Crear equipo",
+        "nameLabel": "Nombre del equipo",
+        "descriptionLabel": "Descripción",
+        "memberCount": "{{count}} miembros"
+      },
+      "billing": {
+        "title": "Facturación",
+        "description": "Plan, asientos y pago.",
+        "plan": "Plan",
+        "seats": "Asientos",
+        "nextInvoice": "Próxima factura",
+        "manageStripe": "Administrar en Stripe",
+        "startSubscription": "Iniciar suscripción"
+      },
+      "developer": {
+        "title": "Claves API",
+        "description": "Acceso programático limitado a este espacio de trabajo.",
+        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
+        "new": "Nueva clave",
+        "create": "Crear clave",
+        "createTitle": "Crear clave API",
+        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
+        "nameLabel": "Nombre de la clave",
+        "namePlaceholder": "Integración de producción",
+        "revoke": "Revocar clave",
+        "lastUsed": "Último uso {{date}}",
+        "neverUsed": "Nunca utilizada",
+        "keyCreatedTitle": "Clave API creada",
+        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
+      }
     }
   },
   "models": {
@@ -2034,7 +2182,9 @@
     "integrations": "連携",
     "defaultUser": "ユーザー",
     "notSignedIn": "未サインイン",
-    "chat": "チャット"
+    "chat": "チャット",
+    "inviteTeammate": "Invitar compañero",
+    "createWorkspace": "Crear espacio de trabajo"
   },
   "chat": {
     "newChat": "新しいチャット",
@@ -2388,7 +2538,37 @@
     "deleteNote": "ノートを削除",
     "deleteConfirmTitle": "ノートを削除しますか？",
     "deleteConfirmDescription": "このノートは完全に削除され、復元できません。",
-    "deleteConfirm": "削除"
+    "deleteConfirm": "削除",
+    "share": {
+      "button": "共有",
+      "dialog": {
+        "title": "ノートを共有",
+        "searchPlaceholder": "メールアドレスでメンバーを追加",
+        "emailLabel": "受信者のメールアドレス",
+        "shareButton": "共有",
+        "copyLink": "リンクをコピー",
+        "copied": "コピーしました",
+        "owner": "オーナー",
+        "pending": "保留中",
+        "accepted": "アクセス権あり",
+        "resend": "招待を再送信",
+        "revoke": "削除",
+        "invitationActions": "招待の操作",
+        "permissionRequired": "共有設定を変更できるのはノートのオーナーのみです。",
+        "visibility": {
+          "label": "公開範囲",
+          "link": "リンクを持つ全員",
+          "domain": "{{domain}} の全員（リンクを持つ人）",
+          "invited": "招待された人のみ"
+        },
+        "error": {
+          "invalidEmail": "有効なメールアドレスを入力してください",
+          "alreadyInvited": "{{email}} はすでに招待されています",
+          "inviteFailed": "招待を送信できませんでした。もう一度お試しください。",
+          "linkUnavailable": "リンクをコピーするには生成またはローテーションしてください"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "検索",
@@ -2489,6 +2669,54 @@
     "speaker": {
       "you": "あなた",
       "others": "他の人"
+    }
+  },
+  "workspaces": {
+    "switcher": {
+      "personal": "Personal",
+      "workspaces": "Espacios de trabajo",
+      "empty": "Aún no hay espacios de trabajo",
+      "create": "Crear espacio de trabajo…"
+    },
+    "create": {
+      "title": "Crear espacio de trabajo",
+      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
+      "nameLabel": "Nombre del espacio de trabajo",
+      "namePlaceholder": "Acme Corp",
+      "submit": "Crear espacio de trabajo",
+      "submitting": "Creando…",
+      "errorTitle": "No se pudo crear el espacio de trabajo"
+    },
+    "created": {
+      "title": "Espacio de trabajo creado",
+      "description": "Ahora eres el propietario de {{name}}."
+    },
+    "invite": {
+      "title": "Invitar a {{workspace}}",
+      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
+      "emailLabel": "Correo electrónico",
+      "roleLabel": "Rol",
+      "teamsLabel": "Agregar a equipos",
+      "submit": "Enviar invitación",
+      "submitting": "Enviando…",
+      "sentTitle": "Invitación enviada",
+      "sentDescription": "Enviamos una invitación a {{email}}.",
+      "errorTitle": "No se pudo enviar la invitación",
+      "role": {
+        "admin": "Administrador",
+        "member": "Miembro"
+      }
+    },
+    "accept": {
+      "title": "Unirse al espacio de trabajo",
+      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
+      "loading": "Cargando invitación…",
+      "accept": "Aceptar invitación",
+      "accepting": "Aceptando…",
+      "signInToAccept": "Inicia sesión para aceptar",
+      "successTitle": "Te uniste",
+      "successDescription": "Bienvenido a {{name}}.",
+      "errorTitle": "No se pudo aceptar la invitación"
     }
   }
 }

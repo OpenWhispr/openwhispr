@@ -87,6 +87,7 @@
     "errors": {
       "callbackRequired": "È necessaria una funzione callback per configurare la scorciatoia",
       "globeOnlyMac": "Il tasto Globe è disponibile solo su macOS.",
+      "mouseButtonOnlyMac": "Le scorciatoie con i tasti del mouse sono attualmente supportate solo su macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
@@ -154,7 +155,17 @@
     "private": "Privato",
     "tap": "Tocca",
     "close": "Chiudi",
-    "dismiss": "Ignora"
+    "dismiss": "Ignora",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "create": "Créer",
+    "delete": "Supprimer",
+    "actions": "Actions",
+    "error": "Une erreur s'est produite",
+    "unknownError": "Une erreur inconnue s'est produite",
+    "copy": "Copier",
+    "copied": "Copié",
+    "done": "Terminé"
   },
   "onboarding": {
     "steps": {
@@ -936,6 +947,10 @@
       "system": {
         "description": "Aggiornamenti, archiviazione e strumenti di sviluppo",
         "label": "Sistema"
+      },
+      "workspace": {
+        "label": "Espace de travail",
+        "description": "Membres, équipes, facturation et clés API"
       }
     },
     "title": "Impostazioni"
@@ -1493,6 +1508,10 @@
         "chatIntelligence": "Chat"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "Genera automaticamente i titoli delle note",
+      "autoGenerateTitleDescription": "Usa l'IA per generare un titolo breve per le note dopo la trascrizione o il miglioramento"
+    },
     "transcription": {
       "customSetup": "Configurazione personalizzata",
       "customSetupDescription": "Usa il tuo provider e la tua chiave API.",
@@ -1543,7 +1562,51 @@
         "deleteModels": "Elimina modelli"
       },
       "transcriptionPreview": "Anteprima dal vivo",
-      "transcriptionPreviewDescription": "Mostra la trascrizione in una finestra flottante prima della correzione"
+      "transcriptionPreviewDescription": "Mostra la trascrizione in una finestra flottante prima della correzione",
+      "vad": {
+        "title": "Rilevamento attività vocale",
+        "description": "Configura come Silero VAD rileva e segmenta il parlato per la trascrizione locale Whisper",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD per dettatura",
+            "description": "Abilita il rilevamento di attività vocale per la dettatura locale"
+          },
+          "noteRecording": {
+            "title": "Silero VAD per registrazione note",
+            "description": "Abilita il rilevamento di attività vocale per la registrazione locale delle note"
+          },
+          "meeting": {
+            "title": "Silero VAD per riunioni",
+            "description": "Abilita il rilevamento di attività vocale per la trascrizione locale delle riunioni"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "Soglia VAD",
+            "info": "Probabilità oltre la quale un frame viene classificato come parlato."
+          },
+          "minSpeechDurationMs": {
+            "label": "Durata minima del parlato (ms)",
+            "info": "I segmenti di parlato più brevi vengono scartati come rumore o falsi positivi."
+          },
+          "minSilenceDurationMs": {
+            "label": "Durata minima di silenzio (ms)",
+            "info": "Il silenzio deve durare almeno questo tempo per terminare un segmento. Pause più brevi restano nel segmento."
+          },
+          "maxSpeechDurationS": {
+            "label": "Durata massima del parlato (s)",
+            "info": "I segmenti più lunghi vengono divisi nei punti di silenzio per mantenere blocchi gestibili."
+          },
+          "speechPadMs": {
+            "label": "Riempimento del parlato (ms)",
+            "info": "Riempimento aggiunto prima e dopo ogni segmento per non tagliare i bordi delle parole."
+          },
+          "samplesOverlap": {
+            "label": "Sovrapposizione campioni (s)",
+            "info": "Audio esteso da un segmento al successivo per evitare tagli netti nella concatenazione."
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -1555,6 +1618,91 @@
       "endpointUrl": "URL endpoint",
       "serverUrl": "URL server",
       "apiKeyOptional": "API Key (opzionale)"
+    },
+    "workspace": {
+      "title": "Espace de travail",
+      "description": "Collaborez, partagez des notes et gérez la facturation au même endroit.",
+      "empty": {
+        "title": "Créez votre premier espace de travail",
+        "description": "Les espaces de travail vous permettent de collaborer et partager des notes.",
+        "create": "Créer un espace"
+      },
+      "tab": {
+        "general": "Général",
+        "members": "Membres",
+        "teams": "Équipes",
+        "billing": "Facturation",
+        "developer": "Développeur"
+      },
+      "role": {
+        "owner": "Propriétaire",
+        "admin": "Administrateur",
+        "member": "Membre"
+      },
+      "general": {
+        "nameLabel": "Nom",
+        "slugLabel": "Slug",
+        "slugHint": "Utilisé dans les URL. Minuscules, chiffres et tirets uniquement.",
+        "saved": "Espace mis à jour",
+        "dangerTitle": "Supprimer l'espace",
+        "dangerDescription": "Toutes les notes, dossiers et intégrations partagés seront supprimés. Cette action est irréversible.",
+        "delete": "Supprimer l'espace",
+        "confirmTitle": "Supprimer {{name}} ?",
+        "confirmDescription": "Cela annule l'abonnement et supprime définitivement toutes les données."
+      },
+      "members": {
+        "title": "Membres",
+        "description": "{{count}} sur {{seats}} sièges utilisés.",
+        "invite": "Inviter",
+        "empty": "Aucun membre pour l'instant.",
+        "roleUpdated": "Rôle mis à jour",
+        "promote": "Promouvoir administrateur",
+        "demote": "Rétrograder membre",
+        "transferOwnership": "Transférer la propriété",
+        "remove": "Retirer de l'espace"
+      },
+      "invites": {
+        "title": "Invitations en attente",
+        "resend": "Renvoyer",
+        "revoke": "Révoquer",
+        "resent": "Invitation renvoyée"
+      },
+      "teams": {
+        "title": "Équipes",
+        "description": "Groupez les membres pour un partage ciblé.",
+        "new": "Nouvelle équipe",
+        "empty": "Aucune équipe.",
+        "createFirst": "Créez votre première équipe",
+        "createTitle": "Créer une équipe",
+        "nameLabel": "Nom de l'équipe",
+        "descriptionLabel": "Description",
+        "memberCount": "{{count}} membres"
+      },
+      "billing": {
+        "title": "Facturation",
+        "description": "Plan, sièges et paiement.",
+        "plan": "Plan",
+        "seats": "Sièges",
+        "nextInvoice": "Prochaine facture",
+        "manageStripe": "Gérer dans Stripe",
+        "startSubscription": "Démarrer l'abonnement"
+      },
+      "developer": {
+        "title": "Clés API",
+        "description": "Accès programmatique limité à cet espace.",
+        "empty": "Aucune clé API. Créez-en une pour vous intégrer.",
+        "new": "Nouvelle clé",
+        "create": "Créer la clé",
+        "createTitle": "Créer une clé API",
+        "createDescription": "Choisissez les permissions. Vous pouvez la révoquer à tout moment.",
+        "nameLabel": "Nom de la clé",
+        "namePlaceholder": "Intégration production",
+        "revoke": "Révoquer la clé",
+        "lastUsed": "Dernière utilisation {{date}}",
+        "neverUsed": "Jamais utilisée",
+        "keyCreatedTitle": "Clé API créée",
+        "keyCreatedDescription": "Copiez cette clé maintenant — vous ne pourrez plus la voir."
+      }
     }
   },
   "models": {
@@ -2034,7 +2182,9 @@
     "integrations": "Integrazioni",
     "defaultUser": "Utente",
     "notSignedIn": "Non hai effettuato l'accesso",
-    "chat": "Chat"
+    "chat": "Chat",
+    "inviteTeammate": "Inviter un coéquipier",
+    "createWorkspace": "Créer un espace de travail"
   },
   "chat": {
     "newChat": "Nuova chat",
@@ -2388,7 +2538,37 @@
     "deleteNote": "Elimina nota",
     "deleteConfirmTitle": "Eliminare la nota?",
     "deleteConfirmDescription": "Questa nota verrà eliminata definitivamente e non potrà essere recuperata.",
-    "deleteConfirm": "Elimina"
+    "deleteConfirm": "Elimina",
+    "share": {
+      "button": "Condividi",
+      "dialog": {
+        "title": "Condividi nota",
+        "searchPlaceholder": "Aggiungi persone tramite email",
+        "emailLabel": "Email del destinatario",
+        "shareButton": "Condividi",
+        "copyLink": "Copia link",
+        "copied": "Copiato",
+        "owner": "Proprietario",
+        "pending": "In attesa",
+        "accepted": "Ha accesso",
+        "resend": "Reinvia invito",
+        "revoke": "Rimuovi",
+        "invitationActions": "Azioni invito",
+        "permissionRequired": "Solo il proprietario della nota può modificare la condivisione.",
+        "visibility": {
+          "label": "Visibilità",
+          "link": "Chiunque con il link",
+          "domain": "Tutti in {{domain}} con il link",
+          "invited": "Solo le persone invitate"
+        },
+        "error": {
+          "invalidEmail": "Inserisci un indirizzo email valido",
+          "alreadyInvited": "{{email}} è già stato invitato",
+          "inviteFailed": "Impossibile inviare l'invito. Riprova.",
+          "linkUnavailable": "Genera o ruota il link per copiarlo"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "Cerca",
@@ -2489,6 +2669,54 @@
     "speaker": {
       "you": "Tu",
       "others": "Altri"
+    }
+  },
+  "workspaces": {
+    "switcher": {
+      "personal": "Personnel",
+      "workspaces": "Espaces de travail",
+      "empty": "Aucun espace de travail",
+      "create": "Créer un espace de travail…"
+    },
+    "create": {
+      "title": "Créer un espace de travail",
+      "description": "Les espaces de travail vous permettent de collaborer, partager des notes et gérer la facturation.",
+      "nameLabel": "Nom de l'espace de travail",
+      "namePlaceholder": "Acme Corp",
+      "submit": "Créer l'espace",
+      "submitting": "Création…",
+      "errorTitle": "Impossible de créer l'espace"
+    },
+    "created": {
+      "title": "Espace de travail créé",
+      "description": "Vous êtes maintenant propriétaire de {{name}}."
+    },
+    "invite": {
+      "title": "Inviter dans {{workspace}}",
+      "description": "Ajoutez des coéquipiers par e-mail. Ils recevront un lien pour rejoindre.",
+      "emailLabel": "E-mail",
+      "roleLabel": "Rôle",
+      "teamsLabel": "Ajouter aux équipes",
+      "submit": "Envoyer l'invitation",
+      "submitting": "Envoi…",
+      "sentTitle": "Invitation envoyée",
+      "sentDescription": "Nous avons envoyé une invitation à {{email}}.",
+      "errorTitle": "Impossible d'envoyer l'invitation",
+      "role": {
+        "admin": "Administrateur",
+        "member": "Membre"
+      }
+    },
+    "accept": {
+      "title": "Rejoindre l'espace",
+      "description": "{{inviter}} vous a invité à rejoindre {{workspace}} en tant que {{role}}.",
+      "loading": "Chargement…",
+      "accept": "Accepter l'invitation",
+      "accepting": "Acceptation…",
+      "signInToAccept": "Connectez-vous pour accepter",
+      "successTitle": "Vous êtes membre",
+      "successDescription": "Bienvenue dans {{name}}.",
+      "errorTitle": "Impossible d'accepter l'invitation"
     }
   }
 }

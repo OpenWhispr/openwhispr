@@ -26,6 +26,25 @@ class GlobeKeyManager extends EventEmitter {
     this._isStopping = false;
     this._restartCount = 0;
     this._restartResetTimer = null;
+    this.suppressedMouseButtons = [];
+  }
+
+  setSuppressedMouseButtons(buttons = []) {
+    const normalized = [...new Set(buttons.filter((button) => /^MouseButton[45]$/i.test(button)))];
+    const unchanged =
+      normalized.length === this.suppressedMouseButtons.length &&
+      normalized.every((button, index) => button === this.suppressedMouseButtons[index]);
+
+    if (unchanged) {
+      return;
+    }
+
+    this.suppressedMouseButtons = normalized;
+
+    if (this.process) {
+      this.stop();
+      this.start();
+    }
   }
 
   start() {
@@ -75,8 +94,12 @@ class GlobeKeyManager extends EventEmitter {
     }
 
     this.hasReportedError = false;
-    this.process = spawn(listenerPath);
-    debugLogger.info("[GlobeKeyManager] Process spawned", { pid: this.process.pid });
+    const child = spawn(listenerPath, this.suppressedMouseButtons);
+    this.process = child;
+    debugLogger.info("[GlobeKeyManager] Process spawned", {
+      pid: child.pid,
+      suppressedMouseButtons: this.suppressedMouseButtons,
+    });
 
     // After sustained uptime, reset the restart counter so future sleep/wake
     // cycles get a fresh set of restart attempts
@@ -89,8 +112,8 @@ class GlobeKeyManager extends EventEmitter {
       }
     }, RESTART_RESET_MS);
 
-    this.process.stdout.setEncoding("utf8");
-    this.process.stdout.on("data", (chunk) => {
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
       chunk
         .split(/\r?\n/)
         .map((line) => line.trim())
@@ -115,12 +138,22 @@ class GlobeKeyManager extends EventEmitter {
             if (modifier) {
               this.emit("modifier-up", modifier);
             }
+          } else if (line.startsWith("MOUSE_BUTTON_DOWN:")) {
+            const button = line.replace("MOUSE_BUTTON_DOWN:", "").trim();
+            if (button) {
+              this.emit("mouse-button-down", button);
+            }
+          } else if (line.startsWith("MOUSE_BUTTON_UP:")) {
+            const button = line.replace("MOUSE_BUTTON_UP:", "").trim();
+            if (button) {
+              this.emit("mouse-button-up", button);
+            }
           }
         });
     });
 
-    this.process.stderr.setEncoding("utf8");
-    this.process.stderr.on("data", (data) => {
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (data) => {
       const message = data.toString().trim();
       if (message.length > 0) {
         if (message.includes("Failed to create event monitor")) {
@@ -131,14 +164,19 @@ class GlobeKeyManager extends EventEmitter {
       }
     });
 
-    this.process.on("error", (error) => {
+    child.on("error", (error) => {
       debugLogger.info("[GlobeKeyManager] Process error", { error: error.message });
       this.reportError(error);
-      this.process = null;
+      if (this.process === child) this.process = null;
     });
 
-    this.process.on("exit", (code, signal) => {
+    child.on("exit", (code, signal) => {
       debugLogger.info("[GlobeKeyManager] Process exited", { code, signal });
+      // Only clear instance state if this is still the current process — a prior
+      // stop()+start() (e.g. setSuppressedMouseButtons) may have already replaced it.
+      if (this.process !== child) {
+        return;
+      }
       this.process = null;
       if (this._restartResetTimer) {
         clearTimeout(this._restartResetTimer);

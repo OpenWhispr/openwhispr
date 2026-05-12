@@ -60,6 +60,28 @@ export interface NoteItem {
   client_note_id: string;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  workspace_id?: string | null;
+  team_id?: string | null;
+}
+
+export type ShareVisibility = "private" | "link" | "domain" | "invited";
+
+export interface ShareSettings {
+  visibility: ShareVisibility;
+  token_prefix: string | null;
+  domain_allowlist: string[];
+  updated_by_user_id: string | null;
+  updated_at: string | null;
+}
+
+export interface NoteShareInvitation {
+  id: string;
+  email: string;
+  invited_by_user_id: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  last_emailed_at: string | null;
+  created_at: string;
 }
 
 export interface FolderItem {
@@ -73,6 +95,99 @@ export interface FolderItem {
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  workspace_id?: string | null;
+  team_id?: string | null;
+}
+
+export type WorkspaceRole = "owner" | "admin" | "member";
+export type TeamRole = "admin" | "member";
+
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  created_by_user_id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  plan: string;
+  status: string;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  seats: number;
+  created_at: string;
+  updated_at: string;
+  role: WorkspaceRole;
+}
+
+export interface WorkspaceMember {
+  user_id: string;
+  role: WorkspaceRole;
+  joined_at: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+}
+
+export interface Team {
+  id: string;
+  workspace_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  member_count?: number;
+}
+
+export interface TeamMember {
+  user_id: string;
+  role: TeamRole;
+  joined_at: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  email: string;
+  workspace_role: TeamRole;
+  team_ids: string[];
+  invited_by_user_id: string;
+  expires_at: string;
+  created_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface InvitationPreview {
+  id: string;
+  email: string;
+  workspace_role: TeamRole;
+  team_ids: string[];
+  expires_at: string;
+  workspace_id: string;
+  workspace_name: string;
+  workspace_slug: string;
+  inviter_name: string | null;
+  inviter_email: string | null;
+}
+
+export interface WorkspaceApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  last_used_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+  created_by_user_id: string | null;
+  description: string | null;
+}
+
+export interface NewWorkspaceApiKey extends WorkspaceApiKey {
+  key: string;
 }
 
 export interface ActionItem {
@@ -1146,6 +1261,9 @@ declare global {
         callback: (data: { wordsUsed: number; limit: number }) => void
       ) => () => void;
 
+      // Workspace invitation deep link
+      onWorkspaceInvitationToken?: (callback: (token: string) => void) => () => void;
+
       // AssemblyAI Streaming
       assemblyAiStreamingWarmup?: (options?: {
         sampleRate?: number;
@@ -1626,6 +1744,32 @@ declare global {
         enabled: boolean;
         expectedCount: number;
       }) => Promise<{ success: boolean; error?: string }>;
+      getWhisperVadConfig?: () => Promise<{
+        success: boolean;
+        config?: {
+          dictationSileroEnabled: boolean;
+          noteRecordingSileroEnabled: boolean;
+          meetingSileroEnabled: boolean;
+          threshold: number;
+          minSpeechDurationMs: number;
+          minSilenceDurationMs: number;
+          maxSpeechDurationS: number;
+          speechPadMs: number;
+          samplesOverlap: number;
+        };
+        error?: string;
+      }>;
+      setWhisperVadConfig?: (config: {
+        dictationSileroEnabled?: boolean;
+        noteRecordingSileroEnabled?: boolean;
+        meetingSileroEnabled?: boolean;
+        threshold?: number;
+        minSpeechDurationMs?: number;
+        minSilenceDurationMs?: number;
+        maxSpeechDurationS?: number;
+        speechPadMs?: number;
+        samplesOverlap?: number;
+      }) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
       onMeetingDetected?: (callback: (data: any) => void) => () => void;
       onMeetingDetectedStartRecording?: (callback: (data: any) => void) => () => void;
       onMeetingNotificationData?: (callback: (data: any) => void) => () => void;

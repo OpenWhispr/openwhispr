@@ -40,7 +40,12 @@ import {
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import HistoryView from "./HistoryView";
+import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import { syncService } from "../services/SyncService.js";
+import AcceptInvitationModal, {
+  consumePendingInvitationToken,
+  clearPendingInvitationToken,
+} from "./AcceptInvitationModal";
 
 const platform = getCachedPlatform();
 
@@ -67,6 +72,7 @@ export default function ControlPanel() {
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
   const [showReferrals, setShowReferrals] = useState(false);
+  const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
@@ -236,6 +242,22 @@ export default function ControlPanel() {
       duration: 8000,
     });
   }, [usage?.isPastDue, usage?.hasLoaded, toast, t]);
+
+  useEffect(() => {
+    const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
+      setInvitationToken(token);
+    });
+    return () => unsubscribe?.();
+  }, []);
+
+  useEffect(() => {
+    if (!authLoaded || !isSignedIn) return;
+    const pending = consumePendingInvitationToken();
+    if (pending) {
+      setInvitationToken(pending);
+      clearPendingInvitationToken();
+    }
+  }, [authLoaded, isSignedIn]);
 
   useEffect(() => {
     if (!authLoaded || !isSignedIn || cloudMigrationProcessed.current) return;
@@ -652,6 +674,15 @@ export default function ControlPanel() {
         </Suspense>
       )}
 
+      <AcceptInvitationModal
+        token={invitationToken}
+        onClose={() => setInvitationToken(null)}
+        isSignedIn={isSignedIn}
+        onSignIn={() => {
+          setInvitationToken(null);
+        }}
+      />
+
       {showSearch && (
         <Suspense fallback={null}>
           <CommandSearch
@@ -894,6 +925,7 @@ export default function ControlPanel() {
           </div>
         </main>
       </div>
+      <BackgroundActionToastListener />
     </div>
   );
 }

@@ -448,57 +448,11 @@ export default function PersonalNotesView({
     [loadFolders, toast, t]
   );
 
-  const handleApplyEnhancement = useCallback(
-    async (enhancedContent: string, prompt: string, title?: string) => {
-      if (!activeNoteId) return;
-      setLocalEnhancedContent(enhancedContent);
-      const hash = makeContentHash(localContentRef.current);
-      const updates: Record<string, string> = {
-        enhanced_content: enhancedContent,
-        enhancement_prompt: prompt,
-        enhanced_at_content_hash: hash,
-      };
-      if (title) {
-        updates.title = title;
-        setLocalTitle(title);
-      }
-      setIsSaving(true);
-      try {
-        await window.electronAPI.updateNote(activeNoteId, updates);
-      } finally {
-        setIsSaving(false);
-      }
-    },
-    [activeNoteId]
-  );
-
   const {
     state: actionProcessingState,
     actionName,
     runAction,
-    cancel: cancelAction,
-  } = useActionProcessing({
-    onSuccess: useCallback(
-      (enhancedContent: string, prompt: string, title?: string) => {
-        handleApplyEnhancement(enhancedContent, prompt, title);
-      },
-      [handleApplyEnhancement]
-    ),
-    onError: useCallback(
-      (errorMessage: string) => {
-        toast({
-          title: t("notes.enhance.title"),
-          description: errorMessage,
-          variant: "destructive",
-        });
-      },
-      [toast, t]
-    ),
-  });
-
-  useEffect(() => {
-    return () => cancelAction();
-  }, [activeNoteId, cancelAction]);
+  } = useActionProcessing(activeNoteId ?? null);
 
   const isEnhancementStale = useMemo(() => {
     if (!activeNote?.enhanced_content || !activeNote?.enhanced_at_content_hash) return false;
@@ -1017,7 +971,7 @@ export default function PersonalNotesView({
                     ]
                       .filter(Boolean)
                       .join("\n\n");
-                    runAction(action, parts, {
+                    runAction(action, parts, makeContentHash(localContentRef.current), {
                       isCloudMode,
                       modelId: effectiveModelId,
                       isMeetingNote,

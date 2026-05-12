@@ -87,6 +87,7 @@
     "errors": {
       "callbackRequired": "设置快捷键需要回调函数",
       "globeOnlyMac": "Globe 键仅在 macOS 上可用。",
+      "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
@@ -154,7 +155,17 @@
     "private": "隐私",
     "tap": "点按",
     "close": "关闭",
-    "dismiss": "忽略"
+    "dismiss": "忽略",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "create": "Crear",
+    "delete": "Eliminar",
+    "actions": "Acciones",
+    "error": "Algo salió mal",
+    "unknownError": "Ocurrió un error desconocido",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "done": "Listo"
   },
   "onboarding": {
     "steps": {
@@ -936,6 +947,10 @@
       "system": {
         "description": "更新、存储与开发者工具",
         "label": "系统"
+      },
+      "workspace": {
+        "label": "Espacio de trabajo",
+        "description": "Miembros, equipos, facturación y claves API"
       }
     },
     "title": "设置"
@@ -1493,6 +1508,10 @@
         "chatIntelligence": "聊天"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "自动生成笔记标题",
+      "autoGenerateTitleDescription": "使用 AI 在转录或增强后为笔记生成简短标题"
+    },
     "transcription": {
       "customSetup": "自定义设置",
       "customSetupDescription": "使用你自己的服务商和 API Key。",
@@ -1543,7 +1562,51 @@
         "deleteModels": "删除模型"
       },
       "transcriptionPreview": "实时转录预览",
-      "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理"
+      "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理",
+      "vad": {
+        "title": "语音活动检测",
+        "description": "配置 Silero VAD 如何为本地 Whisper 转录检测并切分语音",
+        "toggles": {
+          "dictation": {
+            "title": "听写使用 Silero VAD",
+            "description": "为本地听写启用语音活动检测"
+          },
+          "noteRecording": {
+            "title": "笔记录音使用 Silero VAD",
+            "description": "为本地笔记录音启用语音活动检测"
+          },
+          "meeting": {
+            "title": "会议使用 Silero VAD",
+            "description": "为本地会议转录启用语音活动检测"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "VAD 阈值",
+            "info": "高于该概率的帧会被判定为语音。"
+          },
+          "minSpeechDurationMs": {
+            "label": "最小语音时长 (毫秒)",
+            "info": "短于此时长的语音片段会作为噪声或误判被丢弃。"
+          },
+          "minSilenceDurationMs": {
+            "label": "最小静音时长 (毫秒)",
+            "info": "静音必须达到该时长才会结束一个语音片段。更短的停顿会保留在片段内。"
+          },
+          "maxSpeechDurationS": {
+            "label": "最大语音时长 (秒)",
+            "info": "更长的片段会在静音处自动拆分，以便保持可控大小。"
+          },
+          "speechPadMs": {
+            "label": "语音填充 (毫秒)",
+            "info": "在每个语音片段前后添加的填充，避免切断词语边缘。"
+          },
+          "samplesOverlap": {
+            "label": "样本重叠 (秒)",
+            "info": "将每个片段延伸到下一个片段的音频量，避免拼接时出现突兀的截断。"
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -1555,6 +1618,91 @@
       "endpointUrl": "端点 URL",
       "serverUrl": "服务器 URL",
       "apiKeyOptional": "API Key（可选）"
+    },
+    "workspace": {
+      "title": "Espacio de trabajo",
+      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "empty": {
+        "title": "Crea tu primer espacio de trabajo",
+        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
+        "create": "Crear espacio de trabajo"
+      },
+      "tab": {
+        "general": "General",
+        "members": "Miembros",
+        "teams": "Equipos",
+        "billing": "Facturación",
+        "developer": "Desarrollador"
+      },
+      "role": {
+        "owner": "Propietario",
+        "admin": "Administrador",
+        "member": "Miembro"
+      },
+      "general": {
+        "nameLabel": "Nombre del espacio de trabajo",
+        "slugLabel": "Slug",
+        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
+        "saved": "Espacio de trabajo actualizado",
+        "dangerTitle": "Eliminar espacio de trabajo",
+        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
+        "delete": "Eliminar espacio de trabajo",
+        "confirmTitle": "¿Eliminar {{name}}?",
+        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+      },
+      "members": {
+        "title": "Miembros",
+        "description": "{{count}} de {{seats}} asientos utilizados.",
+        "invite": "Invitar",
+        "empty": "Aún no hay miembros.",
+        "roleUpdated": "Rol actualizado",
+        "promote": "Hacer administrador",
+        "demote": "Hacer miembro",
+        "transferOwnership": "Transferir propiedad",
+        "remove": "Quitar del espacio de trabajo"
+      },
+      "invites": {
+        "title": "Invitaciones pendientes",
+        "resend": "Reenviar",
+        "revoke": "Revocar",
+        "resent": "Invitación reenviada"
+      },
+      "teams": {
+        "title": "Equipos",
+        "description": "Agrupa miembros para compartir con alcance limitado.",
+        "new": "Nuevo equipo",
+        "empty": "Aún no hay equipos.",
+        "createFirst": "Crea tu primer equipo",
+        "createTitle": "Crear equipo",
+        "nameLabel": "Nombre del equipo",
+        "descriptionLabel": "Descripción",
+        "memberCount": "{{count}} miembros"
+      },
+      "billing": {
+        "title": "Facturación",
+        "description": "Plan, asientos y pago.",
+        "plan": "Plan",
+        "seats": "Asientos",
+        "nextInvoice": "Próxima factura",
+        "manageStripe": "Administrar en Stripe",
+        "startSubscription": "Iniciar suscripción"
+      },
+      "developer": {
+        "title": "Claves API",
+        "description": "Acceso programático limitado a este espacio de trabajo.",
+        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
+        "new": "Nueva clave",
+        "create": "Crear clave",
+        "createTitle": "Crear clave API",
+        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
+        "nameLabel": "Nombre de la clave",
+        "namePlaceholder": "Integración de producción",
+        "revoke": "Revocar clave",
+        "lastUsed": "Último uso {{date}}",
+        "neverUsed": "Nunca utilizada",
+        "keyCreatedTitle": "Clave API creada",
+        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
+      }
     }
   },
   "models": {
@@ -2034,7 +2182,9 @@
     "integrations": "集成",
     "defaultUser": "用户",
     "notSignedIn": "未登录",
-    "chat": "聊天"
+    "chat": "聊天",
+    "inviteTeammate": "Invitar compañero",
+    "createWorkspace": "Crear espacio de trabajo"
   },
   "chat": {
     "newChat": "新对话",
@@ -2388,7 +2538,37 @@
     "deleteNote": "删除笔记",
     "deleteConfirmTitle": "删除笔记？",
     "deleteConfirmDescription": "此笔记将被永久删除，无法恢复。",
-    "deleteConfirm": "删除"
+    "deleteConfirm": "删除",
+    "share": {
+      "button": "分享",
+      "dialog": {
+        "title": "分享笔记",
+        "searchPlaceholder": "通过电子邮件添加成员",
+        "emailLabel": "收件人邮箱",
+        "shareButton": "分享",
+        "copyLink": "复制链接",
+        "copied": "已复制",
+        "owner": "所有者",
+        "pending": "待处理",
+        "accepted": "已获得访问权限",
+        "resend": "重新发送邀请",
+        "revoke": "移除",
+        "invitationActions": "邀请操作",
+        "permissionRequired": "只有笔记的所有者可以更改分享设置。",
+        "visibility": {
+          "label": "可见性",
+          "link": "拥有链接的任何人",
+          "domain": "{{domain}} 内拥有链接的所有人",
+          "invited": "仅受邀者"
+        },
+        "error": {
+          "invalidEmail": "请输入有效的电子邮件地址",
+          "alreadyInvited": "{{email}} 已经被邀请",
+          "inviteFailed": "无法发送邀请。请重试。",
+          "linkUnavailable": "生成或更换链接后即可复制"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "搜索",
@@ -2489,6 +2669,54 @@
     "speaker": {
       "you": "你",
       "others": "其他人"
+    }
+  },
+  "workspaces": {
+    "switcher": {
+      "personal": "Personal",
+      "workspaces": "Espacios de trabajo",
+      "empty": "Aún no hay espacios de trabajo",
+      "create": "Crear espacio de trabajo…"
+    },
+    "create": {
+      "title": "Crear espacio de trabajo",
+      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
+      "nameLabel": "Nombre del espacio de trabajo",
+      "namePlaceholder": "Acme Corp",
+      "submit": "Crear espacio de trabajo",
+      "submitting": "Creando…",
+      "errorTitle": "No se pudo crear el espacio de trabajo"
+    },
+    "created": {
+      "title": "Espacio de trabajo creado",
+      "description": "Ahora eres el propietario de {{name}}."
+    },
+    "invite": {
+      "title": "Invitar a {{workspace}}",
+      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
+      "emailLabel": "Correo electrónico",
+      "roleLabel": "Rol",
+      "teamsLabel": "Agregar a equipos",
+      "submit": "Enviar invitación",
+      "submitting": "Enviando…",
+      "sentTitle": "Invitación enviada",
+      "sentDescription": "Enviamos una invitación a {{email}}.",
+      "errorTitle": "No se pudo enviar la invitación",
+      "role": {
+        "admin": "Administrador",
+        "member": "Miembro"
+      }
+    },
+    "accept": {
+      "title": "Unirse al espacio de trabajo",
+      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
+      "loading": "Cargando invitación…",
+      "accept": "Aceptar invitación",
+      "accepting": "Aceptando…",
+      "signInToAccept": "Inicia sesión para aceptar",
+      "successTitle": "Te uniste",
+      "successDescription": "Bienvenido a {{name}}.",
+      "errorTitle": "No se pudo aceptar la invitación"
     }
   }
 }
