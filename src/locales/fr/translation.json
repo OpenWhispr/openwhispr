@@ -87,6 +87,7 @@
     "errors": {
       "callbackRequired": "Une fonction callback est requise pour configurer le raccourci",
       "globeOnlyMac": "La touche Globe est disponible uniquement sur macOS.",
+      "mouseButtonOnlyMac": "Les raccourcis avec les boutons de la souris ne sont actuellement pris en charge que sur macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" est déjà enregistré par une autre application.",
       "osReserved": "\"{{hotkey}}\" peut être réservé par votre environnement de bureau.",
       "registrationFailed": "Impossible d'enregistrer \"{{hotkey}}\". Il est peut-être utilisé par une autre application.",
@@ -1541,6 +1542,10 @@
         "chatIntelligence": "Chat"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "Générer automatiquement les titres des notes",
+      "autoGenerateTitleDescription": "Utiliser l'IA pour générer un titre court pour les notes après la transcription ou l'amélioration"
+    },
     "transcription": {
       "customSetup": "Configuration personnalisée",
       "customSetupDescription": "Utilisez votre propre fournisseur et clé API.",
@@ -1591,7 +1596,51 @@
         "deleteModels": "Supprimer les modèles"
       },
       "transcriptionPreview": "Aperçu en direct",
-      "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction"
+      "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction",
+      "vad": {
+        "title": "Détection d'activité vocale",
+        "description": "Configurez la manière dont Silero VAD détecte et segmente la parole pour la transcription locale Whisper",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD pour la dictée",
+            "description": "Activer la détection d'activité vocale pour la dictée locale"
+          },
+          "noteRecording": {
+            "title": "Silero VAD pour l'enregistrement de notes",
+            "description": "Activer la détection d'activité vocale pour l'enregistrement local des notes"
+          },
+          "meeting": {
+            "title": "Silero VAD pour les réunions",
+            "description": "Activer la détection d'activité vocale pour la transcription locale des réunions"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "Seuil VAD",
+            "info": "Probabilité au-delà de laquelle une trame est classée comme parole."
+          },
+          "minSpeechDurationMs": {
+            "label": "Durée minimale de parole (ms)",
+            "info": "Les segments plus courts sont rejetés comme bruit ou faux positifs."
+          },
+          "minSilenceDurationMs": {
+            "label": "Durée minimale de silence (ms)",
+            "info": "Un silence doit durer au moins ce temps pour terminer un segment. Les pauses plus courtes restent dans le segment."
+          },
+          "maxSpeechDurationS": {
+            "label": "Durée maximale de parole (s)",
+            "info": "Les segments plus longs sont divisés aux points de silence pour rester manipulables."
+          },
+          "speechPadMs": {
+            "label": "Marge de parole (ms)",
+            "info": "Marge ajoutée avant et après chaque segment pour ne pas couper les bords des mots."
+          },
+          "samplesOverlap": {
+            "label": "Chevauchement (s)",
+            "info": "Audio prolongé d'un segment au suivant pour éviter les coupures brusques lors de la concaténation."
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

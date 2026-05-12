@@ -87,6 +87,7 @@
     "errors": {
       "callbackRequired": "Uma função de callback é obrigatória para configurar o atalho",
       "globeOnlyMac": "A tecla Globe está disponível apenas no macOS.",
+      "mouseButtonOnlyMac": "Atalhos com botões do mouse atualmente são compatíveis apenas no macOS.",
       "alreadyRegistered": "\"{{hotkey}}\" já está registrada por outro aplicativo.",
       "osReserved": "\"{{hotkey}}\" pode estar reservada pelo seu ambiente de desktop.",
       "registrationFailed": "Não foi possível registrar \"{{hotkey}}\". Pode estar em uso por outro aplicativo.",
@@ -1465,6 +1466,10 @@
         "chatIntelligence": "Chat"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "Gerar títulos de notas automaticamente",
+      "autoGenerateTitleDescription": "Usar IA para gerar um título curto para notas após transcrição ou aprimoramento"
+    },
     "transcription": {
       "customSetup": "Configuração personalizada",
       "customSetupDescription": "Use seu próprio provedor e chave API.",
@@ -1515,7 +1520,51 @@
         "deleteModels": "Excluir modelos"
       },
       "transcriptionPreview": "Pré-visualização ao vivo",
-      "transcriptionPreviewDescription": "Mostrar transcrição em janela flutuante antes da limpeza"
+      "transcriptionPreviewDescription": "Mostrar transcrição em janela flutuante antes da limpeza",
+      "vad": {
+        "title": "Detecção de atividade de voz",
+        "description": "Configure como o Silero VAD detecta e segmenta a fala na transcrição local do Whisper",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD para ditado",
+            "description": "Ativar detecção de atividade de voz para ditado local"
+          },
+          "noteRecording": {
+            "title": "Silero VAD para gravação de notas",
+            "description": "Ativar detecção de atividade de voz para gravação local de notas"
+          },
+          "meeting": {
+            "title": "Silero VAD para reuniões",
+            "description": "Ativar detecção de atividade de voz para transcrição local de reuniões"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "Limiar de VAD",
+            "info": "Probabilidade acima da qual um quadro é classificado como fala."
+          },
+          "minSpeechDurationMs": {
+            "label": "Duração mínima da fala (ms)",
+            "info": "Segmentos de fala mais curtos são descartados como ruído ou falsos positivos."
+          },
+          "minSilenceDurationMs": {
+            "label": "Duração mínima de silêncio (ms)",
+            "info": "O silêncio precisa durar pelo menos esse tempo para encerrar um segmento. Pausas mais curtas permanecem dentro do segmento."
+          },
+          "maxSpeechDurationS": {
+            "label": "Duração máxima da fala (s)",
+            "info": "Segmentos maiores são divididos em pontos de silêncio para manter pedaços gerenciáveis."
+          },
+          "speechPadMs": {
+            "label": "Preenchimento da fala (ms)",
+            "info": "Preenchimento antes e depois de cada segmento para não cortar as bordas das palavras."
+          },
+          "samplesOverlap": {
+            "label": "Sobreposição de amostras (s)",
+            "info": "Áudio estendido de um segmento para o próximo, evitando cortes bruscos na concatenação."
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

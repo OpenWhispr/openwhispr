@@ -87,6 +87,7 @@
     "errors": {
       "callbackRequired": "ホットキー設定にはコールバック関数が必要です",
       "globeOnlyMac": "Globe キーは macOS でのみ利用できます。",
+      "mouseButtonOnlyMac": "マウスボタンのホットキーは現在 macOS でのみサポートされています。",
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
@@ -1493,6 +1494,10 @@
         "chatIntelligence": "チャット"
       }
     },
+    "noteFormatting": {
+      "autoGenerateTitle": "ノートのタイトルを自動生成",
+      "autoGenerateTitleDescription": "文字起こしや改善後にAIを使用してノートの短いタイトルを生成します"
+    },
     "transcription": {
       "customSetup": "カスタム設定",
       "customSetupDescription": "独自のプロバイダーと API キーを使用。",
@@ -1543,7 +1548,51 @@
         "deleteModels": "モデルを削除"
       },
       "transcriptionPreview": "リアルタイム文字起こしプレビュー",
-      "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示"
+      "transcriptionPreviewDescription": "クリーンアップ前にフローティングウィンドウで文字起こしを表示",
+      "vad": {
+        "title": "音声アクティビティ検出",
+        "description": "ローカル Whisper 文字起こしで Silero VAD が発話を検出・分割する方法を設定します",
+        "toggles": {
+          "dictation": {
+            "title": "ディクテーションで Silero VAD を使用",
+            "description": "ローカルディクテーションで音声アクティビティ検出を有効化"
+          },
+          "noteRecording": {
+            "title": "ノート録音で Silero VAD を使用",
+            "description": "ローカルノート録音で音声アクティビティ検出を有効化"
+          },
+          "meeting": {
+            "title": "会議で Silero VAD を使用",
+            "description": "ローカル会議文字起こしで音声アクティビティ検出を有効化"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "VAD しきい値",
+            "info": "フレームを音声として分類する確率のしきい値です。"
+          },
+          "minSpeechDurationMs": {
+            "label": "最小発話時間 (ms)",
+            "info": "これより短い発話区間はノイズや誤検出として破棄されます。"
+          },
+          "minSilenceDurationMs": {
+            "label": "最小無音時間 (ms)",
+            "info": "発話区間を終了するには最低この長さの無音が必要です。短い無音は区間に含まれます。"
+          },
+          "maxSpeechDurationS": {
+            "label": "最大発話時間 (秒)",
+            "info": "これより長い区間は無音の位置で分割され、扱いやすい長さに保たれます。"
+          },
+          "speechPadMs": {
+            "label": "発話パディング (ms)",
+            "info": "単語の端が切れないよう、各区間の前後に追加されるパディングです。"
+          },
+          "samplesOverlap": {
+            "label": "サンプル重なり (秒)",
+            "info": "区間を連結するときに途切れないよう、次の区間に延長する音声の長さです。"
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {

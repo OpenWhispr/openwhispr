@@ -27,6 +27,7 @@ export interface TranscriptionSettings {
 }
 
 export interface CleanupSettings {
+  autoGenerateNoteTitle: boolean;
   useCleanupModel: boolean;
   useDictationAgent: boolean;
   cleanupModel: string;
@@ -203,6 +204,8 @@ function useSettingsInternal() {
     customDictionary: store.customDictionary,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
+    autoGenerateNoteTitle: store.autoGenerateNoteTitle,
+    setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
     useCleanupModel: store.useCleanupModel,
     useDictationAgent: store.useDictationAgent,
     cleanupModel: store.cleanupModel,
@@ -282,6 +285,24 @@ function useSettingsInternal() {
     setNoteFilesEnabled: store.setNoteFilesEnabled,
     noteFilesPath: store.noteFilesPath,
     setNoteFilesPath: store.setNoteFilesPath,
+    dictationSileroEnabled: store.dictationSileroEnabled,
+    setDictationSileroEnabled: store.setDictationSileroEnabled,
+    noteRecordingSileroEnabled: store.noteRecordingSileroEnabled,
+    setNoteRecordingSileroEnabled: store.setNoteRecordingSileroEnabled,
+    meetingSileroEnabled: store.meetingSileroEnabled,
+    setMeetingSileroEnabled: store.setMeetingSileroEnabled,
+    whisperVadThreshold: store.whisperVadThreshold,
+    setWhisperVadThreshold: store.setWhisperVadThreshold,
+    whisperVadMinSpeechDurationMs: store.whisperVadMinSpeechDurationMs,
+    setWhisperVadMinSpeechDurationMs: store.setWhisperVadMinSpeechDurationMs,
+    whisperVadMinSilenceDurationMs: store.whisperVadMinSilenceDurationMs,
+    setWhisperVadMinSilenceDurationMs: store.setWhisperVadMinSilenceDurationMs,
+    whisperVadMaxSpeechDurationS: store.whisperVadMaxSpeechDurationS,
+    setWhisperVadMaxSpeechDurationS: store.setWhisperVadMaxSpeechDurationS,
+    whisperVadSpeechPadMs: store.whisperVadSpeechPadMs,
+    setWhisperVadSpeechPadMs: store.setWhisperVadSpeechPadMs,
+    whisperVadSamplesOverlap: store.whisperVadSamplesOverlap,
+    setWhisperVadSamplesOverlap: store.setWhisperVadSamplesOverlap,
     cloudBackupEnabled: store.cloudBackupEnabled,
     setCloudBackupEnabled: store.setCloudBackupEnabled,
     telemetryEnabled: store.telemetryEnabled,

@@ -34,6 +34,11 @@ const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
+const {
+  DEFAULT_WHISPER_VAD_CONFIG,
+  sanitizeWhisperVadConfig,
+  resolveContextSileroEnabled,
+} = require("./whisperVadConfig");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
@@ -319,6 +324,12 @@ class IPCHandlers {
     this._noteFilesEnabled = false;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
+    this.whisperVadSettings = {
+      dictationSileroEnabled: true,
+      noteRecordingSileroEnabled: true,
+      meetingSileroEnabled: true,
+      ...DEFAULT_WHISPER_VAD_CONFIG,
+    };
     liveSpeakerIdentifier.setDiarizationManager(this.diarizationManager);
     this._setupTextEditMonitor();
     this._setupAudioCleanup();
@@ -330,6 +341,35 @@ class IPCHandlers {
         this.broadcastToWindows("cuda-fallback-notification", {});
       });
     }
+  }
+
+  _getWhisperVadSettings() {
+    const current = this.whisperVadSettings || {};
+    return {
+      dictationSileroEnabled: current.dictationSileroEnabled !== false,
+      noteRecordingSileroEnabled: current.noteRecordingSileroEnabled !== false,
+      meetingSileroEnabled: current.meetingSileroEnabled !== false,
+      ...sanitizeWhisperVadConfig(current),
+    };
+  }
+
+  _setWhisperVadSettings(update = {}) {
+    this.whisperVadSettings = { ...this._getWhisperVadSettings(), ...update };
+    return this._getWhisperVadSettings();
+  }
+
+  _resolveWhisperVadOptions(context) {
+    const settings = this._getWhisperVadSettings();
+    const {
+      dictationSileroEnabled,
+      noteRecordingSileroEnabled,
+      meetingSileroEnabled,
+      ...vadConfig
+    } = settings;
+    return {
+      vadEnabled: resolveContextSileroEnabled(settings, context),
+      vadConfig,
+    };
   }
 
   _asyncVectorUpsert(note) {
@@ -1405,7 +1445,11 @@ class IPCHandlers {
           const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
           return result;
         }
-        const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, options);
+        const vadOptions = this._resolveWhisperVadOptions("noteRecording");
+        const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
+          ...options,
+          ...vadOptions,
+        });
         return result;
       } catch (error) {
         debugLogger.error("Audio file transcription error", { error: error.message });
@@ -1484,7 +1528,11 @@ class IPCHandlers {
       });
 
       try {
-        const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, options);
+        const vadOptions = this._resolveWhisperVadOptions("dictation");
+        const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, {
+          ...options,
+          ...vadOptions,
+        });
 
         debugLogger.log("Whisper result", {
           success: result.success,
@@ -2045,6 +2093,7 @@ class IPCHandlers {
       if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
       this._hotkeyCaptureMode = enabled;
       this.windowManager.setHotkeyListeningMode(enabled);
+      ipcMain.emit("hotkey-listening-mode-changed", null, enabled);
       const hotkeyManager = this.windowManager.hotkeyManager;
 
       // When exiting capture mode with a new hotkey, use that to avoid reading stale state
@@ -2054,10 +2103,12 @@ class IPCHandlers {
         isGlobeLikeHotkey,
         isModifierOnlyHotkey,
         isRightSideModifier,
+        isMouseButtonHotkey,
       } = require("./hotkeyManager");
       const usesNativeListener = (hotkey) =>
         !hotkey ||
         isGlobeLikeHotkey(hotkey) ||
+        isMouseButtonHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
         isRightSideModifier(hotkey);
 
@@ -3541,9 +3592,11 @@ class IPCHandlers {
               settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
             result = await this.parakeetManager.transcribeLocalParakeet(buffer, { model });
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
+            const vadOptions = this._resolveWhisperVadOptions("noteRecording");
             result = await this.whisperManager.transcribeLocalWhisper(buffer, {
               model: settings.whisperModel,
               language,
+              ...vadOptions,
             });
           }
         } else if (settings?.cloudTranscriptionMode === "openwhispr") {
@@ -4692,9 +4745,11 @@ class IPCHandlers {
             model: meetingLocalModel,
           });
         } else {
+          const vadOptions = this._resolveWhisperVadOptions("meeting");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: meetingLocalModel,
             language: meetingLocalLanguage,
+            ...vadOptions,
           });
         }
 
@@ -4931,9 +4986,11 @@ class IPCHandlers {
             model: dictationPreviewModel,
           });
         } else {
+          const vadOptions = this._resolveWhisperVadOptions("dictation");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: dictationPreviewModel,
             language: dictationPreviewLanguage,
+            ...vadOptions,
           });
         }
 
@@ -7144,6 +7201,23 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("whisper-vad-get-config", async () => {
+      try {
+        return { success: true, config: this._getWhisperVadSettings() };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("whisper-vad-set-config", async (_event, payload) => {
+      try {
+        const config = this._setWhisperVadSettings(payload || {});
+        return { success: true, config };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("meeting-set-session-speaker-config", async (_event, payload) => {
       try {
         const enabled = payload?.enabled !== false;
@@ -7626,10 +7700,8 @@ class IPCHandlers {
   _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
     if (sessionConfig?.expectedCount) {
       const total = Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT);
-      return {
-        numSpeakers: Math.max(1, total - 1),
-        cap: null,
-      };
+      const numSpeakers = Math.max(1, total - 1);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     let attendees = [];
@@ -7642,17 +7714,13 @@ class IPCHandlers {
       }
     }
     if (attendees.length >= 2) {
-      return {
-        numSpeakers: Math.min(attendees.length, MAX_SPEAKER_COUNT),
-        cap: null,
-      };
+      const numSpeakers = Math.min(attendees.length, MAX_SPEAKER_COUNT);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     if (observedSpeakerIds.size >= 2) {
-      return {
-        numSpeakers: Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT),
-        cap: null,
-      };
+      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };

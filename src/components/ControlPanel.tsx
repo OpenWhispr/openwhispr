@@ -40,6 +40,7 @@ import {
 } from "../stores/noteStore";
 import { fetchProviders as fetchStreamingProviders } from "../stores/streamingProvidersStore";
 import HistoryView from "./HistoryView";
+import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import { syncService } from "../services/SyncService.js";
 
 const platform = getCachedPlatform();
@@ -894,6 +895,7 @@ export default function ControlPanel() {
           </div>
         </main>
       </div>
+      <BackgroundActionToastListener />
     </div>
   );
 }

@@ -1,19 +1,25 @@
 import type { ReasoningConfig } from "../BaseReasoningService";
-
 import { getCloudModel, getLocalModel } from "../../models/ModelRegistry";
 
-// Sends `reasoning_effort` (OpenAI/Groq dialect), `think` (Ollama dialect),
-// and `chat_template_kwargs.enable_thinking` (llama.cpp/Qwen chat-template
-// dialect); servers ignore unknown fields. Skips known non-thinking models
-// to avoid suppressing reasoning on models like gpt-5 where the user toggle
-// is hidden but the default value still applies.
-function applySuppressionHints(requestBody: Record<string, unknown>): void {
-  requestBody.reasoning_effort = "none";
-  requestBody.think = false;
-  requestBody.chat_template_kwargs = {
-    ...((requestBody.chat_template_kwargs as Record<string, unknown>) ?? {}),
-    enable_thinking: false,
-  };
+// Strict OpenAI-compatible servers (Groq, LM Studio, vLLM, LocalAI) reject
+// unknown fields like `think` with "property 'think' is unsupported". Only
+// Ollama-native servers accept `think`; everyone else uses `reasoning_effort`.
+// The `lan` provider defaults to Ollama dialect, but legacy users who
+// configured Self-Hosted as "openai-compatible" still route through `lan`
+// — honor that flag so their backend doesn't reject the request.
+function usesOllamaDialect(providerKey: string): boolean {
+  if (providerKey === "local") return true;
+  if (providerKey !== "lan") return false;
+  if (typeof window === "undefined") return true;
+  return window.localStorage?.getItem("remoteReasoningType") !== "openai-compatible";
+}
+
+function suppressThinking(requestBody: Record<string, unknown>, providerKey: string): void {
+  if (usesOllamaDialect(providerKey)) {
+    requestBody.think = false;
+  } else {
+    requestBody.reasoning_effort = "none";
+  }
 }
 
 export function applyThinkingSuppression(
@@ -22,12 +28,11 @@ export function applyThinkingSuppression(
   provider: string,
   config: ReasoningConfig
 ): void {
+  const providerKey = provider.toLowerCase();
   const cloudModel = getCloudModel(model);
-  const curatedGroqSuppress =
-    !!cloudModel?.disableThinking && provider.toLowerCase() === "groq";
 
-  if (curatedGroqSuppress) {
-    applySuppressionHints(requestBody);
+  if (cloudModel?.disableThinking && providerKey === "groq") {
+    suppressThinking(requestBody, providerKey);
     return;
   }
 
@@ -35,8 +40,7 @@ export function applyThinkingSuppression(
 
   const localModel = getLocalModel(model);
   const knownModel = cloudModel || localModel;
-
   if (knownModel && !knownModel.supportsThinking) return;
 
-  applySuppressionHints(requestBody);
+  suppressThinking(requestBody, providerKey);
 }
