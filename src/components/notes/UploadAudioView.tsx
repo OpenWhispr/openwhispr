@@ -530,7 +530,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const handleUrlSubmit = async () => {
     const trimmed = urlInput.trim();
-    if (!trimmed) return;
+    if (!trimmed || batch.isProcessing) return;
 
     try {
       new URL(trimmed);
@@ -922,7 +922,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   />
                   <button
                     onClick={handleUrlSubmit}
-                    disabled={!urlInput.trim()}
+                    disabled={!urlInput.trim() || batch.isProcessing}
                     className={cn(
                       "absolute right-px top-px bottom-px w-7 rounded-r-[7px] flex items-center justify-center transition-colors",
                       "border-l border-foreground/6 dark:border-white/6",

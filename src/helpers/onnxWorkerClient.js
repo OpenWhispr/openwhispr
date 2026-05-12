@@ -45,23 +45,6 @@ class OnnxWorkerClient {
     }
   }
 
-  _cudnnLibPath() {
-    if (process.platform !== "linux") return null;
-    const fs = require("fs");
-    const candidates = [
-      path.join(__dirname, "..", "..", "resources", "bin", "cudnn-linux-x64"),
-    ];
-    try {
-      candidates.push(path.join(process.resourcesPath, "bin", "cudnn-linux-x64"));
-    } catch {}
-    for (const dir of candidates) {
-      try {
-        if (fs.existsSync(path.join(dir, "libcudnn.so.9"))) return dir;
-      } catch {}
-    }
-    return null;
-  }
-
   async _spawn() {
     if (this.child) return;
     if (this.spawnPromise) return this.spawnPromise;
@@ -71,17 +54,11 @@ class OnnxWorkerClient {
       const logPath = this._logPath();
       if (logPath) env.OPENWHISPR_ONNX_WORKER_LOG = logPath;
 
-      const cudnnPath = this._cudnnLibPath();
-      if (cudnnPath) {
-        env.LD_LIBRARY_PATH = cudnnPath + (env.LD_LIBRARY_PATH ? `:${env.LD_LIBRARY_PATH}` : "");
-        debugLogger.info("ONNX worker cuDNN path set", { cudnnPath });
-      }
-
       const child = utilityProcess.fork(WORKER_SCRIPT, [], {
         serviceName: "openwhispr-onnx",
         stdio: "pipe",
         env,
-        execArgv: ["--max-old-space-size=2048"],
+        execArgv: ["--max-old-space-size=512"],
       });
 
       const forwardStderr = (chunk) => {
@@ -231,17 +208,6 @@ class OnnxWorkerClient {
     });
   }
 
-  async diarizeLoad(segModelPath, embModelPath) {
-    return this.request("diarize.load", { segModelPath, embModelPath }, [], 600_000);
-  }
-
-  async diarizeSegment(samplesBuffer, sampleRate) {
-    return this.request("diarize.segment", { samplesBuffer, sampleRate }, [], 300_000);
-  }
-
-  async diarizeEmbedBatch(segments) {
-    return this.request("diarize.embedBatch", { segments }, [], 300_000);
-  }
 
   async stop() {
     this.shuttingDown = true;

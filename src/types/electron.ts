@@ -654,13 +654,6 @@ declare global {
       ) => Promise<{ success: boolean }>;
       getGpuDeviceIndex?: (purpose: "transcription" | "intelligence") => Promise<string>;
       detectGpu: () => Promise<GpuInfo>;
-      checkCudaDiarizationReady?: () => Promise<{
-        isLinux: boolean;
-        hasGpu: boolean;
-        hasCuda: boolean;
-        hasCudnn: boolean;
-        ready: boolean;
-      }>;
       getCudaWhisperStatus: () => Promise<CudaWhisperStatus>;
       downloadCudaWhisperBinary: () => Promise<{ success: boolean; error?: string }>;
       cancelCudaWhisperDownload: () => Promise<{ success: boolean }>;

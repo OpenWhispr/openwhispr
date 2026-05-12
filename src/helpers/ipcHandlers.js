@@ -1712,29 +1712,6 @@ class IPCHandlers {
       return this.whisperManager.getServerStatus();
     });
 
-    ipcMain.handle("check-cuda-diarization-ready", async () => {
-      if (process.platform !== "linux") {
-        return { isLinux: false, hasGpu: false, hasCuda: false, hasCudnn: false, ready: false };
-      }
-      const { detectNvidiaGpu } = require("../utils/gpuDetection");
-      const gpuInfo = await detectNvidiaGpu();
-      const hasGpu = gpuInfo?.hasNvidiaGpu ?? false;
-      if (!hasGpu) return { isLinux: true, hasGpu: false, hasCuda: false, hasCudnn: false, ready: false };
-
-      const { execSync } = require("child_process");
-      let hasCuda = false;
-      try {
-        const ldcache = execSync("ldconfig -p 2>/dev/null", { encoding: "utf8" });
-        hasCuda = ldcache.includes("libcublas.so.12");
-      } catch {}
-
-      const onnxClient = require("./onnxWorkerClient");
-      const cudnnPath = onnxClient._cudnnLibPath?.() ?? null;
-      const hasCudnn = cudnnPath !== null;
-
-      return { isLinux: true, hasGpu: true, hasCuda, hasCudnn, ready: hasCuda && hasCudnn };
-    });
-
     ipcMain.handle("detect-gpu", async () => {
       const { detectNvidiaGpu } = require("../utils/gpuDetection");
       return detectNvidiaGpu();
@@ -2068,15 +2045,16 @@ class IPCHandlers {
 
         const { mergeSpeakersWithText, formatSpeakerTranscript } = require("./speakerMerge");
         const { convertToWav } = require("./ffmpegUtils");
-        const wavPath = filePath.replace(/\.[^.]+$/, "") + "-diarize.wav";
+        const { getSafeTempDir } = require("./safeTempDir");
+        const wavPath = path.join(getSafeTempDir(), `ow-diarize-${Date.now()}.wav`);
 
-        await convertToWav(filePath, wavPath, { sampleRate: 16000, channels: 1 });
-
-        const segments = await this.diarizationManager.diarize(wavPath, diarOpts);
-
-        try { fs.unlinkSync(wavPath); } catch {}
-
-        return { success: true, segments, formattedText: segments.length > 0 ? formatSpeakerTranscript(segments) : null };
+        try {
+          await convertToWav(filePath, wavPath, { sampleRate: 16000, channels: 1 });
+          const segments = await this.diarizationManager.diarize(wavPath, diarOpts);
+          return { success: true, segments, formattedText: segments.length > 0 ? formatSpeakerTranscript(segments) : null };
+        } finally {
+          try { fs.unlinkSync(wavPath); } catch {}
+        }
       } catch (error) {
         debugLogger.error("Diarization error", { error: error.message });
         return { success: false, error: error.message };
@@ -6327,7 +6305,7 @@ class IPCHandlers {
           if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
           const fileSize = fs.statSync(filePath).size;
-          if (!diarize && fileSize > BYOK_FILE_SIZE_LIMIT) {
+          if (fileSize > BYOK_FILE_SIZE_LIMIT) {
             return {
               success: false,
               error: "File too large. Maximum size for bring-your-own-key is 25 MB.",

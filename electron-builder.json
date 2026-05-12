@@ -206,9 +206,7 @@
       "--deb-recommends",
       "xclip",
       "--deb-suggests",
-      "xsel",
-      "--deb-suggests",
-      "nvidia-cuda-toolkit"
+      "xsel"
     ]
   },
   "rpm": {
@@ -228,9 +226,7 @@
       "--rpm-tag",
       "Recommends: xclip",
       "--rpm-tag",
-      "Suggests: xsel",
-      "--rpm-tag",
-      "Suggests: cuda-toolkit"
+      "Suggests: xsel"
     ]
   },
   "nsis": {

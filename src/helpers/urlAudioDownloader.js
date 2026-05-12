@@ -21,20 +21,24 @@ const MAX_DOWNLOAD_BYTES = 500 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
 
 function isPrivateIp(ip) {
-  if (ip === "0.0.0.0" || ip === "::1" || ip === "::") return true;
+  if (ip === "::1" || ip === "::") return true;
   if (isIP(ip) === 4) {
     const parts = ip.split(".").map(Number);
+    if (parts[0] === 0) return true;
     if (parts[0] === 127) return true;
     if (parts[0] === 10) return true;
     if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
     if (parts[0] === 192 && parts[1] === 168) return true;
     if (parts[0] === 169 && parts[1] === 254) return true;
+    if (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127) return true;
+    if (parts[0] >= 224) return true;
     return false;
   }
   if (isIP(ip) === 6) {
     const lower = ip.toLowerCase();
     if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
     if (lower.startsWith("fe80")) return true;
+    if (lower.startsWith("ff")) return true;
     const v4mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
     if (v4mapped) return isPrivateIp(v4mapped[1]);
     const v4compat = lower.match(/^::(\d+\.\d+\.\d+\.\d+)$/);
@@ -99,7 +103,8 @@ function extractYouTubeVideoId(urlString) {
 
   if (host === "youtu.be") {
     const id = parsed.pathname.slice(1).split("/")[0];
-    return id || null;
+    if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return id;
+    return null;
   }
 
   if (YOUTUBE_HOSTS.has(host)) {
@@ -258,6 +263,7 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
   }
 
   const headResponse = await httpRequest(parsed, { method: "HEAD", lookup: ssrfSafeLookup });
+  headResponse.resume();
 
   const contentType = (headResponse.headers["content-type"] || "").toLowerCase();
   const isAudioVideo =
@@ -298,7 +304,8 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
       err.code = "DOWNLOAD_FAILED";
       throw err;
     }
-    return downloadDirect(response.headers.location, onProgress, abortSignal, redirectCount + 1);
+    const redirectUrl = new URL(response.headers.location, parsed.href).href;
+    return downloadDirect(redirectUrl, onProgress, abortSignal, redirectCount + 1);
   }
 
   if (response.statusCode !== 200) {
