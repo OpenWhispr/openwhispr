@@ -2123,7 +2123,11 @@
     "description": "Insegna all'IA il tuo vocabolario — nomi, gergo e termini che potrebbe altrimenti non riconoscere",
     "clearTitle": "Svuotare il dizionario?",
     "clearDescription": "Verranno rimossi tutti i termini dal tuo dizionario personalizzato. Questa azione non può essere annullata.",
-    "addPlaceholder": "Aggiungi una parola o una frase..."
+    "addPlaceholder": "Aggiungi una parola o una frase...",
+    "replaceFrom": "Replace from",
+    "replaceTo": "with",
+    "addReplacement": "Add replacement",
+    "removeReplacement": "Remove replacement"
   },
   "sidebar": {
     "home": "Home",

@@ -2123,7 +2123,11 @@
     "description": "Ensine a IA o seu vocabulário — nomes, jargões e termos que ela poderia não reconhecer",
     "clearTitle": "Limpar o dicionário?",
     "clearDescription": "Isso removerá todas as palavras do seu dicionário personalizado. Esta ação não pode ser desfeita.",
-    "addPlaceholder": "Adicionar uma palavra ou frase..."
+    "addPlaceholder": "Adicionar uma palavra ou frase...",
+    "replaceFrom": "Replace from",
+    "replaceTo": "with",
+    "addReplacement": "Add replacement",
+    "removeReplacement": "Remove replacement"
   },
   "sidebar": {
     "home": "Início",

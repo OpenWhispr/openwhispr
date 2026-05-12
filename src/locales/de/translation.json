@@ -2123,7 +2123,11 @@
     "description": "Bringe der KI dein Vokabular bei – Namen, Fachbegriffe und Ausdrücke, die sie sonst übersehen könnte",
     "clearTitle": "Wörterbuch leeren?",
     "clearDescription": "Dadurch werden alle Wörter aus deinem benutzerdefinierten Wörterbuch entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
-    "addPlaceholder": "Ein Wort oder eine Phrase hinzufügen..."
+    "addPlaceholder": "Ein Wort oder eine Phrase hinzufügen...",
+    "replaceFrom": "Replace from",
+    "replaceTo": "with",
+    "addReplacement": "Add replacement",
+    "removeReplacement": "Remove replacement"
   },
   "sidebar": {
     "home": "Startseite",

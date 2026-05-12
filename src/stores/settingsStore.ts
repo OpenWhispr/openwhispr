@@ -7,6 +7,8 @@ import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import logger from "../utils/logger";
 import whisperVadConstants from "../constants/whisperVad.json";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type { DictionaryReplacement } from "../utils/dictionaryReplacements";
+import { normalizeDictionaryReplacements } from "../utils/dictionaryReplacements";
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import {
@@ -50,6 +52,17 @@ function readStringArray(key: string, fallback: string[]): string[] {
   try {
     const parsed = JSON.parse(stored);
     return Array.isArray(parsed) ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function readJson<T>(key: string, fallback: T): T {
+  if (!isBrowser) return fallback;
+  const stored = localStorage.getItem(key);
+  if (stored === null) return fallback;
+  try {
+    return JSON.parse(stored) as T;
   } catch {
     return fallback;
   }
@@ -369,6 +382,7 @@ export interface SettingsState
   keepTranscriptionInClipboard: boolean;
   noteFilesEnabled: boolean;
   noteFilesPath: string;
+  customDictionaryReplacements: DictionaryReplacement[];
 
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
@@ -466,6 +480,7 @@ export interface SettingsState
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
+  setCustomDictionaryReplacements: (replacements: DictionaryReplacement[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
@@ -690,6 +705,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   customDictionary: readStringArray("customDictionary", []),
+  customDictionaryReplacements: normalizeDictionaryReplacements(
+    readJson<DictionaryReplacement[]>("customDictionaryReplacements", [])
+  ),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
@@ -1006,6 +1024,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         "settings"
       );
     });
+  },
+  setCustomDictionaryReplacements: (replacements: DictionaryReplacement[]) => {
+    const normalized = normalizeDictionaryReplacements(replacements);
+    if (isBrowser) localStorage.setItem("customDictionaryReplacements", JSON.stringify(normalized));
+    set({ customDictionaryReplacements: normalized });
   },
 
   setUiLanguage: (language: string) => {
