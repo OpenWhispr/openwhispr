@@ -64,6 +64,26 @@ export interface NoteItem {
   team_id?: string | null;
 }
 
+export type ShareVisibility = "private" | "link" | "domain" | "invited";
+
+export interface ShareSettings {
+  visibility: ShareVisibility;
+  token_prefix: string | null;
+  domain_allowlist: string[];
+  updated_by_user_id: string | null;
+  updated_at: string | null;
+}
+
+export interface NoteShareInvitation {
+  id: string;
+  email: string;
+  invited_by_user_id: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  last_emailed_at: string | null;
+  created_at: string;
+}
+
 export interface FolderItem {
   id: number;
   name: string;
