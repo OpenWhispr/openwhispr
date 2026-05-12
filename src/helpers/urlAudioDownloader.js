@@ -145,7 +145,9 @@ function createStallChecker(onStall) {
 }
 
 async function downloadYouTube(url, onProgress, abortSignal) {
-  const youtubedl = require("youtube-dl-exec");
+  const { create, constants } = require("youtube-dl-exec");
+  const binaryPath = constants.YOUTUBE_DL_PATH.replace("app.asar", "app.asar.unpacked");
+  const youtubedl = create(binaryPath);
 
   onProgress?.({ stage: "resolving", percent: 0 });
 
