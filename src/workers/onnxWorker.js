@@ -63,7 +63,6 @@ function loadOrt() {
 
 const SESSION_OPTIONS = { intraOpNumThreads, executionMode: "sequential" };
 
-
 let _melFilterbank = null;
 function getMelFilterbank() {
   if (_melFilterbank) return _melFilterbank;

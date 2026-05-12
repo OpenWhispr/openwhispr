@@ -1194,7 +1194,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   min="2"
                   max="20"
                   value={diarizationNumSpeakers}
-                  onChange={(e) => setDiarizationNumSpeakers(e.target.value)}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (raw === "") { setDiarizationNumSpeakers(""); return; }
+                    const n = Math.max(2, Math.min(20, Number(raw)));
+                    setDiarizationNumSpeakers(String(isNaN(n) ? "" : n));
+                  }}
                   placeholder={t("notes.upload.numSpeakersPlaceholder")}
                   className={cn(
                     "w-full h-8 px-2.5 rounded-lg text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",

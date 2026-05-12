@@ -39,7 +39,7 @@ export default function BatchQueueView({
   onOpenNote,
 }: BatchQueueViewProps) {
   const { t } = useTranslation();
-  const allDone = queue.every(
+  const allDone = queue.length > 0 && queue.every(
     (i) => i.status === "done" || i.status === "error"
   );
   const overallProgress =

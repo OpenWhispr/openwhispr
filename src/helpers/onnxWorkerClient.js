@@ -208,7 +208,6 @@ class OnnxWorkerClient {
     });
   }
 
-
   async stop() {
     this.shuttingDown = true;
     if (this.respawnTimer) {

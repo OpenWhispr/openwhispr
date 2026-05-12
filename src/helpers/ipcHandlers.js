@@ -1455,6 +1455,9 @@ class IPCHandlers {
     let activeUrlDownloadAbort = null;
 
     ipcMain.handle("download-url-audio", async (event, url) => {
+      if (typeof url !== "string" || url.length > 2048) {
+        return { success: false, error: "Invalid URL", code: "INVALID_URL" };
+      }
       const { download } = require("./urlAudioDownloader");
 
       if (activeUrlDownloadAbort) {
@@ -1501,7 +1504,7 @@ class IPCHandlers {
         const resolved = path.resolve(filePath);
         const tempDir = getSafeTempDir();
         const basename = path.basename(resolved);
-        if (!basename.startsWith("ow-url-")) {
+        if (!basename.startsWith("ow-url-") && !basename.startsWith("ow-diarize-")) {
           return { success: false, error: "Not an OpenWhispr temp file" };
         }
         const real = fs.realpathSync(resolved);
