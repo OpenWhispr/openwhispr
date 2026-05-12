@@ -443,16 +443,21 @@ class LlamaServerManager {
 
     this.clearIdleTimer();
 
-    // Qwen chat templates route output to `message.reasoning_content` and
-    // leave `message.content` empty unless `enable_thinking` is disabled.
-    // The kwarg is unreferenced by non-Qwen templates (Llama, Mistral, etc.).
-    const body = JSON.stringify({
+    const requestBody = {
       messages,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.max_tokens ?? 512,
       stream: false,
-      chat_template_kwargs: { enable_thinking: false },
-    });
+    };
+
+    // Qwen chat templates route output to `message.reasoning_content` and
+    // leave `message.content` empty unless `enable_thinking` is disabled.
+    // Non-Qwen templates ignore the kwarg.
+    if (options.disableThinking !== false) {
+      requestBody.chat_template_kwargs = { enable_thinking: false };
+    }
+
+    const body = JSON.stringify(requestBody);
 
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
