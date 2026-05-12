@@ -155,7 +155,17 @@
     "private": "Private",
     "tap": "Tap",
     "close": "Close",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "save": "Save",
+    "saving": "Saving…",
+    "create": "Create",
+    "delete": "Delete",
+    "actions": "Actions",
+    "error": "Something went wrong",
+    "unknownError": "An unknown error occurred",
+    "copy": "Copy",
+    "copied": "Copied",
+    "done": "Done"
   },
   "onboarding": {
     "steps": {
@@ -1010,6 +1020,10 @@
         "description": "Plans, usage & billing",
         "label": "Plans & Billing"
       },
+      "workspace": {
+        "description": "Members, teams, billing & API keys",
+        "label": "Workspace"
+      },
       "general": {
         "description": "Appearance, sounds & startup",
         "label": "Preferences"
@@ -1038,6 +1052,91 @@
     "title": "Settings"
   },
   "settingsPage": {
+    "workspace": {
+      "title": "Workspace",
+      "description": "Collaborate with teammates, share notes, and manage billing in one place.",
+      "empty": {
+        "title": "Create your first workspace",
+        "description": "Workspaces let you collaborate with teammates and share notes.",
+        "create": "Create workspace"
+      },
+      "tab": {
+        "general": "General",
+        "members": "Members",
+        "teams": "Teams",
+        "billing": "Billing",
+        "developer": "Developer"
+      },
+      "role": {
+        "owner": "Owner",
+        "admin": "Admin",
+        "member": "Member"
+      },
+      "general": {
+        "nameLabel": "Workspace name",
+        "slugLabel": "Slug",
+        "slugHint": "Used in URLs and invite links. Lowercase letters, digits, and dashes only.",
+        "saved": "Workspace updated",
+        "dangerTitle": "Delete workspace",
+        "dangerDescription": "All shared notes, folders, and integrations will be deleted. This cannot be undone.",
+        "delete": "Delete workspace",
+        "confirmTitle": "Delete {{name}}?",
+        "confirmDescription": "This cancels the subscription and removes all workspace data permanently."
+      },
+      "members": {
+        "title": "Members",
+        "description": "{{count}} of {{seats}} seats used.",
+        "invite": "Invite",
+        "empty": "No members yet.",
+        "roleUpdated": "Role updated",
+        "promote": "Make admin",
+        "demote": "Make member",
+        "transferOwnership": "Transfer ownership",
+        "remove": "Remove from workspace"
+      },
+      "invites": {
+        "title": "Pending invitations",
+        "resend": "Resend",
+        "revoke": "Revoke",
+        "resent": "Invitation resent"
+      },
+      "teams": {
+        "title": "Teams",
+        "description": "Group members for scoped sharing.",
+        "new": "New team",
+        "empty": "No teams yet.",
+        "createFirst": "Create your first team",
+        "createTitle": "Create team",
+        "nameLabel": "Team name",
+        "descriptionLabel": "Description",
+        "memberCount": "{{count}} members"
+      },
+      "billing": {
+        "title": "Billing",
+        "description": "Plan, seats, and payment.",
+        "plan": "Plan",
+        "seats": "Seats",
+        "nextInvoice": "Next invoice",
+        "manageStripe": "Manage in Stripe",
+        "startSubscription": "Start subscription"
+      },
+      "developer": {
+        "title": "API keys",
+        "description": "Programmatic access scoped to this workspace.",
+        "empty": "No API keys yet. Create one to integrate with this workspace.",
+        "new": "New key",
+        "create": "Create key",
+        "createTitle": "Create API key",
+        "createDescription": "Choose the permissions this key needs. You can revoke it any time.",
+        "nameLabel": "Key name",
+        "namePlaceholder": "Production integration",
+        "revoke": "Revoke key",
+        "lastUsed": "Last used {{date}}",
+        "neverUsed": "Never used",
+        "keyCreatedTitle": "API key created",
+        "keyCreatedDescription": "Copy this key now — you won't be able to see it again."
+      }
+    },
     "account": {
       "badges": {
         "free": "Free",
@@ -1810,7 +1909,57 @@
     "integrations": "Integrations",
     "defaultUser": "User",
     "notSignedIn": "Not signed in",
-    "chat": "Chat"
+    "chat": "Chat",
+    "inviteTeammate": "Invite teammate",
+    "createWorkspace": "Create workspace"
+  },
+  "workspaces": {
+    "switcher": {
+      "personal": "Personal",
+      "workspaces": "Workspaces",
+      "empty": "No workspaces yet",
+      "create": "Create workspace…"
+    },
+    "create": {
+      "title": "Create workspace",
+      "description": "Workspaces let you collaborate, share notes, and manage billing in one place.",
+      "nameLabel": "Workspace name",
+      "namePlaceholder": "Acme Corp",
+      "submit": "Create workspace",
+      "submitting": "Creating…",
+      "errorTitle": "Couldn't create workspace"
+    },
+    "created": {
+      "title": "Workspace created",
+      "description": "You're now the owner of {{name}}."
+    },
+    "invite": {
+      "title": "Invite to {{workspace}}",
+      "description": "Add teammates by email. They'll get a link to join.",
+      "emailLabel": "Email",
+      "roleLabel": "Role",
+      "teamsLabel": "Add to teams",
+      "submit": "Send invite",
+      "submitting": "Sending…",
+      "sentTitle": "Invite sent",
+      "sentDescription": "We sent an invitation to {{email}}.",
+      "errorTitle": "Couldn't send invitation",
+      "role": {
+        "admin": "Admin",
+        "member": "Member"
+      }
+    },
+    "accept": {
+      "title": "Join workspace",
+      "description": "{{inviter}} invited you to join {{workspace}} as a {{role}}.",
+      "loading": "Loading invitation…",
+      "accept": "Accept invitation",
+      "accepting": "Accepting…",
+      "signInToAccept": "Sign in to accept",
+      "successTitle": "You're in",
+      "successDescription": "Welcome to {{name}}.",
+      "errorTitle": "Couldn't accept invitation"
+    }
   },
   "chat": {
     "newChat": "New chat",

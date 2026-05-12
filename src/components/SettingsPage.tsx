@@ -96,6 +96,7 @@ import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import { useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
+import WorkspaceSection from "./settings/WorkspaceSection";
 
 const formatAmount = (cents: number, currency: string) =>
   (cents / 100).toLocaleString(undefined, { style: "currency", currency });
@@ -103,6 +104,7 @@ const formatAmount = (cents: number, currency: string) =>
 export type SettingsSectionType =
   | "account"
   | "plansBilling"
+  | "workspace"
   | "general"
   | "hotkeys"
   | "speechToText"
@@ -2245,6 +2247,9 @@ export default function SettingsPage({
             )}
           </div>
         );
+
+      case "workspace":
+        return <WorkspaceSection initialSubTab={initialSubTab} />;
 
       case "general":
         return (
