@@ -92,6 +92,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     title?: string;
   } | null>(null);
   const [downloadedTempPath, setDownloadedTempPath] = useState<string | null>(null);
+  const downloadedTempPathRef = useRef(downloadedTempPath);
+  downloadedTempPathRef.current = downloadedTempPath;
   const [urlExpanded, setUrlExpanded] = useState(false);
 
   const batch = useBatchQueue();
@@ -208,6 +210,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   useEffect(() => {
     return () => {
       if (progressRef.current) clearInterval(progressRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (downloadedTempPathRef.current) {
+        window.electronAPI.deleteTempFile(downloadedTempPathRef.current);
+      }
     };
   }, []);
 

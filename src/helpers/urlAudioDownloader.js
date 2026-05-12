@@ -43,6 +43,13 @@ function isPrivateIp(ip) {
     if (v4mapped) return isPrivateIp(v4mapped[1]);
     const v4compat = lower.match(/^::(\d+\.\d+\.\d+\.\d+)$/);
     if (v4compat) return isPrivateIp(v4compat[1]);
+    const v4mappedHex = lower.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+    if (v4mappedHex) {
+      const hi = parseInt(v4mappedHex[1], 16);
+      const lo = parseInt(v4mappedHex[2], 16);
+      const dotted = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
+      return isPrivateIp(dotted);
+    }
     return false;
   }
   return false;
@@ -109,7 +116,7 @@ function extractYouTubeVideoId(urlString) {
 
   if (YOUTUBE_HOSTS.has(host)) {
     const watchId = parsed.searchParams.get("v");
-    if (watchId) return watchId;
+    if (watchId && /^[A-Za-z0-9_-]{11}$/.test(watchId)) return watchId;
 
     const pathMatch = parsed.pathname.match(/^\/(shorts|embed)\/([a-zA-Z0-9_-]{11})/);
     if (pathMatch) return pathMatch[2];
@@ -149,6 +156,12 @@ async function downloadYouTube(url, onProgress, abortSignal) {
   const binaryPath = constants.YOUTUBE_DL_PATH.replace("app.asar", "app.asar.unpacked");
   const youtubedl = create(binaryPath);
 
+  const parsedUrl = new URL(url);
+  if (parsedUrl.protocol !== "https:") {
+    parsedUrl.protocol = "https:";
+    url = parsedUrl.href;
+  }
+
   onProgress?.({ stage: "resolving", percent: 0 });
 
   if (isPlaylistUrl(url)) {
@@ -164,13 +177,24 @@ async function downloadYouTube(url, onProgress, abortSignal) {
     throw err;
   }
 
+  const sanitizedUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
   let info;
   try {
-    info = await youtubedl(url, {
-      dumpSingleJson: true,
-      noWarnings: true,
-    });
+    const metaProc = youtubedl.exec(sanitizedUrl, { dumpSingleJson: true, noWarnings: true });
+    if (abortSignal) {
+      const handler = () => metaProc.kill("SIGTERM");
+      abortSignal.addEventListener("abort", handler, { once: true });
+      metaProc.finally(() => abortSignal.removeEventListener("abort", handler));
+    }
+    const { stdout } = await metaProc;
+    info = JSON.parse(stdout);
   } catch (e) {
+    if (abortSignal?.aborted) {
+      const err = new Error("Download cancelled");
+      err.code = "DOWNLOAD_CANCELLED";
+      throw err;
+    }
     const err = new Error(e.message || "Video unavailable");
     err.code = "VIDEO_UNAVAILABLE";
     throw err;
@@ -196,12 +220,18 @@ async function downloadYouTube(url, onProgress, abortSignal) {
   const tempBase = path.join(getSafeTempDir(), `ow-url-${Date.now()}-${videoId}`);
 
   try {
-    await youtubedl(url, {
+    const subprocess = youtubedl.exec(sanitizedUrl, {
       extractAudio: true,
       audioFormat: "best",
       output: `${tempBase}.%(ext)s`,
       noWarnings: true,
     });
+    if (abortSignal) {
+      const abortHandler = () => subprocess.kill("SIGTERM");
+      abortSignal.addEventListener("abort", abortHandler, { once: true });
+      subprocess.finally(() => abortSignal.removeEventListener("abort", abortHandler));
+    }
+    await subprocess;
 
     const tempDir = getSafeTempDir();
     const prefix = path.basename(tempBase);
@@ -216,6 +246,9 @@ async function downloadYouTube(url, onProgress, abortSignal) {
     }
 
     const tempPath = path.join(tempDir, files[0]);
+    for (const f of files.slice(1)) {
+      try { fs.unlinkSync(path.join(tempDir, f)); } catch {}
+    }
     const sizeBytes = fs.statSync(tempPath).size;
 
     onProgress?.({ stage: "ready", percent: 100, title });
@@ -258,7 +291,8 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
     throw err;
   }
 
-  if (isIP(parsed.hostname) && isPrivateIp(parsed.hostname)) {
+  const rawHost = parsed.hostname.replace(/^\[|\]$/g, "");
+  if (isIP(rawHost) && isPrivateIp(rawHost)) {
     const err = new Error("Direct downloads from private/internal addresses are not allowed");
     err.code = "SSRF_BLOCKED";
     throw err;
@@ -282,7 +316,8 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
         err.code = "INVALID_URL";
         throw err;
       }
-      if (isIP(nextUrl.hostname) && isPrivateIp(nextUrl.hostname)) {
+      const nextRawHost = nextUrl.hostname.replace(/^\[|\]$/g, "");
+      if (isIP(nextRawHost) && isPrivateIp(nextRawHost)) {
         const err = new Error("Direct downloads from private/internal addresses are not allowed");
         err.code = "SSRF_BLOCKED";
         throw err;
@@ -314,7 +349,7 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
     throw err;
   }
 
-  const urlPath = parsed.pathname;
+  const urlPath = headParsed.pathname;
   const extMatch = urlPath.match(/\.([a-zA-Z0-9]{2,5})$/);
   const ext = extMatch ? extMatch[1] : "audio";
   const fileName = path.basename(urlPath, `.${ext}`) || "audio";
@@ -327,13 +362,13 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
 
   if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
     response.destroy();
-    if (redirectCount >= MAX_REDIRECTS) {
+    if (redirectCount + headRedirects >= MAX_REDIRECTS) {
       const err = new Error("Too many redirects");
       err.code = "DOWNLOAD_FAILED";
       throw err;
     }
     const redirectUrl = new URL(response.headers.location, headParsed.href).href;
-    return downloadDirect(redirectUrl, onProgress, abortSignal, redirectCount + 1);
+    return downloadDirect(redirectUrl, onProgress, abortSignal, redirectCount + headRedirects + 1);
   }
 
   if (response.statusCode !== 200) {

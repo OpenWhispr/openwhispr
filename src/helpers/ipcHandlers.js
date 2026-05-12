@@ -356,7 +356,15 @@ class IPCHandlers {
   }
 
   _setWhisperVadSettings(update = {}) {
-    this.whisperVadSettings = { ...this._getWhisperVadSettings(), ...update };
+    const ALLOWED_KEYS = new Set([
+      "dictationSileroEnabled", "noteRecordingSileroEnabled", "meetingSileroEnabled",
+      ...Object.keys(require("../constants/whisperVad.json").DEFAULTS),
+    ]);
+    const filtered = {};
+    for (const [k, v] of Object.entries(update)) {
+      if (ALLOWED_KEYS.has(k)) filtered[k] = v;
+    }
+    this.whisperVadSettings = { ...this._getWhisperVadSettings(), ...filtered };
     return this._getWhisperVadSettings();
   }
 
@@ -1418,7 +1426,7 @@ class IPCHandlers {
     ipcMain.handle("select-audio-file", async (event, options = {}) => {
       const { dialog } = require("electron");
       const properties = ["openFile"];
-      if (options.multiple) properties.push("multiSelections");
+      if (options.multiple === true) properties.push("multiSelections");
       const result = await dialog.showOpenDialog({
         properties,
         filters: [
@@ -1428,7 +1436,7 @@ class IPCHandlers {
       if (result.canceled || !result.filePaths.length) {
         return { canceled: true };
       }
-      if (options.multiple) {
+      if (options.multiple === true) {
         return { canceled: false, filePaths: result.filePaths };
       }
       return { canceled: false, filePath: result.filePaths[0] };
@@ -1504,6 +1512,9 @@ class IPCHandlers {
 
     ipcMain.handle("delete-temp-file", async (event, filePath) => {
       try {
+        if (typeof filePath !== "string") {
+          return { success: false, error: "Invalid file path" };
+        }
         const { getSafeTempDir } = require("./safeTempDir");
         const resolved = path.resolve(filePath);
         const tempDir = getSafeTempDir();
@@ -1527,6 +1538,9 @@ class IPCHandlers {
     ipcMain.handle("transcribe-audio-file", async (event, filePath, options = {}) => {
       const fs = require("fs");
       try {
+        if (typeof filePath !== "string") {
+          return { success: false, error: "Invalid file path" };
+        }
         const resolved = path.resolve(filePath);
         const real = fs.realpathSync(resolved);
         const allowedDirs = [
@@ -2080,6 +2094,9 @@ class IPCHandlers {
           return { success: false, error: "Diarization models not downloaded" };
         }
 
+        if (typeof filePath !== "string") {
+          return { success: false, error: "Invalid file path" };
+        }
         const resolved = path.resolve(filePath);
         const realPath = fs.realpathSync(resolved);
         const allowedDirs = [
