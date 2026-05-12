@@ -3218,7 +3218,14 @@ EOF`,
                   renderWhisperVadSettings()}
               </div>
             )}
-            renderNoteRecording={() => <MeetingTranscriptionPanel />}
+            renderNoteRecording={() => (
+              <div className="space-y-6">
+                <MeetingTranscriptionPanel />
+                {transcriptionMode === "local" &&
+                  localTranscriptionProvider !== "nvidia" &&
+                  renderWhisperVadSettings()}
+              </div>
+            )}
           />
         );
 
