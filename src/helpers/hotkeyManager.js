@@ -1,3 +1,4 @@
+const EventEmitter = require("events");
 const { globalShortcut, BrowserWindow } = require("electron");
 const debugLogger = require("./debugLogger");
 const GnomeShortcutManager = require("./gnomeShortcut");
@@ -78,8 +79,9 @@ const SUGGESTED_HOTKEYS = {
   compound: ["Control+Super", "Control+Alt", "Control+Shift+Space", "Alt+F7"],
 };
 
-class HotkeyManager {
+class HotkeyManager extends EventEmitter {
   constructor() {
+    super();
     this.slots = new Map();
     const defaultDictation = process.platform === "darwin" ? "GLOBE" : "Control+Super";
     this.slots.set("dictation", { hotkey: defaultDictation, callback: null, accelerator: null });
@@ -357,7 +359,7 @@ class HotkeyManager {
         if (process.platform !== "darwin") {
           return {
             success: false,
-            error: "Mouse button hotkeys are currently supported on macOS only.",
+            error: i18nMain.t("hotkey.errors.mouseButtonOnlyMac"),
           };
         }
         slot.hotkey = hotkey;
@@ -845,6 +847,8 @@ class HotkeyManager {
       this.notifyHotkeyFailure(defaultHotkey, result);
     } catch (err) {
       debugLogger.error("Failed to initialize hotkey", { error: err.message }, "hotkey");
+    } finally {
+      this.emit("hotkey-loaded", this.currentHotkey);
     }
   }
 

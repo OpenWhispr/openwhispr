@@ -64,7 +64,7 @@ let mouseEventTap = CGEvent.tapCreate(
     place: .headInsertEventTap,
     options: .defaultTap,
     eventsOfInterest: CGEventMask(mouseEventMask),
-    callback: { proxy, type, event, refcon in
+    callback: { _, type, event, _ in
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let mouseEventTapPort {
                 CGEvent.tapEnable(tap: mouseEventTapPort, enable: true)

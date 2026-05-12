@@ -940,9 +940,6 @@ async function startApp() {
     let globeLastStopTime = 0;
     const MIN_HOLD_DURATION_MS = 150;
     const POST_STOP_COOLDOWN_MS = 300;
-    // Re-sync suppression after the renderer has loaded the stored hotkey
-    // (hotkeyManager.loadSavedHotkeyOrDefault reads localStorage async via did-finish-load).
-    const HOTKEY_LOAD_GRACE_MS = 1500;
 
     globeKeyManager.on("globe-down", async () => {
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
@@ -1105,7 +1102,7 @@ async function startApp() {
       const agentHotkey = hotkeyManager.getSlotHotkey("agent");
       if (isMouseButtonHotkey(agentHotkey)) buttons.push(agentHotkey);
 
-      globeKeyManager.setSuppressedMouseButtons?.(buttons);
+      globeKeyManager.setSuppressedMouseButtons(buttons);
     };
 
     // Mouse Button 4/5 handling (e.g., Logitech MX Master side buttons)
@@ -1171,7 +1168,15 @@ async function startApp() {
 
     syncSuppressedMouseButtons();
     globeKeyManager.start();
-    setTimeout(syncSuppressedMouseButtons, HOTKEY_LOAD_GRACE_MS);
+    hotkeyManager.once("hotkey-loaded", syncSuppressedMouseButtons);
+
+    ipcMain.on("hotkey-listening-mode-changed", (_event, enabled) => {
+      if (enabled) {
+        globeKeyManager.setSuppressedMouseButtons([]);
+      } else {
+        syncSuppressedMouseButtons();
+      }
+    });
 
     // After starting globe-listener, check if accessibility is granted.
     // If not, notify the control panel so it can prompt the user.
