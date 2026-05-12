@@ -443,18 +443,14 @@ class LlamaServerManager {
 
     this.clearIdleTimer();
 
-    // Suppress thinking for local llama.cpp/Qwen chat templates. Without
-    // `chat_template_kwargs.enable_thinking: false`, Qwen3.5 routes output
-    // into `message.reasoning_content` and leaves `message.content` empty
-    // until `max_tokens` is exhausted. llama.cpp ignores unknown fields, so
-    // `think` is kept as a no-op signal for any future Ollama-compatible
-    // backend that may also be reached through this code path.
+    // Qwen chat templates route output to `message.reasoning_content` and
+    // leave `message.content` empty unless `enable_thinking` is disabled.
+    // The kwarg is unreferenced by non-Qwen templates (Llama, Mistral, etc.).
     const body = JSON.stringify({
       messages,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.max_tokens ?? 512,
       stream: false,
-      think: false,
       chat_template_kwargs: { enable_thinking: false },
     });
 
