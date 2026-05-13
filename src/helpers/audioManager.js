@@ -882,6 +882,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "smallest") {
+      apiKey = s.smallestAiApiKey;
+      if (!isValidApiKey(apiKey, "smallest")) {
+        apiKey = await window.electronAPI.getSmallestAiKey?.();
+      }
+      if (!isValidApiKey(apiKey, "smallest")) {
+        const err = new Error(
+          "Smallest AI API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else {
       // Default to OpenAI
       // Prefer store value (user-entered via UI) over main process (.env)
@@ -1520,6 +1532,42 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw new Error("No text transcribed - Mistral response was empty");
       }
 
+      // Smallest AI uses raw binary audio (application/octet-stream), not multipart/form-data
+      if (provider === "smallest") {
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const params = new URLSearchParams({ language: language || "en" });
+        const smallestHeaders = {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/octet-stream",
+          "X-Source": "openwhispr",
+        };
+        const smallestResponse = await fetch(`${endpoint}?${params}`, {
+          method: "POST",
+          headers: smallestHeaders,
+          body: audioBuffer,
+        });
+
+        if (!smallestResponse.ok) {
+          const errorText = await smallestResponse.text();
+          logger.error("Transcription API error response", { status: smallestResponse.status, errorText }, "transcription");
+          throw new Error(`API Error: ${smallestResponse.status} ${errorText}`);
+        }
+
+        const smallestData = await smallestResponse.json();
+        const rawText = smallestData?.transcription || "";
+
+        if (!rawText.trim()) {
+          throw new Error("No text transcribed - Smallest AI response was empty");
+        }
+
+        timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+        const reasoningStart = performance.now();
+        const text = await this.processTranscription(rawText, "smallest");
+        timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+        return { success: true, text, rawText, source: "smallest", timings };
+      }
+
       logger.debug(
         "Making transcription API request",
         {
@@ -1759,6 +1807,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Return provider-appropriate default
       if (provider === "groq") return "whisper-large-v3-turbo";
       if (provider === "mistral") return "voxtral-mini-latest";
+      if (provider === "smallest") return "pulse";
       return "gpt-4o-mini-transcribe";
     } catch (error) {
       return "gpt-4o-mini-transcribe";
@@ -1842,6 +1891,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
         return endpoint;
       };
+
+      if (currentProvider === "smallest") {
+        return cacheResult("https://api.smallest.ai/waves/v1/pulse/get_text");
+      }
 
       if (!normalizedBase) {
         logger.debug(

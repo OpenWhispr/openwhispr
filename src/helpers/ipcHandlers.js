@@ -64,6 +64,7 @@ function parseAttendees(raw) {
 }
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
+const SMALLEST_AI_TRANSCRIPTION_URL = "https://api.smallest.ai/waves/v1/pulse/get_text";
 
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
@@ -516,6 +517,7 @@ class IPCHandlers {
     }
     if (provider === "groq") return "whisper-large-v3-turbo";
     if (provider === "mistral") return "voxtral-mini-latest";
+    if (provider === "smallest") return "pulse";
     return "gpt-4o-mini-transcribe";
   }
 
@@ -2483,6 +2485,14 @@ class IPCHandlers {
       return this.environmentManager.saveMistralKey(key);
     });
 
+    ipcMain.handle("get-smallest-ai-key", async () => {
+      return this.environmentManager.getSmallestAiKey();
+    });
+
+    ipcMain.handle("save-smallest-ai-key", async (event, key) => {
+      return this.environmentManager.saveSmallestAiKey(key);
+    });
+
     ipcMain.handle(
       "proxy-mistral-transcription",
       async (event, { audioBuffer, model, language, contextBias }) => {
@@ -3650,6 +3660,9 @@ class IPCHandlers {
           } else if (provider === "mistral") {
             apiKey = this.environmentManager.getMistralKey();
             endpoint = MISTRAL_TRANSCRIPTION_URL;
+          } else if (provider === "smallest") {
+            apiKey = this.environmentManager.getSmallestAiKey();
+            endpoint = SMALLEST_AI_TRANSCRIPTION_URL;
           } else if (provider === "custom") {
             apiKey = this.environmentManager.getCustomTranscriptionKey();
             const base = (settings?.cloudTranscriptionBaseUrl || "").trim();
@@ -3666,25 +3679,48 @@ class IPCHandlers {
             throw new Error(`${provider} API key not configured`);
           }
 
-          const formData = new FormData();
-          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
-          formData.append("model", model);
-          if (language) formData.append("language", language);
-          const headers = {};
-          if (provider === "mistral") {
-            headers["x-api-key"] = apiKey;
-          } else if (apiKey) {
-            headers.Authorization = `Bearer ${apiKey}`;
-          }
+          if (provider === "smallest") {
+            const lang = language || "en";
+            const params = new URLSearchParams({ language: lang });
+            const smallestHeaders = {
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/octet-stream",
+              "X-Source": "openwhispr",
+            };
+            const smallestResponse = await fetch(`${endpoint}?${params}`, {
+              method: "POST",
+              headers: smallestHeaders,
+              body: buffer,
+            });
+            if (!smallestResponse.ok) {
+              const errorText = await smallestResponse.text();
+              throw new Error(`Smallest AI API Error: ${smallestResponse.status} ${errorText}`);
+            }
+            const smallestData = await smallestResponse.json();
+            if (smallestData?.transcription) {
+              result = { text: smallestData.transcription, source: provider, model };
+            }
+          } else {
+            const formData = new FormData();
+            formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+            formData.append("model", model);
+            if (language) formData.append("language", language);
+            const headers = {};
+            if (provider === "mistral") {
+              headers["x-api-key"] = apiKey;
+            } else if (apiKey) {
+              headers.Authorization = `Bearer ${apiKey}`;
+            }
 
-          const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
-          }
-          const data = await response.json();
-          if (data?.text) {
-            result = { text: data.text, source: provider, model };
+            const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
+            }
+            const data = await response.json();
+            if (data?.text) {
+              result = { text: data.text, source: provider, model };
+            }
           }
         }
 

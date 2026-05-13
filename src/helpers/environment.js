@@ -14,6 +14,7 @@ const SECRET_KEYS = [
   "MISTRAL_API_KEY",
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
+  "SMALLEST_AI_API_KEY",
   "CUSTOM_TRANSCRIPTION_API_KEY",
   "CUSTOM_CLEANUP_API_KEY",
   "BEDROCK_ACCESS_KEY_ID",
@@ -309,6 +310,14 @@ class EnvironmentManager {
 
   saveDeepgramKey(key) {
     return this._saveKey("DEEPGRAM_API_KEY", key);
+  }
+
+  getSmallestAiKey() {
+    return this._getKey("SMALLEST_AI_API_KEY");
+  }
+
+  saveSmallestAiKey(key) {
+    return this._saveKey("SMALLEST_AI_API_KEY", key);
   }
 
   getCustomTranscriptionKey() {
