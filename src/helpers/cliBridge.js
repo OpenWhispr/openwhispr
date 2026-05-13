@@ -21,13 +21,19 @@ function getBridgeFilePath() {
 
 function isPortAvailable(port) {
   return new Promise((resolve) => {
-    const server = net.createServer();
-    server.once("error", () => resolve(false));
-    server.once("listening", () => {
-      server.close();
-      resolve(true);
+    const probe = net.createServer();
+    probe.once("error", () => resolve(false));
+    probe.once("listening", () => {
+      probe.close(() => {
+        const loopback = net.createServer();
+        loopback.once("error", () => resolve(false));
+        loopback.once("listening", () => {
+          loopback.close(() => resolve(true));
+        });
+        loopback.listen(port, HOST);
+      });
     });
-    server.listen(port, HOST);
+    probe.listen(port, "0.0.0.0");
   });
 }
 
