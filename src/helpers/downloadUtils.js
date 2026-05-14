@@ -435,7 +435,15 @@ function extractArchive(archivePath, destDir) {
 
   return new Promise((resolve, reject) => {
     execFile("unzip", ["-o", archivePath, "-d", destDir], (err) => {
-      err ? reject(new Error(`Extraction failed: ${err.message}`)) : resolve();
+      if (!err) return resolve();
+      debugLogger.info("system unzip failed, using JS extraction", { error: err.message });
+      const unzipper = require("unzipper");
+      fs.createReadStream(archivePath)
+        .pipe(unzipper.Extract({ path: destDir }))
+        .on("close", resolve)
+        .on("error", (extractErr) =>
+          reject(new Error(`Zip extraction failed: ${extractErr.message}`))
+        );
     });
   });
 }
