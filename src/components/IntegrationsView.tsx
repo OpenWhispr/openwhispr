@@ -4,6 +4,8 @@ import { Code2, Info, Loader2, Mail, Plus, Unlink } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
+import { Toggle } from "./ui/toggle";
+import type { GoogleCalendar } from "../types/calendar";
 import {
   ConfirmDialog,
   Dialog,
@@ -43,10 +45,32 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
   const [confirmDisconnectEmail, setConfirmDisconnectEmail] = useState<string | null>(null);
   const [showPermissionDialog, setShowPermissionDialog] = useState(false);
   const [apiKeysDialogOpen, setApiKeysDialogOpen] = useState(false);
+  const [calendarsByAccount, setCalendarsByAccount] = useState<Record<string, GoogleCalendar[]>>(
+    {}
+  );
+  const [loadingCalendars, setLoadingCalendars] = useState(false);
+  const [togglingCalendarIds, setTogglingCalendarIds] = useState<Set<string>>(new Set());
   const systemAudio = useSystemAudioPermission();
   const { request: requestSystemAudioAccess } = systemAudio;
   const hasAccounts = gcalAccounts.length > 0;
   const needsSystemAudioGrant = !systemAudio.granted && canManageSystemAudioInApp(systemAudio);
+
+  const loadCalendars = useCallback(async () => {
+    setLoadingCalendars(true);
+    try {
+      const res = await window.electronAPI?.gcalGetCalendars?.();
+      const calendars = (res?.calendars ?? []) as GoogleCalendar[];
+      const grouped: Record<string, GoogleCalendar[]> = {};
+      for (const cal of calendars) {
+        const email = (cal as GoogleCalendar & { account_email?: string }).account_email ?? "";
+        if (!grouped[email]) grouped[email] = [];
+        grouped[email].push(cal);
+      }
+      setCalendarsByAccount(grouped);
+    } finally {
+      setLoadingCalendars(false);
+    }
+  }, []);
 
   const startOAuth = useCallback(async () => {
     setIsConnecting(true);
@@ -58,11 +82,12 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
           ...current.filter((a) => a.email !== result.email),
           { email: result.email },
         ]);
+        await loadCalendars();
       }
     } finally {
       setIsConnecting(false);
     }
-  }, [setGcalAccounts]);
+  }, [setGcalAccounts, loadCalendars]);
 
   const handleConnect = useCallback(async () => {
     if (needsSystemAudioGrant) {
@@ -82,12 +107,72 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
         await window.electronAPI?.gcalDisconnect?.(email);
         const current = useSettingsStore.getState().gcalAccounts;
         setGcalAccounts(current.filter((a) => a.email !== email));
+        setCalendarsByAccount((prev) => {
+          const next = { ...prev };
+          delete next[email];
+          return next;
+        });
       } finally {
         setDisconnectingEmail(null);
       }
     },
     [setGcalAccounts]
   );
+
+  const handleToggleCalendar = useCallback(
+    async (calendarId: string, accountEmail: string, nextSelected: boolean) => {
+      setTogglingCalendarIds((prev) => {
+        const next = new Set(prev);
+        next.add(calendarId);
+        return next;
+      });
+      setCalendarsByAccount((prev) => {
+        const accountCalendars = prev[accountEmail];
+        if (!accountCalendars) return prev;
+        return {
+          ...prev,
+          [accountEmail]: accountCalendars.map((cal) =>
+            cal.id === calendarId ? { ...cal, is_selected: nextSelected ? 1 : 0 } : cal
+          ),
+        };
+      });
+      const rollback = () => {
+        setCalendarsByAccount((current) => {
+          const accountCalendars = current[accountEmail];
+          if (!accountCalendars) return current;
+          return {
+            ...current,
+            [accountEmail]: accountCalendars.map((cal) =>
+              cal.id === calendarId ? { ...cal, is_selected: nextSelected ? 0 : 1 } : cal
+            ),
+          };
+        });
+      };
+      try {
+        const res = await window.electronAPI?.gcalSetCalendarSelection?.(calendarId, nextSelected);
+        if (!res?.success) {
+          rollback();
+        }
+      } catch {
+        rollback();
+      } finally {
+        setTogglingCalendarIds((prev) => {
+          const next = new Set(prev);
+          next.delete(calendarId);
+          return next;
+        });
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    if (hasAccounts) {
+      loadCalendars();
+    } else {
+      setCalendarsByAccount({});
+    }
+  }, [hasAccounts, loadCalendars]);
 
   useEffect(() => {
     const unsub = window.electronAPI?.onGcalConnectionChanged?.(
@@ -105,10 +190,11 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
             { email: data.email },
           ]);
         }
+        loadCalendars();
       }
     );
     return () => unsub?.();
-  }, [setGcalAccounts]);
+  }, [setGcalAccounts, loadCalendars]);
 
   return (
     <div className="max-w-lg mx-auto w-full px-6 py-6 space-y-5">
@@ -161,28 +247,78 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
           </SettingsPanelRow>
 
           {hasAccounts &&
-            gcalAccounts.map((account) => (
-              <SettingsPanelRow key={account.email}>
-                <div className="group flex items-center gap-3 pl-12">
-                  <Mail className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
-                  <span className="text-xs text-muted-foreground truncate flex-1">
-                    {account.email}
-                  </span>
-                  <button
-                    onClick={() => setConfirmDisconnectEmail(account.email)}
-                    disabled={disconnectingEmail === account.email}
-                    className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all disabled:opacity-50"
-                    aria-label={t("integrations.googleCalendar.disconnect")}
-                  >
-                    {disconnectingEmail === account.email ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Unlink className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </div>
-              </SettingsPanelRow>
-            ))}
+            gcalAccounts.map((account) => {
+              const accountCalendars = calendarsByAccount[account.email];
+              const showCalendarsLoading =
+                loadingCalendars && (!accountCalendars || accountCalendars.length === 0);
+              const showCalendarsEmpty =
+                !loadingCalendars && accountCalendars && accountCalendars.length === 0;
+              return (
+                <SettingsPanelRow key={account.email}>
+                  <div className="group flex items-center gap-3 pl-12">
+                    <Mail className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0" />
+                    <span className="text-xs text-muted-foreground truncate flex-1">
+                      {account.email}
+                    </span>
+                    <button
+                      onClick={() => setConfirmDisconnectEmail(account.email)}
+                      disabled={disconnectingEmail === account.email}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all disabled:opacity-50"
+                      aria-label={t("integrations.googleCalendar.disconnect")}
+                    >
+                      {disconnectingEmail === account.email ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Unlink className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+                  {(showCalendarsLoading ||
+                    showCalendarsEmpty ||
+                    (accountCalendars && accountCalendars.length > 0)) && (
+                    <div className="mt-2 pl-12 pr-1">
+                      <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-1.5">
+                        {t("integrations.googleCalendar.calendarsLabel")}
+                      </div>
+                      {showCalendarsLoading ? (
+                        <div className="flex items-center gap-2 py-1">
+                          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground/50" />
+                          <span className="text-xs text-muted-foreground/70">
+                            {t("integrations.googleCalendar.loadingCalendars")}
+                          </span>
+                        </div>
+                      ) : showCalendarsEmpty ? (
+                        <div className="py-1 text-xs text-muted-foreground/70">
+                          {t("integrations.googleCalendar.noCalendars")}
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          {accountCalendars!.map((cal) => (
+                            <div key={cal.id} className="flex items-center gap-2.5 py-1">
+                              <span
+                                className="h-2 w-2 rounded-full shrink-0"
+                                style={{ backgroundColor: cal.background_color ?? "#888" }}
+                                aria-hidden
+                              />
+                              <span className="text-xs text-muted-foreground flex-1 truncate">
+                                {cal.summary}
+                              </span>
+                              <Toggle
+                                checked={cal.is_selected === 1}
+                                disabled={togglingCalendarIds.has(cal.id)}
+                                onChange={(next) =>
+                                  handleToggleCalendar(cal.id, account.email, next)
+                                }
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </SettingsPanelRow>
+              );
+            })}
 
           {hasAccounts && (
             <SettingsPanelRow>

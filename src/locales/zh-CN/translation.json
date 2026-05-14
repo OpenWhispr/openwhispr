@@ -2365,7 +2365,10 @@
       "disconnectDescription": "将不再从此日历记录会议笔记。",
       "systemAudioRequired": "需要系统音频权限",
       "systemAudioDescription": "要转录会议，OpenWhispr 需要系统音频权限来录制其他参与者的音频。我们绝不会录制您的屏幕。您将被引导至系统设置以启用此权限。",
-      "openSettings": "打开系统设置"
+      "openSettings": "打开系统设置",
+      "calendarsLabel": "要同步的日历",
+      "loadingCalendars": "正在加载日历…",
+      "noCalendars": "暂无日历"
     },
     "sections": {
       "calendar": "日历",

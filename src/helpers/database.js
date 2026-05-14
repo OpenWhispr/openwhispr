@@ -1440,7 +1440,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
         .prepare(
-          "SELECT * FROM calendar_events WHERE datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now') AND is_all_day = 0 AND status = 'confirmed' ORDER BY start_time ASC"
+          "SELECT ce.* FROM calendar_events ce JOIN google_calendars gc ON gc.id = ce.calendar_id WHERE gc.is_selected = 1 AND datetime(ce.start_time) <= datetime('now') AND datetime(ce.end_time) > datetime('now') AND ce.is_all_day = 0 AND ce.status = 'confirmed' ORDER BY ce.start_time ASC"
         )
         .all();
     } catch (error) {
@@ -1480,7 +1480,7 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
         .prepare(
-          "SELECT * FROM calendar_events WHERE ((datetime(start_time) > datetime('now') AND datetime(start_time) <= datetime('now', '+' || ? || ' minutes')) OR (datetime(start_time) <= datetime('now') AND datetime(end_time) > datetime('now'))) AND is_all_day = 0 AND status = 'confirmed' ORDER BY start_time ASC"
+          "SELECT ce.* FROM calendar_events ce JOIN google_calendars gc ON gc.id = ce.calendar_id WHERE gc.is_selected = 1 AND ((datetime(ce.start_time) > datetime('now') AND datetime(ce.start_time) <= datetime('now', '+' || ? || ' minutes')) OR (datetime(ce.start_time) <= datetime('now') AND datetime(ce.end_time) > datetime('now'))) AND ce.is_all_day = 0 AND ce.status = 'confirmed' ORDER BY ce.start_time ASC"
         )
         .all(windowMinutes);
     } catch (error) {
