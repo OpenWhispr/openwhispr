@@ -49,7 +49,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
     {}
   );
   const [loadingCalendars, setLoadingCalendars] = useState(false);
-  const [togglingCalendarId, setTogglingCalendarId] = useState<string | null>(null);
+  const [togglingCalendarIds, setTogglingCalendarIds] = useState<Set<string>>(new Set());
   const systemAudio = useSystemAudioPermission();
   const { request: requestSystemAudioAccess } = systemAudio;
   const hasAccounts = gcalAccounts.length > 0;
@@ -121,8 +121,11 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
 
   const handleToggleCalendar = useCallback(
     async (calendarId: string, accountEmail: string, nextSelected: boolean) => {
-      setTogglingCalendarId(calendarId);
-      const previous = calendarsByAccount;
+      setTogglingCalendarIds((prev) => {
+        const next = new Set(prev);
+        next.add(calendarId);
+        return next;
+      });
       setCalendarsByAccount((prev) => {
         const accountCalendars = prev[accountEmail];
         if (!accountCalendars) return prev;
@@ -133,18 +136,34 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
           ),
         };
       });
+      const rollback = () => {
+        setCalendarsByAccount((current) => {
+          const accountCalendars = current[accountEmail];
+          if (!accountCalendars) return current;
+          return {
+            ...current,
+            [accountEmail]: accountCalendars.map((cal) =>
+              cal.id === calendarId ? { ...cal, is_selected: nextSelected ? 0 : 1 } : cal
+            ),
+          };
+        });
+      };
       try {
         const res = await window.electronAPI?.gcalSetCalendarSelection?.(calendarId, nextSelected);
         if (!res?.success) {
-          setCalendarsByAccount(previous);
+          rollback();
         }
       } catch {
-        setCalendarsByAccount(previous);
+        rollback();
       } finally {
-        setTogglingCalendarId(null);
+        setTogglingCalendarIds((prev) => {
+          const next = new Set(prev);
+          next.delete(calendarId);
+          return next;
+        });
       }
     },
-    [calendarsByAccount]
+    []
   );
 
   useEffect(() => {
@@ -232,6 +251,8 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
               const accountCalendars = calendarsByAccount[account.email];
               const showCalendarsLoading =
                 loadingCalendars && (!accountCalendars || accountCalendars.length === 0);
+              const showCalendarsEmpty =
+                !loadingCalendars && accountCalendars && accountCalendars.length === 0;
               return (
                 <SettingsPanelRow key={account.email}>
                   <div className="group flex items-center gap-3 pl-12">
@@ -253,6 +274,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
                     </button>
                   </div>
                   {(showCalendarsLoading ||
+                    showCalendarsEmpty ||
                     (accountCalendars && accountCalendars.length > 0)) && (
                     <div className="mt-2 pl-12 pr-1">
                       <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-1.5">
@@ -264,6 +286,10 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
                           <span className="text-xs text-muted-foreground/70">
                             {t("integrations.googleCalendar.loadingCalendars")}
                           </span>
+                        </div>
+                      ) : showCalendarsEmpty ? (
+                        <div className="py-1 text-xs text-muted-foreground/70">
+                          {t("integrations.googleCalendar.noCalendars")}
                         </div>
                       ) : (
                         <div className="space-y-1">
@@ -279,7 +305,7 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
                               </span>
                               <Toggle
                                 checked={cal.is_selected === 1}
-                                disabled={togglingCalendarId === cal.id}
+                                disabled={togglingCalendarIds.has(cal.id)}
                                 onChange={(next) =>
                                   handleToggleCalendar(cal.id, account.email, next)
                                 }
