@@ -918,14 +918,40 @@ async function startApp() {
 
   const keyToRegister = resolvePasteLastStartupKey(environmentManager.getPasteLastKey?.() ?? "");
   if (keyToRegister) {
-    hotkeyManager.registerSlot("pasteLast", keyToRegister, pasteLastCallback);
+    const result = await hotkeyManager.registerSlot(
+      "pasteLast",
+      keyToRegister,
+      pasteLastCallback
+    );
+    debugLogger.info(
+      "Paste-last hotkey startup registration",
+      { keyToRegister, ...result },
+      "hotkey"
+    );
+    if (!result.success) {
+      debugLogger.warn(
+        "Failed to register paste-last hotkey at startup",
+        { hotkey: keyToRegister, error: result.error, suggestions: result.suggestions },
+        "hotkey"
+      );
+    }
   }
 
-  ipcMain.on("paste-last-key-changed", (_event, hotkey) => {
+  ipcMain.on("paste-last-key-changed", async (_event, hotkey) => {
     if (hotkey) {
-      const result = hotkeyManager.registerSlot("pasteLast", hotkey, pasteLastCallback);
+      const result = await hotkeyManager.registerSlot(
+        "pasteLast",
+        hotkey,
+        pasteLastCallback
+      );
       if (result.success) {
         environmentManager.savePasteLastKey(hotkey);
+      } else {
+        debugLogger.warn(
+          "Failed to register paste-last hotkey via paste-last-key-changed",
+          { hotkey, error: result.error },
+          "hotkey"
+        );
       }
     } else {
       hotkeyManager.unregisterSlot("pasteLast");

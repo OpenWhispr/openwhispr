@@ -7043,7 +7043,7 @@ class IPCHandlers {
       if (!pasteLastCallback) {
         return { success: false, message: "Paste-last hotkey callback not initialized" };
       }
-      const result = hotkeyManager.registerSlot("pasteLast", hotkey, pasteLastCallback);
+      const result = await hotkeyManager.registerSlot("pasteLast", hotkey, pasteLastCallback);
       if (!result.success) {
         return { success: false, message: result.error, suggestions: result.suggestions };
       }
