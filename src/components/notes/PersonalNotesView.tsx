@@ -122,10 +122,14 @@ export default function PersonalNotesView({
   const [syncedNoteId, setSyncedNoteIdState] = useState<number | null>(null);
   const localContentRef = useRef(localContent);
   const localTitleRef = useRef(localTitle);
+  const localEnhancedContentRef = useRef(localEnhancedContent);
   useEffect(() => {
     localContentRef.current = localContent;
     localTitleRef.current = localTitle;
   }, [localContent, localTitle]);
+  useEffect(() => {
+    localEnhancedContentRef.current = localEnhancedContent;
+  }, [localEnhancedContent]);
   const markNoteAsSynced = (id: number | null) => {
     activeNoteRef.current = id;
     setSyncedNoteIdState(id);
@@ -233,55 +237,72 @@ export default function PersonalNotesView({
   }, []);
 
   useEffect(() => {
-    const syncNote = async () => {
-      if (activeNote && activeNote.id !== activeNoteRef.current) {
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-          saveTimeoutRef.current = null;
-          if (activeNoteRef.current) {
-            await window.electronAPI.updateNote(activeNoteRef.current, {
-              title: localTitleRef.current,
-              content: localContentRef.current,
-            });
-          }
-        }
-        if (enhancedSaveTimeoutRef.current) {
-          clearTimeout(enhancedSaveTimeoutRef.current);
-          enhancedSaveTimeoutRef.current = null;
-        }
-        markNoteAsSynced(activeNote.id);
-        setLocalTitle(activeNote.title);
-        setLocalContent(activeNote.content);
+    if (activeNote && activeNote.id !== activeNoteRef.current) {
+      // --- Switching notes ---
+      // 1. Capture old note state before anything changes
+      const oldNoteId = activeNoteRef.current;
+      const oldTitle = localTitleRef.current;
+      const oldContent = localContentRef.current;
+      const hadPendingSave = !!saveTimeoutRef.current;
+
+      // 2. Clear all pending timers
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      if (enhancedSaveTimeoutRef.current) {
+        clearTimeout(enhancedSaveTimeoutRef.current);
+        enhancedSaveTimeoutRef.current = null;
+      }
+
+      // 3. Switch to new note IMMEDIATELY (no await, eliminates race window)
+      markNoteAsSynced(activeNote.id);
+      setLocalTitle(activeNote.title);
+      setLocalContent(activeNote.content);
+      setLocalEnhancedContent(activeNote.enhanced_content ?? null);
+      // Also update refs directly so callbacks are correct before next render
+      localTitleRef.current = activeNote.title;
+      localContentRef.current = activeNote.content;
+
+      // 4. Flush old note data fire-and-forget (uses captured values, not refs)
+      if (hadPendingSave && oldNoteId) {
+        window.electronAPI
+          .updateNote(oldNoteId, { title: oldTitle, content: oldContent })
+          .catch((err: unknown) => {
+            logger.warn(
+              "Failed to flush note on switch",
+              { error: (err as Error).message },
+              "notes"
+            );
+          });
+      }
+    } else if (activeNote && activeNote.id === activeNoteRef.current && !saveTimeoutRef.current) {
+      // External update (e.g. AI chat tool) — resync only when no user save is pending
+      if (activeNote.title !== localTitleRef.current) setLocalTitle(activeNote.title);
+      if (activeNote.content !== localContentRef.current) setLocalContent(activeNote.content);
+      if ((activeNote.enhanced_content ?? null) !== localEnhancedContentRef.current) {
         setLocalEnhancedContent(activeNote.enhanced_content ?? null);
-      } else if (activeNote && activeNote.id === activeNoteRef.current && !saveTimeoutRef.current) {
-        // External update (e.g. AI chat tool) — resync only when no user save is pending
-        if (activeNote.title !== localTitleRef.current) setLocalTitle(activeNote.title);
-        if (activeNote.content !== localContentRef.current) setLocalContent(activeNote.content);
-        if ((activeNote.enhanced_content ?? null) !== localEnhancedContent) {
-          setLocalEnhancedContent(activeNote.enhanced_content ?? null);
-        }
       }
-      if (!activeNote) {
-        if (saveTimeoutRef.current) {
-          clearTimeout(saveTimeoutRef.current);
-          saveTimeoutRef.current = null;
-        }
-        if (enhancedSaveTimeoutRef.current) {
-          clearTimeout(enhancedSaveTimeoutRef.current);
-          enhancedSaveTimeoutRef.current = null;
-        }
-        markNoteAsSynced(null);
-        setLocalTitle("");
-        setLocalContent("");
-        setLocalEnhancedContent(null);
+    } else if (!activeNote) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
       }
-    };
-    syncNote();
-  }, [activeNote, localEnhancedContent]);
+      if (enhancedSaveTimeoutRef.current) {
+        clearTimeout(enhancedSaveTimeoutRef.current);
+        enhancedSaveTimeoutRef.current = null;
+      }
+      markNoteAsSynced(null);
+      setLocalTitle("");
+      setLocalContent("");
+      setLocalEnhancedContent(null);
+    }
+  }, [activeNote]);
 
   const debouncedSave = useCallback((noteId: number, title: string, content: string) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
+      saveTimeoutRef.current = null;
       setIsSaving(true);
       try {
         await window.electronAPI.updateNote(noteId, { title, content });
@@ -324,6 +345,7 @@ export default function PersonalNotesView({
     const noteId = activeNoteRef.current;
     if (enhancedSaveTimeoutRef.current) clearTimeout(enhancedSaveTimeoutRef.current);
     enhancedSaveTimeoutRef.current = setTimeout(async () => {
+      enhancedSaveTimeoutRef.current = null;
       setIsSaving(true);
       try {
         await window.electronAPI.updateNote(noteId, { enhanced_content: content });
@@ -896,6 +918,7 @@ export default function PersonalNotesView({
         {editorNote ? (
           <>
             <NoteEditor
+              key={editorNote.id}
               note={editorNote}
               onTitleChange={handleTitleChange}
               onContentChange={handleContentChange}
@@ -943,8 +966,10 @@ export default function PersonalNotesView({
               actionPicker={
                 <ActionPicker
                   onRunAction={(action) => {
-                    const rawTranscript = realtimeTranscript || activeNote?.transcript;
-                    const hasNotes = !!localContent.trim();
+                    if (!editorNote) return;
+                    const rawTranscript = realtimeTranscript || editorNote.transcript;
+                    const noteContent = editorNote.content;
+                    const hasNotes = !!noteContent.trim();
                     if (!hasNotes && !rawTranscript) return;
 
                     let formattedTranscript = "";
@@ -966,12 +991,12 @@ export default function PersonalNotesView({
                     }
 
                     const parts = [
-                      hasNotes ? localContent : "",
+                      hasNotes ? noteContent : "",
                       formattedTranscript ? `## Meeting Transcript\n${formattedTranscript}` : "",
                     ]
                       .filter(Boolean)
                       .join("\n\n");
-                    runAction(action, parts, makeContentHash(localContentRef.current), {
+                    runAction(action, parts, makeContentHash(noteContent), {
                       isCloudMode,
                       modelId: effectiveModelId,
                       isMeetingNote,
@@ -979,7 +1004,9 @@ export default function PersonalNotesView({
                   }}
                   onManageActions={() => setShowActionManager(true)}
                   disabled={
-                    (!localContent.trim() && !realtimeTranscript && !activeNote?.transcript) ||
+                    (!editorNote?.content?.trim() &&
+                      !realtimeTranscript &&
+                      !activeNote?.transcript) ||
                     actionProcessingState === "processing"
                   }
                 />
