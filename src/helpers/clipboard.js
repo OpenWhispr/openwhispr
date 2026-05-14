@@ -464,39 +464,51 @@ class ClipboardManager {
           // KWin script executes in the compositor; brief pause lets the journal flush.
           spawnSync("sleep", ["0.03"], { timeout: 100 });
 
-          const journalResult = spawnSync(
-            "journalctl",
-            [
-              "--user",
-              // KDE 6 logs KWin output under this identifier
-              "--identifier=kwin_wayland_wrapper",
-              "--since=3 seconds ago",
-              "-n",
-              "5",
-              "--no-pager",
-              "-o",
-              "cat",
-            ],
-            { timeout: 1000, stdio: "pipe" }
-          );
+          const baseJournalArgs = [
+            // KDE 6 logs KWin output under this identifier
+            "--identifier=kwin_wayland_wrapper",
+            "--since=3 seconds ago",
+            "-n",
+            "5",
+            "--no-pager",
+            "-o",
+            "cat",
+          ];
+
+          let windowClass = null;
+          // Try user journal first; fall back to system journal when
+          // /var/log/journal/ is missing and entries land there instead.
+          for (const prefix of [["--user"], []]) {
+            const journalResult = spawnSync(
+              "journalctl",
+              [...prefix, ...baseJournalArgs],
+              { timeout: 1000, stdio: "pipe" }
+            );
+            if (journalResult.status === 0) {
+              const lines = journalResult.stdout.toString().split("\n");
+              for (let i = lines.length - 1; i >= 0; i--) {
+                const idx = lines[i].indexOf(`${journalMarker}:`);
+                if (idx !== -1) {
+                  const cls = lines[i]
+                    .slice(idx + journalMarker.length + 1)
+                    .trim()
+                    .toLowerCase();
+                  if (cls) {
+                    windowClass = cls;
+                    break;
+                  }
+                }
+              }
+              if (windowClass) break;
+            }
+          }
+
           spawnSync(qdbus, ["org.kde.KWin", `/Scripting/Script${scriptId}`, "stop"], {
             timeout: 1000,
             stdio: "pipe",
           });
 
-          if (journalResult.status === 0) {
-            const lines = journalResult.stdout.toString().split("\n");
-            for (let i = lines.length - 1; i >= 0; i--) {
-              const idx = lines[i].indexOf(`${journalMarker}:`);
-              if (idx !== -1) {
-                const cls = lines[i]
-                  .slice(idx + journalMarker.length + 1)
-                  .trim()
-                  .toLowerCase();
-                if (cls) return cls;
-              }
-            }
-          }
+          if (windowClass) return windowClass;
         }
       } catch (err) {
         debugLogger.warn("KWin script fallback failed", { error: err?.message }, "clipboard");
