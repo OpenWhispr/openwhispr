@@ -2365,7 +2365,10 @@
       "disconnectDescription": "このカレンダーからの会議メモは記録されなくなります。",
       "systemAudioRequired": "システムオーディオの権限が必要です",
       "systemAudioDescription": "会議を文字起こしするには、OpenWhispr に他の参加者の音声を録音するためのシステムオーディオの権限が必要です。画面を録画することはありません。システム設定に移動して有効にします。",
-      "openSettings": "システム設定を開く"
+      "openSettings": "システム設定を開く",
+      "calendarsLabel": "同期するカレンダー",
+      "loadingCalendars": "カレンダーを読み込み中…",
+      "noCalendars": "カレンダーはまだありません"
     },
     "sections": {
       "calendar": "カレンダー",

@@ -2509,7 +2509,10 @@
       "disconnectDescription": "Meeting notes will no longer be recorded from this calendar.",
       "systemAudioRequired": "System Audio Permission Required",
       "systemAudioDescription": "To transcribe meetings, OpenWhispr needs the System Audio permission to capture other participants' audio. We never record your screen. You'll be taken to System Settings to enable it.",
-      "openSettings": "Open System Settings"
+      "openSettings": "Open System Settings",
+      "calendarsLabel": "Calendars to sync",
+      "loadingCalendars": "Loading calendars…",
+      "noCalendars": "No calendars yet"
     },
     "sections": {
       "calendar": "Calendar",

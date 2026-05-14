@@ -2413,7 +2413,10 @@
       "disconnectDescription": "Ya no se grabarán notas de reuniones de este calendario.",
       "systemAudioRequired": "Se requiere permiso de Audio del Sistema",
       "systemAudioDescription": "Para transcribir reuniones, OpenWhispr necesita el permiso de Audio del Sistema para capturar el audio de otros participantes. Nunca grabamos tu pantalla. Serás dirigido a Ajustes del Sistema para activarlo.",
-      "openSettings": "Abrir Ajustes del Sistema"
+      "openSettings": "Abrir Ajustes del Sistema",
+      "calendarsLabel": "Calendarios a sincronizar",
+      "loadingCalendars": "Cargando calendarios…",
+      "noCalendars": "Aún no hay calendarios"
     },
     "sections": {
       "calendar": "Calendario",

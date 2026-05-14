@@ -2413,7 +2413,10 @@
       "disconnectDescription": "Les notes de réunion ne seront plus enregistrées depuis ce calendrier.",
       "systemAudioRequired": "Autorisation Audio Système requise",
       "systemAudioDescription": "Pour transcrire les réunions, OpenWhispr a besoin de l'autorisation Audio Système pour capturer l'audio des autres participants. Nous n'enregistrons jamais votre écran. Vous serez dirigé vers les Réglages Système pour l'activer.",
-      "openSettings": "Ouvrir les Réglages Système"
+      "openSettings": "Ouvrir les Réglages Système",
+      "calendarsLabel": "Agendas à synchroniser",
+      "loadingCalendars": "Chargement des agendas…",
+      "noCalendars": "Aucun agenda pour le moment"
     },
     "sections": {
       "calendar": "Calendrier",
