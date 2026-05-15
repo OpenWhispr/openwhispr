@@ -4,6 +4,7 @@ import {
   MessageSquare,
   NotebookPen,
   BookOpen,
+  Replace,
   Upload,
   Blocks,
   Gift,
@@ -31,6 +32,7 @@ export type ControlPanelView =
   | "chat"
   | "personal-notes"
   | "dictionary"
+  | "phrases"
   | "upload"
   | "integrations";
 
@@ -95,6 +97,7 @@ export default function ControlPanelSidebar({
     { id: "personal-notes", label: t("sidebar.notes"), icon: NotebookPen },
     { id: "upload", label: t("sidebar.upload"), icon: Upload },
     { id: "dictionary", label: t("sidebar.dictionary"), icon: BookOpen },
+    { id: "phrases", label: t("sidebar.phrases"), icon: Replace },
     { id: "integrations", label: t("sidebar.integrations"), icon: Blocks },
   ];
 

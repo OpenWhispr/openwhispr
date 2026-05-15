@@ -1897,6 +1897,7 @@
     "notes": "Notes",
     "upload": "Upload",
     "dictionary": "Dictionary",
+    "phrases": "Phrases",
     "referral": "Get a free month",
     "settings": "Settings",
     "support": "Support",
@@ -2331,6 +2332,22 @@
     "howItWorksDetail": "Words are fed as context hints to the speech model, helping it recognize uncommon terms. For difficult words, try adding context like \"The word is Synty\" alongside the word itself.",
     "autoManaged": "Auto-managed — synced from agent name",
     "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition."
+  },
+  "phrases": {
+    "title": "Phrases",
+    "description": "Define spoken triggers that get replaced with longer text when you dictate.",
+    "addFirst": "Add your first phrase",
+    "add": "Add phrase",
+    "delete": "Delete phrase",
+    "removeTitle": "Remove this phrase?",
+    "removeDescription": "This phrase will no longer be expanded in your transcriptions.",
+    "triggerColumn": "Trigger",
+    "snippetColumn": "Snippet",
+    "triggerPlaceholder": "my email",
+    "snippetPlaceholder": "me@example.com",
+    "howItWorks": "How it works",
+    "howItWorksDetail": "After Whisper transcribes your speech, each trigger phrase is replaced with its snippet. Surrounding text is preserved verbatim. Matching is case-insensitive and respects word boundaries — so \"my email\" will match \"My Email\" but not \"my emails\".",
+    "inputHint": "Triggers match whole words, case-insensitive. Longer triggers win when they overlap."
   },
   "support": {
     "documentation": "Documentation",
