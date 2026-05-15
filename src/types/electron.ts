@@ -1059,6 +1059,8 @@ declare global {
       toggleMediaPlayback?: () => Promise<boolean>;
       pauseMediaPlayback?: () => Promise<boolean>;
       resumeMediaPlayback?: () => Promise<boolean>;
+      muteSystemVolume?: () => Promise<boolean>;
+      unmuteSystemVolume?: () => Promise<boolean>;
       openWhisperModelsFolder?: () => Promise<{ success: boolean; error?: string }>;
 
       // Windows Push-to-Talk notifications

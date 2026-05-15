@@ -1302,6 +1302,9 @@
         "dictationSoundsDescription": "Ton abspielen, wenn die Aufnahme startet und stoppt",
         "pauseMedia": "Medien pausieren",
         "pauseMediaDescription": "Musik beim Starten der Diktat automatisch pausieren",
+        "_muteSystemAutoTranslatedNote": "muteSystem and muteSystemDescription were auto-translated by Claude and have not been reviewed by a native speaker.",
+        "muteSystem": "Systemaudio stummschalten",
+        "muteSystemDescription": "Schaltet die Systemausgabe während des Diktierens stumm, damit die Wiedergabe nicht vom Mikrofon erfasst wird",
         "title": "Soundeffekte"
       },
       "clipboard": {

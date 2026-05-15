@@ -1350,6 +1350,9 @@
         "dictationSoundsDescription": "Reproduce un tono al iniciar y detener la grabación",
         "pauseMedia": "Pausar multimedia",
         "pauseMediaDescription": "Pausar la música automáticamente al iniciar el dictado",
+        "_muteSystemAutoTranslatedNote": "muteSystem and muteSystemDescription were auto-translated by Claude and have not been reviewed by a native speaker.",
+        "muteSystem": "Silenciar audio del sistema",
+        "muteSystemDescription": "Silencia la salida del sistema mientras dictas para que la reproducción no sea captada por el micrófono",
         "title": "Efectos de sonido"
       },
       "clipboard": {
