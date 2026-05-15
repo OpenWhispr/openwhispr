@@ -72,6 +72,7 @@
     "typecheck": "cd src && tsc --noEmit",
     "quality-check": "npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",
+    "test": "node --test \"test/**/*.test.js\"",
     "preview": "cd src && vite preview",
     "clean": "node cleanup.js"
   },
