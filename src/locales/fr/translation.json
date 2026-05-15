@@ -1350,6 +1350,7 @@
         "dictationSoundsDescription": "Jouer un son au début et à la fin de l'enregistrement",
         "pauseMedia": "Mettre en pause le média",
         "pauseMediaDescription": "Mettre automatiquement la musique en pause au début de la dictée",
+        "_muteSystemAutoTranslatedNote": "muteSystem and muteSystemDescription were auto-translated by Claude and have not been reviewed by a native speaker.",
         "muteSystem": "Couper le son du système",
         "muteSystemDescription": "Coupe la sortie audio du système pendant la dictée afin que la lecture ne soit pas captée par le micro",
         "title": "Effets sonores"

@@ -1302,6 +1302,7 @@
         "dictationSoundsDescription": "在录音开始和停止时播放提示音",
         "pauseMedia": "暂停媒体",
         "pauseMediaDescription": "开始听写时自动暂停音乐",
+        "_muteSystemAutoTranslatedNote": "muteSystem and muteSystemDescription were auto-translated by Claude and have not been reviewed by a native speaker.",
         "muteSystem": "静音系统音频",
         "muteSystemDescription": "听写时静音系统输出，避免播放声音被麦克风拾取",
         "title": "音效"

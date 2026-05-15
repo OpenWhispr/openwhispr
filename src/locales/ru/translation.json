@@ -1302,6 +1302,7 @@
         "dictationSoundsDescription": "Воспроизводить звуковой сигнал при начале и окончании записи",
         "pauseMedia": "Пауза медиа",
         "pauseMediaDescription": "Автоматически приостанавливать музыку при начале диктовки",
+        "_muteSystemAutoTranslatedNote": "muteSystem and muteSystemDescription were auto-translated by Claude and have not been reviewed by a native speaker.",
         "muteSystem": "Отключить системный звук",
         "muteSystemDescription": "Отключает звук системы во время диктовки, чтобы воспроизведение не попадало в микрофон",
         "title": "Звуковые эффекты"
