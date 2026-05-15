@@ -2,6 +2,7 @@ import * as React from "react";
 import { X, Copy, Check } from "lucide-react";
 import { cn } from "../lib/utils";
 import { ToastContext, type ToastProps } from "./useToast";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 interface ToastState extends ToastProps {
   id: string;
@@ -30,6 +31,14 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const toast = React.useCallback(
     (props: Omit<ToastProps, "id">) => {
+      if (props.variant !== "destructive") {
+        const s = useSettingsStore.getState();
+        if (!s.notificationsEnabled) return "";
+        if (props.category === "transcription" && !s.notifyTranscriptionStatus) return "";
+        if (props.category === "downloads" && !s.notifyModelDownloads) return "";
+        if (props.category === "clipboard" && !s.notifyClipboardOperations) return "";
+      }
+
       const id = Math.random().toString(36).substring(2, 11);
       const newToast: ToastState = { ...props, id, createdAt: Date.now() };
 

@@ -1304,6 +1304,28 @@
         "pauseMediaDescription": "ディクテーション開始時に音楽を自動的に一時停止",
         "title": "サウンドエフェクト"
       },
+      "notifications": {
+        "title": "通知",
+        "description": "OpenWhispr が表示できる通知を設定します",
+        "disableAll": "すべての通知を無効にする",
+        "disableAllDescription": "エラーメッセージ以外をすべて消音にする",
+        "meetingsCategory": "会議とカレンダー",
+        "meetingsCategoryDescription": "会議とカレンダーの通知",
+        "meetingDetection": "会議の検出",
+        "meetingDetectionDescription": "会議が検出されたときに通知して録音を開始できるようにする",
+        "calendarReminders": "カレンダーリマインダー",
+        "calendarRemindersDescription": "予定された会議がまもなく始まるときに通知する",
+        "updates": "アプリの更新",
+        "updatesDescription": "新しいバージョンが利用可能になったときに通知する",
+        "activityCategory": "アクティビティ",
+        "activityCategoryDescription": "更新、文字起こし、ダウンロード、クリップボードの通知",
+        "transcriptionStatus": "文字起こしの状態",
+        "transcriptionStatusDescription": "文字起こしの進捗と結果を通知する",
+        "modelDownloads": "モデルのダウンロード",
+        "modelDownloadsDescription": "ダウンロードの進捗と完了を通知する",
+        "clipboardOperations": "クリップボード操作",
+        "clipboardOperationsDescription": "テキストがクリップボードにコピーされたときに通知する"
+      },
       "clipboard": {
         "title": "クリップボード",
         "autoPaste": "自動貼り付け",

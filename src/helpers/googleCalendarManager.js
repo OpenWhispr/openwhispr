@@ -292,14 +292,17 @@ class GoogleCalendarManager {
     this.activeMeeting = event;
     this.notifiedMeetings.add(event.id);
 
-    const notif = new Notification({
-      title: event.summary || "Meeting",
-      body: "Meeting starting now",
-    });
-    notif.on("click", () => {
-      this.broadcastToWindows("gcal-start-recording", { event });
-    });
-    notif.show();
+    const nPrefs = this.windowManager?._notificationPrefs || {};
+    if (nPrefs.notificationsEnabled !== false && nPrefs.notifyCalendarReminders !== false) {
+      const notif = new Notification({
+        title: event.summary || "Meeting",
+        body: "Meeting starting now",
+      });
+      notif.on("click", () => {
+        this.broadcastToWindows("gcal-start-recording", { event });
+      });
+      notif.show();
+    }
 
     this.broadcastToWindows("gcal-meeting-starting", { event });
 

@@ -28,6 +28,15 @@ class WindowManager {
     this.transcriptionPreviewWindow = null;
     this.updateNotificationWindow = null;
     this._updateNotificationDismissed = false;
+    this._notificationPrefs = {
+      notificationsEnabled: true,
+      notifyMeetingDetection: true,
+      notifyCalendarReminders: true,
+      notifyUpdates: true,
+      notifyTranscriptionStatus: true,
+      notifyModelDownloads: true,
+      notifyClipboardOperations: true,
+    };
     this.tray = null;
     this.hotkeyManager = new HotkeyManager();
     this.dragManager = new DragManager();

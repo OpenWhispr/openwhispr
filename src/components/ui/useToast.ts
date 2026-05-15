@@ -1,11 +1,14 @@
 import * as React from "react";
 
+export type ToastCategory = "transcription" | "downloads" | "clipboard";
+
 export interface ToastProps {
   id?: string;
   title?: string;
   description?: string;
   action?: React.ReactNode;
   variant?: "default" | "destructive" | "success";
+  category?: ToastCategory;
   duration?: number;
   onClose?: () => void;
 }

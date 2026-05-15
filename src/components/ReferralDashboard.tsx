@@ -241,6 +241,7 @@ export function ReferralDashboard() {
         title: t("referral.toasts.copiedTitle"),
         description: t("referral.toasts.copiedDescription"),
         variant: "success",
+        category: "clipboard",
         duration: 2000,
       });
       setTimeout(() => setCopied(false), 2000);

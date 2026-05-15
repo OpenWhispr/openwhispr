@@ -99,6 +99,7 @@ export default function DeveloperSection() {
         title: t("developerSection.toasts.copied.title"),
         description: t("developerSection.toasts.copied.description"),
         variant: "success",
+        category: "clipboard",
         duration: 2000,
       });
       setTimeout(() => setCopiedPath(false), 2000);

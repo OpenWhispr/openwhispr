@@ -33,6 +33,8 @@ import {
   MessageSquare,
   FileAudio,
   Wand2,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
@@ -205,6 +207,7 @@ interface TranscriptionSectionProps {
     title: string;
     description: string;
     variant?: "default" | "destructive" | "success";
+    category?: "transcription" | "downloads" | "clipboard";
     duration?: number;
   }) => void;
 }
@@ -289,6 +292,7 @@ function TranscriptionSection({
       title: t(`settingsPage.transcription.toasts.${toastKey}.title`),
       description: t(`settingsPage.transcription.toasts.${toastKey}.description`),
       variant: "success",
+      category: "transcription",
       duration: 3000,
     });
   };
@@ -380,6 +384,7 @@ interface AiModelsSectionProps {
     title: string;
     description: string;
     variant?: "default" | "destructive" | "success";
+    category?: "transcription" | "downloads" | "clipboard";
     duration?: number;
   }) => void;
 }
@@ -702,6 +707,20 @@ export default function SettingsPage({
     setTranscriptionMode,
     remoteTranscriptionUrl,
     setRemoteTranscriptionUrl,
+    notificationsEnabled,
+    setNotificationsEnabled,
+    notifyMeetingDetection,
+    setNotifyMeetingDetection,
+    notifyCalendarReminders,
+    setNotifyCalendarReminders,
+    notifyUpdates,
+    setNotifyUpdates,
+    notifyTranscriptionStatus,
+    setNotifyTranscriptionStatus,
+    notifyModelDownloads,
+    setNotifyModelDownloads,
+    notifyClipboardOperations,
+    setNotifyClipboardOperations,
     audioCuesEnabled,
     setAudioCuesEnabled,
     pauseMediaOnDictation,
@@ -930,6 +949,7 @@ export default function SettingsPage({
   );
 
   const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
+  const [expandedNotifGroups, setExpandedNotifGroups] = useState<Set<string>>(new Set());
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -956,6 +976,26 @@ export default function SettingsPage({
     };
     loadAutoStart();
   }, [platform]);
+
+  useEffect(() => {
+    window.electronAPI?.syncNotificationPreferences?.({
+      notificationsEnabled,
+      notifyMeetingDetection,
+      notifyCalendarReminders,
+      notifyUpdates,
+      notifyTranscriptionStatus,
+      notifyModelDownloads,
+      notifyClipboardOperations,
+    });
+  }, [
+    notificationsEnabled,
+    notifyMeetingDetection,
+    notifyCalendarReminders,
+    notifyUpdates,
+    notifyTranscriptionStatus,
+    notifyModelDownloads,
+    notifyClipboardOperations,
+  ]);
 
   const handleAutoStartChange = async (enabled: boolean) => {
     if (window.electronAPI?.setAutoStartEnabled) {
@@ -2333,6 +2373,190 @@ export default function SettingsPage({
                     <Toggle checked={pauseMediaOnDictation} onChange={setPauseMediaOnDictation} />
                   </SettingsRow>
                 </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Notifications */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.notifications.title")}
+                description={t("settingsPage.general.notifications.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.general.notifications.disableAll")}
+                    description={t("settingsPage.general.notifications.disableAllDescription")}
+                  >
+                    <Toggle
+                      checked={!notificationsEnabled}
+                      onChange={(v) => setNotificationsEnabled(!v)}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+
+                {/* Meetings & Calendar */}
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={
+                      <button
+                        className="flex items-center gap-1.5 text-left"
+                        onClick={() => {
+                          setExpandedNotifGroups((prev) => {
+                            const next = new Set(prev);
+                            next.has("meetings") ? next.delete("meetings") : next.add("meetings");
+                            return next;
+                          });
+                        }}
+                      >
+                        {expandedNotifGroups.has("meetings") ? (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                        )}
+                        {t("settingsPage.general.notifications.meetingsCategory")}
+                      </button>
+                    }
+                    description={t("settingsPage.general.notifications.meetingsCategoryDescription")}
+                  >
+                    <Toggle
+                      checked={notifyMeetingDetection || notifyCalendarReminders}
+                      onChange={(v) => {
+                        setNotifyMeetingDetection(v);
+                        setNotifyCalendarReminders(v);
+                      }}
+                      disabled={!notificationsEnabled}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                {expandedNotifGroups.has("meetings") && (
+                  <>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.general.notifications.meetingDetection")}
+                        description={t("settingsPage.general.notifications.meetingDetectionDescription")}
+                        className="pl-8"
+                      >
+                        <Toggle
+                          checked={notifyMeetingDetection}
+                          onChange={setNotifyMeetingDetection}
+                          disabled={!notificationsEnabled}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.general.notifications.calendarReminders")}
+                        description={t("settingsPage.general.notifications.calendarRemindersDescription")}
+                        className="pl-8"
+                      >
+                        <Toggle
+                          checked={notifyCalendarReminders}
+                          onChange={setNotifyCalendarReminders}
+                          disabled={!notificationsEnabled}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  </>
+                )}
+
+                {/* Activity Feedback */}
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={
+                      <button
+                        className="flex items-center gap-1.5 text-left"
+                        onClick={() => {
+                          setExpandedNotifGroups((prev) => {
+                            const next = new Set(prev);
+                            next.has("activity") ? next.delete("activity") : next.add("activity");
+                            return next;
+                          });
+                        }}
+                      >
+                        {expandedNotifGroups.has("activity") ? (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                        )}
+                        {t("settingsPage.general.notifications.activityCategory")}
+                      </button>
+                    }
+                    description={t("settingsPage.general.notifications.activityCategoryDescription")}
+                  >
+                    <Toggle
+                      checked={
+                        notifyUpdates ||
+                        notifyTranscriptionStatus ||
+                        notifyModelDownloads ||
+                        notifyClipboardOperations
+                      }
+                      onChange={(v) => {
+                        setNotifyUpdates(v);
+                        setNotifyTranscriptionStatus(v);
+                        setNotifyModelDownloads(v);
+                        setNotifyClipboardOperations(v);
+                      }}
+                      disabled={!notificationsEnabled}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                {expandedNotifGroups.has("activity") && (
+                  <>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.general.notifications.updates")}
+                        description={t("settingsPage.general.notifications.updatesDescription")}
+                        className="pl-8"
+                      >
+                        <Toggle
+                          checked={notifyUpdates}
+                          onChange={setNotifyUpdates}
+                          disabled={!notificationsEnabled}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.general.notifications.transcriptionStatus")}
+                        description={t("settingsPage.general.notifications.transcriptionStatusDescription")}
+                        className="pl-8"
+                      >
+                        <Toggle
+                          checked={notifyTranscriptionStatus}
+                          onChange={setNotifyTranscriptionStatus}
+                          disabled={!notificationsEnabled}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.general.notifications.modelDownloads")}
+                        description={t("settingsPage.general.notifications.modelDownloadsDescription")}
+                        className="pl-8"
+                      >
+                        <Toggle
+                          checked={notifyModelDownloads}
+                          onChange={setNotifyModelDownloads}
+                          disabled={!notificationsEnabled}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("settingsPage.general.notifications.clipboardOperations")}
+                        description={t("settingsPage.general.notifications.clipboardOperationsDescription")}
+                        className="pl-8"
+                      >
+                        <Toggle
+                          checked={notifyClipboardOperations}
+                          onChange={setNotifyClipboardOperations}
+                          disabled={!notificationsEnabled}
+                        />
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  </>
+                )}
               </SettingsPanel>
             </div>
 

@@ -27,7 +27,7 @@ export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegration
     try {
       await navigator.clipboard.writeText(MCP_URL);
       setCopied(true);
-      toast({ title: t("integrations.mcp.copied"), variant: "success", duration: 2000 });
+      toast({ title: t("integrations.mcp.copied"), variant: "success", category: "clipboard", duration: 2000 });
       setTimeout(() => setCopied(false), 2000);
     } catch {
       /* noop */

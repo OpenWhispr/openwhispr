@@ -133,6 +133,13 @@ const BOOLEAN_SETTINGS = new Set([
   "dictationAgentDisableThinking",
   "noteFormattingDisableThinking",
   "chatAgentDisableThinking",
+  "notificationsEnabled",
+  "notifyMeetingDetection",
+  "notifyCalendarReminders",
+  "notifyUpdates",
+  "notifyTranscriptionStatus",
+  "notifyModelDownloads",
+  "notifyClipboardOperations",
 ]);
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
@@ -351,6 +358,13 @@ export interface SettingsState
   gcalAccounts: GoogleCalendarAccount[];
   gcalConnected: boolean;
   gcalEmail: string;
+  notificationsEnabled: boolean;
+  notifyMeetingDetection: boolean;
+  notifyCalendarReminders: boolean;
+  notifyUpdates: boolean;
+  notifyTranscriptionStatus: boolean;
+  notifyModelDownloads: boolean;
+  notifyClipboardOperations: boolean;
   meetingProcessDetection: boolean;
   meetingAudioDetection: boolean;
   speakerDiarizationEnabled: boolean;
@@ -530,6 +544,13 @@ export interface SettingsState
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
   setGcalAccounts: (accounts: GoogleCalendarAccount[]) => void;
+  setNotificationsEnabled: (value: boolean) => void;
+  setNotifyMeetingDetection: (value: boolean) => void;
+  setNotifyCalendarReminders: (value: boolean) => void;
+  setNotifyUpdates: (value: boolean) => void;
+  setNotifyTranscriptionStatus: (value: boolean) => void;
+  setNotifyModelDownloads: (value: boolean) => void;
+  setNotifyClipboardOperations: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setMeetingAudioDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
@@ -754,6 +775,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
   startMinimized: readBoolean("startMinimized", false),
+  notificationsEnabled: readBoolean("notificationsEnabled", true),
+  notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
+  notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
+  notifyUpdates: readBoolean("notifyUpdates", true),
+  notifyTranscriptionStatus: readBoolean("notifyTranscriptionStatus", true),
+  notifyModelDownloads: readBoolean("notifyModelDownloads", true),
+  notifyClipboardOperations: readBoolean("notifyClipboardOperations", true),
   ...(() => {
     let accounts: GoogleCalendarAccount[] = [];
     try {
@@ -1217,6 +1245,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       gcalEmail: accounts[0]?.email ?? "",
     });
   },
+  setNotificationsEnabled: createBooleanSetter("notificationsEnabled"),
+  setNotifyMeetingDetection: createBooleanSetter("notifyMeetingDetection"),
+  setNotifyCalendarReminders: createBooleanSetter("notifyCalendarReminders"),
+  setNotifyUpdates: createBooleanSetter("notifyUpdates"),
+  setNotifyTranscriptionStatus: createBooleanSetter("notifyTranscriptionStatus"),
+  setNotifyModelDownloads: createBooleanSetter("notifyModelDownloads"),
+  setNotifyClipboardOperations: createBooleanSetter("notifyClipboardOperations"),
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
   setMeetingAudioDetection: createBooleanSetter("meetingAudioDetection"),
   setSpeakerDiarizationEnabled: (value: boolean) => {
@@ -1774,6 +1809,25 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync meeting detection preferences on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    try {
+      const currentState = useSettingsStore.getState();
+      await window.electronAPI.syncNotificationPreferences?.({
+        notificationsEnabled: currentState.notificationsEnabled,
+        notifyMeetingDetection: currentState.notifyMeetingDetection,
+        notifyCalendarReminders: currentState.notifyCalendarReminders,
+        notifyUpdates: currentState.notifyUpdates,
+        notifyTranscriptionStatus: currentState.notifyTranscriptionStatus,
+        notifyModelDownloads: currentState.notifyModelDownloads,
+        notifyClipboardOperations: currentState.notifyClipboardOperations,
+      });
+    } catch (err) {
+      logger.warn(
+        "Failed to sync notification preferences on startup",
         { error: (err as Error).message },
         "settings"
       );
