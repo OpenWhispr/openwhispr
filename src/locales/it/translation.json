@@ -1304,6 +1304,28 @@
         "pauseMediaDescription": "Metti automaticamente in pausa la musica quando inizia la dettatura",
         "title": "Effetti sonori"
       },
+      "notifications": {
+        "title": "Notifiche",
+        "description": "Scegli quali notifiche OpenWhispr può mostrare",
+        "disableAll": "Disattiva tutte le notifiche",
+        "disableAllDescription": "Silenzia tutto tranne i messaggi di errore",
+        "meetingsCategory": "Riunioni e calendario",
+        "meetingsCategoryDescription": "Notifiche riunioni e calendario",
+        "meetingDetection": "Rilevamento riunioni",
+        "meetingDetectionDescription": "Avvisa quando viene rilevata una riunione per avviare la registrazione",
+        "calendarReminders": "Promemoria calendario",
+        "calendarRemindersDescription": "Avvisa quando una riunione programmata sta per iniziare",
+        "updates": "Aggiornamenti app",
+        "updatesDescription": "Avvisa quando è disponibile una nuova versione",
+        "activityCategory": "Attività",
+        "activityCategoryDescription": "Aggiornamenti, trascrizione, download e appunti",
+        "transcriptionStatus": "Stato trascrizione",
+        "transcriptionStatusDescription": "Mostra il progresso e i risultati della trascrizione",
+        "modelDownloads": "Download modelli",
+        "modelDownloadsDescription": "Mostra il progresso e il completamento dei download",
+        "clipboardOperations": "Operazioni appunti",
+        "clipboardOperationsDescription": "Avvisa quando il testo viene copiato negli appunti"
+      },
       "clipboard": {
         "title": "Appunti",
         "autoPaste": "Incollaggio automatico",

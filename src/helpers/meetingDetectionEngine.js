@@ -141,6 +141,12 @@ class MeetingDetectionEngine {
       detection.event = event;
     }
 
+    const nPrefs = this.windowManager._notificationPrefs || {};
+    if (nPrefs.notificationsEnabled === false || nPrefs.notifyMeetingDetection === false) {
+      debugLogger.info("Meeting notification suppressed by user preference", {}, "meeting");
+      return;
+    }
+
     this.windowManager.showMeetingNotification({
       detectionId,
       source,

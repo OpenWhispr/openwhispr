@@ -1485,6 +1485,28 @@
         "pauseMediaDescription": "Automatically pause music when dictation starts",
         "title": "Sound Effects"
       },
+      "notifications": {
+        "title": "Notifications",
+        "description": "Control which notifications OpenWhispr can show",
+        "disableAll": "Disable all notifications",
+        "disableAllDescription": "Silence everything except error messages",
+        "meetingsCategory": "Meetings & Calendar",
+        "meetingsCategoryDescription": "Meeting and calendar notifications",
+        "meetingDetection": "Meeting detection",
+        "meetingDetectionDescription": "Notify when a meeting is detected so you can start recording",
+        "calendarReminders": "Calendar reminders",
+        "calendarRemindersDescription": "Notify when a scheduled meeting is about to start",
+        "updates": "App updates",
+        "updatesDescription": "Notify when a new version is available",
+        "activityCategory": "Activity feedback",
+        "activityCategoryDescription": "Updates, transcription, downloads, and clipboard notifications",
+        "transcriptionStatus": "Transcription status",
+        "transcriptionStatusDescription": "Notify about transcription progress and results",
+        "modelDownloads": "Model downloads",
+        "modelDownloadsDescription": "Notify about model download progress and completion",
+        "clipboardOperations": "Clipboard operations",
+        "clipboardOperationsDescription": "Notify when text is copied to clipboard"
+      },
       "clipboard": {
         "title": "Clipboard",
         "autoPaste": "Automatic pasting",

@@ -1304,6 +1304,28 @@
         "pauseMediaDescription": "开始听写时自动暂停音乐",
         "title": "音效"
       },
+      "notifications": {
+        "title": "通知",
+        "description": "设置 OpenWhispr 可以显示哪些通知",
+        "disableAll": "禁用所有通知",
+        "disableAllDescription": "静音除错误消息外的所有内容",
+        "meetingsCategory": "会议与日历",
+        "meetingsCategoryDescription": "会议和日历通知",
+        "meetingDetection": "会议检测",
+        "meetingDetectionDescription": "检测到会议时通知您以便开始录音",
+        "calendarReminders": "日历提醒",
+        "calendarRemindersDescription": "预定会议即将开始时通知您",
+        "updates": "应用更新",
+        "updatesDescription": "有新版本可用时通知您",
+        "activityCategory": "活动反馈",
+        "activityCategoryDescription": "更新、转录、下载和剪贴板通知",
+        "transcriptionStatus": "转录状态",
+        "transcriptionStatusDescription": "通知转录进度和结果",
+        "modelDownloads": "模型下载",
+        "modelDownloadsDescription": "通知下载进度和完成状态",
+        "clipboardOperations": "剪贴板操作",
+        "clipboardOperationsDescription": "文本复制到剪贴板时通知您"
+      },
       "clipboard": {
         "title": "剪贴板",
         "autoPaste": "自动粘贴",

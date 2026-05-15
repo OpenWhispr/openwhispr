@@ -91,7 +91,10 @@ class UpdateManager {
           };
         }
         this.notifyRenderers("update-available", info);
-        if (this.windowManager && info && !this._suppressNotification) {
+        const nPrefs = this.windowManager?._notificationPrefs || {};
+        const notifAllowed =
+          nPrefs.notificationsEnabled !== false && nPrefs.notifyUpdates !== false;
+        if (this.windowManager && info && !this._suppressNotification && notifAllowed) {
           this.windowManager.showUpdateNotification(info).catch((err) => {
             console.error("Failed to show update notification:", err);
           });

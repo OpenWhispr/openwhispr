@@ -378,6 +378,7 @@ export default function ControlPanel() {
           title: t("controlPanel.history.copiedTitle"),
           description: t("controlPanel.history.copiedDescription"),
           variant: "success",
+          category: "clipboard",
           duration: 2000,
         });
       } catch (err) {
@@ -529,7 +530,7 @@ export default function ControlPanel() {
           }
 
           updateInStore(finalTranscription);
-          toast({ title: t("controlPanel.history.retrySuccess") });
+          toast({ title: t("controlPanel.history.retrySuccess"), category: "transcription" });
         } else {
           toast({
             title: t("controlPanel.history.retryError"),

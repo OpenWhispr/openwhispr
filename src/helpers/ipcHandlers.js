@@ -7192,6 +7192,15 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("sync-notification-preferences", async (_event, prefs) => {
+      try {
+        Object.assign(this.windowManager._notificationPrefs, prefs);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("meeting-set-speaker-diarization-enabled", async (_event, payload) => {
       try {
         this.speakerDiarizationEnabled = payload?.enabled !== false;
