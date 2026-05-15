@@ -135,7 +135,7 @@ const BOOLEAN_SETTINGS = new Set([
   "chatAgentDisableThinking",
 ]);
 
-const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
+const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts", "customPhrases"]);
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
@@ -466,6 +466,8 @@ export interface SettingsState
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
+  customPhrases: import("../types/phrases").CustomPhrase[];
+  setCustomPhrases: (phrases: import("../types/phrases").CustomPhrase[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
@@ -690,6 +692,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   customDictionary: readStringArray("customDictionary", []),
+  customPhrases: readStringArray("customPhrases", []) as unknown as import("../types/phrases").CustomPhrase[],
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
@@ -1006,6 +1009,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         "settings"
       );
     });
+  },
+
+  setCustomPhrases: (phrases) => {
+    if (isBrowser) localStorage.setItem("customPhrases", JSON.stringify(phrases));
+    set({ customPhrases: phrases });
   },
 
   setUiLanguage: (language: string) => {

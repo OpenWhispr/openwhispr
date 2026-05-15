@@ -589,6 +589,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return;
       }
 
+      if (result?.text) {
+        const phrases = settings.customPhrases;
+        if (phrases?.length) {
+          try {
+            const { applyPhrases } = await import("../utils/phraseSubstitution");
+            result.text = applyPhrases(result.text, phrases);
+          } catch (err) {
+            logger.warn(
+              "Phrase substitution failed",
+              { error: err?.message },
+              "transcription"
+            );
+          }
+        }
+      }
+
       this.lastAudioMetadata = {
         durationMs: metadata?.durationSeconds
           ? Math.round(metadata.durationSeconds * 1000)
