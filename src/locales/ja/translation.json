@@ -1302,6 +1302,8 @@
         "dictationSoundsDescription": "録音の開始・停止時に効果音を再生",
         "pauseMedia": "メディアを一時停止",
         "pauseMediaDescription": "ディクテーション開始時に音楽を自動的に一時停止",
+        "muteSystem": "システム音声をミュート",
+        "muteSystemDescription": "ディクテーション中はシステム出力をミュートし、再生音がマイクに拾われないようにします",
         "title": "サウンドエフェクト"
       },
       "clipboard": {
