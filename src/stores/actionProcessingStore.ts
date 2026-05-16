@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import reasoningService from "../services/ReasoningService";
-import { getEffectiveCleanupModel, getSettings } from "./settingsStore";
+import { getSettings } from "./settingsStore";
 import { appendDictionarySuffix } from "../config/prompts";
 import { generateNoteTitle } from "../utils/generateTitle";
 import type { ActionItem } from "../types/electron";
@@ -109,7 +109,7 @@ export function runBackgroundAction(
 ): void {
   if (processingFlags.get(noteId)) return;
 
-  const modelId = getEffectiveCleanupModel() || options.modelId;
+  const modelId = options.modelId;
   if (!modelId && !options.isCloudMode) {
     pushErrorEvent({ noteId, message: labels.noModel });
     return;
