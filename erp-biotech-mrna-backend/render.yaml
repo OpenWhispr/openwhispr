@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: erp-biotech-mrna-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        sync: false          # 部署后在 Render 控制台手动填入 Supabase 连接串
+      - key: SECRET_KEY
+        generateValue: true  # Render 自动生成随机密钥
+      - key: CORS_ORIGINS
+        value: '["https://your-app.vercel.app"]'   # 部署完 Vercel 后改成真实域名
