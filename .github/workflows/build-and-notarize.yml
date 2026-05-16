@@ -180,9 +180,20 @@ jobs:
       # Signed build runs only for trusted events (push to main, internal PRs).
       # Fork PRs and dependabot don't have Azure secret access, so they run
       # an unsigned build to keep CI green.
+      # Strip win.azureSignOptions from electron-builder.json instead of using
+      # --config.win.azureSignOptions=null on the CLI: yargs converts the CLI
+      # value to the string "null", which fails electron-builder 26.x schema
+      # validation. Mutating the JSON file in-place is the simplest reliable
+      # bypass for unsigned CI builds.
+      - name: Strip Azure signing config for unsigned build
+        if: ${{ github.actor == 'dependabot[bot]' || github.event.pull_request.head.repo.fork }}
+        shell: bash
+        run: |
+          node -e "const fs=require('fs');const p='electron-builder.json';const c=JSON.parse(fs.readFileSync(p,'utf8'));delete c.win.azureSignOptions;fs.writeFileSync(p,JSON.stringify(c,null,2));"
+
       - name: Build Application (unsigned, fork PRs and dependabot)
         if: ${{ github.actor == 'dependabot[bot]' || github.event.pull_request.head.repo.fork }}
-        run: npm run build:win -- --publish never --config.win.azureSignOptions=null
+        run: npm run build:win -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
           VITE_NEON_AUTH_URL: ${{ vars.VITE_NEON_AUTH_URL }}
