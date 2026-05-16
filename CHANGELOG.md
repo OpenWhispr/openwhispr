@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **OpenRouter STT**: Added OpenRouter as a first-class cloud transcription provider, sitting alongside OpenAI, Groq, Mistral, and Custom in the Speech-to-Text tab. OpenRouter's transcription endpoint takes a JSON body with base64-encoded audio in `input_audio.data` (not OpenAI-style multipart), so the request builder switches wire format when this provider is selected. Free-text model field accepts any OpenRouter STT model id (e.g. `google/chirp-3`). Closes #769.
+
 ## [1.7.0] - 2026-04-30
 
 A big release: new sign-in options, smoother meeting recording, faster cross-device sync, a more configurable AI setup, and the long-planned move to our new legal entity (Gizmo Labs Inc.) on macOS and Windows.

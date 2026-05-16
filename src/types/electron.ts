@@ -975,6 +975,10 @@ declare global {
         contextBias?: string[];
       }) => Promise<{ text: string }>;
 
+      // OpenRouter API key management
+      getOpenRouterKey: () => Promise<string | null>;
+      saveOpenRouterKey: (key: string) => Promise<void>;
+
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;

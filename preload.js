@@ -358,6 +358,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
 
+  // OpenRouter API
+  getOpenRouterKey: () => ipcRenderer.invoke("get-openrouter-key"),
+  saveOpenRouterKey: (key) => ipcRenderer.invoke("save-openrouter-key", key),
+
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),

@@ -117,6 +117,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     openaiApiKey,
     groqApiKey,
     mistralApiKey,
+    openrouterApiKey,
     customTranscriptionApiKey,
     updateTranscriptionSettings,
   } = useSettings();
@@ -199,7 +200,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 ? groqApiKey
                 : cloudTranscriptionProvider === "mistral"
                   ? mistralApiKey
-                  : customTranscriptionApiKey;
+                  : cloudTranscriptionProvider === "openrouter"
+                    ? openrouterApiKey
+                    : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -231,6 +234,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     openaiApiKey,
     groqApiKey,
     mistralApiKey,
+    openrouterApiKey,
     customTranscriptionApiKey,
   ]);
 
@@ -256,6 +260,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return groqApiKey;
       case "mistral":
         return mistralApiKey;
+      case "openrouter":
+        return openrouterApiKey;
       case "custom":
         return customTranscriptionApiKey || "";
       default:

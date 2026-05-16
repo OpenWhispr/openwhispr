@@ -202,6 +202,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq" },
   { id: "mistral", name: "Mistral" },
+  { id: "openrouter", name: "OpenRouter" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -273,6 +274,8 @@ export default function TranscriptionModelPicker({
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const openrouterApiKey = useSettingsStore((s) => s.openrouterApiKey);
+  const setOpenRouterApiKey = useSettingsStore((s) => s.setOpenRouterApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
@@ -534,6 +537,12 @@ export default function TranscriptionModelPicker({
 
       if (providerId === "custom") {
         onCloudModelSelect("whisper-1");
+        return;
+      }
+
+      if (providerId === "openrouter") {
+        if (provider) setCloudTranscriptionBaseUrl?.(provider.baseUrl);
+        onCloudModelSelect("");
         return;
       }
 
@@ -855,6 +864,54 @@ export default function TranscriptionModelPicker({
                     placeholder="whisper-1"
                     className="h-8 text-sm"
                   />
+                </div>
+              </div>
+            ) : selectedCloudProvider === "openrouter" ? (
+              <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium text-foreground">
+                      {t("common.apiKey")}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={createExternalLinkHandler("https://openrouter.ai/keys")}
+                      className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                    >
+                      {t("transcription.getKey")}
+                    </button>
+                  </div>
+                  <ApiKeyInput
+                    apiKey={openrouterApiKey}
+                    setApiKey={setOpenRouterApiKey}
+                    label=""
+                    helpText=""
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-medium text-foreground">
+                    {t("common.model")}
+                  </label>
+                  <Input
+                    value={selectedCloudModel}
+                    onChange={(e) => onCloudModelSelect(e.target.value)}
+                    placeholder="google/chirp-3"
+                    className="h-8 text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Browse models at{" "}
+                    <button
+                      type="button"
+                      onClick={createExternalLinkHandler(
+                        "https://openrouter.ai/models?modality=audio-%3Etext"
+                      )}
+                      className="text-primary hover:underline cursor-pointer"
+                    >
+                      openrouter.ai/models
+                    </button>
+                    .
+                  </p>
                 </div>
               </div>
             ) : (
