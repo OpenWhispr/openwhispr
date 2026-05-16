@@ -56,6 +56,7 @@ export interface ApiKeySettings {
   geminiApiKey: string;
   groqApiKey: string;
   mistralApiKey: string;
+  openrouterApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
@@ -215,6 +216,7 @@ function useSettingsInternal() {
     geminiApiKey: store.geminiApiKey,
     groqApiKey: store.groqApiKey,
     mistralApiKey: store.mistralApiKey,
+    openrouterApiKey: store.openrouterApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
     meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
@@ -250,6 +252,7 @@ function useSettingsInternal() {
     setGeminiApiKey: store.setGeminiApiKey,
     setGroqApiKey: store.setGroqApiKey,
     setMistralApiKey: store.setMistralApiKey,
+    setOpenRouterApiKey: store.setOpenRouterApiKey,
     customTranscriptionApiKey: store.customTranscriptionApiKey,
     setCustomTranscriptionApiKey: store.setCustomTranscriptionApiKey,
     cleanupCustomApiKey: store.cleanupCustomApiKey,

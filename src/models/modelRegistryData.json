@@ -191,6 +191,12 @@
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
         }
       ]
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "models": []
     }
   ],
   "cloudProviders": [

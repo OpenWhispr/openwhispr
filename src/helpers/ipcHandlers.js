@@ -505,7 +505,7 @@ class IPCHandlers {
 
   _resolveByokModel(provider, configuredModel) {
     const trimmed = (configuredModel || "").trim();
-    if (provider === "custom") return trimmed || "whisper-1";
+    if (provider === "custom" || provider === "openrouter") return trimmed || "whisper-1";
     if (trimmed) {
       const isGroq = trimmed.startsWith("whisper-large-v3");
       const isOpenAI = trimmed.startsWith("gpt-4o") || trimmed === "whisper-1";
@@ -2483,6 +2483,14 @@ class IPCHandlers {
       return this.environmentManager.saveMistralKey(key);
     });
 
+    ipcMain.handle("get-openrouter-key", async () => {
+      return this.environmentManager.getOpenRouterKey();
+    });
+
+    ipcMain.handle("save-openrouter-key", async (event, key) => {
+      return this.environmentManager.saveOpenRouterKey(key);
+    });
+
     ipcMain.handle(
       "proxy-mistral-transcription",
       async (event, { audioBuffer, model, language, contextBias }) => {
@@ -3650,6 +3658,9 @@ class IPCHandlers {
           } else if (provider === "mistral") {
             apiKey = this.environmentManager.getMistralKey();
             endpoint = MISTRAL_TRANSCRIPTION_URL;
+          } else if (provider === "openrouter") {
+            apiKey = this.environmentManager.getOpenRouterKey();
+            endpoint = "https://openrouter.ai/api/v1/audio/transcriptions";
           } else if (provider === "custom") {
             apiKey = this.environmentManager.getCustomTranscriptionKey();
             const base = (settings?.cloudTranscriptionBaseUrl || "").trim();
@@ -3666,18 +3677,38 @@ class IPCHandlers {
             throw new Error(`${provider} API key not configured`);
           }
 
-          const formData = new FormData();
-          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
-          formData.append("model", model);
-          if (language) formData.append("language", language);
-          const headers = {};
-          if (provider === "mistral") {
-            headers["x-api-key"] = apiKey;
-          } else if (apiKey) {
-            headers.Authorization = `Bearer ${apiKey}`;
+          let response;
+          if (provider === "openrouter") {
+            const body = {
+              model,
+              input_audio: {
+                data: Buffer.from(buffer).toString("base64"),
+                format: "webm",
+              },
+            };
+            if (language) body.language = language;
+            response = await proxyFetch(endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify(body),
+            });
+          } else {
+            const formData = new FormData();
+            formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+            formData.append("model", model);
+            if (language) formData.append("language", language);
+            const headers = {};
+            if (provider === "mistral") {
+              headers["x-api-key"] = apiKey;
+            } else if (apiKey) {
+              headers.Authorization = `Bearer ${apiKey}`;
+            }
+            response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
           }
 
-          const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
           if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`${provider} API Error: ${response.status} ${errorText}`);

@@ -12,6 +12,7 @@ const SECRET_KEYS = [
   "GEMINI_API_KEY",
   "GROQ_API_KEY",
   "MISTRAL_API_KEY",
+  "OPENROUTER_API_KEY",
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "CUSTOM_TRANSCRIPTION_API_KEY",
@@ -293,6 +294,14 @@ class EnvironmentManager {
 
   saveMistralKey(key) {
     return this._saveKey("MISTRAL_API_KEY", key);
+  }
+
+  getOpenRouterKey() {
+    return this._getKey("OPENROUTER_API_KEY");
+  }
+
+  saveOpenRouterKey(key) {
+    return this._saveKey("OPENROUTER_API_KEY", key);
   }
 
   getAssemblyAIKey() {

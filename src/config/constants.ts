@@ -76,6 +76,7 @@ export const API_ENDPOINTS = {
   GEMINI: "https://generativelanguage.googleapis.com/v1beta",
   GROQ_BASE: "https://api.groq.com/openai/v1",
   MISTRAL_BASE: "https://api.mistral.ai/v1",
+  OPENROUTER_BASE: "https://openrouter.ai/api/v1",
   TRANSCRIPTION_BASE: DEFAULT_TRANSCRIPTION_BASE,
   TRANSCRIPTION: buildApiUrl(DEFAULT_TRANSCRIPTION_BASE, "/audio/transcriptions"),
 } as const;

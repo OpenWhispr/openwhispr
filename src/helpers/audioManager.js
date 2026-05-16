@@ -55,12 +55,23 @@ const PLACEHOLDER_KEYS = {
   openai: "your_openai_api_key_here",
   groq: "your_groq_api_key_here",
   mistral: "your_mistral_api_key_here",
+  openrouter: "your_openrouter_api_key_here",
 };
 
 const isValidApiKey = (key, provider = "openai") => {
   if (!key || key.trim() === "") return false;
   const placeholder = PLACEHOLDER_KEYS[provider] || PLACEHOLDER_KEYS.openai;
   return key !== placeholder;
+};
+
+// Chunked to avoid `String.fromCharCode(...largeArray)` stack overflow on multi-MB clips.
+const bytesToBase64 = (bytes) => {
+  const CHUNK = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
 };
 
 const STREAMING_PROVIDERS = {
@@ -882,6 +893,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "openrouter") {
+      apiKey = s.openrouterApiKey;
+      if (!isValidApiKey(apiKey, "openrouter")) {
+        apiKey = await window.electronAPI.getOpenRouterKey?.();
+      }
+      if (!isValidApiKey(apiKey, "openrouter")) {
+        const err = new Error(
+          "OpenRouter API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else {
       // Default to OpenAI
       // Prefer store value (user-entered via UI) over main process (.env)
@@ -1483,7 +1506,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider === "custom" ||
         (!endpoint.includes("api.openai.com") &&
           !endpoint.includes("api.groq.com") &&
-          !endpoint.includes("api.mistral.ai"));
+          !endpoint.includes("api.mistral.ai") &&
+          !endpoint.includes("openrouter.ai"));
 
       const apiCallStart = performance.now();
 
@@ -1539,18 +1563,44 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         headers.Authorization = `Bearer ${apiKey}`;
       }
 
+      // OpenRouter's transcription API is JSON-only with base64 audio in `input_audio.data`,
+      // not multipart/form-data. See https://openrouter.ai/docs/api/api-reference/transcriptions.
+      const isOpenRouter = provider === "openrouter";
+      let requestBody;
+      if (isOpenRouter) {
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const base64Audio = bytesToBase64(new Uint8Array(audioBuffer));
+        const orFormat = extension === "mp4" ? "m4a" : extension;
+        const orBody = {
+          model,
+          input_audio: { data: base64Audio, format: orFormat },
+        };
+        if (language && language !== "auto") {
+          orBody.language = language;
+        }
+        headers["Content-Type"] = "application/json";
+        requestBody = JSON.stringify(orBody);
+      } else {
+        requestBody = formData;
+      }
+
       logger.debug(
         "STT request details",
         {
           endpoint,
           method: "POST",
           hasAuthHeader: !!apiKey,
-          formDataFields: [
-            "file",
-            "model",
-            language && language !== "auto" ? "language" : null,
-            shouldStream ? "stream" : null,
-          ].filter(Boolean),
+          bodyFormat: isOpenRouter ? "json" : "multipart",
+          fields: isOpenRouter
+            ? ["model", "input_audio", language && language !== "auto" ? "language" : null].filter(
+                Boolean
+              )
+            : [
+                "file",
+                "model",
+                language && language !== "auto" ? "language" : null,
+                shouldStream ? "stream" : null,
+              ].filter(Boolean),
         },
         "transcription"
       );
@@ -1558,7 +1608,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const response = await fetch(endpoint, {
         method: "POST",
         headers,
-        body: formData,
+        body: requestBody,
       });
 
       const responseContentType = response.headers.get("content-type") || "";
@@ -1737,6 +1787,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (provider === "custom") {
         return trimmedModel || "whisper-1";
       }
+      // OpenRouter: free-text model id (e.g. "google/chirp-3")
+      if (provider === "openrouter") {
+        return trimmedModel || "";
+      }
 
       // Validate model matches provider to handle settings migration
       if (trimmedModel) {
@@ -1805,6 +1859,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         base = API_ENDPOINTS.GROQ_BASE;
       } else if (currentProvider === "mistral") {
         base = API_ENDPOINTS.MISTRAL_BASE;
+      } else if (currentProvider === "openrouter") {
+        base = API_ENDPOINTS.OPENROUTER_BASE;
       } else {
         // OpenAI or other standard providers
         base = API_ENDPOINTS.TRANSCRIPTION_BASE;
