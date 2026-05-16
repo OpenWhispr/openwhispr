@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.core.audit import log_action
 from app.core.deps import get_current_user, require_role
 from app.database import get_db
 from app.models.batch import Batch
@@ -103,7 +104,7 @@ def list_materials(
 def create_material(
     body: MaterialCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_role("admin", "manager")),
+    current_user: User = Depends(require_role("admin", "manager")),
 ):
     mat_id = body.id or _next_id(db)
     if db.get(Material, mat_id):
@@ -111,7 +112,10 @@ def create_material(
     m = Material(**body.model_dump())
     m.id = mat_id
     db.add(m)
+    log_action(db, "CREATE", "material", mat_id, current_user.username,
+               f"created {body.name_cn} ({body.name_en})")
     db.commit()
+
     db.refresh(m)
     return m
 
@@ -134,11 +138,14 @@ def update_material(
     mat_id: str,
     body: MaterialUpdate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_role("admin", "manager")),
+    current_user: User = Depends(require_role("admin", "manager")),
 ):
     m = _get_or_404(mat_id, db)
-    for field, value in body.model_dump(exclude_none=True).items():
+    changes = {k: v for k, v in body.model_dump(exclude_none=True).items()}
+    for field, value in changes.items():
         setattr(m, field, value)
+    log_action(db, "UPDATE", "material", mat_id, current_user.username,
+               "updated " + ", ".join(f"{k}={v}" for k, v in changes.items()))
     db.commit()
     db.refresh(m)
     return m
@@ -150,9 +157,11 @@ def update_material(
 def delete_material(
     mat_id: str,
     db: Session = Depends(get_db),
-    _: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_role("admin")),
 ):
     m = _get_or_404(mat_id, db)
+    log_action(db, "DELETE", "material", mat_id, current_user.username,
+               f"deleted {m.name_cn} ({mat_id})")
     db.delete(m)
     db.commit()
 
@@ -190,6 +199,8 @@ def inbound(
         note=body.note,
     )
     db.add(tx)
+    log_action(db, "INBOUND", "material", mat_id, current_user.username,
+               f"入库 {body.qty} {m.unit}, lot={body.lot_no or '-'}, note={body.note or '-'}")
     db.commit()
     db.refresh(tx)
     return tx
@@ -227,6 +238,8 @@ def outbound(
         note=body.note,
     )
     db.add(tx)
+    log_action(db, "OUTBOUND", "material", mat_id, current_user.username,
+               f"出库 {body.qty} {m.unit}, lot={body.lot_no or '-'}, note={body.note or '-'}")
     db.commit()
     db.refresh(tx)
     return tx

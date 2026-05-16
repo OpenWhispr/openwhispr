@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +20,14 @@ class Settings(BaseSettings):
 
     # CORS — add the frontend origin
     CORS_ORIGINS: list[str] = ["http://localhost:5500", "http://127.0.0.1:5500", "null"]
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def fix_postgres_url(cls, v: str) -> str:
+        # Supabase / Render provide postgres:// but SQLAlchemy requires postgresql://
+        if isinstance(v, str) and v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql://", 1)
+        return v
 
 
 settings = Settings()

@@ -32,11 +32,13 @@ app.add_middleware(
 
 # ── routers ──────────────────────────────────────────────────────────────────
 from app.api.auth import router as auth_router
+from app.api.v1.audit import router as audit_router
 from app.api.v1.batches import router as batches_router
 from app.api.v1.dashboard import router as dashboard_router
 from app.api.v1.materials import router as materials_router
 from app.api.v1.reports import router as reports_router
 from app.api.v1.transactions import router as transactions_router
+from app.api.v1.users import router as users_router
 
 app.include_router(auth_router)
 app.include_router(materials_router, prefix="/api/v1")
@@ -44,6 +46,8 @@ app.include_router(batches_router, prefix="/api/v1")
 app.include_router(transactions_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(reports_router, prefix="/api/v1")
+app.include_router(audit_router, prefix="/api/v1")
+app.include_router(users_router, prefix="/api/v1")
 
 
 @app.get("/health")
