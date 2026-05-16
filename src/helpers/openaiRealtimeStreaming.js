@@ -26,6 +26,10 @@ class OpenAIRealtimeStreaming {
     this.coldStartBuffer = [];
     this.coldStartBufferSize = 0;
     this.speechStartedAt = null;
+    // Tracks transcription-completed item_ids we've already pushed onto
+    // completedSegments so server re-emissions of the same event don't
+    // duplicate text in the final transcript (#770).
+    this.seenItemIds = new Set();
   }
 
   getFullTranscript() {
@@ -50,6 +54,7 @@ class OpenAIRealtimeStreaming {
     this.coldStartBuffer = [];
     this.coldStartBufferSize = 0;
     this.speechStartedAt = null;
+    this.seenItemIds = new Set();
 
     const url = "wss://api.openai.com/v1/realtime?intent=transcription";
     debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
@@ -183,6 +188,17 @@ class OpenAIRealtimeStreaming {
         }
 
         case "conversation.item.input_audio_transcription.completed": {
+          // Server occasionally re-emits the same completion event for one
+          // conversation item, which would otherwise multiply text in the
+          // final transcript (#770). Dedup by item_id; when the field is
+          // missing fall through to the existing single-fire behaviour.
+          const itemId = typeof event.item_id === "string" ? event.item_id : undefined;
+          if (itemId && this.seenItemIds.has(itemId)) {
+            debugLogger.debug("OpenAI Realtime duplicate completion ignored", { itemId });
+            break;
+          }
+          if (itemId) this.seenItemIds.add(itemId);
+
           const transcript = (event.transcript || "").trim();
           if (transcript) {
             this.completedSegments.push(transcript);
