@@ -40,6 +40,7 @@ export interface CleanupSettings {
 
 export interface HotkeySettings {
   dictationKey: string;
+  pasteLastKey: string;
   meetingKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
   activationMode: "tap" | "push";
@@ -216,6 +217,7 @@ function useSettingsInternal() {
     groqApiKey: store.groqApiKey,
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
+    pasteLastKey: store.pasteLastKey,
     meetingKey: store.meetingKey,
     meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
     setMeetingHotkeyLayoutMode: store.setMeetingHotkeyLayoutMode,
@@ -255,6 +257,7 @@ function useSettingsInternal() {
     cleanupCustomApiKey: store.cleanupCustomApiKey,
     setCleanupCustomApiKey: store.setCleanupCustomApiKey,
     setDictationKey: store.setDictationKey,
+    setPasteLastKey: store.setPasteLastKey,
     setMeetingKey: store.setMeetingKey,
     setTheme: store.setTheme,
     activationMode: store.activationMode,

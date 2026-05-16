@@ -23,6 +23,7 @@ const {
   BrowserWindow,
   dialog,
   ipcMain,
+  Notification,
   session,
   systemPreferences,
 } = require("electron");
@@ -262,6 +263,7 @@ const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager")
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
+const { resolveStartupKey: resolvePasteLastStartupKey } = require("./src/helpers/pasteLastKey");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
 const sidecarRegistry = require("./src/helpers/sidecarRegistry");
 const { reapStaleSidecars } = require("./src/helpers/sidecarReaper");
@@ -855,6 +857,108 @@ async function startApp() {
     }
   });
 
+  // Set up paste-last-transcription hotkey
+  const pasteLastCallback = async () => {
+    if (hotkeyManager.isInListeningMode()) return;
+    try {
+      const transcriptions = databaseManager.getTranscriptions(1);
+      const latest = transcriptions?.[0];
+      if (!latest?.text) {
+        // Surface a one-liner so users know the hotkey fired but had nothing to paste,
+        // instead of leaving them to wonder if the binding is broken.
+        if (Notification.isSupported()) {
+          try {
+            new Notification({
+              title: i18nMain.t("settingsPage.general.pasteLastHotkey.emptyNotificationTitle"),
+              body: i18nMain.t("settingsPage.general.pasteLastHotkey.emptyNotificationBody"),
+              silent: true,
+            }).show();
+          } catch (notifyErr) {
+            debugLogger.debug("Paste-last empty notification failed", { error: notifyErr.message });
+          }
+        }
+        return;
+      }
+
+      // Blur main window so paste goes to target app (same as paste-text handler)
+      const mainWindow = windowManager.mainWindow;
+      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
+        if (process.platform === "darwin") {
+          mainWindow.hide();
+          await new Promise((r) => setTimeout(r, 120));
+          mainWindow.showInactive();
+        } else {
+          mainWindow.blur();
+          await new Promise((r) => setTimeout(r, 80));
+        }
+      }
+
+      await clipboardManager.pasteText(latest.text, { restoreClipboard: true });
+
+      // Start AutoLearn monitoring so user corrections are captured
+      if (textEditMonitor && ipcHandlers?._autoLearnEnabled) {
+        const targetPid = textEditMonitor.lastTargetPid || null;
+        setTimeout(() => {
+          try {
+            textEditMonitor.startMonitoring(latest.text, 30000, { targetPid });
+          } catch (monitorErr) {
+            debugLogger.debug("[AutoLearn] Failed to start monitoring for paste-last", {
+              error: monitorErr.message,
+            });
+          }
+        }, 500);
+      }
+    } catch (err) {
+      debugLogger.warn("Paste-last transcription failed", { error: err.message });
+    }
+  };
+  windowManager._pasteLastCallback = pasteLastCallback;
+  // Expose the callback to the tray so a menu item can trigger the same flow.
+  trayManager?.setPasteLastCallback?.(pasteLastCallback);
+
+  const keyToRegister = resolvePasteLastStartupKey(environmentManager.getPasteLastKey?.() ?? "");
+  if (keyToRegister) {
+    const result = await hotkeyManager.registerSlot(
+      "pasteLast",
+      keyToRegister,
+      pasteLastCallback
+    );
+    debugLogger.info(
+      "Paste-last hotkey startup registration",
+      { keyToRegister, ...result },
+      "hotkey"
+    );
+    if (!result.success) {
+      debugLogger.warn(
+        "Failed to register paste-last hotkey at startup",
+        { hotkey: keyToRegister, error: result.error, suggestions: result.suggestions },
+        "hotkey"
+      );
+    }
+  }
+
+  ipcMain.on("paste-last-key-changed", async (_event, hotkey) => {
+    if (hotkey) {
+      const result = await hotkeyManager.registerSlot(
+        "pasteLast",
+        hotkey,
+        pasteLastCallback
+      );
+      if (result.success) {
+        environmentManager.savePasteLastKey(hotkey);
+      } else {
+        debugLogger.warn(
+          "Failed to register paste-last hotkey via paste-last-key-changed",
+          { hotkey, error: result.error },
+          "hotkey"
+        );
+      }
+    } else {
+      hotkeyManager.unregisterSlot("pasteLast");
+      environmentManager.savePasteLastKey("");
+    }
+  });
+
   // Phase 2: Initialize remaining managers after windows are visible
   initializeDeferredManagers();
 
@@ -956,6 +1060,7 @@ async function startApp() {
 
   trayManager.setWindows(windowManager.mainWindow, windowManager.controlPanelWindow);
   trayManager.setWindowManager(windowManager);
+  trayManager.setDatabaseManager(databaseManager);
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 
