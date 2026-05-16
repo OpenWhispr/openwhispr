@@ -46,7 +46,11 @@ import ActionPicker from "./ActionPicker";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
-import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
+import {
+  useSettingsStore,
+  selectIsCloudNoteFormattingMode,
+  selectResolvedNoteFormatting,
+} from "../../stores/settingsStore";
 import { useFolderManagement } from "../../hooks/useFolderManagement";
 import { useNoteDragAndDrop } from "../../hooks/useNoteDragAndDrop";
 import { cn } from "../lib/utils";
@@ -131,8 +135,9 @@ export default function PersonalNotesView({
     setSyncedNoteIdState(id);
   };
   const { toast } = useToast();
-  const isCloudMode = useSettingsStore(selectIsCloudCleanupMode);
-  const effectiveModelId = useSettingsStore((s) => s.cleanupModel);
+  const isCloudMode = useSettingsStore(selectIsCloudNoteFormattingMode);
+  const noteFormatting = useSettingsStore(selectResolvedNoteFormatting);
+  const effectiveModelId = noteFormatting.model;
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const fileManagerName = navigator.platform.startsWith("Mac")
     ? "Finder"

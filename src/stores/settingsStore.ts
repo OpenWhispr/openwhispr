@@ -1442,6 +1442,11 @@ export const selectIsCloudChatAgentMode = (state: SettingsState) =>
   state.chatAgentMode === "openwhispr" &&
   state.chatAgentCloudMode === "openwhispr";
 
+export const selectIsCloudNoteFormattingMode = (state: SettingsState) => {
+  const cfg = selectResolvedNoteFormatting(state);
+  return state.isSignedIn && cfg.mode === "openwhispr" && cfg.cloudMode === "openwhispr";
+};
+
 export interface ResolvedMeetingTranscription {
   useLocalWhisper: boolean;
   whisperModel: string;
