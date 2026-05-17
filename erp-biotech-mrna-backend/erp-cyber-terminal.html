@@ -218,16 +218,12 @@ body::after{content:"";position:fixed;inset:0;background-image:url("data:image/s
 .sidebar.collapsed .nav-item{justify-content:center}
 .sidebar.collapsed .nav-item::after{content:attr(data-tip);position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);background:var(--bg-elev);border:1px solid var(--border-hi);color:var(--text-hi);font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 12px;white-space:nowrap;z-index:200;opacity:0;pointer-events:none;transition:opacity .15s;letter-spacing:.05em}
 .sidebar.collapsed .nav-item:hover::after{opacity:1}
-/* ── sidebar new-material button ── */
-.sb-new-btn{display:flex;align-items:center;gap:10px;padding:10px 12px;margin:10px 8px 4px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.22);color:var(--green);cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s;font-family:var(--font-ui);font-size:12px;letter-spacing:.1em;text-align:left;position:relative;overflow:hidden;width:calc(100% - 16px);flex-shrink:0;}
-.sb-new-btn:hover{background:rgba(74,222,128,.14);border-color:var(--green);box-shadow:0 0 14px var(--green-glow);}
-.sb-new-btn .sbn-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0;line-height:1;font-style:normal;}
-.sb-new-btn .sbn-text{white-space:nowrap;font-weight:600;flex:1;overflow:hidden;transition:opacity .15s;}
-.sb-new-btn .sbn-hint{font-size:9px;letter-spacing:.08em;color:rgba(74,222,128,.5);white-space:nowrap;transition:opacity .15s;}
-.sidebar.collapsed .sb-new-btn{justify-content:center;margin:10px 4px 4px;width:calc(100% - 8px);padding:10px;}
-.sidebar.collapsed .sb-new-btn .sbn-text,.sidebar.collapsed .sb-new-btn .sbn-hint{opacity:0;width:0;overflow:hidden;}
-.sidebar.collapsed .sb-new-btn::after{content:"新建物料";position:absolute;left:calc(100% + 8px);top:50%;transform:translateY(-50%);background:var(--bg-elev);border:1px solid var(--border-hi);color:var(--text-hi);font-family:'JetBrains Mono',monospace;font-size:11px;padding:5px 12px;white-space:nowrap;z-index:200;opacity:0;pointer-events:none;transition:opacity .15s;letter-spacing:.05em;}
-.sidebar.collapsed .sb-new-btn:hover::after{opacity:1;}
+/* ── stock-in "新建物料" inline button & dropdown helpers ── */
+.in-new-btn{margin-left:auto;background:none;border:1px solid var(--border-hi);color:var(--green);font-family:var(--font-ui);font-size:10px;letter-spacing:.08em;padding:2px 9px;cursor:pointer;transition:border-color .15s,background .15s;flex-shrink:0;}
+.in-new-btn:hover{border-color:var(--green);background:rgba(74,222,128,.08);}
+.mat-di-empty{padding:10px 14px;font-size:11px;color:var(--text-dim);letter-spacing:.04em;display:flex;align-items:center;justify-content:space-between;}
+.mat-di-new{padding:3px 9px;border:1px solid rgba(74,222,128,.3);color:var(--green);font-size:10.5px;letter-spacing:.06em;cursor:pointer;background:none;transition:background .12s,border-color .12s;white-space:nowrap;flex-shrink:0;}
+.mat-di-new:hover{background:rgba(74,222,128,.1);border-color:var(--green);}
 /* footer */
 .sb-footer{flex-shrink:0;border-top:1px solid var(--border);padding:10px 8px;display:flex;flex-direction:column;gap:2px}
 .sb-user{display:flex;align-items:center;gap:10px;padding:8px 10px;overflow:hidden}
@@ -699,11 +695,6 @@ textarea.fi{resize:vertical;min-height:72px;line-height:1.6}
   </div>
 
   <div class="sb-nav">
-    <button class="sb-new-btn" id="sbNewMatBtn" title="新建物料 (N)">
-      <span class="sbn-icon">＋</span>
-      <span class="sbn-text">新建物料</span>
-      <span class="sbn-hint">N</span>
-    </button>
     <div class="sb-sec">模块</div>
     <div class="nav-item active" data-nav="ledger" data-tip="物料台账">
       <span class="ni-icon">≡</span>
@@ -1167,7 +1158,7 @@ textarea.fi{resize:vertical;min-height:72px;line-height:1.6}
     <div class="modal-body">
       <div class="fgrid">
         <div class="fg s2">
-          <div class="flabel">物料 <span class="req">*</span></div>
+          <div class="flabel" style="display:flex;align-items:center;">物料 <span class="req">*</span><button class="in-new-btn" id="inNewMatBtn" type="button" title="找不到物料？点此新建">＋ 新建物料</button></div>
           <div class="mat-sw">
             <div class="mat-sin" id="inMatSin"><input type="text" id="inMatSearch" placeholder="搜索物料编码、名称、货号…" autocomplete="off"></div>
             <div class="mat-dd" id="inMatDd"></div>
@@ -1698,11 +1689,27 @@ function prefillIn(id){
 
 document.getElementById('inMatSearch').addEventListener('input',function(){
   const dd=document.getElementById('inMatDd');
-  const res=filterMats(this.value);
-  dd.innerHTML=matDdHTML(res);
-  dd.classList.toggle('open',this.value.length>0&&res.length>0);
+  const q=this.value;
+  const res=filterMats(q);
+  if(q.length>0&&res.length===0){
+    // 无匹配 → 显示「新建此物料」入口
+    dd.innerHTML='<div class="mat-di-empty"><span>未找到「'+q+'」</span>'
+      +'<span class="mat-di-new" data-action="new" data-q="'+q.replace(/"/g,'&quot;')+'">＋ 新建此物料</span></div>';
+    dd.classList.add('open');
+  }else{
+    dd.innerHTML=matDdHTML(res);
+    dd.classList.toggle('open',q.length>0&&res.length>0);
+  }
 });
 document.getElementById('inMatDd').addEventListener('click',function(e){
+  // 点击「新建此物料」
+  const newEl=e.target.closest('[data-action="new"]');
+  if(newEl){
+    const q=newEl.dataset.q||'';
+    this.classList.remove('open');
+    if(typeof window.openNewMatModal==='function') window.openNewMatModal(q);
+    return;
+  }
   const di=e.target.closest('.mat-di'); if(!di) return;
   prefillIn(di.dataset.id);
   this.classList.remove('open');
@@ -2962,14 +2969,19 @@ document.addEventListener('keydown',e=>{
   </div>
 </div>`);
 
-  function openNewMatModal(){
+  function openNewMatModal(prefillName){
     // Auto-fill next available ID
     const ids=MAT_LIST.map(m=>m.id).filter(id=>/^MAT-\d+$/.test(id));
     const next=ids.length?String(Math.max(...ids.map(id=>parseInt(id.split('-')[1])))+1).padStart(4,'0'):'0001';
     const el=document.getElementById('nmId');
     if(el&&!el.value) el.placeholder='MAT-'+next;
+    // 若从入库搜索框调用，预填中文名称
+    if(prefillName){
+      const cn=document.getElementById('nmNameCN');
+      if(cn&&!cn.value) cn.value=prefillName;
+    }
     document.getElementById('newMatModal').classList.add('open');
-    setTimeout(()=>document.getElementById('nmNameCN').focus(),80);
+    setTimeout(()=>document.getElementById(prefillName?'nmNameEN':'nmNameCN').focus(),80);
   }
   function closeNewMatModal(){
     document.getElementById('newMatModal').classList.remove('open');
@@ -2977,9 +2989,11 @@ document.addEventListener('keydown',e=>{
   }
   window.openNewMatModal=openNewMatModal;
 
-  // ── sidebar button ────────────────────────────────────────────────────
-  var sbBtn=document.getElementById('sbNewMatBtn');
-  if(sbBtn) sbBtn.addEventListener('click',openNewMatModal);
+  // ── 入库弹窗内"＋ 新建物料"按钮 ──────────────────────────────────────
+  var inNewBtn=document.getElementById('inNewMatBtn');
+  if(inNewBtn) inNewBtn.addEventListener('click',function(){
+    openNewMatModal(document.getElementById('inMatSearch').value.trim());
+  });
 
   document.getElementById('newMatClose').addEventListener('click',closeNewMatModal);
   document.getElementById('newMatCancel').addEventListener('click',closeNewMatModal);
@@ -3039,6 +3053,10 @@ document.addEventListener('keydown',e=>{
       // Reset form
       ['nmId','nmNameCN','nmNameEN','nmSku','nmSpec','nmUnit','nmCur','nmSafe','nmPrice','nmSupplier','nmMaker','nmCountry'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=el.type==='number'?'0':''});
       closeNewMatModal();
+      // 若入库弹窗开着，自动选中刚创建的物料，省去再搜索一次
+      if(document.getElementById('inModal').classList.contains('open')&&typeof prefillIn==='function'){
+        prefillIn(mat.id);
+      }
     }catch(e){
       errEl.textContent='创建失败: '+e.message;
     }finally{
