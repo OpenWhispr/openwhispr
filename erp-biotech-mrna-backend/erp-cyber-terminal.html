@@ -657,9 +657,9 @@ textarea.fi{resize:vertical;min-height:72px;line-height:1.6}
 .rp-sm-lbl{font-size:9px;color:var(--text-dim);letter-spacing:.18em;text-transform:uppercase;margin-top:6px}
 /* @@CSS-INJECT@@ */
 /* ── Login Overlay ──────────────────────────────────────────────────────── */
-#loginOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--bg-deep);}
+#loginOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(5,7,9,0.88);backdrop-filter:blur(4px);}
 #loginOverlay.hidden{display:none;}
-.login-box{width:380px;padding:40px;border:1px solid var(--border-hi);background:var(--bg-surface);}
+.login-box{width:400px;padding:44px 40px;border:1px solid var(--border-hi);background:var(--bg-surface);box-shadow:0 0 60px rgba(0,0,0,.7),0 0 0 1px var(--border-thin);}
 .login-logo{font-family:var(--font-display);font-size:22px;letter-spacing:.2em;color:var(--green);margin-bottom:4px;}
 .login-sub{font-size:10px;color:var(--text-dim);letter-spacing:.15em;margin-bottom:28px;}
 .login-title{font-size:10px;color:var(--text-mute);letter-spacing:.12em;margin-bottom:18px;border-bottom:1px solid var(--border-thin);padding-bottom:10px;}
@@ -2615,11 +2615,12 @@ document.addEventListener('keydown',e=>{
     sessionStorage.removeItem('materia-tok');
     sessionStorage.setItem('materia-lo','1');
     _tok = null;
-    showLoginOverlay();
+    location.reload();          // reload清空所有IIFE状态，防止req()用默认账号偷跑
   };
 
-  // ── expose login fn for login overlay ────────────────────────────────
+  // ── expose login fn & rerender for cross-IIFE access ─────────────────
   window.__erpLoginFn = login;
+  window.__erpRerender = function(){ rerender(); };
 
   // ── show current user in sidebar ──────────────────────────────────────
   async function loadSessionUser(){
@@ -2639,12 +2640,19 @@ document.addEventListener('keydown',e=>{
   loadSessionUser();
 
   async function req(path,opts={}){
-    if(!_tok) await login();
+    if(!_tok){
+      if(sessionStorage.getItem('materia-lo')==='1'){showLoginOverlay();throw new Error('已退出登录');}
+      await login();
+    }
     const r=await fetch(API+path,{
       ...opts,
       headers:{Authorization:'Bearer '+_tok,'Content-Type':'application/json',...(opts.headers||{})}
     });
-    if(r.status===401){_tok=null;return req(path,opts);}
+    if(r.status===401){
+      _tok=null;
+      if(sessionStorage.getItem('materia-lo')==='1'){showLoginOverlay();throw new Error('已退出登录');}
+      return req(path,opts);
+    }
     if(!r.ok) throw new Error('API '+r.status+' '+path);
     return r.json();
   }
@@ -3004,12 +3012,8 @@ document.addEventListener('keydown',e=>{
       const newEntry={id:mat.id,nameCN:mat.name_cn,nameEN:mat.name_en,sku:mat.sku,spec:mat.spec,unit:mat.unit,cur:mat.cur_stock,safe:mat.safe_stock,cond:mat.cond,supplier:mat.supplier,status:mat.status,batches:[]};
       MAT_LIST.push(newEntry);
       MATS[mat.id]={...newEntry,name:mat.name_cn};
-      // Re-render table
-      if(typeof rerender==='function') rerender();
-      else{
-        const tbody=document.querySelector('#ledgerTbody')||document.querySelector('table tbody');
-        if(tbody){const tr=document.createElement('tr');tr.className='tr-row';tr.setAttribute('data-id',mat.id);tr.innerHTML=`<td>${MAT_LIST.length}</td><td>${mat.id}</td><td>${mat.name_cn}</td><td>${mat.sku}</td><td>${mat.spec}</td><td>${mat.unit}</td><td>${mat.cur_stock}</td><td>${mat.safe_stock}</td><td>${mat.price}</td><td>${mat.cond}</td><td>${mat.supplier}</td>`;tbody.appendChild(tr);}
-      }
+      // Re-render table — use global window.__erpRerender exposed by main IIFE
+      if(typeof window.__erpRerender==='function') window.__erpRerender();
       if(typeof showToast==='function') showToast('✓ 物料 '+mat.id+' 已创建','ok');
       // Reset form
       ['nmId','nmNameCN','nmNameEN','nmSku','nmSpec','nmUnit','nmCur','nmSafe','nmPrice','nmSupplier','nmMaker','nmCountry'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=el.type==='number'?'0':''});
@@ -3034,9 +3038,14 @@ document.addEventListener('keydown',e=>{
   const API=window.ERP_API||'http://localhost:8000';
   function tok(){return sessionStorage.getItem('materia-tok')||'';}
   async function apiFetch(path,opts={},_retry){
-    // If token missing, try auto-login first
-    if(!tok()&&!_retry&&typeof window.__erpLoginFn==='function'){
+    // If token missing and NOT explicitly logged out, try auto-login first
+    if(!tok()&&!_retry&&typeof window.__erpLoginFn==='function'&&sessionStorage.getItem('materia-lo')!=='1'){
       try{await window.__erpLoginFn();}catch(e){}
+    }
+    // If explicitly logged out, block and show overlay
+    if(!tok()&&sessionStorage.getItem('materia-lo')==='1'){
+      if(typeof showLoginOverlay==='function') showLoginOverlay();
+      throw new Error('请重新登录');
     }
     const res=await fetch(API+path,{headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok()},...opts});
     // On 401, attempt one silent re-login then retry
@@ -3141,8 +3150,8 @@ document.addEventListener('keydown',e=>{
       const mat=await apiFetch('/api/v1/materials/'+_editId,{method:'PUT',body:JSON.stringify(body)});
       const idx=MAT_LIST.findIndex(x=>x.id===_editId);
       if(idx>=0){Object.assign(MAT_LIST[idx],{nameCN:mat.name_cn,nameEN:mat.name_en,sku:mat.sku,spec:mat.spec,unit:mat.unit,safe:mat.safe_stock,price:mat.price,cond:mat.cond,category:mat.category,supplier:mat.supplier,status:mat.status});}
-      if(MATS[_editId]) Object.assign(MATS[_editId],{nameCN:mat.name_cn,nameEN:mat.name_en});
-      if(typeof rerender==='function') rerender();
+      if(MATS[_editId]) Object.assign(MATS[_editId],{nameCN:mat.name_cn,nameEN:mat.name_en,sku:mat.sku,spec:mat.spec,unit:mat.unit,safe:mat.safe_stock,price:mat.price,cond:mat.cond,category:mat.category,supplier:mat.supplier,status:mat.status});
+      if(typeof window.__erpRerender==='function') window.__erpRerender();
       if(typeof showToast==='function') showToast('✓ 物料 '+_editId+' 已更新','ok');
       closeEditModal();
     }catch(e){errEl.textContent='保存失败: '+e.message;}
@@ -3156,7 +3165,7 @@ document.addEventListener('keydown',e=>{
       const idx=MAT_LIST.findIndex(x=>x.id===_editId);
       if(idx>=0) MAT_LIST.splice(idx,1);
       delete MATS[_editId];
-      if(typeof rerender==='function') rerender();
+      if(typeof window.__erpRerender==='function') window.__erpRerender();  // 刷新表格DOM
       if(typeof showToast==='function') showToast('已删除物料 '+_editId,'ok');
       closeEditModal();
       if(typeof closeDrawer==='function') closeDrawer();
