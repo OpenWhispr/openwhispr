@@ -3541,7 +3541,7 @@ document.addEventListener('keydown',e=>{
   function fmtSys(){
     // Display in CST (UTC+8)
     var now = new Date();
-    var cst = new Date(now.getTime() + (8*60 - now.getTimezoneOffset()) * 60000);
+    var cst = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + 8 * 3600000);
     return cst.getUTCFullYear()
       +'-'+ pad2(cst.getUTCMonth()+1)
       +'-'+ pad2(cst.getUTCDate())
