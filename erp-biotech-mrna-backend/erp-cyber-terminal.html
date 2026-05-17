@@ -2836,6 +2836,8 @@ document.addEventListener('keydown',e=>{
       // fetch all material details in parallel (15 requests, all localhost)
       var listResp=await req('/api/v1/materials?page_size=200');
       var details=await Promise.all(listResp.items.map(function(m){return req('/api/v1/materials/'+m.id);}));
+      // 先清空静态占位数据，再用后端数据填充，确保已删除的条目不再显示
+      Object.keys(MATS).forEach(function(k){delete MATS[k];});
       details.forEach(function(d){MATS[d.id]=mapMat(d,d);});
       bootLog(true,'sync <em>materials</em> ✓ '+listResp.total+' SKU · batches loaded');
       rerender();
