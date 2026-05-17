@@ -656,6 +656,22 @@ textarea.fi{resize:vertical;min-height:72px;line-height:1.6}
 .rp-sm-num{font-family:'Departure Mono',monospace;font-size:24px;color:var(--text-hi);line-height:1}
 .rp-sm-lbl{font-size:9px;color:var(--text-dim);letter-spacing:.18em;text-transform:uppercase;margin-top:6px}
 /* @@CSS-INJECT@@ */
+/* ── Login Overlay ──────────────────────────────────────────────────────── */
+#loginOverlay{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--bg-deep);}
+#loginOverlay.hidden{display:none;}
+.login-box{width:380px;padding:40px;border:1px solid var(--border-hi);background:var(--bg-surface);}
+.login-logo{font-family:var(--font-display);font-size:22px;letter-spacing:.2em;color:var(--green);margin-bottom:4px;}
+.login-sub{font-size:10px;color:var(--text-dim);letter-spacing:.15em;margin-bottom:28px;}
+.login-title{font-size:10px;color:var(--text-mute);letter-spacing:.12em;margin-bottom:18px;border-bottom:1px solid var(--border-thin);padding-bottom:10px;}
+.login-field{margin-bottom:14px;}
+.login-label{font-size:10px;color:var(--text-dim);letter-spacing:.1em;margin-bottom:5px;}
+.login-input{width:100%;background:var(--bg-elev);border:1px solid var(--border-hi);color:var(--text-hi);padding:9px 12px;font-family:var(--font-ui);font-size:12px;outline:none;}
+.login-input:focus{border-color:var(--green);}
+.login-btn{width:100%;background:var(--green);color:#000;border:none;padding:11px;font-family:var(--font-ui);font-size:12px;font-weight:600;letter-spacing:.12em;cursor:pointer;margin-top:8px;}
+.login-btn:hover{opacity:.88;}
+.login-btn:disabled{opacity:.5;cursor:default;}
+.login-err{color:var(--red);font-size:11px;margin-top:10px;min-height:16px;}
+.login-hint{font-size:10px;color:var(--text-dim);margin-top:18px;padding-top:14px;border-top:1px solid var(--border-thin);line-height:1.8;}
 </style>
 </head>
 <body>
@@ -1268,6 +1284,31 @@ textarea.fi{resize:vertical;min-height:72px;line-height:1.6}
   </div>
 </div>
 
+<!-- ── Login Overlay ──────────────────────────────────────────────────── -->
+<div id="loginOverlay" class="hidden">
+  <div class="login-box">
+    <div class="login-logo">MATERIA</div>
+    <div class="login-sub">BIOTECH MATERIALS ERP · CYBER TERMINAL</div>
+    <div class="login-title">▸ AUTHENTICATE</div>
+    <div class="login-field">
+      <div class="login-label">USERNAME</div>
+      <input class="login-input" id="loginUser" type="text" placeholder="username" autocomplete="username">
+    </div>
+    <div class="login-field">
+      <div class="login-label">PASSWORD</div>
+      <input class="login-input" id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="login-btn" id="loginSubmit">▶ LOGIN</button>
+    <div class="login-err" id="loginErr"></div>
+    <div class="login-hint">
+      Demo 账号：<br>
+      admin / admin123 &nbsp;管理员<br>
+      manager / manager123 &nbsp;库存经理<br>
+      op01 / op123 &nbsp;操作员
+    </div>
+  </div>
+</div>
+
 <script>
 // ─── API 地址配置（部署时改此处一行即可）─────────────────────────────────────
 window.ERP_API = 'https://erp-biotech-backend.onrender.com';
@@ -1297,6 +1338,18 @@ window.ERP_API = 'https://erp-biotech-backend.onrender.com';
     });
   }
 })();
+
+// ─── LOGIN OVERLAY HELPERS ────────────────────────────────────────────────────
+function showLoginOverlay(){
+  var el=document.getElementById('loginOverlay');
+  if(el) el.classList.remove('hidden');
+  var su=document.getElementById('sessionUser');
+  if(su) su.textContent='未登录';
+}
+function hideLoginOverlay(){
+  var el=document.getElementById('loginOverlay');
+  if(el) el.classList.add('hidden');
+}
 
 // ─── MATERIAL DATA ────────────────────────────────────────────────────────────
 const MATS = {
@@ -2560,14 +2613,21 @@ document.addEventListener('keydown',e=>{
   window.__erpLogout = function(){
     if(!confirm('确认退出登录？')) return;
     sessionStorage.removeItem('materia-tok');
+    sessionStorage.setItem('materia-lo','1');
     _tok = null;
-    location.reload();
+    showLoginOverlay();
   };
+
+  // ── expose login fn for login overlay ────────────────────────────────
+  window.__erpLoginFn = login;
 
   // ── show current user in sidebar ──────────────────────────────────────
   async function loadSessionUser(){
     try{
-      if(!_tok) await login();
+      if(!_tok){
+        if(sessionStorage.getItem('materia-lo')==='1'){showLoginOverlay();return;}
+        await login();
+      }
       const r=await fetch(API+'/auth/me',{headers:{'Authorization':'Bearer '+_tok}});
       if(r.ok){
         const u=await r.json();
@@ -2762,6 +2822,7 @@ document.addEventListener('keydown',e=>{
 
   // ── init ─────────────────────────────────────────────────────────────
   async function init(){
+    if(sessionStorage.getItem('materia-lo')==='1'){showLoginOverlay();return;}
     try{
       bootLog(true,'connect <em>MATERIA API</em> :8000 · authenticating…');
       // fetch all material details in parallel (15 requests, all localhost)
@@ -2972,8 +3033,19 @@ document.addEventListener('keydown',e=>{
 (function(){
   const API=window.ERP_API||'http://localhost:8000';
   function tok(){return sessionStorage.getItem('materia-tok')||'';}
-  async function apiFetch(path,opts={}){
+  async function apiFetch(path,opts={},_retry){
+    // If token missing, try auto-login first
+    if(!tok()&&!_retry&&typeof window.__erpLoginFn==='function'){
+      try{await window.__erpLoginFn();}catch(e){}
+    }
     const res=await fetch(API+path,{headers:{'Content-Type':'application/json','Authorization':'Bearer '+tok()},...opts});
+    // On 401, attempt one silent re-login then retry
+    if(res.status===401&&!_retry){
+      if(typeof window.__erpLoginFn==='function'){
+        try{await window.__erpLoginFn();}catch(e){showLoginOverlay();throw new Error('会话已过期，请重新登录');}
+      }
+      return apiFetch(path,opts,true);
+    }
     if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.detail||'HTTP '+res.status);}
     if(res.status===204) return null;
     return res.json();
@@ -3360,6 +3432,46 @@ document.addEventListener('keydown',e=>{
   }
   setTimeout(checkExpiryBanner,2000);
 
+})();
+
+// ─── LOGIN FORM HANDLER ──────────────────────────────────────────────────────
+(function(){
+  function doLogin(){
+    var userEl=document.getElementById('loginUser');
+    var passEl=document.getElementById('loginPass');
+    var errEl=document.getElementById('loginErr');
+    var btn=document.getElementById('loginSubmit');
+    var u=(userEl?userEl.value:'').trim();
+    var p=passEl?passEl.value:'';
+    if(!u||!p){if(errEl) errEl.textContent='请输入用户名和密码';return;}
+    if(btn){btn.disabled=true;btn.textContent='登录中…';}
+    if(errEl) errEl.textContent='';
+    var loginFn=window.__erpLoginFn;
+    if(!loginFn){if(errEl) errEl.textContent='系统未初始化，请刷新页面';if(btn){btn.disabled=false;btn.textContent='▶ LOGIN';}return;}
+    loginFn(u,p).then(function(){
+      sessionStorage.removeItem('materia-lo');
+      // reload so all IIFE state resets cleanly with the new token
+      location.reload();
+    }).catch(function(e){
+      if(errEl) errEl.textContent=e.message==='Login failed'?'用户名或密码错误':('登录失败: '+(e.message||'未知错误'));
+      if(btn){btn.disabled=false;btn.textContent='▶ LOGIN';}
+    });
+  }
+  // Wire up after DOM ready
+  var wireAttempts=0;
+  function wireLogin(){
+    var btn=document.getElementById('loginSubmit');
+    if(!btn){if(wireAttempts++<20) setTimeout(wireLogin,100);return;}
+    btn.addEventListener('click',doLogin);
+    var passEl=document.getElementById('loginPass');
+    var userEl=document.getElementById('loginUser');
+    if(passEl) passEl.addEventListener('keydown',function(e){if(e.key==='Enter') doLogin();});
+    if(userEl) userEl.addEventListener('keydown',function(e){if(e.key==='Enter'&&passEl) passEl.focus();});
+    // Show overlay if explicitly logged out
+    if(sessionStorage.getItem('materia-lo')==='1') showLoginOverlay();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wireLogin);
+  else wireLogin();
 })();
 </script>
 </body>
