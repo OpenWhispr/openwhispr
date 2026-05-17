@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "erp-cyber-terminal.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    { "src": "/", "dest": "/erp-cyber-terminal.html" },
+    { "src": "/erp-cyber-terminal.html", "dest": "/erp-cyber-terminal.html" }
+  ]
+}
