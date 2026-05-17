@@ -760,8 +760,8 @@ textarea.fi{resize:vertical;min-height:72px;line-height:1.6}
   <span class="tb-crumb">materia@lab-302 ~ /inventory <em>$</em> <span class="arg">./materia --view=ledger --sort=expiry</span></span>
   <div class="tb-right">
     <span><b>BUILD</b> 2026.05.14-r3</span>
-    <span><b>UPTIME</b> 14d 02:17:33</span>
-    <span><b>SYS</b> 2026-05-14 09:42:17 CST</span>
+    <span><b>UPTIME</b> <span id="tbUptime">--</span></span>
+    <span><b>SYS</b> <span id="tbSysClock">--</span></span>
   </div>
 </div>
 
@@ -3528,6 +3528,46 @@ document.addEventListener('keydown',e=>{
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wireLogin);
   else wireLogin();
+})();
+</script>
+
+<script>
+// ─── TITLEBAR LIVE CLOCK & UPTIME ──────────────────────────────────────────
+(function(){
+  var _start = Date.now();
+
+  function pad2(n){ return String(n).padStart(2,'0'); }
+
+  function fmtSys(){
+    // Display in CST (UTC+8)
+    var now = new Date();
+    var cst = new Date(now.getTime() + (8*60 - now.getTimezoneOffset()) * 60000);
+    return cst.getUTCFullYear()
+      +'-'+ pad2(cst.getUTCMonth()+1)
+      +'-'+ pad2(cst.getUTCDate())
+      +' '+ pad2(cst.getUTCHours())
+      +':'+ pad2(cst.getUTCMinutes())
+      +':'+ pad2(cst.getUTCSeconds())
+      +' CST';
+  }
+
+  function fmtUptime(){
+    var s = Math.floor((Date.now() - _start) / 1000);
+    var d = Math.floor(s / 86400); s %= 86400;
+    var h = Math.floor(s / 3600);  s %= 3600;
+    var m = Math.floor(s / 60);    s %= 60;
+    return (d>0 ? d+'d ' : '') + pad2(h)+':'+pad2(m)+':'+pad2(s);
+  }
+
+  function tick(){
+    var sc = document.getElementById('tbSysClock');
+    var up = document.getElementById('tbUptime');
+    if(sc) sc.textContent = fmtSys();
+    if(up) up.textContent = fmtUptime();
+  }
+
+  tick();
+  setInterval(tick, 1000);
 })();
 </script>
 </body>
