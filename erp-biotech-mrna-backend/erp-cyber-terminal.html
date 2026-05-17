@@ -765,14 +765,14 @@ textarea.fi{resize:vertical;min-height:72px;line-height:1.6}
       </span>
       <span class="theme-state" id="themeState">DARK</span>
     </button>
-    <div class="tbc-slot">
+    <button class="tbc-slot" id="logoutBtn" type="button" style="cursor:pointer;width:100%;text-align:left;background:none;border:1px dashed var(--border-thin);color:inherit;" onclick="window.__erpLogout()">
       <span class="tbc-slot-icon">⊙</span>
       <span class="tbc-slot-body">
         <span class="tbc-slot-title">USER SESSION</span>
-        <span class="tbc-slot-sub">Login · Profile · Workspace</span>
+        <span class="tbc-slot-sub" id="sessionUser">连接中...</span>
       </span>
-      <span class="tbc-wip">WIP</span>
-    </div>
+      <span class="tbc-wip" style="color:var(--red,#f66);border-color:var(--red,#f66);">退出</span>
+    </button>
     <div class="tbc-footer">Phase 2 · UI v3.0</div>
   </div>
 </header>
@@ -2555,6 +2555,28 @@ document.addEventListener('keydown',e=>{
     _tok=(await r.json()).access_token;
     sessionStorage.setItem('materia-tok',_tok);
   }
+
+  // ── logout ────────────────────────────────────────────────────────────
+  window.__erpLogout = function(){
+    if(!confirm('确认退出登录？')) return;
+    sessionStorage.removeItem('materia-tok');
+    _tok = null;
+    location.reload();
+  };
+
+  // ── show current user in sidebar ──────────────────────────────────────
+  async function loadSessionUser(){
+    try{
+      if(!_tok) await login();
+      const r=await fetch(API+'/auth/me',{headers:{'Authorization':'Bearer '+_tok}});
+      if(r.ok){
+        const u=await r.json();
+        const el=document.getElementById('sessionUser');
+        if(el) el.textContent=(u.full_name||u.username)+' · '+( u.role==='admin'?'管理员':u.role==='manager'?'经理':'操作员');
+      }
+    }catch(e){}
+  }
+  loadSessionUser();
 
   async function req(path,opts={}){
     if(!_tok) await login();
