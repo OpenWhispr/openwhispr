@@ -282,6 +282,7 @@ export default function PersonalNotesView({
   const debouncedSave = useCallback((noteId: number, title: string, content: string) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
+      saveTimeoutRef.current = null;
       setIsSaving(true);
       try {
         await window.electronAPI.updateNote(noteId, { title, content });
