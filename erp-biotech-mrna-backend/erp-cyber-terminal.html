@@ -3161,11 +3161,19 @@ document.addEventListener('keydown',e=>{
   document.getElementById('editMatDelete').addEventListener('click',async function(){
     if(!confirm('确认删除物料 '+_editId+' ？此操作不可恢复。')) return;
     try{
-      await apiFetch('/api/v1/materials/'+_editId,{method:'DELETE'});
+      try{
+        await apiFetch('/api/v1/materials/'+_editId,{method:'DELETE'});
+      }catch(apiErr){
+        // 404 / "not found" = 后端已不存在（之前删过但前端未刷新），
+        // 视为删除成功，继续清理前端状态
+        const alreadyGone=apiErr.message.toLowerCase().includes('not found')||apiErr.message.includes('404');
+        if(!alreadyGone) throw apiErr;
+      }
+      // ── 清理前端状态并刷新表格 ──────────────────────────────────────────
       const idx=MAT_LIST.findIndex(x=>x.id===_editId);
       if(idx>=0) MAT_LIST.splice(idx,1);
       delete MATS[_editId];
-      if(typeof window.__erpRerender==='function') window.__erpRerender();  // 刷新表格DOM
+      if(typeof window.__erpRerender==='function') window.__erpRerender();
       if(typeof showToast==='function') showToast('已删除物料 '+_editId,'ok');
       closeEditModal();
       if(typeof closeDrawer==='function') closeDrawer();
