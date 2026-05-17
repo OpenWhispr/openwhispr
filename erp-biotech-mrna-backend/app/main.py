@@ -11,6 +11,9 @@ from app.database import Base, engine
 async def lifespan(app: FastAPI):
     # Create all tables on startup (dev convenience — use Alembic for prod)
     Base.metadata.create_all(bind=engine)
+    # Seed initial data (users + sample materials) if DB is empty
+    from app.seed import run as seed_run
+    seed_run()
     yield
 
 
