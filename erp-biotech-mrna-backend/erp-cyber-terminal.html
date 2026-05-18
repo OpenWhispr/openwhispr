@@ -1315,10 +1315,14 @@ textarea.fi{resize:vertical;min-height:72px;line-height:1.6}
 
 <script>
 // ─── API 地址配置（部署时改此处一行即可）─────────────────────────────────────
-// file:// 协议时使用局域网后端（192.168.0.146），部署后使用 Render
-window.ERP_API = location.protocol === 'file:'
-  ? 'http://192.168.0.146:8000'
-  : 'https://erp-biotech-backend.onrender.com';
+// 优先级：URL参数 → file://局域网 → 线上Render
+(function(){
+  var p = new URLSearchParams(location.search).get('api');
+  if(p){ window.ERP_API = p; return; }
+  window.ERP_API = location.protocol === 'file:'
+    ? 'http://192.168.0.146:8000'
+    : 'https://erp-biotech-backend.onrender.com';
+})();
 
 // ─── THEME SWITCHER ────────────────────────────────────────────────────────────
 (function(){
