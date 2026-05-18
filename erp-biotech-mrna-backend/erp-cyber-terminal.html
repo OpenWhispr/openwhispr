@@ -1315,9 +1315,9 @@ textarea.fi{resize:vertical;min-height:72px;line-height:1.6}
 
 <script>
 // ─── API 地址配置（部署时改此处一行即可）─────────────────────────────────────
-// file:// 协议时自动使用本地后端，部署后使用 Render
+// file:// 协议时使用局域网后端（192.168.0.146），部署后使用 Render
 window.ERP_API = location.protocol === 'file:'
-  ? 'http://127.0.0.1:8000'
+  ? 'http://192.168.0.146:8000'
   : 'https://erp-biotech-backend.onrender.com';
 
 // ─── THEME SWITCHER ────────────────────────────────────────────────────────────
