@@ -4,9 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MATERIA · 物料台账 · Cyber Terminal</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Departure+Mono&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=JetBrains+Mono:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- Google Fonts removed: blocked in mainland China; fallback to system fonts below -->
 <script>
 try{document.documentElement.dataset.theme=localStorage.getItem('materia-theme')||'dark';}catch(e){}
 </script>
@@ -20,7 +18,7 @@ try{document.documentElement.dataset.theme=localStorage.getItem('materia-theme')
   --amber:#f59e0b;--amber-glow:rgba(245,158,11,.4);
   --red:#f87171;--red-glow:rgba(248,113,113,.4);
   --blue:#60a5fa;--blue-dim:#1e3a5f;
-  --font-ui:'JetBrains Mono','Noto Sans SC',monospace;--font-display:'Departure Mono','JetBrains Mono',monospace;
+  --font-ui:'Cascadia Code','Consolas','SF Mono','Menlo',monospace;--font-display:'Cascadia Code','Consolas','Courier New',monospace;
   --scanline-opacity:1;--paper-opacity:0;--panel-shadow:none;--radius-soft:0px;
 }
 [data-theme="light"]{
@@ -31,7 +29,7 @@ try{document.documentElement.dataset.theme=localStorage.getItem('materia-theme')
   --amber:#8c6010;--amber-glow:rgba(140,96,16,.16);
   --red:#a82c1e;--red-glow:rgba(168,44,30,.14);
   --blue:#285f81;--blue-dim:#d8e2e5;
-  --font-ui:'EB Garamond','Noto Sans SC',serif;--font-display:'EB Garamond','Noto Sans SC',serif;
+  --font-ui:'Georgia','SimSun','宋体',serif;--font-display:'Georgia','SimSun','宋体',serif;
   --scanline-opacity:0;--paper-opacity:.036;--panel-shadow:0 4px 20px rgba(40,31,20,.08);--radius-soft:8px;
 }
 html.theme-transitioning,html.theme-transitioning *{transition:background-color .38s ease,color .3s ease,border-color .38s ease,box-shadow .38s ease,opacity .32s ease, text-shadow .32s ease!important}
