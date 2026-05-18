@@ -153,6 +153,9 @@ function createStallChecker(onStall) {
 
 async function downloadYouTube(url, onProgress, abortSignal) {
   const { create, constants } = require("youtube-dl-exec");
+  if (!constants.YOUTUBE_DL_PATH) {
+    throw new Error("yt-dlp binary not found — youtube-dl-exec postinstall may have failed");
+  }
   const binaryPath = constants.YOUTUBE_DL_PATH.replace("app.asar", "app.asar.unpacked");
   const youtubedl = create(binaryPath);
 
@@ -353,7 +356,12 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
   const extMatch = urlPath.match(/\.([a-zA-Z0-9]{2,5})$/);
   const ext = extMatch ? extMatch[1] : "audio";
   const fileName = path.basename(urlPath, `.${ext}`) || "audio";
-  const title = decodeURIComponent(fileName).replace(/[_-]+/g, " ");
+  let title;
+  try {
+    title = decodeURIComponent(fileName).replace(/[_-]+/g, " ");
+  } catch {
+    title = fileName.replace(/[_-]+/g, " ");
+  }
   const tempPath = path.join(getSafeTempDir(), `ow-url-${Date.now()}.${ext}`);
 
   onProgress?.({ stage: "downloading", percent: 0, title });

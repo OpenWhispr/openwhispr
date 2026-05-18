@@ -93,7 +93,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   } | null>(null);
   const [downloadedTempPath, setDownloadedTempPath] = useState<string | null>(null);
   const downloadedTempPathRef = useRef(downloadedTempPath);
-  downloadedTempPathRef.current = downloadedTempPath;
+  useEffect(() => {
+    downloadedTempPathRef.current = downloadedTempPath;
+  }, [downloadedTempPath]);
   const [urlExpanded, setUrlExpanded] = useState(false);
 
   const batch = useBatchQueue();
