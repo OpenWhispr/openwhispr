@@ -26,7 +26,7 @@ function resolveReasoningRoute(text, settings, agentName) {
   if (!cleanupReachable && !agentReachable) return { kind: "skip" };
 
   const invoked = !!agentName && detectAgentName(text, agentName);
-  if (agentReachable && (!cleanupReachable || invoked)) {
+  if (agentReachable && invoked) {
     const provider = settings.dictationAgentProvider?.trim() || undefined;
     const isSelfHostedAgent =
       settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl;
@@ -51,7 +51,8 @@ function resolveReasoningRoute(text, settings, agentName) {
       },
     };
   }
-  return { kind: "cleanup" };
+  if (cleanupReachable) return { kind: "cleanup" };
+  return { kind: "skip" };
 }
 
 const PLACEHOLDER_KEYS = {
