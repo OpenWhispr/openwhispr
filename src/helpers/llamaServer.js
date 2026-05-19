@@ -479,7 +479,8 @@ class LlamaServerManager {
 
             try {
               const response = JSON.parse(data);
-              const text = response.choices?.[0]?.message?.content || "";
+              const message = response.choices?.[0]?.message;
+              const text = message?.content || message?.reasoning_content || "";
               resolve(text.trim());
             } catch (e) {
               reject(new Error(`Failed to parse llama-server response: ${e.message}`));
