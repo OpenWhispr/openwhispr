@@ -42,6 +42,7 @@ function resolveReasoningRoute(text, settings, agentName) {
           isCustomAgent || isSelfHostedAgent
             ? settings.dictationAgentCustomApiKey || undefined
             : undefined,
+        disableThinking: settings.dictationAgentDisableThinking,
         systemPrompt: resolvePrompt("dictationAgent", {
           agentName,
           language: settings.preferredLanguage,
@@ -51,7 +52,14 @@ function resolveReasoningRoute(text, settings, agentName) {
       },
     };
   }
-  if (cleanupReachable) return { kind: "cleanup" };
+  if (cleanupReachable) {
+    return {
+      kind: "cleanup",
+      config: {
+        disableThinking: settings.cleanupDisableThinking,
+      },
+    };
+  }
   return { kind: "skip" };
 }
 
@@ -1075,13 +1083,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (route.kind === "skip") return normalizedText;
 
         const targetModel = route.kind === "agent" ? route.model : cleanupModel;
-        const reasoningConfig = route.kind === "agent" ? route.config : undefined;
+        const reasoningConfig = route.config;
 
         logger.logReasoning("SENDING_TO_REASONING", {
           preparedTextLength: normalizedText.length,
           model: targetModel,
           provider: route.config?.provider || cleanupProvider,
           path: route.kind,
+          disableThinking: reasoningConfig?.disableThinking,
         });
 
         const result = await this.processWithReasoningModel(
