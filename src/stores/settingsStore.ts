@@ -192,11 +192,7 @@ function migrateProviderSettings() {
     localStorage.setItem("remoteTranscriptionType", "openai-compatible");
     const legacyBaseUrl = localStorage.getItem("cloudTranscriptionBaseUrl");
     const existingRemoteUrl = localStorage.getItem("remoteTranscriptionUrl");
-    if (
-      !existingRemoteUrl &&
-      legacyBaseUrl &&
-      legacyBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE
-    ) {
+    if (!existingRemoteUrl && legacyBaseUrl && legacyBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE) {
       localStorage.setItem("remoteTranscriptionUrl", legacyBaseUrl);
     }
   }
