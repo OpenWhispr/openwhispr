@@ -20,6 +20,7 @@ function suppressThinking(requestBody: Record<string, unknown>, providerKey: str
   } else {
     requestBody.reasoning_effort = "none";
   }
+  requestBody.chat_template_kwargs = { enable_thinking: false };
 }
 
 export function applyThinkingSuppression(
