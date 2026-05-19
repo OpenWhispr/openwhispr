@@ -1527,6 +1527,12 @@ class IPCHandlers {
         if (rel.startsWith("..") || path.isAbsolute(rel)) {
           return { success: false, error: "Not an OpenWhispr temp file" };
         }
+        if (process.platform !== "win32") {
+          const stat = fs.lstatSync(real);
+          if (stat.isSymbolicLink()) {
+            return { success: false, error: "Not an OpenWhispr temp file" };
+          }
+        }
         fs.unlinkSync(real);
         return { success: true };
       } catch (error) {
@@ -2135,11 +2141,16 @@ class IPCHandlers {
 
     ipcMain.handle("merge-speaker-text", async (event, { segments, text, duration }) => {
       try {
-        if (!Array.isArray(segments) || typeof text !== "string" || typeof duration !== "number") {
+        if (!Array.isArray(segments) || typeof text !== "string" || typeof duration !== "number" || !isFinite(duration)) {
           return { success: false, error: "Invalid arguments" };
         }
+        const sanitizedSegments = segments.map((s) => ({
+          speaker: typeof s.speaker === "string" ? s.speaker.slice(0, 100) : "unknown",
+          start: typeof s.start === "number" && isFinite(s.start) ? s.start : 0,
+          end: typeof s.end === "number" && isFinite(s.end) ? s.end : 0,
+        }));
         const { mergeSpeakersWithText, formatSpeakerTranscript } = require("./speakerMerge");
-        const merged = mergeSpeakersWithText(segments, text, duration);
+        const merged = mergeSpeakersWithText(sanitizedSegments, text, duration);
         return { success: true, text: formatSpeakerTranscript(merged) };
       } catch (error) {
         debugLogger.error("Speaker merge error", { error: error.message });
@@ -2499,7 +2510,7 @@ class IPCHandlers {
         if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
           return { success: false, error: "Only HTTP/HTTPS URLs are allowed" };
         }
-        await shell.openExternal(url);
+        await shell.openExternal(parsed.href);
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };

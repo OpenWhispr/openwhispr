@@ -401,6 +401,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const handleTranscribe = async () => {
     if (!file) return;
+    const currentFile = file;
+    const currentTempPath = downloadedTempPath;
     setState("transcribing");
     setError(null);
     setProgress(0);
@@ -438,7 +440,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
       const diarizePromise =
         diarizationEnabled && diarizationModelsReady && !byokUseDiarize
-          ? window.electronAPI.diarizeAudioFile?.(file.path, {
+          ? window.electronAPI.diarizeAudioFile?.(currentFile.path, {
               numSpeakers: diarizationNumSpeakers ? Number(diarizationNumSpeakers) : undefined,
             }).catch(() => null)
           : null;
@@ -447,7 +449,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
       if (isOpenWhisprCloud) {
         res = await withSessionRefresh(async () => {
-          const r = await window.electronAPI.transcribeAudioFileCloud!(file.path);
+          const r = await window.electronAPI.transcribeAudioFileCloud!(currentFile.path);
           if (!r.success && r.code) {
             throw Object.assign(new Error(r.error || "Cloud transcription failed"), {
               code: r.code,
@@ -456,13 +458,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           return r;
         });
       } else if (useLocalWhisper) {
-        res = await window.electronAPI.transcribeAudioFile(file.path, {
+        res = await window.electronAPI.transcribeAudioFile(currentFile.path, {
           provider: localTranscriptionProvider as "whisper" | "nvidia",
           model: localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel,
         });
       } else {
         res = await window.electronAPI.transcribeAudioFileByok!({
-          filePath: file.path,
+          filePath: currentFile.path,
           apiKey: getActiveApiKey(),
           baseUrl: cloudTranscriptionBaseUrl || "",
           model: cloudTranscriptionModel,
@@ -479,14 +481,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setResult(res.text);
 
         let title: string;
-        if (file.fromUrl) {
-          title = file.name;
+        if (currentFile.fromUrl) {
+          title = currentFile.name;
         } else {
           const textFallback = res.text.trim().split(/\s+/).slice(0, 6).join(" ");
           const fallbackTitle =
             textFallback.length > 0
               ? textFallback + (res.text.trim().split(/\s+/).length > 6 ? "..." : "")
-              : file.name.replace(/\.[^.]+$/, "");
+              : currentFile.name.replace(/\.[^.]+$/, "");
           const aiTitle = await generateTitle(res.text);
           title = aiTitle || fallbackTitle;
         }
@@ -516,13 +518,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           title,
           finalText,
           "upload",
-          file.name,
+          currentFile.name,
           null,
           folderId
         );
         if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);
-        if (downloadedTempPath) {
-          window.electronAPI.deleteTempFile(downloadedTempPath);
+        if (currentTempPath) {
+          window.electronAPI.deleteTempFile(currentTempPath);
           setDownloadedTempPath(null);
         }
         setState("complete");

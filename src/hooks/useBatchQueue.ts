@@ -192,10 +192,11 @@ export function useBatchQueue() {
             }
           })();
 
-          const skipLocalDiarize = !transcribeOpts.useLocalWhisper &&
-            !transcribeOpts.isOpenWhisprCloud;
+          const byokUseDiarize = diarizationOpts.enabled &&
+            !transcribeOpts.useLocalWhisper && !transcribeOpts.isOpenWhisprCloud &&
+            (transcribeOpts.cloudTranscriptionProvider === "openai" || transcribeOpts.cloudTranscriptionProvider === "mistral");
 
-          const diarizePromise = diarizationOpts.enabled && filePath && !skipLocalDiarize
+          const diarizePromise = diarizationOpts.enabled && filePath && !byokUseDiarize
             ? window.electronAPI.diarizeAudioFile?.(filePath, {
                 numSpeakers: diarizationOpts.numSpeakers ?? undefined,
               }).catch(() => null)

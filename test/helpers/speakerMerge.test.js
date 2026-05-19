@@ -61,6 +61,30 @@ it("formatSpeakerTranscript formats with labels and timestamps", () => {
   expect(output).toContain("Hello there.");
 });
 
+it("mergeSpeakersWithText handles duration=0 with segments", () => {
+  const segments = [
+    { start: 0, end: 5, speaker: "speaker_0" },
+  ];
+  const text = "Short clip text.";
+  const result = mergeSpeakersWithText(segments, text, 0);
+  expect(result.length).toBeGreaterThanOrEqual(1);
+  expect(result[0].text).toContain("Short clip text");
+});
+
+it("mergeSpeakersWithText handles zero-duration segment", () => {
+  const segments = [
+    { start: 0, end: 0, speaker: "speaker_0" },
+  ];
+  const text = "Some text.";
+  const result = mergeSpeakersWithText(segments, text, 10);
+  expect(result.length).toBeGreaterThanOrEqual(1);
+  expect(result[0].text).toContain("Some text");
+});
+
+it("formatSpeakerTranscript returns empty string for empty input", () => {
+  expect(formatSpeakerTranscript([])).toBe("");
+});
+
 it("formatSpeakerTranscript formats minutes and seconds correctly", () => {
   const merged = [
     { speaker: "speaker_0", text: "Long segment.", start: 0, end: 125 },

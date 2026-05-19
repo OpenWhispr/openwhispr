@@ -205,8 +205,8 @@ class DatabaseManager {
         this.db
           .prepare("INSERT OR IGNORE INTO folders (name, is_default, sort_order) VALUES ('Videos', 1, ?)")
           .run((maxOrder?.m ?? 1) + 1);
-      } else if (!videosFolder.is_default) {
-        this.db.prepare("UPDATE folders SET is_default = 1 WHERE name = 'Videos'").run();
+      } else if (!videosFolder.is_default && videosFolder.sort_order === 2) {
+        this.db.prepare("UPDATE folders SET is_default = 1 WHERE id = ?").run(videosFolder.id);
       }
 
       this.db.exec(`
