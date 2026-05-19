@@ -1498,7 +1498,7 @@
         "calendarRemindersDescription": "Notify when a scheduled meeting is about to start",
         "updates": "App updates",
         "updatesDescription": "Notify when a new version is available",
-        "activityCategory": "Activity feedback",
+        "activityCategory": "App activity",
         "activityCategoryDescription": "Updates, transcription, downloads, and clipboard notifications",
         "transcriptionStatus": "Transcription status",
         "transcriptionStatusDescription": "Notify about transcription progress and results",

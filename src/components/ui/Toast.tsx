@@ -30,13 +30,13 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const toast = React.useCallback(
-    (props: Omit<ToastProps, "id">) => {
+    (props: Omit<ToastProps, "id">): string | null => {
       if (props.variant !== "destructive") {
         const s = useSettingsStore.getState();
-        if (!s.notificationsEnabled) return "";
-        if (props.category === "transcription" && !s.notifyTranscriptionStatus) return "";
-        if (props.category === "downloads" && !s.notifyModelDownloads) return "";
-        if (props.category === "clipboard" && !s.notifyClipboardOperations) return "";
+        if (!s.notificationsEnabled) return null;
+        if (props.category === "transcription" && !s.notifyTranscriptionStatus) return null;
+        if (props.category === "downloads" && !s.notifyModelDownloads) return null;
+        if (props.category === "clipboard" && !s.notifyClipboardOperations) return null;
       }
 
       const id = Math.random().toString(36).substring(2, 11);

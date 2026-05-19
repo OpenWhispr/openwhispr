@@ -141,20 +141,19 @@ class MeetingDetectionEngine {
       detection.event = event;
     }
 
-    const nPrefs = this.windowManager._notificationPrefs || {};
-    if (nPrefs.notificationsEnabled === false || nPrefs.notifyMeetingDetection === false) {
+    const nPrefs = this.windowManager.notificationPrefs || {};
+    if (nPrefs.notificationsEnabled !== false && nPrefs.notifyMeetingDetection !== false) {
+      this.windowManager.showMeetingNotification({
+        detectionId,
+        source,
+        key,
+        title,
+        body,
+        event,
+      });
+    } else {
       debugLogger.info("Meeting notification suppressed by user preference", {}, "meeting");
-      return;
     }
-
-    this.windowManager.showMeetingNotification({
-      detectionId,
-      source,
-      key,
-      title,
-      body,
-      event,
-    });
 
     this.broadcastToWindows("meeting-detected", {
       detectionId,

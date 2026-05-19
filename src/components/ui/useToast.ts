@@ -14,7 +14,7 @@ export interface ToastProps {
 }
 
 export interface ToastContextType {
-  toast: (props: Omit<ToastProps, "id">) => void;
+  toast: (props: Omit<ToastProps, "id">) => string | null;
   dismiss: (id?: string) => void;
   toastCount: number;
 }

@@ -949,7 +949,12 @@ export default function SettingsPage({
   );
 
   const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
-  const [expandedNotifGroups, setExpandedNotifGroups] = useState<Set<string>>(new Set());
+  type NotifGroup = "meetings" | "activity";
+  const [expandedNotifGroups, setExpandedNotifGroups] = useState<Set<NotifGroup>>(new Set());
+  const meetingsSnapshot = useRef<{ detection: boolean; calendar: boolean } | null>(null);
+  const activitySnapshot = useRef<{
+    updates: boolean; transcription: boolean; downloads: boolean; clipboard: boolean;
+  } | null>(null);
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -2400,6 +2405,8 @@ export default function SettingsPage({
                   <SettingsRow
                     label={
                       <button
+                        type="button"
+                        aria-expanded={expandedNotifGroups.has("meetings")}
                         className="flex items-center gap-1.5 text-left"
                         onClick={() => {
                           setExpandedNotifGroups((prev) => {
@@ -2422,8 +2429,21 @@ export default function SettingsPage({
                     <Toggle
                       checked={notifyMeetingDetection || notifyCalendarReminders}
                       onChange={(v) => {
-                        setNotifyMeetingDetection(v);
-                        setNotifyCalendarReminders(v);
+                        if (!v) {
+                          meetingsSnapshot.current = {
+                            detection: notifyMeetingDetection,
+                            calendar: notifyCalendarReminders,
+                          };
+                          setNotifyMeetingDetection(false);
+                          setNotifyCalendarReminders(false);
+                        } else if (meetingsSnapshot.current) {
+                          setNotifyMeetingDetection(meetingsSnapshot.current.detection);
+                          setNotifyCalendarReminders(meetingsSnapshot.current.calendar);
+                          meetingsSnapshot.current = null;
+                        } else {
+                          setNotifyMeetingDetection(true);
+                          setNotifyCalendarReminders(true);
+                        }
                       }}
                       disabled={!notificationsEnabled}
                     />
@@ -2465,6 +2485,8 @@ export default function SettingsPage({
                   <SettingsRow
                     label={
                       <button
+                        type="button"
+                        aria-expanded={expandedNotifGroups.has("activity")}
                         className="flex items-center gap-1.5 text-left"
                         onClick={() => {
                           setExpandedNotifGroups((prev) => {
@@ -2492,10 +2514,29 @@ export default function SettingsPage({
                         notifyClipboardOperations
                       }
                       onChange={(v) => {
-                        setNotifyUpdates(v);
-                        setNotifyTranscriptionStatus(v);
-                        setNotifyModelDownloads(v);
-                        setNotifyClipboardOperations(v);
+                        if (!v) {
+                          activitySnapshot.current = {
+                            updates: notifyUpdates,
+                            transcription: notifyTranscriptionStatus,
+                            downloads: notifyModelDownloads,
+                            clipboard: notifyClipboardOperations,
+                          };
+                          setNotifyUpdates(false);
+                          setNotifyTranscriptionStatus(false);
+                          setNotifyModelDownloads(false);
+                          setNotifyClipboardOperations(false);
+                        } else if (activitySnapshot.current) {
+                          setNotifyUpdates(activitySnapshot.current.updates);
+                          setNotifyTranscriptionStatus(activitySnapshot.current.transcription);
+                          setNotifyModelDownloads(activitySnapshot.current.downloads);
+                          setNotifyClipboardOperations(activitySnapshot.current.clipboard);
+                          activitySnapshot.current = null;
+                        } else {
+                          setNotifyUpdates(true);
+                          setNotifyTranscriptionStatus(true);
+                          setNotifyModelDownloads(true);
+                          setNotifyClipboardOperations(true);
+                        }
                       }}
                       disabled={!notificationsEnabled}
                     />

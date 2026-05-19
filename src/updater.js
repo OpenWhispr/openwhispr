@@ -91,7 +91,7 @@ class UpdateManager {
           };
         }
         this.notifyRenderers("update-available", info);
-        const nPrefs = this.windowManager?._notificationPrefs || {};
+        const nPrefs = this.windowManager?.notificationPrefs || {};
         const notifAllowed =
           nPrefs.notificationsEnabled !== false && nPrefs.notifyUpdates !== false;
         if (this.windowManager && info && !this._suppressNotification && notifAllowed) {

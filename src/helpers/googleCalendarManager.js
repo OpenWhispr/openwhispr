@@ -292,7 +292,7 @@ class GoogleCalendarManager {
     this.activeMeeting = event;
     this.notifiedMeetings.add(event.id);
 
-    const nPrefs = this.windowManager?._notificationPrefs || {};
+    const nPrefs = this.windowManager?.notificationPrefs || {};
     if (nPrefs.notificationsEnabled !== false && nPrefs.notifyCalendarReminders !== false) {
       const notif = new Notification({
         title: event.summary || "Meeting",

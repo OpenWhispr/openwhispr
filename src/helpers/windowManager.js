@@ -28,7 +28,7 @@ class WindowManager {
     this.transcriptionPreviewWindow = null;
     this.updateNotificationWindow = null;
     this._updateNotificationDismissed = false;
-    this._notificationPrefs = {
+    this.notificationPrefs = {
       notificationsEnabled: true,
       notifyMeetingDetection: true,
       notifyCalendarReminders: true,

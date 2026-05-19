@@ -1317,7 +1317,7 @@
         "calendarRemindersDescription": "Benachrichtigen, wenn ein geplantes Meeting bald beginnt",
         "updates": "App-Updates",
         "updatesDescription": "Benachrichtigen, wenn eine neue Version verfügbar ist",
-        "activityCategory": "Aktivitäts-Feedback",
+        "activityCategory": "App-Aktivität",
         "activityCategoryDescription": "Updates, Transkription, Downloads und Zwischenablage",
         "transcriptionStatus": "Transkriptionsstatus",
         "transcriptionStatusDescription": "Über Transkriptionsfortschritt und -ergebnisse benachrichtigen",

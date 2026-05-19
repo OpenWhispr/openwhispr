@@ -1,5 +1,12 @@
 /* eslint-disable */
-// Notification Settings - DevTools Console Test Script
+// Notification Settings - DevTools Console Smoke Check
+//
+// NOT a behavioral test: verifies DOM state and localStorage keys exist,
+// but does not exercise the React->store->localStorage->IPC pipeline.
+// StorageEvent dispatch only fires in other documents, not the originator,
+// so tests that toggle via localStorage won't trigger zustand subscribers.
+//
+// Usage:
 // 1. Open OpenWhispr with npm run dev
 // 2. Go to Settings → Preferences
 // 3. Open DevTools (Ctrl+Shift+I)

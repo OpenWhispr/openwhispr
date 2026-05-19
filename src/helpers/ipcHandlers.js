@@ -7192,9 +7192,22 @@ class IPCHandlers {
       }
     });
 
+    const NOTIFICATION_PREF_KEYS = new Set([
+      "notificationsEnabled", "notifyMeetingDetection", "notifyCalendarReminders",
+      "notifyUpdates", "notifyTranscriptionStatus", "notifyModelDownloads",
+      "notifyClipboardOperations",
+    ]);
+
     ipcMain.handle("sync-notification-preferences", async (_event, prefs) => {
       try {
-        Object.assign(this.windowManager._notificationPrefs, prefs);
+        if (!prefs || typeof prefs !== "object") {
+          return { success: false, error: "Invalid preferences" };
+        }
+        for (const [k, v] of Object.entries(prefs)) {
+          if (NOTIFICATION_PREF_KEYS.has(k)) {
+            this.windowManager.notificationPrefs[k] = !!v;
+          }
+        }
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
