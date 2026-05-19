@@ -2629,6 +2629,7 @@ export default function SettingsPage({
                           cmds: [
                             { label: "Ubuntu / Pop!_OS / Debian", cmd: "sudo apt install ydotool" },
                             { label: "Fedora", cmd: "sudo dnf install ydotool" },
+                            { label: "Arch Linux", cmd: "sudo pacman -S ydotool" },
                             { label: "openSUSE", cmd: "sudo zypper install ydotool" },
                           ],
                         },
@@ -2665,6 +2666,7 @@ export default function SettingsPage({
                               cmd: "sudo apt install ydotoold",
                             },
                             { label: "Fedora", cmd: "# Already included in the ydotool package" },
+                            { label: "Arch Linux", cmd: "# Included in the ydotool package" },
                           ],
                         },
                       ],
@@ -2869,13 +2871,23 @@ EOF`,
                             {
                               cmd: "systemctl --user enable ydotoold && systemctl --user start ydotoold",
                             },
+                            {
+                              label: "Arch Linux (service is named ydotool.service)",
+                              cmd: "systemctl --user enable --now ydotool.service",
+                            },
                           ],
                         },
                         {
                           title: t("settingsPage.general.waylandPaste.guide.daemon.step2Title", {
                             defaultValue: "Verify it's running",
                           }),
-                          cmds: [{ cmd: "systemctl --user status ydotoold" }],
+                          cmds: [
+                            { cmd: "systemctl --user status ydotoold" },
+                            {
+                              label: "Arch Linux",
+                              cmd: "systemctl --user status ydotool.service",
+                            },
+                          ],
                         },
                       ],
                     },

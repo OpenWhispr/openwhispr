@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
-import { hasStoredByokKey } from "../utils/byokDetection";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import logger from "../utils/logger";
@@ -191,6 +190,11 @@ function migrateProviderSettings() {
 
   if (provider === "custom" && cloudMode === "byok") {
     localStorage.setItem("remoteTranscriptionType", "openai-compatible");
+    const legacyBaseUrl = localStorage.getItem("cloudTranscriptionBaseUrl");
+    const existingRemoteUrl = localStorage.getItem("remoteTranscriptionUrl");
+    if (!existingRemoteUrl && legacyBaseUrl && legacyBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE) {
+      localStorage.setItem("remoteTranscriptionUrl", legacyBaseUrl);
+    }
   }
 
   const reasoningMode = localStorage.getItem("cloudReasoningMode");
@@ -1643,11 +1647,6 @@ export async function initializeSettings(): Promise<void> {
         azureApiKey: azureApiKey || "",
         vertexApiKey: vertexApiKey || "",
       });
-
-      // hasStoredByokKey reads from Zustand, so this default must run after hydration.
-      if (!localStorage.getItem("cloudTranscriptionMode") && hasStoredByokKey()) {
-        useSettingsStore.setState({ cloudTranscriptionMode: "byok" });
-      }
 
       for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {
         localStorage.removeItem(key);

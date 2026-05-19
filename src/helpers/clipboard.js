@@ -1600,7 +1600,7 @@ class ClipboardManager {
 
     if (ydotoolExists && !ydotoolDaemonRunning) {
       errorMsg +=
-        "\n\nNote: ydotool is installed but the ydotoold daemon is not running. Start it with: sudo systemctl enable --now ydotool";
+        "\n\nNote: ydotool is installed but the ydotoold daemon is not running. Start it with: systemctl --user enable --now ydotoold";
     }
 
     const err = new Error(errorMsg + failureSummary);
