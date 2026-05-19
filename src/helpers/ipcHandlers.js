@@ -2,8 +2,6 @@ const { ipcMain, app, shell, BrowserWindow, systemPreferences, net } = require("
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const http = require("http");
-const https = require("https");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const tokenStore = require("./tokenStore");
@@ -110,37 +108,23 @@ function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   return { body: Buffer.concat(bodyParts), boundary };
 }
 
-function postMultipart(url, body, boundary, headers = {}) {
-  const httpModule = url.protocol === "https:" ? https : http;
-  return new Promise((resolve, reject) => {
-    const req = httpModule.request(
-      {
-        hostname: url.hostname,
-        port: url.port || (url.protocol === "https:" ? 443 : 80),
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": `multipart/form-data; boundary=${boundary}`,
-          "Content-Length": body.length,
-          ...headers,
-        },
-      },
-      (res) => {
-        let responseData = "";
-        res.on("data", (chunk) => (responseData += chunk));
-        res.on("end", () => {
-          try {
-            resolve({ statusCode: res.statusCode, data: JSON.parse(responseData) });
-          } catch (e) {
-            reject(new Error(`Invalid JSON response: ${responseData.slice(0, 200)}`));
-          }
-        });
-      }
-    );
-    req.on("error", reject);
-    req.write(body);
-    req.end();
+async function postMultipart(url, body, boundary, headers = {}) {
+  const response = await net.fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
+      "Content-Length": String(body.length),
+      ...headers,
+    },
+    body,
+    useSessionCookies: false,
   });
+  const text = await response.text();
+  try {
+    return { statusCode: response.status, data: JSON.parse(text) };
+  } catch {
+    throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`);
+  }
 }
 
 function interpretTranscribeResponse(data) {

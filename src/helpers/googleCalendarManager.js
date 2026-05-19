@@ -1,5 +1,4 @@
-const https = require("https");
-const { Notification, BrowserWindow } = require("electron");
+const { net, Notification, BrowserWindow } = require("electron");
 const debugLogger = require("./debugLogger");
 const GoogleCalendarOAuth = require("./googleCalendarOAuth");
 
@@ -456,44 +455,26 @@ class GoogleCalendarManager {
   async _apiGet(path, accountEmail = null) {
     const accessToken = await this.oauth.getValidAccessToken(accountEmail);
     const urlString = path.startsWith("http") ? path : `${CALENDAR_API_BASE}${path}`;
-    const url = new URL(urlString);
 
-    return new Promise((resolve, reject) => {
-      const req = https.request(
-        {
-          hostname: url.hostname,
-          port: 443,
-          path: url.pathname + url.search,
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        },
-        (res) => {
-          let data = "";
-          res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => {
-            try {
-              const parsed = JSON.parse(data);
-              if (res.statusCode >= 400) {
-                const err = new Error(parsed.error?.message || `API error ${res.statusCode}`);
-                err.statusCode = res.statusCode;
-                reject(err);
-                return;
-              }
-              resolve(parsed);
-            } catch (e) {
-              reject(new Error(`Invalid JSON response: ${data.slice(0, 200)}`));
-            }
-          });
-        }
-      );
-      req.on("error", reject);
-      req.setTimeout(10000, () => {
-        req.destroy(new Error("Request timed out after 10s"));
-      });
-      req.end();
+    const response = await net.fetch(urlString, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(10000),
+      useSessionCookies: false,
     });
+    const text = await response.text();
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`);
+    }
+    if (response.status >= 400) {
+      const err = new Error(parsed.error?.message || `API error ${response.status}`);
+      err.statusCode = response.status;
+      throw err;
+    }
+    return parsed;
   }
 }
 
