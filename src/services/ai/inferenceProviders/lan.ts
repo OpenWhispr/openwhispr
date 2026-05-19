@@ -16,7 +16,8 @@ export const lanProvider: InferenceProvider = {
       const endpoint = buildApiUrl(baseUrl, "/chat/completions");
       const apiKey =
         config.customApiKey?.trim() ||
-        (isAgentCall ? "" : settings.cleanupCustomApiKey?.trim() || "");
+        (isAgentCall ? "" : settings.cleanupCustomApiKey?.trim()) ||
+        "";
       const resolvedModel = model?.trim() || "default";
       return await ctx.callChatCompletionsApi(
         endpoint,
