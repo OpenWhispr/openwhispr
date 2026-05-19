@@ -1,10 +1,10 @@
 const { spawn } = require("child_process");
 const fs = require("fs");
-const net = require("net");
 const path = require("path");
 const http = require("http");
 const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
+const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
 const sidecarPidFile = require("./sidecarPidFile");
@@ -97,27 +97,9 @@ class LlamaServerManager {
 
   async findAvailablePort() {
     for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
-      if (await this.isPortAvailable(port)) return port;
+      if (await isPortAvailable(port)) return port;
     }
     throw new Error(`No available ports in range ${PORT_RANGE_START}-${PORT_RANGE_END}`);
-  }
-
-  isPortAvailable(port) {
-    return new Promise((resolve) => {
-      const probe = net.createServer();
-      probe.once("error", () => resolve(false));
-      probe.once("listening", () => {
-        probe.close(() => {
-          const loopback = net.createServer();
-          loopback.once("error", () => resolve(false));
-          loopback.once("listening", () => {
-            loopback.close(() => resolve(true));
-          });
-          loopback.listen(port, "127.0.0.1");
-        });
-      });
-      probe.listen(port, "0.0.0.0");
-    });
   }
 
   async start(modelPath, options = {}) {
