@@ -179,7 +179,6 @@ class LlamaVulkanManager {
     debugLogger.info("Vulkan llama-server deleted", { deletedCount });
     return { success: true, deletedCount };
   }
-
 }
 
 module.exports = LlamaVulkanManager;

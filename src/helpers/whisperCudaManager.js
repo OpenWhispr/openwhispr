@@ -240,7 +240,6 @@ class WhisperCudaManager {
       freed_mb: Math.round(freedBytes / (1024 * 1024)),
     };
   }
-
 }
 
 module.exports = WhisperCudaManager;
