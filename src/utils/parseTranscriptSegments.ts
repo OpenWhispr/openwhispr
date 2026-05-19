@@ -1,4 +1,4 @@
-import type { TranscriptSegment } from "../hooks/useMeetingTranscription";
+import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 import { normalizeTranscriptSegments } from "./transcriptSpeakerState";
 import logger from "./logger";
 export function parseTranscriptSegments(raw: string): TranscriptSegment[] {

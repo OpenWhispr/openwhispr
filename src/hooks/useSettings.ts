@@ -26,20 +26,22 @@ export interface TranscriptionSettings {
   showTranscriptionPreview: boolean;
 }
 
-export interface ReasoningSettings {
-  useReasoningModel: boolean;
-  reasoningModel: string;
-  reasoningProvider: string;
-  cloudReasoningBaseUrl?: string;
-  cloudReasoningMode: string;
-  reasoningMode: InferenceMode;
-  remoteReasoningType: SelfHostedType;
-  remoteReasoningUrl: string;
+export interface CleanupSettings {
+  autoGenerateNoteTitle: boolean;
+  useCleanupModel: boolean;
+  useDictationAgent: boolean;
+  cleanupModel: string;
+  cleanupProvider: string;
+  cleanupCloudBaseUrl?: string;
+  cleanupCloudMode: string;
+  cleanupMode: InferenceMode;
+  cleanupRemoteUrl: string;
 }
 
 export interface HotkeySettings {
   dictationKey: string;
   meetingKey: string;
+  meetingHotkeyLayoutMode: "side-panel" | "full-width";
   activationMode: "tap" | "push";
 }
 
@@ -55,7 +57,7 @@ export interface ApiKeySettings {
   groqApiKey: string;
   mistralApiKey: string;
   customTranscriptionApiKey: string;
-  customReasoningApiKey: string;
+  cleanupCustomApiKey: string;
 }
 
 export interface PrivacySettings {
@@ -69,15 +71,15 @@ export interface ThemeSettings {
   theme: "light" | "dark" | "auto";
 }
 
-export interface AgentModeSettings {
-  agentModel: string;
-  agentProvider: string;
-  agentKey: string;
-  agentSystemPrompt: string;
-  agentEnabled: boolean;
-  cloudAgentMode: string;
-  agentInferenceMode: InferenceMode;
-  remoteAgentUrl: string;
+export interface ChatAgentSettings {
+  chatAgentModel: string;
+  chatAgentProvider: string;
+  chatAgentKey: string;
+  chatAgentCloudMode: string;
+  chatAgentMode: InferenceMode;
+  chatAgentCloudBaseUrl: string;
+  chatAgentRemoteUrl: string;
+  chatAgentCustomApiKey: string;
 }
 
 function useSettingsInternal() {
@@ -140,8 +142,10 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    reasoningProvider,
-    reasoningModel,
+    cleanupProvider,
+    cleanupModel,
+    dictationAgentProvider,
+    dictationAgentModel,
   } = store;
 
   useEffect(() => {
@@ -153,8 +157,10 @@ function useSettingsInternal() {
         useLocalWhisper,
         localTranscriptionProvider,
         model: model || undefined,
-        reasoningProvider,
-        reasoningModel: reasoningProvider === "local" ? reasoningModel : undefined,
+        cleanupProvider,
+        cleanupModel: cleanupProvider === "local" ? cleanupModel : undefined,
+        dictationAgentProvider,
+        dictationAgentModel: dictationAgentProvider === "local" ? dictationAgentModel : undefined,
       })
       .catch((err) =>
         logger.warn(
@@ -168,8 +174,10 @@ function useSettingsInternal() {
     localTranscriptionProvider,
     whisperModel,
     parakeetModel,
-    reasoningProvider,
-    reasoningModel,
+    cleanupProvider,
+    cleanupModel,
+    dictationAgentProvider,
+    dictationAgentModel,
   ]);
 
   return {
@@ -185,21 +193,23 @@ function useSettingsInternal() {
     cloudTranscriptionProvider: store.cloudTranscriptionProvider,
     cloudTranscriptionModel: store.cloudTranscriptionModel,
     cloudTranscriptionBaseUrl: store.cloudTranscriptionBaseUrl,
-    cloudReasoningBaseUrl: store.cloudReasoningBaseUrl,
+    cleanupCloudBaseUrl: store.cleanupCloudBaseUrl,
     cloudTranscriptionMode: store.cloudTranscriptionMode,
-    cloudReasoningMode: store.cloudReasoningMode,
+    cleanupCloudMode: store.cleanupCloudMode,
     transcriptionMode: store.transcriptionMode,
     remoteTranscriptionType: store.remoteTranscriptionType,
     remoteTranscriptionUrl: store.remoteTranscriptionUrl,
-    reasoningMode: store.reasoningMode,
-    remoteReasoningType: store.remoteReasoningType,
-    remoteReasoningUrl: store.remoteReasoningUrl,
+    cleanupMode: store.cleanupMode,
+    cleanupRemoteUrl: store.cleanupRemoteUrl,
     customDictionary: store.customDictionary,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
-    useReasoningModel: store.useReasoningModel,
-    reasoningModel: store.reasoningModel,
-    reasoningProvider: store.reasoningProvider,
+    autoGenerateNoteTitle: store.autoGenerateNoteTitle,
+    setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
+    useCleanupModel: store.useCleanupModel,
+    useDictationAgent: store.useDictationAgent,
+    cleanupModel: store.cleanupModel,
+    cleanupProvider: store.cleanupProvider,
     openaiApiKey: store.openaiApiKey,
     anthropicApiKey: store.anthropicApiKey,
     geminiApiKey: store.geminiApiKey,
@@ -207,6 +217,8 @@ function useSettingsInternal() {
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
+    meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
+    setMeetingHotkeyLayoutMode: store.setMeetingHotkeyLayoutMode,
     theme: store.theme,
     setUseLocalWhisper: store.setUseLocalWhisper,
     setWhisperModel: store.setWhisperModel,
@@ -220,19 +232,19 @@ function useSettingsInternal() {
     setCloudTranscriptionProvider: store.setCloudTranscriptionProvider,
     setCloudTranscriptionModel: store.setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl: store.setCloudTranscriptionBaseUrl,
-    setCloudReasoningBaseUrl: store.setCloudReasoningBaseUrl,
     setCloudTranscriptionMode: store.setCloudTranscriptionMode,
-    setCloudReasoningMode: store.setCloudReasoningMode,
+    setCleanupCloudBaseUrl: store.setCleanupCloudBaseUrl,
+    setCleanupCloudMode: store.setCleanupCloudMode,
     setTranscriptionMode: store.setTranscriptionMode,
     setRemoteTranscriptionType: store.setRemoteTranscriptionType,
     setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,
-    setReasoningMode: store.setReasoningMode,
-    setRemoteReasoningType: store.setRemoteReasoningType,
-    setRemoteReasoningUrl: store.setRemoteReasoningUrl,
+    setCleanupMode: store.setCleanupMode,
+    setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,
-    setUseReasoningModel: store.setUseReasoningModel,
-    setReasoningModel: store.setReasoningModel,
-    setReasoningProvider: store.setReasoningProvider,
+    setUseCleanupModel: store.setUseCleanupModel,
+    setUseDictationAgent: store.setUseDictationAgent,
+    setCleanupModel: store.setCleanupModel,
+    setCleanupProvider: store.setCleanupProvider,
     setOpenaiApiKey: store.setOpenaiApiKey,
     setAnthropicApiKey: store.setAnthropicApiKey,
     setGeminiApiKey: store.setGeminiApiKey,
@@ -240,8 +252,8 @@ function useSettingsInternal() {
     setMistralApiKey: store.setMistralApiKey,
     customTranscriptionApiKey: store.customTranscriptionApiKey,
     setCustomTranscriptionApiKey: store.setCustomTranscriptionApiKey,
-    customReasoningApiKey: store.customReasoningApiKey,
-    setCustomReasoningApiKey: store.setCustomReasoningApiKey,
+    cleanupCustomApiKey: store.cleanupCustomApiKey,
+    setCleanupCustomApiKey: store.setCleanupCustomApiKey,
     setDictationKey: store.setDictationKey,
     setMeetingKey: store.setMeetingKey,
     setTheme: store.setTheme,
@@ -273,6 +285,24 @@ function useSettingsInternal() {
     setNoteFilesEnabled: store.setNoteFilesEnabled,
     noteFilesPath: store.noteFilesPath,
     setNoteFilesPath: store.setNoteFilesPath,
+    dictationSileroEnabled: store.dictationSileroEnabled,
+    setDictationSileroEnabled: store.setDictationSileroEnabled,
+    noteRecordingSileroEnabled: store.noteRecordingSileroEnabled,
+    setNoteRecordingSileroEnabled: store.setNoteRecordingSileroEnabled,
+    meetingSileroEnabled: store.meetingSileroEnabled,
+    setMeetingSileroEnabled: store.setMeetingSileroEnabled,
+    whisperVadThreshold: store.whisperVadThreshold,
+    setWhisperVadThreshold: store.setWhisperVadThreshold,
+    whisperVadMinSpeechDurationMs: store.whisperVadMinSpeechDurationMs,
+    setWhisperVadMinSpeechDurationMs: store.setWhisperVadMinSpeechDurationMs,
+    whisperVadMinSilenceDurationMs: store.whisperVadMinSilenceDurationMs,
+    setWhisperVadMinSilenceDurationMs: store.setWhisperVadMinSilenceDurationMs,
+    whisperVadMaxSpeechDurationS: store.whisperVadMaxSpeechDurationS,
+    setWhisperVadMaxSpeechDurationS: store.setWhisperVadMaxSpeechDurationS,
+    whisperVadSpeechPadMs: store.whisperVadSpeechPadMs,
+    setWhisperVadSpeechPadMs: store.setWhisperVadSpeechPadMs,
+    whisperVadSamplesOverlap: store.whisperVadSamplesOverlap,
+    setWhisperVadSamplesOverlap: store.setWhisperVadSamplesOverlap,
     cloudBackupEnabled: store.cloudBackupEnabled,
     setCloudBackupEnabled: store.setCloudBackupEnabled,
     telemetryEnabled: store.telemetryEnabled,
@@ -282,7 +312,7 @@ function useSettingsInternal() {
     dataRetentionEnabled: store.dataRetentionEnabled,
     setDataRetentionEnabled: store.setDataRetentionEnabled,
     updateTranscriptionSettings: store.updateTranscriptionSettings,
-    updateReasoningSettings: store.updateReasoningSettings,
+    updateCleanupSettings: store.updateCleanupSettings,
     updateApiKeys: store.updateApiKeys,
   };
 }

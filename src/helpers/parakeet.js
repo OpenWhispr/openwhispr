@@ -226,8 +226,7 @@ class ParakeetManager {
     });
 
     const startTime = Date.now();
-    const language = options.language || "auto";
-    const result = await this.serverManager.transcribe(audioBuffer, { modelName: model, language });
+    const result = await this.serverManager.transcribe(audioBuffer, { modelName: model });
     const elapsed = Date.now() - startTime;
 
     debugLogger.logSTTPipeline("transcribeLocalParakeet - completed", {

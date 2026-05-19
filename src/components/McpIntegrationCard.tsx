@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, Copy, ExternalLink, Plus } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { LogoTile } from "./ui/LogoTile";
 import { useToast } from "./ui/useToast";
 import logo from "../assets/logo.svg";
 import claudeIcon from "../assets/icons/providers/claude.svg";
@@ -15,14 +16,6 @@ const MCP_DOCS_URL = "https://docs.openwhispr.com/integrations/mcp";
 interface McpIntegrationCardProps {
   isPaid: boolean;
   onUpgrade: () => void;
-}
-
-function LogoTile({ src, alt }: { src: string; alt: string }) {
-  return (
-    <div className="w-9 h-9 rounded-lg bg-white dark:bg-surface-raised shadow-[0_0_0_1px_rgba(0,0,0,0.04)] dark:shadow-none dark:border dark:border-white/5 flex items-center justify-center shrink-0">
-      <img src={src} alt={alt} className="w-5 h-5" />
-    </div>
-  );
 }
 
 export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegrationCardProps) {
@@ -47,9 +40,9 @@ export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegration
         <LogoTile src={logo} alt="OpenWhispr" />
         <Plus className="h-3 w-3 text-muted-foreground/40 shrink-0" />
         <div className="flex items-center gap-1">
-          <LogoTile src={claudeIcon} alt="Claude" />
-          <LogoTile src={openaiIcon} alt="ChatGPT" />
-          <LogoTile src={cursorIcon} alt="Cursor" />
+          <LogoTile src={claudeIcon} alt="Claude" monochrome />
+          <LogoTile src={openaiIcon} alt="ChatGPT" monochrome />
+          <LogoTile src={cursorIcon} alt="Cursor" monochrome />
         </div>
       </div>
 

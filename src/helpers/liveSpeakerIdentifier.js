@@ -1,6 +1,7 @@
 const fs = require("fs");
 const debugLogger = require("./debugLogger");
 const speakerEmbeddings = require("./speakerEmbeddings");
+const { MAX_EMBEDDING_SECONDS } = speakerEmbeddings;
 const { downsample24kTo16k } = require("../utils/audioUtils");
 const { MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
 
@@ -20,6 +21,8 @@ const LIVE_IDENTIFICATION_INTERVAL_SECONDS = 1.0;
 const LIVE_IDENTIFICATION_INTERVAL_SAMPLES = Math.round(
   SAMPLE_RATE * LIVE_IDENTIFICATION_INTERVAL_SECONDS
 );
+const MAX_EMBEDDING_SAMPLES = SAMPLE_RATE * MAX_EMBEDDING_SECONDS;
+const SPEECH_CHUNKS_MAX_SAMPLES = MAX_EMBEDDING_SAMPLES * 4;
 const SPEECH_THRESHOLD = 0.15;
 const SILENCE_THRESHOLD = 0.08;
 const SILENCE_WINDOWS_TO_END = 24;
@@ -66,6 +69,36 @@ function concatFloat32Arrays(chunks) {
   }
 
   return merged;
+}
+
+function trimChunksToMaxSamples(chunks, maxSamples) {
+  let total = 0;
+  for (const chunk of chunks) total += chunk.length;
+  while (total > maxSamples && chunks.length > 0) {
+    total -= chunks[0].length;
+    chunks.shift();
+  }
+}
+
+function selectBestEmbeddingWindow(samples) {
+  if (samples.length <= MAX_EMBEDDING_SAMPLES) return samples;
+
+  const stride = SAMPLE_RATE;
+  let bestStart = 0;
+  let bestEnergy = -Infinity;
+
+  for (let start = 0; start + MAX_EMBEDDING_SAMPLES <= samples.length; start += stride) {
+    let energy = 0;
+    for (let i = start; i < start + MAX_EMBEDDING_SAMPLES; i++) {
+      energy += Math.abs(samples[i]);
+    }
+    if (energy > bestEnergy) {
+      bestEnergy = energy;
+      bestStart = start;
+    }
+  }
+
+  return samples.subarray(bestStart, bestStart + MAX_EMBEDDING_SAMPLES);
 }
 
 function cloneFloat32Array(value) {
@@ -409,6 +442,7 @@ class LiveSpeakerIdentifier {
 
     if (this.speechActive) {
       this.speechChunks.push(cloneFloat32Array(window));
+      trimChunksToMaxSamples(this.speechChunks, SPEECH_CHUNKS_MAX_SAMPLES);
       this.segmentEndSample = windowEndSample;
 
       if (probability >= SILENCE_THRESHOLD) {
@@ -504,10 +538,14 @@ class LiveSpeakerIdentifier {
   }
 
   async _identifyActiveSpeechSegment(force = false) {
-    const currentSamples = concatFloat32Arrays(this.speechChunks);
-    if (currentSamples.length < LIVE_IDENTIFICATION_MIN_SAMPLES) {
+    const allSamples = concatFloat32Arrays(this.speechChunks);
+    if (allSamples.length < LIVE_IDENTIFICATION_MIN_SAMPLES) {
       return;
     }
+    const currentSamples =
+      allSamples.length > MAX_EMBEDDING_SAMPLES
+        ? allSamples.subarray(allSamples.length - MAX_EMBEDDING_SAMPLES)
+        : allSamples;
 
     if (
       !force &&
@@ -552,7 +590,9 @@ class LiveSpeakerIdentifier {
       return;
     }
 
-    const embedding = await speakerEmbeddings.extractEmbeddingFromSamples(samples);
+    const embedding = await speakerEmbeddings.extractEmbeddingFromSamples(
+      selectBestEmbeddingWindow(samples)
+    );
     if (!embedding) {
       return;
     }

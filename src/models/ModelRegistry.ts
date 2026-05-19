@@ -1,5 +1,5 @@
 import modelDataRaw from "./modelRegistryData.json";
-import { isCloudReasoningMode, getSettings } from "../stores/settingsStore";
+import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
 
 export interface ModelDefinition {
   id: string;
@@ -13,6 +13,7 @@ export interface ModelDefinition {
   contextLength: number;
   hfRepo: string;
   recommended?: boolean;
+  supportsThinking?: boolean;
 }
 
 export interface LocalProviderData {
@@ -38,6 +39,7 @@ export interface CloudModelDefinition {
   description: string;
   descriptionKey?: string;
   disableThinking?: boolean;
+  supportsThinking?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
 }
@@ -282,11 +284,11 @@ export function getReasoningModelLabel(modelId: string): string {
 }
 
 export function getModelProvider(modelId: string): string {
-  if (isCloudReasoningMode()) {
+  if (isCloudCleanupMode()) {
     return "openwhispr";
   }
 
-  const storedProvider = getSettings().reasoningProvider;
+  const storedProvider = getSettings().cleanupProvider;
 
   if (storedProvider === "custom") {
     return "custom";
@@ -372,6 +374,10 @@ export function getCloudModel(modelId: string): CloudModelDefinition | undefined
     if (model) return model;
   }
   return undefined;
+}
+
+export function getLocalModel(modelId: string): ModelDefinition | undefined {
+  return modelRegistry.getModel(modelId)?.model;
 }
 
 export interface OpenAiApiConfig {

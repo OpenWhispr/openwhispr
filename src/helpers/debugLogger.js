@@ -136,13 +136,26 @@ class DebugLogger {
     return LOG_LEVELS[normalized] >= this.levelValue;
   }
 
+  serializeValue(value) {
+    if (value instanceof Error) {
+      return {
+        name: value.name,
+        message: value.message,
+        ...(value.code ? { code: value.code } : {}),
+        ...(value.stack ? { stack: value.stack } : {}),
+        ...value,
+      };
+    }
+    return value;
+  }
+
   formatArgs(args) {
     return args
       .map((arg) => {
-        if (typeof arg === "object") {
+        if (arg !== null && typeof arg === "object") {
           try {
-            return JSON.stringify(arg, null, 2);
-          } catch (error) {
+            return JSON.stringify(this.serializeValue(arg), null, 2);
+          } catch {
             return String(arg);
           }
         }
@@ -155,8 +168,8 @@ class DebugLogger {
     if (meta === undefined) return "";
     if (typeof meta === "string") return meta;
     try {
-      return JSON.stringify(meta, null, 2);
-    } catch (error) {
+      return JSON.stringify(this.serializeValue(meta), null, 2);
+    } catch {
       return String(meta);
     }
   }

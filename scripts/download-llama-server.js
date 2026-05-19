@@ -13,8 +13,11 @@ const {
 
 const LLAMA_CPP_REPO = "ggerganov/llama.cpp";
 
-// Version can be pinned via environment variable for reproducible builds
-const VERSION_OVERRIDE = process.env.LLAMA_CPP_VERSION || null;
+// Pinned: whisper-server.exe (built against OpenWhispr/whisper.cpp 0.0.6) loads
+// ggml-*.dll from this script's output dir on Windows. Newer llama.cpp builds
+// bumped ggml's ABI and crash whisper-server on load_backend. Bump only after
+// verifying local Whisper starts on Windows.
+const LLAMA_CPP_TAG = process.env.LLAMA_CPP_VERSION || "b8857";
 
 const BINARIES = {
   "darwin-arm64": {
@@ -53,12 +56,7 @@ let cachedRelease = null;
 
 async function getRelease() {
   if (cachedRelease) return cachedRelease;
-
-  if (VERSION_OVERRIDE) {
-    cachedRelease = await fetchLatestRelease(LLAMA_CPP_REPO, { tagPrefix: VERSION_OVERRIDE });
-  } else {
-    cachedRelease = await fetchLatestRelease(LLAMA_CPP_REPO);
-  }
+  cachedRelease = await fetchLatestRelease(LLAMA_CPP_REPO, { tag: LLAMA_CPP_TAG });
   return cachedRelease;
 }
 
@@ -170,11 +168,7 @@ function getEntriesForPlatformArch(platformArch) {
 }
 
 async function main() {
-  if (VERSION_OVERRIDE) {
-    console.log(`\n[llama-server] Using pinned version: ${VERSION_OVERRIDE}`);
-  } else {
-    console.log("\n[llama-server] Fetching latest release...");
-  }
+  console.log(`\n[llama-server] Using pinned version: ${LLAMA_CPP_TAG}`);
   const release = await getRelease();
 
   if (!release) {

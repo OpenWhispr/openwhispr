@@ -87,6 +87,7 @@
     "errors": {
       "callbackRequired": "设置快捷键需要回调函数",
       "globeOnlyMac": "Globe 键仅在 macOS 上可用。",
+      "mouseButtonOnlyMac": "鼠标按键快捷键目前仅在 macOS 上受支持。",
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
@@ -154,7 +155,17 @@
     "private": "隐私",
     "tap": "点按",
     "close": "关闭",
-    "dismiss": "忽略"
+    "dismiss": "忽略",
+    "save": "Guardar",
+    "saving": "Guardando…",
+    "create": "Crear",
+    "delete": "Eliminar",
+    "actions": "Acciones",
+    "error": "Algo salió mal",
+    "unknownError": "Ocurrió un error desconocido",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "done": "Listo"
   },
   "onboarding": {
     "steps": {
@@ -206,6 +217,25 @@
       "hotkeyToStartStop": "{{hotkey}} 开始/停止",
       "holdHotkey": "按住 {{hotkey}}",
       "textareaPlaceholder": "点击此处，然后使用快捷键进行听写..."
+    },
+    "connectivity": {
+      "title": "无法从该网络连接到 OpenWhispr Cloud",
+      "body": "{{cause}} 你可以切换到本地引擎，或继续并稍后重试。",
+      "useLocal": "使用本地引擎",
+      "continue": "仍然继续"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "无法连接到 OpenWhispr Cloud",
+        "generic": "网络请求失败，请检查你的连接。",
+        "dnsBlocked": "DNS 无法解析 openwhispr.com — 广告拦截器或过滤器可能阻止了它。",
+        "refused": "连接被拒绝 — 可能是防火墙或 VPN。",
+        "timeout": "网络超时 — VPN、强制门户或网络不稳定。",
+        "tls": "TLS 握手失败 — 请检查系统时钟或企业代理。",
+        "fallback": "Cloud 不可用 — 本次录音将使用本地引擎。"
+      }
     }
   },
   "controlPanel": {
@@ -336,6 +366,13 @@
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
     "availableModels": "可用模型",
+    "disableThinking": {
+      "label": "禁用思考输出",
+      "help": "跳过推理令牌以获得更清晰的输出。推荐用于清理。某些服务器会忽略此提示。"
+    },
+    "selfHosted": {
+      "endpointHelp": "指向本地网络中兼容 OpenAI 的服务器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
+    },
     "enterprise": {
       "title": "企业级提供商",
       "description": "使用你组织的凭据连接云端提供商。",
@@ -408,6 +445,11 @@
       "noAudio": {
         "title": "未检测到音频",
         "description": "录音中未检测到音频，请重试。"
+      },
+      "errorDescriptions": {
+        "sessionExpired": "OpenWhispr Cloud 会话不可用。请到「设置」中重新登录。",
+        "offline": "你目前离线。云端转录需要互联网连接。",
+        "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。"
       }
     },
     "clipboard": {
@@ -590,7 +632,10 @@
     },
     "social": {
       "completeInBrowser": "在浏览器中完成登录",
-      "continueWithGoogle": "使用 Google 继续"
+      "continueWithApple": "使用 Apple 继续",
+      "continueWithGoogle": "使用 Google 继续",
+      "continueWithMicrosoft": "使用 Microsoft 继续",
+      "protocolUnavailable": "无法通过浏览器登录 — 请在系统的“默认应用”设置中重新注册 openwhispr:// 协议。"
     },
     "welcomeSubtitle": "随时随地用语音输入",
     "welcomeTitle": "欢迎使用 OpenWhispr",
@@ -860,39 +905,8 @@
     "view": {
       "customPrompt": "自定义提示词",
       "defaultPrompt": "默认提示词",
-      "modes": {
-        "agent": {
-          "description": "通过“{{agentName}}”触发——执行命令、回答问题、撰写内容",
-          "label": "语音助手"
-        },
-        "cleanup": {
-          "description": "快速通道——去除语气词，修正语法和标点",
-          "label": "文本整理"
-        }
-      },
       "modified": "已修改"
     }
-  },
-  "resetPassword": {
-    "backToSignIn": "返回登录",
-    "confirmPasswordPlaceholder": "确认新密码",
-    "continue": "继续",
-    "errors": {
-      "passwordMinLength": "密码至少需要 8 个字符",
-      "passwordsDoNotMatch": "两次输入的密码不一致"
-    },
-    "goBack": "返回",
-    "newPasswordPlaceholder": "新密码",
-    "notConfigured": "身份验证未配置。",
-    "passwordMinLength": "密码至少需要 8 个字符",
-    "resetButton": "重置密码",
-    "resetting": "正在重置...",
-    "subtitle": "在下方输入你的新密码",
-    "success": {
-      "description": "密码已更新，你现在已登录。",
-      "title": "密码重置成功"
-    },
-    "title": "创建新密码"
   },
   "settingsModal": {
     "groups": {
@@ -933,6 +947,10 @@
       "system": {
         "description": "更新、存储与开发者工具",
         "label": "系统"
+      },
+      "workspace": {
+        "label": "Espacio de trabajo",
+        "description": "Miembros, equipos, facturación y claves API"
       }
     },
     "title": "设置"
@@ -962,7 +980,7 @@
       },
       "disabled": "已禁用",
       "featuresDisabled": "账户功能已禁用",
-      "featuresDisabledDescription": "在 .env 文件中设置 VITE_NEON_AUTH_URL 以启用账户功能。",
+      "featuresDisabledDescription": "在 .env 文件中设置 VITE_AUTH_URL 以启用账户功能。",
       "notConfigured": "身份验证未配置",
       "notSignedIn": "未登录",
       "notSignedInDescription": "创建账户以解锁高级功能。",
@@ -1054,7 +1072,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
+          "features": [
+            "无限会议录制",
+            "代理模式",
+            "与您的数据对话",
+            "优先支持"
+          ],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1112,8 +1135,6 @@
     },
     "agentConfig": {
       "agentName": "助手名称",
-      "cleanupExample": "文本整理",
-      "cleanupMode": "整理模式",
       "description": "为你的 AI 助手取个名字，这样你就能在听写时直接呼唤它",
       "dialogs": {
         "updatedDescription": "你的助手已命名为“{{name}}”。说“Hey {{name}}”然后说出指令即可使用。",
@@ -1121,7 +1142,7 @@
       },
       "examplesTitle": "示例",
       "helper": "选一个简短、说起来自然的名字",
-      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，AI 会从整理模式切换到指令模式。没有触发短语时，它只会整理你的听写内容。",
+      "howItWorksDescription": "当你说“Hey {{agentName}}”并跟上指令时，AI 会执行你的命令——撰写内容、格式化文本或回答问题——而不是逐字转写。",
       "howItWorksTitle": "工作原理",
       "instructionMode": "指令",
       "placeholder": "例如 Jarvis、Nova、Atlas...",
@@ -1138,7 +1159,7 @@
       "customSetupDescription": "使用你自己的服务商和 API Key。",
       "description": "整理转录文本、处理指令、修正错误，同时保留你的语气风格。",
       "enableTextCleanup": "启用文本整理",
-      "enableTextCleanupDescription": "使用 AI 格式化文本并执行语音指令",
+      "enableTextCleanupDescription": "AI 去除语气词，修正语法和标点",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "云服务商",
@@ -1267,7 +1288,10 @@
       "meetingHotkey": {
         "title": "会议模式快捷键",
         "description": "启动会议模式并将面板固定到屏幕侧边",
-        "clear": "移除快捷键"
+        "clear": "移除快捷键",
+        "layoutLabel": "通过快捷键触发时,打开方式:",
+        "layoutFullWidth": "全宽",
+        "layoutSidePanel": "侧边栏"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",
@@ -1479,9 +1503,14 @@
       "description": "配置用于听写清理、笔记格式化和聊天的模型",
       "tabs": {
         "dictationCleanup": "听写清理",
+        "dictationAgent": "Voice Agent",
         "noteFormatting": "笔记格式化",
-        "chatIntelligence": "聊天智能"
+        "chatIntelligence": "聊天"
       }
+    },
+    "noteFormatting": {
+      "autoGenerateTitle": "自动生成笔记标题",
+      "autoGenerateTitleDescription": "使用 AI 在转录或增强后为笔记生成简短标题"
     },
     "transcription": {
       "customSetup": "自定义设置",
@@ -1533,7 +1562,51 @@
         "deleteModels": "删除模型"
       },
       "transcriptionPreview": "实时转录预览",
-      "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理"
+      "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理",
+      "vad": {
+        "title": "语音活动检测",
+        "description": "配置 Silero VAD 如何为本地 Whisper 转录检测并切分语音",
+        "toggles": {
+          "dictation": {
+            "title": "听写使用 Silero VAD",
+            "description": "为本地听写启用语音活动检测"
+          },
+          "noteRecording": {
+            "title": "笔记录音使用 Silero VAD",
+            "description": "为本地笔记录音启用语音活动检测"
+          },
+          "meeting": {
+            "title": "会议使用 Silero VAD",
+            "description": "为本地会议转录启用语音活动检测"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "VAD 阈值",
+            "info": "高于该概率的帧会被判定为语音。"
+          },
+          "minSpeechDurationMs": {
+            "label": "最小语音时长 (毫秒)",
+            "info": "短于此时长的语音片段会作为噪声或误判被丢弃。"
+          },
+          "minSilenceDurationMs": {
+            "label": "最小静音时长 (毫秒)",
+            "info": "静音必须达到该时长才会结束一个语音片段。更短的停顿会保留在片段内。"
+          },
+          "maxSpeechDurationS": {
+            "label": "最大语音时长 (秒)",
+            "info": "更长的片段会在静音处自动拆分，以便保持可控大小。"
+          },
+          "speechPadMs": {
+            "label": "语音填充 (毫秒)",
+            "info": "在每个语音片段前后添加的填充，避免切断词语边缘。"
+          },
+          "samplesOverlap": {
+            "label": "样本重叠 (秒)",
+            "info": "将每个片段延伸到下一个片段的音频量，避免拼接时出现突兀的截断。"
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -1545,13 +1618,99 @@
       "endpointUrl": "端点 URL",
       "serverUrl": "服务器 URL",
       "apiKeyOptional": "API Key（可选）"
+    },
+    "workspace": {
+      "title": "Espacio de trabajo",
+      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "empty": {
+        "title": "Crea tu primer espacio de trabajo",
+        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
+        "create": "Crear espacio de trabajo"
+      },
+      "tab": {
+        "general": "General",
+        "members": "Miembros",
+        "teams": "Equipos",
+        "billing": "Facturación",
+        "developer": "Desarrollador"
+      },
+      "role": {
+        "owner": "Propietario",
+        "admin": "Administrador",
+        "member": "Miembro"
+      },
+      "general": {
+        "nameLabel": "Nombre del espacio de trabajo",
+        "slugLabel": "Slug",
+        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
+        "saved": "Espacio de trabajo actualizado",
+        "dangerTitle": "Eliminar espacio de trabajo",
+        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
+        "delete": "Eliminar espacio de trabajo",
+        "confirmTitle": "¿Eliminar {{name}}?",
+        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+      },
+      "members": {
+        "title": "Miembros",
+        "description": "{{count}} de {{seats}} asientos utilizados.",
+        "invite": "Invitar",
+        "empty": "Aún no hay miembros.",
+        "roleUpdated": "Rol actualizado",
+        "promote": "Hacer administrador",
+        "demote": "Hacer miembro",
+        "transferOwnership": "Transferir propiedad",
+        "remove": "Quitar del espacio de trabajo"
+      },
+      "invites": {
+        "title": "Invitaciones pendientes",
+        "resend": "Reenviar",
+        "revoke": "Revocar",
+        "resent": "Invitación reenviada"
+      },
+      "teams": {
+        "title": "Equipos",
+        "description": "Agrupa miembros para compartir con alcance limitado.",
+        "new": "Nuevo equipo",
+        "empty": "Aún no hay equipos.",
+        "createFirst": "Crea tu primer equipo",
+        "createTitle": "Crear equipo",
+        "nameLabel": "Nombre del equipo",
+        "descriptionLabel": "Descripción",
+        "memberCount": "{{count}} miembros"
+      },
+      "billing": {
+        "title": "Facturación",
+        "description": "Plan, asientos y pago.",
+        "plan": "Plan",
+        "seats": "Asientos",
+        "nextInvoice": "Próxima factura",
+        "manageStripe": "Administrar en Stripe",
+        "startSubscription": "Iniciar suscripción"
+      },
+      "developer": {
+        "title": "Claves API",
+        "description": "Acceso programático limitado a este espacio de trabajo.",
+        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
+        "new": "Nueva clave",
+        "create": "Crear clave",
+        "createTitle": "Crear clave API",
+        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
+        "nameLabel": "Nombre de la clave",
+        "namePlaceholder": "Integración de producción",
+        "revoke": "Revocar clave",
+        "lastUsed": "Último uso {{date}}",
+        "neverUsed": "Nunca utilizada",
+        "keyCreatedTitle": "Clave API creada",
+        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
+      }
     }
   },
   "models": {
     "learnMore": "了解更多",
     "descriptions": {
       "parakeet": {
-        "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）"
+        "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）",
+        "parakeet_unified_en_0_6b": "仅英语 ASR，最先进的准确度（平均 WER 5.91%）"
       },
       "whisper": {
         "tiny": "最快速度，较低质量",
@@ -1570,7 +1729,6 @@
         "mistral_voxtral_mini_latest": "快速多语言转录"
       },
       "cloud": {
-        "openai_gpt_5_4": "复杂推理前沿模型",
         "openai_gpt_5_2": "强大的推理模型",
         "openai_gpt_5_mini": "快速且经济",
         "openai_gpt_5_nano": "超快速、低延迟",
@@ -1579,7 +1737,6 @@
         "openai_gpt_4_1_nano": "最低延迟 GPT-4.1",
         "anthropic_claude_sonnet_4_5": "均衡性能",
         "anthropic_claude_haiku_4_5": "快速且接近前沿水平",
-        "anthropic_claude_opus_4_5": "最强大的 Claude 模型",
         "gemini_gemini_3_pro_preview": "新一代旗舰模型，擅长复杂推理",
         "gemini_gemini_3_flash_preview": "超快速、高能力的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延迟和成本",
@@ -1591,7 +1748,11 @@
         "groq_llama_4_scout": "Meta 高效多模态，750 T/秒",
         "groq_compound": "Groq Compound 系统，450 T/秒",
         "groq_compound_mini": "快速 Compound 系统，3x 更低延迟",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文",
+        "openai_gpt_5_5": "复杂推理前沿模型",
+        "anthropic_claude_opus_4_7": "最强大的 Claude 模型",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",
@@ -1820,6 +1981,9 @@
       "comingSoon": "即将推出",
       "back": "返回"
     },
+    "meetingPill": {
+      "returnToNote": "返回到录音"
+    },
     "context": {
       "moveToFolder": "移动到文件夹",
       "delete": "删除",
@@ -1978,7 +2142,9 @@
     "integrations": "集成",
     "defaultUser": "用户",
     "notSignedIn": "未登录",
-    "chat": "聊天"
+    "chat": "聊天",
+    "inviteTeammate": "Invitar compañero",
+    "createWorkspace": "Crear espacio de trabajo"
   },
   "chat": {
     "newChat": "新对话",
@@ -2088,16 +2254,30 @@
       "stopListening": "停止录音",
       "startListening": "开始录音",
       "hideForNow": "暂时隐藏"
+    }
+  },
+  "dictationAgent": {
+    "enabled": "Enable voice agent",
+    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
-    "oauth": {
-      "redirectTitle": "正在跳转到应用...",
-      "closeTab": "您可以关闭此标签页。"
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {
     "settings": {
-      "enabled": "启用智能助手模式",
-      "enabledDescription": "使用独立热键打开语音聊天覆盖层",
       "hotkey": "助手热键",
       "hotkeyDescription": "切换助手覆盖层的热键",
       "model": "助手模型",
@@ -2190,7 +2370,8 @@
     "sections": {
       "calendar": "日历",
       "api": "API",
-      "mcp": "MCP"
+      "mcp": "MCP",
+      "cli": "CLI"
     },
     "api": {
       "title": "API 密钥",
@@ -2211,6 +2392,25 @@
       "copyUrl": "复制 MCP URL",
       "proRequired": "升级到付费计划，以将 OpenWhispr 连接到 Claude、ChatGPT 和 Cursor。",
       "copied": "已复制"
+    },
+    "cli": {
+      "title": "命令行访问",
+      "description": "让你的智能助手通过终端访问你的笔记。",
+      "installLabel": "安装",
+      "learnMore": "查看文档",
+      "copyDocsLink": "复制文档链接",
+      "docsLinkCopied": "已复制文档链接",
+      "viewPlans": "查看套餐",
+      "local": {
+        "label": "本地",
+        "freeBadge": "免费",
+        "description": "直接读取你的本地笔记。无需登录或 API 密钥 — 在 OpenWhispr 运行时即可使用。"
+      },
+      "cloud": {
+        "label": "云端",
+        "description": "使用 API 密钥在多台设备之间同步。",
+        "proRequired": "升级到付费计划以在云端模式下使用 CLI。"
+      }
     },
     "plan": {
       "title": "您的方案",
@@ -2298,7 +2498,37 @@
     "deleteNote": "删除笔记",
     "deleteConfirmTitle": "删除笔记？",
     "deleteConfirmDescription": "此笔记将被永久删除，无法恢复。",
-    "deleteConfirm": "删除"
+    "deleteConfirm": "删除",
+    "share": {
+      "button": "分享",
+      "dialog": {
+        "title": "分享笔记",
+        "searchPlaceholder": "通过电子邮件添加成员",
+        "emailLabel": "收件人邮箱",
+        "shareButton": "分享",
+        "copyLink": "复制链接",
+        "copied": "已复制",
+        "owner": "所有者",
+        "pending": "待处理",
+        "accepted": "已获得访问权限",
+        "resend": "重新发送邀请",
+        "revoke": "移除",
+        "invitationActions": "邀请操作",
+        "permissionRequired": "只有笔记的所有者可以更改分享设置。",
+        "visibility": {
+          "label": "可见性",
+          "link": "拥有链接的任何人",
+          "domain": "{{domain}} 内拥有链接的所有人",
+          "invited": "仅受邀者"
+        },
+        "error": {
+          "invalidEmail": "请输入有效的电子邮件地址",
+          "alreadyInvited": "{{email}} 已经被邀请",
+          "inviteFailed": "无法发送邀请。请重试。",
+          "linkUnavailable": "生成或更换链接后即可复制"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "搜索",
@@ -2399,6 +2629,54 @@
     "speaker": {
       "you": "你",
       "others": "其他人"
+    }
+  },
+  "workspaces": {
+    "switcher": {
+      "personal": "Personal",
+      "workspaces": "Espacios de trabajo",
+      "empty": "Aún no hay espacios de trabajo",
+      "create": "Crear espacio de trabajo…"
+    },
+    "create": {
+      "title": "Crear espacio de trabajo",
+      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
+      "nameLabel": "Nombre del espacio de trabajo",
+      "namePlaceholder": "Acme Corp",
+      "submit": "Crear espacio de trabajo",
+      "submitting": "Creando…",
+      "errorTitle": "No se pudo crear el espacio de trabajo"
+    },
+    "created": {
+      "title": "Espacio de trabajo creado",
+      "description": "Ahora eres el propietario de {{name}}."
+    },
+    "invite": {
+      "title": "Invitar a {{workspace}}",
+      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
+      "emailLabel": "Correo electrónico",
+      "roleLabel": "Rol",
+      "teamsLabel": "Agregar a equipos",
+      "submit": "Enviar invitación",
+      "submitting": "Enviando…",
+      "sentTitle": "Invitación enviada",
+      "sentDescription": "Enviamos una invitación a {{email}}.",
+      "errorTitle": "No se pudo enviar la invitación",
+      "role": {
+        "admin": "Administrador",
+        "member": "Miembro"
+      }
+    },
+    "accept": {
+      "title": "Unirse al espacio de trabajo",
+      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
+      "loading": "Cargando invitación…",
+      "accept": "Aceptar invitación",
+      "accepting": "Aceptando…",
+      "signInToAccept": "Inicia sesión para aceptar",
+      "successTitle": "Te uniste",
+      "successDescription": "Bienvenido a {{name}}.",
+      "errorTitle": "No se pudo aceptar la invitación"
     }
   }
 }

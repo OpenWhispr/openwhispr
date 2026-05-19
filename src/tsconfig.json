@@ -16,8 +16,7 @@
     "isolatedModules": true,
     "paths": {
       "@/*": ["./*"]
-    },
-    "baseUrl": "."
+    }
   },
   "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"],
   "exclude": ["node_modules", "dist"]

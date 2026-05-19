@@ -165,7 +165,8 @@ class DatabaseManager {
           name TEXT NOT NULL UNIQUE,
           is_default INTEGER NOT NULL DEFAULT 0,
           sort_order INTEGER NOT NULL DEFAULT 0,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
 
@@ -379,6 +380,16 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN diarization_enabled INTEGER");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN expected_speaker_count INTEGER");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS contacts (
@@ -458,6 +469,12 @@ class DatabaseManager {
       }
       try {
         this.db.exec("ALTER TABLE folders ADD COLUMN deleted_at TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE folders ADD COLUMN updated_at DATETIME");
+        this.db.exec("UPDATE folders SET updated_at = created_at WHERE updated_at IS NULL");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
@@ -541,13 +558,17 @@ class DatabaseManager {
   saveTranscription(
     text,
     rawText = null,
-    { status = "completed", errorMessage = null, errorCode = null } = {}
+    {
+      status = "completed",
+      errorMessage = null,
+      errorCode = null,
+      clientTranscriptionId = randomUUID(),
+    } = {}
   ) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const clientTranscriptionId = randomUUID();
       const stmt = this.db.prepare(
         "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, client_transcription_id) VALUES (?, ?, ?, ?, ?, ?)"
       );
@@ -831,6 +852,8 @@ class DatabaseManager {
         "transcript",
         "calendar_event_id",
         "participants",
+        "diarization_enabled",
+        "expected_speaker_count",
         "sync_status",
         "deleted_at",
         "client_note_id",
@@ -905,9 +928,10 @@ class DatabaseManager {
         .prepare("SELECT id FROM notes WHERE folder_id = ?")
         .all(id)
         .map((row) => row.id);
+      // Server cascades note deletes on folder delete; sync pull picks up note tombstones.
       const hardDeleteNotes = this.db.prepare("DELETE FROM notes WHERE folder_id = ?");
       const tombstoneFolder = this.db.prepare(
-        "UPDATE folders SET deleted_at = datetime('now'), sync_status = 'pending', name = '__deleted_' || id || '_' || name WHERE id = ?"
+        "UPDATE folders SET deleted_at = datetime('now'), updated_at = datetime('now'), sync_status = 'pending', name = '__deleted_' || id || '_' || name WHERE id = ?"
       );
       const hardDeleteFolder = this.db.prepare("DELETE FROM folders WHERE id = ?");
       this.db.transaction(() => {
@@ -935,7 +959,9 @@ class DatabaseManager {
         .get(trimmed, id);
       if (existing) return { success: false, error: "A folder with that name already exists" };
       this.db
-        .prepare("UPDATE folders SET name = ?, sync_status = 'pending' WHERE id = ?")
+        .prepare(
+          "UPDATE folders SET name = ?, sync_status = 'pending', updated_at = datetime('now') WHERE id = ?"
+        )
         .run(trimmed, id);
       const updated = this.db.prepare("SELECT * FROM folders WHERE id = ?").get(id);
       return { success: true, folder: updated };
@@ -1988,8 +2014,9 @@ class DatabaseManager {
       const stmt = this.db.prepare(`
         INSERT INTO notes (client_note_id, cloud_id, title, content, enhanced_content,
           enhancement_prompt, enhanced_at_content_hash, note_type, source_file,
-          audio_duration_seconds, transcript, folder_id, sync_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)
+          audio_duration_seconds, transcript, folder_id, participants, calendar_event_id,
+          diarization_enabled, expected_speaker_count, sync_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)
         ON CONFLICT(client_note_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           title = excluded.title,
@@ -1999,6 +2026,10 @@ class DatabaseManager {
           enhanced_at_content_hash = excluded.enhanced_at_content_hash,
           transcript = excluded.transcript,
           folder_id = excluded.folder_id,
+          participants = excluded.participants,
+          calendar_event_id = excluded.calendar_event_id,
+          diarization_enabled = excluded.diarization_enabled,
+          expected_speaker_count = excluded.expected_speaker_count,
           sync_status = 'synced',
           updated_at = excluded.updated_at
       `);
@@ -2015,6 +2046,10 @@ class DatabaseManager {
         cloudNote.audio_duration_seconds || null,
         cloudNote.transcript || null,
         localFolderId,
+        cloudNote.participants || null,
+        cloudNote.calendar_event_id || null,
+        cloudNote.diarization_enabled ?? null,
+        cloudNote.expected_speaker_count ?? null,
         cloudNote.created_at,
         cloudNote.updated_at
       );
@@ -2128,13 +2163,14 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const stmt = this.db.prepare(`
-        INSERT INTO folders (client_folder_id, cloud_id, name, is_default, sort_order, sync_status, created_at)
-        VALUES (?, ?, ?, ?, ?, 'synced', ?)
+        INSERT INTO folders (client_folder_id, cloud_id, name, is_default, sort_order, sync_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'synced', ?, ?)
         ON CONFLICT(client_folder_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           name = excluded.name,
           sort_order = excluded.sort_order,
-          sync_status = 'synced'
+          sync_status = 'synced',
+          updated_at = excluded.updated_at
       `);
       stmt.run(
         cloudFolder.client_folder_id,
@@ -2142,7 +2178,8 @@ class DatabaseManager {
         cloudFolder.name,
         cloudFolder.is_default ? 1 : 0,
         cloudFolder.sort_order || 0,
-        cloudFolder.created_at
+        cloudFolder.created_at,
+        cloudFolder.updated_at || cloudFolder.created_at
       );
       return this.db
         .prepare("SELECT * FROM folders WHERE client_folder_id = ?")

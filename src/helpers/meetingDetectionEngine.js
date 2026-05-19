@@ -201,11 +201,11 @@ class MeetingDetectionEngine {
         }
 
         await this.windowManager.createControlPanelWindow();
-        this.windowManager.snapControlPanelToMeetingMode();
         this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
           noteId: noteResult.note.id,
           folderId: meetingsFolder.id,
           event: detection.event,
+          trigger: "calendar-join",
         });
 
         this.audioActivityDetector.resetPrompt();
@@ -234,7 +234,7 @@ class MeetingDetectionEngine {
 
     const activeEvents = this.databaseManager.getActiveEvents();
     if (activeEvents?.length > 0) {
-      return this.joinCalendarMeeting(activeEvents[0].id);
+      return this.joinCalendarMeeting(activeEvents[0].id, "hotkey");
     }
 
     this._meetingModeActive = true;
@@ -270,17 +270,17 @@ class MeetingDetectionEngine {
 
     await this.windowManager.createControlPanelWindow();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    this.windowManager.snapControlPanelToMeetingMode();
     this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
       noteId: noteResult.note.id,
       folderId: meetingsFolder.id,
       event,
+      trigger: "hotkey",
     });
   }
 
-  async joinCalendarMeeting(eventId) {
+  async joinCalendarMeeting(eventId, trigger = "calendar-join") {
     this._meetingModeActive = true;
-    debugLogger.info("Joining calendar meeting", { eventId }, "meeting");
+    debugLogger.info("Joining calendar meeting", { eventId, trigger }, "meeting");
 
     const calEvent = this.databaseManager.getCalendarEventById(eventId);
     if (!calEvent) {
@@ -312,11 +312,11 @@ class MeetingDetectionEngine {
 
     await this.windowManager.createControlPanelWindow();
     await new Promise((resolve) => setTimeout(resolve, 50));
-    this.windowManager.snapControlPanelToMeetingMode();
     this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
       noteId: noteResult.note.id,
       folderId: meetingsFolder.id,
       event: calEvent,
+      trigger,
     });
   }
 

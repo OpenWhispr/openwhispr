@@ -67,7 +67,6 @@ class OpenAIRealtimeStreaming {
       this.ws = new WebSocket(url, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
-          "OpenAI-Beta": "realtime=v1",
         },
       });
 

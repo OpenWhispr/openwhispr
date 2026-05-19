@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { authClient, isWithinGracePeriod } from "../lib/neonAuth";
+import { authClient, isWithinGracePeriod } from "../lib/auth";
 import logger from "../utils/logger";
 import { useSettingsStore } from "../stores/settingsStore";
 
@@ -18,7 +18,7 @@ export function useAuth() {
   const gracePeriodActive = isWithinGracePeriod();
 
   // Only sync true to the store — signOut() handles setting false via localStorage + reload.
-  // The Neon SDK's useSession() flickers in Electron (renderer can't access main process cookies).
+  // Better Auth's useSession() flickers in Electron (renderer can't see the main-process cookie until reload).
   const isSignedIn = rawIsSignedIn || gracePeriodActive;
 
   const lastSyncedRef = useRef(false);

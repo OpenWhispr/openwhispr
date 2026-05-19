@@ -1202,6 +1202,10 @@ class WindowManager {
       this.updateNotificationWindow.close();
       this.updateNotificationWindow = null;
     }
+    if (this._updateNotificationAutoDismiss) {
+      clearTimeout(this._updateNotificationAutoDismiss);
+      this._updateNotificationAutoDismiss = null;
+    }
 
     const display = screen.getPrimaryDisplay();
     const position = WindowPositionUtil.getNotificationPosition(display);
@@ -1241,8 +1245,16 @@ class WindowManager {
       }
     }, 3000);
 
+    this._updateNotificationAutoDismiss = setTimeout(() => {
+      this.dismissUpdateNotification({ persistent: false });
+    }, 5000);
+
     this.updateNotificationWindow.on("closed", () => {
       this.updateNotificationWindow = null;
+      if (this._updateNotificationAutoDismiss) {
+        clearTimeout(this._updateNotificationAutoDismiss);
+        this._updateNotificationAutoDismiss = null;
+      }
     });
   }
 
@@ -1256,12 +1268,16 @@ class WindowManager {
     }
   }
 
-  dismissUpdateNotification() {
+  dismissUpdateNotification({ persistent = true } = {}) {
     this._pendingUpdateNotificationData = null;
-    this._updateNotificationDismissed = true;
+    if (persistent) this._updateNotificationDismissed = true;
     if (this._updateNotificationReadyFallback) {
       clearTimeout(this._updateNotificationReadyFallback);
       this._updateNotificationReadyFallback = null;
+    }
+    if (this._updateNotificationAutoDismiss) {
+      clearTimeout(this._updateNotificationAutoDismiss);
+      this._updateNotificationAutoDismiss = null;
     }
     if (this.updateNotificationWindow && !this.updateNotificationWindow.isDestroyed()) {
       this.updateNotificationWindow.close();

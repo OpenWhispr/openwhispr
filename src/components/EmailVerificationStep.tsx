@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { OPENWHISPR_API_URL } from "../config/constants";
+import { authClient } from "../lib/auth";
 import { Button } from "./ui/button";
 import { Mail, Loader2, Check, RefreshCw } from "lucide-react";
 import logoIcon from "../assets/icon.png";
@@ -54,26 +55,22 @@ export default function EmailVerificationStep({ email, onVerified }: EmailVerifi
   }, [email, verified, onVerified, t]);
 
   const handleResend = useCallback(async () => {
-    if (resendCooldown > 0 || isResending || !OPENWHISPR_API_URL) return;
+    if (resendCooldown > 0 || isResending) return;
     setIsResending(true);
     setError(null);
     try {
-      const res = await fetch(`${OPENWHISPR_API_URL}/api/auth/send-verification-email`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (res.ok) {
-        setResendCooldown(60);
+      const result = await authClient.sendVerificationEmail({ email });
+      if (result.error) {
+        setError(result.error.message || t("emailVerification.errors.resendFailed"));
       } else {
-        const data = await res.json();
-        setError(data.error || t("emailVerification.errors.resendFailed"));
+        setResendCooldown(60);
       }
     } catch {
       setError(t("emailVerification.errors.serverUnreachable"));
     } finally {
       setIsResending(false);
     }
-  }, [resendCooldown, isResending, t]);
+  }, [resendCooldown, isResending, email, t]);
 
   if (verified) {
     return (

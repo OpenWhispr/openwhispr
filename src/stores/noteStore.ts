@@ -1,11 +1,20 @@
 import { create } from "zustand";
-import type { NoteItem } from "../types/electron";
+import type { NoteItem, NoteShareInvitation, ShareSettings } from "../types/electron";
+
+export interface NoteShareCacheEntry {
+  share: ShareSettings;
+  invitations: NoteShareInvitation[];
+  // Raw token is returned by the API exactly once (on generate or rotate)
+  // and is only kept in memory for the active dialog session.
+  rawToken: string | null;
+}
 
 interface NoteState {
   notes: NoteItem[];
   activeNoteId: number | null;
   activeFolderId: number | null;
   migration: { total: number; done: number } | null;
+  shareByCloudId: Map<string, NoteShareCacheEntry>;
 }
 
 const useNoteStore = create<NoteState>()(() => ({
@@ -13,6 +22,7 @@ const useNoteStore = create<NoteState>()(() => ({
   activeNoteId: null,
   activeFolderId: null,
   migration: null,
+  shareByCloudId: new Map<string, NoteShareCacheEntry>(),
 }));
 
 let hasBoundIpcListeners = false;
@@ -193,4 +203,35 @@ export async function startMigration(): Promise<void> {
   }
 
   useNoteStore.setState({ migration: null });
+}
+
+export function setShareCache(cloudId: string, entry: NoteShareCacheEntry): void {
+  const { shareByCloudId } = useNoteStore.getState();
+  const next = new Map(shareByCloudId);
+  next.set(cloudId, entry);
+  useNoteStore.setState({ shareByCloudId: next });
+}
+
+export function updateShareCache(
+  cloudId: string,
+  updater: (current: NoteShareCacheEntry | undefined) => NoteShareCacheEntry
+): void {
+  const { shareByCloudId } = useNoteStore.getState();
+  const next = new Map(shareByCloudId);
+  next.set(cloudId, updater(next.get(cloudId)));
+  useNoteStore.setState({ shareByCloudId: next });
+}
+
+export function clearShareCache(cloudId: string): void {
+  const { shareByCloudId } = useNoteStore.getState();
+  if (!shareByCloudId.has(cloudId)) return;
+  const next = new Map(shareByCloudId);
+  next.delete(cloudId);
+  useNoteStore.setState({ shareByCloudId: next });
+}
+
+export function useShareCacheEntry(cloudId: string | null): NoteShareCacheEntry | null {
+  return useNoteStore((state) =>
+    cloudId ? state.shareByCloudId.get(cloudId) ?? null : null
+  );
 }

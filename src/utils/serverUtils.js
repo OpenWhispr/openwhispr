@@ -1,7 +1,7 @@
 const fs = require("fs");
 const net = require("net");
 const path = require("path");
-const { killProcess } = require("./process");
+const { killProcessGroup } = require("./process");
 
 const GRACEFUL_STOP_TIMEOUT_MS = 5000;
 
@@ -49,11 +49,11 @@ function resolveBinaryPath(binaryName) {
 }
 
 async function gracefulStopProcess(proc) {
-  killProcess(proc, "SIGTERM");
+  killProcessGroup(proc, "SIGTERM");
 
   await new Promise((resolve) => {
     const timeout = setTimeout(() => {
-      if (proc) killProcess(proc, "SIGKILL");
+      if (proc) killProcessGroup(proc, "SIGKILL");
       resolve();
     }, GRACEFUL_STOP_TIMEOUT_MS);
 

@@ -52,12 +52,36 @@ export interface NoteItem {
   transcript: string | null;
   calendar_event_id: string | null;
   participants: string | null;
+  diarization_enabled: number | null;
+  expected_speaker_count: number | null;
   cloud_id: string | null;
   created_at: string;
   updated_at: string;
   client_note_id: string;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  workspace_id?: string | null;
+  team_id?: string | null;
+}
+
+export type ShareVisibility = "private" | "link" | "domain" | "invited";
+
+export interface ShareSettings {
+  visibility: ShareVisibility;
+  token_prefix: string | null;
+  domain_allowlist: string[];
+  updated_by_user_id: string | null;
+  updated_at: string | null;
+}
+
+export interface NoteShareInvitation {
+  id: string;
+  email: string;
+  invited_by_user_id: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  last_emailed_at: string | null;
+  created_at: string;
 }
 
 export interface FolderItem {
@@ -66,10 +90,104 @@ export interface FolderItem {
   is_default: number;
   sort_order: number;
   created_at: string;
+  updated_at: string;
   client_folder_id: string;
   cloud_id: string | null;
   sync_status: "synced" | "pending" | "error";
   deleted_at: string | null;
+  workspace_id?: string | null;
+  team_id?: string | null;
+}
+
+export type WorkspaceRole = "owner" | "admin" | "member";
+export type TeamRole = "admin" | "member";
+
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  created_by_user_id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  plan: string;
+  status: string;
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  seats: number;
+  created_at: string;
+  updated_at: string;
+  role: WorkspaceRole;
+}
+
+export interface WorkspaceMember {
+  user_id: string;
+  role: WorkspaceRole;
+  joined_at: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+}
+
+export interface Team {
+  id: string;
+  workspace_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  member_count?: number;
+}
+
+export interface TeamMember {
+  user_id: string;
+  role: TeamRole;
+  joined_at: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  email: string;
+  workspace_role: TeamRole;
+  team_ids: string[];
+  invited_by_user_id: string;
+  expires_at: string;
+  created_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface InvitationPreview {
+  id: string;
+  email: string;
+  workspace_role: TeamRole;
+  team_ids: string[];
+  expires_at: string;
+  workspace_id: string;
+  workspace_name: string;
+  workspace_slug: string;
+  inviter_name: string | null;
+  inviter_email: string | null;
+}
+
+export interface WorkspaceApiKey {
+  id: string;
+  name: string;
+  key_prefix: string;
+  scopes: string[];
+  last_used_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+  created_by_user_id: string | null;
+  description: string | null;
+}
+
+export interface NewWorkspaceApiKey extends WorkspaceApiKey {
+  key: string;
 }
 
 export interface ActionItem {
@@ -388,6 +506,7 @@ declare global {
           status?: TranscriptionStatus;
           errorMessage?: string | null;
           errorCode?: TranscriptionErrorCode;
+          clientTranscriptionId?: string;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
       getTranscriptions: (limit?: number) => Promise<TranscriptionItem[]>;
@@ -418,6 +537,7 @@ declare global {
           cloudTranscriptionBaseUrl?: string;
           parakeetModel: string;
           whisperModel: string;
+          preferredLanguage?: string;
           transcriptionMode?: InferenceMode;
           remoteTranscriptionType?: SelfHostedType;
           remoteTranscriptionUrl?: string;
@@ -469,6 +589,8 @@ declare global {
           transcript?: string | null;
           calendar_event_id?: string | null;
           participants?: string | null;
+          diarization_enabled?: number | null;
+          expected_speaker_count?: number | null;
         }
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
@@ -565,7 +687,6 @@ declare global {
       // API key management
       getOpenAIKey: () => Promise<string>;
       saveOpenAIKey: (key: string) => Promise<{ success: boolean }>;
-      createProductionEnvFile: (key: string) => Promise<void>;
       getAnthropicKey: () => Promise<string | null>;
       saveAnthropicKey: (key: string) => Promise<void>;
       getUiLanguage: () => Promise<string>;
@@ -576,8 +697,10 @@ declare global {
         useLocalWhisper: boolean;
         localTranscriptionProvider: LocalTranscriptionProvider;
         model?: string;
-        reasoningProvider: string;
-        reasoningModel?: string;
+        cleanupProvider: string;
+        cleanupModel?: string;
+        dictationAgentProvider: string;
+        dictationAgentModel?: string;
       }) => Promise<void>;
 
       // Clipboard operations
@@ -637,7 +760,7 @@ declare global {
       // Parakeet operations (NVIDIA via sherpa-onnx)
       transcribeLocalParakeet: (
         audioBlob: ArrayBuffer,
-        options?: { model?: string; language?: string }
+        options?: { model?: string }
       ) => Promise<ParakeetTranscriptionResult>;
       checkParakeetInstallation: () => Promise<ParakeetCheckResult>;
       downloadParakeetModel: (modelName: string) => Promise<ParakeetModelResult>;
@@ -751,6 +874,7 @@ declare global {
       windowMaximize: () => Promise<void>;
       windowClose: () => Promise<void>;
       windowIsMaximized: () => Promise<boolean>;
+      snapToMeetingMode: () => Promise<void>;
       restoreFromMeetingMode: () => Promise<void>;
       getPlatform: () => string;
       startWindowDrag: () => Promise<void>;
@@ -768,7 +892,10 @@ declare global {
       installUpdate: () => Promise<UpdateResult>;
       getAppVersion: () => Promise<AppVersionResult>;
       getPostMigrationState: () => Promise<{ justMigrated: boolean }>;
+      getOAuthProtocolRegistered: () => Promise<boolean>;
+      getOAuthProtocol: () => Promise<string>;
       markBundleMigrated: () => Promise<void>;
+      markBundleMigrationDismissed: () => Promise<void>;
       getUpdateStatus: () => Promise<UpdateStatusResult>;
       getUpdateInfo: () => Promise<UpdateInfoResult | null>;
 
@@ -851,8 +978,8 @@ declare global {
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;
-      getCustomReasoningKey?: () => Promise<string | null>;
-      saveCustomReasoningKey?: (key: string) => Promise<void>;
+      getCleanupCustomKey?: () => Promise<string | null>;
+      saveCleanupCustomKey?: (key: string) => Promise<void>;
 
       // Enterprise provider key persistence
       getBedrockRegion?: () => Promise<string | null>;
@@ -949,6 +1076,8 @@ declare global {
 
       // Auth
       authClearSession?: () => Promise<void>;
+      authGetToken?: () => Promise<string | null>;
+      authSetToken?: (token: string) => Promise<void>;
 
       // OpenWhispr Cloud API
       cloudTranscribe?: (
@@ -957,6 +1086,7 @@ declare global {
       ) => Promise<{
         success: boolean;
         text?: string;
+        clientTranscriptionId?: string;
         wordsUsed?: number;
         wordsRemaining?: number;
         limitReached?: boolean;
@@ -1004,6 +1134,12 @@ declare global {
         limitReached?: boolean;
         error?: string;
         code?: string;
+      }>;
+      cloudHealthCheck?: () => Promise<{
+        ok: boolean;
+        status?: number;
+        code?: string;
+        messageKey?: string;
       }>;
       cloudUsage?: () => Promise<{
         success: boolean;
@@ -1097,6 +1233,9 @@ declare global {
       onLimitReached?: (
         callback: (data: { wordsUsed: number; limit: number }) => void
       ) => () => void;
+
+      // Workspace invitation deep link
+      onWorkspaceInvitationToken?: (callback: (token: string) => void) => () => void;
 
       // AssemblyAI Streaming
       assemblyAiStreamingWarmup?: (options?: {
@@ -1565,6 +1704,32 @@ declare global {
         enabled: boolean;
         expectedCount: number;
       }) => Promise<{ success: boolean; error?: string }>;
+      getWhisperVadConfig?: () => Promise<{
+        success: boolean;
+        config?: {
+          dictationSileroEnabled: boolean;
+          noteRecordingSileroEnabled: boolean;
+          meetingSileroEnabled: boolean;
+          threshold: number;
+          minSpeechDurationMs: number;
+          minSilenceDurationMs: number;
+          maxSpeechDurationS: number;
+          speechPadMs: number;
+          samplesOverlap: number;
+        };
+        error?: string;
+      }>;
+      setWhisperVadConfig?: (config: {
+        dictationSileroEnabled?: boolean;
+        noteRecordingSileroEnabled?: boolean;
+        meetingSileroEnabled?: boolean;
+        threshold?: number;
+        minSpeechDurationMs?: number;
+        minSilenceDurationMs?: number;
+        maxSpeechDurationS?: number;
+        speechPadMs?: number;
+        samplesOverlap?: number;
+      }) => Promise<{ success: boolean; config?: Record<string, unknown>; error?: string }>;
       onMeetingDetected?: (callback: (data: any) => void) => () => void;
       onMeetingDetectedStartRecording?: (callback: (data: any) => void) => () => void;
       onMeetingNotificationData?: (callback: (data: any) => void) => () => void;
@@ -1576,7 +1741,12 @@ declare global {
       ) => Promise<{ success: boolean }>;
       joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
       onNavigateToMeetingNote?: (
-        callback: (data: { noteId: number; folderId: number; event: any }) => void
+        callback: (data: {
+          noteId: number;
+          folderId: number;
+          event: any;
+          trigger?: "hotkey" | "manual" | "calendar-join";
+        }) => void
       ) => () => void;
       onNavigateToNote?: (
         callback: (data: { noteId: number; folderId: number | null }) => void
@@ -1598,6 +1768,7 @@ declare global {
       startDictationPreview?: (opts: {
         provider: string;
         model: string;
+        language?: string;
       }) => Promise<{ success: boolean }>;
       stopDictationPreview?: (opts?: { showCleanup?: boolean }) => Promise<{ success: boolean }>;
       dismissDictationPreview?: () => Promise<{ success: boolean }>;

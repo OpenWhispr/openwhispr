@@ -36,6 +36,17 @@
       "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
       "extractDir": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
       "descriptionKey": "models.descriptions.parakeet.parakeet_tdt_0_6b_v3"
+    },
+    "parakeet-unified-en-0.6b": {
+      "name": "Parakeet Unified EN 0.6B",
+      "description": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
+      "size": "631MB",
+      "sizeMb": 631,
+      "language": "en",
+      "supportedLanguages": ["en"],
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming.tar.bz2",
+      "extractDir": "sherpa-onnx-nemo-parakeet-unified-en-0.6b-int8-non-streaming",
+      "descriptionKey": "models.descriptions.parakeet.parakeet_unified_en_0_6b"
     }
   },
   "diarizationModels": {
@@ -188,10 +199,10 @@
       "name": "OpenAI",
       "models": [
         {
-          "id": "gpt-5.4",
-          "name": "GPT-5.4",
-          "description": "Frontier model for complex reasoning",
-          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_4",
+          "id": "gpt-5.5",
+          "name": "GPT-5.5",
+          "description": "Frontier model for complex reasoning, 1M context",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_5",
           "tokenParam": "max_completion_tokens",
           "supportsTemperature": false
         },
@@ -262,10 +273,28 @@
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5"
         },
         {
+          "id": "claude-opus-4-7",
+          "name": "Claude Opus 4.7",
+          "description": "Most capable Claude model, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7"
+        },
+        {
           "id": "claude-opus-4-6",
           "name": "Claude Opus 4.6",
-          "description": "Most capable Claude model",
+          "description": "Previous Opus generation, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6"
+        },
+        {
+          "id": "claude-sonnet-4-5",
+          "name": "Claude Sonnet 4.5",
+          "description": "Previous Sonnet generation",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5"
+        },
+        {
+          "id": "claude-opus-4-5",
+          "name": "Claude Opus 4.5",
+          "description": "Earlier Opus model",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5"
         }
       ]
     },
@@ -302,18 +331,21 @@
           "name": "Qwen3 32B",
           "description": "Powerful reasoning model, 131K context",
           "disableThinking": true,
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b"
         },
         {
           "id": "openai/gpt-oss-120b",
           "name": "GPT-OSS 120B",
           "description": "OpenAI's open-source flagship, 500 T/sec",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b"
         },
         {
           "id": "openai/gpt-oss-20b",
           "name": "GPT-OSS 20B",
           "description": "Fast open-source model, 1000 T/sec",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b"
         },
         {
@@ -431,6 +463,7 @@
           "contextLength": 262144,
           "hfRepo": "bartowski/Qwen_Qwen3.5-9B-GGUF",
           "recommended": true,
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_5_9b_q4_k_m"
         },
         {
@@ -443,6 +476,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/Qwen_Qwen3.5-4B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_5_4b_q4_k_m"
         },
         {
@@ -455,6 +489,7 @@
           "quantization": "q4_k_m",
           "contextLength": 262144,
           "hfRepo": "bartowski/Qwen_Qwen3.5-2B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_5_2b_q4_k_m"
         },
         {
@@ -467,6 +502,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-8B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8b_q4_k_m"
         },
         {
@@ -479,6 +515,7 @@
           "quantization": "q5_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-8B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_8b_q5_k_m"
         },
         {
@@ -491,6 +528,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-4B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_4b_q4_k_m"
         },
         {
@@ -503,6 +541,7 @@
           "quantization": "q8_0",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-1.7B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_1_7b_q8_0"
         },
         {
@@ -515,6 +554,7 @@
           "quantization": "q4_k_m",
           "contextLength": 131072,
           "hfRepo": "Qwen/Qwen3-32B-GGUF",
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.qwen_qwen3_32b_q4_k_m"
         },
         {
@@ -674,6 +714,7 @@
           "contextLength": 128000,
           "hfRepo": "ggml-org/gpt-oss-20b-GGUF",
           "recommended": true,
+          "supportsThinking": true,
           "descriptionKey": "models.descriptions.local.openai_oss_gpt_oss_20b_mxfp4"
         }
       ]

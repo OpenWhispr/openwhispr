@@ -1,16 +1,13 @@
 const fs = require("fs");
 const { promises: fsPromises } = require("fs");
 const path = require("path");
-const https = require("https");
-const http = require("http");
+const { net } = require("electron");
 const { execFile } = require("child_process");
 const { pipeline } = require("stream");
 const debugLogger = require("./debugLogger");
 
 const USER_AGENT = "OpenWhispr/1.0";
 const PROGRESS_THROTTLE_MS = 100;
-const MAX_REDIRECTS = 5;
-const DEFAULT_TIMEOUT = 60000;
 const DEFAULT_MAX_RETRIES = 3;
 const MAX_BACKOFF_MS = 30000;
 const STALL_TIMEOUT_MS = 30000;
@@ -48,6 +45,11 @@ function isRetryable(error) {
   return RETRYABLE_CODES.has(error.code);
 }
 
+function headerValue(headers, name) {
+  const raw = headers[name];
+  return Array.isArray(raw) ? raw[0] : raw;
+}
+
 function backoffDelay(attempt) {
   return Math.min(1000 * Math.pow(2, attempt), MAX_BACKOFF_MS);
 }
@@ -57,23 +59,11 @@ function sleep(ms) {
 }
 
 function downloadAttempt(url, tempPath, options) {
-  const {
-    timeout,
-    onProgress,
-    signal,
-    startOffset = 0,
-    expectedSize = 0,
-    _redirects = 0,
-  } = options;
+  const { onProgress, signal, startOffset = 0, expectedSize = 0 } = options;
 
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(Object.assign(new Error("Download cancelled"), { isAbort: true }));
-      return;
-    }
-
-    if (_redirects > MAX_REDIRECTS) {
-      reject(Object.assign(new Error("Too many redirects"), { isHttpError: true }));
       return;
     }
 
@@ -82,7 +72,6 @@ function downloadAttempt(url, tempPath, options) {
       headers["Range"] = `bytes=${startOffset}-`;
     }
 
-    const client = url.startsWith("https") ? https : http;
     let request = null;
     let activeFile = null;
     let stallTimer = null;
@@ -96,7 +85,7 @@ function downloadAttempt(url, tempPath, options) {
         stallTimer = null;
       }
       if (request) {
-        request.destroy();
+        request.abort();
         request = null;
       }
       if (activeFile) {
@@ -114,7 +103,12 @@ function downloadAttempt(url, tempPath, options) {
       signal.onAbort = onAbort;
     }
 
-    request = client.get(url, { headers, timeout }, (response) => {
+    request = net.request({ url, method: "GET" });
+    for (const [name, value] of Object.entries(headers)) {
+      request.setHeader(name, value);
+    }
+
+    request.on("response", (response) => {
       if (signal?.aborted) {
         response.resume();
         cleanup();
@@ -124,48 +118,25 @@ function downloadAttempt(url, tempPath, options) {
 
       const statusCode = response.statusCode;
 
-      // Follow redirects inline — no separate HEAD resolve step needed
-      if (statusCode >= 300 && statusCode < 400) {
-        response.resume();
-        if (signal) signal.onAbort = null;
-        if (request) {
-          request.destroy();
-          request = null;
-        }
-        const location = response.headers.location;
-        if (!location) {
-          reject(
-            Object.assign(new Error("Redirect without location header"), { isHttpError: true })
-          );
-          return;
-        }
-        downloadAttempt(location, tempPath, { ...options, _redirects: _redirects + 1 }).then(
-          resolve,
-          reject
-        );
-        return;
-      }
-
-      // Content response — create write stream
       if (statusCode === 200 && startOffset > 0) {
         // Server doesn't support Range — restart from beginning
         downloadedSize = 0;
         activeFile = fs.createWriteStream(tempPath, { flags: "w" });
-        totalSize = parseInt(response.headers["content-length"], 10) || 0;
+        totalSize = parseInt(headerValue(response.headers, "content-length"), 10) || 0;
       } else if (statusCode === 206) {
         activeFile = fs.createWriteStream(tempPath, { flags: "a" });
-        const contentRange = response.headers["content-range"];
+        const contentRange = headerValue(response.headers, "content-range");
         if (contentRange) {
           const match = contentRange.match(/\/(\d+)$/);
           if (match) totalSize = parseInt(match[1], 10);
         }
         if (!totalSize) {
-          const contentLength = parseInt(response.headers["content-length"], 10) || 0;
+          const contentLength = parseInt(headerValue(response.headers, "content-length"), 10) || 0;
           totalSize = startOffset + contentLength;
         }
       } else if (statusCode === 200) {
         activeFile = fs.createWriteStream(tempPath, { flags: "w" });
-        totalSize = parseInt(response.headers["content-length"], 10) || 0;
+        totalSize = parseInt(headerValue(response.headers, "content-length"), 10) || 0;
       } else {
         response.resume();
         cleanup();
@@ -247,11 +218,7 @@ function downloadAttempt(url, tempPath, options) {
       }
     });
 
-    request.on("timeout", () => {
-      if (signal) signal.onAbort = null;
-      cleanup();
-      reject(Object.assign(new Error("Socket timeout"), { code: "ETIMEDOUT" }));
-    });
+    request.end();
 
     function emitProgress() {
       if (!onProgress) return;
@@ -268,13 +235,7 @@ function downloadAttempt(url, tempPath, options) {
 }
 
 async function downloadFile(url, destPath, options = {}) {
-  const {
-    onProgress,
-    timeout = DEFAULT_TIMEOUT,
-    maxRetries = DEFAULT_MAX_RETRIES,
-    signal,
-    expectedSize = 0,
-  } = options;
+  const { onProgress, maxRetries = DEFAULT_MAX_RETRIES, signal, expectedSize = 0 } = options;
 
   const tempPath = `${destPath}.tmp`;
 
@@ -314,7 +275,6 @@ async function downloadFile(url, destPath, options = {}) {
 
     try {
       await downloadAttempt(url, tempPath, {
-        timeout,
         onProgress,
         signal,
         startOffset,

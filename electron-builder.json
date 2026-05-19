@@ -87,20 +87,12 @@
   "asarUnpack": [
     "**/node_modules/ffmpeg-static/**/*",
     "**/node_modules/better-sqlite3/**/*",
-    "**/node_modules/onnxruntime-node/**/*"
+    "**/node_modules/onnxruntime-node/**/*",
+    "**/node_modules/@napi-rs/keyring/**/*"
   ],
   "extraResources": [
     ".env",
     "src/assets/**/*",
-    "resources/bin/macos-audio-tap",
-    "resources/bin/macos-globe-listener",
-    "resources/bin/macos-fast-paste",
-    "resources/bin/macos-mic-listener",
-    "resources/bin/macos-text-monitor",
-    "resources/bin/macos-media-remote",
-    "resources/bin/linux-fast-paste",
-    "resources/bin/linux-system-audio-helper",
-    "resources/bin/linux-text-monitor",
     {
       "from": "resources/bin/",
       "to": "bin/",
@@ -110,6 +102,15 @@
         "llama-server-*",
         "sherpa-onnx-*",
         "qdrant-*",
+        "macos-audio-tap",
+        "macos-globe-listener",
+        "macos-fast-paste",
+        "macos-mic-listener",
+        "macos-text-monitor",
+        "macos-media-remote",
+        "linux-fast-paste",
+        "linux-system-audio-helper",
+        "linux-text-monitor",
         "linux-key-listener*",
         "meeting-aec-helper-*",
         "windows-key-listener*",

@@ -34,23 +34,15 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [justCreated, setJustCreated] = useState(false);
 
-  const reasoningModel = useSettingsStore((s) => s.reasoningModel);
-  const setReasoningModel = useSettingsStore((s) => s.setReasoningModel);
-  const reasoningProvider = useSettingsStore((s) => s.reasoningProvider);
-  const setReasoningProvider = useSettingsStore((s) => s.setReasoningProvider);
-  const setReasoningMode = useSettingsStore((s) => s.setReasoningMode);
-  const cloudReasoningBaseUrl = useSettingsStore((s) => s.cloudReasoningBaseUrl);
-  const setCloudReasoningBaseUrl = useSettingsStore((s) => s.setCloudReasoningBaseUrl);
-  const openaiApiKey = useSettingsStore((s) => s.openaiApiKey);
-  const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
-  const anthropicApiKey = useSettingsStore((s) => s.anthropicApiKey);
-  const setAnthropicApiKey = useSettingsStore((s) => s.setAnthropicApiKey);
-  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
-  const setGeminiApiKey = useSettingsStore((s) => s.setGeminiApiKey);
-  const groqApiKey = useSettingsStore((s) => s.groqApiKey);
-  const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
-  const customReasoningApiKey = useSettingsStore((s) => s.customReasoningApiKey);
-  const setCustomReasoningApiKey = useSettingsStore((s) => s.setCustomReasoningApiKey);
+  const cleanupModel = useSettingsStore((s) => s.cleanupModel);
+  const setCleanupModel = useSettingsStore((s) => s.setCleanupModel);
+  const cleanupProvider = useSettingsStore((s) => s.cleanupProvider);
+  const setCleanupProvider = useSettingsStore((s) => s.setCleanupProvider);
+  const setCleanupMode = useSettingsStore((s) => s.setCleanupMode);
+  const cleanupCloudBaseUrl = useSettingsStore((s) => s.cleanupCloudBaseUrl);
+  const setCleanupCloudBaseUrl = useSettingsStore((s) => s.setCleanupCloudBaseUrl);
+  const cleanupCustomApiKey = useSettingsStore((s) => s.cleanupCustomApiKey);
+  const setCleanupCustomApiKey = useSettingsStore((s) => s.setCleanupCustomApiKey);
 
   const { alertDialog, hideAlertDialog } = useDialogs();
   const {
@@ -169,23 +161,15 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
                 </p>
 
                 <ReasoningModelSelector
-                  reasoningModel={reasoningModel}
-                  setReasoningModel={setReasoningModel}
-                  localReasoningProvider={reasoningProvider}
-                  setLocalReasoningProvider={setReasoningProvider}
-                  cloudReasoningBaseUrl={cloudReasoningBaseUrl}
-                  setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
-                  openaiApiKey={openaiApiKey}
-                  setOpenaiApiKey={setOpenaiApiKey}
-                  anthropicApiKey={anthropicApiKey}
-                  setAnthropicApiKey={setAnthropicApiKey}
-                  geminiApiKey={geminiApiKey}
-                  setGeminiApiKey={setGeminiApiKey}
-                  groqApiKey={groqApiKey}
-                  setGroqApiKey={setGroqApiKey}
-                  customReasoningApiKey={customReasoningApiKey}
-                  setCustomReasoningApiKey={setCustomReasoningApiKey}
-                  setReasoningMode={setReasoningMode}
+                  reasoningModel={cleanupModel}
+                  setReasoningModel={setCleanupModel}
+                  localReasoningProvider={cleanupProvider}
+                  setLocalReasoningProvider={setCleanupProvider}
+                  cloudReasoningBaseUrl={cleanupCloudBaseUrl}
+                  setCloudReasoningBaseUrl={setCleanupCloudBaseUrl}
+                  customReasoningApiKey={cleanupCustomApiKey}
+                  setCustomReasoningApiKey={setCleanupCustomApiKey}
+                  setReasoningMode={setCleanupMode}
                 />
               </div>
             )}

@@ -184,7 +184,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Environment variables
   getOpenAIKey: () => ipcRenderer.invoke("get-openai-key"),
   saveOpenAIKey: (key) => ipcRenderer.invoke("save-openai-key", key),
-  createProductionEnvFile: (key) => ipcRenderer.invoke("create-production-env-file", key),
 
   // Clipboard functions
   checkAccessibilityPermission: (silent) =>
@@ -281,6 +280,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   windowMaximize: () => ipcRenderer.invoke("window-maximize"),
   windowClose: () => ipcRenderer.invoke("window-close"),
   windowIsMaximized: () => ipcRenderer.invoke("window-is-maximized"),
+  snapToMeetingMode: () => ipcRenderer.invoke("snap-to-meeting-mode"),
   restoreFromMeetingMode: () => ipcRenderer.invoke("restore-from-meeting-mode"),
   getPlatform: () => process.platform,
   appQuit: () => ipcRenderer.invoke("app-quit"),
@@ -305,7 +305,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   installUpdate: () => ipcRenderer.invoke("install-update"),
   getAppVersion: () => ipcRenderer.invoke("get-app-version"),
   getPostMigrationState: () => ipcRenderer.invoke("get-post-migration-state"),
+  getOAuthProtocolRegistered: () => ipcRenderer.invoke("get-oauth-protocol-registered"),
+  getOAuthProtocol: () => ipcRenderer.invoke("get-oauth-protocol"),
   markBundleMigrated: () => ipcRenderer.invoke("mark-bundle-migrated"),
+  markBundleMigrationDismissed: () => ipcRenderer.invoke("mark-bundle-migration-dismissed"),
   getUpdateStatus: () => ipcRenderer.invoke("get-update-status"),
   getUpdateInfo: () => ipcRenderer.invoke("get-update-info"),
 
@@ -358,8 +361,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),
-  getCustomReasoningKey: () => ipcRenderer.invoke("get-custom-reasoning-key"),
-  saveCustomReasoningKey: (key) => ipcRenderer.invoke("save-custom-reasoning-key", key),
+  getCleanupCustomKey: () => ipcRenderer.invoke("get-cleanup-custom-key"),
+  saveCleanupCustomKey: (key) => ipcRenderer.invoke("save-cleanup-custom-key", key),
 
   // Enterprise provider key management
   getBedrockRegion: () => ipcRenderer.invoke("get-bedrock-region"),
@@ -463,8 +466,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   resumeMediaPlayback: () => ipcRenderer.invoke("resume-media-playback"),
   openWhisperModelsFolder: () => ipcRenderer.invoke("open-whisper-models-folder"),
   authClearSession: () => ipcRenderer.invoke("auth-clear-session"),
+  authGetToken: () => ipcRenderer.invoke("auth-get-token"),
+  authSetToken: (token) => ipcRenderer.invoke("auth-set-token", token),
 
   // OpenWhispr Cloud API
+  cloudHealthCheck: () => ipcRenderer.invoke("cloud-health-check"),
   cloudTranscribe: (audioBuffer, opts) => ipcRenderer.invoke("cloud-transcribe", audioBuffer, opts),
   cloudReason: (text, opts) => ipcRenderer.invoke("cloud-reason", text, opts),
   cloudStreamingUsage: (text, audioDurationSeconds, opts) =>
@@ -593,6 +599,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Usage limit events (for showing UpgradePrompt in ControlPanel)
   notifyLimitReached: (data) => ipcRenderer.send("limit-reached", data),
   onLimitReached: registerListener("limit-reached", (callback) => (_event, data) => callback(data)),
+
+  // Workspace invitation deep link
+  onWorkspaceInvitationToken: registerListener(
+    "workspace-invitation-token",
+    (callback) => (_event, token) => callback(token)
+  ),
 
   // Globe key listener for hotkey capture (macOS only)
   onGlobeKeyPressed: (callback) => {
@@ -837,6 +849,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("meeting-set-speaker-diarization-enabled", { enabled }),
   setMeetingSessionSpeakerConfig: (config) =>
     ipcRenderer.invoke("meeting-set-session-speaker-config", config),
+  getWhisperVadConfig: () => ipcRenderer.invoke("whisper-vad-get-config"),
+  setWhisperVadConfig: (config) => ipcRenderer.invoke("whisper-vad-set-config", config),
   onMeetingDetected: registerListener(
     "meeting-detected",
     (callback) => (_event, data) => callback(data)

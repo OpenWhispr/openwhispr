@@ -87,6 +87,7 @@
     "errors": {
       "callbackRequired": "Eine Callback-Funktion ist für das Hotkey-Setup erforderlich",
       "globeOnlyMac": "Die Globe-Taste ist nur auf macOS verfügbar.",
+      "mouseButtonOnlyMac": "Maustasten-Hotkeys werden derzeit nur auf macOS unterstützt.",
       "alreadyRegistered": "\"{{hotkey}}\" ist bereits von einer anderen Anwendung registriert.",
       "osReserved": "\"{{hotkey}}\" ist möglicherweise von Ihrer Desktop-Umgebung reserviert.",
       "registrationFailed": "\"{{hotkey}}\" konnte nicht registriert werden. Möglicherweise wird es von einer anderen Anwendung verwendet.",
@@ -154,7 +155,17 @@
     "private": "Privat",
     "tap": "Tippen",
     "close": "Schließen",
-    "dismiss": "Verwerfen"
+    "dismiss": "Verwerfen",
+    "save": "Speichern",
+    "saving": "Speichern…",
+    "create": "Erstellen",
+    "delete": "Löschen",
+    "actions": "Aktionen",
+    "error": "Etwas ist schiefgelaufen",
+    "unknownError": "Ein unbekannter Fehler ist aufgetreten",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "done": "Fertig"
   },
   "onboarding": {
     "steps": {
@@ -206,6 +217,25 @@
       "hotkeyToStartStop": "{{hotkey}} zum Starten/Stoppen",
       "holdHotkey": "{{hotkey}} gedrückt halten",
       "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden..."
+    },
+    "connectivity": {
+      "title": "OpenWhispr Cloud ist aus diesem Netzwerk nicht erreichbar",
+      "body": "{{cause}} Sie können zur lokalen Engine wechseln oder fortfahren und es später erneut versuchen.",
+      "useLocal": "Lokale Engine verwenden",
+      "continue": "Trotzdem fortfahren"
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "OpenWhispr Cloud nicht erreichbar",
+        "generic": "Die Netzwerkanfrage ist fehlgeschlagen. Prüfen Sie Ihre Verbindung.",
+        "dnsBlocked": "DNS löst openwhispr.com nicht auf — ein Werbeblocker oder Filter blockiert es möglicherweise.",
+        "refused": "Verbindung wurde abgelehnt — wahrscheinlich eine Firewall oder ein VPN.",
+        "timeout": "Netzwerk-Zeitüberschreitung — VPN, Captive Portal oder instabile Verbindung.",
+        "tls": "TLS-Handshake fehlgeschlagen — prüfen Sie Ihre Systemuhr oder einen Unternehmens-Proxy.",
+        "fallback": "Cloud nicht erreichbar — lokale Engine wird für diese Aufnahme verwendet."
+      }
     }
   },
   "controlPanel": {
@@ -336,6 +366,13 @@
     "getApiKey": "API-Schlüssel holen ->",
     "selectModel": "Modell auswählen",
     "availableModels": "Verfügbare Modelle",
+    "disableThinking": {
+      "label": "Denkausgabe deaktivieren",
+      "help": "Überspringt Reasoning-Token für eine sauberere Ausgabe. Empfohlen für Bereinigung. Einige Server ignorieren diesen Hinweis."
+    },
+    "selfHosted": {
+      "endpointHelp": "Zeige auf einen OpenAI-kompatiblen Server in deinem lokalen Netzwerk (z. B. Ollama, LM Studio, vLLM oder llama-server)."
+    },
     "enterprise": {
       "title": "Enterprise-Anbieter",
       "description": "Verbinden Sie sich mit Cloud-Anbietern über die Zugangsdaten Ihrer Organisation.",
@@ -408,6 +445,11 @@
       "noAudio": {
         "title": "Kein Audio erkannt",
         "description": "Die Aufnahme enthielt kein erkennbares Audio. Bitte versuchen Sie es erneut."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
+        "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
+        "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan."
       }
     },
     "clipboard": {
@@ -590,7 +632,10 @@
     },
     "social": {
       "completeInBrowser": "Anmeldung im Browser abschließen",
-      "continueWithGoogle": "Weiter mit Google"
+      "continueWithApple": "Weiter mit Apple",
+      "continueWithGoogle": "Weiter mit Google",
+      "continueWithMicrosoft": "Weiter mit Microsoft",
+      "protocolUnavailable": "Browser-Anmeldung nicht verfügbar — registrieren Sie das openwhispr://-Protokoll in den Standardanwendungs-Einstellungen Ihres Systems erneut."
     },
     "welcomeSubtitle": "Diktieren Sie überall mit Ihrer Stimme",
     "welcomeTitle": "Willkommen bei OpenWhispr",
@@ -860,39 +905,8 @@
     "view": {
       "customPrompt": "Benutzerdefinierter Prompt",
       "defaultPrompt": "Standard-Prompt",
-      "modes": {
-        "agent": {
-          "description": "Ausgelöst durch '{{agentName}}' – führt Befehle aus, beantwortet Fragen, verfasst Inhalte",
-          "label": "Agent"
-        },
-        "cleanup": {
-          "description": "Schneller Pfad – entfernt Füllwörter, korrigiert Grammatik und Zeichensetzung",
-          "label": "Textbereinigung"
-        }
-      },
       "modified": "Geändert"
     }
-  },
-  "resetPassword": {
-    "backToSignIn": "Zurück zur Anmeldung",
-    "confirmPasswordPlaceholder": "Neues Passwort bestätigen",
-    "continue": "Weiter",
-    "errors": {
-      "passwordMinLength": "Passwort muss mindestens 8 Zeichen lang sein",
-      "passwordsDoNotMatch": "Passwörter stimmen nicht überein"
-    },
-    "goBack": "Zurück",
-    "newPasswordPlaceholder": "Neues Passwort",
-    "notConfigured": "Authentifizierung ist nicht konfiguriert.",
-    "passwordMinLength": "Passwort muss mindestens 8 Zeichen lang sein",
-    "resetButton": "Passwort zurücksetzen",
-    "resetting": "Wird zurückgesetzt...",
-    "subtitle": "Geben Sie unten Ihr neues Passwort ein",
-    "success": {
-      "description": "Ihr Passwort wurde aktualisiert. Sie sind jetzt angemeldet.",
-      "title": "Passwort erfolgreich zurückgesetzt"
-    },
-    "title": "Neues Passwort erstellen"
   },
   "settingsModal": {
     "groups": {
@@ -933,6 +947,10 @@
       "system": {
         "description": "Updates, Speicher & Entwicklertools",
         "label": "System"
+      },
+      "workspace": {
+        "label": "Workspace",
+        "description": "Mitglieder, Teams, Abrechnung und API-Schlüssel"
       }
     },
     "title": "Einstellungen"
@@ -962,7 +980,7 @@
       },
       "disabled": "Deaktiviert",
       "featuresDisabled": "Kontofunktionen deaktiviert",
-      "featuresDisabledDescription": "Setzen Sie VITE_NEON_AUTH_URL in Ihrer .env-Datei, um Kontofunktionen zu aktivieren.",
+      "featuresDisabledDescription": "Setzen Sie VITE_AUTH_URL in Ihrer .env-Datei, um Kontofunktionen zu aktivieren.",
       "notConfigured": "Authentifizierung ist nicht konfiguriert",
       "notSignedIn": "Nicht angemeldet",
       "notSignedInDescription": "Erstellen Sie ein Konto, um Premium-Funktionen freizuschalten.",
@@ -1117,8 +1135,6 @@
     },
     "agentConfig": {
       "agentName": "Agent-Name",
-      "cleanupExample": "Textbereinigung",
-      "cleanupMode": "Bereinigungsmodus",
       "description": "Benennen Sie Ihren KI-Assistenten, damit Sie ihn beim Diktieren direkt ansprechen können",
       "dialogs": {
         "updatedDescription": "Ihr Agent heißt jetzt '{{name}}'. Sprechen Sie ihn an, indem Sie 'Hey {{name}}' gefolgt von Ihren Anweisungen sagen.",
@@ -1126,7 +1142,7 @@
       },
       "examplesTitle": "Beispiele",
       "helper": "Wählen Sie etwas Kurzes und Natürliches zum Aussprechen",
-      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, wechselt die KI vom Bereinigungsmodus in den Anweisungsmodus. Ohne die Triggerphrase wird Ihr Diktat einfach bereinigt.",
+      "howItWorksDescription": "Wenn Sie 'Hey {{agentName}}' gefolgt von einer Anweisung sagen, führt die KI Ihren Befehl aus — Inhalte verfassen, Text formatieren oder Fragen beantworten — statt ihn wörtlich zu transkribieren.",
       "howItWorksTitle": "So funktioniert es",
       "instructionMode": "Anweisung",
       "placeholder": "z. B. Jarvis, Nova, Atlas...",
@@ -1143,7 +1159,7 @@
       "customSetupDescription": "Verwenden Sie Ihren eigenen Anbieter und API-Schlüssel.",
       "description": "Bereinigt Transkriptionen, verarbeitet Befehle und korrigiert Fehler unter Beibehaltung Ihres Stils.",
       "enableTextCleanup": "Textbereinigung aktivieren",
-      "enableTextCleanupDescription": "KI formatiert Text und führt Sprachbefehle aus",
+      "enableTextCleanupDescription": "KI entfernt Füllwörter, korrigiert Grammatik und Zeichensetzung",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud-Anbieter",
@@ -1272,7 +1288,10 @@
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
         "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben",
-        "clear": "Hotkey entfernen"
+        "clear": "Hotkey entfernen",
+        "layoutLabel": "Beim Auslösen per Hotkey öffnen in:",
+        "layoutFullWidth": "Volle Breite",
+        "layoutSidePanel": "Seitenleiste"
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
@@ -1484,9 +1503,14 @@
       "description": "Konfigurieren Sie Modelle für Bereinigung, Notizformatierung und Chat",
       "tabs": {
         "dictationCleanup": "Diktat-Bereinigung",
+        "dictationAgent": "Voice Agent",
         "noteFormatting": "Notizformatierung",
-        "chatIntelligence": "Chat-Intelligenz"
+        "chatIntelligence": "Chat"
       }
+    },
+    "noteFormatting": {
+      "autoGenerateTitle": "Notiztitel automatisch generieren",
+      "autoGenerateTitleDescription": "KI verwenden, um nach der Transkription oder Verbesserung einen kurzen Titel für Notizen zu generieren"
     },
     "transcription": {
       "customSetup": "Benutzerdefinierte Einrichtung",
@@ -1538,7 +1562,51 @@
         "deleteModels": "Modelle löschen"
       },
       "transcriptionPreview": "Live-Transkriptionsvorschau",
-      "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen"
+      "transcriptionPreviewDescription": "Transkription vor der Bereinigung in einem Fenster anzeigen",
+      "vad": {
+        "title": "Sprachaktivitätserkennung",
+        "description": "Konfiguriere, wie Silero VAD Sprache für die lokale Whisper-Transkription erkennt und segmentiert",
+        "toggles": {
+          "dictation": {
+            "title": "Silero VAD für Diktat",
+            "description": "Sprachaktivitätserkennung für lokales Diktat aktivieren"
+          },
+          "noteRecording": {
+            "title": "Silero VAD für Notizaufnahme",
+            "description": "Sprachaktivitätserkennung für lokale Notizaufnahme aktivieren"
+          },
+          "meeting": {
+            "title": "Silero VAD für Meetings",
+            "description": "Sprachaktivitätserkennung für lokale Meeting-Transkription aktivieren"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "VAD-Schwellenwert",
+            "info": "Wahrscheinlichkeit, ab der ein Frame als Sprache eingestuft wird."
+          },
+          "minSpeechDurationMs": {
+            "label": "Minimale Sprachdauer (ms)",
+            "info": "Kürzere Sprachsegmente werden als Rauschen oder Falscherkennung verworfen."
+          },
+          "minSilenceDurationMs": {
+            "label": "Minimale Pausendauer (ms)",
+            "info": "Eine Pause muss mindestens so lang sein, um ein Sprachsegment zu beenden. Kürzere Pausen bleiben Teil des Segments."
+          },
+          "maxSpeechDurationS": {
+            "label": "Maximale Sprachdauer (s)",
+            "info": "Längere Segmente werden an Pausen aufgeteilt, damit einzelne Stücke handhabbar bleiben."
+          },
+          "speechPadMs": {
+            "label": "Sprach-Polsterung (ms)",
+            "info": "Zusätzliche Polsterung vor und nach jedem Segment, damit Wortgrenzen nicht abgeschnitten werden."
+          },
+          "samplesOverlap": {
+            "label": "Sample-Überlappung (s)",
+            "info": "Audio, das von einem Segment ins nächste übertragen wird, um abrupte Schnitte beim Zusammenfügen zu vermeiden."
+          }
+        }
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -1550,13 +1618,99 @@
       "endpointUrl": "Endpunkt-URL",
       "serverUrl": "Server-URL",
       "apiKeyOptional": "API-Schlüssel (optional)"
+    },
+    "workspace": {
+      "title": "Workspace",
+      "description": "Arbeiten Sie zusammen, teilen Sie Notizen und verwalten Sie die Abrechnung an einem Ort.",
+      "empty": {
+        "title": "Ersten Workspace erstellen",
+        "description": "Workspaces ermöglichen die Zusammenarbeit und das Teilen von Notizen.",
+        "create": "Workspace erstellen"
+      },
+      "tab": {
+        "general": "Allgemein",
+        "members": "Mitglieder",
+        "teams": "Teams",
+        "billing": "Abrechnung",
+        "developer": "Entwickler"
+      },
+      "role": {
+        "owner": "Inhaber",
+        "admin": "Administrator",
+        "member": "Mitglied"
+      },
+      "general": {
+        "nameLabel": "Workspace-Name",
+        "slugLabel": "Slug",
+        "slugHint": "Wird in URLs verwendet. Nur Kleinbuchstaben, Ziffern und Bindestriche.",
+        "saved": "Workspace aktualisiert",
+        "dangerTitle": "Workspace löschen",
+        "dangerDescription": "Alle geteilten Notizen, Ordner und Integrationen werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
+        "delete": "Workspace löschen",
+        "confirmTitle": "{{name}} löschen?",
+        "confirmDescription": "Dies kündigt das Abonnement und entfernt alle Workspace-Daten dauerhaft."
+      },
+      "members": {
+        "title": "Mitglieder",
+        "description": "{{count}} von {{seats}} Plätzen belegt.",
+        "invite": "Einladen",
+        "empty": "Noch keine Mitglieder.",
+        "roleUpdated": "Rolle aktualisiert",
+        "promote": "Zum Administrator machen",
+        "demote": "Zum Mitglied machen",
+        "transferOwnership": "Eigentum übertragen",
+        "remove": "Aus Workspace entfernen"
+      },
+      "invites": {
+        "title": "Ausstehende Einladungen",
+        "resend": "Erneut senden",
+        "revoke": "Widerrufen",
+        "resent": "Einladung erneut gesendet"
+      },
+      "teams": {
+        "title": "Teams",
+        "description": "Mitglieder gruppieren für gezieltes Teilen.",
+        "new": "Neues Team",
+        "empty": "Noch keine Teams.",
+        "createFirst": "Erstellen Sie Ihr erstes Team",
+        "createTitle": "Team erstellen",
+        "nameLabel": "Team-Name",
+        "descriptionLabel": "Beschreibung",
+        "memberCount": "{{count}} Mitglieder"
+      },
+      "billing": {
+        "title": "Abrechnung",
+        "description": "Plan, Plätze und Zahlung.",
+        "plan": "Plan",
+        "seats": "Plätze",
+        "nextInvoice": "Nächste Rechnung",
+        "manageStripe": "In Stripe verwalten",
+        "startSubscription": "Abonnement starten"
+      },
+      "developer": {
+        "title": "API-Schlüssel",
+        "description": "Programmatischer Zugriff auf diesen Workspace.",
+        "empty": "Noch keine API-Schlüssel. Erstellen Sie einen für Integrationen.",
+        "new": "Neuer Schlüssel",
+        "create": "Schlüssel erstellen",
+        "createTitle": "API-Schlüssel erstellen",
+        "createDescription": "Wählen Sie die Berechtigungen. Sie können den Schlüssel jederzeit widerrufen.",
+        "nameLabel": "Schlüsselname",
+        "namePlaceholder": "Produktionsintegration",
+        "revoke": "Schlüssel widerrufen",
+        "lastUsed": "Zuletzt verwendet {{date}}",
+        "neverUsed": "Nie verwendet",
+        "keyCreatedTitle": "API-Schlüssel erstellt",
+        "keyCreatedDescription": "Kopieren Sie diesen Schlüssel jetzt — Sie können ihn nicht erneut sehen."
+      }
     }
   },
   "models": {
     "learnMore": "Mehr erfahren",
     "descriptions": {
       "parakeet": {
-        "parakeet_tdt_0_6b_v3": "Schnelle mehrsprachige ASR mit automatischer Spracherkennung (25 Sprachen)"
+        "parakeet_tdt_0_6b_v3": "Schnelle mehrsprachige ASR mit automatischer Spracherkennung (25 Sprachen)",
+        "parakeet_unified_en_0_6b": "Englisch-only ASR mit Spitzen-Genauigkeit (5,91% durchschnittliche WER)"
       },
       "whisper": {
         "tiny": "Am schnellsten, geringere Qualität",
@@ -1575,7 +1729,6 @@
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription"
       },
       "cloud": {
-        "openai_gpt_5_4": "Frontier-Modell für komplexes Reasoning",
         "openai_gpt_5_2": "Starkes Reasoning-Modell",
         "openai_gpt_5_mini": "Schnell und kosteneffizient",
         "openai_gpt_5_nano": "Ultraschnell, niedrige Latenz",
@@ -1584,7 +1737,6 @@
         "openai_gpt_4_1_nano": "GPT-4.1 mit der niedrigsten Latenz",
         "anthropic_claude_sonnet_4_5": "Ausgewogene Leistung",
         "anthropic_claude_haiku_4_5": "Schnell mit nahezu Frontier-Intelligenz",
-        "anthropic_claude_opus_4_5": "Leistungsstärkstes Claude-Modell",
         "gemini_gemini_3_pro_preview": "Flaggschiff der nächsten Generation für komplexes Reasoning",
         "gemini_gemini_3_flash_preview": "Ultraschnelles Modell der nächsten Generation mit hoher Leistungsfähigkeit",
         "gemini_gemini_2_5_flash_lite": "Niedrigste Latenz und Kosten",
@@ -1596,7 +1748,11 @@
         "groq_llama_4_scout": "Effizientes Multimodal von Meta, 750 T/s",
         "groq_compound": "Groqs Compound-System, 450 T/s",
         "groq_compound_mini": "Schnelles Compound-System, 3x niedrigere Latenz",
-        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, 256K Kontext"
+        "groq_kimi_k2_0905": "Moonshot AI 1T MoE, 256K Kontext",
+        "openai_gpt_5_5": "Frontier-Modell für komplexes Reasoning",
+        "anthropic_claude_opus_4_7": "Leistungsstärkstes Claude-Modell",
+        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
+        "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",
@@ -1825,6 +1981,9 @@
       "comingSoon": "Demnächst verfügbar",
       "back": "Zurück"
     },
+    "meetingPill": {
+      "returnToNote": "Zurück zur Aufnahme"
+    },
     "context": {
       "moveToFolder": "In Ordner verschieben",
       "delete": "Löschen",
@@ -1983,7 +2142,9 @@
     "integrations": "Integrationen",
     "defaultUser": "Benutzer",
     "notSignedIn": "Nicht angemeldet",
-    "chat": "Chat"
+    "chat": "Chat",
+    "inviteTeammate": "Teammitglied einladen",
+    "createWorkspace": "Workspace erstellen"
   },
   "chat": {
     "newChat": "Neuer Chat",
@@ -2093,16 +2254,30 @@
       "stopListening": "Aufnahme beenden",
       "startListening": "Aufnahme starten",
       "hideForNow": "Vorerst ausblenden"
+    }
+  },
+  "dictationAgent": {
+    "enabled": "Enable voice agent",
+    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "modes": {
+      "openwhispr": "OpenWhispr Cloud",
+      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
+      "providers": "Bring your own key",
+      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "local": "Local",
+      "localDesc": "Run a local LLM on your device — fully private.",
+      "selfHosted": "Self-hosted",
+      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "enterprise": "Enterprise",
+      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
     },
-    "oauth": {
-      "redirectTitle": "Weiterleitung zur App...",
-      "closeTab": "Du kannst diesen Tab schließen."
+    "prompt": {
+      "title": "Agent prompt",
+      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
     }
   },
   "agentMode": {
     "settings": {
-      "enabled": "Agent-Modus aktivieren",
-      "enabledDescription": "Verwende eine separate Tastenkombination, um ein Sprach-Chat-Overlay zu öffnen",
       "hotkey": "Agent-Tastenkombination",
       "hotkeyDescription": "Tastenkombination zum Umschalten des Agent-Overlays",
       "model": "Agent-Modell",
@@ -2195,7 +2370,8 @@
     "sections": {
       "calendar": "Kalender",
       "api": "API",
-      "mcp": "MCP"
+      "mcp": "MCP",
+      "cli": "CLI"
     },
     "api": {
       "title": "API-Schlüssel",
@@ -2216,6 +2392,25 @@
       "copyUrl": "MCP-URL kopieren",
       "proRequired": "Upgrade auf einen kostenpflichtigen Plan, um OpenWhispr mit Claude, ChatGPT und Cursor zu verbinden.",
       "copied": "Kopiert"
+    },
+    "cli": {
+      "title": "Kommandozeilen-Zugriff",
+      "description": "Gib deinem Agenten über das Terminal Zugriff auf deine Notizen.",
+      "installLabel": "Installieren",
+      "learnMore": "Dokumentation lesen",
+      "copyDocsLink": "Doku-Link kopieren",
+      "docsLinkCopied": "Doku-Link kopiert",
+      "viewPlans": "Pläne ansehen",
+      "local": {
+        "label": "Lokal",
+        "freeBadge": "Kostenlos",
+        "description": "Greife direkt auf deine lokalen Notizen zu. Kein Login oder API-Key — funktioniert, solange OpenWhispr läuft."
+      },
+      "cloud": {
+        "label": "Cloud",
+        "description": "Synchronisiere geräteübergreifend mit deinem API-Key.",
+        "proRequired": "Upgrade auf einen kostenpflichtigen Plan, um die CLI im Cloud-Modus zu nutzen."
+      }
     },
     "plan": {
       "title": "Dein Plan",
@@ -2303,7 +2498,37 @@
     "deleteNote": "Notiz löschen",
     "deleteConfirmTitle": "Notiz löschen?",
     "deleteConfirmDescription": "Diese Notiz wird dauerhaft gelöscht und kann nicht wiederhergestellt werden.",
-    "deleteConfirm": "Löschen"
+    "deleteConfirm": "Löschen",
+    "share": {
+      "button": "Teilen",
+      "dialog": {
+        "title": "Notiz teilen",
+        "searchPlaceholder": "Personen per E-Mail hinzufügen",
+        "emailLabel": "E-Mail des Empfängers",
+        "shareButton": "Teilen",
+        "copyLink": "Link kopieren",
+        "copied": "Kopiert",
+        "owner": "Eigentümer",
+        "pending": "Ausstehend",
+        "accepted": "Hat Zugriff",
+        "resend": "Einladung erneut senden",
+        "revoke": "Entfernen",
+        "invitationActions": "Einladungsaktionen",
+        "permissionRequired": "Nur der Notiz-Eigentümer kann die Freigabe ändern.",
+        "visibility": {
+          "label": "Sichtbarkeit",
+          "link": "Jeder mit dem Link",
+          "domain": "Alle bei {{domain}} mit dem Link",
+          "invited": "Nur eingeladene Personen"
+        },
+        "error": {
+          "invalidEmail": "Gib eine gültige E-Mail-Adresse ein",
+          "alreadyInvited": "{{email}} ist bereits eingeladen",
+          "inviteFailed": "Die Einladung konnte nicht gesendet werden. Versuche es erneut.",
+          "linkUnavailable": "Generiere oder rotiere den Link, um ihn zu kopieren"
+        }
+      }
+    }
   },
   "commandSearch": {
     "title": "Suche",
@@ -2404,6 +2629,54 @@
     "speaker": {
       "you": "Du",
       "others": "Andere"
+    }
+  },
+  "workspaces": {
+    "switcher": {
+      "personal": "Persönlich",
+      "workspaces": "Workspaces",
+      "empty": "Noch keine Workspaces",
+      "create": "Workspace erstellen…"
+    },
+    "create": {
+      "title": "Workspace erstellen",
+      "description": "Workspaces ermöglichen Zusammenarbeit, geteilte Notizen und gemeinsame Abrechnung.",
+      "nameLabel": "Workspace-Name",
+      "namePlaceholder": "Acme Corp",
+      "submit": "Workspace erstellen",
+      "submitting": "Erstelle…",
+      "errorTitle": "Workspace konnte nicht erstellt werden"
+    },
+    "created": {
+      "title": "Workspace erstellt",
+      "description": "Sie sind nun Inhaber von {{name}}."
+    },
+    "invite": {
+      "title": "Zu {{workspace}} einladen",
+      "description": "Fügen Sie Teammitglieder per E-Mail hinzu. Sie erhalten einen Beitrittslink.",
+      "emailLabel": "E-Mail",
+      "roleLabel": "Rolle",
+      "teamsLabel": "Zu Teams hinzufügen",
+      "submit": "Einladung senden",
+      "submitting": "Sende…",
+      "sentTitle": "Einladung gesendet",
+      "sentDescription": "Einladung an {{email}} gesendet.",
+      "errorTitle": "Einladung konnte nicht gesendet werden",
+      "role": {
+        "admin": "Administrator",
+        "member": "Mitglied"
+      }
+    },
+    "accept": {
+      "title": "Workspace beitreten",
+      "description": "{{inviter}} hat Sie eingeladen, {{workspace}} als {{role}} beizutreten.",
+      "loading": "Lade Einladung…",
+      "accept": "Einladung annehmen",
+      "accepting": "Annehmen…",
+      "signInToAccept": "Anmelden zum Annehmen",
+      "successTitle": "Beigetreten",
+      "successDescription": "Willkommen bei {{name}}.",
+      "errorTitle": "Einladung konnte nicht angenommen werden"
     }
   }
 }

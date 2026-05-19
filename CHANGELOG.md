@@ -7,35 +7,99 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.7.0] - 2026-04-26
+## [1.7.0] - 2026-04-30
 
-### Added
+A big release: new sign-in options, smoother meeting recording, faster cross-device sync, a more configurable AI setup, and the long-planned move to our new legal entity (Gizmo Labs Inc.) on macOS and Windows.
 
-- **Bundle ID Migration to Gizmo Labs** (macOS/Windows): App identifier renamed from `com.herotools.openwispr` to `com.gizmolabs.openwhispr` to align with the new legal entity (Gizmo Labs Inc.) and fix the long-standing typo. Existing notes, settings, API keys, and downloaded models carry over automatically on first launch (userData path is keyed by `productName`, not bundle ID). Auto-update from 1.6.x cannot reach this release — Squirrel.Mac enforces `CFBundleIdentifier` matching and the Team ID change in Gizmo Labs signing already broke the cryptographic update chain. Users must manually re-download from openwhispr.com/download
-- **Post-Migration Onboarding** (macOS): One-time modal walks returning users through re-granting Microphone, Accessibility, and System Audio after the bundle rename. Detected via a sentinel file (`.bundle-migrated`) in userData; reuses the existing `PermissionsSection` and live-polling hooks. Fresh installs write the sentinel during onboarding completion so the modal never fires for new users
-- **Interoperable Cloud Streaming Providers**: Meeting recording now supports AssemblyAI Universal-3 Pro, Deepgram, and OpenAI Realtime as interchangeable cloud streaming backends. Provider availability is server-authoritative via the `NOTE_RECORDING_PROVIDERS` env var on the API; desktop picks the active provider from the catalog returned by `/api/note-recording-config`
-- **Acoustic VAD Gate for Meeting Mic**: Drops system-dominant microphone chunks using RMS/peak thresholds against a rolling reference window, preventing cross-language hallucinations from speaker bleed into the mic
-- **Peak Escape**: Soft exception to the VAD gate when the mic peak spikes cleanly over the system-speaking window, so the user's voice onset is never clipped mid-syllable
-- **Cross-Device Delete Propagation** (#646): Deletes now propagate across devices through the sync pipeline for all object types
+### Sign in your way
 
-### Changed
+- **Sign in with Microsoft** — new on this release, alongside Google and email/password.
+- **Sign in with Apple** on macOS — native Apple ID flow.
+- **Self-hosted authentication.** Sign-in now runs entirely on OpenWhispr infrastructure (we replaced Neon Auth with [Better Auth](https://better-auth.com) at `auth.openwhispr.com`). No third-party vendor lock-in. Self-hosters can point at their own server via `VITE_AUTH_URL`.
+- **Bearer-token sessions** stored in your OS keychain replace the old browser-style cookie jar, so signed-in state survives renderer crashes and Electron session resets. Existing 1.7.x users transition silently on first launch.
+- **Forgot password** opens a browser tab to `openwhispr.com/reset-password` instead of an in-app form, matching how every other reset flow works on the web.
+- **Sign-in buttons disable with a tooltip** when the OS hasn't registered the `openwhispr://` callback handler, so OAuth never gets stuck without a return path.
 
-- **Meeting Streaming Provider Authority**: Removed the desktop-side streaming provider UI picker. The authoritative list lives on the API; the desktop renders whichever providers are enabled server-side
-- **Echo Cancellation Pipeline**: AEC3 config now disables OS-level `echoCancellation` (it was double-processing) and enables the built-in high-pass filter plus `kModerate` noise suppression, giving a noticeably cleaner mic path before the VAD gate
-- **VAD Thresholds Tuned Against Measured Leak**: RMS ceiling `0.018`, peak ceiling `0.07`, lookback `500ms` — calibrated from real session traces where user speech consistently exceeded both thresholds and bleed consistently sat below
+### Security
 
-### Fixed
+- **API keys are now encrypted at rest.** All 12 secrets — every BYOK API key (OpenAI, Anthropic, Gemini, Groq, AssemblyAI, Deepgram, Mistral) and every enterprise cloud credential (AWS, Azure, Vertex) — moved from plaintext `.env` and `localStorage` to per-key files encrypted with the OS keychain via Electron `safeStorage` (Keychain on macOS, DPAPI on Windows, libsecret on Linux). A one-time silent migration runs on first launch with round-trip verification before any plaintext is removed; a sentinel makes it idempotent and re-tryable on partial failure. Closes #532.
+- **Non-secret preferences** (regions, endpoints, hotkeys, flags) continue to live in `.env` so power users can keep editing them by hand.
+- **Linux without a keyring** falls back to plaintext rather than locking you out, matching Electron's default behavior.
 
-- **AssemblyAI v3 Frame Size**: Buffer audio to meet the v3 minimum 50ms frame requirement (was hitting "Input Duration Error: 45.0 ms")
-- **AssemblyAI / Deepgram `completedSegments`**: The echo-leak detector crashed on turn-end for non-OpenAI providers because `completedSegments` only existed on the OpenAI client; exposed it on AssemblyAI and Deepgram as well
-- **Streaming Token Plumbing**: Streaming client factory now passes both `apiKey` and `token` fields (OpenAI expects `apiKey`, AssemblyAI/Deepgram expect `token`)
-- **Note-Recording Config Over IPC**: Moved the `/api/note-recording-config` fetch from the renderer into the main process so Neon Auth session cookies are attached (was returning 401)
-- **Speech-Start Timestamp to Echo-Leak Detector**: AssemblyAI and Deepgram turns now pass their speech-start wall-clock time to the detector, eliminating `missing_start` drops on legitimate turns
-- **Drop Flagged-Bleed Mic Segments on Holdback Expiry**: When the echo-leak detector flags a mic turn as bleed, the segment is now dropped rather than flushed once the holdback window closes; correlation `>= 0.70` alone is sufficient evidence (in addition to the prior three-condition check)
-- **Speaker Label Cap**: UI speaker labels are now strictly capped at `expectedCount` (interpreted as the number of other attendees besides the user), preventing phantom `Speaker 3+` labels in 1-on-1 and small-group sessions
-- **Live Speaker Profile Matching Scoped to Note Attendees**: Live diarization no longer pulls in profiles from unrelated notes when identifying attendees
-- **Sync — Preserve Client `updated_at` on Note Push**: Server was overwriting `updated_at` on every push, causing spurious sync loops and stale-merge conflicts
-- **Chat Intelligence Stale Provider on Mode Switch** (#647): Switching Agent Mode from Cloud Providers to Local left the previous cloud provider cached, routing chat to the stale provider and erroring with "API key not configured" despite a local model being selected; mode changes now clear `agentProvider`/`agentModel` when incompatible with the new mode
+### Meeting recording
+
+- **Background recording.** Meeting capture now lives in a global store with a side-effect-only mount, so the audio pipeline survives navigating to other notes, opening Settings, or any view unmount that previously killed it.
+- **Floating recording pill.** When you record one note and navigate to another, a pill appears top-center showing live mic-activity bars, the recording note title, click-to-jump-back, and a stop button.
+- **Side-panel layout is opt-in.** A new hotkey-only layout setting (full-width or side-panel) controls whether hotkey-triggered recordings snap the window to a 1/3 panel. Manual record-from-note and calendar joins always open full-width and auto-flip to side-panel only when the window narrows below 1024px.
+- **Per-note diarization preferences persist.** Mid-session toggles for "label speakers" and the "others in call" stepper are saved against the note, so a stop/resume keeps your choices instead of falling back to the global default.
+- **Meeting metadata syncs across devices.** Participants, calendar event ID, diarization toggle, and expected speaker count now travel through cloud sync alongside note content. Older clients that don't send these fields keep working — the columns are nullable and treated as optional server-side.
+- **Three interchangeable streaming providers**: OpenAI Realtime, AssemblyAI Universal-3 Pro, and Deepgram. Which providers are available is set on the OpenWhispr server, so there's no desktop-side toggle to keep in sync.
+- **Cleaner mic capture.** A new acoustic gate prevents system audio from leaking into your mic during meetings. Speech onsets are protected so your voice isn't clipped at the start of a sentence.
+- **Better echo cancellation** with built-in noise suppression in the same pass.
+- **Speaker labels capped to attendee count** — no more phantom "Speaker 3+" labels in 1-on-1s and small groups.
+- **Live diarization** stays scoped to the current note's attendees instead of pulling in profiles from unrelated meetings.
+- **Stable AssemblyAI / Deepgram turns**: fixed a crash on turn-end and a frame-size mismatch with AssemblyAI v3.
+- **Fewer dropped turns**: speech-start timestamps now flow through the echo-leak detector for AssemblyAI and Deepgram (was OpenAI-only).
+- **Music pause/resume on Windows is reliable again.** Switching to a `windows-media-control` Python sidecar with a hardened WinRT async bridge fixed a class of GSMTC failures that left playback paused after a recording ended; if GSMTC ever fails, the app falls back to a media-key tap.
+
+### AI configuration
+
+- **Per-scope language model setup**: pick different providers and models for dictation cleanup, the agent, note formatting, and chat. An empty agent setting links back to your cleanup model with one click.
+- **Self-hosted reasoning got upgraded.** The Self-Hosted card now exposes URL + API key + model picker (was URL-only), bringing it to parity with Cloud → Custom. Distinct help text on each: Cloud → Custom points at OpenRouter / Together; Self-Hosted explains it's for OpenAI-compatible servers on your local network (Ollama, LM Studio, vLLM, llama-server). Closes #661.
+- **Per-scope thinking-mode toggle.** Models that support visible reasoning (e.g. GPT-5/o-series, DeepSeek-R1, Qwen-think) now expose a "show thinking" switch per scope. Defaults to suppressed so the dictation pipeline stays snappy; turn it on per scope when you want to see the model reason.
+- **NVIDIA Parakeet `parakeet-unified-en-0.6b`** — a new English-only Parakeet model with state-of-the-art offline accuracy (5.91% avg WER on the HF Open ASR Leaderboard, vs 6.34% for v3) at a slightly smaller ~631MB.
+- **Switching agent mode** between Cloud and Local no longer leaves stale provider state behind.
+- **More reliable ONNX inference** (speaker embeddings, semantic search): long meetings no longer crash the app from a memory allocation failure deep in the speaker model.
+- **Local helpers shut down cleanly on Quit.** Local Whisper, Parakeet, llama-server, Qdrant, and the diarization helper now stop properly when you Quit. If a previous session ever leaves one stuck, the app catches and cleans it up on the next launch — so dictation and transcription work right away without manual cleanup.
+- **Local LLM startup is more patient.** llama-server with Vulkan acceleration now gets a longer startup window before the app gives up; a stuck server is also fully stopped before any re-download attempt, so partial files don't get clobbered mid-write.
+- **Model downloads work behind redirects.** Whisper, Parakeet, Qdrant, MiniLM, and local LLM (GGUF) downloads from Hugging Face and GitHub Releases now follow 3xx redirects correctly — a regression where the manual redirect handler aborted the request before the follow could land has been fixed.
+- **Local LLM downloads share the same plumbing** as Whisper and Parakeet (proxy-aware, resume on stall, retry with backoff), removing ~50 lines of duplicated download code.
+- **ONNX worker failures are now visible.** When the speaker-embedding / semantic-search worker crashes, stderr and `onnx-worker.log` capture the cause; the parent caps respawn at 5 attempts and degrades to FTS5 keyword search instead of restarting in a tight loop.
+
+### Sync
+
+- **Cross-device delete** propagates to other signed-in devices for all object types.
+- **Folder cascade delete** with a confirmation dialog showing how many notes will be removed.
+- **Folders sync immediately** on rename and create (was previously only on update).
+- **Transcriptions sync on save** instead of waiting for the next app launch.
+- **No more duplicate transcriptions in the cloud.** Each transcription is tagged with a client-generated UUID before upload so the cloud row and local row stay in lockstep — sync upserts the existing row instead of creating a second copy.
+- **Folder pull** no longer overwrites a freshly-renamed folder with a stale cloud copy.
+- **Server stops overwriting `updated_at`** on every note push, eliminating spurious sync loops.
+
+### CLI
+
+- **Local HTTP bridge** for the `openwhispr` CLI: when the desktop is running, CLI commands hit it directly for note/folder/transcription operations and only fall back to the cloud API if the desktop is closed. Bearer-token auth, 127.0.0.1-only.
+
+### Network
+
+- **Proxy-aware fetches**: Node-side requests now honor the system proxy.
+- **Trusts your OS CA store**: corporate TLS interception with a trusted root no longer breaks Node-side requests.
+- **Helpful error messages**: connectivity failures explain whether it's an auth-host issue, DNS, port 443, or a TLS certificate, instead of a generic "Network error".
+
+### Other notable improvements
+
+- **Auto-learn corrections** now works for Cyrillic, CJK, Arabic, Devanagari, and other non-Latin scripts.
+- **Windows text-field detection** falls back to UIA `TextPattern` when `ValuePattern` isn't available — restoring rich-edit support in apps like RichEdit, Monaco, Qt, and Electron-hosted controls.
+- **Chat — first message saved** the moment the conversation is created, eliminating a race that could orphan it.
+- **Note move** keeps the active note selected and removes the source-folder entry immediately.
+- **Local semantic search (Qdrant)** writes to the user data directory, not the read-only app bundle.
+- **No more hotkey re-register storm** when dismissing Settings with a hotkey field focused — the IPC handler short-circuits duplicate listening-mode changes (one call per slot, not four).
+- **macOS native helpers bundled correctly.** `macos-audio-tap`, `macos-globe-listener`, `macos-fast-paste`, `macos-mic-listener`, `macos-text-monitor`, `macos-media-remote`, and the `linux-*` helpers now land under `Resources/bin/` in the packaged app — matching where the runtime resolvers and CI verify step look for them.
+
+### macOS / Windows: bundle identifier change
+
+The app's bundle ID changed from `com.herotools.openwispr` to `com.gizmolabs.openwhispr` to match our new legal entity (Gizmo Labs Inc.) and fix the long-standing typo. Your notes, settings, API keys, and downloaded models carry over automatically on first launch.
+
+**Auto-update from 1.6.x cannot reach this release.** Please download the new build manually from [openwhispr.com/download](https://openwhispr.com/download).
+
+A one-time onboarding modal walks you through re-granting Microphone, Accessibility, and System Audio permissions on macOS.
+
+### Upgrade notes
+
+- 1.6.x users: download manually from [openwhispr.com/download](https://openwhispr.com/download).
+- You'll be signed out and need to sign in again.
+- macOS: re-grant Microphone in-app and Accessibility + Screen Recording in System Settings.
+- Self-hosters: rename `VITE_NEON_AUTH_URL` → `VITE_AUTH_URL`; rename the legacy reasoning-model env vars (e.g. `REASONING_MODEL` → `CLEANUP_MODEL`); rename `AGENT_KEY` → `CHAT_AGENT_KEY`. Both old and new names work for two releases.
 
 ## [1.6.10] - 2026-04-20
 

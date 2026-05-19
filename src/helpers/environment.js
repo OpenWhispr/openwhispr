@@ -2,9 +2,11 @@ const path = require("path");
 const fs = require("fs");
 const fsPromises = require("fs/promises");
 const { app } = require("electron");
+const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
+const secretCrypto = require("./secretCrypto");
 
-const PERSISTED_KEYS = [
+const SECRET_KEYS = [
   "OPENAI_API_KEY",
   "ANTHROPIC_API_KEY",
   "GEMINI_API_KEY",
@@ -13,16 +15,29 @@ const PERSISTED_KEYS = [
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "CUSTOM_TRANSCRIPTION_API_KEY",
-  "CUSTOM_REASONING_API_KEY",
+  "CUSTOM_CLEANUP_API_KEY",
+  "BEDROCK_ACCESS_KEY_ID",
+  "BEDROCK_SECRET_ACCESS_KEY",
+  "BEDROCK_SESSION_TOKEN",
+  "AZURE_OPENAI_API_KEY",
+  "VERTEX_API_KEY",
+];
+
+const SECRET_KEY_SET = new Set(SECRET_KEYS);
+
+const PERSISTED_KEYS = [
+  ...SECRET_KEYS,
   "LOCAL_TRANSCRIPTION_PROVIDER",
   "PARAKEET_MODEL",
   "LOCAL_WHISPER_MODEL",
-  "REASONING_PROVIDER",
-  "LOCAL_REASONING_MODEL",
+  "CLEANUP_PROVIDER",
+  "LOCAL_CLEANUP_MODEL",
+  "DICTATION_AGENT_PROVIDER",
+  "LOCAL_DICTATION_AGENT_MODEL",
   "LLAMA_GPU_BACKEND",
   "LLAMA_VULKAN_ENABLED",
   "DICTATION_KEY",
-  "AGENT_KEY",
+  "CHAT_AGENT_KEY",
   "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
@@ -34,16 +49,11 @@ const PERSISTED_KEYS = [
   "INTELLIGENCE_GPU_INDEX",
   "BEDROCK_REGION",
   "BEDROCK_PROFILE",
-  "BEDROCK_ACCESS_KEY_ID",
-  "BEDROCK_SECRET_ACCESS_KEY",
-  "BEDROCK_SESSION_TOKEN",
   "AZURE_OPENAI_ENDPOINT",
-  "AZURE_OPENAI_API_KEY",
   "AZURE_OPENAI_DEPLOYMENT",
   "AZURE_OPENAI_API_VERSION",
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
-  "VERTEX_API_KEY",
 ];
 
 class EnvironmentManager {
@@ -77,12 +87,171 @@ class EnvironmentManager {
     }
   }
 
+  // Encryption init runs after construction; safeStorage fallback needs app.whenReady().
+  async init() {
+    if (!this._encryptionAvailable()) {
+      debugLogger.warn(
+        "Secret encryption unavailable — secrets remain in plaintext .env",
+        { platform: process.platform },
+        "environment"
+      );
+      return;
+    }
+
+    if (!fs.existsSync(this._getMigrationSentinelPath())) {
+      await this._migrateToSecureStorage();
+    }
+    await this._loadAllSecrets();
+  }
+
+  _getMigrationSentinelPath() {
+    return path.join(this._getSecureKeysDir(), ".migrated");
+  }
+
+  _encryptionAvailable() {
+    try {
+      return secretCrypto.isAvailable();
+    } catch {
+      return false;
+    }
+  }
+
+  _getSecureKeysDir() {
+    return path.join(app.getPath("userData"), "secure-keys");
+  }
+
+  _getSecretFilePath(envVarName) {
+    return path.join(this._getSecureKeysDir(), `${envVarName}.enc`);
+  }
+
+  async _loadAllSecrets() {
+    await Promise.all(SECRET_KEYS.map((name) => this._loadSecretKey(name)));
+  }
+
+  async _loadSecretKey(envVarName) {
+    const filePath = this._getSecretFilePath(envVarName);
+    try {
+      const buffer = await fsPromises.readFile(filePath);
+      const { value, needsReencrypt } = secretCrypto.decrypt(buffer);
+      process.env[envVarName] = value;
+      if (needsReencrypt) await this._saveSecretKey(envVarName, value);
+    } catch (error) {
+      if (error.code === "ENOENT") return;
+      debugLogger.error(
+        "Failed to decrypt secret — user must re-enter",
+        { key: envVarName, code: error.code, error: error.message },
+        "environment"
+      );
+    }
+  }
+
+  async _saveSecretKey(envVarName, value) {
+    if (!value) {
+      await this._deleteSecretKey(envVarName);
+      return;
+    }
+
+    process.env[envVarName] = value;
+
+    const dir = this._getSecureKeysDir();
+    await fsPromises.mkdir(dir, { recursive: true });
+
+    const filePath = this._getSecretFilePath(envVarName);
+    const tmpPath = `${filePath}.tmp`;
+    const encrypted = secretCrypto.encrypt(value);
+
+    await fsPromises.writeFile(tmpPath, encrypted);
+    await fsPromises.rename(tmpPath, filePath);
+  }
+
+  async _deleteSecretKey(envVarName) {
+    delete process.env[envVarName];
+    try {
+      await fsPromises.unlink(this._getSecretFilePath(envVarName));
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  }
+
+  async _migrateToSecureStorage() {
+    const dir = this._getSecureKeysDir();
+    await fsPromises.mkdir(dir, { recursive: true });
+
+    // Adopt renamed key so the value survives migration. Old releases stored
+    // it under CUSTOM_REASONING_API_KEY; new code only encrypts CUSTOM_CLEANUP_API_KEY.
+    if (process.env.CUSTOM_REASONING_API_KEY && !process.env.CUSTOM_CLEANUP_API_KEY) {
+      process.env.CUSTOM_CLEANUP_API_KEY = process.env.CUSTOM_REASONING_API_KEY;
+    }
+    delete process.env.CUSTOM_REASONING_API_KEY;
+
+    const migrated = [];
+    try {
+      for (const name of SECRET_KEYS) {
+        const value = process.env[name];
+        if (!value) continue;
+        await this._saveSecretKey(name, value);
+        // Round-trip verify before stripping plaintext .env.
+        const buffer = await fsPromises.readFile(this._getSecretFilePath(name));
+        if (secretCrypto.decrypt(buffer).value !== value) {
+          throw new Error(`round-trip verification failed for ${name}`);
+        }
+        migrated.push(name);
+      }
+    } catch (error) {
+      debugLogger.error(
+        "Secret migration aborted — plaintext .env preserved",
+        { error: error.message, migrated },
+        "environment"
+      );
+      return;
+    }
+
+    // Write sentinel before stripping plaintext from .env so a crash mid-rewrite is recoverable.
+    await fsPromises.writeFile(this._getMigrationSentinelPath(), "");
+    const envPath = path.join(app.getPath("userData"), ".env");
+    if (fs.existsSync(envPath)) await this._writeEnvFileAtomic(envPath);
+    debugLogger.info(
+      "Migrated secrets to encrypted storage",
+      { count: migrated.length },
+      "environment"
+    );
+  }
+
+  async _writeEnvFileAtomic(envPath) {
+    // Only strip plaintext secrets once migration has fully completed —
+    // otherwise a partial-migration recovery can lose unencrypted secrets.
+    const stripSecrets =
+      this._encryptionAvailable() && fs.existsSync(this._getMigrationSentinelPath());
+    let envContent = "# OpenWhispr Environment Variables\n";
+    for (const key of PERSISTED_KEYS) {
+      if (stripSecrets && SECRET_KEY_SET.has(key)) continue;
+      if (process.env[key]) {
+        envContent += `${key}=${process.env[key]}\n`;
+      }
+    }
+    const tmpPath = `${envPath}.tmp`;
+    await fsPromises.writeFile(tmpPath, envContent, "utf8");
+    await fsPromises.rename(tmpPath, envPath);
+  }
+
   _getKey(envVarName) {
     return process.env[envVarName] || "";
   }
 
   _saveKey(envVarName, key) {
-    process.env[envVarName] = key;
+    if (SECRET_KEY_SET.has(envVarName) && this._encryptionAvailable()) {
+      this._saveSecretKey(envVarName, key).catch((error) => {
+        debugLogger.error(
+          "Failed to persist encrypted secret",
+          { key: envVarName, error: error.message },
+          "environment"
+        );
+      });
+    } else if (key) {
+      process.env[envVarName] = key;
+    } else {
+      delete process.env[envVarName];
+    }
     return { success: true };
   }
 
@@ -150,12 +319,14 @@ class EnvironmentManager {
     return this._saveKey("CUSTOM_TRANSCRIPTION_API_KEY", key);
   }
 
-  getCustomReasoningKey() {
-    return this._getKey("CUSTOM_REASONING_API_KEY");
+  getCleanupCustomKey() {
+    // TODO: drop CUSTOM_REASONING_API_KEY fallback after 2 releases.
+    return this._getKey("CUSTOM_CLEANUP_API_KEY") || this._getKey("CUSTOM_REASONING_API_KEY");
   }
 
-  saveCustomReasoningKey(key) {
-    return this._saveKey("CUSTOM_REASONING_API_KEY", key);
+  saveCleanupCustomKey(key) {
+    delete process.env.CUSTOM_REASONING_API_KEY;
+    return this._saveKey("CUSTOM_CLEANUP_API_KEY", key);
   }
 
   // Enterprise providers — AWS Bedrock
@@ -247,11 +418,13 @@ class EnvironmentManager {
   }
 
   getAgentKey() {
-    return this._getKey("AGENT_KEY");
+    // TODO: drop AGENT_KEY fallback after 2 releases.
+    return this._getKey("CHAT_AGENT_KEY") || this._getKey("AGENT_KEY");
   }
 
   saveAgentKey(key) {
-    const result = this._saveKey("AGENT_KEY", key);
+    delete process.env.AGENT_KEY;
+    const result = this._saveKey("CHAT_AGENT_KEY", key);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }
@@ -321,34 +494,10 @@ class EnvironmentManager {
     return { ...result, language: normalized };
   }
 
-  async createProductionEnvFile(apiKey) {
-    const envPath = path.join(app.getPath("userData"), ".env");
-
-    const envContent = `# OpenWhispr Environment Variables
-# This file was created automatically for production use
-OPENAI_API_KEY=${apiKey}
-`;
-
-    await fsPromises.writeFile(envPath, envContent, "utf8");
-    require("dotenv").config({ path: envPath });
-
-    return { success: true, path: envPath };
-  }
-
   async saveAllKeysToEnvFile() {
     const envPath = path.join(app.getPath("userData"), ".env");
-
-    let envContent = "# OpenWhispr Environment Variables\n";
-
-    for (const key of PERSISTED_KEYS) {
-      if (process.env[key]) {
-        envContent += `${key}=${process.env[key]}\n`;
-      }
-    }
-
-    await fsPromises.writeFile(envPath, envContent, "utf8");
+    await this._writeEnvFileAtomic(envPath);
     require("dotenv").config({ path: envPath });
-
     return { success: true, path: envPath };
   }
 }

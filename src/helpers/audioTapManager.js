@@ -43,7 +43,6 @@ class AudioTapManager {
     this.isStopping = false;
     this.permissionStatus = this._loadPermissionStatus();
     this._requestPromise = null;
-    this._verifiedGranted = false;
   }
 
   isSupported() {
@@ -70,48 +69,12 @@ class AudioTapManager {
     return this.permissionStatus;
   }
 
-  /** Cached status check — never spawns processes or triggers system dialogs. */
   checkAccess() {
     if (!this.isSupported()) {
       return { granted: false, status: "unsupported" };
     }
     const status = this.getPermissionStatus();
     return { granted: status === "granted", status };
-  }
-
-  /**
-   * Async check that verifies a cached "granted" status by probing the binary
-   * once per session. Detects permission revocations that the disk cache misses.
-   */
-  async verifyAccess() {
-    if (!this.isSupported()) {
-      return { granted: false, status: "unsupported" };
-    }
-
-    // Active process means definitely granted.
-    if (this.process) {
-      return { granted: true, status: "granted" };
-    }
-
-    // Only probe when cached status is "granted" — trust "denied" and "unknown".
-    if (this.permissionStatus !== "granted" || this._verifiedGranted) {
-      const status = this.getPermissionStatus();
-      return { granted: status === "granted", status };
-    }
-
-    // Cached says "granted" but no process running — verify once per session.
-    try {
-      const result = await this._probeForAccess();
-      if (result.granted) {
-        this._verifiedGranted = true;
-      }
-      return result;
-    } catch {
-      // Probe rejected — permission was likely revoked.
-      // _probeForAccess already persisted the updated status.
-      const status = this.getPermissionStatus();
-      return { granted: status === "granted", status };
-    }
   }
 
   _statusFilePath() {

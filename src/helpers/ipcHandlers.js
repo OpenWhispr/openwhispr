@@ -1,4 +1,4 @@
-const { ipcMain, app, shell, BrowserWindow, systemPreferences } = require("electron");
+const { ipcMain, app, shell, BrowserWindow, systemPreferences, net } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -6,6 +6,8 @@ const http = require("http");
 const https = require("https");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const tokenStore = require("./tokenStore");
+const { classifyAndLog } = require("./networkErrors");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
@@ -32,6 +34,11 @@ const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
+const {
+  DEFAULT_WHISPER_VAD_CONFIG,
+  sanitizeWhisperVadConfig,
+  resolveContextSileroEnabled,
+} = require("./whisperVadConfig");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
@@ -164,7 +171,7 @@ async function chunkedCloudTranscribe({
   buffer = null,
   filePath = null,
   apiUrl,
-  cookieHeader,
+  authHeader,
   multipartFields = {},
   onProgress,
   concurrencyLimit = CLOUD_CHUNK_CONCURRENCY,
@@ -207,7 +214,7 @@ async function chunkedCloudTranscribe({
         multipartFields
       );
       const url = new URL(`${apiUrl}/api/transcribe`);
-      const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
+      const data = await postMultipart(url, body, boundary, authHeader);
 
       results[index] = interpretTranscribeResponse(data);
       completedCount++;
@@ -296,6 +303,8 @@ class IPCHandlers {
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
     this.meetingAecManager = managers.meetingAecManager;
+    this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
+    this.oauthProtocol = managers.oauthProtocol || "openwhispr";
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
@@ -304,6 +313,7 @@ class IPCHandlers {
     this._dictationIdleTimer = null;
     this._meetingMicStreaming = null;
     this._meetingSystemStreaming = null;
+    this._hotkeyCaptureMode = false;
     this._autoLearnEnabled = true; // Default on, synced from renderer
     this._autoLearnDebounceTimer = null;
     this._autoLearnLatestData = null;
@@ -314,6 +324,12 @@ class IPCHandlers {
     this._noteFilesEnabled = false;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
+    this.whisperVadSettings = {
+      dictationSileroEnabled: true,
+      noteRecordingSileroEnabled: true,
+      meetingSileroEnabled: true,
+      ...DEFAULT_WHISPER_VAD_CONFIG,
+    };
     liveSpeakerIdentifier.setDiarizationManager(this.diarizationManager);
     this._setupTextEditMonitor();
     this._setupAudioCleanup();
@@ -325,6 +341,35 @@ class IPCHandlers {
         this.broadcastToWindows("cuda-fallback-notification", {});
       });
     }
+  }
+
+  _getWhisperVadSettings() {
+    const current = this.whisperVadSettings || {};
+    return {
+      dictationSileroEnabled: current.dictationSileroEnabled !== false,
+      noteRecordingSileroEnabled: current.noteRecordingSileroEnabled !== false,
+      meetingSileroEnabled: current.meetingSileroEnabled !== false,
+      ...sanitizeWhisperVadConfig(current),
+    };
+  }
+
+  _setWhisperVadSettings(update = {}) {
+    this.whisperVadSettings = { ...this._getWhisperVadSettings(), ...update };
+    return this._getWhisperVadSettings();
+  }
+
+  _resolveWhisperVadOptions(context) {
+    const settings = this._getWhisperVadSettings();
+    const {
+      dictationSileroEnabled,
+      noteRecordingSileroEnabled,
+      meetingSileroEnabled,
+      ...vadConfig
+    } = settings;
+    return {
+      vadEnabled: resolveContextSileroEnabled(settings, context),
+      vadConfig,
+    };
   }
 
   _asyncVectorUpsert(note) {
@@ -654,6 +699,10 @@ class IPCHandlers {
       return false;
     });
 
+    ipcMain.handle("snap-to-meeting-mode", () => {
+      this.windowManager.snapControlPanelToMeetingMode();
+    });
+
     ipcMain.handle("restore-from-meeting-mode", () => {
       this.windowManager.restoreControlPanelFromMeetingMode();
       this.meetingDetectionEngine?.setMeetingModeActive(false);
@@ -703,10 +752,6 @@ class IPCHandlers {
 
     ipcMain.handle("save-openai-key", async (event, key) => {
       return this.environmentManager.saveOpenAIKey(key);
-    });
-
-    ipcMain.handle("create-production-env-file", async (event, apiKey) => {
-      return this.environmentManager.createProductionEnvFile(apiKey);
     });
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
@@ -1400,7 +1445,11 @@ class IPCHandlers {
           const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
           return result;
         }
-        const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, options);
+        const vadOptions = this._resolveWhisperVadOptions("noteRecording");
+        const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
+          ...options,
+          ...vadOptions,
+        });
         return result;
       } catch (error) {
         debugLogger.error("Audio file transcription error", { error: error.message });
@@ -1479,7 +1528,11 @@ class IPCHandlers {
       });
 
       try {
-        const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, options);
+        const vadOptions = this._resolveWhisperVadOptions("dictation");
+        const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, {
+          ...options,
+          ...vadOptions,
+        });
 
         debugLogger.log("Whisper result", {
           success: result.success,
@@ -2037,7 +2090,10 @@ class IPCHandlers {
     });
 
     ipcMain.handle("set-hotkey-listening-mode", async (event, enabled, newHotkey = null) => {
+      if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
+      this._hotkeyCaptureMode = enabled;
       this.windowManager.setHotkeyListeningMode(enabled);
+      ipcMain.emit("hotkey-listening-mode-changed", null, enabled);
       const hotkeyManager = this.windowManager.hotkeyManager;
 
       // When exiting capture mode with a new hotkey, use that to avoid reading stale state
@@ -2047,10 +2103,12 @@ class IPCHandlers {
         isGlobeLikeHotkey,
         isModifierOnlyHotkey,
         isRightSideModifier,
+        isMouseButtonHotkey,
       } = require("./hotkeyManager");
       const usesNativeListener = (hotkey) =>
         !hotkey ||
         isGlobeLikeHotkey(hotkey) ||
+        isMouseButtonHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
         isRightSideModifier(hotkey);
 
@@ -2447,7 +2505,7 @@ class IPCHandlers {
           }
         }
 
-        const response = await fetch(MISTRAL_TRANSCRIPTION_URL, {
+        const response = await proxyFetch(MISTRAL_TRANSCRIPTION_URL, {
           method: "POST",
           headers: {
             "x-api-key": apiKey,
@@ -2472,12 +2530,12 @@ class IPCHandlers {
       return this.environmentManager.saveCustomTranscriptionKey(key);
     });
 
-    ipcMain.handle("get-custom-reasoning-key", async () => {
-      return this.environmentManager.getCustomReasoningKey();
+    ipcMain.handle("get-cleanup-custom-key", async () => {
+      return this.environmentManager.getCleanupCustomKey();
     });
 
-    ipcMain.handle("save-custom-reasoning-key", async (event, key) => {
-      return this.environmentManager.saveCustomReasoningKey(key);
+    ipcMain.handle("save-cleanup-custom-key", async (event, key) => {
+      return this.environmentManager.saveCleanupCustomKey(key);
     });
 
     // Enterprise provider key handlers
@@ -2736,11 +2794,41 @@ class IPCHandlers {
         });
       }
 
-      if (prefs.reasoningProvider === "local" && prefs.reasoningModel) {
-        setVars.REASONING_PROVIDER = "local";
-        setVars.LOCAL_REASONING_MODEL = prefs.reasoningModel;
-      } else if (prefs.reasoningProvider && prefs.reasoningProvider !== "local") {
+      // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL clears once
+      // the read fallback is removed (~2 releases after this lands).
+      if (prefs.cleanupProvider === "local" && prefs.cleanupModel) {
+        setVars.CLEANUP_PROVIDER = "local";
+        setVars.LOCAL_CLEANUP_MODEL = prefs.cleanupModel;
         clearVars.push("REASONING_PROVIDER", "LOCAL_REASONING_MODEL");
+      } else if (prefs.cleanupProvider && prefs.cleanupProvider !== "local") {
+        clearVars.push(
+          "CLEANUP_PROVIDER",
+          "LOCAL_CLEANUP_MODEL",
+          "REASONING_PROVIDER",
+          "LOCAL_REASONING_MODEL"
+        );
+      }
+
+      const dictationAgentLocal =
+        prefs.dictationAgentProvider === "local" && prefs.dictationAgentModel;
+      if (dictationAgentLocal) {
+        setVars.DICTATION_AGENT_PROVIDER = "local";
+        setVars.LOCAL_DICTATION_AGENT_MODEL = prefs.dictationAgentModel;
+      } else if (prefs.dictationAgentProvider && prefs.dictationAgentProvider !== "local") {
+        clearVars.push("DICTATION_AGENT_PROVIDER", "LOCAL_DICTATION_AGENT_MODEL");
+      }
+
+      // Stop the local llama-server only when neither cleanup nor dictation-agent
+      // still need a local model. Otherwise the still-active scope would lose
+      // its server on the next provider switch of the other scope.
+      const cleanupNeedsLocal = setVars.CLEANUP_PROVIDER === "local";
+      const dictationAgentNeedsLocal = setVars.DICTATION_AGENT_PROVIDER === "local";
+      if (
+        prefs.cleanupProvider &&
+        prefs.cleanupProvider !== "local" &&
+        !cleanupNeedsLocal &&
+        !dictationAgentNeedsLocal
+      ) {
         const modelManager = require("./modelManagerBridge").default;
         modelManager.stopServer().catch((err) => {
           debugLogger.error("Failed to stop llama-server on provider switch", {
@@ -2787,7 +2875,7 @@ class IPCHandlers {
             temperature: config?.temperature || 0.3,
           };
 
-          const response = await fetch("https://api.anthropic.com/v1/messages", {
+          const response = await proxyFetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -2947,6 +3035,16 @@ class IPCHandlers {
           this._llamaVulkanManager = new LlamaVulkanManager();
         }
 
+        // Stop Vulkan server before downloading to release file locks on DLLs (Windows EBUSY)
+        const modelManager = require("./modelManagerBridge").default;
+        if (modelManager.serverManager.activeBackend === "vulkan") {
+          await modelManager.stopServer().catch((err) => {
+            debugLogger.warn("Failed to stop Vulkan server before download", {
+              error: err.message,
+            });
+          });
+        }
+
         const result = await this._llamaVulkanManager.download((downloaded, total) => {
           if (!event.sender.isDestroyed()) {
             event.sender.send("llama-vulkan-download-progress", {
@@ -2960,10 +3058,9 @@ class IPCHandlers {
         if (result.success) {
           process.env.LLAMA_VULKAN_ENABLED = "true";
           delete process.env.LLAMA_GPU_BACKEND;
-          const modelManager = require("./modelManagerBridge").default;
           modelManager.serverManager.cachedServerBinaryPaths = null;
           await this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
-          // Restart llama server so it picks up the Vulkan binary
+          // Stop server so next inference picks up the new Vulkan binary
           await modelManager.stopServer().catch(() => {});
         }
 
@@ -3171,7 +3268,7 @@ class IPCHandlers {
         return buildSystemAudioAccess();
       }
 
-      const result = await this.audioTapManager.verifyAccess();
+      const result = this.audioTapManager.checkAccess();
       return buildSystemAudioAccess({
         granted: result.granted,
         status: result.status,
@@ -3239,13 +3336,9 @@ class IPCHandlers {
       });
     });
 
-    // Auth: clear all session cookies for sign-out.
-    // This clears every cookie in the renderer session rather than targeting
-    // individual auth cookies, which is acceptable because the app only sets
-    // cookies for Neon Auth. Avoids CSRF/Origin header issues that occur when
-    // the renderer tries to call the server-side sign-out endpoint directly.
     ipcMain.handle("auth-clear-session", async (event) => {
       try {
+        tokenStore.clear();
         const win = BrowserWindow.fromWebContents(event.sender);
         if (win) {
           await win.webContents.session.clearStorageData({ storages: ["cookies"] });
@@ -3254,6 +3347,19 @@ class IPCHandlers {
       } catch (error) {
         debugLogger.error("Failed to clear auth session:", error);
         return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("auth-get-token", () => tokenStore.get());
+    ipcMain.handle("auth-set-token", (_event, token) => {
+      if (typeof token === "string" && token) {
+        tokenStore.set(token);
+      } else {
+        // Surface silent rotation-to-empty so we can spot regressions where the
+        // renderer thinks it's persisting a token but the value never lands.
+        debugLogger.debug("auth-set-token ignored: empty or non-string token", {
+          type: typeof token,
+        });
       }
     });
 
@@ -3276,10 +3382,10 @@ class IPCHandlers {
       "";
 
     const getAuthUrl = () =>
-      process.env.NEON_AUTH_URL ||
-      process.env.VITE_NEON_AUTH_URL ||
-      runtimeEnv.VITE_NEON_AUTH_URL ||
-      "";
+      process.env.AUTH_URL ||
+      process.env.VITE_AUTH_URL ||
+      runtimeEnv.VITE_AUTH_URL ||
+      "https://auth.openwhispr.com";
 
     const getSessionCookiesFromWindow = async (win) => {
       const scopedUrls = [getAuthUrl(), getApiUrl()].filter(Boolean);
@@ -3333,15 +3439,36 @@ class IPCHandlers {
       return getSessionCookiesFromWindow(win);
     };
 
+    // Bearer auth is preferred. Cookie fallback covers the brief window before
+    // main.js's startup migration bridge runs (or if it failed for this user).
+    const getAuthHeaderFromWindow = async (win) => {
+      const token = tokenStore.get();
+      if (token) return { Authorization: `Bearer ${token}` };
+      const cookieHeader = win ? await getSessionCookiesFromWindow(win) : "";
+      return cookieHeader ? { Cookie: cookieHeader } : {};
+    };
+
+    const getAuthHeader = async (event) => {
+      const win = BrowserWindow.fromWebContents(event.sender);
+      return getAuthHeaderFromWindow(win);
+    };
+
+    // Honors system proxy via Electron's net stack. useSessionCookies:false so
+    // Electron doesn't auto-attach jar cookies on top of our explicit headers.
+    const proxyFetch = (url, init = {}) => net.fetch(url, { ...init, useSessionCookies: false });
+
     ipcMain.handle("cloud-transcribe", async (event, audioBuffer, opts = {}) => {
       try {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const audioData = Buffer.from(audioBuffer);
+        // Reused for the local SQLite row so SyncService upserts the existing
+        // cloud row (filling in text) instead of creating a duplicate.
+        const clientTranscriptionId = crypto.randomUUID();
         const multipartFields = {
           language: opts.language,
           prompt: opts.prompt,
@@ -3350,6 +3477,7 @@ class IPCHandlers {
           appVersion: app.getVersion(),
           clientVersion: app.getVersion(),
           sessionId: this.sessionId,
+          clientTranscriptionId,
         };
 
         debugLogger.debug("Cloud transcribe request", { audioSize: audioData.length }, "cloud-api");
@@ -3358,13 +3486,14 @@ class IPCHandlers {
           const { text, responses, lastResponse } = await chunkedCloudTranscribe({
             buffer: audioData,
             apiUrl,
-            cookieHeader,
+            authHeader,
             multipartFields,
           });
           const sum = (field) => responses.reduce((s, r) => s + (r?.[field] || 0), 0);
           return {
             success: true,
             text,
+            clientTranscriptionId,
             wordsUsed: lastResponse?.wordsUsed,
             wordsRemaining: lastResponse?.wordsRemaining,
             plan: lastResponse?.plan,
@@ -3385,7 +3514,7 @@ class IPCHandlers {
           multipartFields
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
-        const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
+        const data = await postMultipart(url, body, boundary, authHeader);
 
         debugLogger.debug(
           "Cloud transcribe response",
@@ -3397,6 +3526,7 @@ class IPCHandlers {
         return {
           success: true,
           text: result.text,
+          clientTranscriptionId,
           wordsUsed: result.wordsUsed,
           wordsRemaining: result.wordsRemaining,
           plan: result.plan,
@@ -3417,11 +3547,45 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("cloud-health-check", async () => {
+      const apiUrl = getApiUrl();
+      if (!apiUrl) {
+        return {
+          ok: false,
+          code: "NO_API_URL",
+          messageKey: "streaming.errors.cloudUnreachable.generic",
+        };
+      }
+      const url = `${apiUrl}/api/health`;
+      try {
+        const res = await proxyFetch(url, {
+          method: "GET",
+          signal: AbortSignal.timeout(3000),
+        });
+        return { ok: res.ok, status: res.status };
+      } catch (err) {
+        const classified = classifyAndLog(err, url);
+        if (classified.isNetworkError) {
+          return { ok: false, code: classified.code, messageKey: classified.messageKey };
+        }
+        return {
+          ok: false,
+          code: "UNKNOWN",
+          messageKey: "streaming.errors.cloudUnreachable.generic",
+        };
+      }
+    });
+
     ipcMain.handle("retry-transcription", async (event, id, settings) => {
       const buffer = this.audioStorageManager.getAudioBuffer(id);
       if (!buffer) return { success: false, error: "Audio file not found" };
       try {
         let result;
+        const preferredLanguage = settings?.preferredLanguage;
+        const language =
+          preferredLanguage && preferredLanguage !== "auto"
+            ? preferredLanguage.split("-")[0]
+            : undefined;
 
         if (settings?.useLocalWhisper) {
           if (settings.localTranscriptionProvider === "nvidia") {
@@ -3429,18 +3593,22 @@ class IPCHandlers {
               settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
             result = await this.parakeetManager.transcribeLocalParakeet(buffer, { model });
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
+            const vadOptions = this._resolveWhisperVadOptions("noteRecording");
             result = await this.whisperManager.transcribeLocalWhisper(buffer, {
               model: settings.whisperModel,
+              language,
+              ...vadOptions,
             });
           }
         } else if (settings?.cloudTranscriptionMode === "openwhispr") {
           const win = BrowserWindow.fromWebContents(event.sender);
           if (win) {
-            const cookieHeader = await getSessionCookiesFromWindow(win);
-            if (cookieHeader) {
+            const authHeader = await getAuthHeaderFromWindow(win);
+            if (Object.keys(authHeader).length) {
               const apiUrl = getApiUrl();
               if (apiUrl) {
                 const multipartFields = {
+                  language,
                   clientType: "desktop",
                   appVersion: app.getVersion(),
                   sessionId: this.sessionId,
@@ -3449,7 +3617,7 @@ class IPCHandlers {
                   const { text } = await chunkedCloudTranscribe({
                     buffer,
                     apiUrl,
-                    cookieHeader,
+                    authHeader,
                     multipartFields,
                   });
                   result = { text, source: "openwhispr", model: "cloud" };
@@ -3461,9 +3629,7 @@ class IPCHandlers {
                     multipartFields
                   );
                   const url = new URL(`${apiUrl}/api/transcribe`);
-                  const data = await postMultipart(url, body, boundary, {
-                    Cookie: cookieHeader,
-                  });
+                  const data = await postMultipart(url, body, boundary, authHeader);
                   const responseData = interpretTranscribeResponse(data);
                   result = {
                     text: responseData.text,
@@ -3504,6 +3670,7 @@ class IPCHandlers {
           const formData = new FormData();
           formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
           formData.append("model", model);
+          if (language) formData.append("language", language);
           const headers = {};
           if (provider === "mistral") {
             headers["x-api-key"] = apiKey;
@@ -3511,7 +3678,7 @@ class IPCHandlers {
             headers.Authorization = `Bearer ${apiKey}`;
           }
 
-          const response = await fetch(endpoint, { method: "POST", headers, body: formData });
+          const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
           if (!response.ok) {
             const errorText = await response.text();
             throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
@@ -3959,14 +4126,32 @@ class IPCHandlers {
     const fetchRealtimeToken = async (event, options, { streams } = {}) => {
       const postServerToken = async (path, body = {}) => {
         const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
-        const response = await fetch(`${apiUrl}${path}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Cookie: cookieHeader },
-          body: JSON.stringify(body),
-        });
+        if (!apiUrl) {
+          const err = new Error("OpenWhispr API URL not configured");
+          err.code = "NO_API";
+          throw err;
+        }
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
+        const url = `${apiUrl}${path}`;
+        let response;
+        try {
+          response = await proxyFetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", ...authHeader },
+            body: JSON.stringify(body),
+          });
+        } catch (err) {
+          const classified = classifyAndLog(err, url);
+          if (classified.isNetworkError) {
+            throw Object.assign(new Error(err.message || "Network request failed"), {
+              code: "NETWORK_ERROR",
+              networkCode: classified.code,
+              messageKey: classified.messageKey,
+            });
+          }
+          throw err;
+        }
         if (!response.ok) {
           const err = await response.json().catch(() => ({}));
           throw new Error(err.error || `Token request failed: ${response.status}`);
@@ -3983,7 +4168,7 @@ class IPCHandlers {
             throw new Error("No AssemblyAI API key configured. Add your key in Settings.");
           }
           return dual(async () => {
-            const response = await fetch(
+            const response = await proxyFetch(
               "https://streaming.assemblyai.com/v3/token?expires_in_seconds=60",
               { headers: { Authorization: apiKey } }
             );
@@ -4168,6 +4353,7 @@ class IPCHandlers {
     let meetingLocalTranscript = "";
     let meetingLocalProvider = null;
     let meetingLocalModel = null;
+    let meetingLocalLanguage = null;
     let meetingLocalTranscribing = false;
     let meetingPendingMicChunks = [];
     let meetingPendingMicFinals = [];
@@ -4560,8 +4746,11 @@ class IPCHandlers {
             model: meetingLocalModel,
           });
         } else {
+          const vadOptions = this._resolveWhisperVadOptions("meeting");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: meetingLocalModel,
+            language: meetingLocalLanguage,
+            ...vadOptions,
           });
         }
 
@@ -4732,6 +4921,7 @@ class IPCHandlers {
       meetingLocalTranscript = "";
       meetingLocalProvider = null;
       meetingLocalModel = null;
+      meetingLocalLanguage = null;
       meetingLocalTranscribing = false;
       meetingPendingMicChunks = [];
       resetPendingMicFinals();
@@ -4746,6 +4936,7 @@ class IPCHandlers {
     let dictationPreviewTranscribing = false;
     let dictationPreviewProvider = null;
     let dictationPreviewModel = null;
+    let dictationPreviewLanguage = null;
     let dictationPreviewSessionActive = false;
     let dictationPreviewChunkCount = 0;
 
@@ -4762,6 +4953,7 @@ class IPCHandlers {
       dictationPreviewTranscribing = false;
       dictationPreviewProvider = null;
       dictationPreviewModel = null;
+      dictationPreviewLanguage = null;
     };
 
     const transcribeDictationPreviewChunk = async () => {
@@ -4795,8 +4987,11 @@ class IPCHandlers {
             model: dictationPreviewModel,
           });
         } else {
+          const vadOptions = this._resolveWhisperVadOptions("dictation");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: dictationPreviewModel,
+            language: dictationPreviewLanguage,
+            ...vadOptions,
           });
         }
 
@@ -5035,6 +5230,7 @@ class IPCHandlers {
           meetingLocalMode = true;
           meetingLocalProvider = options.localProvider || "whisper";
           meetingLocalModel = options.localModel || null;
+          meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalBuffers = { mic: [], system: [] };
           meetingLocalTranscript = "";
@@ -5305,13 +5501,21 @@ class IPCHandlers {
       }
     });
 
+    const streamingStartFailure = (err) => {
+      const result = { success: false, error: err.message };
+      if (err.code) result.code = err.code;
+      if (err.messageKey) result.messageKey = err.messageKey;
+      if (err.networkCode) result.networkCode = err.networkCode;
+      return result;
+    };
+
     ipcMain.handle("dictation-realtime-warmup", async (event, options = {}) => {
       try {
         await connectDictationStreaming(event, options);
         startDictationIdleTimer();
         return { success: true };
       } catch (err) {
-        return { success: false, error: err.message };
+        return streamingStartFailure(err);
       }
     });
 
@@ -5321,7 +5525,7 @@ class IPCHandlers {
         if (!this._dictationStreaming?.isConnected) await connectDictationStreaming(event, options);
         return { success: true };
       } catch (err) {
-        return { success: false, error: err.message };
+        return streamingStartFailure(err);
       }
     });
 
@@ -5339,12 +5543,13 @@ class IPCHandlers {
       return { success: true, text: result.text || "" };
     });
 
-    ipcMain.handle("start-dictation-preview", async (_event, { provider, model }) => {
+    ipcMain.handle("start-dictation-preview", async (_event, { provider, model, language }) => {
       resetDictationPreviewState();
       dictationPreviewMode = true;
       dictationPreviewSessionActive = true;
       dictationPreviewProvider = provider;
       dictationPreviewModel = model;
+      dictationPreviewLanguage = language || null;
       dictationPreviewChunkCount = 0;
       this.windowManager.showTranscriptionPreview("");
       dictationPreviewTimer = setInterval(() => transcribeDictationPreviewChunk(), 1500);
@@ -5433,8 +5638,8 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         debugLogger.debug(
           "Cloud reason request",
@@ -5446,11 +5651,11 @@ class IPCHandlers {
           "cloud-api"
         );
 
-        const response = await fetch(`${apiUrl}/api/reason`, {
+        const response = await proxyFetch(`${apiUrl}/api/reason`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Cookie: cookieHeader,
+            ...authHeader,
           },
           body: JSON.stringify({
             text,
@@ -5519,14 +5724,14 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        const response = await fetch(`${apiUrl}/api/agent/stream`, {
+        const response = await proxyFetch(`${apiUrl}/api/agent/stream`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Cookie: cookieHeader,
+            ...authHeader,
           },
           body: JSON.stringify({
             messages,
@@ -5612,16 +5817,16 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         debugLogger.debug("Agent web search request", { query, numResults }, "cloud-api");
 
-        const response = await fetch(`${apiUrl}/api/agent/web-search`, {
+        const response = await proxyFetch(`${apiUrl}/api/agent/web-search`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Cookie: cookieHeader,
+            ...authHeader,
           },
           body: JSON.stringify({ query, numResults }),
         });
@@ -5655,14 +5860,14 @@ class IPCHandlers {
           const apiUrl = getApiUrl();
           if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-          const cookieHeader = await getSessionCookies(event);
-          if (!cookieHeader) throw new Error("No session cookies available");
+          const authHeader = await getAuthHeader(event);
+          if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-          const response = await fetch(`${apiUrl}/api/streaming-usage`, {
+          const response = await proxyFetch(`${apiUrl}/api/streaming-usage`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Cookie: cookieHeader,
+              ...authHeader,
             },
             body: JSON.stringify({
               text,
@@ -5706,11 +5911,11 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        const response = await fetch(`${apiUrl}/api/usage`, {
-          headers: { Cookie: cookieHeader },
+        const response = await proxyFetch(`${apiUrl}/api/usage`, {
+          headers: authHeader,
         });
 
         if (!response.ok) {
@@ -5736,17 +5941,17 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        const headers = { Cookie: cookieHeader };
+        const headers = { ...authHeader };
         const fetchOpts = { method: "POST", headers };
         if (body) {
           headers["Content-Type"] = "application/json";
           fetchOpts.body = JSON.stringify(body);
         }
 
-        const response = await fetch(`${apiUrl}${endpoint}`, fetchOpts);
+        const response = await proxyFetch(`${apiUrl}${endpoint}`, fetchOpts);
 
         if (!response.ok) {
           if (response.status === 401) {
@@ -5780,12 +5985,12 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        const response = await fetch(`${apiUrl}/api/stripe/switch-plan`, {
+        const response = await proxyFetch(`${apiUrl}/api/stripe/switch-plan`, {
           method: "POST",
-          headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
+          headers: { ...authHeader, "Content-Type": "application/json" },
           body: JSON.stringify(opts),
         });
 
@@ -5812,12 +6017,12 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        const response = await fetch(`${apiUrl}/api/stripe/preview-switch`, {
+        const response = await proxyFetch(`${apiUrl}/api/stripe/preview-switch`, {
           method: "POST",
-          headers: { Cookie: cookieHeader, "Content-Type": "application/json" },
+          headers: { ...authHeader, "Content-Type": "application/json" },
           body: JSON.stringify(opts),
         });
 
@@ -5844,11 +6049,11 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const method = (opts.method || "GET").toUpperCase();
-        const headers = { Cookie: cookieHeader };
+        const headers = { ...authHeader };
         const fetchOpts = { method, headers };
 
         if (opts.body !== undefined) {
@@ -5856,7 +6061,7 @@ class IPCHandlers {
           fetchOpts.body = JSON.stringify(opts.body);
         }
 
-        const response = await fetch(`${apiUrl}${opts.path}`, fetchOpts);
+        const response = await proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
 
         if (response.status === 401) {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
@@ -5887,11 +6092,11 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        const response = await fetch(`${apiUrl}/api/stt-config`, {
-          headers: { Cookie: cookieHeader },
+        const response = await proxyFetch(`${apiUrl}/api/stt-config`, {
+          headers: authHeader,
         });
 
         if (!response.ok) {
@@ -5917,11 +6122,11 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        const response = await fetch(`${apiUrl}/api/note-recording-config`, {
-          headers: { Cookie: cookieHeader },
+        const response = await proxyFetch(`${apiUrl}/api/note-recording-config`, {
+          headers: authHeader,
         });
 
         if (!response.ok) {
@@ -5944,8 +6149,8 @@ class IPCHandlers {
         const apiUrl = getApiUrl();
         if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const multipartFields = {
           source: "file_upload",
@@ -5965,7 +6170,7 @@ class IPCHandlers {
           const { text, warning } = await chunkedCloudTranscribe({
             filePath,
             apiUrl,
-            cookieHeader,
+            authHeader,
             multipartFields,
             onProgress: (payload) => event.sender.send("upload-transcription-progress", payload),
           });
@@ -5984,7 +6189,7 @@ class IPCHandlers {
           multipartFields
         );
         const url = new URL(`${apiUrl}/api/transcribe`);
-        const data = await postMultipart(url, body, boundary, { Cookie: cookieHeader });
+        const data = await postMultipart(url, body, boundary, authHeader);
         const result = interpretTranscribeResponse(data);
 
         return { success: true, text: result.text };
@@ -6060,14 +6265,14 @@ class IPCHandlers {
           throw new Error("OpenWhispr API URL not configured");
         }
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) {
-          throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) {
+          throw new Error("Not authenticated");
         }
 
-        const response = await fetch(`${apiUrl}/api/referrals/stats`, {
+        const response = await proxyFetch(`${apiUrl}/api/referrals/stats`, {
           headers: {
-            Cookie: cookieHeader,
+            ...authHeader,
           },
         });
 
@@ -6096,15 +6301,15 @@ class IPCHandlers {
           throw new Error("OpenWhispr API URL not configured");
         }
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) {
-          throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) {
+          throw new Error("Not authenticated");
         }
 
-        const response = await fetch(`${apiUrl}/api/referrals/invite`, {
+        const response = await proxyFetch(`${apiUrl}/api/referrals/invite`, {
           method: "POST",
           headers: {
-            Cookie: cookieHeader,
+            ...authHeader,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ email }),
@@ -6134,14 +6339,14 @@ class IPCHandlers {
           throw new Error("OpenWhispr API URL not configured");
         }
 
-        const cookieHeader = await getSessionCookies(event);
-        if (!cookieHeader) {
-          throw new Error("No session cookies available");
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) {
+          throw new Error("Not authenticated");
         }
 
-        const response = await fetch(`${apiUrl}/api/referrals/invites`, {
+        const response = await proxyFetch(`${apiUrl}/api/referrals/invites`, {
           headers: {
-            Cookie: cookieHeader,
+            ...authHeader,
           },
         });
 
@@ -6298,8 +6503,16 @@ class IPCHandlers {
       justMigrated: postMigrationDetector.isReturningFromOldBundle(),
     }));
 
+    ipcMain.handle("get-oauth-protocol-registered", () => this.oauthProtocolRegistered);
+
+    ipcMain.handle("get-oauth-protocol", () => this.oauthProtocol);
+
     ipcMain.handle("mark-bundle-migrated", () => {
       postMigrationDetector.markBundleMigrated();
+    });
+
+    ipcMain.handle("mark-bundle-migration-dismissed", () => {
+      postMigrationDetector.markBundleMigrationDismissed();
     });
 
     ipcMain.handle("get-update-status", async () => {
@@ -6316,15 +6529,15 @@ class IPCHandlers {
         throw new Error("OpenWhispr API URL not configured");
       }
 
-      const cookieHeader = await getSessionCookies(event);
-      if (!cookieHeader) {
-        throw new Error("No session cookies available");
+      const authHeader = await getAuthHeader(event);
+      if (!Object.keys(authHeader).length) {
+        throw new Error("Not authenticated");
       }
 
-      const tokenResponse = await fetch(`${apiUrl}/api/streaming-token`, {
+      const tokenResponse = await proxyFetch(`${apiUrl}/api/streaming-token`, {
         method: "POST",
         headers: {
-          Cookie: cookieHeader,
+          ...authHeader,
         },
       });
 
@@ -6467,7 +6680,7 @@ class IPCHandlers {
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
         }
-        return { success: false, error: error.message };
+        return streamingStartFailure(error);
       } finally {
         streamingStartInProgress = false;
       }
@@ -6519,12 +6732,12 @@ class IPCHandlers {
       const win = BrowserWindow.fromId(windowId);
       if (!win || win.isDestroyed()) throw new Error("Window not available for token refresh");
 
-      const cookieHeader = await getSessionCookiesFromWindow(win);
-      if (!cookieHeader) throw new Error("No session cookies available");
+      const authHeader = await getAuthHeaderFromWindow(win);
+      if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-      const tokenResponse = await fetch(`${apiUrl}/api/deepgram-streaming-token`, {
+      const tokenResponse = await proxyFetch(`${apiUrl}/api/deepgram-streaming-token`, {
         method: "POST",
-        headers: { Cookie: cookieHeader },
+        headers: authHeader,
       });
 
       if (!tokenResponse.ok) {
@@ -6547,15 +6760,15 @@ class IPCHandlers {
         throw new Error("OpenWhispr API URL not configured");
       }
 
-      const cookieHeader = await getSessionCookies(event);
-      if (!cookieHeader) {
-        throw new Error("No session cookies available");
+      const authHeader = await getAuthHeader(event);
+      if (!Object.keys(authHeader).length) {
+        throw new Error("Not authenticated");
       }
 
-      const tokenResponse = await fetch(`${apiUrl}/api/deepgram-streaming-token`, {
+      const tokenResponse = await proxyFetch(`${apiUrl}/api/deepgram-streaming-token`, {
         method: "POST",
         headers: {
-          Cookie: cookieHeader,
+          ...authHeader,
         },
       });
 
@@ -6721,7 +6934,7 @@ class IPCHandlers {
         if (error.code === "AUTH_EXPIRED") {
           return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
         }
-        return { success: false, error: error.message };
+        return streamingStartFailure(error);
       } finally {
         deepgramStreamingStartInProgress = false;
       }
@@ -6984,6 +7197,23 @@ class IPCHandlers {
       try {
         this.speakerDiarizationEnabled = payload?.enabled !== false;
         return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("whisper-vad-get-config", async () => {
+      try {
+        return { success: true, config: this._getWhisperVadSettings() };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("whisper-vad-set-config", async (_event, payload) => {
+      try {
+        const config = this._setWhisperVadSettings(payload || {});
+        return { success: true, config };
       } catch (error) {
         return { success: false, error: error.message };
       }
@@ -7471,10 +7701,8 @@ class IPCHandlers {
   _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
     if (sessionConfig?.expectedCount) {
       const total = Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT);
-      return {
-        numSpeakers: Math.max(1, total - 1),
-        cap: null,
-      };
+      const numSpeakers = Math.max(1, total - 1);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     let attendees = [];
@@ -7487,17 +7715,13 @@ class IPCHandlers {
       }
     }
     if (attendees.length >= 2) {
-      return {
-        numSpeakers: Math.min(attendees.length, MAX_SPEAKER_COUNT),
-        cap: null,
-      };
+      const numSpeakers = Math.min(attendees.length, MAX_SPEAKER_COUNT);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     if (observedSpeakerIds.size >= 2) {
-      return {
-        numSpeakers: Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT),
-        cap: null,
-      };
+      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };

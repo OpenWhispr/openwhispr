@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./useAuth";
 import { CACHE_CONFIG } from "../config/constants";
-import { withSessionRefresh } from "../lib/neonAuth";
+import { withSessionRefresh } from "../lib/auth";
 
 interface UsageData {
   wordsUsed: number;

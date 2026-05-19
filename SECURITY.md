@@ -4,8 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.6.x   | :white_check_mark: |
-| < 1.6   | :x:                |
+| 1.7.x   | :white_check_mark: |
+| < 1.7   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -39,11 +39,14 @@ Out of scope:
 - **Local-first audio processing** — Audio is transcribed on-device using
   whisper.cpp or nvidia parakeet. Recordings are not sent to external servers unless explicitly
   configured by the user.
-- **Credential storage** — API keys provided by users (BYOK) are stored in
-  plaintext in the app's `userData` directory (`.env` file and Electron
-  `localStorage`). They are readable by any process running as the current OS
-  user. Migrating to Electron's `safeStorage` API for platform-native
-  encryption is tracked in [#532](https://github.com/OpenWhispr/openwhispr/issues/532).
+- **Credential storage** — API keys provided by users (BYOK) and enterprise
+  cloud credentials (AWS, Azure, Vertex) are encrypted at rest using
+  Electron's `safeStorage` API, which delegates to the OS keychain (Keychain
+  on macOS, DPAPI on Windows, libsecret on Linux). Encrypted blobs are stored
+  under `userData/secure-keys/`. Non-secret preferences (regions, endpoints,
+  hotkeys, flags) continue to live in `.env`. On Linux systems without a
+  keyring, secrets fall back to plaintext to match Electron's default
+  behavior.
 - **Native binaries** — Platform-specific helpers (key listeners, paste
   utilities) are compiled from source during the build process.
 - **Context isolation** — The Electron renderer runs with context isolation

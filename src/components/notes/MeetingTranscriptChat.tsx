@@ -5,7 +5,7 @@ import { Popover, PopoverTrigger, PopoverContent } from "../ui/popover";
 import { Toggle } from "../ui/toggle";
 import { cn } from "../lib/utils";
 import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
-import type { TranscriptSegment } from "../../hooks/useMeetingTranscription";
+import type { TranscriptSegment } from "../../stores/meetingRecordingStore";
 import {
   isTranscriptSpeakerLocked,
   type TranscriptSpeakerStatus,

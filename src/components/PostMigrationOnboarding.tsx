@@ -27,6 +27,11 @@ export default function PostMigrationOnboarding({
   const permissions = usePermissions();
   const systemAudio = useSystemAudioPermission();
 
+  const remindLater = () => {
+    window.electronAPI?.markBundleMigrationDismissed?.();
+    onOpenChange(false);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -38,7 +43,7 @@ export default function PostMigrationOnboarding({
         <PermissionsSection permissions={permissions} systemAudio={systemAudio} />
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button variant="ghost" onClick={remindLater}>
             {t("postMigration.remindLater")}
           </Button>
           <Button onClick={onDone} disabled={!permissions.micPermissionGranted}>

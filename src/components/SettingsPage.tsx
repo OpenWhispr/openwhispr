@@ -29,13 +29,13 @@ import {
   BookOpen,
   Copy,
   Trash2,
-  Building2,
+  Info,
   MessageSquare,
   FileAudio,
   Wand2,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { NEON_AUTH_URL, signOut, deleteAccount } from "../lib/neonAuth";
+import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
 import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
 import PermissionCard from "./ui/PermissionCard";
@@ -55,7 +55,6 @@ import {
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
 import { useDialogs } from "../hooks/useDialogs";
-import { useAgentName } from "../utils/agentName";
 import { useWhisper } from "../hooks/useWhisper";
 import { usePermissions } from "../hooks/usePermissions";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
@@ -63,8 +62,6 @@ import { useClipboard } from "../hooks/useClipboard";
 import { useUpdater } from "../hooks/useUpdater";
 
 import PromptStudio from "./ui/PromptStudio";
-import ReasoningModelSelector from "./ReasoningModelSelector";
-import EnterpriseSection from "./EnterpriseSection";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
@@ -73,11 +70,14 @@ import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
 import { formatHotkeyLabel } from "../utils/hotkeys";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
-import AgentModeSettings from "./settings/AgentModeSettings";
-import { MeetingReasoningPanel, MeetingTranscriptionPanel } from "./settings/MeetingSettings";
+import ChatAgentSettings from "./settings/ChatAgentSettings";
+import DictationAgentSettings from "./settings/DictationAgentSettings";
+import InferenceConfigEditor from "./settings/InferenceConfigEditor";
+import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
@@ -90,11 +90,13 @@ import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import { useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
+import WorkspaceSection from "./settings/WorkspaceSection";
 
 const formatAmount = (cents: number, currency: string) =>
   (cents / 100).toLocaleString(undefined, { style: "currency", currency });
@@ -102,6 +104,7 @@ const formatAmount = (cents: number, currency: string) =>
 export type SettingsSectionType =
   | "account"
   | "plansBilling"
+  | "workspace"
   | "general"
   | "hotkeys"
   | "speechToText"
@@ -190,14 +193,6 @@ interface TranscriptionSectionProps {
   setWhisperModel: (model: string) => void;
   parakeetModel: string;
   setParakeetModel: (model: string) => void;
-  openaiApiKey: string;
-  setOpenaiApiKey: (key: string) => void;
-  groqApiKey: string;
-  setGroqApiKey: (key: string) => void;
-  mistralApiKey: string;
-  setMistralApiKey: (key: string) => void;
-  customTranscriptionApiKey: string;
-  setCustomTranscriptionApiKey: (key: string) => void;
   cloudTranscriptionBaseUrl?: string;
   setCloudTranscriptionBaseUrl: (url: string) => void;
   transcriptionMode: InferenceMode;
@@ -232,14 +227,6 @@ function TranscriptionSection({
   setWhisperModel,
   parakeetModel,
   setParakeetModel,
-  openaiApiKey,
-  setOpenaiApiKey,
-  groqApiKey,
-  setGroqApiKey,
-  mistralApiKey,
-  setMistralApiKey,
-  customTranscriptionApiKey,
-  setCustomTranscriptionApiKey,
   cloudTranscriptionBaseUrl,
   setCloudTranscriptionBaseUrl,
   transcriptionMode,
@@ -351,14 +338,6 @@ function TranscriptionSection({
             }
       }
       mode={mode}
-      openaiApiKey={openaiApiKey}
-      setOpenaiApiKey={setOpenaiApiKey}
-      groqApiKey={groqApiKey}
-      setGroqApiKey={setGroqApiKey}
-      mistralApiKey={mistralApiKey}
-      setMistralApiKey={setMistralApiKey}
-      customTranscriptionApiKey={customTranscriptionApiKey}
-      setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
       cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
       setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
       variant="settings"
@@ -395,32 +374,8 @@ function TranscriptionSection({
 }
 
 interface AiModelsSectionProps {
-  isSignedIn: boolean;
-  startOnboarding: () => void;
-  cloudReasoningMode: string;
-  setCloudReasoningMode: (mode: string) => void;
-  useReasoningModel: boolean;
-  setUseReasoningModel: (value: boolean) => void;
-  reasoningModel: string;
-  setReasoningModel: (model: string) => void;
-  reasoningProvider: string;
-  setReasoningProvider: (provider: string) => void;
-  cloudReasoningBaseUrl: string;
-  setCloudReasoningBaseUrl: (url: string) => void;
-  openaiApiKey: string;
-  setOpenaiApiKey: (key: string) => void;
-  anthropicApiKey: string;
-  setAnthropicApiKey: (key: string) => void;
-  geminiApiKey: string;
-  setGeminiApiKey: (key: string) => void;
-  groqApiKey: string;
-  setGroqApiKey: (key: string) => void;
-  customReasoningApiKey: string;
-  setCustomReasoningApiKey: (key: string) => void;
-  reasoningMode: InferenceMode;
-  setReasoningMode: (mode: InferenceMode) => void;
-  remoteReasoningUrl: string;
-  setRemoteReasoningUrl: (url: string) => void;
+  useCleanupModel: boolean;
+  setUseCleanupModel: (value: boolean) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -429,91 +384,41 @@ interface AiModelsSectionProps {
   }) => void;
 }
 
-function AiModelsSection({
-  isSignedIn,
-  startOnboarding,
-  cloudReasoningMode,
-  setCloudReasoningMode,
-  useReasoningModel,
-  setUseReasoningModel,
-  reasoningModel,
-  setReasoningModel,
-  reasoningProvider,
-  setReasoningProvider,
-  cloudReasoningBaseUrl,
-  setCloudReasoningBaseUrl,
-  openaiApiKey,
-  setOpenaiApiKey,
-  anthropicApiKey,
-  setAnthropicApiKey,
-  geminiApiKey,
-  setGeminiApiKey,
-  groqApiKey,
-  setGroqApiKey,
-  customReasoningApiKey,
-  setCustomReasoningApiKey,
-  reasoningMode,
-  setReasoningMode,
-  remoteReasoningUrl,
-  setRemoteReasoningUrl,
-  toast,
-}: AiModelsSectionProps) {
+const CLEANUP_MODE_TOAST_KEY: Record<InferenceMode, string> = {
+  openwhispr: "switchedCloud",
+  providers: "switchedProviders",
+  local: "switchedLocal",
+  "self-hosted": "switchedSelfHosted",
+  enterprise: "switchedEnterprise",
+};
+
+function NoteFormattingSettings() {
+  const { t } = useTranslation();
+  const autoGenerateNoteTitle = useSettingsStore((s) => s.autoGenerateNoteTitle);
+  const setAutoGenerateNoteTitle = useSettingsStore((s) => s.setAutoGenerateNoteTitle);
+
+  return (
+    <div className="space-y-4">
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.noteFormatting.autoGenerateTitle")}
+            description={t("settingsPage.noteFormatting.autoGenerateTitleDescription")}
+          >
+            <Toggle checked={autoGenerateNoteTitle} onChange={setAutoGenerateNoteTitle} />
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+      <InferenceConfigEditor scope="noteFormatting" />
+    </div>
+  );
+}
+
+function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModelsSectionProps) {
   const { t } = useTranslation();
 
-  const aiModes: InferenceModeOption[] = [
-    {
-      id: "openwhispr",
-      label: t("settingsPage.aiModels.modes.openwhispr"),
-      description: t("settingsPage.aiModels.modes.openwhisprDesc"),
-      icon: <Cloud className="w-4 h-4" />,
-      disabled: !isSignedIn,
-      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
-    },
-    {
-      id: "providers",
-      label: t("settingsPage.aiModels.modes.providers"),
-      description: t("settingsPage.aiModels.modes.providersDesc"),
-      icon: <Key className="w-4 h-4" />,
-    },
-    {
-      id: "local",
-      label: t("settingsPage.aiModels.modes.local"),
-      description: t("settingsPage.aiModels.modes.localDesc"),
-      icon: <Cpu className="w-4 h-4" />,
-    },
-    {
-      id: "self-hosted",
-      label: t("settingsPage.aiModels.modes.selfHosted"),
-      description: t("settingsPage.aiModels.modes.selfHostedDesc"),
-      icon: <Network className="w-4 h-4" />,
-    },
-    {
-      id: "enterprise",
-      label: t("settingsPage.aiModels.modes.enterprise"),
-      description: t("settingsPage.aiModels.modes.enterpriseDesc"),
-      icon: <Building2 className="w-4 h-4" />,
-    },
-  ];
-
-  const handleReasoningModeSelect = (mode: InferenceMode) => {
-    if (mode === "openwhispr" && !isSignedIn) {
-      startOnboarding();
-      return;
-    }
-    if (mode === reasoningMode) return;
-    setReasoningMode(mode);
-    setCloudReasoningMode(mode === "openwhispr" ? "openwhispr" : "byok");
-    if (mode === "openwhispr" || mode === "self-hosted" || mode === "enterprise") {
-      window.electronAPI?.llamaServerStop?.();
-    }
-
-    const toastKey = {
-      openwhispr: "switchedCloud",
-      providers: "switchedProviders",
-      local: "switchedLocal",
-      "self-hosted": "switchedSelfHosted",
-      enterprise: "switchedEnterprise",
-    }[mode];
+  const handleCleanupModeChange = (mode: InferenceMode) => {
+    const toastKey = CLEANUP_MODE_TOAST_KEY[mode];
     toast({
       title: t(`settingsPage.aiModels.toasts.${toastKey}.title`),
       description: t(`settingsPage.aiModels.toasts.${toastKey}.description`),
@@ -521,29 +426,6 @@ function AiModelsSection({
       duration: 3000,
     });
   };
-
-  const renderReasoningSelector = (mode?: "cloud" | "local") => (
-    <ReasoningModelSelector
-      reasoningModel={reasoningModel}
-      setReasoningModel={setReasoningModel}
-      localReasoningProvider={reasoningProvider}
-      setLocalReasoningProvider={setReasoningProvider}
-      cloudReasoningBaseUrl={cloudReasoningBaseUrl}
-      setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
-      openaiApiKey={openaiApiKey}
-      setOpenaiApiKey={setOpenaiApiKey}
-      anthropicApiKey={anthropicApiKey}
-      setAnthropicApiKey={setAnthropicApiKey}
-      geminiApiKey={geminiApiKey}
-      setGeminiApiKey={setGeminiApiKey}
-      groqApiKey={groqApiKey}
-      setGroqApiKey={setGroqApiKey}
-      customReasoningApiKey={customReasoningApiKey}
-      setCustomReasoningApiKey={setCustomReasoningApiKey}
-      setReasoningMode={setReasoningMode}
-      mode={mode}
-    />
-  );
 
   return (
     <div className="space-y-4">
@@ -553,38 +435,14 @@ function AiModelsSection({
             label={t("settingsPage.aiModels.enableTextCleanup")}
             description={t("settingsPage.aiModels.enableTextCleanupDescription")}
           >
-            <Toggle checked={useReasoningModel} onChange={setUseReasoningModel} />
+            <Toggle checked={useCleanupModel} onChange={setUseCleanupModel} />
           </SettingsRow>
         </SettingsPanelRow>
       </SettingsPanel>
 
-      {useReasoningModel && (
+      {useCleanupModel && (
         <>
-          <InferenceModeSelector
-            modes={aiModes}
-            activeMode={reasoningMode}
-            onSelect={handleReasoningModeSelect}
-          />
-
-          {reasoningMode === "providers" && renderReasoningSelector("cloud")}
-          {reasoningMode === "local" && renderReasoningSelector("local")}
-
-          {reasoningMode === "self-hosted" && (
-            <SelfHostedPanel
-              service="reasoning"
-              url={remoteReasoningUrl}
-              onUrlChange={setRemoteReasoningUrl}
-            />
-          )}
-
-          {reasoningMode === "enterprise" && (
-            <EnterpriseSection
-              currentProvider={reasoningProvider}
-              reasoningModel={reasoningModel}
-              setReasoningModel={setReasoningModel}
-              setLocalReasoningProvider={setReasoningProvider}
-            />
-          )}
+          <InferenceConfigEditor scope="dictationCleanup" onModeChange={handleCleanupModeChange} />
           <GpuDeviceSelector purpose="intelligence" />
         </>
       )}
@@ -593,10 +451,15 @@ function AiModelsSection({
 }
 
 type SpeechTab = "dictation" | "noteRecording";
-type LlmTab = "dictationCleanup" | "noteFormatting" | "chatIntelligence";
+type LlmTab = "dictationCleanup" | "dictationAgent" | "noteFormatting" | "chatIntelligence";
 
 const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording"];
-const LLM_TABS: LlmTab[] = ["dictationCleanup", "noteFormatting", "chatIntelligence"];
+const LLM_TABS: LlmTab[] = [
+  "dictationCleanup",
+  "dictationAgent",
+  "noteFormatting",
+  "chatIntelligence",
+];
 
 function useSubTab<T extends string>(storageKey: string, options: readonly T[], initial?: T) {
   const [tab, setTab] = useLocalStorage<T>(storageKey, initial ?? options[0]);
@@ -606,6 +469,28 @@ function useSubTab<T extends string>(storageKey: string, options: readonly T[], 
   }, [initial]);
   const safeTab = options.includes(tab) ? tab : options[0];
   return [safeTab, setTab] as const;
+}
+
+function VADLabelWithInfo({ label, description }: { label: string; description: string }) {
+  return (
+    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+      <span>{label}</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={label}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent side="top" align="start" className="max-w-sm p-3">
+          <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 }
 
 function SpeechToTextTabs({
@@ -651,11 +536,13 @@ function SpeechToTextTabs({
 function LlmsTabs({
   initialTab,
   renderDictationCleanup,
+  renderDictationAgent,
   renderNoteFormatting,
   renderChatIntelligence,
 }: {
   initialTab?: LlmTab;
   renderDictationCleanup: () => React.ReactNode;
+  renderDictationAgent: () => React.ReactNode;
   renderNoteFormatting: () => React.ReactNode;
   renderChatIntelligence: () => React.ReactNode;
 }) {
@@ -664,6 +551,7 @@ function LlmsTabs({
 
   const subTabs = [
     { id: "dictationCleanup", name: t("settingsPage.llms.tabs.dictationCleanup") },
+    { id: "dictationAgent", name: t("settingsPage.llms.tabs.dictationAgent") },
     { id: "noteFormatting", name: t("settingsPage.llms.tabs.noteFormatting") },
     { id: "chatIntelligence", name: t("settingsPage.llms.tabs.chatIntelligence") },
   ];
@@ -680,11 +568,13 @@ function LlmsTabs({
         onSelect={(id) => setTab(id as LlmTab)}
         renderIcon={(id) => {
           if (id === "dictationCleanup") return <Wand2 className="w-3.5 h-3.5" />;
+          if (id === "dictationAgent") return <Sparkles className="w-3.5 h-3.5" />;
           if (id === "noteFormatting") return <BookOpen className="w-3.5 h-3.5" />;
           return <MessageSquare className="w-3.5 h-3.5" />;
         }}
       />
       {tab === "dictationCleanup" && renderDictationCleanup()}
+      {tab === "dictationAgent" && renderDictationAgent()}
       {tab === "noteFormatting" && renderNoteFormatting()}
       {tab === "chatIntelligence" && renderChatIntelligence()}
     </div>
@@ -780,15 +670,7 @@ export default function SettingsPage({
     cloudTranscriptionProvider,
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
-    cloudReasoningBaseUrl,
-    useReasoningModel,
-    reasoningModel,
-    reasoningProvider,
-    openaiApiKey,
-    anthropicApiKey,
-    geminiApiKey,
-    groqApiKey,
-    mistralApiKey,
+    useCleanupModel,
     dictationKey,
     activationMode,
     setActivationMode,
@@ -804,38 +686,22 @@ export default function SettingsPage({
     setCloudTranscriptionProvider,
     setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl,
-    setCloudReasoningBaseUrl,
-    setUseReasoningModel,
-    setReasoningModel,
-    setReasoningProvider,
-    setOpenaiApiKey,
-    setAnthropicApiKey,
-    setGeminiApiKey,
-    setGroqApiKey,
-    setMistralApiKey,
-    customTranscriptionApiKey,
-    setCustomTranscriptionApiKey,
-    customReasoningApiKey,
-    setCustomReasoningApiKey,
+    setUseCleanupModel,
     setDictationKey,
     meetingKey,
     setMeetingKey,
+    meetingHotkeyLayoutMode,
+    setMeetingHotkeyLayoutMode,
     autoLearnCorrections,
     setAutoLearnCorrections,
     updateTranscriptionSettings,
-    updateReasoningSettings,
+    updateCleanupSettings,
     cloudTranscriptionMode,
     setCloudTranscriptionMode,
-    cloudReasoningMode,
-    setCloudReasoningMode,
     transcriptionMode,
     setTranscriptionMode,
     remoteTranscriptionUrl,
     setRemoteTranscriptionUrl,
-    reasoningMode,
-    setReasoningMode,
-    remoteReasoningUrl,
-    setRemoteReasoningUrl,
     audioCuesEnabled,
     setAudioCuesEnabled,
     pauseMediaOnDictation,
@@ -866,10 +732,28 @@ export default function SettingsPage({
     setNoteFilesEnabled,
     noteFilesPath,
     setNoteFilesPath,
+    dictationSileroEnabled,
+    setDictationSileroEnabled,
+    noteRecordingSileroEnabled,
+    setNoteRecordingSileroEnabled,
+    meetingSileroEnabled,
+    setMeetingSileroEnabled,
+    whisperVadThreshold,
+    setWhisperVadThreshold,
+    whisperVadMinSpeechDurationMs,
+    setWhisperVadMinSpeechDurationMs,
+    whisperVadMinSilenceDurationMs,
+    setWhisperVadMinSilenceDurationMs,
+    whisperVadMaxSpeechDurationS,
+    setWhisperVadMaxSpeechDurationS,
+    whisperVadSpeechPadMs,
+    setWhisperVadSpeechPadMs,
+    whisperVadSamplesOverlap,
+    setWhisperVadSamplesOverlap,
   } = useSettings();
 
-  const agentKey = useSettingsStore((s) => s.agentKey);
-  const setAgentKey = useSettingsStore((s) => s.setAgentKey);
+  const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
+  const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
   const meetingAudioDetection = useSettingsStore((s) => s.meetingAudioDetection);
   const setMeetingAudioDetection = useSettingsStore((s) => s.setMeetingAudioDetection);
 
@@ -907,8 +791,6 @@ export default function SettingsPage({
   const permissionsHook = usePermissions(showAlertDialog);
   const systemAudio = useSystemAudioPermission();
   useClipboard(showAlertDialog);
-  const { agentName, setAgentName } = useAgentName();
-  const [agentNameInput, setAgentNameInput] = useState(agentName);
   const [audioStorageUsage, setAudioStorageUsage] = useState<{
     fileCount: number;
     totalBytes: number;
@@ -964,38 +846,6 @@ export default function SettingsPage({
     refreshYdotoolStatus();
   }, [refreshYdotoolStatus]);
 
-  const handleSaveAgentName = useCallback(() => {
-    const trimmed = agentNameInput.trim();
-    const previousName = agentName;
-
-    setAgentName(trimmed);
-    setAgentNameInput(trimmed);
-
-    let nextDictionary = customDictionary.filter((w) => w !== previousName);
-    if (trimmed) {
-      const hasName = nextDictionary.some((w) => w.toLowerCase() === trimmed.toLowerCase());
-      if (!hasName) {
-        nextDictionary = [trimmed, ...nextDictionary];
-      }
-    }
-    setCustomDictionary(nextDictionary);
-
-    showAlertDialog({
-      title: t("settingsPage.agentConfig.dialogs.updatedTitle"),
-      description: t("settingsPage.agentConfig.dialogs.updatedDescription", {
-        name: trimmed,
-      }),
-    });
-  }, [
-    agentNameInput,
-    agentName,
-    customDictionary,
-    setAgentName,
-    setCustomDictionary,
-    showAlertDialog,
-    t,
-  ]);
-
   const { theme, setTheme } = useTheme();
   const usage = useUsage();
   const hasShownApproachingToast = useRef(false);
@@ -1046,11 +896,11 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.meetingHotkey.title": meetingKey,
-          "agentMode.settings.hotkey": agentKey,
+          "agentMode.settings.hotkey": chatAgentKey,
         },
         t
       ),
-    [meetingKey, agentKey, t]
+    [meetingKey, chatAgentKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -1059,11 +909,11 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.hotkey.title": dictationKey,
-          "agentMode.settings.hotkey": agentKey,
+          "agentMode.settings.hotkey": chatAgentKey,
         },
         t
       ),
-    [dictationKey, agentKey, t]
+    [dictationKey, chatAgentKey, t]
   );
 
   const validateAgentHotkey = useCallback(
@@ -1476,12 +1326,135 @@ export default function SettingsPage({
     });
   }, [showConfirmDialog, showAlertDialog, t]);
 
+  const renderWhisperVadSettings = () => (
+    <div>
+      <SectionHeader
+        title={t("settingsPage.transcription.vad.title")}
+        description={t("settingsPage.transcription.vad.description")}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.vad.toggles.dictation.title")}
+            description={t("settingsPage.transcription.vad.toggles.dictation.description")}
+          >
+            <Toggle checked={dictationSileroEnabled} onChange={setDictationSileroEnabled} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.vad.toggles.noteRecording.title")}
+            description={t("settingsPage.transcription.vad.toggles.noteRecording.description")}
+          >
+            <Toggle checked={noteRecordingSileroEnabled} onChange={setNoteRecordingSileroEnabled} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.vad.toggles.meeting.title")}
+            description={t("settingsPage.transcription.vad.toggles.meeting.description")}
+          >
+            <Toggle checked={meetingSileroEnabled} onChange={setMeetingSileroEnabled} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.threshold.label")}
+                description={t("settingsPage.transcription.vad.fields.threshold.info")}
+              />
+              <Input
+                type="number"
+                step="0.01"
+                min="0.1"
+                max="0.95"
+                value={whisperVadThreshold}
+                onChange={(e) => setWhisperVadThreshold(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.label")}
+                description={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.info")}
+              />
+              <Input
+                type="number"
+                step="10"
+                min="50"
+                max="2000"
+                value={whisperVadMinSpeechDurationMs}
+                onChange={(e) => setWhisperVadMinSpeechDurationMs(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.minSilenceDurationMs.label")}
+                description={t("settingsPage.transcription.vad.fields.minSilenceDurationMs.info")}
+              />
+              <Input
+                type="number"
+                step="10"
+                min="50"
+                max="2000"
+                value={whisperVadMinSilenceDurationMs}
+                onChange={(e) => setWhisperVadMinSilenceDurationMs(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.label")}
+                description={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.info")}
+              />
+              <Input
+                type="number"
+                step="1"
+                min="5"
+                max="120"
+                value={whisperVadMaxSpeechDurationS}
+                onChange={(e) => setWhisperVadMaxSpeechDurationS(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.speechPadMs.label")}
+                description={t("settingsPage.transcription.vad.fields.speechPadMs.info")}
+              />
+              <Input
+                type="number"
+                step="10"
+                min="0"
+                max="1000"
+                value={whisperVadSpeechPadMs}
+                onChange={(e) => setWhisperVadSpeechPadMs(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.samplesOverlap.label")}
+                description={t("settingsPage.transcription.vad.fields.samplesOverlap.info")}
+              />
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="0.95"
+                value={whisperVadSamplesOverlap}
+                onChange={(e) => setWhisperVadSamplesOverlap(Number(e.target.value))}
+              />
+            </div>
+          </div>
+        </SettingsPanelRow>
+      </SettingsPanel>
+    </div>
+  );
+
   const renderSectionContent = () => {
     switch (activeSection) {
       case "account":
         return (
           <div className="space-y-5">
-            {!NEON_AUTH_URL ? (
+            {!AUTH_URL ? (
               <>
                 <SectionHeader
                   title={t("settingsPage.account.title")}
@@ -1620,7 +1593,7 @@ export default function SettingsPage({
       case "plansBilling":
         return (
           <div className="space-y-5">
-            {!NEON_AUTH_URL ? (
+            {!AUTH_URL ? (
               <>
                 <SectionHeader
                   title={t("settingsPage.account.pricing.title")}
@@ -2278,6 +2251,9 @@ export default function SettingsPage({
             )}
           </div>
         );
+
+      case "workspace":
+        return <WorkspaceSection initialSubTab={initialSubTab} />;
 
       case "general":
         return (
@@ -3165,6 +3141,35 @@ EOF`,
                     </button>
                   )}
                 </SettingsPanelRow>
+                <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/40 dark:border-white/5">
+                  <span className="text-xs text-muted-foreground/80">
+                    {t("settingsPage.general.meetingHotkey.layoutLabel")}
+                  </span>
+                  <Select
+                    value={meetingHotkeyLayoutMode}
+                    onValueChange={(value) =>
+                      setMeetingHotkeyLayoutMode(value as "side-panel" | "full-width")
+                    }
+                  >
+                    <SelectTrigger className="h-7 w-36 text-xs rounded-lg px-2.5 [&>svg]:h-3 [&>svg]:w-3">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem
+                        value="full-width"
+                        className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
+                      >
+                        {t("settingsPage.general.meetingHotkey.layoutFullWidth")}
+                      </SelectItem>
+                      <SelectItem
+                        value="side-panel"
+                        className="text-xs py-1.5 pl-2.5 pr-7 rounded-md"
+                      >
+                        {t("settingsPage.general.meetingHotkey.layoutSidePanel")}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
@@ -3177,8 +3182,8 @@ EOF`,
               <SettingsPanel>
                 <SettingsPanelRow>
                   <HotkeyInput
-                    value={agentKey}
-                    onChange={setAgentKey}
+                    value={chatAgentKey}
+                    onChange={setChatAgentKey}
                     validate={validateAgentHotkey}
                   />
                 </SettingsPanelRow>
@@ -3192,44 +3197,48 @@ EOF`,
           <SpeechToTextTabs
             initialTab={initialSubTab as SpeechTab | undefined}
             renderDictation={() => (
-              <TranscriptionSection
-                isSignedIn={isSignedIn ?? false}
-                startOnboarding={startOnboarding}
-                cloudTranscriptionMode={cloudTranscriptionMode}
-                setCloudTranscriptionMode={setCloudTranscriptionMode}
-                useLocalWhisper={useLocalWhisper}
-                setUseLocalWhisper={setUseLocalWhisper}
-                updateTranscriptionSettings={updateTranscriptionSettings}
-                cloudTranscriptionProvider={cloudTranscriptionProvider}
-                setCloudTranscriptionProvider={setCloudTranscriptionProvider}
-                cloudTranscriptionModel={cloudTranscriptionModel}
-                setCloudTranscriptionModel={setCloudTranscriptionModel}
-                localTranscriptionProvider={localTranscriptionProvider}
-                setLocalTranscriptionProvider={setLocalTranscriptionProvider}
-                whisperModel={whisperModel}
-                setWhisperModel={setWhisperModel}
-                parakeetModel={parakeetModel}
-                setParakeetModel={setParakeetModel}
-                openaiApiKey={openaiApiKey}
-                setOpenaiApiKey={setOpenaiApiKey}
-                groqApiKey={groqApiKey}
-                setGroqApiKey={setGroqApiKey}
-                mistralApiKey={mistralApiKey}
-                setMistralApiKey={setMistralApiKey}
-                customTranscriptionApiKey={customTranscriptionApiKey}
-                setCustomTranscriptionApiKey={setCustomTranscriptionApiKey}
-                cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
-                setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
-                transcriptionMode={transcriptionMode}
-                setTranscriptionMode={setTranscriptionMode}
-                remoteTranscriptionUrl={remoteTranscriptionUrl}
-                setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
-                showTranscriptionPreview={showTranscriptionPreview}
-                setShowTranscriptionPreview={setShowTranscriptionPreview}
-                toast={toast}
-              />
+              <div className="space-y-6">
+                <TranscriptionSection
+                  isSignedIn={isSignedIn ?? false}
+                  startOnboarding={startOnboarding}
+                  cloudTranscriptionMode={cloudTranscriptionMode}
+                  setCloudTranscriptionMode={setCloudTranscriptionMode}
+                  useLocalWhisper={useLocalWhisper}
+                  setUseLocalWhisper={setUseLocalWhisper}
+                  updateTranscriptionSettings={updateTranscriptionSettings}
+                  cloudTranscriptionProvider={cloudTranscriptionProvider}
+                  setCloudTranscriptionProvider={setCloudTranscriptionProvider}
+                  cloudTranscriptionModel={cloudTranscriptionModel}
+                  setCloudTranscriptionModel={setCloudTranscriptionModel}
+                  localTranscriptionProvider={localTranscriptionProvider}
+                  setLocalTranscriptionProvider={setLocalTranscriptionProvider}
+                  whisperModel={whisperModel}
+                  setWhisperModel={setWhisperModel}
+                  parakeetModel={parakeetModel}
+                  setParakeetModel={setParakeetModel}
+                  cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
+                  setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+                  transcriptionMode={transcriptionMode}
+                  setTranscriptionMode={setTranscriptionMode}
+                  remoteTranscriptionUrl={remoteTranscriptionUrl}
+                  setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                  showTranscriptionPreview={showTranscriptionPreview}
+                  setShowTranscriptionPreview={setShowTranscriptionPreview}
+                  toast={toast}
+                />
+                {transcriptionMode === "local" &&
+                  localTranscriptionProvider !== "nvidia" &&
+                  renderWhisperVadSettings()}
+              </div>
             )}
-            renderNoteRecording={() => <MeetingTranscriptionPanel />}
+            renderNoteRecording={() => (
+              <div className="space-y-6">
+                <MeetingTranscriptionPanel />
+                {transcriptionMode === "local" &&
+                  localTranscriptionProvider !== "nvidia" &&
+                  renderWhisperVadSettings()}
+              </div>
+            )}
           />
         );
 
@@ -3237,139 +3246,14 @@ EOF`,
         return (
           <LlmsTabs
             initialTab={initialSubTab as LlmTab | undefined}
-            renderChatIntelligence={() => (
-              <div className="space-y-6">
-                <AgentModeSettings />
-
-                <div className="border-t border-border/40 pt-6 space-y-5">
-                  <SectionHeader
-                    title={t("settingsPage.agentConfig.title")}
-                    description={t("settingsPage.agentConfig.description")}
-                  />
-
-                  <div>
-                    <p className="text-xs font-medium text-foreground mb-3">
-                      {t("settingsPage.agentConfig.agentName")}
-                    </p>
-                    <SettingsPanel>
-                      <SettingsPanelRow>
-                        <div className="space-y-3">
-                          <div className="flex gap-2">
-                            <Input
-                              placeholder={t("settingsPage.agentConfig.placeholder")}
-                              value={agentNameInput}
-                              onChange={(e) => setAgentNameInput(e.target.value)}
-                              className="flex-1 text-center text-base font-mono"
-                            />
-                            <Button
-                              onClick={handleSaveAgentName}
-                              disabled={!agentNameInput.trim()}
-                              size="sm"
-                            >
-                              {t("settingsPage.agentConfig.save")}
-                            </Button>
-                          </div>
-                          <p className="text-xs text-muted-foreground/60">
-                            {t("settingsPage.agentConfig.helper")}
-                          </p>
-                        </div>
-                      </SettingsPanelRow>
-                    </SettingsPanel>
-                  </div>
-
-                  <div>
-                    <SectionHeader title={t("settingsPage.agentConfig.howItWorksTitle")} />
-                    <SettingsPanel>
-                      <SettingsPanelRow>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                          {t("settingsPage.agentConfig.howItWorksDescription", { agentName })}
-                        </p>
-                      </SettingsPanelRow>
-                    </SettingsPanel>
-                  </div>
-
-                  <div>
-                    <SectionHeader title={t("settingsPage.agentConfig.examplesTitle")} />
-                    <SettingsPanel>
-                      <SettingsPanelRow>
-                        <div className="space-y-2.5">
-                          {[
-                            {
-                              input: t("settingsPage.agentConfig.examples.formalEmail", {
-                                agentName,
-                              }),
-                              mode: t("settingsPage.agentConfig.instructionMode"),
-                            },
-                            {
-                              input: t("settingsPage.agentConfig.examples.professional", {
-                                agentName,
-                              }),
-                              mode: t("settingsPage.agentConfig.instructionMode"),
-                            },
-                            {
-                              input: t("settingsPage.agentConfig.examples.bulletPoints", {
-                                agentName,
-                              }),
-                              mode: t("settingsPage.agentConfig.instructionMode"),
-                            },
-                            {
-                              input: t("settingsPage.agentConfig.cleanupExample"),
-                              mode: t("settingsPage.agentConfig.cleanupMode"),
-                            },
-                          ].map((example, i) => (
-                            <div key={i} className="flex items-start gap-3">
-                              <span
-                                className={`shrink-0 mt-0.5 text-xs font-medium uppercase tracking-wider px-1.5 py-px rounded ${
-                                  example.mode === t("settingsPage.agentConfig.instructionMode")
-                                    ? "bg-primary/10 text-primary dark:bg-primary/15"
-                                    : "bg-muted text-muted-foreground"
-                                }`}
-                              >
-                                {example.mode}
-                              </span>
-                              <p className="text-xs text-muted-foreground leading-relaxed">
-                                "{example.input}"
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </SettingsPanelRow>
-                    </SettingsPanel>
-                  </div>
-                </div>
-              </div>
-            )}
+            renderChatIntelligence={() => <ChatAgentSettings />}
             renderDictationCleanup={() => (
               <div className="space-y-6">
                 <AiModelsSection
-                  isSignedIn={isSignedIn ?? false}
-                  startOnboarding={startOnboarding}
-                  cloudReasoningMode={cloudReasoningMode}
-                  setCloudReasoningMode={setCloudReasoningMode}
-                  useReasoningModel={useReasoningModel}
-                  setUseReasoningModel={(value) => {
-                    updateReasoningSettings({ useReasoningModel: value });
+                  useCleanupModel={useCleanupModel}
+                  setUseCleanupModel={(value) => {
+                    updateCleanupSettings({ useCleanupModel: value });
                   }}
-                  reasoningModel={reasoningModel}
-                  setReasoningModel={setReasoningModel}
-                  reasoningProvider={reasoningProvider}
-                  setReasoningProvider={setReasoningProvider}
-                  cloudReasoningBaseUrl={cloudReasoningBaseUrl}
-                  setCloudReasoningBaseUrl={setCloudReasoningBaseUrl}
-                  openaiApiKey={openaiApiKey}
-                  setOpenaiApiKey={setOpenaiApiKey}
-                  anthropicApiKey={anthropicApiKey}
-                  setAnthropicApiKey={setAnthropicApiKey}
-                  geminiApiKey={geminiApiKey}
-                  setGeminiApiKey={setGeminiApiKey}
-                  groqApiKey={groqApiKey}
-                  setGroqApiKey={setGroqApiKey}
-                  customReasoningApiKey={customReasoningApiKey}
-                  setCustomReasoningApiKey={setCustomReasoningApiKey}
-                  reasoningMode={reasoningMode}
-                  setReasoningMode={setReasoningMode}
-                  remoteReasoningUrl={remoteReasoningUrl}
-                  setRemoteReasoningUrl={setRemoteReasoningUrl}
                   toast={toast}
                 />
 
@@ -3382,7 +3266,8 @@ EOF`,
                 </div>
               </div>
             )}
-            renderNoteFormatting={() => <MeetingReasoningPanel />}
+            renderDictationAgent={() => <DictationAgentSettings />}
+            renderNoteFormatting={() => <NoteFormattingSettings />}
           />
         );
 

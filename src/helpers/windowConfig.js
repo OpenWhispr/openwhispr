@@ -74,7 +74,7 @@ const CONTROL_PANEL_CONFIG = {
     sandbox: false,
     // webSecurity: false disables same-origin policy. Required because in
     // production the renderer loads from a file:// origin but makes
-    // cross-origin fetch calls to Neon Auth, Gemini, OpenAI, and Groq APIs
+    // cross-origin fetch calls to Better Auth, Gemini, OpenAI, and Groq APIs
     // directly from the browser. These would be blocked by CORS otherwise.
     webSecurity: false,
     spellcheck: false,

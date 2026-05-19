@@ -6,7 +6,7 @@ if (
   !process.argv.includes("--ozone-platform=x11")
 ) {
   const desktop = (process.env.XDG_CURRENT_DESKTOP || "").toLowerCase();
-  if (desktop.includes("kde") || /gnome|ubuntu|unity/.test(desktop)) {
+  if (desktop.includes("kde") || /gnome|ubuntu|unity|cosmic/.test(desktop)) {
     const { spawn } = require("child_process");
     spawn(process.execPath, [...process.argv.slice(1), "--ozone-platform=x11"], {
       stdio: "inherit",
@@ -155,10 +155,12 @@ function shouldRegisterProtocolWithAppArg() {
 function getDefaultHtmlHandler() {
   try {
     const { execFileSync } = require("child_process");
-    return execFileSync("xdg-mime", ["query", "default", "text/html"], {
-      encoding: "utf8",
-      timeout: 3000,
-    }).trim() || null;
+    return (
+      execFileSync("xdg-mime", ["query", "default", "text/html"], {
+        encoding: "utf8",
+        timeout: 3000,
+      }).trim() || null
+    );
   } catch {
     return null;
   }
@@ -261,6 +263,8 @@ const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
+const sidecarRegistry = require("./src/helpers/sidecarRegistry");
+const { reapStaleSidecars } = require("./src/helpers/sidecarReaper");
 
 // Manager instances - initialized after app.whenReady()
 let debugLogger = null;
@@ -389,7 +393,21 @@ function initializeCoreManagers() {
     linuxPortalAudioManager,
     meetingAecManager,
     getTrayManager: () => trayManager,
+    oauthProtocolRegistered: protocolRegistered,
+    oauthProtocol: OAUTH_PROTOCOL,
   });
+}
+
+function registerSidecars() {
+  if (whisperManager) sidecarRegistry.register("whisper", () => whisperManager.stopServer());
+  if (parakeetManager) sidecarRegistry.register("parakeet", () => parakeetManager.stopServer());
+  if (diarizationManager) {
+    sidecarRegistry.register("diarization", () => diarizationManager.shutdown());
+  }
+  const modelManager = require("./src/helpers/modelManagerBridge").default;
+  sidecarRegistry.register("llama", () => modelManager.stopServer());
+  const onnxWorkerClient = require("./src/helpers/onnxWorkerClient");
+  sidecarRegistry.register("onnx", () => onnxWorkerClient.stop());
 }
 
 // Phase 2: Non-critical setup after windows are visible
@@ -445,7 +463,12 @@ app.on("open-url", (event, url) => {
     return;
   }
 
-  handleOAuthDeepLink(url);
+  if (url.includes("/invitations/")) {
+    handleInvitationDeepLink(url);
+    return;
+  }
+
+  void handleOAuthDeepLink(url);
 
   if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
     windowManager.controlPanelWindow.show();
@@ -453,28 +476,123 @@ app.on("open-url", (event, url) => {
   }
 });
 
-// Extract the session verifier from the deep link and navigate the control
-// panel to its app URL with the verifier param so the Neon Auth SDK can
-// read it from window.location.search and complete authentication.
-function navigateControlPanelWithVerifier(verifier) {
-  if (!verifier) return;
+function handleInvitationDeepLink(deepLinkUrl) {
+  try {
+    const match = deepLinkUrl.match(/invitations\/([^/?#]+)/);
+    const token = match?.[1];
+    if (!token) return;
+    if (windowManager && isLiveWindow(windowManager.controlPanelWindow)) {
+      windowManager.controlPanelWindow.show();
+      windowManager.controlPanelWindow.focus();
+      windowManager.controlPanelWindow.webContents.send("workspace-invitation-token", token);
+    } else if (windowManager) {
+      windowManager.createControlPanelWindow();
+      // Defer the send until renderer is ready; main.js relies on `did-finish-load`
+      const win = windowManager.controlPanelWindow;
+      if (win) {
+        win.webContents.once("did-finish-load", () => {
+          win.webContents.send("workspace-invitation-token", token);
+        });
+      }
+    }
+  } catch (error) {
+    console.error("Invitation deep link parse failed:", error);
+  }
+}
+
+function resolveAuthUrl() {
+  const fs = require("fs");
+  const envPath = path.join(__dirname, "src", "dist", "runtime-env.json");
+  let runtimeEnv = {};
+  try {
+    if (fs.existsSync(envPath)) runtimeEnv = JSON.parse(fs.readFileSync(envPath, "utf8"));
+  } catch {}
+  return (
+    process.env.AUTH_URL ||
+    process.env.VITE_AUTH_URL ||
+    runtimeEnv.VITE_AUTH_URL ||
+    "https://auth.openwhispr.com"
+  );
+}
+
+function getOauthCookieName() {
+  return process.env.NODE_ENV === "production"
+    ? "__Secure-openwhispr.session_token"
+    : "openwhispr.session_token";
+}
+
+// Older website builds send the signed cookie value as `?token=`; trade it
+// for the raw session.token the bearer plugin expects.
+async function exchangeSignedTokenForRawBearer(signedToken) {
+  try {
+    const res = await fetch(`${resolveAuthUrl()}/api/auth/get-session`, {
+      headers: { Cookie: `${getOauthCookieName()}=${signedToken}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.session?.token || null;
+  } catch (err) {
+    if (debugLogger) {
+      debugLogger.warn("Signed-token bearer exchange failed (non-fatal)", {
+        error: err?.message,
+      });
+    }
+    return null;
+  }
+}
+
+// One-time bridge for users upgrading from a build that injected the session
+// cookie into Electron's jar: exchange the existing cookie for a raw bearer
+// token, store it, and remove the cookie. Non-fatal — failures fall through
+// to the normal sign-in flow.
+async function migrateCookieToBearerToken() {
+  const tokenStore = require("./src/helpers/tokenStore");
+  if (tokenStore.get()) return;
+
+  const cookieName = getOauthCookieName();
+  const authUrl = resolveAuthUrl();
+
+  try {
+    const cookies = await session.defaultSession.cookies.get({ url: authUrl, name: cookieName });
+    if (!cookies.length) return;
+
+    const rawToken = await exchangeSignedTokenForRawBearer(cookies[0].value);
+    if (!rawToken) return;
+
+    tokenStore.set(rawToken);
+    await session.defaultSession.cookies.remove(authUrl, cookieName);
+    if (debugLogger) debugLogger.debug("Migrated cookie to bearer token");
+  } catch (err) {
+    if (debugLogger) {
+      debugLogger.warn("Cookie→bearer token migration failed (non-fatal)", {
+        error: err?.message,
+      });
+    }
+  }
+}
+
+// Persist the bearer token and reload the control panel so the renderer's
+// authClient sends `Authorization: Bearer <token>` on its next request.
+async function applySessionTokenAndRefresh(token) {
+  if (!token) return;
   if (!isLiveWindow(windowManager?.controlPanelWindow)) return;
 
-  const appUrl = DevServerManager.getAppUrl(true);
+  const tokenStore = require("./src/helpers/tokenStore");
+  tokenStore.set(token);
 
+  const appUrl = DevServerManager.getAppUrl(true);
   if (appUrl) {
-    const separator = appUrl.includes("?") ? "&" : "?";
-    const urlWithVerifier = `${appUrl}${separator}neon_auth_session_verifier=${encodeURIComponent(verifier)}`;
-    windowManager.controlPanelWindow.loadURL(urlWithVerifier);
+    windowManager.controlPanelWindow.loadURL(appUrl);
   } else {
     const fileInfo = DevServerManager.getAppFilePath(true);
-    if (!fileInfo) return;
-    fileInfo.query.neon_auth_session_verifier = verifier;
-    windowManager.controlPanelWindow.loadFile(fileInfo.path, { query: fileInfo.query });
+    if (fileInfo) {
+      windowManager.controlPanelWindow.loadFile(fileInfo.path, { query: fileInfo.query });
+    }
   }
 
   if (debugLogger) {
-    debugLogger.debug("Navigating control panel with OAuth verifier", {
+    debugLogger.debug("Applied bearer token and reloaded control panel", {
       appChannel: APP_CHANNEL,
       oauthProtocol: OAUTH_PROTOCOL,
     });
@@ -483,12 +601,18 @@ function navigateControlPanelWithVerifier(verifier) {
   windowManager.controlPanelWindow.focus();
 }
 
-function handleOAuthDeepLink(deepLinkUrl) {
+async function handleOAuthDeepLink(deepLinkUrl) {
   try {
     const parsed = new URL(deepLinkUrl);
-    const verifier = parsed.searchParams.get("neon_auth_session_verifier");
-    if (!verifier) return;
-    navigateControlPanelWithVerifier(verifier);
+    const bearerToken = parsed.searchParams.get("bearer_token");
+    if (bearerToken) {
+      void applySessionTokenAndRefresh(bearerToken);
+      return;
+    }
+    const signedToken = parsed.searchParams.get("token");
+    if (!signedToken) return;
+    const rawToken = await exchangeSignedTokenForRawBearer(signedToken);
+    if (rawToken) void applySessionTokenAndRefresh(rawToken);
   } catch (err) {
     if (debugLogger) debugLogger.error("Failed to handle OAuth deep link:", err);
   }
@@ -552,11 +676,11 @@ function startAuthBridgeServer() {
       return;
     }
 
-    let verifier = requestUrl.searchParams.get("neon_auth_session_verifier");
-    if (!verifier && req.method === "POST") {
+    let token = requestUrl.searchParams.get("bearer_token") || requestUrl.searchParams.get("token");
+    if (!token && req.method === "POST") {
       try {
         const body = await parseJsonBody(req);
-        verifier = body?.neon_auth_session_verifier || body?.verifier || null;
+        token = body?.bearer_token || body?.token || null;
       } catch (error) {
         res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
         res.end(error.message || "Invalid request");
@@ -564,13 +688,13 @@ function startAuthBridgeServer() {
       }
     }
 
-    if (!verifier) {
+    if (!token) {
       res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
-      res.end("Missing neon_auth_session_verifier");
+      res.end("Missing token");
       return;
     }
 
-    navigateControlPanelWithVerifier(verifier);
+    void applySessionTokenAndRefresh(token);
 
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(
@@ -595,8 +719,12 @@ function startAuthBridgeServer() {
 
 // Main application startup
 async function startApp() {
+  reapStaleSidecars();
+
   // Phase 1: Core managers + IPC handlers before windows
   initializeCoreManagers();
+  await environmentManager.init();
+  registerSidecars();
   startAuthBridgeServer();
 
   cliBridge = new CliBridge(ipcHandlers);
@@ -605,14 +733,25 @@ async function startApp() {
     cliBridge = null;
   });
 
-  // Electron's file:// sends no Origin header, which Neon Auth rejects.
+  await migrateCookieToBearerToken();
+
+  // Electron's file:// renderer sends Origin: null, which Better Auth's
+  // trustedOrigins check rejects. Spoof Origin to the request's own URL so
+  // calls to OpenWhispr's auth and API hosts are treated as same-origin.
   session.defaultSession.webRequest.onBeforeSendHeaders(
-    { urls: ["https://*.neon.tech/*"] },
+    {
+      urls: [
+        "https://auth.openwhispr.com/*",
+        "https://api.openwhispr.com/*",
+        "http://localhost:3000/*",
+        "http://127.0.0.1:3000/*",
+      ],
+    },
     (details, callback) => {
       try {
         details.requestHeaders["Origin"] = new URL(details.url).origin;
       } catch {
-        /* malformed URL — leave Origin as-is */
+        // malformed URL — leave Origin as-is
       }
       callback({ requestHeaders: details.requestHeaders });
     }
@@ -748,10 +887,26 @@ async function startApp() {
     debugLogger.debug("Parakeet startup init error (non-fatal)", { error: err.message });
   });
 
-  if (process.env.REASONING_PROVIDER === "local" && process.env.LOCAL_REASONING_MODEL) {
+  // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL fallbacks after 2 releases.
+  const cleanupProvider = process.env.CLEANUP_PROVIDER || process.env.REASONING_PROVIDER;
+  const cleanupLocalModel = process.env.LOCAL_CLEANUP_MODEL || process.env.LOCAL_REASONING_MODEL;
+  if (cleanupProvider === "local" && cleanupLocalModel) {
     const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.prewarmServer(process.env.LOCAL_REASONING_MODEL).catch((err) => {
+    modelManager.prewarmServer(cleanupLocalModel).catch((err) => {
       debugLogger.debug("llama-server pre-warm error (non-fatal)", { error: err.message });
+    });
+  }
+
+  if (
+    process.env.DICTATION_AGENT_PROVIDER === "local" &&
+    process.env.LOCAL_DICTATION_AGENT_MODEL &&
+    process.env.LOCAL_DICTATION_AGENT_MODEL !== cleanupLocalModel
+  ) {
+    const modelManager = require("./src/helpers/modelManagerBridge").default;
+    modelManager.prewarmServer(process.env.LOCAL_DICTATION_AGENT_MODEL).catch((err) => {
+      debugLogger.debug("dictation-agent llama-server pre-warm error (non-fatal)", {
+        error: err.message,
+      });
     });
   }
 
@@ -769,6 +924,7 @@ async function startApp() {
 
   const QdrantManager = require("./src/helpers/qdrantManager");
   qdrantManager = new QdrantManager();
+  sidecarRegistry.register("qdrant", () => qdrantManager.stop());
   if (qdrantManager.isAvailable()) {
     qdrantManager
       .start()
@@ -807,7 +963,7 @@ async function startApp() {
   updateManager.checkForUpdatesOnStartup();
 
   if (process.platform === "darwin") {
-    const { isGlobeLikeHotkey } = require("./src/helpers/hotkeyManager");
+    const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");
     let globeKeyDownTime = 0;
     let globeKeyIsRecording = false;
     let globeLastStopTime = 0;
@@ -967,7 +1123,89 @@ async function startApp() {
       }
     });
 
+    const syncSuppressedMouseButtons = () => {
+      const buttons = [];
+      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
+      if (isMouseButtonHotkey(currentHotkey)) buttons.push(currentHotkey);
+
+      const agentHotkey = hotkeyManager.getSlotHotkey("agent");
+      if (isMouseButtonHotkey(agentHotkey)) buttons.push(agentHotkey);
+
+      globeKeyManager.setSuppressedMouseButtons(buttons);
+    };
+
+    // Mouse Button 4/5 handling (e.g., Logitech MX Master side buttons)
+    let mouseButtonDownTime = 0;
+    let mouseButtonIsRecording = false;
+    let mouseButtonLastStopTime = 0;
+
+    globeKeyManager.on("mouse-button-down", async (button) => {
+      if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
+      if (!isMouseButtonHotkey(button)) return;
+
+      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
+      const agentHotkey = hotkeyManager.getSlotHotkey("agent");
+
+      if (agentHotkey === button) {
+        windowManager.toggleAgentOverlay();
+      }
+
+      if (currentHotkey !== button) return;
+      if (!isLiveWindow(windowManager.mainWindow)) return;
+
+      const activationMode = windowManager.getActivationMode();
+      if (textEditMonitor) textEditMonitor.captureTargetPid();
+
+      if (activationMode === "push") {
+        const now = Date.now();
+        if (now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS) return;
+        windowManager.showDictationPanel();
+        const pressTime = now;
+        mouseButtonDownTime = pressTime;
+        mouseButtonIsRecording = false;
+        setTimeout(() => {
+          if (mouseButtonDownTime === pressTime && !mouseButtonIsRecording) {
+            mouseButtonIsRecording = true;
+            windowManager.sendStartDictation();
+          }
+        }, MIN_HOLD_DURATION_MS);
+      } else {
+        windowManager.sendToggleDictation();
+      }
+    });
+
+    globeKeyManager.on("mouse-button-up", async (button) => {
+      if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
+      if (!isMouseButtonHotkey(button)) return;
+
+      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
+      if (currentHotkey !== button) return;
+      if (!isLiveWindow(windowManager.mainWindow)) return;
+
+      const activationMode = windowManager.getActivationMode();
+      if (activationMode === "push") {
+        mouseButtonDownTime = 0;
+        mouseButtonLastStopTime = Date.now();
+        if (mouseButtonIsRecording) {
+          mouseButtonIsRecording = false;
+          windowManager.sendStopDictation();
+        } else {
+          windowManager.hideDictationPanel();
+        }
+      }
+    });
+
+    syncSuppressedMouseButtons();
     globeKeyManager.start();
+    hotkeyManager.once("hotkey-loaded", syncSuppressedMouseButtons);
+
+    ipcMain.on("hotkey-listening-mode-changed", (_event, enabled) => {
+      if (enabled) {
+        globeKeyManager.setSuppressedMouseButtons([]);
+      } else {
+        syncSuppressedMouseButtons();
+      }
+    });
 
     // After starting globe-listener, check if accessibility is granted.
     // If not, notify the control panel so it can prompt the user.
@@ -1001,6 +1239,10 @@ async function startApp() {
       rightModDownTime = 0;
       rightModIsRecording = false;
       rightModLastStopTime = 0;
+      mouseButtonDownTime = 0;
+      mouseButtonIsRecording = false;
+      mouseButtonLastStopTime = 0;
+      syncSuppressedMouseButtons();
     });
   }
 
@@ -1143,7 +1385,9 @@ async function startApp() {
     });
 
     linuxKeyManager.on("permission-denied", () => {
-      debugLogger.warn("[Push-to-Talk] Linux key listener has no permission to access input devices");
+      debugLogger.warn(
+        "[Push-to-Talk] Linux key listener has no permission to access input devices"
+      );
       windowManager.setActivationModeCache("tap");
       environmentManager.saveActivationMode("tap");
       linuxKeyManager.stop();
@@ -1240,8 +1484,10 @@ if (gotSingleInstanceLock) {
     if (url) {
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
+      } else if (url.includes("/invitations/")) {
+        handleInvitationDeepLink(url);
       } else {
-        handleOAuthDeepLink(url);
+        void handleOAuthDeepLink(url);
       }
     }
   });
@@ -1327,75 +1573,45 @@ if (gotSingleInstanceLock) {
     }
   });
 
-  app.on("will-quit", () => {
-    if (authBridgeServer) {
-      authBridgeServer.close();
-      authBridgeServer = null;
-    }
-    if (cliBridge) {
-      cliBridge.stop().catch(() => {});
-      cliBridge = null;
-    }
-    if (windowManager && isLiveWindow(windowManager.agentWindow)) {
-      windowManager.agentWindow.destroy();
-    }
-    if (windowManager && isLiveWindow(windowManager.transcriptionPreviewWindow)) {
-      windowManager.transcriptionPreviewWindow.destroy();
-    }
-    if (hotkeyManager) {
-      hotkeyManager.unregisterAll();
-    } else {
-      globalShortcut.unregisterAll();
-    }
-    if (globeKeyManager) {
-      globeKeyManager.stop();
-    }
-    if (windowsKeyManager) {
-      windowsKeyManager.stop();
-    }
-    if (linuxKeyManager) {
-      linuxKeyManager.stop();
-    }
-    if (meetingDetectionEngine) {
-      meetingDetectionEngine.stop();
-    }
-    if (googleCalendarManager) {
-      googleCalendarManager.stop();
-    }
-    if (audioTapManager) {
-      audioTapManager.stop().catch(() => {});
-    }
-    if (linuxPortalAudioManager) {
-      linuxPortalAudioManager.stop().catch(() => {});
-    }
-    if (meetingAecManager) {
-      meetingAecManager.stop().catch(() => {});
-    }
-    if (ipcHandlers) {
-      ipcHandlers._cleanupTextEditMonitor();
-    }
-    if (textEditMonitor) {
-      textEditMonitor.stopMonitoring();
-    }
-    if (updateManager) {
-      updateManager.cleanup();
-    }
-    // Stop whisper server if running
-    if (whisperManager) {
-      whisperManager.stopServer().catch(() => {});
-    }
-    // Stop parakeet WS server if running
-    if (parakeetManager) {
-      parakeetManager.stopServer().catch(() => {});
-    }
-    if (diarizationManager) {
-      diarizationManager.shutdown().catch(() => {});
-    }
-    // Stop llama-server if running
-    const modelManager = require("./src/helpers/modelManagerBridge").default;
-    modelManager.stopServer().catch(() => {});
-    if (qdrantManager) {
-      qdrantManager.stop().catch(() => {});
-    }
+  let isShuttingDown = false;
+  app.on("before-quit", (event) => {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    event.preventDefault();
+    performSyncTeardown();
+    sidecarRegistry.shutdownAll().finally(() => app.exit(0));
   });
+}
+
+function performSyncTeardown() {
+  if (authBridgeServer) {
+    authBridgeServer.close();
+    authBridgeServer = null;
+  }
+  if (cliBridge) {
+    cliBridge.stop().catch(() => {});
+    cliBridge = null;
+  }
+  if (windowManager && isLiveWindow(windowManager.agentWindow)) {
+    windowManager.agentWindow.destroy();
+  }
+  if (windowManager && isLiveWindow(windowManager.transcriptionPreviewWindow)) {
+    windowManager.transcriptionPreviewWindow.destroy();
+  }
+  if (hotkeyManager) {
+    hotkeyManager.unregisterAll();
+  } else {
+    globalShortcut.unregisterAll();
+  }
+  if (globeKeyManager) globeKeyManager.stop();
+  if (windowsKeyManager) windowsKeyManager.stop();
+  if (linuxKeyManager) linuxKeyManager.stop();
+  if (meetingDetectionEngine) meetingDetectionEngine.stop();
+  if (googleCalendarManager) googleCalendarManager.stop();
+  if (audioTapManager) audioTapManager.stop().catch(() => {});
+  if (linuxPortalAudioManager) linuxPortalAudioManager.stop().catch(() => {});
+  if (meetingAecManager) meetingAecManager.stop().catch(() => {});
+  if (ipcHandlers) ipcHandlers._cleanupTextEditMonitor();
+  if (textEditMonitor) textEditMonitor.stopMonitoring();
+  if (updateManager) updateManager.cleanup();
 }

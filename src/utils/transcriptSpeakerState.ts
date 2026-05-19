@@ -1,4 +1,4 @@
-import type { TranscriptSegment } from "../hooks/useMeetingTranscription";
+import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 
 export type TranscriptSpeakerStatus = "provisional" | "confirmed" | "suggested" | "locked";
 export type TranscriptSpeakerLockSource = "user" | "diarization" | "suggestion";

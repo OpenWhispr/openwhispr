@@ -46,7 +46,7 @@ import ActionPicker from "./ActionPicker";
 import ActionManagerDialog from "./ActionManagerDialog";
 import AddNotesToFolderDialog from "./AddNotesToFolderDialog";
 import { useActionProcessing } from "../../hooks/useActionProcessing";
-import { useSettingsStore, selectIsCloudReasoningMode } from "../../stores/settingsStore";
+import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
 import { useFolderManagement } from "../../hooks/useFolderManagement";
 import { useNoteDragAndDrop } from "../../hooks/useNoteDragAndDrop";
 import { cn } from "../lib/utils";
@@ -63,7 +63,16 @@ import {
   setActiveFolderId,
   removeNote,
 } from "../../stores/noteStore";
-import { useMeetingTranscription } from "../../hooks/useMeetingTranscription";
+import {
+  useMeetingRecordingStore,
+  useIsMeetingMode,
+  useIsNarrowWindow,
+  startRecording as storeStartRecording,
+  stopRecording as storeStopRecording,
+  lockSpeaker,
+  setSessionDiarizationEnabled,
+  setSessionExpectedCount,
+} from "../../stores/meetingRecordingStore";
 import { useNotesOnboarding } from "../../hooks/useNotesOnboarding";
 import NotesOnboarding from "./NotesOnboarding";
 
@@ -77,9 +86,12 @@ function makeContentHash(content: string): string {
 interface PersonalNotesViewProps {
   onOpenSettings?: (section: string) => void;
   onOpenSearch?: () => void;
-  meetingRecordingRequest?: { noteId: number; folderId: number; event: any } | null;
+  meetingRecordingRequest?: {
+    noteId: number;
+    folderId: number;
+    event: any;
+  } | null;
   onMeetingRecordingRequestHandled?: () => void;
-  isMeetingMode?: boolean;
 }
 
 export default function PersonalNotesView({
@@ -87,11 +99,13 @@ export default function PersonalNotesView({
   onOpenSearch,
   meetingRecordingRequest,
   onMeetingRecordingRequestHandled,
-  isMeetingMode,
 }: PersonalNotesViewProps) {
+  const isMeetingMode = useIsMeetingMode();
+  const isNarrowWindow = useIsNarrowWindow();
   const { t } = useTranslation();
   const notes = useNotes();
   const activeNoteId = useActiveNoteId();
+  const isSidePanelLayout = isMeetingMode || (isNarrowWindow && activeNoteId != null);
   const activeFolderId = useActiveFolderId();
   const [isSaving, setIsSaving] = useState(false);
   const [localTitle, setLocalTitle] = useState("");
@@ -117,8 +131,8 @@ export default function PersonalNotesView({
     setSyncedNoteIdState(id);
   };
   const { toast } = useToast();
-  const isCloudMode = useSettingsStore(selectIsCloudReasoningMode);
-  const effectiveModelId = useSettingsStore((s) => s.reasoningModel);
+  const isCloudMode = useSettingsStore(selectIsCloudCleanupMode);
+  const effectiveModelId = useSettingsStore((s) => s.cleanupModel);
   const noteFilesEnabled = useSettingsStore((s) => s.noteFilesEnabled);
   const fileManagerName = navigator.platform.startsWith("Mac")
     ? "Finder"
@@ -127,31 +141,18 @@ export default function PersonalNotesView({
       : "Files";
   const { isComplete: isOnboardingComplete, complete: completeOnboarding } = useNotesOnboarding();
 
-  const {
-    isRecording: isTranscribing,
-    transcript: realtimeTranscript,
-    segments: realtimeSegments,
-    micPartial,
-    systemPartial,
-    systemPartialSpeakerId,
-    systemPartialSpeakerName,
-    diarizationSessionId,
-    prepareTranscription,
-    startTranscription,
-    stopTranscription,
-    lockSpeaker,
-    sessionDiarizationEnabled,
-    sessionExpectedCount,
-    userTouchedStepper,
-    setSessionDiarizationEnabled,
-    setSessionExpectedCount,
-  } = useMeetingTranscription();
-  const recordingNoteIdRef = useRef<number | null>(null);
-  const [recordingNoteId, setRecordingNoteId] = useState<number | null>(null);
-  const setActiveRecordingNoteId = (id: number | null) => {
-    recordingNoteIdRef.current = id;
-    setRecordingNoteId(id);
-  };
+  const isTranscribing = useMeetingRecordingStore((s) => s.isRecording);
+  const realtimeTranscript = useMeetingRecordingStore((s) => s.transcript);
+  const realtimeSegments = useMeetingRecordingStore((s) => s.segments);
+  const micPartial = useMeetingRecordingStore((s) => s.micPartial);
+  const systemPartial = useMeetingRecordingStore((s) => s.systemPartial);
+  const systemPartialSpeakerId = useMeetingRecordingStore((s) => s.systemPartialSpeakerId);
+  const systemPartialSpeakerName = useMeetingRecordingStore((s) => s.systemPartialSpeakerName);
+  const diarizationSessionId = useMeetingRecordingStore((s) => s.diarizationSessionId);
+  const sessionDiarizationEnabled = useMeetingRecordingStore((s) => s.sessionDiarizationEnabled);
+  const sessionExpectedCount = useMeetingRecordingStore((s) => s.sessionExpectedCount);
+  const userTouchedStepper = useMeetingRecordingStore((s) => s.userTouchedStepper);
+  const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
 
   const {
     folders,
@@ -214,15 +215,22 @@ export default function PersonalNotesView({
   }, [activeNote?.calendar_event_id]);
 
   const startRecording = useCallback(async () => {
-    setActiveRecordingNoteId(activeNoteRef.current);
-    const note = notes.find((n) => n.id === activeNoteRef.current);
+    const noteId = activeNoteRef.current;
+    const note = notes.find((n) => n.id === noteId);
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    await startTranscription({ seedSegments, noteId: activeNoteRef.current });
-  }, [notes, startTranscription]);
+    await storeStartRecording({
+      noteId,
+      noteTitle: note?.title ?? null,
+      folderId: note?.folder_id ?? null,
+      seedSegments,
+      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
+      expectedCount: note?.expected_speaker_count ?? null,
+    });
+  }, [notes]);
 
   const stopRecording = useCallback(async () => {
-    await stopTranscription();
-  }, [stopTranscription]);
+    await storeStopRecording();
+  }, []);
 
   useEffect(() => {
     const syncNote = async () => {
@@ -440,57 +448,11 @@ export default function PersonalNotesView({
     [loadFolders, toast, t]
   );
 
-  const handleApplyEnhancement = useCallback(
-    async (enhancedContent: string, prompt: string, title?: string) => {
-      if (!activeNoteId) return;
-      setLocalEnhancedContent(enhancedContent);
-      const hash = makeContentHash(localContentRef.current);
-      const updates: Record<string, string> = {
-        enhanced_content: enhancedContent,
-        enhancement_prompt: prompt,
-        enhanced_at_content_hash: hash,
-      };
-      if (title) {
-        updates.title = title;
-        setLocalTitle(title);
-      }
-      setIsSaving(true);
-      try {
-        await window.electronAPI.updateNote(activeNoteId, updates);
-      } finally {
-        setIsSaving(false);
-      }
-    },
-    [activeNoteId]
-  );
-
   const {
     state: actionProcessingState,
     actionName,
     runAction,
-    cancel: cancelAction,
-  } = useActionProcessing({
-    onSuccess: useCallback(
-      (enhancedContent: string, prompt: string, title?: string) => {
-        handleApplyEnhancement(enhancedContent, prompt, title);
-      },
-      [handleApplyEnhancement]
-    ),
-    onError: useCallback(
-      (errorMessage: string) => {
-        toast({
-          title: t("notes.enhance.title"),
-          description: errorMessage,
-          variant: "destructive",
-        });
-      },
-      [toast, t]
-    ),
-  });
-
-  useEffect(() => {
-    return () => cancelAction();
-  }, [activeNoteId, cancelAction]);
+  } = useActionProcessing(activeNoteId ?? null);
 
   const isEnhancementStale = useMemo(() => {
     if (!activeNote?.enhanced_content || !activeNote?.enhanced_at_content_hash) return false;
@@ -514,29 +476,20 @@ export default function PersonalNotesView({
     [activeNoteId]
   );
 
-  // Pre-warm WebSocket when entering meeting mode (before user hits record)
-  useEffect(() => {
-    if (!isMeetingMode) return;
-    prepareTranscription();
-    return () => {
-      window.electronAPI?.meetingTranscriptionCancel?.();
-    };
-  }, [isMeetingMode, activeNoteId, prepareTranscription]);
-
   useEffect(() => {
     if (!meetingRecordingRequest || activeNoteId !== meetingRecordingRequest.noteId) return;
-    setActiveRecordingNoteId(meetingRecordingRequest.noteId);
     const note = notes.find((n) => n.id === meetingRecordingRequest.noteId);
     const seedSegments = note?.transcript ? parseTranscriptSegments(note.transcript) : [];
-    startTranscription({ seedSegments, noteId: meetingRecordingRequest.noteId });
+    storeStartRecording({
+      noteId: meetingRecordingRequest.noteId,
+      noteTitle: note?.title ?? null,
+      folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
+      seedSegments,
+      diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
+      expectedCount: note?.expected_speaker_count ?? null,
+    });
     onMeetingRecordingRequestHandled?.();
-  }, [
-    meetingRecordingRequest,
-    activeNoteId,
-    notes,
-    startTranscription,
-    onMeetingRecordingRequestHandled,
-  ]);
+  }, [meetingRecordingRequest, activeNoteId, notes, onMeetingRecordingRequestHandled]);
 
   const prevTranscribingRef = useRef(false);
 
@@ -551,28 +504,25 @@ export default function PersonalNotesView({
           ? serializeTranscriptSegments(realtimeSegments)
           : realtimeTranscript;
 
-      const noteId = recordingNoteIdRef.current;
-      if (noteId && transcript) {
-        window.electronAPI.updateNote(noteId, { transcript });
+      if (recordingNoteId && transcript) {
+        window.electronAPI.updateNote(recordingNoteId, { transcript });
       }
-      setActiveRecordingNoteId(null);
     }
     prevTranscribingRef.current = isTranscribing;
-  }, [isTranscribing, realtimeTranscript, realtimeSegments]);
+  }, [isTranscribing, realtimeTranscript, realtimeSegments, recordingNoteId]);
 
   useEffect(() => {
     if (!isTranscribing) return;
 
     const interval = setInterval(() => {
-      const noteId = recordingNoteIdRef.current;
-      if (!noteId || realtimeSegments.length === 0) return;
-      window.electronAPI.updateNote(noteId, {
+      if (!recordingNoteId || realtimeSegments.length === 0) return;
+      window.electronAPI.updateNote(recordingNoteId, {
         transcript: serializeTranscriptSegments(realtimeSegments),
       });
     }, 30_000);
 
     return () => clearInterval(interval);
-  }, [isTranscribing, realtimeSegments]);
+  }, [isTranscribing, realtimeSegments, recordingNoteId]);
 
   const isLocalSynced = syncedNoteId === activeNote?.id;
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
@@ -592,7 +542,7 @@ export default function PersonalNotesView({
     <div className="flex h-full">
       <div
         className="shrink-0 overflow-hidden transition-[width] duration-300 ease-out"
-        style={{ width: isMeetingMode || isActiveNoteRecording ? 0 : "13rem" }}
+        style={{ width: isSidePanelLayout ? 0 : "13rem" }}
       >
         <div className="w-52 shrink-0 border-r border-border/15 dark:border-white/4 flex flex-col h-full">
           <div className="px-2 pt-2 pb-1 shrink-0 space-y-0.5">
@@ -950,7 +900,7 @@ export default function PersonalNotesView({
               onTitleChange={handleTitleChange}
               onContentChange={handleContentChange}
               isSaving={isSaving}
-              isRecording={isTranscribing}
+              isRecording={isActiveNoteRecording}
               isProcessing={false}
               onStartRecording={startRecording}
               onStopRecording={stopRecording}
@@ -1021,7 +971,7 @@ export default function PersonalNotesView({
                     ]
                       .filter(Boolean)
                       .join("\n\n");
-                    runAction(action, parts, {
+                    runAction(action, parts, makeContentHash(localContentRef.current), {
                       isCloudMode,
                       modelId: effectiveModelId,
                       isMeetingNote,

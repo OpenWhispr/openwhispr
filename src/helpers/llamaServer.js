@@ -7,15 +7,17 @@ const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
 const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
+const sidecarPidFile = require("./sidecarPidFile");
 
 const PORT_RANGE_START = 8200;
 const PORT_RANGE_END = 8220;
 const STARTUP_TIMEOUT_MS = 60000;
-const VULKAN_STARTUP_TIMEOUT_MS = 10000;
+const VULKAN_STARTUP_TIMEOUT_MS = 60000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
+const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 class LlamaServerManager {
   constructor() {
@@ -28,6 +30,7 @@ class LlamaServerManager {
     this.healthCheckFailures = 0;
     this.cachedServerBinaryPaths = null;
     this.activeBackend = null;
+    this.idleTimer = null;
   }
 
   getServerBinaryPaths() {
@@ -162,6 +165,7 @@ class LlamaServerManager {
     }
 
     this.startHealthCheck();
+    this.resetIdleTimer();
     debugLogger.info("llama-server started successfully", {
       port: this.port,
       model: path.basename(modelPath),
@@ -231,7 +235,9 @@ class LlamaServerManager {
         windowsHide: true,
         cwd: getSafeTempDir(),
         env,
+        detached: process.platform !== "win32",
       });
+      sidecarPidFile.write("llama", this.process.pid);
 
       let stderrBuffer = "";
       let exitCode = null;
@@ -266,6 +272,7 @@ class LlamaServerManager {
         this.ready = false;
         this.process = null;
         this.stopHealthCheck();
+        sidecarPidFile.clear("llama");
       });
 
       const getProcessInfo = () => ({ stderr: stderrBuffer, exitCode, exitSignal });
@@ -411,17 +418,45 @@ class LlamaServerManager {
     }
   }
 
+  resetIdleTimer() {
+    this.clearIdleTimer();
+    this.idleTimer = setTimeout(() => {
+      debugLogger.info("llama-server idle timeout reached, stopping to free VRAM", {
+        timeoutMs: IDLE_TIMEOUT_MS,
+        model: this.modelPath ? path.basename(this.modelPath) : null,
+      });
+      this.stop();
+    }, IDLE_TIMEOUT_MS);
+  }
+
+  clearIdleTimer() {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
   async inference(messages, options = {}) {
     if (!this.ready || !this.process) {
       throw new Error("llama-server is not running");
     }
 
-    const body = JSON.stringify({
+    this.clearIdleTimer();
+
+    const requestBody = {
       messages,
       temperature: options.temperature ?? 0.7,
       max_tokens: options.max_tokens ?? 512,
       stream: false,
-    });
+    };
+
+    // Without this, Qwen chat templates leave `message.content` empty and
+    // route output into `reasoning_content`. Non-Qwen templates ignore it.
+    if (options.disableThinking !== false) {
+      requestBody.chat_template_kwargs = { enable_thinking: false };
+    }
+
+    const body = JSON.stringify(requestBody);
 
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
@@ -475,10 +510,11 @@ class LlamaServerManager {
 
       req.write(body);
       req.end();
-    });
+    }).finally(() => this.resetIdleTimer());
   }
 
   async stop() {
+    this.clearIdleTimer();
     this.stopHealthCheck();
 
     if (!this.process) {
