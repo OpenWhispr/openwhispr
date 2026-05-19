@@ -1769,15 +1769,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const s = getSettings();
     const currentProvider = s.cloudTranscriptionProvider || "openai";
     const currentBaseUrl = s.cloudTranscriptionBaseUrl || "";
+    const transcriptionMode = s.transcriptionMode || "";
+    const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
 
-    // Only use custom URL when provider is explicitly "custom"
-    const isCustomEndpoint = currentProvider === "custom";
+    const isSelfHosted = transcriptionMode === "self-hosted" && remoteUrl.length > 0;
+    const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
 
-    // Invalidate cache if provider or base URL changed
     if (
       this.cachedTranscriptionEndpoint &&
       (this.cachedEndpointProvider !== currentProvider ||
-        this.cachedEndpointBaseUrl !== currentBaseUrl)
+        this.cachedEndpointBaseUrl !== currentBaseUrl ||
+        this.cachedEndpointMode !== transcriptionMode ||
+        this.cachedEndpointRemoteUrl !== remoteUrl)
     ) {
       logger.debug(
         "STT endpoint cache invalidated",
@@ -1786,6 +1789,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           newProvider: currentProvider,
           previousBaseUrl: this.cachedEndpointBaseUrl,
           newBaseUrl: currentBaseUrl,
+          previousMode: this.cachedEndpointMode,
+          newMode: transcriptionMode,
+          previousRemoteUrl: this.cachedEndpointRemoteUrl,
+          newRemoteUrl: remoteUrl,
         },
         "transcription"
       );
@@ -1797,9 +1804,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     try {
-      // Use custom URL only when provider is "custom", otherwise use provider-specific defaults
       let base;
-      if (isCustomEndpoint) {
+      if (isSelfHosted) {
+        base = remoteUrl;
+      } else if (currentProvider === "custom") {
         base = currentBaseUrl.trim() || API_ENDPOINTS.TRANSCRIPTION_BASE;
       } else if (currentProvider === "groq") {
         base = API_ENDPOINTS.GROQ_BASE;
@@ -1816,8 +1824,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "STT endpoint resolution",
         {
           provider: currentProvider,
+          mode: transcriptionMode,
+          isSelfHosted,
           isCustomEndpoint,
           rawBaseUrl: currentBaseUrl,
+          remoteUrl,
           normalizedBase,
           defaultBase: API_ENDPOINTS.TRANSCRIPTION_BASE,
         },
@@ -1828,6 +1839,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.cachedTranscriptionEndpoint = endpoint;
         this.cachedEndpointProvider = currentProvider;
         this.cachedEndpointBaseUrl = currentBaseUrl;
+        this.cachedEndpointMode = transcriptionMode;
+        this.cachedEndpointRemoteUrl = remoteUrl;
 
         logger.debug(
           "STT endpoint resolved",
@@ -1885,6 +1898,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.cachedTranscriptionEndpoint = API_ENDPOINTS.TRANSCRIPTION;
       this.cachedEndpointProvider = currentProvider;
       this.cachedEndpointBaseUrl = currentBaseUrl;
+      this.cachedEndpointMode = transcriptionMode;
+      this.cachedEndpointRemoteUrl = remoteUrl;
       return API_ENDPOINTS.TRANSCRIPTION;
     }
   }

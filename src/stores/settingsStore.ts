@@ -190,6 +190,15 @@ function migrateProviderSettings() {
 
   if (provider === "custom" && cloudMode === "byok") {
     localStorage.setItem("remoteTranscriptionType", "openai-compatible");
+    const legacyBaseUrl = localStorage.getItem("cloudTranscriptionBaseUrl");
+    const existingRemoteUrl = localStorage.getItem("remoteTranscriptionUrl");
+    if (
+      !existingRemoteUrl &&
+      legacyBaseUrl &&
+      legacyBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE
+    ) {
+      localStorage.setItem("remoteTranscriptionUrl", legacyBaseUrl);
+    }
   }
 
   const reasoningMode = localStorage.getItem("cloudReasoningMode");
