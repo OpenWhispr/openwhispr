@@ -38,7 +38,10 @@ function resolveReasoningRoute(text, settings, agentName) {
         provider,
         lanUrl: isSelfHostedAgent ? settings.dictationAgentRemoteUrl : undefined,
         baseUrl: isCustomAgent ? settings.dictationAgentCloudBaseUrl || undefined : undefined,
-        customApiKey: isCustomAgent ? settings.dictationAgentCustomApiKey || undefined : undefined,
+        customApiKey:
+          isCustomAgent || isSelfHostedAgent
+            ? settings.dictationAgentCustomApiKey || undefined
+            : undefined,
         systemPrompt: resolvePrompt("dictationAgent", {
           agentName,
           language: settings.preferredLanguage,
