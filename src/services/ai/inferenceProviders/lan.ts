@@ -1,18 +1,23 @@
 import type { InferenceProvider } from "./types";
-import { buildApiUrl, normalizeBaseUrl } from "../../../config/constants";
+import { buildApiUrl, ensureV1Suffix } from "../../../config/constants";
 import { getSettings } from "../../../stores/settingsStore";
 import logger from "../../../utils/logger";
 
 export const lanProvider: InferenceProvider = {
   id: "lan",
   async call({ text, model, agentName, config, ctx }) {
-    const lanUrl = (config.lanUrl || getSettings().cleanupRemoteUrl).trim();
+    const isAgentCall = !!config.lanUrl;
+    const settings = getSettings();
+    const lanUrl = (config.lanUrl || settings.cleanupRemoteUrl).trim();
     logger.logReasoning("LAN_START", { url: lanUrl, agentName, model });
 
     try {
-      const baseUrl = normalizeBaseUrl(lanUrl) || lanUrl;
-      const endpoint = buildApiUrl(baseUrl, "/v1/chat/completions");
-      const apiKey = config.customApiKey?.trim() || getSettings().cleanupCustomApiKey?.trim() || "";
+      const baseUrl = ensureV1Suffix(lanUrl);
+      const endpoint = buildApiUrl(baseUrl, "/chat/completions");
+      const apiKey =
+        config.customApiKey?.trim() ||
+        (isAgentCall ? "" : settings.cleanupCustomApiKey?.trim()) ||
+        "";
       const resolvedModel = model?.trim() || "default";
       return await ctx.callChatCompletionsApi(
         endpoint,

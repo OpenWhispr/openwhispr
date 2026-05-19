@@ -27,7 +27,6 @@ class ParakeetWsServer {
     this.modelDir = null;
     this.startupPromise = null;
     this.healthCheckInterval = null;
-    this.transcribing = false;
     this.cachedWsBinaryPath = null;
   }
 
@@ -190,7 +189,6 @@ class ParakeetWsServer {
         this.stopHealthCheck();
         return;
       }
-      if (this.transcribing) return;
 
       if (!this._isProcessAlive()) {
         debugLogger.warn("parakeet-ws health check failed: process not alive");
@@ -212,24 +210,15 @@ class ParakeetWsServer {
       throw new Error("parakeet-ws server is not running");
     }
 
-    this.transcribing = true;
-
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
       let result = "";
-
-      const done =
-        (fn) =>
-        (...args) => {
-          this.transcribing = false;
-          fn(...args);
-        };
 
       const timeout = setTimeout(() => {
         try {
           ws.close();
         } catch {}
-        done(reject)(new Error("parakeet-ws transcription timed out"));
+        reject(new Error("parakeet-ws transcription timed out"));
       }, TRANSCRIPTION_TIMEOUT_MS);
 
       const ws = new WebSocket(`ws://127.0.0.1:${this.port}`);
@@ -272,15 +261,15 @@ class ParakeetWsServer {
 
         try {
           const parsed = JSON.parse(result);
-          done(resolve)({ text: (parsed.text || "").trim(), elapsed });
+          resolve({ text: (parsed.text || "").trim(), elapsed });
         } catch {
-          done(resolve)({ text: result.trim(), elapsed });
+          resolve({ text: result.trim(), elapsed });
         }
       });
 
       ws.on("error", (error) => {
         clearTimeout(timeout);
-        done(reject)(new Error(`parakeet-ws transcription failed: ${error.message}`));
+        reject(new Error(`parakeet-ws transcription failed: ${error.message}`));
       });
     });
   }

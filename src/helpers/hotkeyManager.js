@@ -1,3 +1,4 @@
+const EventEmitter = require("events");
 const { globalShortcut, BrowserWindow } = require("electron");
 const debugLogger = require("./debugLogger");
 const GnomeShortcutManager = require("./gnomeShortcut");
@@ -58,6 +59,10 @@ function isGlobeLikeHotkey(hotkey) {
   return hotkey === "GLOBE" || hotkey === "Fn";
 }
 
+function isMouseButtonHotkey(hotkey) {
+  return /^MouseButton[45]$/i.test(hotkey || "");
+}
+
 function normalizeToAccelerator(hotkey) {
   let accelerator = hotkey.startsWith("Fn+") ? hotkey.slice(3) : hotkey;
   accelerator = accelerator
@@ -74,8 +79,9 @@ const SUGGESTED_HOTKEYS = {
   compound: ["Control+Super", "Control+Alt", "Control+Shift+Space", "Alt+F7"],
 };
 
-class HotkeyManager {
+class HotkeyManager extends EventEmitter {
   constructor() {
+    super();
     this.slots = new Map();
     const defaultDictation = process.platform === "darwin" ? "GLOBE" : "Control+Super";
     this.slots.set("dictation", { hotkey: defaultDictation, callback: null, accelerator: null });
@@ -276,7 +282,12 @@ class HotkeyManager {
     }
 
     const hk = slot.hotkey;
-    if (!isGlobeLikeHotkey(hk) && !isRightSideModifier(hk) && !isModifierOnlyHotkey(hk)) {
+    if (
+      !isGlobeLikeHotkey(hk) &&
+      !isMouseButtonHotkey(hk) &&
+      !isRightSideModifier(hk) &&
+      !isModifierOnlyHotkey(hk)
+    ) {
       const accel = normalizeToAccelerator(hk);
       try {
         globalShortcut.unregister(accel);
@@ -308,6 +319,7 @@ class HotkeyManager {
     if (
       hotkey === slot.hotkey &&
       !isGlobeLikeHotkey(hotkey) &&
+      !isMouseButtonHotkey(hotkey) &&
       !isRightSideModifier(hotkey) &&
       !isModifierOnlyHotkey(hotkey) &&
       globalShortcut.isRegistered(checkAccelerator)
@@ -324,6 +336,7 @@ class HotkeyManager {
     if (
       previousHotkey &&
       !isGlobeLikeHotkey(previousHotkey) &&
+      !isMouseButtonHotkey(previousHotkey) &&
       !isRightSideModifier(previousHotkey) &&
       !isModifierOnlyHotkey(previousHotkey)
     ) {
@@ -341,6 +354,21 @@ class HotkeyManager {
     try {
       const conflict = this._findSlotConflict(slotName, hotkey);
       if (conflict) return conflict;
+
+      if (isMouseButtonHotkey(hotkey)) {
+        if (process.platform !== "darwin") {
+          return {
+            success: false,
+            error: i18nMain.t("hotkey.errors.mouseButtonOnlyMac"),
+          };
+        }
+        slot.hotkey = hotkey;
+        slot.accelerator = null;
+        debugLogger.log(
+          `[HotkeyManager] Mouse button "${hotkey}" set - using macOS native listener`
+        );
+        return { success: true, hotkey };
+      }
 
       if (isGlobeLikeHotkey(hotkey)) {
         if (process.platform !== "darwin") {
@@ -424,7 +452,10 @@ class HotkeyManager {
 
   _findSlotConflict(slotName, hotkey) {
     const accelerator =
-      isGlobeLikeHotkey(hotkey) || isRightSideModifier(hotkey) || isModifierOnlyHotkey(hotkey)
+      isGlobeLikeHotkey(hotkey) ||
+      isMouseButtonHotkey(hotkey) ||
+      isRightSideModifier(hotkey) ||
+      isModifierOnlyHotkey(hotkey)
         ? null
         : normalizeToAccelerator(hotkey);
 
@@ -454,6 +485,7 @@ class HotkeyManager {
     if (
       !previousHotkey ||
       isGlobeLikeHotkey(previousHotkey) ||
+      isMouseButtonHotkey(previousHotkey) ||
       isRightSideModifier(previousHotkey) ||
       isModifierOnlyHotkey(previousHotkey)
     ) {
@@ -815,6 +847,8 @@ class HotkeyManager {
       this.notifyHotkeyFailure(defaultHotkey, result);
     } catch (err) {
       debugLogger.error("Failed to initialize hotkey", { error: err.message }, "hotkey");
+    } finally {
+      this.emit("hotkey-loaded", this.currentHotkey);
     }
   }
 
@@ -974,6 +1008,20 @@ class HotkeyManager {
       const conflict = this._findSlotConflict("dictation", hotkey);
       if (conflict) {
         return { success: false, message: conflict.error, reason: conflict.reason };
+      }
+
+      if (isMouseButtonHotkey(hotkey)) {
+        const result = this.setupShortcuts(hotkey, callback);
+        if (result.success) {
+          const saved = await this.saveHotkeyToRenderer(hotkey);
+          if (!saved) {
+            debugLogger.warn(
+              "[HotkeyManager] Mouse button hotkey set but failed to persist to localStorage"
+            );
+          }
+          return { success: true, message: `Hotkey updated to: ${hotkey}` };
+        }
+        return { success: false, message: result.error };
       }
 
       if (this.useGnome && this.gnomeManager) {
@@ -1157,3 +1205,4 @@ module.exports = HotkeyManager;
 module.exports.isGlobeLikeHotkey = isGlobeLikeHotkey;
 module.exports.isModifierOnlyHotkey = isModifierOnlyHotkey;
 module.exports.isRightSideModifier = isRightSideModifier;
+module.exports.isMouseButtonHotkey = isMouseButtonHotkey;

@@ -40,6 +40,7 @@ class LocalReasoningService {
         contextSize: config.contextSize || 4096,
         threads: config.threads || 4,
         systemPrompt: config.systemPrompt || "",
+        disableThinking: config.disableThinking !== false,
       };
 
       debugLogger.logReasoning("LOCAL_BRIDGE_INFERENCE", {

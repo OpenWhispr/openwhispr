@@ -27,6 +27,19 @@ export function getDefaultPromptText(kind: PromptKind, uiLanguage?: string): str
   return t(def.i18nKey, { defaultValue: def.fallback });
 }
 
+export function appendDictionarySuffix(
+  prompt: string,
+  customDictionary?: string[],
+  uiLanguage?: string
+): string {
+  if (!customDictionary?.length) return prompt;
+  const locale = normalizeUiLanguage(uiLanguage || "en");
+  const suffix = i18n.getFixedT(locale, "prompts")("dictionarySuffix", {
+    defaultValue: enPrompts.dictionarySuffix,
+  });
+  return prompt + suffix + customDictionary.join(", ");
+}
+
 function applySubstitutions(template: string, opts: ResolvePromptOptions): string {
   const name = opts.agentName?.trim() || "Assistant";
   let prompt = template.replace(/\{\{agentName\}\}/g, name);
@@ -34,13 +47,5 @@ function applySubstitutions(template: string, opts: ResolvePromptOptions): strin
   const langInstruction = getLanguageInstruction(opts.language);
   if (langInstruction) prompt += "\n\n" + langInstruction;
 
-  if (opts.customDictionary?.length) {
-    const locale = normalizeUiLanguage(opts.uiLanguage || "en");
-    const suffix = i18n.getFixedT(locale, "prompts")("dictionarySuffix", {
-      defaultValue: enPrompts.dictionarySuffix,
-    });
-    prompt += suffix + opts.customDictionary.join(", ");
-  }
-
-  return prompt;
+  return appendDictionarySuffix(prompt, opts.customDictionary, opts.uiLanguage);
 }

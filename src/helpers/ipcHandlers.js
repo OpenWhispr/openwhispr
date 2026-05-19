@@ -34,6 +34,11 @@ const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
+const {
+  DEFAULT_WHISPER_VAD_CONFIG,
+  sanitizeWhisperVadConfig,
+  resolveContextSileroEnabled,
+} = require("./whisperVadConfig");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
@@ -319,6 +324,12 @@ class IPCHandlers {
     this._noteFilesEnabled = false;
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
+    this.whisperVadSettings = {
+      dictationSileroEnabled: true,
+      noteRecordingSileroEnabled: true,
+      meetingSileroEnabled: true,
+      ...DEFAULT_WHISPER_VAD_CONFIG,
+    };
     liveSpeakerIdentifier.setDiarizationManager(this.diarizationManager);
     this._setupTextEditMonitor();
     this._setupAudioCleanup();
@@ -330,6 +341,35 @@ class IPCHandlers {
         this.broadcastToWindows("cuda-fallback-notification", {});
       });
     }
+  }
+
+  _getWhisperVadSettings() {
+    const current = this.whisperVadSettings || {};
+    return {
+      dictationSileroEnabled: current.dictationSileroEnabled !== false,
+      noteRecordingSileroEnabled: current.noteRecordingSileroEnabled !== false,
+      meetingSileroEnabled: current.meetingSileroEnabled !== false,
+      ...sanitizeWhisperVadConfig(current),
+    };
+  }
+
+  _setWhisperVadSettings(update = {}) {
+    this.whisperVadSettings = { ...this._getWhisperVadSettings(), ...update };
+    return this._getWhisperVadSettings();
+  }
+
+  _resolveWhisperVadOptions(context) {
+    const settings = this._getWhisperVadSettings();
+    const {
+      dictationSileroEnabled,
+      noteRecordingSileroEnabled,
+      meetingSileroEnabled,
+      ...vadConfig
+    } = settings;
+    return {
+      vadEnabled: resolveContextSileroEnabled(settings, context),
+      vadConfig,
+    };
   }
 
   _asyncVectorUpsert(note) {
@@ -1405,7 +1445,11 @@ class IPCHandlers {
           const result = await this.parakeetManager.transcribeLocalParakeet(audioBuffer, options);
           return result;
         }
-        const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, options);
+        const vadOptions = this._resolveWhisperVadOptions("noteRecording");
+        const result = await this.whisperManager.transcribeLocalWhisper(audioBuffer, {
+          ...options,
+          ...vadOptions,
+        });
         return result;
       } catch (error) {
         debugLogger.error("Audio file transcription error", { error: error.message });
@@ -1484,7 +1528,11 @@ class IPCHandlers {
       });
 
       try {
-        const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, options);
+        const vadOptions = this._resolveWhisperVadOptions("dictation");
+        const result = await this.whisperManager.transcribeLocalWhisper(audioBlob, {
+          ...options,
+          ...vadOptions,
+        });
 
         debugLogger.log("Whisper result", {
           success: result.success,
@@ -2045,6 +2093,7 @@ class IPCHandlers {
       if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
       this._hotkeyCaptureMode = enabled;
       this.windowManager.setHotkeyListeningMode(enabled);
+      ipcMain.emit("hotkey-listening-mode-changed", null, enabled);
       const hotkeyManager = this.windowManager.hotkeyManager;
 
       // When exiting capture mode with a new hotkey, use that to avoid reading stale state
@@ -2054,10 +2103,12 @@ class IPCHandlers {
         isGlobeLikeHotkey,
         isModifierOnlyHotkey,
         isRightSideModifier,
+        isMouseButtonHotkey,
       } = require("./hotkeyManager");
       const usesNativeListener = (hotkey) =>
         !hotkey ||
         isGlobeLikeHotkey(hotkey) ||
+        isMouseButtonHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
         isRightSideModifier(hotkey);
 
@@ -3529,6 +3580,11 @@ class IPCHandlers {
       if (!buffer) return { success: false, error: "Audio file not found" };
       try {
         let result;
+        const preferredLanguage = settings?.preferredLanguage;
+        const language =
+          preferredLanguage && preferredLanguage !== "auto"
+            ? preferredLanguage.split("-")[0]
+            : undefined;
 
         if (settings?.useLocalWhisper) {
           if (settings.localTranscriptionProvider === "nvidia") {
@@ -3536,8 +3592,11 @@ class IPCHandlers {
               settings.parakeetModel || process.env.PARAKEET_MODEL || "parakeet-tdt-0.6b-v3";
             result = await this.parakeetManager.transcribeLocalParakeet(buffer, { model });
           } else if (this.whisperManager?.serverManager?.isAvailable?.()) {
+            const vadOptions = this._resolveWhisperVadOptions("noteRecording");
             result = await this.whisperManager.transcribeLocalWhisper(buffer, {
               model: settings.whisperModel,
+              language,
+              ...vadOptions,
             });
           }
         } else if (settings?.cloudTranscriptionMode === "openwhispr") {
@@ -3548,6 +3607,7 @@ class IPCHandlers {
               const apiUrl = getApiUrl();
               if (apiUrl) {
                 const multipartFields = {
+                  language,
                   clientType: "desktop",
                   appVersion: app.getVersion(),
                   sessionId: this.sessionId,
@@ -3609,6 +3669,7 @@ class IPCHandlers {
           const formData = new FormData();
           formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
           formData.append("model", model);
+          if (language) formData.append("language", language);
           const headers = {};
           if (provider === "mistral") {
             headers["x-api-key"] = apiKey;
@@ -4064,7 +4125,11 @@ class IPCHandlers {
     const fetchRealtimeToken = async (event, options, { streams } = {}) => {
       const postServerToken = async (path, body = {}) => {
         const apiUrl = getApiUrl();
-        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+        if (!apiUrl) {
+          const err = new Error("OpenWhispr API URL not configured");
+          err.code = "NO_API";
+          throw err;
+        }
         const authHeader = await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
         const url = `${apiUrl}${path}`;
@@ -4287,6 +4352,7 @@ class IPCHandlers {
     let meetingLocalTranscript = "";
     let meetingLocalProvider = null;
     let meetingLocalModel = null;
+    let meetingLocalLanguage = null;
     let meetingLocalTranscribing = false;
     let meetingPendingMicChunks = [];
     let meetingPendingMicFinals = [];
@@ -4679,8 +4745,11 @@ class IPCHandlers {
             model: meetingLocalModel,
           });
         } else {
+          const vadOptions = this._resolveWhisperVadOptions("meeting");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: meetingLocalModel,
+            language: meetingLocalLanguage,
+            ...vadOptions,
           });
         }
 
@@ -4851,6 +4920,7 @@ class IPCHandlers {
       meetingLocalTranscript = "";
       meetingLocalProvider = null;
       meetingLocalModel = null;
+      meetingLocalLanguage = null;
       meetingLocalTranscribing = false;
       meetingPendingMicChunks = [];
       resetPendingMicFinals();
@@ -4865,6 +4935,7 @@ class IPCHandlers {
     let dictationPreviewTranscribing = false;
     let dictationPreviewProvider = null;
     let dictationPreviewModel = null;
+    let dictationPreviewLanguage = null;
     let dictationPreviewSessionActive = false;
     let dictationPreviewChunkCount = 0;
 
@@ -4881,6 +4952,7 @@ class IPCHandlers {
       dictationPreviewTranscribing = false;
       dictationPreviewProvider = null;
       dictationPreviewModel = null;
+      dictationPreviewLanguage = null;
     };
 
     const transcribeDictationPreviewChunk = async () => {
@@ -4914,8 +4986,11 @@ class IPCHandlers {
             model: dictationPreviewModel,
           });
         } else {
+          const vadOptions = this._resolveWhisperVadOptions("dictation");
           result = await this.whisperManager.transcribeLocalWhisper(wav, {
             model: dictationPreviewModel,
+            language: dictationPreviewLanguage,
+            ...vadOptions,
           });
         }
 
@@ -5136,12 +5211,12 @@ class IPCHandlers {
           }
           await startMeetingAec(systemAudioMode);
           await startLiveSpeakerIdentification(win, systemAudioMode);
-          systemAudioStrategy = await startMeetingSystemAudio(
+          ({ systemAudioMode, systemAudioStrategy } = await startMeetingSystemAudio(
             event,
             systemAudioMode,
             systemAudioStrategy,
             "during warm-start reuse"
-          );
+          ));
           return {
             success: true,
             systemAudioMode,
@@ -5154,6 +5229,7 @@ class IPCHandlers {
           meetingLocalMode = true;
           meetingLocalProvider = options.localProvider || "whisper";
           meetingLocalModel = options.localModel || null;
+          meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalBuffers = { mic: [], system: [] };
           meetingLocalTranscript = "";
@@ -5165,12 +5241,12 @@ class IPCHandlers {
             transcribeAllLocalBuffers();
           }, 5000);
 
-          systemAudioStrategy = await startMeetingSystemAudio(
+          ({ systemAudioMode, systemAudioStrategy } = await startMeetingSystemAudio(
             event,
             systemAudioMode,
             systemAudioStrategy,
             "in local meeting mode"
-          );
+          ));
 
           debugLogger.debug("Meeting transcription started in local mode", {
             provider: meetingLocalProvider,
@@ -5194,12 +5270,12 @@ class IPCHandlers {
         const realtimeWin = BrowserWindow.fromWebContents(event.sender);
         await startLiveSpeakerIdentification(realtimeWin, systemAudioMode);
         await startMeetingAec(systemAudioMode);
-        systemAudioStrategy = await startMeetingSystemAudio(
+        ({ systemAudioMode, systemAudioStrategy } = await startMeetingSystemAudio(
           event,
           systemAudioMode,
           systemAudioStrategy,
           "in realtime mode"
-        );
+        ));
         return {
           success: true,
           systemAudioMode,
@@ -5311,24 +5387,44 @@ class IPCHandlers {
       context
     ) => {
       if (systemAudioMode === "native") {
-        await startNativeMeetingSystemAudio(event);
-        return systemAudioStrategy;
+        try {
+          await startNativeMeetingSystemAudio(event);
+          return { systemAudioMode, systemAudioStrategy };
+        } catch (error) {
+          debugLogger.warn(
+            `Native system audio tap failed ${context}, falling back to mic-only`,
+            { error: error.message },
+            "meeting"
+          );
+          if (this._meetingSystemStreaming?.isConnected) {
+            await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
+              debugLogger.debug(
+                "System streaming disconnect during native fallback failed",
+                { error: disconnectError.message },
+                "meeting"
+              );
+            });
+          }
+          this._meetingSystemStreaming = null;
+          await stopLiveSpeakerIdentification().catch(() => {});
+          return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
+        }
       }
 
       if (systemAudioStrategy !== "portal-helper") {
-        return systemAudioStrategy;
+        return { systemAudioMode, systemAudioStrategy };
       }
 
       try {
         await startLinuxMeetingSystemAudio(event);
-        return systemAudioStrategy;
+        return { systemAudioMode, systemAudioStrategy };
       } catch (error) {
         debugLogger.warn(
           `Linux portal helper failed ${context}, falling back to browser portal`,
           { error: error.message },
           "meeting"
         );
-        return "browser-portal";
+        return { systemAudioMode, systemAudioStrategy: "browser-portal" };
       }
     };
 
@@ -5466,12 +5562,13 @@ class IPCHandlers {
       return { success: true, text: result.text || "" };
     });
 
-    ipcMain.handle("start-dictation-preview", async (_event, { provider, model }) => {
+    ipcMain.handle("start-dictation-preview", async (_event, { provider, model, language }) => {
       resetDictationPreviewState();
       dictationPreviewMode = true;
       dictationPreviewSessionActive = true;
       dictationPreviewProvider = provider;
       dictationPreviewModel = model;
+      dictationPreviewLanguage = language || null;
       dictationPreviewChunkCount = 0;
       this.windowManager.showTranscriptionPreview("");
       dictationPreviewTimer = setInterval(() => transcribeDictationPreviewChunk(), 1500);
@@ -7124,6 +7221,23 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("whisper-vad-get-config", async () => {
+      try {
+        return { success: true, config: this._getWhisperVadSettings() };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("whisper-vad-set-config", async (_event, payload) => {
+      try {
+        const config = this._setWhisperVadSettings(payload || {});
+        return { success: true, config };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("meeting-set-session-speaker-config", async (_event, payload) => {
       try {
         const enabled = payload?.enabled !== false;
@@ -7606,10 +7720,8 @@ class IPCHandlers {
   _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds }) {
     if (sessionConfig?.expectedCount) {
       const total = Math.min(sessionConfig.expectedCount, MAX_SPEAKER_COUNT);
-      return {
-        numSpeakers: Math.max(1, total - 1),
-        cap: null,
-      };
+      const numSpeakers = Math.max(1, total - 1);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     let attendees = [];
@@ -7622,17 +7734,13 @@ class IPCHandlers {
       }
     }
     if (attendees.length >= 2) {
-      return {
-        numSpeakers: Math.min(attendees.length, MAX_SPEAKER_COUNT),
-        cap: null,
-      };
+      const numSpeakers = Math.min(attendees.length, MAX_SPEAKER_COUNT);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     if (observedSpeakerIds.size >= 2) {
-      return {
-        numSpeakers: Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT),
-        cap: null,
-      };
+      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
+      return { numSpeakers, cap: numSpeakers };
     }
 
     return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };

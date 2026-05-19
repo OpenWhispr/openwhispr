@@ -13,7 +13,10 @@ import {
   Search,
   Plus,
   Check,
+  Share2,
 } from "lucide-react";
+import ShareNoteDialog from "./ShareNoteDialog";
+import { useShareCacheEntry } from "../../stores/noteStore";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
@@ -147,6 +150,9 @@ export default function NoteEditor({
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isDiarizing, setIsDiarizing] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const shareCache = useShareCacheEntry(note.cloud_id);
+  const isShared = (shareCache?.share.visibility ?? "private") !== "private";
   const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerProfiles, setSpeakerProfiles] = useState<
@@ -778,6 +784,31 @@ export default function NoteEditor({
                   )}
                 </div>
               )}
+              {note.cloud_id && (
+                <button
+                  type="button"
+                  onClick={() => setShareDialogOpen(true)}
+                  className={cn(
+                    "shrink-0 h-6 w-6 flex items-center justify-center rounded-md",
+                    "bg-foreground/4 dark:bg-white/5",
+                    "hover:bg-foreground/8 dark:hover:bg-white/10",
+                    "active:bg-foreground/12 dark:active:bg-white/15",
+                    "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                    "transition-colors duration-150"
+                  )}
+                  aria-label={t("noteEditor.share.button")}
+                >
+                  <Share2
+                    size={11}
+                    className={cn(
+                      "transition-colors",
+                      isShared
+                        ? "text-blue-600 dark:text-blue-400"
+                        : "text-foreground/50 dark:text-foreground/40"
+                    )}
+                  />
+                </button>
+              )}
               {(onExportNote || onExportTranscript) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -945,6 +976,13 @@ export default function NoteEditor({
           activeConversationId={embeddedChat.activeConversationId}
           onSwitchConversation={embeddedChat.switchConversation}
           onNewChat={embeddedChat.startNewChat}
+        />
+      )}
+      {note.cloud_id && (
+        <ShareNoteDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          note={note}
         />
       )}
     </div>

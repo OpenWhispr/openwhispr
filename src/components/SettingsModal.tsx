@@ -9,6 +9,7 @@ import {
   Keyboard,
   CreditCard,
   Shield,
+  Users,
 } from "lucide-react";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
@@ -64,6 +65,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         label: t("settingsModal.sections.plansBilling.label"),
         icon: CreditCard,
         description: t("settingsModal.sections.plansBilling.description"),
+        group: t("settingsModal.groups.account"),
+      },
+      {
+        id: "workspace",
+        label: t("settingsModal.sections.workspace.label"),
+        icon: Users,
+        description: t("settingsModal.sections.workspace.description"),
         group: t("settingsModal.groups.account"),
       },
       {

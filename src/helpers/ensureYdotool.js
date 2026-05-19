@@ -136,7 +136,7 @@ async function ensureYdotool() {
   }
   if (!hasYdotoold) {
     missing.push(
-      "- ydotoold (daemon) is not installed. On Ubuntu/Pop!_OS: sudo apt install ydotoold"
+      "- ydotoold (daemon) is not installed. On Ubuntu/Pop!_OS: sudo apt install ydotoold. On Arch: included in the ydotool package."
     );
   }
   if (!hasUinput) {

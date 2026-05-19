@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
+import { getBaseLanguageCode } from "../utils/languageSupport";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
 import {
   DEFAULT_SYSTEM_AUDIO_ACCESS,
@@ -109,6 +110,7 @@ const isSegmentWithinIdentificationWindow = (
 const getMeetingTranscriptionOptions = () => {
   const state = getSettings();
   const resolved = selectResolvedMeetingTranscription(state);
+  const language = getBaseLanguageCode(state.preferredLanguage);
 
   if (resolved.useLocalWhisper) {
     return {
@@ -118,6 +120,7 @@ const getMeetingTranscriptionOptions = () => {
         resolved.localTranscriptionProvider === "nvidia"
           ? resolved.parakeetModel || "parakeet-tdt-0.6b-v3"
           : resolved.whisperModel || "base",
+      language,
     };
   }
 

@@ -29,6 +29,7 @@ import {
   BookOpen,
   Copy,
   Trash2,
+  Info,
   MessageSquare,
   FileAudio,
   Wand2,
@@ -89,11 +90,13 @@ import type { InferenceModeOption } from "./ui/SettingsSection";
 import { useSettingsLayout } from "./ui/useSettingsLayout";
 import { useUsage } from "../hooks/useUsage";
 import { cn } from "./lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import { useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
+import WorkspaceSection from "./settings/WorkspaceSection";
 
 const formatAmount = (cents: number, currency: string) =>
   (cents / 100).toLocaleString(undefined, { style: "currency", currency });
@@ -101,6 +104,7 @@ const formatAmount = (cents: number, currency: string) =>
 export type SettingsSectionType =
   | "account"
   | "plansBilling"
+  | "workspace"
   | "general"
   | "hotkeys"
   | "speechToText"
@@ -388,6 +392,28 @@ const CLEANUP_MODE_TOAST_KEY: Record<InferenceMode, string> = {
   enterprise: "switchedEnterprise",
 };
 
+function NoteFormattingSettings() {
+  const { t } = useTranslation();
+  const autoGenerateNoteTitle = useSettingsStore((s) => s.autoGenerateNoteTitle);
+  const setAutoGenerateNoteTitle = useSettingsStore((s) => s.setAutoGenerateNoteTitle);
+
+  return (
+    <div className="space-y-4">
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.noteFormatting.autoGenerateTitle")}
+            description={t("settingsPage.noteFormatting.autoGenerateTitleDescription")}
+          >
+            <Toggle checked={autoGenerateNoteTitle} onChange={setAutoGenerateNoteTitle} />
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+      <InferenceConfigEditor scope="noteFormatting" />
+    </div>
+  );
+}
+
 function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModelsSectionProps) {
   const { t } = useTranslation();
 
@@ -445,6 +471,32 @@ function useSubTab<T extends string>(storageKey: string, options: readonly T[], 
   return [safeTab, setTab] as const;
 }
 
+function VADLabelWithInfo({ label, description }: { label: string; description: string }) {
+  return (
+    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground">
+      <span>{label}</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={label}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent side="top" align="start" className="max-w-sm p-3">
+          <p className="text-xs leading-relaxed text-muted-foreground">{description}</p>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+function TabPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return <div className={active ? undefined : "hidden"}>{children}</div>;
+}
+
 function SpeechToTextTabs({
   initialTab,
   renderDictation,
@@ -480,8 +532,8 @@ function SpeechToTextTabs({
           )
         }
       />
-      <div className={tab !== "dictation" ? "hidden" : undefined}>{renderDictation()}</div>
-      <div className={tab !== "noteRecording" ? "hidden" : undefined}>{renderNoteRecording()}</div>
+      <TabPanel active={tab === "dictation"}>{renderDictation()}</TabPanel>
+      <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
     </div>
   );
 }
@@ -526,10 +578,10 @@ function LlmsTabs({
           return <MessageSquare className="w-3.5 h-3.5" />;
         }}
       />
-      <div className={tab !== "dictationCleanup" ? "hidden" : undefined}>{renderDictationCleanup()}</div>
-      <div className={tab !== "dictationAgent" ? "hidden" : undefined}>{renderDictationAgent()}</div>
-      <div className={tab !== "noteFormatting" ? "hidden" : undefined}>{renderNoteFormatting()}</div>
-      <div className={tab !== "chatIntelligence" ? "hidden" : undefined}>{renderChatIntelligence()}</div>
+      <TabPanel active={tab === "dictationCleanup"}>{renderDictationCleanup()}</TabPanel>
+      <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
+      <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
+      <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
     </div>
   );
 }
@@ -685,6 +737,24 @@ export default function SettingsPage({
     setNoteFilesEnabled,
     noteFilesPath,
     setNoteFilesPath,
+    dictationSileroEnabled,
+    setDictationSileroEnabled,
+    noteRecordingSileroEnabled,
+    setNoteRecordingSileroEnabled,
+    meetingSileroEnabled,
+    setMeetingSileroEnabled,
+    whisperVadThreshold,
+    setWhisperVadThreshold,
+    whisperVadMinSpeechDurationMs,
+    setWhisperVadMinSpeechDurationMs,
+    whisperVadMinSilenceDurationMs,
+    setWhisperVadMinSilenceDurationMs,
+    whisperVadMaxSpeechDurationS,
+    setWhisperVadMaxSpeechDurationS,
+    whisperVadSpeechPadMs,
+    setWhisperVadSpeechPadMs,
+    whisperVadSamplesOverlap,
+    setWhisperVadSamplesOverlap,
   } = useSettings();
 
   const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
@@ -1256,6 +1326,129 @@ export default function SettingsPage({
       confirmText: t("settingsPage.account.deleteAccount.confirmText"),
     });
   }, [showConfirmDialog, showAlertDialog, t]);
+
+  const renderWhisperVadSettings = () => (
+    <div>
+      <SectionHeader
+        title={t("settingsPage.transcription.vad.title")}
+        description={t("settingsPage.transcription.vad.description")}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.vad.toggles.dictation.title")}
+            description={t("settingsPage.transcription.vad.toggles.dictation.description")}
+          >
+            <Toggle checked={dictationSileroEnabled} onChange={setDictationSileroEnabled} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.vad.toggles.noteRecording.title")}
+            description={t("settingsPage.transcription.vad.toggles.noteRecording.description")}
+          >
+            <Toggle checked={noteRecordingSileroEnabled} onChange={setNoteRecordingSileroEnabled} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.vad.toggles.meeting.title")}
+            description={t("settingsPage.transcription.vad.toggles.meeting.description")}
+          >
+            <Toggle checked={meetingSileroEnabled} onChange={setMeetingSileroEnabled} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.threshold.label")}
+                description={t("settingsPage.transcription.vad.fields.threshold.info")}
+              />
+              <Input
+                type="number"
+                step="0.01"
+                min="0.1"
+                max="0.95"
+                value={whisperVadThreshold}
+                onChange={(e) => setWhisperVadThreshold(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.label")}
+                description={t("settingsPage.transcription.vad.fields.minSpeechDurationMs.info")}
+              />
+              <Input
+                type="number"
+                step="10"
+                min="50"
+                max="2000"
+                value={whisperVadMinSpeechDurationMs}
+                onChange={(e) => setWhisperVadMinSpeechDurationMs(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.minSilenceDurationMs.label")}
+                description={t("settingsPage.transcription.vad.fields.minSilenceDurationMs.info")}
+              />
+              <Input
+                type="number"
+                step="10"
+                min="50"
+                max="2000"
+                value={whisperVadMinSilenceDurationMs}
+                onChange={(e) => setWhisperVadMinSilenceDurationMs(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.label")}
+                description={t("settingsPage.transcription.vad.fields.maxSpeechDurationS.info")}
+              />
+              <Input
+                type="number"
+                step="1"
+                min="5"
+                max="120"
+                value={whisperVadMaxSpeechDurationS}
+                onChange={(e) => setWhisperVadMaxSpeechDurationS(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.speechPadMs.label")}
+                description={t("settingsPage.transcription.vad.fields.speechPadMs.info")}
+              />
+              <Input
+                type="number"
+                step="10"
+                min="0"
+                max="1000"
+                value={whisperVadSpeechPadMs}
+                onChange={(e) => setWhisperVadSpeechPadMs(Number(e.target.value))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <VADLabelWithInfo
+                label={t("settingsPage.transcription.vad.fields.samplesOverlap.label")}
+                description={t("settingsPage.transcription.vad.fields.samplesOverlap.info")}
+              />
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="0.95"
+                value={whisperVadSamplesOverlap}
+                onChange={(e) => setWhisperVadSamplesOverlap(Number(e.target.value))}
+              />
+            </div>
+          </div>
+        </SettingsPanelRow>
+      </SettingsPanel>
+    </div>
+  );
 
   const renderSectionContent = () => {
     switch (activeSection) {
@@ -2060,6 +2253,9 @@ export default function SettingsPage({
           </div>
         );
 
+      case "workspace":
+        return <WorkspaceSection initialSubTab={initialSubTab} />;
+
       case "general":
         return (
           <div className="space-y-6">
@@ -2438,6 +2634,7 @@ export default function SettingsPage({
                           cmds: [
                             { label: "Ubuntu / Pop!_OS / Debian", cmd: "sudo apt install ydotool" },
                             { label: "Fedora", cmd: "sudo dnf install ydotool" },
+                            { label: "Arch Linux", cmd: "sudo pacman -S ydotool" },
                             { label: "openSUSE", cmd: "sudo zypper install ydotool" },
                           ],
                         },
@@ -2474,6 +2671,7 @@ export default function SettingsPage({
                               cmd: "sudo apt install ydotoold",
                             },
                             { label: "Fedora", cmd: "# Already included in the ydotool package" },
+                            { label: "Arch Linux", cmd: "# Included in the ydotool package" },
                           ],
                         },
                       ],
@@ -2678,13 +2876,23 @@ EOF`,
                             {
                               cmd: "systemctl --user enable ydotoold && systemctl --user start ydotoold",
                             },
+                            {
+                              label: "Arch Linux (service is named ydotool.service)",
+                              cmd: "systemctl --user enable --now ydotool.service",
+                            },
                           ],
                         },
                         {
                           title: t("settingsPage.general.waylandPaste.guide.daemon.step2Title", {
                             defaultValue: "Verify it's running",
                           }),
-                          cmds: [{ cmd: "systemctl --user status ydotoold" }],
+                          cmds: [
+                            { cmd: "systemctl --user status ydotoold" },
+                            {
+                              label: "Arch Linux",
+                              cmd: "systemctl --user status ydotool.service",
+                            },
+                          ],
                         },
                       ],
                     },
@@ -3565,45 +3773,58 @@ EOF`,
         onOk={() => {}}
       />
 
+      {/* Kept mounted across section switches so model-download progress and IPC listeners survive. */}
       <div className={activeSection !== "speechToText" ? "hidden" : undefined}>
         <SpeechToTextTabs
-          initialTab={initialSubTab as SpeechTab | undefined}
+          initialTab={activeSection === "speechToText" ? (initialSubTab as SpeechTab | undefined) : undefined}
           renderDictation={() => (
-            <TranscriptionSection
-              isSignedIn={isSignedIn ?? false}
-              startOnboarding={startOnboarding}
-              cloudTranscriptionMode={cloudTranscriptionMode}
-              setCloudTranscriptionMode={setCloudTranscriptionMode}
-              useLocalWhisper={useLocalWhisper}
-              setUseLocalWhisper={setUseLocalWhisper}
-              updateTranscriptionSettings={updateTranscriptionSettings}
-              cloudTranscriptionProvider={cloudTranscriptionProvider}
-              setCloudTranscriptionProvider={setCloudTranscriptionProvider}
-              cloudTranscriptionModel={cloudTranscriptionModel}
-              setCloudTranscriptionModel={setCloudTranscriptionModel}
-              localTranscriptionProvider={localTranscriptionProvider}
-              setLocalTranscriptionProvider={setLocalTranscriptionProvider}
-              whisperModel={whisperModel}
-              setWhisperModel={setWhisperModel}
-              parakeetModel={parakeetModel}
-              setParakeetModel={setParakeetModel}
-              cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
-              setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
-              transcriptionMode={transcriptionMode}
-              setTranscriptionMode={setTranscriptionMode}
-              remoteTranscriptionUrl={remoteTranscriptionUrl}
-              setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
-              showTranscriptionPreview={showTranscriptionPreview}
-              setShowTranscriptionPreview={setShowTranscriptionPreview}
-              toast={toast}
-            />
+            <div className="space-y-6">
+              <TranscriptionSection
+                isSignedIn={isSignedIn ?? false}
+                startOnboarding={startOnboarding}
+                cloudTranscriptionMode={cloudTranscriptionMode}
+                setCloudTranscriptionMode={setCloudTranscriptionMode}
+                useLocalWhisper={useLocalWhisper}
+                setUseLocalWhisper={setUseLocalWhisper}
+                updateTranscriptionSettings={updateTranscriptionSettings}
+                cloudTranscriptionProvider={cloudTranscriptionProvider}
+                setCloudTranscriptionProvider={setCloudTranscriptionProvider}
+                cloudTranscriptionModel={cloudTranscriptionModel}
+                setCloudTranscriptionModel={setCloudTranscriptionModel}
+                localTranscriptionProvider={localTranscriptionProvider}
+                setLocalTranscriptionProvider={setLocalTranscriptionProvider}
+                whisperModel={whisperModel}
+                setWhisperModel={setWhisperModel}
+                parakeetModel={parakeetModel}
+                setParakeetModel={setParakeetModel}
+                cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
+                setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+                transcriptionMode={transcriptionMode}
+                setTranscriptionMode={setTranscriptionMode}
+                remoteTranscriptionUrl={remoteTranscriptionUrl}
+                setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                showTranscriptionPreview={showTranscriptionPreview}
+                setShowTranscriptionPreview={setShowTranscriptionPreview}
+                toast={toast}
+              />
+              {transcriptionMode === "local" &&
+                localTranscriptionProvider !== "nvidia" &&
+                renderWhisperVadSettings()}
+            </div>
           )}
-          renderNoteRecording={() => <MeetingTranscriptionPanel />}
+          renderNoteRecording={() => (
+            <div className="space-y-6">
+              <MeetingTranscriptionPanel />
+              {transcriptionMode === "local" &&
+                localTranscriptionProvider !== "nvidia" &&
+                renderWhisperVadSettings()}
+            </div>
+          )}
         />
       </div>
       <div className={activeSection !== "llms" ? "hidden" : undefined}>
         <LlmsTabs
-          initialTab={initialSubTab as LlmTab | undefined}
+          initialTab={activeSection === "llms" ? (initialSubTab as LlmTab | undefined) : undefined}
           renderChatIntelligence={() => <ChatAgentSettings />}
           renderDictationCleanup={() => (
             <div className="space-y-6">
@@ -3624,7 +3845,7 @@ EOF`,
             </div>
           )}
           renderDictationAgent={() => <DictationAgentSettings />}
-          renderNoteFormatting={() => <InferenceConfigEditor scope="noteFormatting" />}
+          renderNoteFormatting={() => <NoteFormattingSettings />}
         />
       </div>
       {renderSectionContent()}

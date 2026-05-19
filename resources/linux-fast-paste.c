@@ -17,6 +17,10 @@
 #include <errno.h>
 #endif
 
+#ifdef HAVE_ATSPI
+#include <atspi/atspi.h>
+#endif
+
 #ifdef HAVE_GIO
 #include <gio/gio.h>
 
@@ -350,6 +354,69 @@ static int is_terminal(const char *wm_class) {
     return 0;
 }
 
+static int check_parent_terminal(Display *dpy, Window win) {
+    Window current = win;
+    Window root = DefaultRootWindow(dpy);
+
+    for (int depth = 0; depth < 20; depth++) {
+        Window parent, dummy_root;
+        Window *children = NULL;
+        unsigned int nchildren;
+
+        if (!XQueryTree(dpy, current, &dummy_root, &parent, &children, &nchildren)) {
+            if (children) XFree(children);
+            break;
+        }
+        if (children) XFree(children);
+        if (parent == 0 || parent == root) break;
+
+        XClassHint hint;
+        if (XGetClassHint(dpy, parent, &hint)) {
+            int terminal = is_terminal(hint.res_class) || is_terminal(hint.res_name);
+            XFree(hint.res_name);
+            XFree(hint.res_class);
+            return terminal;
+        }
+
+        current = parent;
+    }
+
+    return 0;
+}
+
+#ifdef HAVE_ATSPI
+static int detect_terminal_atspi(void) {
+    atspi_init();
+    AtspiAccessible *desktop = atspi_get_desktop(0);
+    if (!desktop) return -1;
+
+    int n = atspi_accessible_get_child_count(desktop, NULL);
+    for (int i = 0; i < n; i++) {
+        AtspiAccessible *app = atspi_accessible_get_child_at_index(desktop, i, NULL);
+        if (!app) continue;
+        int nw = atspi_accessible_get_child_count(app, NULL);
+        for (int j = 0; j < nw; j++) {
+            AtspiAccessible *win = atspi_accessible_get_child_at_index(app, j, NULL);
+            if (!win) continue;
+            AtspiStateSet *states = atspi_accessible_get_state_set(win);
+            gboolean active = atspi_state_set_contains(states, ATSPI_STATE_ACTIVE);
+            g_object_unref(states);
+            if (active) {
+                char *name = atspi_accessible_get_name(app, NULL);
+                int result = name ? is_terminal(name) : 0;
+                g_free(name);
+                g_object_unref(win);
+                g_object_unref(app);
+                return result;
+            }
+            g_object_unref(win);
+        }
+        g_object_unref(app);
+    }
+    return -1;
+}
+#endif
+
 static Window get_active_window(Display *dpy) {
     Atom prop = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", True);
     if (prop != None) {
@@ -566,7 +633,28 @@ int main(int argc, char *argv[]) {
 
     if (use_portal) {
 #ifdef HAVE_GIO
-        return paste_via_portal(force_terminal, restore_token);
+        int shift = force_terminal;
+#ifdef HAVE_ATSPI
+        if (!shift) { int r = detect_terminal_atspi(); if (r >= 0) shift = r; }
+#endif
+        if (!shift) {
+            Display *dpy = XOpenDisplay(NULL);
+            if (dpy) {
+                Window win = (target_window != None) ? target_window : get_active_window(dpy);
+                if (win != None) {
+                    XClassHint hint;
+                    if (XGetClassHint(dpy, win, &hint)) {
+                        shift = is_terminal(hint.res_class) || is_terminal(hint.res_name);
+                        XFree(hint.res_name);
+                        XFree(hint.res_class);
+                    } else {
+                        shift = check_parent_terminal(dpy, win);
+                    }
+                }
+                XCloseDisplay(dpy);
+            }
+        }
+        return paste_via_portal(shift, restore_token);
 #else
         fprintf(stderr, "portal support not compiled in\n");
         return 5;
@@ -575,7 +663,28 @@ int main(int argc, char *argv[]) {
 
     if (use_uinput) {
 #ifdef HAVE_UINPUT
-        return paste_via_uinput(force_terminal);
+        int shift = force_terminal;
+#ifdef HAVE_ATSPI
+        if (!shift) { int r = detect_terminal_atspi(); if (r >= 0) shift = r; }
+#endif
+        if (!shift) {
+            Display *dpy = XOpenDisplay(NULL);
+            if (dpy) {
+                Window win = (target_window != None) ? target_window : get_active_window(dpy);
+                if (win != None) {
+                    XClassHint hint;
+                    if (XGetClassHint(dpy, win, &hint)) {
+                        shift = is_terminal(hint.res_class) || is_terminal(hint.res_name);
+                        XFree(hint.res_name);
+                        XFree(hint.res_class);
+                    } else {
+                        shift = check_parent_terminal(dpy, win);
+                    }
+                }
+                XCloseDisplay(dpy);
+            }
+        }
+        return paste_via_uinput(shift);
 #else
         fprintf(stderr, "uinput support not compiled in\n");
         return 3;
@@ -598,12 +707,17 @@ int main(int argc, char *argv[]) {
     Window win = (target_window != None) ? target_window : get_active_window(dpy);
 
     int use_shift = force_terminal;
+#ifdef HAVE_ATSPI
+    if (!use_shift) { int r = detect_terminal_atspi(); if (r >= 0) use_shift = r; }
+#endif
     if (!use_shift && win != None) {
         XClassHint hint;
         if (XGetClassHint(dpy, win, &hint)) {
             use_shift = is_terminal(hint.res_class) || is_terminal(hint.res_name);
             XFree(hint.res_name);
             XFree(hint.res_class);
+        } else {
+            use_shift = check_parent_terminal(dpy, win);
         }
     }
 

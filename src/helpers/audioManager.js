@@ -4,7 +4,7 @@ import logger from "../utils/logger";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import { isSecureEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
-import { getBaseLanguageCode, validateLanguageForModel } from "../utils/languageSupport";
+import { getBaseLanguageCode } from "../utils/languageSupport";
 import {
   createLocalSpeechGateState,
   getLocalSpeechGateDecision,
@@ -38,7 +38,10 @@ function resolveReasoningRoute(text, settings, agentName) {
         provider,
         lanUrl: isSelfHostedAgent ? settings.dictationAgentRemoteUrl : undefined,
         baseUrl: isCustomAgent ? settings.dictationAgentCloudBaseUrl || undefined : undefined,
-        customApiKey: isCustomAgent ? settings.dictationAgentCustomApiKey || undefined : undefined,
+        customApiKey:
+          isCustomAgent || isSelfHostedAgent
+            ? settings.dictationAgentCustomApiKey || undefined
+            : undefined,
         systemPrompt: resolvePrompt("dictationAgent", {
           agentName,
           language: settings.preferredLanguage,
@@ -439,7 +442,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
           const provider = localTranscriptionProvider === "nvidia" ? "nvidia" : "whisper";
           const model = provider === "nvidia" ? parakeetModel : whisperModel;
-          window.electronAPI?.startDictationPreview?.({ provider, model });
+          const language = getBaseLanguageCode(getSettings().preferredLanguage);
+          window.electronAPI?.startDictationPreview?.({ provider, model, language });
         } catch (e) {
           logger.warn("Preview worklet setup failed", { error: e.message }, "audio");
         }
@@ -743,11 +747,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     try {
       const arrayBuffer = await audioBlob.arrayBuffer();
-      const language = validateLanguageForModel(getSettings().preferredLanguage, model);
-      const options = { model };
-      if (language) {
-        options.language = language;
-      }
 
       logger.debug(
         "Parakeet transcription starting",
@@ -760,7 +759,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
 
       const transcriptionStart = performance.now();
-      const result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, options);
+      const result = await window.electronAPI.transcribeLocalParakeet(arrayBuffer, { model });
       timings.transcriptionProcessingDurationMs = Math.round(
         performance.now() - transcriptionStart
       );
@@ -1452,10 +1451,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("language", language);
       }
 
-      // Add custom dictionary as prompt hint for cloud transcription
-      // Groq Whisper API limits prompt to 896 chars; OpenAI ~900 chars.
-      // Truncate at last comma boundary so we never send a partial word.
-      const MAX_PROMPT_CHARS = provider === "groq" ? 896 : 900;
+      const endpoint = this.getTranscriptionEndpoint();
+
+      // Groq rejects prompts > 896 chars (incl. when reached via "custom" provider).
+      // 890 leaves margin for UTF-16 vs codepoint counting drift.
+      const isGroqEndpoint = provider === "groq" || endpoint.includes("api.groq.com");
+      const MAX_PROMPT_CHARS = isGroqEndpoint ? 890 : 900;
       let dictionaryPrompt = this.getCustomDictionaryPrompt();
       if (dictionaryPrompt) {
         if (dictionaryPrompt.length > MAX_PROMPT_CHARS) {
@@ -1481,7 +1482,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("stream", "true");
       }
 
-      const endpoint = this.getTranscriptionEndpoint();
       const isCustomEndpoint =
         provider === "custom" ||
         (!endpoint.includes("api.openai.com") &&
@@ -1772,15 +1772,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const s = getSettings();
     const currentProvider = s.cloudTranscriptionProvider || "openai";
     const currentBaseUrl = s.cloudTranscriptionBaseUrl || "";
+    const transcriptionMode = s.transcriptionMode || "";
+    const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
 
-    // Only use custom URL when provider is explicitly "custom"
-    const isCustomEndpoint = currentProvider === "custom";
+    const isSelfHosted = transcriptionMode === "self-hosted" && remoteUrl.length > 0;
+    const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
 
-    // Invalidate cache if provider or base URL changed
     if (
       this.cachedTranscriptionEndpoint &&
       (this.cachedEndpointProvider !== currentProvider ||
-        this.cachedEndpointBaseUrl !== currentBaseUrl)
+        this.cachedEndpointBaseUrl !== currentBaseUrl ||
+        this.cachedEndpointMode !== transcriptionMode ||
+        this.cachedEndpointRemoteUrl !== remoteUrl)
     ) {
       logger.debug(
         "STT endpoint cache invalidated",
@@ -1789,6 +1792,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           newProvider: currentProvider,
           previousBaseUrl: this.cachedEndpointBaseUrl,
           newBaseUrl: currentBaseUrl,
+          previousMode: this.cachedEndpointMode,
+          newMode: transcriptionMode,
+          previousRemoteUrl: this.cachedEndpointRemoteUrl,
+          newRemoteUrl: remoteUrl,
         },
         "transcription"
       );
@@ -1800,9 +1807,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     try {
-      // Use custom URL only when provider is "custom", otherwise use provider-specific defaults
       let base;
-      if (isCustomEndpoint) {
+      if (isSelfHosted) {
+        base = remoteUrl;
+      } else if (currentProvider === "custom") {
         base = currentBaseUrl.trim() || API_ENDPOINTS.TRANSCRIPTION_BASE;
       } else if (currentProvider === "groq") {
         base = API_ENDPOINTS.GROQ_BASE;
@@ -1819,8 +1827,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "STT endpoint resolution",
         {
           provider: currentProvider,
+          mode: transcriptionMode,
+          isSelfHosted,
           isCustomEndpoint,
           rawBaseUrl: currentBaseUrl,
+          remoteUrl,
           normalizedBase,
           defaultBase: API_ENDPOINTS.TRANSCRIPTION_BASE,
         },
@@ -1831,6 +1842,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.cachedTranscriptionEndpoint = endpoint;
         this.cachedEndpointProvider = currentProvider;
         this.cachedEndpointBaseUrl = currentBaseUrl;
+        this.cachedEndpointMode = transcriptionMode;
+        this.cachedEndpointRemoteUrl = remoteUrl;
 
         logger.debug(
           "STT endpoint resolved",
@@ -1888,6 +1901,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.cachedTranscriptionEndpoint = API_ENDPOINTS.TRANSCRIPTION;
       this.cachedEndpointProvider = currentProvider;
       this.cachedEndpointBaseUrl = currentBaseUrl;
+      this.cachedEndpointMode = transcriptionMode;
+      this.cachedEndpointRemoteUrl = remoteUrl;
       return API_ENDPOINTS.TRANSCRIPTION;
     }
   }
