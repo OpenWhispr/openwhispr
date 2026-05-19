@@ -64,8 +64,6 @@ class OpenAIRealtimeStreaming {
         reject(new Error("OpenAI Realtime connection timeout"));
       }, WEBSOCKET_TIMEOUT_MS);
 
-      // Realtime moved from Beta to GA; the OpenAI-Beta header is now rejected
-      // with "The Realtime Beta API is no longer supported." (#782).
       this.ws = new WebSocket(url, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
