@@ -813,15 +813,18 @@ export default function SettingsPage({
 
   // Lazy keep-alive: mount AI sections only after the user has visited them once,
   // then keep them mounted so model-download progress and IPC listeners survive
-  // top-level tab switches without paying the mount cost for users who never visit.
+  // section switches. The setState-during-render pattern flips the flag in the
+  // same commit as the section change, so there's no blank frame on first visit.
   const [hasMountedSpeechToText, setHasMountedSpeechToText] = useState(
     activeSection === "speechToText"
   );
   const [hasMountedLlms, setHasMountedLlms] = useState(activeSection === "llms");
-  useEffect(() => {
-    if (activeSection === "speechToText") setHasMountedSpeechToText(true);
-    else if (activeSection === "llms") setHasMountedLlms(true);
-  }, [activeSection]);
+  if (activeSection === "speechToText" && !hasMountedSpeechToText) {
+    setHasMountedSpeechToText(true);
+  }
+  if (activeSection === "llms" && !hasMountedLlms) {
+    setHasMountedLlms(true);
+  }
 
   const handleClearAllAudio = async () => {
     if (!window.electronAPI?.deleteAllAudio) return;
