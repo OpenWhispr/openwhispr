@@ -7193,9 +7193,10 @@ class IPCHandlers {
     });
 
     const NOTIFICATION_PREF_KEYS = new Set([
-      "notificationsEnabled", "notifyMeetingDetection", "notifyCalendarReminders",
-      "notifyUpdates", "notifyTranscriptionStatus", "notifyModelDownloads",
-      "notifyClipboardOperations",
+      "notificationsEnabled",
+      "notifyMeetingDetection",
+      "notifyCalendarReminders",
+      "notifyUpdates",
     ]);
 
     ipcMain.handle("sync-notification-preferences", async (_event, prefs) => {

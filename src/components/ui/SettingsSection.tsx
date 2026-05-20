@@ -57,7 +57,7 @@ export const SettingsGroup: React.FC<SettingsGroupProps> = ({
 };
 
 interface SettingsRowProps {
-  label: React.ReactNode;
+  label: string;
   description?: string;
   children: React.ReactNode;
   className?: string;

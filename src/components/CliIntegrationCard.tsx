@@ -30,7 +30,6 @@ export default function CliIntegrationCard({ isPaid, onUpgrade }: CliIntegration
       toast({
         title: t("integrations.cli.docsLinkCopied"),
         variant: "success",
-        category: "clipboard",
         duration: 2000,
       });
       setTimeout(() => setDocsLinkCopied(false), 2000);

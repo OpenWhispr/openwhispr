@@ -178,7 +178,6 @@ export function useModelDownload({
         toast({
           title: t("hooks.modelDownload.downloadInProgress.title"),
           description: t("hooks.modelDownload.downloadInProgress.description"),
-          category: "downloads",
         });
         return;
       }
@@ -288,7 +287,6 @@ export function useModelDownload({
               description: t("hooks.modelDownload.modelDeleted.descriptionWithSpace", {
                 sizeMb: result.freed_mb,
               }),
-              category: "downloads",
             });
           }
         } else if (modelType === "parakeet") {
@@ -299,7 +297,6 @@ export function useModelDownload({
               description: t("hooks.modelDownload.modelDeleted.descriptionWithSpace", {
                 sizeMb: result.freed_mb,
               }),
-              category: "downloads",
             });
           }
         } else {
@@ -307,7 +304,6 @@ export function useModelDownload({
           toast({
             title: t("hooks.modelDownload.modelDeleted.title"),
             description: t("hooks.modelDownload.modelDeleted.description"),
-            category: "downloads",
           });
         }
         onComplete?.();

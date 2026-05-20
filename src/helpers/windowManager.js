@@ -33,9 +33,6 @@ class WindowManager {
       notifyMeetingDetection: true,
       notifyCalendarReminders: true,
       notifyUpdates: true,
-      notifyTranscriptionStatus: true,
-      notifyModelDownloads: true,
-      notifyClipboardOperations: true,
     };
     this.tray = null;
     this.hotkeyManager = new HotkeyManager();

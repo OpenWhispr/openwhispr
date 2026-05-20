@@ -137,9 +137,6 @@ const BOOLEAN_SETTINGS = new Set([
   "notifyMeetingDetection",
   "notifyCalendarReminders",
   "notifyUpdates",
-  "notifyTranscriptionStatus",
-  "notifyModelDownloads",
-  "notifyClipboardOperations",
 ]);
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
@@ -362,9 +359,6 @@ export interface SettingsState
   notifyMeetingDetection: boolean;
   notifyCalendarReminders: boolean;
   notifyUpdates: boolean;
-  notifyTranscriptionStatus: boolean;
-  notifyModelDownloads: boolean;
-  notifyClipboardOperations: boolean;
   meetingProcessDetection: boolean;
   meetingAudioDetection: boolean;
   speakerDiarizationEnabled: boolean;
@@ -548,9 +542,6 @@ export interface SettingsState
   setNotifyMeetingDetection: (value: boolean) => void;
   setNotifyCalendarReminders: (value: boolean) => void;
   setNotifyUpdates: (value: boolean) => void;
-  setNotifyTranscriptionStatus: (value: boolean) => void;
-  setNotifyModelDownloads: (value: boolean) => void;
-  setNotifyClipboardOperations: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setMeetingAudioDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
@@ -779,9 +770,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
   notifyUpdates: readBoolean("notifyUpdates", true),
-  notifyTranscriptionStatus: readBoolean("notifyTranscriptionStatus", true),
-  notifyModelDownloads: readBoolean("notifyModelDownloads", true),
-  notifyClipboardOperations: readBoolean("notifyClipboardOperations", true),
   ...(() => {
     let accounts: GoogleCalendarAccount[] = [];
     try {
@@ -1249,9 +1237,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNotifyMeetingDetection: createBooleanSetter("notifyMeetingDetection"),
   setNotifyCalendarReminders: createBooleanSetter("notifyCalendarReminders"),
   setNotifyUpdates: createBooleanSetter("notifyUpdates"),
-  setNotifyTranscriptionStatus: createBooleanSetter("notifyTranscriptionStatus"),
-  setNotifyModelDownloads: createBooleanSetter("notifyModelDownloads"),
-  setNotifyClipboardOperations: createBooleanSetter("notifyClipboardOperations"),
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
   setMeetingAudioDetection: createBooleanSetter("meetingAudioDetection"),
   setSpeakerDiarizationEnabled: (value: boolean) => {
@@ -1821,9 +1806,6 @@ export async function initializeSettings(): Promise<void> {
         notifyMeetingDetection: currentState.notifyMeetingDetection,
         notifyCalendarReminders: currentState.notifyCalendarReminders,
         notifyUpdates: currentState.notifyUpdates,
-        notifyTranscriptionStatus: currentState.notifyTranscriptionStatus,
-        notifyModelDownloads: currentState.notifyModelDownloads,
-        notifyClipboardOperations: currentState.notifyClipboardOperations,
       });
     } catch (err) {
       logger.warn(
