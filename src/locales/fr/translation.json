@@ -1361,6 +1361,18 @@
         "pauseMediaDescription": "Mettre automatiquement la musique en pause au début de la dictée",
         "title": "Effets sonores"
       },
+      "notifications": {
+        "title": "Notifications",
+        "description": "Choisissez les notifications qu'OpenWhispr peut afficher",
+        "disableAll": "Désactiver toutes les notifications",
+        "disableAllDescription": "Tout couper sauf les messages d'erreur",
+        "meetingDetection": "Détection de réunion",
+        "meetingDetectionDescription": "Prévenir quand une réunion est détectée pour lancer l'enregistrement",
+        "calendarReminders": "Rappels de calendrier",
+        "calendarRemindersDescription": "Prévenir quand une réunion planifiée va commencer",
+        "updates": "Mises à jour",
+        "updatesDescription": "Prévenir quand une nouvelle version est disponible"
+      },
       "clipboard": {
         "title": "Presse-papiers",
         "autoPaste": "Collage automatique",
@@ -2337,6 +2349,7 @@
     "settings": {
       "hotkey": "Raccourci Agent",
       "hotkeyDescription": "Raccourci clavier pour basculer la fenêtre agent",
+      "clearHotkey": "Supprimer le raccourci",
       "model": "Modèle Agent",
       "modelDescription": "Modèle IA utilisé pour les conversations agent",
       "systemPrompt": "Prompt système",
@@ -2417,6 +2430,8 @@
       "connecting": "Connexion...",
       "connected": "Connecté",
       "addAnother": "Ajouter un autre calendrier",
+      "primaryOnly": "Synchroniser uniquement le calendrier principal",
+      "primaryOnlyDescription": "Ignorer les événements des calendriers partagés avec vous.",
       "disconnect": "Déconnecter",
       "disconnectConfirm": "Déconnecter {{email}} ?",
       "disconnectDescription": "Les notes de réunion ne seront plus enregistrées depuis ce calendrier.",

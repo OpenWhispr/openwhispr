@@ -4,6 +4,7 @@ export interface GoogleCalendar {
   description: string | null;
   background_color: string | null;
   is_selected: number;
+  is_primary: number;
   sync_token: string | null;
 }
 

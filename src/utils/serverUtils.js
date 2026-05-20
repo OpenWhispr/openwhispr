@@ -5,16 +5,21 @@ const { killProcessGroup } = require("./process");
 
 const GRACEFUL_STOP_TIMEOUT_MS = 5000;
 
-function isPortAvailable(port) {
+function tryBind(port, host) {
   return new Promise((resolve) => {
-    const server = net.createServer();
-    server.once("error", () => resolve(false));
-    server.once("listening", () => {
-      server.close();
-      resolve(true);
-    });
-    server.listen(port, "127.0.0.1");
+    const s = net.createServer();
+    s.once("error", () => resolve(false));
+    s.once("listening", () => s.close(() => resolve(true)));
+    s.listen(port, host);
   });
+}
+
+async function isPortAvailable(port) {
+  return (
+    (await tryBind(port, "0.0.0.0")) &&
+    (await tryBind(port, "::")) &&
+    (await tryBind(port, "127.0.0.1"))
+  );
 }
 
 async function findAvailablePort(rangeStart, rangeEnd) {

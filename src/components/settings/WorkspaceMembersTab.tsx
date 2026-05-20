@@ -119,10 +119,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
 
       <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
         {members.map((member) => (
-          <div
-            key={member.user_id}
-            className="flex items-center gap-3 px-4 h-14"
-          >
+          <div key={member.user_id} className="flex items-center gap-3 px-4 h-14">
             {member.image ? (
               <img
                 src={member.image}

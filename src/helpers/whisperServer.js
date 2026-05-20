@@ -1,12 +1,12 @@
 const { spawn } = require("child_process");
 const EventEmitter = require("events");
 const fs = require("fs");
-const net = require("net");
 const path = require("path");
 const http = require("http");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { killProcess } = require("../utils/process");
+const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { convertToWav } = require("./ffmpegUtils");
 const sidecarPidFile = require("./sidecarPidFile");
@@ -273,21 +273,9 @@ class WhisperServerManager extends EventEmitter {
 
   async findAvailablePort() {
     for (let port = PORT_RANGE_START; port <= PORT_RANGE_END; port++) {
-      if (await this.isPortAvailable(port)) return port;
+      if (await isPortAvailable(port)) return port;
     }
     throw new Error(`No available ports in range ${PORT_RANGE_START}-${PORT_RANGE_END}`);
-  }
-
-  isPortAvailable(port) {
-    return new Promise((resolve) => {
-      const server = net.createServer();
-      server.once("error", () => resolve(false));
-      server.once("listening", () => {
-        server.close();
-        resolve(true);
-      });
-      server.listen(port, "127.0.0.1");
-    });
   }
 
   async start(modelPath, options = {}) {

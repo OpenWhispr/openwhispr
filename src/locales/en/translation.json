@@ -1494,6 +1494,18 @@
         "pauseMediaDescription": "Automatically pause music when dictation starts",
         "title": "Sound Effects"
       },
+      "notifications": {
+        "title": "Notifications",
+        "description": "Control which notifications OpenWhispr can show",
+        "disableAll": "Disable all notifications",
+        "disableAllDescription": "Silence everything except error messages",
+        "meetingDetection": "Meeting detection",
+        "meetingDetectionDescription": "Notify when a meeting is detected so you can start recording",
+        "calendarReminders": "Calendar reminders",
+        "calendarRemindersDescription": "Notify when a scheduled meeting is about to start",
+        "updates": "App updates",
+        "updatesDescription": "Notify when a new version is available"
+      },
       "clipboard": {
         "title": "Clipboard",
         "autoPaste": "Automatic pasting",
@@ -2433,6 +2445,7 @@
     "settings": {
       "hotkey": "Agent Hotkey",
       "hotkeyDescription": "Hotkey to toggle the agent overlay",
+      "clearHotkey": "Remove hotkey",
       "model": "Agent Model",
       "modelDescription": "AI model used for agent conversations",
       "systemPrompt": "System Prompt",
@@ -2513,6 +2526,8 @@
       "connecting": "Connecting...",
       "connected": "Connected",
       "addAnother": "Add another calendar",
+      "primaryOnly": "Sync primary calendar only",
+      "primaryOnlyDescription": "Ignore events from calendars shared with you.",
       "disconnect": "Disconnect",
       "disconnectConfirm": "Disconnect {{email}}?",
       "disconnectDescription": "Meeting notes will no longer be recorded from this calendar.",

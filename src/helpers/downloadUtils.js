@@ -234,6 +234,22 @@ function downloadAttempt(url, tempPath, options) {
   });
 }
 
+async function fetchJson(url, options = {}) {
+  const headers = { "User-Agent": USER_AGENT, ...(options.headers || {}) };
+  const response = await net.fetch(url, {
+    method: "GET",
+    headers,
+    useSessionCookies: false,
+  });
+  if (!response.ok) {
+    const err = new Error(`HTTP ${response.status} fetching ${url}`);
+    err.isHttpError = true;
+    err.statusCode = response.status;
+    throw err;
+  }
+  return response.json();
+}
+
 async function downloadFile(url, destPath, options = {}) {
   const { onProgress, maxRetries = DEFAULT_MAX_RETRIES, signal, expectedSize = 0 } = options;
 
@@ -472,6 +488,7 @@ async function findFiles(dir, pattern, maxDepth = 5, depth = 0) {
 
 module.exports = {
   downloadFile,
+  fetchJson,
   createDownloadSignal,
   validateFileSize,
   cleanupStaleDownloads,

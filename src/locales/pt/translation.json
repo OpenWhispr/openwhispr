@@ -1285,6 +1285,18 @@
         "pauseMediaDescription": "Pausar a música automaticamente ao iniciar o ditado",
         "title": "Efeitos sonoros"
       },
+      "notifications": {
+        "title": "Notificações",
+        "description": "Controle quais notificações o OpenWhispr pode mostrar",
+        "disableAll": "Desativar todas as notificações",
+        "disableAllDescription": "Silenciar tudo exceto mensagens de erro",
+        "meetingDetection": "Detecção de reuniões",
+        "meetingDetectionDescription": "Notificar quando uma reunião for detectada para iniciar a gravação",
+        "calendarReminders": "Lembretes do calendário",
+        "calendarRemindersDescription": "Notificar quando uma reunião agendada está prestes a começar",
+        "updates": "Atualizações do app",
+        "updatesDescription": "Notificar quando uma nova versão estiver disponível"
+      },
       "clipboard": {
         "title": "Área de transferência",
         "autoPaste": "Colagem automática",
@@ -2289,6 +2301,7 @@
     "settings": {
       "hotkey": "Tecla do Agente",
       "hotkeyDescription": "Tecla de atalho para alternar a sobreposição do agente",
+      "clearHotkey": "Remover atalho",
       "model": "Modelo do Agente",
       "modelDescription": "Modelo de IA usado para conversas do agente",
       "systemPrompt": "Prompt do Sistema",
@@ -2369,6 +2382,8 @@
       "connecting": "Conectando...",
       "connected": "Conectado",
       "addAnother": "Adicionar outro calendário",
+      "primaryOnly": "Sincronizar apenas o calendário principal",
+      "primaryOnlyDescription": "Ignorar eventos de calendários compartilhados com você.",
       "disconnect": "Desconectar",
       "disconnectConfirm": "Desconectar {{email}}?",
       "disconnectDescription": "As notas de reunião não serão mais gravadas deste calendário.",

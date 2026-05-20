@@ -510,7 +510,9 @@ class SyncService {
   }
 
   private async pushPendingTranscriptions(): Promise<void> {
-    const pending = (await window.electronAPI.getPendingTranscriptions?.()) ?? [];
+    const pending = ((await window.electronAPI.getPendingTranscriptions?.()) ?? []).filter(
+      (t) => !!t.text?.trim()
+    );
     if (pending.length === 0) return;
 
     for (let i = 0; i < pending.length; i += TRANSCRIPTION_BATCH_SIZE) {
@@ -561,6 +563,8 @@ class SyncService {
             if (local) await window.electronAPI.hardDeleteTranscription?.(local.id);
             continue;
           }
+
+          if (!cloudT.text) continue;
 
           if (!local) {
             await window.electronAPI.upsertTranscriptionFromCloud?.(

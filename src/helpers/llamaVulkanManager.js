@@ -5,6 +5,7 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const {
   downloadFile,
+  fetchJson,
   createDownloadSignal,
   checkDiskSpace,
   cleanupStaleDownloads,
@@ -12,6 +13,13 @@ const {
   findFile,
   findFiles,
 } = require("./downloadUtils");
+
+function githubReleaseHeaders() {
+  const headers = { Accept: "application/vnd.github+json" };
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
 
 const GITHUB_RELEASE_URL = "https://api.github.com/repos/ggerganov/llama.cpp/releases/latest";
 
@@ -86,7 +94,7 @@ class LlamaVulkanManager {
       await fsPromises.mkdir(this.binDir, { recursive: true });
       await cleanupStaleDownloads(this.binDir);
 
-      const release = await this._fetchJson(GITHUB_RELEASE_URL);
+      const release = await fetchJson(GITHUB_RELEASE_URL, { headers: githubReleaseHeaders() });
       if (!release?.assets) throw new Error("Could not fetch llama.cpp release info");
 
       const config = this._getConfig();
@@ -170,42 +178,6 @@ class LlamaVulkanManager {
 
     debugLogger.info("Vulkan llama-server deleted", { deletedCount });
     return { success: true, deletedCount };
-  }
-
-  _fetchJson(url) {
-    const https = require("https");
-    return new Promise((resolve, reject) => {
-      const headers = {
-        "User-Agent": "OpenWhispr/1.0",
-        Accept: "application/vnd.github+json",
-      };
-      const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
-      if (token) headers.Authorization = `Bearer ${token}`;
-
-      https
-        .get(url, { headers, timeout: 15000 }, (res) => {
-          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-            res.resume();
-            this._fetchJson(res.headers.location).then(resolve, reject);
-            return;
-          }
-          if (res.statusCode !== 200) {
-            res.resume();
-            reject(new Error(`GitHub API returned ${res.statusCode}`));
-            return;
-          }
-          let data = "";
-          res.on("data", (chunk) => (data += chunk));
-          res.on("end", () => {
-            try {
-              resolve(JSON.parse(data));
-            } catch {
-              reject(new Error("Failed to parse GitHub release JSON"));
-            }
-          });
-        })
-        .on("error", reject);
-    });
   }
 }
 

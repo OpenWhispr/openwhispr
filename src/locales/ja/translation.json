@@ -1313,6 +1313,18 @@
         "pauseMediaDescription": "ディクテーション開始時に音楽を自動的に一時停止",
         "title": "サウンドエフェクト"
       },
+      "notifications": {
+        "title": "通知",
+        "description": "OpenWhispr が表示できる通知を設定します",
+        "disableAll": "すべての通知を無効にする",
+        "disableAllDescription": "エラーメッセージ以外をすべて消音にする",
+        "meetingDetection": "会議の検出",
+        "meetingDetectionDescription": "会議が検出されたときに通知して録音を開始できるようにする",
+        "calendarReminders": "カレンダーリマインダー",
+        "calendarRemindersDescription": "予定された会議がまもなく始まるときに通知する",
+        "updates": "アプリの更新",
+        "updatesDescription": "新しいバージョンが利用可能になったときに通知する"
+      },
       "clipboard": {
         "title": "クリップボード",
         "autoPaste": "自動貼り付け",
@@ -2289,6 +2301,7 @@
     "settings": {
       "hotkey": "エージェントホットキー",
       "hotkeyDescription": "エージェントオーバーレイを切り替えるホットキー",
+      "clearHotkey": "ホットキーを削除",
       "model": "エージェントモデル",
       "modelDescription": "エージェント会話に使用するAIモデル",
       "systemPrompt": "システムプロンプト",
@@ -2369,6 +2382,8 @@
       "connecting": "接続中...",
       "connected": "接続済み",
       "addAnother": "別のカレンダーを追加",
+      "primaryOnly": "メインカレンダーのみ同期",
+      "primaryOnlyDescription": "共有されたカレンダーの予定は無視します。",
       "disconnect": "切断",
       "disconnectConfirm": "{{email}} を切断しますか？",
       "disconnectDescription": "このカレンダーからの会議メモは記録されなくなります。",

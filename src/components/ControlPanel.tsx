@@ -46,6 +46,7 @@ import AcceptInvitationModal, {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "./AcceptInvitationModal";
+import { WORKSPACES_ENABLED } from "../lib/features";
 
 const platform = getCachedPlatform();
 
@@ -244,6 +245,7 @@ export default function ControlPanel() {
   }, [usage?.isPastDue, usage?.hasLoaded, toast, t]);
 
   useEffect(() => {
+    if (!WORKSPACES_ENABLED) return;
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
       setInvitationToken(token);
     });
@@ -251,7 +253,7 @@ export default function ControlPanel() {
   }, []);
 
   useEffect(() => {
-    if (!authLoaded || !isSignedIn) return;
+    if (!WORKSPACES_ENABLED || !authLoaded || !isSignedIn) return;
     const pending = consumePendingInvitationToken();
     if (pending) {
       setInvitationToken(pending);
@@ -297,7 +299,9 @@ export default function ControlPanel() {
   }, [useLocalWhisper, localTranscriptionProvider, useCleanupModel, gpuBannerDismissed]);
 
   useEffect(() => {
-    const cleanup = window.electronAPI?.onNavigateToMeetingNote?.((data) => {
+    const drain = async () => {
+      const data = await window.electronAPI?.getPendingMeetingNoteNavigation?.();
+      if (!data) return;
       setActiveFolderId(data.folderId);
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
@@ -313,7 +317,9 @@ export default function ControlPanel() {
       ) {
         window.electronAPI?.snapToMeetingMode?.();
       }
-    });
+    };
+    drain();
+    const cleanup = window.electronAPI?.onMeetingNoteNavigationPending?.(drain);
     return () => cleanup?.();
   }, []);
 
@@ -674,14 +680,16 @@ export default function ControlPanel() {
         </Suspense>
       )}
 
-      <AcceptInvitationModal
-        token={invitationToken}
-        onClose={() => setInvitationToken(null)}
-        isSignedIn={isSignedIn}
-        onSignIn={() => {
-          setInvitationToken(null);
-        }}
-      />
+      {WORKSPACES_ENABLED && (
+        <AcceptInvitationModal
+          token={invitationToken}
+          onClose={() => setInvitationToken(null)}
+          isSignedIn={isSignedIn}
+          onSignIn={() => {
+            setInvitationToken(null);
+          }}
+        />
+      )}
 
       {showSearch && (
         <Suspense fallback={null}>

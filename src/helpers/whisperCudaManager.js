@@ -1,11 +1,11 @@
 const fs = require("fs");
 const { promises: fsPromises } = require("fs");
 const path = require("path");
-const https = require("https");
 const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const {
   downloadFile,
+  fetchJson,
   createDownloadSignal,
   checkDiskSpace,
   cleanupStaleDownloads,
@@ -72,7 +72,9 @@ class WhisperCudaManager {
       throw new Error(`CUDA binaries not available for ${process.platform}`);
     }
 
-    const release = await this._fetchJson(GITHUB_RELEASE_URL);
+    const release = await fetchJson(GITHUB_RELEASE_URL, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
     const assetName = PLATFORM_ASSET_NAMES[process.platform];
     const asset = release.assets?.find((a) => a.name === assetName);
 
@@ -237,56 +239,6 @@ class WhisperCudaManager {
       freed_bytes: freedBytes,
       freed_mb: Math.round(freedBytes / (1024 * 1024)),
     };
-  }
-
-  _fetchJson(url) {
-    return new Promise((resolve, reject) => {
-      https
-        .get(
-          url,
-          {
-            headers: {
-              "User-Agent": "OpenWhispr/1.0",
-              Accept: "application/vnd.github+json",
-            },
-            timeout: 15000,
-          },
-          (res) => {
-            if (res.statusCode >= 300 && res.statusCode < 400) {
-              const location = res.headers.location;
-              if (!location) {
-                reject(new Error("Redirect without location header"));
-                return;
-              }
-              res.resume();
-              this._fetchJson(location).then(resolve, reject);
-              return;
-            }
-
-            if (res.statusCode !== 200) {
-              res.resume();
-              reject(new Error(`GitHub API returned HTTP ${res.statusCode}`));
-              return;
-            }
-
-            let data = "";
-            res.on("data", (chunk) => (data += chunk));
-            res.on("end", () => {
-              try {
-                resolve(JSON.parse(data));
-              } catch (e) {
-                reject(new Error(`Failed to parse GitHub API response: ${e.message}`));
-              }
-            });
-            res.on("error", reject);
-          }
-        )
-        .on("error", reject)
-        .on("timeout", function () {
-          this.destroy();
-          reject(new Error("GitHub API request timed out"));
-        });
-    });
   }
 }
 

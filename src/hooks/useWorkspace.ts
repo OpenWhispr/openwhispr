@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useWorkspaceStore } from "../stores/workspaceStore";
+import { WORKSPACES_ENABLED } from "../lib/features";
 import type { Workspace, WorkspaceRole } from "../types/electron";
 
 interface UseWorkspaceResult {
@@ -19,7 +20,7 @@ export function useWorkspace(): UseWorkspaceResult {
   const setActive = useWorkspaceStore((s) => s.setActiveWorkspaceId);
 
   useEffect(() => {
-    if (!loaded) {
+    if (WORKSPACES_ENABLED && !loaded) {
       void refresh();
     }
   }, [loaded, refresh]);

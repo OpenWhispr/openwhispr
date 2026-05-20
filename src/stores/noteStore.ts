@@ -231,7 +231,5 @@ export function clearShareCache(cloudId: string): void {
 }
 
 export function useShareCacheEntry(cloudId: string | null): NoteShareCacheEntry | null {
-  return useNoteStore((state) =>
-    cloudId ? state.shareByCloudId.get(cloudId) ?? null : null
-  );
+  return useNoteStore((state) => (cloudId ? (state.shareByCloudId.get(cloudId) ?? null) : null));
 }

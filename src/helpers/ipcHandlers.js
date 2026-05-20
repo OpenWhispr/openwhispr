@@ -2,8 +2,6 @@ const { ipcMain, app, shell, BrowserWindow, systemPreferences, net } = require("
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
-const http = require("http");
-const https = require("https");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const tokenStore = require("./tokenStore");
@@ -74,6 +72,7 @@ const AUDIO_MIME_TYPES = {
   m4a: "audio/mp4",
   webm: "audio/webm",
   ogg: "audio/ogg",
+  oga: "audio/ogg",
   flac: "audio/flac",
   aac: "audio/aac",
 };
@@ -110,37 +109,22 @@ function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   return { body: Buffer.concat(bodyParts), boundary };
 }
 
-function postMultipart(url, body, boundary, headers = {}) {
-  const httpModule = url.protocol === "https:" ? https : http;
-  return new Promise((resolve, reject) => {
-    const req = httpModule.request(
-      {
-        hostname: url.hostname,
-        port: url.port || (url.protocol === "https:" ? 443 : 80),
-        path: url.pathname,
-        method: "POST",
-        headers: {
-          "Content-Type": `multipart/form-data; boundary=${boundary}`,
-          "Content-Length": body.length,
-          ...headers,
-        },
-      },
-      (res) => {
-        let responseData = "";
-        res.on("data", (chunk) => (responseData += chunk));
-        res.on("end", () => {
-          try {
-            resolve({ statusCode: res.statusCode, data: JSON.parse(responseData) });
-          } catch (e) {
-            reject(new Error(`Invalid JSON response: ${responseData.slice(0, 200)}`));
-          }
-        });
-      }
-    );
-    req.on("error", reject);
-    req.write(body);
-    req.end();
+async function postMultipart(url, body, boundary, headers = {}) {
+  const response = await net.fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      "Content-Type": `multipart/form-data; boundary=${boundary}`,
+      ...headers,
+    },
+    body,
+    useSessionCookies: false,
   });
+  const text = await response.text();
+  try {
+    return { statusCode: response.status, data: JSON.parse(text) };
+  } catch {
+    throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`);
+  }
 }
 
 function interpretTranscribeResponse(data) {
@@ -1418,7 +1402,10 @@ class IPCHandlers {
       const result = await dialog.showOpenDialog({
         properties: ["openFile"],
         filters: [
-          { name: "Audio Files", extensions: ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"] },
+          {
+            name: "Audio Files",
+            extensions: ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac"],
+          },
         ],
       });
       if (result.canceled || !result.filePaths.length) {
@@ -1458,13 +1445,18 @@ class IPCHandlers {
     });
 
     ipcMain.handle("paste-text", async (event, text, options) => {
-      // If the floating dictation panel currently has focus, dismiss it so the
-      // paste keystroke lands in the user's target app instead of the overlay.
       const mainWindow = this.windowManager?.mainWindow;
-      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
+      const targetPid = this.textEditMonitor?.lastTargetPid || null;
+
+      // Activating the target by PID is more reliable than hide()'s implicit
+      // focus hand-off for Chromium apps like Claude desktop and Brave (#668).
+      let activated = false;
+      if (process.platform === "darwin" && this.textEditMonitor) {
+        activated = await this.textEditMonitor.activateTargetPid();
+      }
+
+      if (!activated && mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
         if (process.platform === "darwin") {
-          // hide() forces macOS to activate the previous app; showInactive()
-          // restores the overlay without stealing focus.
           mainWindow.hide();
           await new Promise((resolve) => setTimeout(resolve, 120));
           mainWindow.showInactive();
@@ -1477,7 +1469,6 @@ class IPCHandlers {
         ...options,
         webContents: event.sender,
       });
-      const targetPid = this.textEditMonitor?.lastTargetPid || null;
       debugLogger.debug("[AutoLearn] Paste completed", {
         autoLearnEnabled: this._autoLearnEnabled,
         hasMonitor: !!this.textEditMonitor,
@@ -5211,12 +5202,12 @@ class IPCHandlers {
           }
           await startMeetingAec(systemAudioMode);
           await startLiveSpeakerIdentification(win, systemAudioMode);
-          systemAudioStrategy = await startMeetingSystemAudio(
+          ({ systemAudioMode, systemAudioStrategy } = await startMeetingSystemAudio(
             event,
             systemAudioMode,
             systemAudioStrategy,
             "during warm-start reuse"
-          );
+          ));
           return {
             success: true,
             systemAudioMode,
@@ -5241,12 +5232,12 @@ class IPCHandlers {
             transcribeAllLocalBuffers();
           }, 5000);
 
-          systemAudioStrategy = await startMeetingSystemAudio(
+          ({ systemAudioMode, systemAudioStrategy } = await startMeetingSystemAudio(
             event,
             systemAudioMode,
             systemAudioStrategy,
             "in local meeting mode"
-          );
+          ));
 
           debugLogger.debug("Meeting transcription started in local mode", {
             provider: meetingLocalProvider,
@@ -5270,12 +5261,12 @@ class IPCHandlers {
         const realtimeWin = BrowserWindow.fromWebContents(event.sender);
         await startLiveSpeakerIdentification(realtimeWin, systemAudioMode);
         await startMeetingAec(systemAudioMode);
-        systemAudioStrategy = await startMeetingSystemAudio(
+        ({ systemAudioMode, systemAudioStrategy } = await startMeetingSystemAudio(
           event,
           systemAudioMode,
           systemAudioStrategy,
           "in realtime mode"
-        );
+        ));
         return {
           success: true,
           systemAudioMode,
@@ -5387,24 +5378,44 @@ class IPCHandlers {
       context
     ) => {
       if (systemAudioMode === "native") {
-        await startNativeMeetingSystemAudio(event);
-        return systemAudioStrategy;
+        try {
+          await startNativeMeetingSystemAudio(event);
+          return { systemAudioMode, systemAudioStrategy };
+        } catch (error) {
+          debugLogger.warn(
+            `Native system audio tap failed ${context}, falling back to mic-only`,
+            { error: error.message },
+            "meeting"
+          );
+          if (this._meetingSystemStreaming?.isConnected) {
+            await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
+              debugLogger.debug(
+                "System streaming disconnect during native fallback failed",
+                { error: disconnectError.message },
+                "meeting"
+              );
+            });
+          }
+          this._meetingSystemStreaming = null;
+          await stopLiveSpeakerIdentification().catch(() => {});
+          return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
+        }
       }
 
       if (systemAudioStrategy !== "portal-helper") {
-        return systemAudioStrategy;
+        return { systemAudioMode, systemAudioStrategy };
       }
 
       try {
         await startLinuxMeetingSystemAudio(event);
-        return systemAudioStrategy;
+        return { systemAudioMode, systemAudioStrategy };
       } catch (error) {
         debugLogger.warn(
           `Linux portal helper failed ${context}, falling back to browser portal`,
           { error: error.message },
           "meeting"
         );
-        return "browser-portal";
+        return { systemAudioMode, systemAudioStrategy: "browser-portal" };
       }
     };
 
@@ -7147,6 +7158,15 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("gcal-set-primary-only", async (_event, value) => {
+      try {
+        await this.googleCalendarManager.setPrimaryOnly(value);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("gcal-sync-events", async () => {
       try {
         await this.googleCalendarManager.syncEvents();
@@ -7209,6 +7229,29 @@ class IPCHandlers {
     ipcMain.handle("meeting-detection-set-preferences", async (_event, prefs) => {
       try {
         this.meetingDetectionEngine.setPreferences(prefs);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
+    const NOTIFICATION_PREF_KEYS = new Set([
+      "notificationsEnabled",
+      "notifyMeetingDetection",
+      "notifyCalendarReminders",
+      "notifyUpdates",
+    ]);
+
+    ipcMain.handle("sync-notification-preferences", async (_event, prefs) => {
+      try {
+        if (!prefs || typeof prefs !== "object") {
+          return { success: false, error: "Invalid preferences" };
+        }
+        for (const [k, v] of Object.entries(prefs)) {
+          if (NOTIFICATION_PREF_KEYS.has(k)) {
+            this.windowManager.notificationPrefs[k] = !!v;
+          }
+        }
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -7280,6 +7323,10 @@ class IPCHandlers {
 
     ipcMain.handle("get-meeting-notification-data", async () => {
       return this.windowManager?._pendingNotificationData ?? null;
+    });
+
+    ipcMain.handle("get-pending-meeting-note-navigation", async () => {
+      return this.windowManager?.consumePendingMeetingNoteNavigation() ?? null;
     });
 
     ipcMain.handle("meeting-notification-ready", async () => {

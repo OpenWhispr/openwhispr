@@ -1074,12 +1074,7 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": [
-            "无限会议录制",
-            "代理模式",
-            "与您的数据对话",
-            "优先支持"
-          ],
+          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1312,6 +1307,18 @@
         "pauseMedia": "暂停媒体",
         "pauseMediaDescription": "开始听写时自动暂停音乐",
         "title": "音效"
+      },
+      "notifications": {
+        "title": "通知",
+        "description": "设置 OpenWhispr 可以显示哪些通知",
+        "disableAll": "禁用所有通知",
+        "disableAllDescription": "静音除错误消息外的所有内容",
+        "meetingDetection": "会议检测",
+        "meetingDetectionDescription": "检测到会议时通知您以便开始录音",
+        "calendarReminders": "日历提醒",
+        "calendarRemindersDescription": "预定会议即将开始时通知您",
+        "updates": "应用更新",
+        "updatesDescription": "有新版本可用时通知您"
       },
       "clipboard": {
         "title": "剪贴板",
@@ -2289,6 +2296,7 @@
     "settings": {
       "hotkey": "助手热键",
       "hotkeyDescription": "切换助手覆盖层的热键",
+      "clearHotkey": "移除快捷键",
       "model": "助手模型",
       "modelDescription": "用于助手对话的AI模型",
       "systemPrompt": "系统提示词",
@@ -2369,6 +2377,8 @@
       "connecting": "连接中...",
       "connected": "已连接",
       "addAnother": "添加其他日历",
+      "primaryOnly": "仅同步主日历",
+      "primaryOnlyDescription": "忽略他人共享给你的日历事件。",
       "disconnect": "断开",
       "disconnectConfirm": "断开 {{email}}？",
       "disconnectDescription": "将不再从此日历记录会议笔记。",
