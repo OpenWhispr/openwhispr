@@ -811,6 +811,18 @@ export default function SettingsPage({
       .catch(() => {});
   }, [activeSection]);
 
+  // Lazy keep-alive: mount AI sections only after the user has visited them once,
+  // then keep them mounted so model-download progress and IPC listeners survive
+  // top-level tab switches without paying the mount cost for users who never visit.
+  const [hasMountedSpeechToText, setHasMountedSpeechToText] = useState(
+    activeSection === "speechToText"
+  );
+  const [hasMountedLlms, setHasMountedLlms] = useState(activeSection === "llms");
+  useEffect(() => {
+    if (activeSection === "speechToText") setHasMountedSpeechToText(true);
+    else if (activeSection === "llms") setHasMountedLlms(true);
+  }, [activeSection]);
+
   const handleClearAllAudio = async () => {
     if (!window.electronAPI?.deleteAllAudio) return;
     try {
@@ -3773,81 +3785,91 @@ EOF`,
         onOk={() => {}}
       />
 
-      {/* Kept mounted across section switches so model-download progress and IPC listeners survive. */}
-      <div className={activeSection !== "speechToText" ? "hidden" : undefined}>
-        <SpeechToTextTabs
-          initialTab={activeSection === "speechToText" ? (initialSubTab as SpeechTab | undefined) : undefined}
-          renderDictation={() => (
-            <div className="space-y-6">
-              <TranscriptionSection
-                isSignedIn={isSignedIn ?? false}
-                startOnboarding={startOnboarding}
-                cloudTranscriptionMode={cloudTranscriptionMode}
-                setCloudTranscriptionMode={setCloudTranscriptionMode}
-                useLocalWhisper={useLocalWhisper}
-                setUseLocalWhisper={setUseLocalWhisper}
-                updateTranscriptionSettings={updateTranscriptionSettings}
-                cloudTranscriptionProvider={cloudTranscriptionProvider}
-                setCloudTranscriptionProvider={setCloudTranscriptionProvider}
-                cloudTranscriptionModel={cloudTranscriptionModel}
-                setCloudTranscriptionModel={setCloudTranscriptionModel}
-                localTranscriptionProvider={localTranscriptionProvider}
-                setLocalTranscriptionProvider={setLocalTranscriptionProvider}
-                whisperModel={whisperModel}
-                setWhisperModel={setWhisperModel}
-                parakeetModel={parakeetModel}
-                setParakeetModel={setParakeetModel}
-                cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
-                setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
-                transcriptionMode={transcriptionMode}
-                setTranscriptionMode={setTranscriptionMode}
-                remoteTranscriptionUrl={remoteTranscriptionUrl}
-                setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
-                showTranscriptionPreview={showTranscriptionPreview}
-                setShowTranscriptionPreview={setShowTranscriptionPreview}
-                toast={toast}
-              />
-              {transcriptionMode === "local" &&
-                localTranscriptionProvider !== "nvidia" &&
-                renderWhisperVadSettings()}
-            </div>
-          )}
-          renderNoteRecording={() => (
-            <div className="space-y-6">
-              <MeetingTranscriptionPanel />
-              {transcriptionMode === "local" &&
-                localTranscriptionProvider !== "nvidia" &&
-                renderWhisperVadSettings()}
-            </div>
-          )}
-        />
-      </div>
-      <div className={activeSection !== "llms" ? "hidden" : undefined}>
-        <LlmsTabs
-          initialTab={activeSection === "llms" ? (initialSubTab as LlmTab | undefined) : undefined}
-          renderChatIntelligence={() => <ChatAgentSettings />}
-          renderDictationCleanup={() => (
-            <div className="space-y-6">
-              <AiModelsSection
-                useCleanupModel={useCleanupModel}
-                setUseCleanupModel={(value) => {
-                  updateCleanupSettings({ useCleanupModel: value });
-                }}
-                toast={toast}
-              />
-              <div className="border-t border-border/40 pt-6">
-                <SectionHeader
-                  title={t("settingsPage.prompts.title")}
-                  description={t("settingsPage.prompts.description")}
+      {/* Mounted on first visit and kept alive so model-download progress and IPC listeners survive section switches. */}
+      {hasMountedSpeechToText && (
+        <TabPanel active={activeSection === "speechToText"}>
+          <SpeechToTextTabs
+            initialTab={
+              activeSection === "speechToText"
+                ? (initialSubTab as SpeechTab | undefined)
+                : undefined
+            }
+            renderDictation={() => (
+              <div className="space-y-6">
+                <TranscriptionSection
+                  isSignedIn={isSignedIn ?? false}
+                  startOnboarding={startOnboarding}
+                  cloudTranscriptionMode={cloudTranscriptionMode}
+                  setCloudTranscriptionMode={setCloudTranscriptionMode}
+                  useLocalWhisper={useLocalWhisper}
+                  setUseLocalWhisper={setUseLocalWhisper}
+                  updateTranscriptionSettings={updateTranscriptionSettings}
+                  cloudTranscriptionProvider={cloudTranscriptionProvider}
+                  setCloudTranscriptionProvider={setCloudTranscriptionProvider}
+                  cloudTranscriptionModel={cloudTranscriptionModel}
+                  setCloudTranscriptionModel={setCloudTranscriptionModel}
+                  localTranscriptionProvider={localTranscriptionProvider}
+                  setLocalTranscriptionProvider={setLocalTranscriptionProvider}
+                  whisperModel={whisperModel}
+                  setWhisperModel={setWhisperModel}
+                  parakeetModel={parakeetModel}
+                  setParakeetModel={setParakeetModel}
+                  cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
+                  setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+                  transcriptionMode={transcriptionMode}
+                  setTranscriptionMode={setTranscriptionMode}
+                  remoteTranscriptionUrl={remoteTranscriptionUrl}
+                  setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                  showTranscriptionPreview={showTranscriptionPreview}
+                  setShowTranscriptionPreview={setShowTranscriptionPreview}
+                  toast={toast}
                 />
-                <PromptStudio />
+                {transcriptionMode === "local" &&
+                  localTranscriptionProvider !== "nvidia" &&
+                  renderWhisperVadSettings()}
               </div>
-            </div>
-          )}
-          renderDictationAgent={() => <DictationAgentSettings />}
-          renderNoteFormatting={() => <NoteFormattingSettings />}
-        />
-      </div>
+            )}
+            renderNoteRecording={() => (
+              <div className="space-y-6">
+                <MeetingTranscriptionPanel />
+                {transcriptionMode === "local" &&
+                  localTranscriptionProvider !== "nvidia" &&
+                  renderWhisperVadSettings()}
+              </div>
+            )}
+          />
+        </TabPanel>
+      )}
+      {hasMountedLlms && (
+        <TabPanel active={activeSection === "llms"}>
+          <LlmsTabs
+            initialTab={
+              activeSection === "llms" ? (initialSubTab as LlmTab | undefined) : undefined
+            }
+            renderChatIntelligence={() => <ChatAgentSettings />}
+            renderDictationCleanup={() => (
+              <div className="space-y-6">
+                <AiModelsSection
+                  useCleanupModel={useCleanupModel}
+                  setUseCleanupModel={(value) => {
+                    updateCleanupSettings({ useCleanupModel: value });
+                  }}
+                  toast={toast}
+                />
+                <div className="border-t border-border/40 pt-6">
+                  <SectionHeader
+                    title={t("settingsPage.prompts.title")}
+                    description={t("settingsPage.prompts.description")}
+                  />
+                  <PromptStudio />
+                </div>
+              </div>
+            )}
+            renderDictationAgent={() => <DictationAgentSettings />}
+            renderNoteFormatting={() => <NoteFormattingSettings />}
+          />
+        </TabPanel>
+      )}
       {renderSectionContent()}
     </>
   );
