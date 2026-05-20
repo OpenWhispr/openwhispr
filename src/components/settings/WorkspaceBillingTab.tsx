@@ -105,10 +105,7 @@ export default function WorkspaceBillingTab({ workspace }: Props) {
             </span>
           </div>
           <div className="h-1.5 rounded-full bg-foreground/5 dark:bg-white/5 overflow-hidden">
-            <div
-              className="h-full bg-primary/70 dark:bg-primary/80"
-              style={{ width: `${pct}%` }}
-            />
+            <div className="h-full bg-primary/70 dark:bg-primary/80" style={{ width: `${pct}%` }} />
           </div>
         </div>
 

@@ -13,16 +13,9 @@ import { cn } from "../lib/utils";
 import ShareVisibilityMenu from "./ShareVisibilityMenu";
 import { useAuth } from "../../hooks/useAuth";
 import { NoteSharingService } from "../../services/NoteSharingService.js";
-import {
-  setShareCache,
-  updateShareCache,
-  useShareCacheEntry,
-} from "../../stores/noteStore";
+import { setShareCache, updateShareCache, useShareCacheEntry } from "../../stores/noteStore";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
-import {
-  emailDomain,
-  isPersonalEmailDomain,
-} from "../../utils/personalEmailDomains";
+import { emailDomain, isPersonalEmailDomain } from "../../utils/personalEmailDomains";
 import type {
   NoteItem,
   NoteShareInvitation,
@@ -40,11 +33,7 @@ interface ShareNoteDialogProps {
   note: NoteItem;
 }
 
-export default function ShareNoteDialog({
-  open,
-  onOpenChange,
-  note,
-}: ShareNoteDialogProps) {
+export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteDialogProps) {
   const { user } = useAuth();
   const ownerName: string | null = user?.name ?? null;
   const ownerEmail: string = user?.email ?? "";
@@ -143,7 +132,7 @@ export default function ShareNoteDialog({
               ? entry?.share.domain_allowlist.length
                 ? entry.share.domain_allowlist
                 : [ownerDomain]
-              : entry?.share.domain_allowlist ?? [],
+              : (entry?.share.domain_allowlist ?? []),
         },
         invitations: entry?.invitations ?? [],
         rawToken: entry?.rawToken ?? null,
@@ -305,9 +294,7 @@ export default function ShareNoteDialog({
           </Button>
         </div>
 
-        {inputError && (
-          <p className="text-xs text-red-500/90 -mt-1">{inputError}</p>
-        )}
+        {inputError && <p className="text-xs text-red-500/90 -mt-1">{inputError}</p>}
 
         {/* Members list */}
         <div className="flex flex-col gap-1.5 mt-1">
@@ -366,7 +353,11 @@ export default function ShareNoteDialog({
         {/* Footer: visibility + copy link */}
         <div className="flex items-center gap-2 pt-3 mt-1 border-t border-border/60">
           <ShareVisibilityMenu
-            value={(share?.visibility ?? "invited") === "private" ? "invited" : (share?.visibility ?? "invited")}
+            value={
+              (share?.visibility ?? "invited") === "private"
+                ? "invited"
+                : (share?.visibility ?? "invited")
+            }
             ownerDomain={ownerDomain}
             showDomainOption={Boolean(showDomainOption)}
             disabled={!isOwner || loading || savingVisibility}

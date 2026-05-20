@@ -255,9 +255,7 @@ export default function ControlPanelSidebar({
 
         {isSignedIn && (
           <button
-            onClick={() =>
-              activeWorkspace ? setInviteOpen(true) : setCreateWorkspaceOpen(true)
-            }
+            onClick={() => (activeWorkspace ? setInviteOpen(true) : setCreateWorkspaceOpen(true))}
             aria-label={
               activeWorkspace ? t("sidebar.inviteTeammate") : t("sidebar.createWorkspace")
             }

@@ -979,11 +979,7 @@ export default function NoteEditor({
         />
       )}
       {note.cloud_id && (
-        <ShareNoteDialog
-          open={shareDialogOpen}
-          onOpenChange={setShareDialogOpen}
-          note={note}
-        />
+        <ShareNoteDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={note} />
       )}
     </div>
   );

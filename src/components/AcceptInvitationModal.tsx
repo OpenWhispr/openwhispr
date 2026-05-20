@@ -61,7 +61,9 @@ export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSi
       setActive(result.workspace_id);
       toast({
         title: t("workspaces.accept.successTitle"),
-        description: preview ? t("workspaces.accept.successDescription", { name: preview.workspace_name }) : undefined,
+        description: preview
+          ? t("workspaces.accept.successDescription", { name: preview.workspace_name })
+          : undefined,
       });
       onClose();
     } catch (err) {
@@ -95,9 +97,7 @@ export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSi
             </DialogDescription>
           )}
           {error && <DialogDescription className="text-destructive">{error}</DialogDescription>}
-          {loading && (
-            <DialogDescription>{t("workspaces.accept.loading")}</DialogDescription>
-          )}
+          {loading && <DialogDescription>{t("workspaces.accept.loading")}</DialogDescription>}
         </DialogHeader>
         <DialogFooter>
           <Button variant="ghost" onClick={handleDecline} disabled={accepting}>
