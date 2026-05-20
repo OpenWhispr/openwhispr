@@ -2328,6 +2328,7 @@
     "settings": {
       "hotkey": "Raccourci Agent",
       "hotkeyDescription": "Raccourci clavier pour basculer la fenêtre agent",
+      "clearHotkey": "Supprimer le raccourci",
       "model": "Modèle Agent",
       "modelDescription": "Modèle IA utilisé pour les conversations agent",
       "systemPrompt": "Prompt système",

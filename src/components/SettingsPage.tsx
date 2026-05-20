@@ -3191,6 +3191,14 @@ EOF`,
                     onChange={setChatAgentKey}
                     validate={validateAgentHotkey}
                   />
+                  {chatAgentKey && (
+                    <button
+                      onClick={() => setChatAgentKey("")}
+                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+                    >
+                      {t("agentMode.settings.clearHotkey")}
+                    </button>
+                  )}
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>

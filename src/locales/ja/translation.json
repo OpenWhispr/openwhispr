@@ -2280,6 +2280,7 @@
     "settings": {
       "hotkey": "エージェントホットキー",
       "hotkeyDescription": "エージェントオーバーレイを切り替えるホットキー",
+      "clearHotkey": "ホットキーを削除",
       "model": "エージェントモデル",
       "modelDescription": "エージェント会話に使用するAIモデル",
       "systemPrompt": "システムプロンプト",

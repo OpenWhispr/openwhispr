@@ -2280,6 +2280,7 @@
     "settings": {
       "hotkey": "Tecla do Agente",
       "hotkeyDescription": "Tecla de atalho para alternar a sobreposição do agente",
+      "clearHotkey": "Remover atalho",
       "model": "Modelo do Agente",
       "modelDescription": "Modelo de IA usado para conversas do agente",
       "systemPrompt": "Prompt do Sistema",

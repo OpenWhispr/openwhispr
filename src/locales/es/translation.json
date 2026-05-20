@@ -2328,6 +2328,7 @@
     "settings": {
       "hotkey": "Tecla del Agente",
       "hotkeyDescription": "Tecla de acceso rápido para alternar la superposición del agente",
+      "clearHotkey": "Eliminar atajo",
       "model": "Modelo del Agente",
       "modelDescription": "Modelo de IA utilizado para conversaciones del agente",
       "systemPrompt": "Prompt del Sistema",

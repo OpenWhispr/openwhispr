@@ -2424,6 +2424,7 @@
     "settings": {
       "hotkey": "Agent Hotkey",
       "hotkeyDescription": "Hotkey to toggle the agent overlay",
+      "clearHotkey": "Remove hotkey",
       "model": "Agent Model",
       "modelDescription": "AI model used for agent conversations",
       "systemPrompt": "System Prompt",

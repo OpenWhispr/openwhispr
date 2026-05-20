@@ -2280,6 +2280,7 @@
     "settings": {
       "hotkey": "助手熱鍵",
       "hotkeyDescription": "切換助手覆蓋層的熱鍵",
+      "clearHotkey": "移除快捷鍵",
       "model": "助手模型",
       "modelDescription": "用於助手對話的AI模型",
       "systemPrompt": "系統提示詞",
