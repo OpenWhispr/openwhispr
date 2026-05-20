@@ -72,6 +72,7 @@ const AUDIO_MIME_TYPES = {
   m4a: "audio/mp4",
   webm: "audio/webm",
   ogg: "audio/ogg",
+  oga: "audio/ogg",
   flac: "audio/flac",
   aac: "audio/aac",
 };
@@ -1401,7 +1402,10 @@ class IPCHandlers {
       const result = await dialog.showOpenDialog({
         properties: ["openFile"],
         filters: [
-          { name: "Audio Files", extensions: ["mp3", "wav", "m4a", "webm", "ogg", "flac", "aac"] },
+          {
+            name: "Audio Files",
+            extensions: ["mp3", "wav", "m4a", "webm", "ogg", "oga", "flac", "aac"],
+          },
         ],
       });
       if (result.canceled || !result.filePaths.length) {
