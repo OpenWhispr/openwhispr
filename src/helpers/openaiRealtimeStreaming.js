@@ -66,7 +66,6 @@ class OpenAIRealtimeStreaming {
       this.ws = new WebSocket(url, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
-          "OpenAI-Beta": "realtime=v1",
         },
       });
 
@@ -93,13 +92,15 @@ class OpenAIRealtimeStreaming {
       this.ws.on("close", (code, reason) => {
         const wasActive = this.isConnected;
         this.isConnecting = false;
+        const reasonText = reason?.toString() || "";
         debugLogger.debug("OpenAI Realtime WebSocket closed", {
           code,
-          reason: reason?.toString(),
+          reason: reasonText,
           wasActive,
         });
         if (this.pendingReject) {
-          this.pendingReject(new Error(`WebSocket closed before ready (code: ${code})`));
+          const detail = reasonText ? ` — ${reasonText}` : "";
+          this.pendingReject(new Error(`WebSocket closed before ready (code: ${code})${detail}`));
           this.pendingReject = null;
           this.pendingResolve = null;
         }
@@ -119,6 +120,7 @@ class OpenAIRealtimeStreaming {
       const event = JSON.parse(data.toString());
 
       switch (event.type) {
+        case "session.created":
         case "transcription_session.created": {
           if (this.preconfigured) {
             // Server-side ephemeral token already configured the session;
@@ -141,17 +143,25 @@ class OpenAIRealtimeStreaming {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) break;
             this.ws.send(
               JSON.stringify({
-                type: "transcription_session.update",
+                type: "session.update",
                 session: {
-                  input_audio_format: "pcm16",
-                  input_audio_transcription: {
-                    model: this.model,
-                  },
-                  turn_detection: {
-                    type: "server_vad",
-                    threshold: 0.3,
-                    silence_duration_ms: 800,
-                    prefix_padding_ms: 500,
+                  type: "transcription",
+                  audio: {
+                    input: {
+                      format: {
+                        type: "audio/pcm",
+                        rate: SAMPLE_RATE,
+                      },
+                      transcription: {
+                        model: this.model,
+                      },
+                      turn_detection: {
+                        type: "server_vad",
+                        threshold: 0.3,
+                        silence_duration_ms: 800,
+                        prefix_padding_ms: 500,
+                      },
+                    },
                   },
                 },
               })
@@ -160,6 +170,7 @@ class OpenAIRealtimeStreaming {
           break;
         }
 
+        case "session.updated":
         case "transcription_session.updated": {
           if (this.pendingResolve) {
             this.isConnected = true;
