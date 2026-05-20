@@ -2360,6 +2360,8 @@
       "connecting": "Verbinde...",
       "connected": "Verbunden",
       "addAnother": "Weiteren Kalender hinzufügen",
+      "primaryOnly": "Nur Hauptkalender synchronisieren",
+      "primaryOnlyDescription": "Termine aus mit dir geteilten Kalendern ignorieren.",
       "disconnect": "Trennen",
       "disconnectConfirm": "{{email}} trennen?",
       "disconnectDescription": "Besprechungsnotizen werden von diesem Kalender nicht mehr aufgezeichnet.",

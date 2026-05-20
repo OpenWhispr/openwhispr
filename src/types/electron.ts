@@ -1507,6 +1507,7 @@ declare global {
         calendarId: string,
         isSelected: boolean
       ) => Promise<{ success: boolean; error?: string }>;
+      gcalSetPrimaryOnly?: (value: boolean) => Promise<{ success: boolean; error?: string }>;
       gcalSyncEvents?: () => Promise<{ success: boolean; error?: string }>;
       gcalGetUpcomingEvents?: (
         windowMinutes?: number

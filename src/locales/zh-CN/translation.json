@@ -2360,6 +2360,8 @@
       "connecting": "连接中...",
       "connected": "已连接",
       "addAnother": "添加其他日历",
+      "primaryOnly": "仅同步主日历",
+      "primaryOnlyDescription": "忽略他人共享给你的日历事件。",
       "disconnect": "断开",
       "disconnectConfirm": "断开 {{email}}？",
       "disconnectDescription": "将不再从此日历记录会议笔记。",

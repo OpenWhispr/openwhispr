@@ -7128,6 +7128,15 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("gcal-set-primary-only", async (_event, value) => {
+      try {
+        await this.googleCalendarManager.setPrimaryOnly(value);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("gcal-sync-events", async () => {
       try {
         await this.googleCalendarManager.syncEvents();

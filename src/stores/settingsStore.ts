@@ -132,6 +132,7 @@ const BOOLEAN_SETTINGS = new Set([
   "dictationAgentDisableThinking",
   "noteFormattingDisableThinking",
   "chatAgentDisableThinking",
+  "gcalPrimaryOnly",
 ]);
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
@@ -355,6 +356,7 @@ export interface SettingsState
   gcalAccounts: GoogleCalendarAccount[];
   gcalConnected: boolean;
   gcalEmail: string;
+  gcalPrimaryOnly: boolean;
   meetingProcessDetection: boolean;
   meetingAudioDetection: boolean;
   speakerDiarizationEnabled: boolean;
@@ -534,6 +536,7 @@ export interface SettingsState
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
   setGcalAccounts: (accounts: GoogleCalendarAccount[]) => void;
+  setGcalPrimaryOnly: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setMeetingAudioDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
@@ -772,6 +775,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       gcalEmail: accounts[0]?.email ?? "",
     };
   })(),
+  gcalPrimaryOnly: readBoolean("gcalPrimaryOnly", true),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
   meetingAudioDetection: readBoolean("meetingAudioDetection", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
@@ -1220,6 +1224,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       gcalConnected: accounts.length > 0,
       gcalEmail: accounts[0]?.email ?? "",
     });
+  },
+  setGcalPrimaryOnly: (value: boolean) => {
+    if (isBrowser) localStorage.setItem("gcalPrimaryOnly", String(value));
+    useSettingsStore.setState({ gcalPrimaryOnly: value });
+    if (isBrowser) window.electronAPI?.gcalSetPrimaryOnly?.(value);
   },
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
   setMeetingAudioDetection: createBooleanSetter("meetingAudioDetection"),
@@ -1773,6 +1782,17 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync meeting detection preferences on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    try {
+      const currentState = useSettingsStore.getState();
+      await window.electronAPI.gcalSetPrimaryOnly?.(currentState.gcalPrimaryOnly);
+    } catch (err) {
+      logger.warn(
+        "Failed to sync gcal primary-only on startup",
         { error: (err as Error).message },
         "settings"
       );

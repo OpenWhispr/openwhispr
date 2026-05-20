@@ -2360,6 +2360,8 @@
       "connecting": "接続中...",
       "connected": "接続済み",
       "addAnother": "別のカレンダーを追加",
+      "primaryOnly": "メインカレンダーのみ同期",
+      "primaryOnlyDescription": "共有されたカレンダーの予定は無視します。",
       "disconnect": "切断",
       "disconnectConfirm": "{{email}} を切断しますか？",
       "disconnectDescription": "このカレンダーからの会議メモは記録されなくなります。",

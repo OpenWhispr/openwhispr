@@ -342,6 +342,14 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
 
+      try {
+        this.db.exec(
+          "ALTER TABLE google_calendars ADD COLUMN is_primary INTEGER NOT NULL DEFAULT 0"
+        );
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS calendar_events (
           id TEXT PRIMARY KEY,
@@ -1324,13 +1332,14 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const stmt = this.db.prepare(
-        `INSERT INTO google_calendars (id, summary, description, background_color, account_email)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO google_calendars (id, summary, description, background_color, account_email, is_primary)
+         VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            summary = excluded.summary,
            description = excluded.description,
            background_color = excluded.background_color,
-           account_email = excluded.account_email`
+           account_email = excluded.account_email,
+           is_primary = excluded.is_primary`
       );
       for (const cal of calendars) {
         stmt.run(
@@ -1338,12 +1347,28 @@ class DatabaseManager {
           cal.summary,
           cal.description || null,
           cal.background_color || null,
-          accountEmail
+          accountEmail,
+          cal.is_primary ? 1 : 0
         );
       }
       return { success: true };
     } catch (error) {
       debugLogger.error("Error saving Google calendars", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  applyPrimaryOnlyToSelection(primaryOnly) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare(
+          "UPDATE google_calendars SET is_selected = CASE WHEN ? = 1 THEN is_primary ELSE 1 END"
+        )
+        .run(primaryOnly ? 1 : 0);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error applying primary-only selection", { error: error.message }, "gcal");
       throw error;
     }
   }
@@ -1588,6 +1613,25 @@ class DatabaseManager {
       return { success: true };
     } catch (error) {
       debugLogger.error("Error removing calendar events", { error: error.message }, "gcal");
+      throw error;
+    }
+  }
+
+  removeEventsFromDeselectedCalendars() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare(
+          "DELETE FROM calendar_events WHERE calendar_id NOT IN (SELECT id FROM google_calendars WHERE is_selected = 1)"
+        )
+        .run();
+      return { success: true };
+    } catch (error) {
+      debugLogger.error(
+        "Error removing events from deselected calendars",
+        { error: error.message },
+        "gcal"
+      );
       throw error;
     }
   }

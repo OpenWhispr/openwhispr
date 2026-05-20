@@ -2360,6 +2360,8 @@
       "connecting": "Connessione...",
       "connected": "Connesso",
       "addAnother": "Aggiungi un altro calendario",
+      "primaryOnly": "Sincronizza solo il calendario principale",
+      "primaryOnlyDescription": "Ignora gli eventi dei calendari condivisi con te.",
       "disconnect": "Disconnetti",
       "disconnectConfirm": "Disconnettere {{email}}?",
       "disconnectDescription": "Le note delle riunioni non saranno più registrate da questo calendario.",

@@ -2504,6 +2504,8 @@
       "connecting": "Connecting...",
       "connected": "Connected",
       "addAnother": "Add another calendar",
+      "primaryOnly": "Sync primary calendar only",
+      "primaryOnlyDescription": "Ignore events from calendars shared with you.",
       "disconnect": "Disconnect",
       "disconnectConfirm": "Disconnect {{email}}?",
       "disconnectDescription": "Meeting notes will no longer be recorded from this calendar.",

@@ -18,13 +18,15 @@ class GoogleCalendarManager {
     this.SYNC_INTERVAL_MS = 2 * 60 * 1000;
     this._consecutiveFailures = 0;
     this._lastFocusSync = 0;
+    this.primaryOnly = true;
   }
 
   start() {
     this._loadAccounts();
     if (this.accounts.size === 0) return;
 
-    this.syncEvents()
+    this.fetchCalendars()
+      .then(() => this.syncEvents())
       .then(() => {
         this.scheduleNextMeeting();
         this._consecutiveFailures = 0;
@@ -133,6 +135,7 @@ class GoogleCalendarManager {
           summary: item.summary,
           description: item.description || null,
           background_color: item.backgroundColor || null,
+          is_primary: item.primary === true,
         }));
         this.databaseManager.saveGoogleCalendars(calendars, email);
         allCalendars.push(...calendars);
@@ -141,6 +144,8 @@ class GoogleCalendarManager {
       }
     }
 
+    this.databaseManager.applyPrimaryOnlyToSelection(this.primaryOnly);
+    this.databaseManager.removeEventsFromDeselectedCalendars();
     return allCalendars;
   }
 
@@ -376,6 +381,18 @@ class GoogleCalendarManager {
     await this.syncEvents();
     this._consecutiveFailures = 0;
     this.scheduleNextMeeting();
+  }
+
+  async setPrimaryOnly(value) {
+    if (this.primaryOnly === value) return;
+    this.primaryOnly = value;
+    if (!this.isConnected()) return;
+
+    await this.fetchCalendars();
+    this.notifiedMeetings.clear();
+    await this.syncEvents();
+    this.scheduleNextMeeting();
+    this.broadcastToWindows("gcal-events-synced", {});
   }
 
   async getUpcomingEvents(windowMinutes) {

@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Code2, Info, Loader2, Mail, Plus, Unlink } from "lucide-react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
+import { SettingsPanel, SettingsPanelRow, SettingsRow } from "./ui/SettingsSection";
+import { Toggle } from "./ui/toggle";
 import {
   ConfirmDialog,
   Dialog,
@@ -37,7 +38,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsViewProps) {
   const { t } = useTranslation();
-  const { gcalAccounts, setGcalAccounts } = useSettingsStore();
+  const { gcalAccounts, setGcalAccounts, gcalPrimaryOnly, setGcalPrimaryOnly } = useSettingsStore();
   const [isConnecting, setIsConnecting] = useState(false);
   const [disconnectingEmail, setDisconnectingEmail] = useState<string | null>(null);
   const [confirmDisconnectEmail, setConfirmDisconnectEmail] = useState<string | null>(null);
@@ -183,6 +184,17 @@ export default function IntegrationsView({ isPaid, onUpgrade }: IntegrationsView
                 </div>
               </SettingsPanelRow>
             ))}
+
+          {hasAccounts && (
+            <SettingsPanelRow>
+              <SettingsRow
+                label={t("integrations.googleCalendar.primaryOnly")}
+                description={t("integrations.googleCalendar.primaryOnlyDescription")}
+              >
+                <Toggle checked={gcalPrimaryOnly} onChange={setGcalPrimaryOnly} />
+              </SettingsRow>
+            </SettingsPanelRow>
+          )}
 
           {hasAccounts && (
             <SettingsPanelRow>
