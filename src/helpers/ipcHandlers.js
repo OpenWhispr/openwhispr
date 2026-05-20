@@ -1441,13 +1441,24 @@ class IPCHandlers {
     });
 
     ipcMain.handle("paste-text", async (event, text, options) => {
-      // If the floating dictation panel currently has focus, dismiss it so the
-      // paste keystroke lands in the user's target app instead of the overlay.
       const mainWindow = this.windowManager?.mainWindow;
-      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
+      const targetPid = this.textEditMonitor?.lastTargetPid || null;
+
+      // On macOS, explicitly activate the captured target app by PID. The
+      // previous hide()-based focus hand-off was unreliable for Chromium apps
+      // like Claude desktop and Brave (#668).
+      let activated = false;
+      if (process.platform === "darwin" && this.textEditMonitor) {
+        activated = await this.textEditMonitor.activateTargetPid();
+        if (activated) {
+          await new Promise((resolve) => setTimeout(resolve, 80));
+        }
+      }
+
+      // Fallback when no target was captured: if the overlay has focus,
+      // dismiss it so the paste keystroke doesn't land on the overlay.
+      if (!activated && mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
         if (process.platform === "darwin") {
-          // hide() forces macOS to activate the previous app; showInactive()
-          // restores the overlay without stealing focus.
           mainWindow.hide();
           await new Promise((resolve) => setTimeout(resolve, 120));
           mainWindow.showInactive();
@@ -1460,7 +1471,6 @@ class IPCHandlers {
         ...options,
         webContents: event.sender,
       });
-      const targetPid = this.textEditMonitor?.lastTargetPid || null;
       debugLogger.debug("[AutoLearn] Paste completed", {
         autoLearnEnabled: this._autoLearnEnabled,
         hasMonitor: !!this.textEditMonitor,
