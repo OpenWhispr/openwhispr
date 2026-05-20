@@ -2470,7 +2470,7 @@ class DatabaseManager {
       stmt.run(
         cloudTranscription.client_transcription_id,
         cloudTranscription.id,
-        cloudTranscription.text,
+        cloudTranscription.text ?? "",
         cloudTranscription.raw_text || null,
         cloudTranscription.status || "completed",
         cloudTranscription.created_at
