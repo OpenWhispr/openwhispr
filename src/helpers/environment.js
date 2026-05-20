@@ -87,17 +87,11 @@ class EnvironmentManager {
     }
   }
 
-  // Encryption init runs after construction; safeStorage fallback needs app.whenReady().
+  // Encryption initializes lazily. Probing it eagerly would touch the macOS
+  // Keychain before any window is visible. Migration and _loadAllSecrets are
+  // both no-ops on fresh installs, so neither path triggers Keychain until
+  // the user actually saves their first secret.
   async init() {
-    if (!this._encryptionAvailable()) {
-      debugLogger.warn(
-        "Secret encryption unavailable — secrets remain in plaintext .env",
-        { platform: process.platform },
-        "environment"
-      );
-      return;
-    }
-
     if (!fs.existsSync(this._getMigrationSentinelPath())) {
       await this._migrateToSecureStorage();
     }

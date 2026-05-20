@@ -69,8 +69,10 @@ function _initKeychain() {
     } else {
       masterKey = crypto.randomBytes(KEY_LEN);
       entry.setPassword(masterKey.toString("base64"));
+      // Write the safeStorage backup only when the key is first generated.
+      // Re-writing on every launch invokes a second Keychain backend on macOS.
+      _saveMasterKeyBackup();
     }
-    _saveMasterKeyBackup();
     return true;
   } catch (error) {
     debugLogger.warn(
