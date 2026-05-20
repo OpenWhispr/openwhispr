@@ -869,9 +869,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   meetingNotificationRespond: (detectionId, action) =>
     ipcRenderer.invoke("meeting-notification-respond", detectionId, action),
   joinCalendarMeeting: (eventId) => ipcRenderer.invoke("join-calendar-meeting", eventId),
-  onNavigateToMeetingNote: registerListener(
-    "navigate-to-meeting-note",
-    (callback) => (_event, data) => callback(data)
+  getPendingMeetingNoteNavigation: () => ipcRenderer.invoke("get-pending-meeting-note-navigation"),
+  onMeetingNoteNavigationPending: registerListener(
+    "meeting-note-navigation-pending",
+    (callback) => () => callback()
   ),
   onNavigateToNote: registerListener(
     "navigate-to-note",

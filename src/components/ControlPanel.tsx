@@ -298,8 +298,8 @@ export default function ControlPanel() {
     detect();
   }, [useLocalWhisper, localTranscriptionProvider, useCleanupModel, gpuBannerDismissed]);
 
-  useEffect(() => {
-    const cleanup = window.electronAPI?.onNavigateToMeetingNote?.((data) => {
+  const handleMeetingNoteNavigation = useCallback(
+    (data: { noteId: number; folderId: number; event: any; trigger?: string }) => {
       setActiveFolderId(data.folderId);
       setActiveNoteId(data.noteId);
       setActiveView("personal-notes");
@@ -315,9 +315,19 @@ export default function ControlPanel() {
       ) {
         window.electronAPI?.snapToMeetingMode?.();
       }
-    });
+    },
+    []
+  );
+
+  useEffect(() => {
+    const drain = async () => {
+      const data = await window.electronAPI?.getPendingMeetingNoteNavigation?.();
+      if (data) handleMeetingNoteNavigation(data);
+    };
+    drain();
+    const cleanup = window.electronAPI?.onMeetingNoteNavigationPending?.(drain);
     return () => cleanup?.();
-  }, []);
+  }, [handleMeetingNoteNavigation]);
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onNavigateToNote?.((data) => {

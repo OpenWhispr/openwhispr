@@ -1741,14 +1741,13 @@ declare global {
         action: string
       ) => Promise<{ success: boolean }>;
       joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
-      onNavigateToMeetingNote?: (
-        callback: (data: {
-          noteId: number;
-          folderId: number;
-          event: any;
-          trigger?: "hotkey" | "manual" | "calendar-join";
-        }) => void
-      ) => () => void;
+      getPendingMeetingNoteNavigation?: () => Promise<{
+        noteId: number;
+        folderId: number;
+        event: any;
+        trigger?: "hotkey" | "manual" | "calendar-join";
+      } | null>;
+      onMeetingNoteNavigationPending?: (callback: () => void) => () => void;
       onNavigateToNote?: (
         callback: (data: { noteId: number; folderId: number | null }) => void
       ) => () => void;
