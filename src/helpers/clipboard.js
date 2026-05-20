@@ -1100,6 +1100,7 @@ class ClipboardManager {
       "sakura",
       "warp",
       "termius",
+      "waveterm",
     ];
 
     // Pre-detect the target window BEFORE our window takes focus or blurs,
@@ -1127,6 +1128,23 @@ class ClipboardManager {
       }
     };
 
+    // Some terminals (notably Konsole on X11) intermittently report no WM_CLASS via
+    // xdotool, leaving WM_CLASS detection blind. Fall back to the owning process
+    // name from /proc/<pid>/comm so terminal-aware paste keys still get chosen.
+    const preDetectWindowComm = (windowId) => {
+      if (!xdotoolExists || (isWayland && !xwaylandAvailable)) return null;
+      try {
+        const args = windowId ? ["getwindowpid", windowId] : ["getactivewindow", "getwindowpid"];
+        const result = spawnSync("xdotool", args, { timeout: 1000 });
+        if (result.status !== 0) return null;
+        const pid = parseInt(result.stdout.toString().trim(), 10);
+        if (!Number.isFinite(pid) || pid <= 0) return null;
+        return fs.readFileSync(`/proc/${pid}/comm`, "utf8").toLowerCase().trim() || null;
+      } catch {
+        return null;
+      }
+    };
+
     const targetWindowId = preDetectTargetWindow();
     let detectedWindowClass = preDetectWindowClass(targetWindowId);
 
@@ -1144,16 +1162,33 @@ class ClipboardManager {
       }
     }
 
-    if (linuxFastPaste) {
-      const earlyIsTerminal = detectedWindowClass
-        ? terminalClasses.some((t) => detectedWindowClass.includes(t))
-        : false;
+    const detectedWindowComm = preDetectWindowComm(targetWindowId);
+    const windowSignals = [detectedWindowClass, detectedWindowComm].filter(Boolean);
+    const signalsMatch = (needle) => windowSignals.some((signal) => signal.includes(needle));
+    const detectedIsKonsole = signalsMatch("konsole");
+
+    // Konsole on X11 silently drops simulated Ctrl+Shift+V via XTest (a long-standing
+    // focus/grab quirk), and the native fast-paste binary uses XTest. Route Konsole+X11
+    // through the xdotool fallback instead, which sends shift+Insert with
+    // windowactivate --sync and reliably reaches the target window.
+    const skipFastPasteForKonsole = detectedIsKonsole && !isWayland;
+
+    if (linuxFastPaste && !skipFastPasteForKonsole) {
+      const earlyIsTerminal =
+        windowSignals.length > 0 ? terminalClasses.some((term) => signalsMatch(term)) : false;
 
       const spawnFastPaste = (args, label) =>
         new Promise((resolve, reject) => {
           debugLogger.debug(
             `Attempting native linux-fast-paste (${label})`,
-            { linuxFastPaste, args, targetWindowId, detectedWindowClass, earlyIsTerminal },
+            {
+              linuxFastPaste,
+              args,
+              targetWindowId,
+              detectedWindowClass,
+              detectedWindowComm,
+              earlyIsTerminal,
+            },
             "clipboard"
           );
           const proc = spawn(linuxFastPaste, args);
@@ -1336,18 +1371,20 @@ class ClipboardManager {
 
     // Terminals use Ctrl+Shift+V instead of Ctrl+V
     const isTerminal = () => {
-      if (!detectedWindowClass) return false;
-      const isTerminalWindow = terminalClasses.some((term) => detectedWindowClass.includes(term));
+      if (windowSignals.length === 0) return false;
+      const isTerminalWindow = terminalClasses.some((term) => signalsMatch(term));
       if (isTerminalWindow) {
-        this.safeLog(`🖥️ Terminal detected: ${detectedWindowClass}`);
+        this.safeLog(`🖥️ Terminal detected: ${windowSignals.join(" | ")}`);
       }
       return isTerminalWindow;
     };
 
     const inTerminal = isTerminal();
     // On Wayland, when window class is unknown, use Shift+Insert as universal paste
-    // (works in both terminals and GUI apps, avoids Ctrl+V printing ^V in terminals)
-    const useShiftInsert = isWayland && !detectedWindowClass;
+    // (works in both terminals and GUI apps, avoids Ctrl+V printing ^V in terminals).
+    // Konsole on X11 also prefers Shift+Insert because simulated Ctrl+Shift+V via XTest
+    // gets dropped (see skipFastPasteForKonsole above).
+    const useShiftInsert = detectedIsKonsole || (isWayland && !detectedWindowClass);
     const pasteKeys = useShiftInsert ? "shift+Insert" : inTerminal ? "ctrl+shift+v" : "ctrl+v";
 
     const canUseWtype = isWayland && isWlroots;
@@ -1361,7 +1398,7 @@ class ClipboardManager {
 
     if (targetWindowId) {
       this.safeLog(
-        `🎯 Targeting window ID ${targetWindowId} for paste (class: ${detectedWindowClass})`
+        `🎯 Targeting window ID ${targetWindowId} for paste (signals: ${windowSignals.join(" | ") || "none"})`
       );
     }
 
@@ -1415,6 +1452,7 @@ class ClipboardManager {
         availableTools: available.map((c) => c.cmd),
         targetWindowId,
         detectedWindowClass,
+        detectedWindowComm,
         inTerminal,
         useShiftInsert,
         pasteKeys,
@@ -1600,7 +1638,7 @@ class ClipboardManager {
 
     if (ydotoolExists && !ydotoolDaemonRunning) {
       errorMsg +=
-        "\n\nNote: ydotool is installed but the ydotoold daemon is not running. Start it with: sudo systemctl enable --now ydotool";
+        "\n\nNote: ydotool is installed but the ydotoold daemon is not running. Start it with: systemctl --user enable --now ydotoold";
     }
 
     const err = new Error(errorMsg + failureSummary);

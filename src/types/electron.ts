@@ -1507,6 +1507,7 @@ declare global {
         calendarId: string,
         isSelected: boolean
       ) => Promise<{ success: boolean; error?: string }>;
+      gcalSetPrimaryOnly?: (value: boolean) => Promise<{ success: boolean; error?: string }>;
       gcalSyncEvents?: () => Promise<{ success: boolean; error?: string }>;
       gcalGetUpcomingEvents?: (
         windowMinutes?: number
@@ -1743,14 +1744,13 @@ declare global {
         action: string
       ) => Promise<{ success: boolean }>;
       joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
-      onNavigateToMeetingNote?: (
-        callback: (data: {
-          noteId: number;
-          folderId: number;
-          event: any;
-          trigger?: "hotkey" | "manual" | "calendar-join";
-        }) => void
-      ) => () => void;
+      getPendingMeetingNoteNavigation?: () => Promise<{
+        noteId: number;
+        folderId: number;
+        event: any;
+        trigger?: "hotkey" | "manual" | "calendar-join";
+      } | null>;
+      onMeetingNoteNavigationPending?: (callback: () => void) => () => void;
       onNavigateToNote?: (
         callback: (data: { noteId: number; folderId: number | null }) => void
       ) => () => void;

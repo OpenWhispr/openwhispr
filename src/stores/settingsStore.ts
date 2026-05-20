@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { API_ENDPOINTS } from "../config/constants";
 import i18n, { normalizeUiLanguage } from "../i18n";
-import { hasStoredByokKey } from "../utils/byokDetection";
 import { ensureAgentNameInDictionary } from "../utils/agentName";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import logger from "../utils/logger";
@@ -137,6 +136,7 @@ const BOOLEAN_SETTINGS = new Set([
   "notifyMeetingDetection",
   "notifyCalendarReminders",
   "notifyUpdates",
+  "gcalPrimaryOnly",
 ]);
 
 const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
@@ -195,6 +195,11 @@ function migrateProviderSettings() {
 
   if (provider === "custom" && cloudMode === "byok") {
     localStorage.setItem("remoteTranscriptionType", "openai-compatible");
+    const legacyBaseUrl = localStorage.getItem("cloudTranscriptionBaseUrl");
+    const existingRemoteUrl = localStorage.getItem("remoteTranscriptionUrl");
+    if (!existingRemoteUrl && legacyBaseUrl && legacyBaseUrl !== API_ENDPOINTS.TRANSCRIPTION_BASE) {
+      localStorage.setItem("remoteTranscriptionUrl", legacyBaseUrl);
+    }
   }
 
   const reasoningMode = localStorage.getItem("cloudReasoningMode");
@@ -359,6 +364,7 @@ export interface SettingsState
   notifyMeetingDetection: boolean;
   notifyCalendarReminders: boolean;
   notifyUpdates: boolean;
+  gcalPrimaryOnly: boolean;
   meetingProcessDetection: boolean;
   meetingAudioDetection: boolean;
   speakerDiarizationEnabled: boolean;
@@ -542,6 +548,7 @@ export interface SettingsState
   setNotifyMeetingDetection: (value: boolean) => void;
   setNotifyCalendarReminders: (value: boolean) => void;
   setNotifyUpdates: (value: boolean) => void;
+  setGcalPrimaryOnly: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
   setMeetingAudioDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
@@ -784,6 +791,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       gcalEmail: accounts[0]?.email ?? "",
     };
   })(),
+  gcalPrimaryOnly: readBoolean("gcalPrimaryOnly", true),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
   meetingAudioDetection: readBoolean("meetingAudioDetection", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
@@ -1237,6 +1245,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setNotifyMeetingDetection: createBooleanSetter("notifyMeetingDetection"),
   setNotifyCalendarReminders: createBooleanSetter("notifyCalendarReminders"),
   setNotifyUpdates: createBooleanSetter("notifyUpdates"),
+  setGcalPrimaryOnly: (value: boolean) => {
+    if (isBrowser) localStorage.setItem("gcalPrimaryOnly", String(value));
+    useSettingsStore.setState({ gcalPrimaryOnly: value });
+    if (isBrowser) window.electronAPI?.gcalSetPrimaryOnly?.(value);
+  },
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
   setMeetingAudioDetection: createBooleanSetter("meetingAudioDetection"),
   setSpeakerDiarizationEnabled: (value: boolean) => {
@@ -1462,6 +1475,11 @@ export const selectIsCloudChatAgentMode = (state: SettingsState) =>
   state.chatAgentMode === "openwhispr" &&
   state.chatAgentCloudMode === "openwhispr";
 
+export const selectIsCloudNoteFormattingMode = (state: SettingsState) => {
+  const cfg = selectResolvedNoteFormatting(state);
+  return state.isSignedIn && cfg.mode === "openwhispr" && cfg.cloudMode === "openwhispr";
+};
+
 export interface ResolvedMeetingTranscription {
   useLocalWhisper: boolean;
   whisperModel: string;
@@ -1664,11 +1682,6 @@ export async function initializeSettings(): Promise<void> {
         vertexApiKey: vertexApiKey || "",
       });
 
-      // hasStoredByokKey reads from Zustand, so this default must run after hydration.
-      if (!localStorage.getItem("cloudTranscriptionMode") && hasStoredByokKey()) {
-        useSettingsStore.setState({ cloudTranscriptionMode: "byok" });
-      }
-
       for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {
         localStorage.removeItem(key);
       }
@@ -1810,6 +1823,17 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync notification preferences on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    try {
+      const currentState = useSettingsStore.getState();
+      await window.electronAPI.gcalSetPrimaryOnly?.(currentState.gcalPrimaryOnly);
+    } catch (err) {
+      logger.warn(
+        "Failed to sync gcal primary-only on startup",
         { error: (err as Error).message },
         "settings"
       );

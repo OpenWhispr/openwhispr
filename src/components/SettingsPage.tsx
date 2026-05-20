@@ -97,6 +97,7 @@ import { formatBytes } from "../utils/formatBytes";
 import { useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
+import { WORKSPACES_ENABLED } from "../lib/features";
 
 const formatAmount = (cents: number, currency: string) =>
   (cents / 100).toLocaleString(undefined, { style: "currency", currency });
@@ -493,6 +494,10 @@ function VADLabelWithInfo({ label, description }: { label: string; description: 
   );
 }
 
+function TabPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
+  return <div className={active ? undefined : "hidden"}>{children}</div>;
+}
+
 function SpeechToTextTabs({
   initialTab,
   renderDictation,
@@ -528,7 +533,8 @@ function SpeechToTextTabs({
           )
         }
       />
-      {tab === "dictation" ? renderDictation() : renderNoteRecording()}
+      <TabPanel active={tab === "dictation"}>{renderDictation()}</TabPanel>
+      <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
     </div>
   );
 }
@@ -573,10 +579,10 @@ function LlmsTabs({
           return <MessageSquare className="w-3.5 h-3.5" />;
         }}
       />
-      {tab === "dictationCleanup" && renderDictationCleanup()}
-      {tab === "dictationAgent" && renderDictationAgent()}
-      {tab === "noteFormatting" && renderNoteFormatting()}
-      {tab === "chatIntelligence" && renderChatIntelligence()}
+      <TabPanel active={tab === "dictationCleanup"}>{renderDictationCleanup()}</TabPanel>
+      <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
+      <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
+      <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
     </div>
   );
 }
@@ -813,6 +819,21 @@ export default function SettingsPage({
       })
       .catch(() => {});
   }, [activeSection]);
+
+  // Lazy keep-alive: mount AI sections only after the user has visited them once,
+  // then keep them mounted so model-download progress and IPC listeners survive
+  // section switches. The setState-during-render pattern flips the flag in the
+  // same commit as the section change, so there's no blank frame on first visit.
+  const [hasMountedSpeechToText, setHasMountedSpeechToText] = useState(
+    activeSection === "speechToText"
+  );
+  const [hasMountedLlms, setHasMountedLlms] = useState(activeSection === "llms");
+  if (activeSection === "speechToText" && !hasMountedSpeechToText) {
+    setHasMountedSpeechToText(true);
+  }
+  if (activeSection === "llms" && !hasMountedLlms) {
+    setHasMountedLlms(true);
+  }
 
   const handleClearAllAudio = async () => {
     if (!window.electronAPI?.deleteAllAudio) return;
@@ -2266,7 +2287,7 @@ export default function SettingsPage({
         );
 
       case "workspace":
-        return <WorkspaceSection initialSubTab={initialSubTab} />;
+        return WORKSPACES_ENABLED ? <WorkspaceSection initialSubTab={initialSubTab} /> : null;
 
       case "general":
         return (
@@ -2707,6 +2728,7 @@ export default function SettingsPage({
                           cmds: [
                             { label: "Ubuntu / Pop!_OS / Debian", cmd: "sudo apt install ydotool" },
                             { label: "Fedora", cmd: "sudo dnf install ydotool" },
+                            { label: "Arch Linux", cmd: "sudo pacman -S ydotool" },
                             { label: "openSUSE", cmd: "sudo zypper install ydotool" },
                           ],
                         },
@@ -2743,6 +2765,7 @@ export default function SettingsPage({
                               cmd: "sudo apt install ydotoold",
                             },
                             { label: "Fedora", cmd: "# Already included in the ydotool package" },
+                            { label: "Arch Linux", cmd: "# Included in the ydotool package" },
                           ],
                         },
                       ],
@@ -2947,13 +2970,23 @@ EOF`,
                             {
                               cmd: "systemctl --user enable ydotoold && systemctl --user start ydotoold",
                             },
+                            {
+                              label: "Arch Linux (service is named ydotool.service)",
+                              cmd: "systemctl --user enable --now ydotool.service",
+                            },
                           ],
                         },
                         {
                           title: t("settingsPage.general.waylandPaste.guide.daemon.step2Title", {
                             defaultValue: "Verify it's running",
                           }),
-                          cmds: [{ cmd: "systemctl --user status ydotoold" }],
+                          cmds: [
+                            { cmd: "systemctl --user status ydotoold" },
+                            {
+                              label: "Arch Linux",
+                              cmd: "systemctl --user status ydotool.service",
+                            },
+                          ],
                         },
                       ],
                     },
@@ -3256,6 +3289,14 @@ EOF`,
                     onChange={setChatAgentKey}
                     validate={validateAgentHotkey}
                   />
+                  {chatAgentKey && (
+                    <button
+                      onClick={() => setChatAgentKey("")}
+                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+                    >
+                      {t("agentMode.settings.clearHotkey")}
+                    </button>
+                  )}
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
@@ -3263,83 +3304,8 @@ EOF`,
         );
 
       case "speechToText":
-        return (
-          <SpeechToTextTabs
-            initialTab={initialSubTab as SpeechTab | undefined}
-            renderDictation={() => (
-              <div className="space-y-6">
-                <TranscriptionSection
-                  isSignedIn={isSignedIn ?? false}
-                  startOnboarding={startOnboarding}
-                  cloudTranscriptionMode={cloudTranscriptionMode}
-                  setCloudTranscriptionMode={setCloudTranscriptionMode}
-                  useLocalWhisper={useLocalWhisper}
-                  setUseLocalWhisper={setUseLocalWhisper}
-                  updateTranscriptionSettings={updateTranscriptionSettings}
-                  cloudTranscriptionProvider={cloudTranscriptionProvider}
-                  setCloudTranscriptionProvider={setCloudTranscriptionProvider}
-                  cloudTranscriptionModel={cloudTranscriptionModel}
-                  setCloudTranscriptionModel={setCloudTranscriptionModel}
-                  localTranscriptionProvider={localTranscriptionProvider}
-                  setLocalTranscriptionProvider={setLocalTranscriptionProvider}
-                  whisperModel={whisperModel}
-                  setWhisperModel={setWhisperModel}
-                  parakeetModel={parakeetModel}
-                  setParakeetModel={setParakeetModel}
-                  cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
-                  setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
-                  transcriptionMode={transcriptionMode}
-                  setTranscriptionMode={setTranscriptionMode}
-                  remoteTranscriptionUrl={remoteTranscriptionUrl}
-                  setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
-                  showTranscriptionPreview={showTranscriptionPreview}
-                  setShowTranscriptionPreview={setShowTranscriptionPreview}
-                  toast={toast}
-                />
-                {transcriptionMode === "local" &&
-                  localTranscriptionProvider !== "nvidia" &&
-                  renderWhisperVadSettings()}
-              </div>
-            )}
-            renderNoteRecording={() => (
-              <div className="space-y-6">
-                <MeetingTranscriptionPanel />
-                {transcriptionMode === "local" &&
-                  localTranscriptionProvider !== "nvidia" &&
-                  renderWhisperVadSettings()}
-              </div>
-            )}
-          />
-        );
-
       case "llms":
-        return (
-          <LlmsTabs
-            initialTab={initialSubTab as LlmTab | undefined}
-            renderChatIntelligence={() => <ChatAgentSettings />}
-            renderDictationCleanup={() => (
-              <div className="space-y-6">
-                <AiModelsSection
-                  useCleanupModel={useCleanupModel}
-                  setUseCleanupModel={(value) => {
-                    updateCleanupSettings({ useCleanupModel: value });
-                  }}
-                  toast={toast}
-                />
-
-                <div className="border-t border-border/40 pt-6">
-                  <SectionHeader
-                    title={t("settingsPage.prompts.title")}
-                    description={t("settingsPage.prompts.description")}
-                  />
-                  <PromptStudio />
-                </div>
-              </div>
-            )}
-            renderDictationAgent={() => <DictationAgentSettings />}
-            renderNoteFormatting={() => <NoteFormattingSettings />}
-          />
-        );
+        return null;
 
       case "privacyData":
         return (
@@ -3909,6 +3875,91 @@ EOF`,
         onOk={() => {}}
       />
 
+      {/* Mounted on first visit and kept alive so model-download progress and IPC listeners survive section switches. */}
+      {hasMountedSpeechToText && (
+        <TabPanel active={activeSection === "speechToText"}>
+          <SpeechToTextTabs
+            initialTab={
+              activeSection === "speechToText"
+                ? (initialSubTab as SpeechTab | undefined)
+                : undefined
+            }
+            renderDictation={() => (
+              <div className="space-y-6">
+                <TranscriptionSection
+                  isSignedIn={isSignedIn ?? false}
+                  startOnboarding={startOnboarding}
+                  cloudTranscriptionMode={cloudTranscriptionMode}
+                  setCloudTranscriptionMode={setCloudTranscriptionMode}
+                  useLocalWhisper={useLocalWhisper}
+                  setUseLocalWhisper={setUseLocalWhisper}
+                  updateTranscriptionSettings={updateTranscriptionSettings}
+                  cloudTranscriptionProvider={cloudTranscriptionProvider}
+                  setCloudTranscriptionProvider={setCloudTranscriptionProvider}
+                  cloudTranscriptionModel={cloudTranscriptionModel}
+                  setCloudTranscriptionModel={setCloudTranscriptionModel}
+                  localTranscriptionProvider={localTranscriptionProvider}
+                  setLocalTranscriptionProvider={setLocalTranscriptionProvider}
+                  whisperModel={whisperModel}
+                  setWhisperModel={setWhisperModel}
+                  parakeetModel={parakeetModel}
+                  setParakeetModel={setParakeetModel}
+                  cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
+                  setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
+                  transcriptionMode={transcriptionMode}
+                  setTranscriptionMode={setTranscriptionMode}
+                  remoteTranscriptionUrl={remoteTranscriptionUrl}
+                  setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                  showTranscriptionPreview={showTranscriptionPreview}
+                  setShowTranscriptionPreview={setShowTranscriptionPreview}
+                  toast={toast}
+                />
+                {transcriptionMode === "local" &&
+                  localTranscriptionProvider !== "nvidia" &&
+                  renderWhisperVadSettings()}
+              </div>
+            )}
+            renderNoteRecording={() => (
+              <div className="space-y-6">
+                <MeetingTranscriptionPanel />
+                {transcriptionMode === "local" &&
+                  localTranscriptionProvider !== "nvidia" &&
+                  renderWhisperVadSettings()}
+              </div>
+            )}
+          />
+        </TabPanel>
+      )}
+      {hasMountedLlms && (
+        <TabPanel active={activeSection === "llms"}>
+          <LlmsTabs
+            initialTab={
+              activeSection === "llms" ? (initialSubTab as LlmTab | undefined) : undefined
+            }
+            renderChatIntelligence={() => <ChatAgentSettings />}
+            renderDictationCleanup={() => (
+              <div className="space-y-6">
+                <AiModelsSection
+                  useCleanupModel={useCleanupModel}
+                  setUseCleanupModel={(value) => {
+                    updateCleanupSettings({ useCleanupModel: value });
+                  }}
+                  toast={toast}
+                />
+                <div className="border-t border-border/40 pt-6">
+                  <SectionHeader
+                    title={t("settingsPage.prompts.title")}
+                    description={t("settingsPage.prompts.description")}
+                  />
+                  <PromptStudio />
+                </div>
+              </div>
+            )}
+            renderDictationAgent={() => <DictationAgentSettings />}
+            renderNoteFormatting={() => <NoteFormattingSettings />}
+          />
+        </TabPanel>
+      )}
       {renderSectionContent()}
     </>
   );

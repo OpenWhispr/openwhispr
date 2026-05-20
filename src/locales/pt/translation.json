@@ -2292,6 +2292,7 @@
     "settings": {
       "hotkey": "Tecla do Agente",
       "hotkeyDescription": "Tecla de atalho para alternar a sobreposição do agente",
+      "clearHotkey": "Remover atalho",
       "model": "Modelo do Agente",
       "modelDescription": "Modelo de IA usado para conversas do agente",
       "systemPrompt": "Prompt do Sistema",
@@ -2372,6 +2373,8 @@
       "connecting": "Conectando...",
       "connected": "Conectado",
       "addAnother": "Adicionar outro calendário",
+      "primaryOnly": "Sincronizar apenas o calendário principal",
+      "primaryOnlyDescription": "Ignorar eventos de calendários compartilhados com você.",
       "disconnect": "Desconectar",
       "disconnectConfirm": "Desconectar {{email}}?",
       "disconnectDescription": "As notas de reunião não serão mais gravadas deste calendário.",

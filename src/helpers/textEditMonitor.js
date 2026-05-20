@@ -77,6 +77,34 @@ class TextEditMonitor extends EventEmitter {
   }
 
   /**
+   * macOS: bring the captured target app to the front before pasting.
+   * More reliable than hide()'s implicit hand-off for Chromium apps (#668).
+   */
+  activateTargetPid() {
+    return new Promise((resolve) => {
+      if (process.platform !== "darwin" || !this.lastTargetPid) {
+        resolve(false);
+        return;
+      }
+      const pid = this.lastTargetPid;
+      const script =
+        `ObjC.import("AppKit"); ` +
+        `const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(${pid}); ` +
+        `if (app.isNil) { "not_found" } else { app.activateWithOptions(2); "ok" }`;
+      execFile(
+        "osascript",
+        ["-l", "JavaScript", "-e", script],
+        { timeout: 1000 },
+        (err, stdout) => {
+          const ok = !err && stdout.trim() === "ok";
+          debugLogger.debug("[TextEditMonitor] Activated target PID", { pid, ok });
+          resolve(ok);
+        }
+      );
+    });
+  }
+
+  /**
    * Start monitoring the focused text field for edits after a paste.
    * Kills any existing monitor before starting a new one.
    * @param {string} originalText - The transcribed text that was pasted

@@ -2287,6 +2287,7 @@
     "settings": {
       "hotkey": "助手热键",
       "hotkeyDescription": "切换助手覆盖层的热键",
+      "clearHotkey": "移除快捷键",
       "model": "助手模型",
       "modelDescription": "用于助手对话的AI模型",
       "systemPrompt": "系统提示词",
@@ -2367,6 +2368,8 @@
       "connecting": "连接中...",
       "connected": "已连接",
       "addAnother": "添加其他日历",
+      "primaryOnly": "仅同步主日历",
+      "primaryOnlyDescription": "忽略他人共享给你的日历事件。",
       "disconnect": "断开",
       "disconnectConfirm": "断开 {{email}}？",
       "disconnectDescription": "将不再从此日历记录会议笔记。",

@@ -23,6 +23,7 @@ const {
   BrowserWindow,
   dialog,
   ipcMain,
+  net,
   session,
   systemPreferences,
 } = require("electron");
@@ -525,9 +526,10 @@ function getOauthCookieName() {
 // for the raw session.token the bearer plugin expects.
 async function exchangeSignedTokenForRawBearer(signedToken) {
   try {
-    const res = await fetch(`${resolveAuthUrl()}/api/auth/get-session`, {
+    const res = await net.fetch(`${resolveAuthUrl()}/api/auth/get-session`, {
       headers: { Cookie: `${getOauthCookieName()}=${signedToken}` },
       signal: AbortSignal.timeout(5000),
+      useSessionCookies: false,
     });
     if (!res.ok) return null;
     const data = await res.json();

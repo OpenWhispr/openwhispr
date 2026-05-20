@@ -7,6 +7,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-05-20
+
+A small patch on top of 1.7.1: zero unnecessary macOS Keychain prompts on first launch, working cloud transcription on Electron's `net.fetch`, the Note Formatting selector now actually controls model routing, Wave Terminal pastes via the terminal path, and a notes view stability fix.
+
+### Desktop & permissions
+
+- **No more spurious macOS Keychain prompts on first launch.** Two changes drop first-launch prompts from ~3 to 0: the environment manager no longer eagerly probes the secret-crypto backend before any window appears (it now defers Keychain access until the user actually saves their first secret), and the `safeStorage` key-loss backup is written only when a new master key is generated, not on every launch.
+
+### Transcription
+
+- **Cloud transcription works again on Electron's `net.fetch`.** The 1.7.0 migration from `https.request` to `net.fetch` carried over a manual `Content-Length` header, which Electron rejects as a forbidden Fetch header — `net::ERR_INVALID_ARGUMENT` before any bytes hit the wire. All five upload callers (cloud-transcribe, chunked cloud transcribe, retry, file upload, BYOK whisper-compatible) now let `net.fetch` set Content-Length itself.
+
+### Notes
+
+- **Note Formatting selector now actually controls model routing.** The Note Formatting tab exposed model / mode / provider keys that no runtime path read — `actionProcessingStore` was overriding any caller-supplied model with `getEffectiveCleanupModel()`, so switching the selector was a no-op end-to-end. Generate Notes now resolves through the same per-scope plumbing as Cleanup, with a `dictationCleanup` fallback so users who never touched Note Formatting keep their existing behavior. Closes #784.
+- **Notes view state management.** Fixed a stale-ref issue where switching between notes could lose unsaved enhanced-content edits.
+
+### Linux
+
+- **Wave Terminal paste.** Added Wave Terminal to the terminal allowlist so auto-paste uses `Ctrl+Shift+V` instead of the default `Ctrl+V`. Closes #814.
+
+## [1.7.1] - 2026-05-20
+
+A follow-up to 1.7.0 with a stronger encryption key for stored secrets, end-to-end voice activity detection on local Whisper, macOS mouse-button hotkeys, the full OpenAI Realtime GA migration, proxy-aware network paths, and a stack of platform fixes across Linux WMs, Intel Macs, and Windows.
+
+### Security
+
+- **Stronger encryption for stored secrets.** Secrets are now encrypted with AES-256-GCM using a 32-byte master key stored in the OS keychain via `@napi-rs/keyring` (Keychain on macOS, Credential Manager on Windows, libsecret on Linux). This replaces Chromium's `safeStorage` saltysalt/peanuts fallback as the trust anchor. Existing `safeStorage`-encrypted blobs are migrated transparently on first read — no prompts, no re-entry.
+- **Linux without a keyring daemon** continues to fall back to `safeStorage`, matching today's behavior.
+- **Key-loss protection.** When the keyring backend loads successfully, the master key is now backed up via `safeStorage` so a future native-module break can still decrypt existing blobs instead of losing them silently.
+
+### Local Whisper: voice activity detection
+
+- **Silero VAD is now wired end-to-end.** The 1.7.0 release exposed VAD tuning UI, but `whisper-server` was never actually started with `--vad` and the Silero model wasn't bundled. This release ships `ggml-silero-v5.1.2.bin` (~864 KB) via a new `download-whisper-vad-model.js` build step, resolves it through `WhisperManager.getVadModelPath()`, and emits the VAD flags only when both `vadEnabled` and the model path are present. Server restart now keys on the VAD model path so toggling the UI takes effect immediately.
+
+### Hotkeys
+
+- **macOS mouse-button hotkeys.** Bind dictation to mouse buttons 4, 5, etc. directly. Capture, validate, and re-bind are wired through the existing globe-listener with a hardened race fix so re-binding doesn't stomp the newly-spawned child process. Compound mouse hotkeys (e.g. `Cmd+MouseButton4`) are explicitly rejected — the native tap only handles bare buttons.
+
+### Notes & dictation
+
+- **Automatic note renaming is now configurable.** A new `autoGenerateNoteTitle` setting in Cleanup turns the auto-title behavior off; the setting is properly registered as a boolean so cross-window storage events don't leave it as the string `"false"` (which silently defeats the toggle). Action processing is now async so the UI doesn't block while a long action runs.
+- **Voice Agent rename.** The Dictation Agent tab and toggle are now labeled "Voice Agent" in all 10 locales; the internal `dictationAgent` identifiers are unchanged. The agent system prompt was compressed ~2700 → ~1200 chars now that name detection (`detectAgentName`) handles routing.
+- **Custom prompts sync across windows without restart.** Storage events for `customPrompt.*` keys now propagate Control Panel edits to the Main Window immediately.
+- **Side-panel layout flip is scoped to the notes view with an active note.** It no longer leaks onto Home, Chat, or Upload when the window is narrow; the layout now also flips correctly when you drag the window narrow on an open note and reverts on widen.
+- **Dictation overlay can't steal focus on Linux WMs.** The floating icon is now `focusable: false`, the cross-platform equivalent of the `no_focus [instance="open-whispr"]` workaround Sway/i3/wlroots users were applying by hand. Mouse clicks on mic and cancel still work; auto-paste no longer breaks because the original text field stays focused.
+- **Meeting-detected "Start Recording" no longer races on a fresh control panel.** The main process used to fire the `navigate-to-meeting-note` IPC after `did-finish-load` but before React mounted its listener, so the click was silently lost on a newly-created window. Now uses the same store-and-drain handshake the notification window already follows.
+
+### Reasoning & local LLMs
+
+- **Voice Agent only triggers when explicitly addressed.** With `useDictationAgent` on and `useCleanupModel` off, every utterance was previously routed to the agent. Now `detectAgentName` must match; otherwise the request falls back to cleanup if reachable, or skips reasoning. Closes #768.
+- **Self-hosted dictation agent uses its own credentials** instead of silently falling back to the cleanup model's URL and API key.
+- **Qwen thinking is suppressed on local llama.cpp.** Both the note-formatting and streaming chat-agent paths now send `chat_template_kwargs.enable_thinking: false` (the llama.cpp-compatible flag) so Qwen3.x doesn't exhaust its token budget inside `<think>` and return empty content.
+- **Stop sending Ollama-only `think` field to Groq.** Groq strictly validates request bodies and rejects unknown fields, so the suppression helper now picks the right dialect per provider instead of attaching both.
+- **`disableThinking` actually reaches every reasoning route.** `resolveReasoningRoute` previously returned a bare `{ kind: "cleanup" }` and the agent config omitted the flag, so `cleanupDisableThinking` and `dictationAgentDisableThinking` were silently dropped before reaching `processWithReasoningModel`. Now propagated through cleanup, BYOK cleanup, and streaming BYOK cleanup — Qwen finally respects the toggle on every STT path.
+- **Thinking-model responses parse correctly.** When a local llama-server response only includes `reasoning_content` (no `content` field — common for Qwen3 / DeepSeek-R1 in single-shot mode), the result is now read from that field instead of returning an empty string.
+- **Idle local LLM unloads from VRAM** after a timeout, freeing the GPU for other workloads.
+- **LAN / custom-cloud URL handling.** Accepts OpenAI-compatible URLs with or without a `/v1` suffix, and no longer produces `/v1/v1/chat/completions` when the stored endpoint already includes the suffix. Both LAN and custom-cloud paths now mirror the SDK's existing v1-suffix fallback.
+
+### Transcription
+
+- **Self-hosted STT endpoint resolution fixed.** `getTranscriptionEndpoint` was only reading `cloudTranscriptionBaseUrl`, which defaults to the OpenAI URL. When `transcriptionMode` is `self-hosted`, the resolver now reads `remoteTranscriptionUrl` and stops silently falling back to OpenAI (which produced a 401).
+- **Language preference is preserved on retry, in meetings, and in the dictation preview.** `preferredLanguage` is now threaded through every transcription path; non-English users were previously dropped to auto-detect on those branches.
+- **Custom dictionary now reaches the meeting note cleanup prompt.** The meeting branch bypassed the dictation cleanup helper and built its own system prompt inline, dropping the user's dictionary. The substitution logic is now in a reusable helper and called from both branches.
+- **Groq Whisper prompt cap fixed.** Custom STT routing to `api.groq.com` is now detected by endpoint URL (not provider name) and the prompt budget is capped at 890 chars (down from 900) to leave margin on UTF-16 codepoint drift.
+- **No more boot-time BYOK auto-default override.** A one-shot migration was switching `cloudTranscriptionMode` to `byok` on every cold boot whenever any BYOK key existed, overriding subscribed users' UI selection. Both the persistence bug and the "any key" signal are gone.
+- **Parakeet health check no longer stalls.** Removed a `transcribing` flag that gated the watchdog interval but had no other reader — if any error path failed to clear it, the watchdog would skip every tick forever and miss a dead sidecar.
+- **Transcription sync survives empty-text cloud rows.** The local `transcriptions` table enforces `text NOT NULL`, but the cloud allowed null/empty rows from earlier failed transcriptions. Pulling one of those would abort the entire sync loop with a `SqliteError`. Empty rows are now filtered on push, skipped on pull, and a defensive coalesce in `upsertTranscriptionFromCloud` guards against future bad inputs.
+
+### Streaming & cloud
+
+- **OpenAI Realtime GA migration complete.** OpenAI removed the Realtime Beta API on 2026-05-12. 1.7.0 dropped the `OpenAI-Beta` header but kept the Beta wire format — transcription still broke because the GA server emits `session.created` / `session.updated` (not `transcription_session.*`) and rejects `transcription_session.update` in favor of `session.update` with `session.type=transcription` and a nested `audio.input.*` schema. The two server-event handlers and the session configuration payload are now on the GA shape. Closes #805.
+- **Graceful fallback when the OpenWhispr API URL is unconfigured.** `postServerToken` now attaches a `NO_API` code so `startStreamingRecording` can fall back to batch recording instead of surfacing an unhandled error.
+
+### Networking & proxies
+
+- **All GitHub, cloud, and calendar fetches now go through Electron `net.fetch`.** PR #687 swapped 23 fetch sites onto `proxyFetch` but missed pre-existing private helpers using raw `http`/`https`. Behind corporate proxies these failed with `ENOTFOUND` / `ETIMEDOUT` before the proxy-aware downloader was ever reached (e.g. "Enable GPU" hitting `connect ETIMEDOUT <IP>:443`). Covers `downloadUtils` (new shared `fetchJson`), `llamaVulkanManager` / `whisperCudaManager` (GitHub release metadata, preserving `GITHUB_TOKEN`), `ipcHandlers.postMultipart` (chunked cloud transcribe, BYOK whisper uploads, 5 callers total), Google Calendar OAuth (token exchange/refresh/revoke) and `_apiGet` with a 10s `AbortSignal.timeout`, and the legacy signed-token bearer exchange in `main.js`.
+
+### Calendar
+
+- **Primary-only sync toggle.** A new "Sync primary calendar only" switch on the Google Calendar integration card (defaults on for new connections) ignores events from calendars shared with you end-to-end: fetch captures Google's `primary` flag, selection is filtered, stale events from deselected calendars are purged, and the notification cache and next-meeting timer are reset. Existing connected users are fixed-forward on next launch.
+
+### Platform fixes
+
+- **Meeting recording falls back to mic-only on Intel Macs** when the native CoreAudio process tap fails (ScreenCaptureKit / audio HAL quirks on AMD GPU configurations). The error no longer aborts the entire session — closes #744.
+- **`macos-media-remote` works on macOS 15.4+.** Three independent regressions (main-thread deadlock, etc.) caused the binary to always return `NOT_PLAYING` on macOS 26.4.x. Music pause/resume during dictation now works again on the latest macOS.
+- **Pop!OS COSMIC is forced to XWayland.** COSMIC's `XDG_CURRENT_DESKTOP=COSMIC` fell outside the relaunch allowlist, so the app ran as a native Wayland client — breaking the orb's initial placement and drag. Now handled like GNOME and KDE.
+- **Terminal detection on GNOME Wayland** now uses AT-SPI2 instead of the X11 selection heuristic, restoring `Ctrl+Shift+V` auto-paste for native Wayland terminal emulators. Fixes #725.
+- **Konsole on X11 auto-paste fixed.** Konsole intermittently reports no `WM_CLASS` via `xdotool`, so terminal detection went blind and fell through to `Ctrl+V` — which AI terminal agents like Codex and Claude Code interpret as image-paste, producing "No image found in clipboard" instead of pasting text. Detection now reads `/proc/<pid>/comm` as a complementary signal, and Konsole + X11 specifically routes through `xdotool windowactivate --sync key shift+Insert` (the XTest `Ctrl+Shift+V` path was being silently dropped by a long-standing focus/grab quirk). Closes #184; original patch and root-cause by @JGKle.
+- **Linux launcher symlinks** (e.g. `/usr/bin/open-whispr` → `/opt/OpenWhispr/open-whispr` from deb/rpm packages) no longer fail with "No such file or directory" — the wrapper now resolves the symlink target before sourcing.
+- **Windows: llama.cpp pinned to b8857** to keep `whisper-server.exe` (frozen at OpenWhispr/whisper.cpp 0.0.6) loading correctly. A llama.cpp release between b8861 and b9020 bumped ggml's ABI, leaving local Whisper users on 1.7.0 unable to transcribe; the download script now requests b8857 explicitly.
+- **Port availability check probes the wildcard address (`0.0.0.0` / `::`)** so sidecars don't false-positive on a free port when something is already bound on all interfaces. Resolved with a consolidated `serverUtils.isPortAvailable` with IPv6 probe. Closes #748.
+
+### Docs & contributor experience
+
+- **`.github/CONTRIBUTING.md`** now points to the canonical docs site so GitHub surfaces the link in the PR-creation UI.
+- **Arch Linux `ydotool` install guide** added to the Linux platform docs.
+
 ## [1.7.0] - 2026-04-30
 
 A big release: new sign-in options, smoother meeting recording, faster cross-device sync, a more configurable AI setup, and the long-planned move to our new legal entity (Gizmo Labs Inc.) on macOS and Windows.

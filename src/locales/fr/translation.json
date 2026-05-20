@@ -2340,6 +2340,7 @@
     "settings": {
       "hotkey": "Raccourci Agent",
       "hotkeyDescription": "Raccourci clavier pour basculer la fenêtre agent",
+      "clearHotkey": "Supprimer le raccourci",
       "model": "Modèle Agent",
       "modelDescription": "Modèle IA utilisé pour les conversations agent",
       "systemPrompt": "Prompt système",
@@ -2420,6 +2421,8 @@
       "connecting": "Connexion...",
       "connected": "Connecté",
       "addAnother": "Ajouter un autre calendrier",
+      "primaryOnly": "Synchroniser uniquement le calendrier principal",
+      "primaryOnlyDescription": "Ignorer les événements des calendriers partagés avec vous.",
       "disconnect": "Déconnecter",
       "disconnectConfirm": "Déconnecter {{email}} ?",
       "disconnectDescription": "Les notes de réunion ne seront plus enregistrées depuis ce calendrier.",

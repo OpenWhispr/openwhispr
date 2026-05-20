@@ -67,7 +67,6 @@ class OpenAIRealtimeStreaming {
       this.ws = new WebSocket(url, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
-          "OpenAI-Beta": "realtime=v1",
         },
       });
 
@@ -117,7 +116,7 @@ class OpenAIRealtimeStreaming {
       const event = JSON.parse(data.toString());
 
       switch (event.type) {
-        case "transcription_session.created": {
+        case "session.created": {
           if (this.preconfigured) {
             // Server-side ephemeral token already configured the session;
             // sending an update would strip language and noise-reduction.
@@ -139,17 +138,20 @@ class OpenAIRealtimeStreaming {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) break;
             this.ws.send(
               JSON.stringify({
-                type: "transcription_session.update",
+                type: "session.update",
                 session: {
-                  input_audio_format: "pcm16",
-                  input_audio_transcription: {
-                    model: this.model,
-                  },
-                  turn_detection: {
-                    type: "server_vad",
-                    threshold: 0.6,
-                    silence_duration_ms: 600,
-                    prefix_padding_ms: 500,
+                  type: "transcription",
+                  audio: {
+                    input: {
+                      format: { type: "audio/pcm", rate: SAMPLE_RATE },
+                      transcription: { model: this.model },
+                      turn_detection: {
+                        type: "server_vad",
+                        threshold: 0.6,
+                        silence_duration_ms: 600,
+                        prefix_padding_ms: 500,
+                      },
+                    },
                   },
                 },
               })
@@ -158,7 +160,7 @@ class OpenAIRealtimeStreaming {
           break;
         }
 
-        case "transcription_session.updated": {
+        case "session.updated": {
           if (this.pendingResolve) {
             this.isConnected = true;
             this.isConnecting = false;

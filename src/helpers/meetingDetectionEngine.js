@@ -205,8 +205,7 @@ class MeetingDetectionEngine {
           }
         }
 
-        await this.windowManager.createControlPanelWindow();
-        this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
+        await this.windowManager.queueMeetingNoteNavigation({
           noteId: noteResult.note.id,
           folderId: meetingsFolder.id,
           event: detection.event,
@@ -273,9 +272,7 @@ class MeetingDetectionEngine {
 
     this.broadcastToWindows("note-added", noteResult.note);
 
-    await this.windowManager.createControlPanelWindow();
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
+    await this.windowManager.queueMeetingNoteNavigation({
       noteId: noteResult.note.id,
       folderId: meetingsFolder.id,
       event,
@@ -315,9 +312,7 @@ class MeetingDetectionEngine {
 
     this.broadcastToWindows("note-added", updateResult?.note || noteResult.note);
 
-    await this.windowManager.createControlPanelWindow();
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    this.windowManager.sendToControlPanel("navigate-to-meeting-note", {
+    await this.windowManager.queueMeetingNoteNavigation({
       noteId: noteResult.note.id,
       folderId: meetingsFolder.id,
       event: calEvent,
