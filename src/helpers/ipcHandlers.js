@@ -1444,9 +1444,8 @@ class IPCHandlers {
       const mainWindow = this.windowManager?.mainWindow;
       const targetPid = this.textEditMonitor?.lastTargetPid || null;
 
-      // On macOS, explicitly activate the captured target app by PID. The
-      // previous hide()-based focus hand-off was unreliable for Chromium apps
-      // like Claude desktop and Brave (#668).
+      // Activating the target by PID is more reliable than hide()'s implicit
+      // focus hand-off for Chromium apps like Claude desktop and Brave (#668).
       let activated = false;
       if (process.platform === "darwin" && this.textEditMonitor) {
         activated = await this.textEditMonitor.activateTargetPid();
@@ -1455,8 +1454,6 @@ class IPCHandlers {
         }
       }
 
-      // Fallback when no target was captured: if the overlay has focus,
-      // dismiss it so the paste keystroke doesn't land on the overlay.
       if (!activated && mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
         if (process.platform === "darwin") {
           mainWindow.hide();

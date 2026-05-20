@@ -78,8 +78,7 @@ class TextEditMonitor extends EventEmitter {
 
   /**
    * macOS: bring the captured target app to the front before pasting.
-   * Replaces the implicit hide()-based focus hand-off, which is unreliable
-   * for Chromium-based apps like Claude desktop and Brave (#668).
+   * More reliable than hide()'s implicit hand-off for Chromium apps (#668).
    */
   activateTargetPid() {
     return new Promise((resolve) => {
@@ -92,11 +91,16 @@ class TextEditMonitor extends EventEmitter {
         `ObjC.import("AppKit"); ` +
         `const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(${pid}); ` +
         `if (app.isNil) { "not_found" } else { app.activateWithOptions(2); "ok" }`;
-      execFile("osascript", ["-l", "JavaScript", "-e", script], { timeout: 1000 }, (err, stdout) => {
-        const ok = !err && stdout.trim() === "ok";
-        debugLogger.debug("[TextEditMonitor] Activated target PID", { pid, ok });
-        resolve(ok);
-      });
+      execFile(
+        "osascript",
+        ["-l", "JavaScript", "-e", script],
+        { timeout: 1000 },
+        (err, stdout) => {
+          const ok = !err && stdout.trim() === "ok";
+          debugLogger.debug("[TextEditMonitor] Activated target PID", { pid, ok });
+          resolve(ok);
+        }
+      );
     });
   }
 
