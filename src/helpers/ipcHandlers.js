@@ -1453,9 +1453,6 @@ class IPCHandlers {
       let activated = false;
       if (process.platform === "darwin" && this.textEditMonitor) {
         activated = await this.textEditMonitor.activateTargetPid();
-        if (activated) {
-          await new Promise((resolve) => setTimeout(resolve, 80));
-        }
       }
 
       if (!activated && mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) {
