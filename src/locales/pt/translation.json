@@ -1721,6 +1721,7 @@
         "openai_gpt_4_1_nano": "GPT-4.1 com menor latência",
         "anthropic_claude_sonnet_4_5": "Desempenho equilibrado",
         "anthropic_claude_haiku_4_5": "Rápido com inteligência quase de ponta",
+        "gemini_gemini_3_5_flash": "Latest fast, high-capability Gemini model",
         "gemini_gemini_3_pro_preview": "Modelo principal de nova geração para raciocínio complexo",
         "gemini_gemini_3_flash_preview": "Modelo de nova geração ultrarápido e de alta capacidade",
         "gemini_gemini_2_5_flash_lite": "Menor latência e custo",

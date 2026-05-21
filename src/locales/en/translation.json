@@ -1849,6 +1849,7 @@
         "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
         "anthropic_claude_sonnet_4_5": "Balanced performance",
         "anthropic_claude_haiku_4_5": "Fast with near-frontier intelligence",
+        "gemini_gemini_3_5_flash": "Latest fast, high-capability Gemini model",
         "gemini_gemini_3_pro_preview": "Next-gen flagship model for complex reasoning",
         "gemini_gemini_3_flash_preview": "Ultra-fast, high-capability next-gen model",
         "gemini_gemini_2_5_flash_lite": "Lowest latency and cost",
