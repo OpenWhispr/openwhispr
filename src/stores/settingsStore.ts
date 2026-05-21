@@ -1951,4 +1951,26 @@ export async function initializeSettings(): Promise<void> {
       useSettingsStore.setState({ [data.key]: data.value });
     }
   });
+
+  const syncKeepAlive = () => {
+    const { transcriptionMode, remoteTranscriptionUrl } = useSettingsStore.getState();
+    const url = (remoteTranscriptionUrl || "").trim();
+    if (transcriptionMode === "self-hosted" && url.length > 0) {
+      window.electronAPI?.selfHostedKeepAliveStart?.(url);
+    } else {
+      window.electronAPI?.selfHostedKeepAliveStop?.();
+    }
+  };
+
+  syncKeepAlive();
+  useSettingsStore.subscribe(
+    (state, prev) => {
+      if (
+        state.transcriptionMode !== prev.transcriptionMode ||
+        state.remoteTranscriptionUrl !== prev.remoteTranscriptionUrl
+      ) {
+        syncKeepAlive();
+      }
+    }
+  );
 }

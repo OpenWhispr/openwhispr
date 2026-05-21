@@ -1824,6 +1824,8 @@ declare global {
       markTranscriptionSynced?: (id: number, cloudId: string) => Promise<void>;
       getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
       hardDeleteTranscription?: (id: number) => Promise<{ success: boolean; id: number }>;
+      selfHostedKeepAliveStart?: (url: string) => Promise<void>;
+      selfHostedKeepAliveStop?: () => Promise<void>;
     };
 
     api?: {

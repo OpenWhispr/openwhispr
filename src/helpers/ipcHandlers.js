@@ -28,6 +28,7 @@ const {
 } = require("./speakerAssignmentPolicy");
 const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
 const postMigrationDetector = require("./postMigrationDetector");
+const SelfHostedKeepAlive = require("./selfHostedKeepAlive");
 const {
   DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
@@ -306,6 +307,7 @@ class IPCHandlers {
     this.audioStorageManager = new AudioStorageManager();
     this._audioCleanupInterval = null;
     this._noteFilesEnabled = false;
+    this._selfHostedKeepAlive = new SelfHostedKeepAlive();
     this.speakerDiarizationEnabled = true;
     this.activeMeetingSpeakerConfig = null;
     this.whisperVadSettings = {
@@ -7498,6 +7500,14 @@ class IPCHandlers {
       this.databaseManager.saveNoteSpeakerEmbeddings(noteId, buffers);
       this._tryAutoLabelOneOnOne(noteId);
       return { success: true };
+    });
+
+    ipcMain.handle("self-hosted-keep-alive-start", (_event, url) => {
+      this._selfHostedKeepAlive.start(url);
+    });
+
+    ipcMain.handle("self-hosted-keep-alive-stop", () => {
+      this._selfHostedKeepAlive.stop();
     });
   }
 
