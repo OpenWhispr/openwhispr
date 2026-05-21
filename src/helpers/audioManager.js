@@ -11,6 +11,7 @@ import {
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
 import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../stores/settingsStore";
+import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth.js";
 import { detectAgentName } from "../config/agentDetection";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
@@ -827,10 +828,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async getAPIKey() {
     const s = getSettings();
     const provider = s.cloudTranscriptionProvider || "openai";
-    const transcriptionMode = s.transcriptionMode || "";
-    const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
-
-    if (transcriptionMode === "self-hosted" && remoteUrl.length > 0) {
+    if (shouldSkipTranscriptionApiKey(s)) {
       return null;
     }
 
