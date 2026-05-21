@@ -827,6 +827,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   async getAPIKey() {
     const s = getSettings();
     const provider = s.cloudTranscriptionProvider || "openai";
+    const transcriptionMode = s.transcriptionMode || "";
+    const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
+
+    if (transcriptionMode === "self-hosted" && remoteUrl.length > 0) {
+      return null;
+    }
 
     // Check cache (invalidate if provider changed)
     if (this.cachedApiKey !== null && this.cachedApiKeyProvider === provider) {
