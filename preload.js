@@ -584,6 +584,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getCortiTenant: () => ipcRenderer.invoke("get-corti-tenant"),
   saveCortiTenant: (value) => ipcRenderer.invoke("save-corti-tenant", value),
   testCortiConnection: () => ipcRenderer.invoke("test-corti-connection"),
+  cortiStartPkce: () => ipcRenderer.invoke("corti-start-pkce"),
+  cortiDisconnect: () => ipcRenderer.invoke("corti-disconnect"),
+  cortiGetAuthStatus: () => ipcRenderer.invoke("corti-get-auth-status"),
 
   // Meeting transcription (streaming, dual-channel)
   meetingTranscriptionPrepare: (options) =>

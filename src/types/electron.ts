@@ -1481,6 +1481,9 @@ declare global {
       getCortiTenant?: () => Promise<string>;
       saveCortiTenant?: (value: string) => Promise<{ success: boolean }>;
       testCortiConnection?: () => Promise<{ success: boolean; error?: string }>;
+      cortiStartPkce?: () => Promise<{ success: boolean; error?: string }>;
+      cortiDisconnect?: () => Promise<{ success: boolean; error?: string }>;
+      cortiGetAuthStatus?: () => Promise<{ isConnected: boolean; method: "pkce" | null }>;
 
       // Agent overlay
       resizeAgentWindow?: (width: number, height: number) => Promise<void>;

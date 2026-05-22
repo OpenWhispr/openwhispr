@@ -7,8 +7,9 @@ const CONFIG_TIMEOUT_MS = 10000;
 const TOKEN_EXPIRY_BUFFER_MS = 30000;
 
 class CortiTranscribeStreaming {
-  constructor(environmentManager) {
+  constructor(environmentManager, cortiOAuth) {
     this.environmentManager = environmentManager;
+    this.cortiOAuth = cortiOAuth;
     this.ws = null;
     this.isConnected = false;
     this.isConfigured = false;
@@ -27,7 +28,7 @@ class CortiTranscribeStreaming {
     this.finalSegments = [];
     this.audioBytesSent = 0;
     this.isDisconnecting = false;
-    this.tokenCache = { token: null, expiresAt: 0 };
+    this.clientCredsCache = { token: null, expiresAt: 0 };
     this.connectionOptions = null;
   }
 
@@ -36,17 +37,32 @@ class CortiTranscribeStreaming {
   }
 
   async _fetchToken() {
-    if (this.tokenCache.token && Date.now() < this.tokenCache.expiresAt - TOKEN_EXPIRY_BUFFER_MS) {
-      return this.tokenCache.token;
+    // PKCE first — uses stored refresh token, no secret required
+    if (this.cortiOAuth) {
+      try {
+        return await this.cortiOAuth.getValidAccessToken();
+      } catch {
+        // Fall through to client_credentials if a secret is configured
+      }
     }
 
+    // Client credentials fallback
     const clientId = this.environmentManager.getCortiClientId();
     const clientSecret = this.environmentManager.getCortiClientSecret();
     const region = this.environmentManager.getCortiRegion() || "eu";
     const tenant = this.environmentManager.getCortiTenant() || "base";
 
     if (!clientId || !clientSecret) {
-      throw new Error("Corti client credentials not configured");
+      throw new Error(
+        "Not connected to Corti. Connect via Settings or configure a Client Secret."
+      );
+    }
+
+    if (
+      this.clientCredsCache.token &&
+      Date.now() < this.clientCredsCache.expiresAt - TOKEN_EXPIRY_BUFFER_MS
+    ) {
+      return this.clientCredsCache.token;
     }
 
     const params = new URLSearchParams({
@@ -71,10 +87,10 @@ class CortiTranscribeStreaming {
     }
 
     const data = await res.json();
-    this.tokenCache.token = data.access_token;
-    this.tokenCache.expiresAt = Date.now() + (data.expires_in || 300) * 1000;
-    debugLogger.debug("Corti token fetched", { expiresIn: data.expires_in });
-    return this.tokenCache.token;
+    this.clientCredsCache.token = data.access_token;
+    this.clientCredsCache.expiresAt = Date.now() + (data.expires_in || 300) * 1000;
+    debugLogger.debug("Corti client_credentials token fetched", { expiresIn: data.expires_in });
+    return this.clientCredsCache.token;
   }
 
   _buildWssUrl(token) {

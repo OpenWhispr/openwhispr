@@ -13,6 +13,7 @@ const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
 const CortiTranscribeStreaming = require("./cortiTranscribeStreaming");
 const CortiManager = require("./cortiManager");
+const CortiOAuth = require("./cortiOAuth");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const AudioStorageManager = require("./audioStorage");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
@@ -297,7 +298,8 @@ class IPCHandlers {
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
     this.cortiStreaming = null;
-    this.cortiManager = new CortiManager(this.environmentManager);
+    this.cortiOAuth = new CortiOAuth(this.environmentManager);
+    this.cortiManager = new CortiManager(this.environmentManager, this.cortiOAuth);
     this._dictationStreaming = null;
     this._dictationConnectPromise = null;
     this._dictationIdleTimer = null;
@@ -2514,6 +2516,29 @@ class IPCHandlers {
 
     ipcMain.handle("test-corti-connection", async () => {
       return this.cortiManager.testConnection();
+    });
+
+    ipcMain.handle("corti-start-pkce", async () => {
+      try {
+        const result = await this.cortiOAuth.startPkceFlow();
+        return result;
+      } catch (err) {
+        debugLogger.error("Corti PKCE flow failed", { error: err.message }, "corti");
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.handle("corti-disconnect", async () => {
+      try {
+        await this.cortiOAuth.disconnect();
+        return { success: true };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    });
+
+    ipcMain.handle("corti-get-auth-status", () => {
+      return this.cortiOAuth.getAuthStatus();
     });
 
     ipcMain.handle("transcribe-corti-rest", async (event, audioBuffer, options = {}) => {
@@ -7072,7 +7097,7 @@ class IPCHandlers {
       try {
         const win = BrowserWindow.fromWebContents(event.sender);
         if (!this.cortiStreaming) {
-          this.cortiStreaming = new CortiTranscribeStreaming(this.environmentManager);
+          this.cortiStreaming = new CortiTranscribeStreaming(this.environmentManager, this.cortiOAuth);
         }
 
         if (this.cortiStreaming.isConnected) {

@@ -183,8 +183,10 @@ function CortiSettingsPanel() {
   const [region, setRegion] = useState<"eu" | "us">("eu");
   const [tenant, setTenant] = useState("base");
   const [mode, setMode] = useState<"websocket" | "rest">("websocket");
-  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
-  const [testError, setTestError] = useState("");
+  const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectError, setConnectError] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -192,37 +194,50 @@ function CortiSettingsPanel() {
       window.electronAPI?.getCortiClientSecret?.(),
       window.electronAPI?.getCortiRegion?.(),
       window.electronAPI?.getCortiTenant?.(),
-    ]).then(([id, secret, reg, ten]) => {
+      window.electronAPI?.cortiGetAuthStatus?.(),
+    ]).then(([id, secret, reg, ten, status]) => {
       if (id) setClientId(id);
       if (secret) setClientSecret(secret);
       if (reg === "us") setRegion("us");
       if (ten) setTenant(ten);
+      if (status?.isConnected) setIsConnected(true);
     });
   }, []);
 
-  const save = async () => {
+  const saveConfig = async (
+    nextRegion = region,
+    nextTenant = tenant,
+    nextClientId = clientId
+  ) => {
     await Promise.all([
-      window.electronAPI?.saveCortiClientId?.(clientId),
-      window.electronAPI?.saveCortiClientSecret?.(clientSecret),
-      window.electronAPI?.saveCortiRegion?.(region),
-      window.electronAPI?.saveCortiTenant?.(tenant),
+      window.electronAPI?.saveCortiClientId?.(nextClientId),
+      window.electronAPI?.saveCortiRegion?.(nextRegion),
+      window.electronAPI?.saveCortiTenant?.(nextTenant),
     ]);
-    useSettingsStore.getState().setCortiRegion(region);
-    useSettingsStore.getState().setCortiTenant(tenant);
-    useSettingsStore.getState().setCortiTranscriptionMode(mode);
+    useSettingsStore.getState().setCortiRegion(nextRegion);
+    useSettingsStore.getState().setCortiTenant(nextTenant);
   };
 
-  const testConnection = async () => {
-    setTestStatus("testing");
-    setTestError("");
-    await save();
-    const result = await window.electronAPI?.testCortiConnection?.();
+  const connect = async () => {
+    setIsConnecting(true);
+    setConnectError("");
+    await saveConfig();
+    const result = await window.electronAPI?.cortiStartPkce?.();
+    setIsConnecting(false);
     if (result?.success) {
-      setTestStatus("ok");
+      setIsConnected(true);
     } else {
-      setTestStatus("error");
-      setTestError(result?.error || "Connection failed");
+      setConnectError(result?.error || t("settingsPage.corti.connectFailed"));
     }
+  };
+
+  const disconnect = async () => {
+    await window.electronAPI?.cortiDisconnect?.();
+    setIsConnected(false);
+  };
+
+  const saveClientSecret = async () => {
+    await window.electronAPI?.saveCortiClientSecret?.(clientSecret);
   };
 
   return (
@@ -238,7 +253,10 @@ function CortiSettingsPanel() {
               <select
                 className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
                 value={region}
-                onChange={(e) => setRegion(e.target.value as "eu" | "us")}
+                onChange={(e) => {
+                  setRegion(e.target.value as "eu" | "us");
+                  saveConfig(e.target.value as "eu" | "us", tenant, clientId);
+                }}
               >
                 <option value="eu">EU</option>
                 <option value="us">US</option>
@@ -253,7 +271,7 @@ function CortiSettingsPanel() {
                 placeholder="base"
                 value={tenant}
                 onChange={(e) => setTenant(e.target.value)}
-                onBlur={save}
+                onBlur={() => saveConfig(region, tenant, clientId)}
               />
             </div>
           </div>
@@ -268,21 +286,7 @@ function CortiSettingsPanel() {
               placeholder="client_id"
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              onBlur={save}
-            />
-          </div>
-
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">
-              {t("settingsPage.corti.clientSecret")}
-            </label>
-            <Input
-              className="h-8 text-xs font-mono"
-              type="password"
-              placeholder="client_secret"
-              value={clientSecret}
-              onChange={(e) => setClientSecret(e.target.value)}
-              onBlur={save}
+              onBlur={() => saveConfig(region, tenant, clientId)}
             />
           </div>
 
@@ -295,7 +299,9 @@ function CortiSettingsPanel() {
               value={mode}
               onChange={(e) => {
                 setMode(e.target.value as "websocket" | "rest");
-                useSettingsStore.getState().setCortiTranscriptionMode(e.target.value as "websocket" | "rest");
+                useSettingsStore
+                  .getState()
+                  .setCortiTranscriptionMode(e.target.value as "websocket" | "rest");
               }}
             >
               <option value="websocket">{t("settingsPage.corti.modeWebsocket")}</option>
@@ -303,26 +309,68 @@ function CortiSettingsPanel() {
             </select>
           </div>
 
+          {/* Primary auth action */}
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={testConnection}
-              disabled={testStatus === "testing"}
-            >
-              {testStatus === "testing" ? (
-                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-              ) : null}
-              {t("settingsPage.corti.testConnection")}
-            </Button>
-            {testStatus === "ok" && (
-              <span className="text-xs text-green-500 flex items-center gap-1">
-                <Check className="w-3 h-3" /> {t("settingsPage.corti.testOk")}
-              </span>
+            {isConnected ? (
+              <>
+                <span className="text-xs text-green-500 flex items-center gap-1">
+                  <Check className="w-3 h-3" /> {t("settingsPage.corti.connected")}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={disconnect}
+                >
+                  {t("settingsPage.corti.disconnect")}
+                </Button>
+              </>
+            ) : (
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                onClick={connect}
+                disabled={isConnecting || !clientId}
+              >
+                {isConnecting ? (
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                ) : null}
+                {t("settingsPage.corti.connect")}
+              </Button>
             )}
-            {testStatus === "error" && (
-              <span className="text-xs text-destructive truncate max-w-[200px]">{testError}</span>
+            {connectError && (
+              <span className="text-xs text-destructive truncate max-w-[200px]">{connectError}</span>
+            )}
+          </div>
+
+          {/* Advanced: client_credentials fallback */}
+          <div>
+            <button
+              type="button"
+              className="text-xs text-muted-foreground flex items-center gap-1 hover:text-foreground transition-colors"
+              onClick={() => setShowAdvanced((v) => !v)}
+            >
+              {showAdvanced ? "▾" : "▸"} {t("settingsPage.corti.advanced")}
+            </button>
+            {showAdvanced && (
+              <div className="mt-2 space-y-2 pl-3 border-l border-border">
+                <p className="text-xs text-muted-foreground">
+                  {t("settingsPage.corti.clientSecretHint")}
+                </p>
+                <div>
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    {t("settingsPage.corti.clientSecret")}
+                  </label>
+                  <Input
+                    className="h-8 text-xs font-mono"
+                    type="password"
+                    placeholder="client_secret"
+                    value={clientSecret}
+                    onChange={(e) => setClientSecret(e.target.value)}
+                    onBlur={saveClientSecret}
+                  />
+                </div>
+              </div>
             )}
           </div>
         </div>

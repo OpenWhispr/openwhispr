@@ -6,9 +6,10 @@ const TRANSCRIPT_SYNC_TIMEOUT_MS = 27000; // Corti syncs up to 25s, poll after
 const TRANSCRIPT_ASYNC_TIMEOUT_MS = 120000;
 
 class CortiManager {
-  constructor(environmentManager) {
+  constructor(environmentManager, cortiOAuth) {
     this.environmentManager = environmentManager;
-    this.tokenCache = { token: null, expiresAt: 0 };
+    this.cortiOAuth = cortiOAuth;
+    this.clientCredsCache = { token: null, expiresAt: 0 };
   }
 
   _getConfig() {
@@ -21,13 +22,31 @@ class CortiManager {
   }
 
   async _ensureToken() {
-    if (this.tokenCache.token && Date.now() < this.tokenCache.expiresAt - TOKEN_EXPIRY_BUFFER_MS) {
-      return this.tokenCache.token;
+    // PKCE first — uses stored refresh token, no secret required
+    if (this.cortiOAuth) {
+      try {
+        return await this.cortiOAuth.getValidAccessToken();
+      } catch {
+        // Fall through to client_credentials if a secret is configured
+      }
     }
 
+    // Client credentials fallback (secret must be set)
     const { clientId, clientSecret, region, tenant } = this._getConfig();
     if (!clientId || !clientSecret) {
-      throw new Error("Corti client credentials not configured");
+      throw new Error(
+        "Not connected to Corti. Connect via Settings or configure a Client Secret."
+      );
+    }
+    return this._ensureClientCredsToken(clientId, clientSecret, region, tenant);
+  }
+
+  async _ensureClientCredsToken(clientId, clientSecret, region, tenant) {
+    if (
+      this.clientCredsCache.token &&
+      Date.now() < this.clientCredsCache.expiresAt - TOKEN_EXPIRY_BUFFER_MS
+    ) {
+      return this.clientCredsCache.token;
     }
 
     const params = new URLSearchParams({
@@ -52,10 +71,10 @@ class CortiManager {
     }
 
     const data = await res.json();
-    this.tokenCache.token = data.access_token;
-    this.tokenCache.expiresAt = Date.now() + (data.expires_in || 300) * 1000;
-    debugLogger.debug("Corti REST token fetched", { expiresIn: data.expires_in });
-    return this.tokenCache.token;
+    this.clientCredsCache.token = data.access_token;
+    this.clientCredsCache.expiresAt = Date.now() + (data.expires_in || 300) * 1000;
+    debugLogger.debug("Corti client_credentials token fetched", { expiresIn: data.expires_in });
+    return this.clientCredsCache.token;
   }
 
   _baseUrl() {

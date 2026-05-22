@@ -1727,7 +1727,14 @@
       "modeRest": "Batch REST",
       "testConnection": "Test Connection",
       "testOk": "Connected",
-      "pickerHint": "Configure credentials below in the Corti Settings panel."
+      "pickerHint": "Configure credentials below in the Corti Settings panel.",
+      "connect": "Connect with Corti",
+      "connecting": "Connecting...",
+      "connected": "Connected",
+      "disconnect": "Disconnect",
+      "connectFailed": "Connection failed",
+      "advanced": "Advanced: client credentials fallback",
+      "clientSecretHint": "If set, used as a fallback when no PKCE session is active."
     }
   },
   "models": {
