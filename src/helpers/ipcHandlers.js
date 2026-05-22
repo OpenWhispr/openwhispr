@@ -11,6 +11,8 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
+const CortiTranscribeStreaming = require("./cortiTranscribeStreaming");
+const CortiManager = require("./cortiManager");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const AudioStorageManager = require("./audioStorage");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
@@ -42,12 +44,14 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
   "assemblyai-realtime": AssemblyAiStreaming,
   "deepgram-realtime": DeepgramStreaming,
+  "corti-realtime": CortiTranscribeStreaming,
 };
 const ALLOWED_MEETING_PROVIDERS = new Set([
   "local",
   "openai-realtime",
   "assemblyai-realtime",
   "deepgram-realtime",
+  "corti-realtime",
 ]);
 
 function parseAttendees(raw) {
@@ -292,6 +296,8 @@ class IPCHandlers {
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
+    this.cortiStreaming = null;
+    this.cortiManager = new CortiManager(this.environmentManager);
     this._dictationStreaming = null;
     this._dictationConnectPromise = null;
     this._dictationIdleTimer = null;
@@ -2474,8 +2480,56 @@ class IPCHandlers {
       return this.environmentManager.saveMistralKey(key);
     });
 
-    ipcMain.handle(
-      "proxy-mistral-transcription",
+    ipcMain.handle("get-corti-client-id", async () => {
+      return this.environmentManager.getCortiClientId();
+    });
+
+    ipcMain.handle("save-corti-client-id", async (_event, value) => {
+      return this.environmentManager.saveCortiClientId(value);
+    });
+
+    ipcMain.handle("get-corti-client-secret", async () => {
+      return this.environmentManager.getCortiClientSecret();
+    });
+
+    ipcMain.handle("save-corti-client-secret", async (_event, value) => {
+      return this.environmentManager.saveCortiClientSecret(value);
+    });
+
+    ipcMain.handle("get-corti-region", async () => {
+      return this.environmentManager.getCortiRegion();
+    });
+
+    ipcMain.handle("save-corti-region", async (_event, value) => {
+      return this.environmentManager.saveCortiRegion(value);
+    });
+
+    ipcMain.handle("get-corti-tenant", async () => {
+      return this.environmentManager.getCortiTenant();
+    });
+
+    ipcMain.handle("save-corti-tenant", async (_event, value) => {
+      return this.environmentManager.saveCortiTenant(value);
+    });
+
+    ipcMain.handle("test-corti-connection", async () => {
+      return this.cortiManager.testConnection();
+    });
+
+    ipcMain.handle("transcribe-corti-rest", async (event, audioBuffer, options = {}) => {
+      try {
+        const result = await this.cortiManager.transcribeRecording(audioBuffer, options);
+        if (!result.success && result.message === "No audio detected") {
+          event.sender.send("no-audio-detected");
+        }
+        return result;
+      } catch (error) {
+        debugLogger.error("Corti REST transcription IPC error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("proxy-mistral-transcription",
       async (event, { audioBuffer, model, language, contextBias }) => {
         const apiKey = this.environmentManager.getMistralKey();
         if (!apiKey) {
@@ -7011,6 +7065,69 @@ class IPCHandlers {
         return { isConnected: false, sessionId: null };
       }
       return this.deepgramStreaming.getStatus();
+    });
+
+    // Corti streaming handlers
+    ipcMain.handle("corti-streaming-start", async (event, options = {}) => {
+      try {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (!this.cortiStreaming) {
+          this.cortiStreaming = new CortiTranscribeStreaming(this.environmentManager);
+        }
+
+        if (this.cortiStreaming.isConnected) {
+          await this.cortiStreaming.disconnect();
+        }
+
+        this.cortiStreaming.onPartialTranscript = (text) => {
+          win?.webContents.send("corti-partial-transcript", text);
+        };
+        this.cortiStreaming.onFinalTranscript = (text) => {
+          win?.webContents.send("corti-final-transcript", text);
+        };
+        this.cortiStreaming.onError = (error) => {
+          win?.webContents.send("corti-error", error.message);
+        };
+        this.cortiStreaming.onSessionEnd = (data) => {
+          win?.webContents.send("corti-session-end", data);
+        };
+
+        await this.cortiStreaming.connect(options);
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Corti streaming start error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.on("corti-streaming-send", (_event, audioBuffer) => {
+      try {
+        if (!this.cortiStreaming) return;
+        const buffer = Buffer.from(audioBuffer);
+        this.cortiStreaming.sendAudio(buffer);
+      } catch (error) {
+        debugLogger.error("Corti streaming send error", { error: error.message });
+      }
+    });
+
+    ipcMain.handle("corti-streaming-stop", async () => {
+      try {
+        let result = { text: "" };
+        if (this.cortiStreaming) {
+          result = await this.cortiStreaming.disconnect();
+        }
+        return { success: true, text: result?.text || "" };
+      } catch (error) {
+        debugLogger.error("Corti streaming stop error", { error: error.message });
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("corti-streaming-status", async () => {
+      if (!this.cortiStreaming) {
+        return { isConnected: false };
+      }
+      return this.cortiStreaming.getStatus();
     });
 
     // Agent mode handlers

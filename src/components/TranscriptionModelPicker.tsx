@@ -202,6 +202,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq" },
   { id: "mistral", name: "Mistral" },
+  { id: "corti", name: "Corti" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -857,6 +858,10 @@ export default function TranscriptionModelPicker({
                   />
                 </div>
               </div>
+            ) : selectedCloudProvider === "corti" ? (
+              <p className="text-xs text-muted-foreground">
+                {t("settingsPage.corti.pickerHint")}
+              </p>
             ) : (
               <div className="space-y-2">
                 <div className="space-y-1.5">

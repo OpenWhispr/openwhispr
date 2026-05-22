@@ -14,6 +14,8 @@ const SECRET_KEYS = [
   "MISTRAL_API_KEY",
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
+  "CORTI_CLIENT_ID",
+  "CORTI_CLIENT_SECRET",
   "CUSTOM_TRANSCRIPTION_API_KEY",
   "CUSTOM_CLEANUP_API_KEY",
   "BEDROCK_ACCESS_KEY_ID",
@@ -54,6 +56,8 @@ const PERSISTED_KEYS = [
   "AZURE_OPENAI_API_VERSION",
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
+  "CORTI_REGION",
+  "CORTI_TENANT",
 ];
 
 class EnvironmentManager {
@@ -399,6 +403,36 @@ class EnvironmentManager {
   }
   saveVertexApiKey(key) {
     return this._saveKey("VERTEX_API_KEY", key);
+  }
+
+  // Corti STT
+  getCortiClientId() {
+    return this._getKey("CORTI_CLIENT_ID");
+  }
+  saveCortiClientId(value) {
+    return this._saveKey("CORTI_CLIENT_ID", value);
+  }
+  getCortiClientSecret() {
+    return this._getKey("CORTI_CLIENT_SECRET");
+  }
+  saveCortiClientSecret(value) {
+    return this._saveKey("CORTI_CLIENT_SECRET", value);
+  }
+  getCortiRegion() {
+    return this._getKey("CORTI_REGION") || "eu";
+  }
+  saveCortiRegion(value) {
+    const result = this._saveKey("CORTI_REGION", value === "us" ? "us" : "eu");
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+  getCortiTenant() {
+    return this._getKey("CORTI_TENANT") || "base";
+  }
+  saveCortiTenant(value) {
+    const result = this._saveKey("CORTI_TENANT", value);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
   }
 
   getDictationKey() {

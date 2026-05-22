@@ -1441,6 +1441,47 @@ declare global {
         callback: (data: { audioDuration?: number; text?: string }) => void
       ) => () => void;
 
+      // Corti Streaming
+      cortiStreamingStart?: (options?: {
+        language?: string;
+        audioFormat?: string;
+      }) => Promise<{
+        success: boolean;
+        error?: string;
+        code?: string;
+      }>;
+      cortiStreamingSend?: (audioBuffer: ArrayBuffer) => void;
+      cortiStreamingStop?: () => Promise<{
+        success: boolean;
+        text?: string;
+        error?: string;
+      }>;
+      cortiStreamingStatus?: () => Promise<{
+        isConnected: boolean;
+        sessionId: string | null;
+      }>;
+      onCortiPartialTranscript?: (callback: (text: string) => void) => () => void;
+      onCortiiFinalTranscript?: (callback: (text: string) => void) => () => void;
+      onCortiError?: (callback: (error: string) => void) => () => void;
+      onCortiSessionEnd?: (callback: (data: { text?: string }) => void) => () => void;
+
+      // Corti REST
+      transcribeCortiRest?: (
+        audioBuffer: ArrayBuffer,
+        opts?: { language?: string }
+      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+
+      // Corti credentials
+      getCortiClientId?: () => Promise<string>;
+      saveCortiClientId?: (value: string) => Promise<{ success: boolean }>;
+      getCortiClientSecret?: () => Promise<string>;
+      saveCortiClientSecret?: (value: string) => Promise<{ success: boolean }>;
+      getCortiRegion?: () => Promise<string>;
+      saveCortiRegion?: (value: string) => Promise<{ success: boolean }>;
+      getCortiTenant?: () => Promise<string>;
+      saveCortiTenant?: (value: string) => Promise<{ success: boolean }>;
+      testCortiConnection?: () => Promise<{ success: boolean; error?: string }>;
+
       // Agent overlay
       resizeAgentWindow?: (width: number, height: number) => Promise<void>;
       getAgentWindowBounds?: () => Promise<{

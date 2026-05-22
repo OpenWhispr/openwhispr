@@ -548,6 +548,43 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, data) => callback(data)
   ),
 
+  // Corti Streaming
+  cortiStreamingStart: (options) => ipcRenderer.invoke("corti-streaming-start", options),
+  cortiStreamingSend: (audioBuffer) => ipcRenderer.send("corti-streaming-send", audioBuffer),
+  cortiStreamingStop: () => ipcRenderer.invoke("corti-streaming-stop"),
+  cortiStreamingStatus: () => ipcRenderer.invoke("corti-streaming-status"),
+  onCortiPartialTranscript: registerListener(
+    "corti-partial-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onCortiiFinalTranscript: registerListener(
+    "corti-final-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onCortiError: registerListener(
+    "corti-error",
+    (callback) => (_event, error) => callback(error)
+  ),
+  onCortiSessionEnd: registerListener(
+    "corti-session-end",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Corti REST transcription
+  transcribeCortiRest: (audioBuffer, opts) =>
+    ipcRenderer.invoke("transcribe-corti-rest", audioBuffer, opts),
+
+  // Corti credentials
+  getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),
+  saveCortiClientId: (value) => ipcRenderer.invoke("save-corti-client-id", value),
+  getCortiClientSecret: () => ipcRenderer.invoke("get-corti-client-secret"),
+  saveCortiClientSecret: (value) => ipcRenderer.invoke("save-corti-client-secret", value),
+  getCortiRegion: () => ipcRenderer.invoke("get-corti-region"),
+  saveCortiRegion: (value) => ipcRenderer.invoke("save-corti-region", value),
+  getCortiTenant: () => ipcRenderer.invoke("get-corti-tenant"),
+  saveCortiTenant: (value) => ipcRenderer.invoke("save-corti-tenant", value),
+  testCortiConnection: () => ipcRenderer.invoke("test-corti-connection"),
+
   // Meeting transcription (streaming, dual-channel)
   meetingTranscriptionPrepare: (options) =>
     ipcRenderer.invoke("meeting-transcription-prepare", options),

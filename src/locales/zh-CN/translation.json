@@ -1072,7 +1072,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
+          "features": [
+            "无限会议录制",
+            "代理模式",
+            "与您的数据对话",
+            "优先支持"
+          ],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -1710,6 +1715,19 @@
         "keyCreatedTitle": "Clave API creada",
         "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
       }
+    },
+    "corti": {
+      "title": "Corti Settings",
+      "region": "Region",
+      "tenant": "Tenant Name",
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "mode": "Transcription Mode",
+      "modeWebsocket": "Real-time Streaming",
+      "modeRest": "Batch REST",
+      "testConnection": "Test Connection",
+      "testOk": "Connected",
+      "pickerHint": "Configure credentials below in the Corti Settings panel."
     }
   },
   "models": {

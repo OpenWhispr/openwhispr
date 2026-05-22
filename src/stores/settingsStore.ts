@@ -481,6 +481,9 @@ export interface SettingsState
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
+  setCortiRegion: (value: "eu" | "us") => void;
+  setCortiTenant: (value: string) => void;
+  setCortiTranscriptionMode: (value: "websocket" | "rest") => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
   setUseDictationAgent: (value: boolean) => void;
@@ -710,6 +713,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   customDictionary: readStringArray("customDictionary", []),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
+  cortiRegion: (readString("cortiRegion", "eu") as "eu" | "us"),
+  cortiTenant: readString("cortiTenant", "base"),
+  cortiTranscriptionMode: (readString("cortiTranscriptionMode", "websocket") as "websocket" | "rest"),
 
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
   useCleanupModel: readBoolean("useCleanupModel", true),
@@ -1014,6 +1020,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupCloudMode: createStringSetter("cleanupCloudMode"),
   setCleanupCloudBaseUrl: createStringSetter("cleanupCloudBaseUrl"),
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
+  setCortiRegion: createStringSetter("cortiRegion") as (value: "eu" | "us") => void,
+  setCortiTenant: createStringSetter("cortiTenant"),
+  setCortiTranscriptionMode: createStringSetter("cortiTranscriptionMode") as (value: "websocket" | "rest") => void,
   setAutoGenerateNoteTitle: createBooleanSetter("autoGenerateNoteTitle"),
   setUseCleanupModel: createBooleanSetter("useCleanupModel"),
   setUseDictationAgent: createBooleanSetter("useDictationAgent"),

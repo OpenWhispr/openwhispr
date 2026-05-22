@@ -24,6 +24,9 @@ export interface TranscriptionSettings {
   customDictionary: string[];
   assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
+  cortiRegion: "eu" | "us";
+  cortiTenant: string;
+  cortiTranscriptionMode: "websocket" | "rest";
 }
 
 export interface CleanupSettings {
@@ -204,6 +207,9 @@ function useSettingsInternal() {
     customDictionary: store.customDictionary,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
+    cortiRegion: store.cortiRegion,
+    cortiTenant: store.cortiTenant,
+    cortiTranscriptionMode: store.cortiTranscriptionMode,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
     setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
     useCleanupModel: store.useCleanupModel,

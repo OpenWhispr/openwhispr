@@ -1715,6 +1715,19 @@
         "keyCreatedTitle": "Clave API creada",
         "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
       }
+    },
+    "corti": {
+      "title": "Corti Settings",
+      "region": "Region",
+      "tenant": "Tenant Name",
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "mode": "Transcription Mode",
+      "modeWebsocket": "Real-time Streaming",
+      "modeRest": "Batch REST",
+      "testConnection": "Test Connection",
+      "testOk": "Connected",
+      "pickerHint": "Configure credentials below in the Corti Settings panel."
     }
   },
   "models": {

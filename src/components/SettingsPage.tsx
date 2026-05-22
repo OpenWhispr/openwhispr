@@ -176,6 +176,161 @@ function SectionHeader({ title, description }: { title: string; description?: st
   );
 }
 
+function CortiSettingsPanel() {
+  const { t } = useTranslation();
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [region, setRegion] = useState<"eu" | "us">("eu");
+  const [tenant, setTenant] = useState("base");
+  const [mode, setMode] = useState<"websocket" | "rest">("websocket");
+  const [testStatus, setTestStatus] = useState<"idle" | "testing" | "ok" | "error">("idle");
+  const [testError, setTestError] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      window.electronAPI?.getCortiClientId?.(),
+      window.electronAPI?.getCortiClientSecret?.(),
+      window.electronAPI?.getCortiRegion?.(),
+      window.electronAPI?.getCortiTenant?.(),
+    ]).then(([id, secret, reg, ten]) => {
+      if (id) setClientId(id);
+      if (secret) setClientSecret(secret);
+      if (reg === "us") setRegion("us");
+      if (ten) setTenant(ten);
+    });
+  }, []);
+
+  const save = async () => {
+    await Promise.all([
+      window.electronAPI?.saveCortiClientId?.(clientId),
+      window.electronAPI?.saveCortiClientSecret?.(clientSecret),
+      window.electronAPI?.saveCortiRegion?.(region),
+      window.electronAPI?.saveCortiTenant?.(tenant),
+    ]);
+    useSettingsStore.getState().setCortiRegion(region);
+    useSettingsStore.getState().setCortiTenant(tenant);
+    useSettingsStore.getState().setCortiTranscriptionMode(mode);
+  };
+
+  const testConnection = async () => {
+    setTestStatus("testing");
+    setTestError("");
+    await save();
+    const result = await window.electronAPI?.testCortiConnection?.();
+    if (result?.success) {
+      setTestStatus("ok");
+    } else {
+      setTestStatus("error");
+      setTestError(result?.error || "Connection failed");
+    }
+  };
+
+  return (
+    <SettingsPanel>
+      <SettingsPanelRow>
+        <SectionHeader title={t("settingsPage.corti.title")} />
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">
+                {t("settingsPage.corti.region")}
+              </label>
+              <select
+                className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
+                value={region}
+                onChange={(e) => setRegion(e.target.value as "eu" | "us")}
+              >
+                <option value="eu">EU</option>
+                <option value="us">US</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">
+                {t("settingsPage.corti.tenant")}
+              </label>
+              <Input
+                className="h-8 text-xs"
+                placeholder="base"
+                value={tenant}
+                onChange={(e) => setTenant(e.target.value)}
+                onBlur={save}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              {t("settingsPage.corti.clientId")}
+            </label>
+            <Input
+              className="h-8 text-xs font-mono"
+              type="password"
+              placeholder="client_id"
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              onBlur={save}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              {t("settingsPage.corti.clientSecret")}
+            </label>
+            <Input
+              className="h-8 text-xs font-mono"
+              type="password"
+              placeholder="client_secret"
+              value={clientSecret}
+              onChange={(e) => setClientSecret(e.target.value)}
+              onBlur={save}
+            />
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              {t("settingsPage.corti.mode")}
+            </label>
+            <select
+              className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
+              value={mode}
+              onChange={(e) => {
+                setMode(e.target.value as "websocket" | "rest");
+                useSettingsStore.getState().setCortiTranscriptionMode(e.target.value as "websocket" | "rest");
+              }}
+            >
+              <option value="websocket">{t("settingsPage.corti.modeWebsocket")}</option>
+              <option value="rest">{t("settingsPage.corti.modeRest")}</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={testConnection}
+              disabled={testStatus === "testing"}
+            >
+              {testStatus === "testing" ? (
+                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+              ) : null}
+              {t("settingsPage.corti.testConnection")}
+            </Button>
+            {testStatus === "ok" && (
+              <span className="text-xs text-green-500 flex items-center gap-1">
+                <Check className="w-3 h-3" /> {t("settingsPage.corti.testOk")}
+              </span>
+            )}
+            {testStatus === "error" && (
+              <span className="text-xs text-destructive truncate max-w-[200px]">{testError}</span>
+            )}
+          </div>
+        </div>
+      </SettingsPanelRow>
+    </SettingsPanel>
+  );
+}
+
 interface TranscriptionSectionProps {
   isSignedIn: boolean;
   startOnboarding: () => void;
@@ -354,6 +509,9 @@ function TranscriptionSection({
       />
 
       {transcriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+      {transcriptionMode === "providers" && cloudTranscriptionProvider === "corti" && (
+        <CortiSettingsPanel />
+      )}
       {transcriptionMode === "local" && (
         <>
           {renderTranscriptionPicker("local")}

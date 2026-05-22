@@ -108,6 +108,18 @@ const STREAMING_PROVIDERS = {
     onError: (cb) => window.electronAPI.onDictationRealtimeError(cb),
     onSessionEnd: (cb) => window.electronAPI.onDictationRealtimeSessionEnd(cb),
   },
+  "corti-realtime": {
+    warmup: () => Promise.resolve(), // stateless — no pre-warming
+    start: (opts) => window.electronAPI.cortiStreamingStart(opts),
+    send: (buf) => window.electronAPI.cortiStreamingSend(buf),
+    finalize: () => {}, // flush is sent automatically on stop
+    stop: () => window.electronAPI.cortiStreamingStop(),
+    status: () => window.electronAPI.cortiStreamingStatus(),
+    onPartial: (cb) => window.electronAPI.onCortiPartialTranscript(cb),
+    onFinal: (cb) => window.electronAPI.onCortiiFinalTranscript(cb),
+    onError: (cb) => window.electronAPI.onCortiError(cb),
+    onSessionEnd: (cb) => window.electronAPI.onCortiSessionEnd(cb),
+  },
 };
 
 class AudioManager {
@@ -590,6 +602,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
         activeModel = "openwhispr-cloud";
         result = await this.processWithOpenWhisprCloud(audioBlob, metadata);
+      } else if (!useLocalWhisper && (settings.cloudTranscriptionProvider || "openai") === "corti") {
+        activeModel = "corti";
+        result = await this.processWithCortiREST(audioBlob, metadata);
       } else {
         activeModel = this.getTranscriptionModel();
         result = await this.processWithOpenAIAPI(audioBlob, metadata);
@@ -1275,6 +1290,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     );
 
     return result;
+  }
+
+  async processWithCortiREST(audioBlob, metadata = {}) {
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const settings = getSettings();
+    const language =
+      metadata.language ||
+      (settings.preferredLanguage !== "auto" ? settings.preferredLanguage : null);
+
+    const result = await window.electronAPI.transcribeCortiRest(arrayBuffer, { language });
+
+    if (!result.success) {
+      const err = new Error(result.error || "Corti transcription failed");
+      err.code = result.code;
+      throw err;
+    }
+
+    return { ...result, source: "corti-rest" };
   }
 
   async processWithOpenWhisprCloud(audioBlob, metadata = {}) {
@@ -2031,6 +2064,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   shouldUseStreaming(isSignedInOverride) {
     const s = getSettings();
     if (s.useLocalWhisper) return false;
+
+    // Corti realtime streaming — always streams when provider is corti-realtime
+    if (this.sttConfig?.streamingProvider === "corti-realtime") return true;
 
     // For dictation/agent: respect sttConfig mode from the API — this allows
     // batch mode even for realtime-capable models (e.g. gpt-4o-mini-transcribe).
