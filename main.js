@@ -1363,6 +1363,7 @@ async function startApp() {
     const needsNativeListener = (hotkey, mode) => {
       if (!isValidHotkey(hotkey)) return false;
       if (mode === "push") return true;
+      if (hotkeyManager.useKDE) return false;
       return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey);
     };
 
