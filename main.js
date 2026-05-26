@@ -52,6 +52,7 @@ const DEFAULT_OAUTH_PROTOCOL_BY_CHANNEL = {
   staging: "openwhispr-staging",
   production: "openwhispr",
 };
+const CORTI_PROTOCOL = "cortispeech";
 const BASE_WINDOWS_APP_ID = "com.gizmolabs.openwhispr";
 const DEFAULT_AUTH_BRIDGE_PORT = 5199;
 
@@ -207,6 +208,19 @@ function registerOpenWhisprProtocol() {
 const protocolRegistered = registerOpenWhisprProtocol();
 if (!protocolRegistered) {
   console.warn(`[Auth] Failed to register ${OAUTH_PROTOCOL}:// protocol handler`);
+}
+
+// Register cortispeech:// for Corti PKCE OAuth callbacks (same approach as above).
+function registerCortiProtocol() {
+  if (shouldRegisterProtocolWithAppArg()) {
+    const appArg = process.argv[1] ? path.resolve(process.argv[1]) : path.resolve(".");
+    return app.setAsDefaultProtocolClient(CORTI_PROTOCOL, process.execPath, [appArg]);
+  }
+  return app.setAsDefaultProtocolClient(CORTI_PROTOCOL);
+}
+const cortiProtocolRegistered = registerCortiProtocol();
+if (!cortiProtocolRegistered) {
+  console.warn(`[Auth] Failed to register ${CORTI_PROTOCOL}:// protocol handler`);
 }
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -457,6 +471,14 @@ function initializeDeferredManagers() {
 
 app.on("open-url", (event, url) => {
   event.preventDefault();
+
+  if (url.startsWith(`${CORTI_PROTOCOL}://`)) {
+    ipcHandlers?.cortiOAuth?.handleCallback(url).catch((err) => {
+      if (debugLogger) debugLogger.error("Corti PKCE callback failed", { error: err.message });
+    });
+    return;
+  }
+
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
 
   if (url.includes("upgrade-success")) {
@@ -1479,6 +1501,13 @@ if (gotSingleInstanceLock) {
     }
 
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
+    const cortiUrl = commandLine.find((arg) => arg.startsWith(`${CORTI_PROTOCOL}://`));
+    if (cortiUrl) {
+      ipcHandlers?.cortiOAuth?.handleCallback(cortiUrl).catch((err) => {
+        if (debugLogger) debugLogger.error("Corti PKCE callback failed", { error: err.message });
+      });
+    }
+
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
       if (url.includes("upgrade-success")) {
