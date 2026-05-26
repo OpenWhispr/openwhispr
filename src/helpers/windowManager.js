@@ -26,6 +26,7 @@ class WindowManager {
     this.notificationWindow = null;
     this._notificationTimeout = null;
     this.transcriptionPreviewWindow = null;
+    this._transcriptionPreviewHideTimer = null;
     this.updateNotificationWindow = null;
     this._updateNotificationDismissed = false;
     this.notificationPrefs = {
@@ -763,7 +764,21 @@ class WindowManager {
     this.transcriptionPreviewWindow = new BrowserWindow(TRANSCRIPTION_PREVIEW_CONFIG);
 
     this.transcriptionPreviewWindow.on("closed", () => {
+      this._cancelTranscriptionPreviewHideTimer();
       this.transcriptionPreviewWindow = null;
+    });
+
+    this.transcriptionPreviewWindow.webContents.on("render-process-gone", (_event, details) => {
+      console.warn("Transcription preview renderer gone", details);
+      this._cancelTranscriptionPreviewHideTimer();
+      if (this.transcriptionPreviewWindow && !this.transcriptionPreviewWindow.isDestroyed()) {
+        this.transcriptionPreviewWindow.destroy();
+      }
+      this.transcriptionPreviewWindow = null;
+    });
+
+    this.transcriptionPreviewWindow.webContents.on("unresponsive", () => {
+      console.warn("Transcription preview renderer unresponsive");
     });
 
     if (process.env.NODE_ENV === "development") {
@@ -779,10 +794,19 @@ class WindowManager {
     }
   }
 
+  _cancelTranscriptionPreviewHideTimer() {
+    if (this._transcriptionPreviewHideTimer) {
+      clearTimeout(this._transcriptionPreviewHideTimer);
+      this._transcriptionPreviewHideTimer = null;
+    }
+  }
+
   async showTranscriptionPreview(text) {
     await this.ensureTranscriptionPreviewWindow();
 
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
+
+    this._cancelTranscriptionPreviewHideTimer();
 
     const mainBounds =
       this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow.getBounds() : null;
@@ -803,7 +827,22 @@ class WindowManager {
 
   appendTranscriptionPreview(text) {
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
+    this._cancelTranscriptionPreviewHideTimer();
     this.transcriptionPreviewWindow.webContents.send("preview-append", text);
+    if (!this.transcriptionPreviewWindow.isVisible()) {
+      this.transcriptionPreviewWindow.showInactive();
+      WindowPositionUtil.setupAlwaysOnTop(this.transcriptionPreviewWindow);
+    }
+  }
+
+  updateTranscriptionPreview(text) {
+    if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
+    this._cancelTranscriptionPreviewHideTimer();
+    this.transcriptionPreviewWindow.webContents.send("preview-text", text);
+    if (!this.transcriptionPreviewWindow.isVisible()) {
+      this.transcriptionPreviewWindow.showInactive();
+      WindowPositionUtil.setupAlwaysOnTop(this.transcriptionPreviewWindow);
+    }
   }
 
   holdTranscriptionPreview(options = {}) {
@@ -813,18 +852,31 @@ class WindowManager {
     });
   }
 
-  completeTranscriptionPreview(text) {
+  completeTranscriptionPreview(text, options = {}) {
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
-    this.transcriptionPreviewWindow.webContents.send("preview-result", { text });
+    this._cancelTranscriptionPreviewHideTimer();
+    this.transcriptionPreviewWindow.webContents.send("preview-result", {
+      text,
+      insertTextContinuously: options.insertTextContinuously !== false,
+    });
     this.transcriptionPreviewWindow.showInactive();
     WindowPositionUtil.setupAlwaysOnTop(this.transcriptionPreviewWindow);
+  }
+
+  setTranscriptionPreviewMode({ insertTextContinuously }) {
+    if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
+    this.transcriptionPreviewWindow.webContents.send("preview-mode", {
+      insertTextContinuously: insertTextContinuously !== false,
+    });
   }
 
   hideTranscriptionPreview() {
     if (!this.transcriptionPreviewWindow || this.transcriptionPreviewWindow.isDestroyed()) return;
 
+    this._cancelTranscriptionPreviewHideTimer();
     this.transcriptionPreviewWindow.webContents.send("preview-hide");
-    setTimeout(() => {
+    this._transcriptionPreviewHideTimer = setTimeout(() => {
+      this._transcriptionPreviewHideTimer = null;
       if (this.transcriptionPreviewWindow && !this.transcriptionPreviewWindow.isDestroyed()) {
         this.transcriptionPreviewWindow.hide();
       }

@@ -128,6 +128,7 @@ const BOOLEAN_SETTINGS = new Set([
   "dataRetentionEnabled",
   "noteFilesEnabled",
   "showTranscriptionPreview",
+  "insertTextContinuously",
   "cleanupDisableThinking",
   "dictationAgentDisableThinking",
   "noteFormattingDisableThinking",
@@ -379,6 +380,7 @@ export interface SettingsState
   whisperVadSamplesOverlap: number;
   panelStartPosition: "bottom-right" | "center" | "bottom-left";
   showTranscriptionPreview: boolean;
+  insertTextContinuously: boolean;
   autoPasteEnabled: boolean;
   keepTranscriptionInClipboard: boolean;
   noteFilesEnabled: boolean;
@@ -481,7 +483,7 @@ export interface SettingsState
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
-  setCortiRegion: (value: "eu" | "us") => void;
+  setCortiEnvironment: (value: string) => void;
   setCortiTenant: (value: string) => void;
   setCortiTranscriptionMode: (value: "websocket" | "rest") => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
@@ -566,6 +568,7 @@ export interface SettingsState
   setWhisperVadSamplesOverlap: (value: number) => void;
   setPanelStartPosition: (position: "bottom-right" | "center" | "bottom-left") => void;
   setShowTranscriptionPreview: (value: boolean) => void;
+  setInsertTextContinuously: (value: boolean) => void;
   setAutoPasteEnabled: (value: boolean) => void;
   setKeepTranscriptionInClipboard: (value: boolean) => void;
   setNoteFilesEnabled: (value: boolean) => void;
@@ -690,30 +693,29 @@ function invalidateApiKeyCaches(
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   uiLanguage: normalizeUiLanguage(isBrowser ? localStorage.getItem("uiLanguage") : null),
-  useLocalWhisper: readBoolean("useLocalWhisper", false),
+  // Corti is now the only STT provider. These fields are retained for backwards
+  // compatibility with persisted settings and meeting-mode overrides but the
+  // active dictation pipeline always uses Corti.
+  useLocalWhisper: false,
   whisperModel: readString("whisperModel", "base"),
-  localTranscriptionProvider: (readString("localTranscriptionProvider", "whisper") === "nvidia"
-    ? "nvidia"
-    : "whisper") as LocalTranscriptionProvider,
+  localTranscriptionProvider: "whisper" as LocalTranscriptionProvider,
   parakeetModel: readString("parakeetModel", ""),
-  allowOpenAIFallback: readBoolean("allowOpenAIFallback", false),
-  allowLocalFallback: readBoolean("allowLocalFallback", false),
+  allowOpenAIFallback: false,
+  allowLocalFallback: false,
   fallbackWhisperModel: readString("fallbackWhisperModel", "base"),
   preferredLanguage: readString("preferredLanguage", "auto"),
-  cloudTranscriptionProvider: readString("cloudTranscriptionProvider", "openai"),
-  cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
+  cloudTranscriptionProvider: "corti",
+  cloudTranscriptionModel: "transcribe",
   cloudTranscriptionBaseUrl: readString(
     "cloudTranscriptionBaseUrl",
     API_ENDPOINTS.TRANSCRIPTION_BASE
   ),
-  // Secrets aren't hydrated yet at construction; the BYOK default is set
-  // post-hydration in initializeSettings.
-  cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
+  cloudTranscriptionMode: "byok",
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   customDictionary: readStringArray("customDictionary", []),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
-  cortiRegion: (readString("cortiRegion", "eu") as "eu" | "us"),
+  cortiEnvironment: readString("cortiEnvironment", "eu"),
   cortiTenant: readString("cortiTenant", "base"),
   cortiTranscriptionMode: (readString("cortiTranscriptionMode", "websocket") as "websocket" | "rest"),
 
@@ -827,18 +829,15 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (v === "bottom-right" || v === "center" || v === "bottom-left") return v;
     return "bottom-right" as const;
   })(),
-  showTranscriptionPreview: readBoolean("showTranscriptionPreview", false),
+  showTranscriptionPreview: readBoolean("showTranscriptionPreview", true),
+  insertTextContinuously: readBoolean("insertTextContinuously", true),
   autoPasteEnabled: readBoolean("autoPasteEnabled", true),
   keepTranscriptionInClipboard: readBoolean("keepTranscriptionInClipboard", false),
   noteFilesEnabled: readBoolean("noteFilesEnabled", false),
   noteFilesPath: readString("noteFilesPath", ""),
   isSignedIn: readBoolean("isSignedIn", false),
 
-  transcriptionMode: (() => {
-    const v = readString("transcriptionMode", "openwhispr");
-    if (v === "openwhispr" || v === "providers" || v === "local" || v === "self-hosted") return v;
-    return "openwhispr" as InferenceMode;
-  })(),
+  transcriptionMode: "providers" as InferenceMode,
   remoteTranscriptionType: (() => {
     const v = readString("remoteTranscriptionType", "lan");
     return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
@@ -1020,7 +1019,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCleanupCloudMode: createStringSetter("cleanupCloudMode"),
   setCleanupCloudBaseUrl: createStringSetter("cleanupCloudBaseUrl"),
   setAssemblyAiStreaming: createBooleanSetter("assemblyAiStreaming"),
-  setCortiRegion: createStringSetter("cortiRegion") as (value: "eu" | "us") => void,
+  setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
   setCortiTranscriptionMode: createStringSetter("cortiTranscriptionMode") as (value: "websocket" | "rest") => void,
   setAutoGenerateNoteTitle: createBooleanSetter("autoGenerateNoteTitle"),
@@ -1347,6 +1346,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   setShowTranscriptionPreview: createBooleanSetter("showTranscriptionPreview"),
+  setInsertTextContinuously: createBooleanSetter("insertTextContinuously"),
   setAutoPasteEnabled: createBooleanSetter("autoPasteEnabled"),
   setKeepTranscriptionInClipboard: createBooleanSetter("keepTranscriptionInClipboard"),
   setNoteFilesEnabled: createBooleanSetter("noteFilesEnabled"),

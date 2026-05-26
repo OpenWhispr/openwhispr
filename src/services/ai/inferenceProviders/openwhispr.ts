@@ -1,46 +1,15 @@
 import type { InferenceProvider } from "./types";
-import { withSessionRefresh } from "../../../lib/auth";
-import { getSettings } from "../../../stores/settingsStore";
-import logger from "../../../utils/logger";
 
+// OpenWhispr cloud inference has been removed. This stub keeps the provider
+// id registered so existing settings ("openwhispr" in cleanupCloudMode etc.)
+// don't reach the registry with `undefined`. Any call throws a clear message.
 export const openwhisprProvider: InferenceProvider = {
   id: "openwhispr",
-  async call({ text, model, agentName, config, ctx }) {
-    logger.logReasoning("OPENWHISPR_START", { model, agentName });
-
-    const customPrompt = config.systemPrompt
-      ? undefined
-      : getSettings().customPrompts.cleanup || undefined;
-
-    const result = await withSessionRefresh(async () => {
-      const res = await window.electronAPI?.cloudReason?.(text, {
-        agentName,
-        customDictionary: ctx.getCustomDictionary(),
-        customPrompt,
-        systemPrompt: config.systemPrompt,
-        language: ctx.getPreferredLanguage(),
-        locale: ctx.getUiLanguage(),
-      });
-
-      if (!res?.success) {
-        const err: Error & { code?: string } = new Error(
-          res?.error || "OpenWhispr cloud reasoning failed"
-        );
-        err.code = res?.code;
-        throw err;
-      }
-
-      return res;
-    });
-
-    logger.logReasoning("OPENWHISPR_SUCCESS", {
-      model: result.model,
-      provider: result.provider,
-      resultLength: result.text.length,
-      promptMode: result.promptMode,
-      matchType: result.matchType,
-    });
-
-    return result.text;
+  async call() {
+    const err: Error & { code?: string } = new Error(
+      "OpenWhispr cloud inference is no longer available. Switch to OpenAI, Anthropic, Gemini, or a local model in Settings."
+    );
+    err.code = "OPENWHISPR_REMOVED";
+    throw err;
   },
 };

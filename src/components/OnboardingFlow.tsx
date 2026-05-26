@@ -11,11 +11,13 @@ import {
   Shield,
   Command,
   UserCircle,
+  Loader2,
+  AlertTriangle,
+  Sliders,
+  LogOut,
 } from "lucide-react";
 import TitleBar from "./TitleBar";
-import WindowControls from "./WindowControls";
 import PermissionsSection from "./ui/PermissionsSection";
-import SupportDropdown from "./ui/SupportDropdown";
 import StepProgress from "./ui/StepProgress";
 import { AlertDialog, ConfirmDialog } from "./ui/dialog";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -25,18 +27,20 @@ import { useClipboard } from "../hooks/useClipboard";
 import { useSystemAudioPermission } from "../hooks/useSystemAudioPermission";
 import { useSettings } from "../hooks/useSettings";
 import LanguageSelector from "./ui/LanguageSelector";
-import AuthenticationStep from "./AuthenticationStep";
-import EmailVerificationStep from "./EmailVerificationStep";
+import { useCortiAccount } from "../hooks/useCortiAccount";
+import { Input } from "./ui/input";
+import { Popover, PopoverTrigger, PopoverContent } from "./ui/popover";
+import { Toggle } from "./ui/toggle";
+import { cn } from "./lib/utils";
+import { useSettingsStore } from "../stores/settingsStore";
 import { setAgentName as saveAgentName } from "../utils/agentName";
 import { formatHotkeyLabel, getDefaultHotkey, isGlobeLikeHotkey } from "../utils/hotkeys";
-import { useAuth } from "../hooks/useAuth";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { getValidationMessage } from "../utils/hotkeyValidator";
 import { getCachedPlatform, getPlatform } from "../utils/platform";
 import logger from "../utils/logger";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
-import TranscriptionModelPicker from "./TranscriptionModelPicker";
 import { ACCESSIBILITY_SKIPPED_KEY, areRequiredPermissionsMet } from "../utils/permissions";
 
 interface OnboardingFlowProps {
@@ -45,9 +49,8 @@ interface OnboardingFlowProps {
 
 export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
-  const { isSignedIn } = useAuth();
 
-  const getMaxStep = () => (isSignedIn ? 2 : 3);
+  const getMaxStep = () => 3;
 
   const [currentStep, setCurrentStep, removeCurrentStep] = useLocalStorage(
     "onboardingCurrentStep",
@@ -75,39 +78,20 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   );
 
   const {
-    useLocalWhisper,
-    whisperModel,
-    localTranscriptionProvider,
-    parakeetModel,
-    cloudTranscriptionProvider,
-    cloudTranscriptionModel,
-    cloudTranscriptionBaseUrl,
-    openaiApiKey,
-    groqApiKey,
-    mistralApiKey,
     dictationKey,
     activationMode,
     setActivationMode,
     setDictationKey,
-    setUseLocalWhisper,
     updateTranscriptionSettings,
     preferredLanguage,
   } = useSettings();
 
   const [hotkey, setHotkey] = useState(dictationKey || getDefaultHotkey());
   const [agentName, setAgentName] = useState("OpenWhispr");
-  const [skipAuth, setSkipAuth] = useState(false);
-  const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
-  const [isModelDownloaded, setIsModelDownloaded] = useState(false);
   const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
   const readableHotkey = formatHotkeyLabel(hotkey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
     useDialogs();
-  const [connectivityDialog, setConnectivityDialog] = useState<{
-    open: boolean;
-    cause: string;
-  }>({ open: false, cause: "" });
-
   const autoRegisterInFlightRef = useRef(false);
   const hotkeyStepInitializedRef = useRef(false);
 
@@ -140,26 +124,25 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setAccessibilitySkipped,
   ]);
 
-  // For signed-in users, permissions are folded into the "setup" step.
   const steps = useMemo(
-    () =>
-      isSignedIn && !skipAuth
-        ? [
-            { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
-            { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
-            { id: "activation", title: t("onboarding.steps.activation"), icon: Command },
-          ]
-        : [
-            { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
-            { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
-            { id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield },
-            { id: "activation", title: t("onboarding.steps.activation"), icon: Command },
-          ],
-    [isSignedIn, skipAuth, t]
+    () => [
+      {
+        id: "corti",
+        title: t("onboarding.steps.corti", "Sign in"),
+        icon: UserCircle,
+      },
+      {
+        id: "language",
+        title: t("onboarding.steps.language", "Language"),
+        icon: Settings,
+      },
+      { id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield },
+      { id: "activation", title: t("onboarding.steps.activation"), icon: Command },
+    ],
+    [t]
   );
 
-  // Only show progress for signed-up users after account creation step
-  const showProgress = currentStep > 0;
+  const showProgress = true;
 
   useEffect(() => {
     const checkHotkeyMode = async () => {
@@ -190,32 +173,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     return () => unsubscribe?.();
   }, []);
 
-  useEffect(() => {
-    const modelToCheck = localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel;
-    if (!useLocalWhisper || !modelToCheck) {
-      setIsModelDownloaded(false);
-      return;
-    }
-
-    const checkStatus = async () => {
-      try {
-        const result =
-          localTranscriptionProvider === "nvidia"
-            ? await window.electronAPI?.checkParakeetModelStatus(modelToCheck)
-            : await window.electronAPI?.checkModelStatus(modelToCheck);
-        setIsModelDownloaded(result?.downloaded ?? false);
-      } catch (error) {
-        logger.error("Failed to check model status", { error }, "onboarding");
-        setIsModelDownloaded(false);
-      }
-    };
-
-    checkStatus();
-  }, [useLocalWhisper, whisperModel, parakeetModel, localTranscriptionProvider]);
-
   // Auto-register default hotkey when entering the activation step
-  // (step 3 for non-signed-in, step 2 for signed-in users)
-  const activationStepIndex = isSignedIn && !skipAuth ? 2 : 3;
+  const activationStepIndex = 3;
 
   useEffect(() => {
     if (currentStep !== activationStepIndex) {
@@ -302,22 +261,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setDictationKey(hotkey);
     saveAgentName(agentName);
 
-    const skippedAuth = skipAuth;
-    localStorage.setItem("authenticationSkipped", skippedAuth.toString());
     localStorage.setItem("onboardingCompleted", "true");
-    localStorage.setItem("skipAuth", skippedAuth.toString());
 
     // Fresh install: write the bundle-migration sentinel so the
     // PostMigrationOnboarding modal doesn't fire on next launch.
-    // Migrating users skip onboarding entirely (their flag carries over
-    // via productName-keyed userData), so they never reach this code.
     void window.electronAPI?.markBundleMigrated?.();
-
-    // Non-signed-in users in cloud mode default to BYOK to avoid
-    // "OpenWhispr Cloud requires sign-in" errors.
-    if (!isSignedIn && !useLocalWhisper) {
-      updateTranscriptionSettings({ cloudTranscriptionMode: "byok" });
-    }
 
     try {
       await window.electronAPI?.saveAllKeysToEnv?.();
@@ -326,16 +274,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
 
     return true;
-  }, [
-    hotkey,
-    agentName,
-    setDictationKey,
-    ensureHotkeyRegistered,
-    isSignedIn,
-    useLocalWhisper,
-    skipAuth,
-    updateTranscriptionSettings,
-  ]);
+  }, [hotkey, agentName, setDictationKey, ensureHotkeyRegistered]);
 
   const nextStep = useCallback(async () => {
     if (currentStep >= steps.length - 1) {
@@ -343,11 +282,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
 
     const currentStepId = steps[currentStep]?.id;
-    const isPermissionsGate =
-      currentStepId === "permissions" || (currentStepId === "setup" && isSignedIn && !skipAuth);
     if (
       getPlatform() === "darwin" &&
-      isPermissionsGate &&
+      currentStepId === "permissions" &&
       !permissionsHook.accessibilityPermissionGranted
     ) {
       setAccessibilitySkipped(true);
@@ -367,8 +304,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setCurrentStep,
     steps,
     activationStepIndex,
-    isSignedIn,
-    skipAuth,
     permissionsHook.accessibilityPermissionGranted,
     setAccessibilitySkipped,
   ]);
@@ -385,171 +320,30 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     if (!saved) {
       return;
     }
-
-    const cloudHealthCheck = window.electronAPI?.cloudHealthCheck;
-    if (useLocalWhisper || !cloudHealthCheck) {
-      removeCurrentStep();
-      onComplete();
-      return;
-    }
-
-    let result;
-    try {
-      result = await cloudHealthCheck();
-    } catch (error) {
-      logger.error("Cloud health check threw", { error }, "onboarding");
-      result = { ok: false } as Awaited<ReturnType<typeof cloudHealthCheck>>;
-    }
-
-    // Any HTTP response (even 4xx) proves the network reached the server.
-    // Only a transport-level failure with no status warrants the warning.
-    if (result.ok || result.status !== undefined) {
-      removeCurrentStep();
-      onComplete();
-      return;
-    }
-
-    setConnectivityDialog({
-      open: true,
-      cause: t(result.messageKey || "streaming.errors.cloudUnreachable.generic"),
-    });
-  }, [saveSettings, removeCurrentStep, onComplete, useLocalWhisper, t]);
-
-  const resolveConnectivity = useCallback(
-    (useLocal: boolean) => {
-      if (useLocal) {
-        setUseLocalWhisper(true);
-      }
-      setConnectivityDialog({ open: false, cause: "" });
-      removeCurrentStep();
-      onComplete();
-    },
-    [setUseLocalWhisper, removeCurrentStep, onComplete]
-  );
+    removeCurrentStep();
+    onComplete();
+  }, [saveSettings, removeCurrentStep, onComplete]);
 
   const renderStep = () => {
     switch (currentStep) {
-      case 0: // Authentication (with Welcome)
-        if (pendingVerificationEmail) {
-          return (
-            <EmailVerificationStep
-              email={pendingVerificationEmail}
-              onVerified={() => {
-                setPendingVerificationEmail(null);
-                nextStep();
-              }}
-            />
-          );
-        }
-        return (
-          <AuthenticationStep
-            onContinueWithoutAccount={() => {
-              setSkipAuth(true);
-              nextStep();
-            }}
-            onAuthComplete={() => {
-              nextStep();
-            }}
-            onNeedsVerification={(email) => {
-              setPendingVerificationEmail(email);
-            }}
-          />
-        );
+      case 0: // Corti sign-in
+        return <CortiLoginStep />;
 
-      case 1: // Setup - Choose Mode & Configure (merged with permissions for signed-in users)
-        if (isSignedIn && !skipAuth) {
-          return (
-            <div className="space-y-6">
-              <div className="text-center">
-                <div className="w-14 h-14 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Check className="w-7 h-7 text-green-500" />
-                </div>
-                <h2 className="text-2xl font-semibold text-foreground mb-2">
-                  {t("onboarding.setup.title")}
-                </h2>
-                <p className="text-muted-foreground">{t("onboarding.setup.description")}</p>
-              </div>
-
-              {/* Language Selector */}
-              <div className="space-y-2.5 p-3 bg-muted/50 border border-border/60 rounded">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-muted-foreground">
-                    {t("onboarding.setup.language")}
-                  </label>
-                  <LanguageSelector
-                    value={preferredLanguage}
-                    onChange={(value) => {
-                      updateTranscriptionSettings({ preferredLanguage: value });
-                    }}
-                    className="w-full"
-                  />
-                </div>
-              </div>
-
-              {/* Permissions */}
-              <div className="space-y-3">
-                <h3 className="text-sm font-medium text-foreground">
-                  {t("onboarding.permissions.title")}
-                </h3>
-                <PermissionsSection permissions={permissionsHook} systemAudio={systemAudio} />
-              </div>
-            </div>
-          );
-        }
-
-        // Not signed in — full setup (unchanged)
+      case 1: // Language
         return (
           <div className="space-y-3">
             <div className="text-center space-y-0.5">
               <h2 className="text-lg font-semibold text-foreground tracking-tight">
-                {t("onboarding.transcription.title")}
+                {t("onboarding.language.title", "Pick your language")}
               </h2>
               <p className="text-xs text-muted-foreground">
-                {t("onboarding.transcription.description")}
+                {t(
+                  "onboarding.language.description",
+                  "Choose the language you'll dictate in most often. You can change it later."
+                )}
               </p>
             </div>
 
-            {/* Unified configuration with integrated mode toggle */}
-            <TranscriptionModelPicker
-              selectedCloudProvider={cloudTranscriptionProvider}
-              onCloudProviderSelect={(provider) =>
-                updateTranscriptionSettings({ cloudTranscriptionProvider: provider })
-              }
-              selectedCloudModel={cloudTranscriptionModel}
-              onCloudModelSelect={(model) =>
-                updateTranscriptionSettings({ cloudTranscriptionModel: model })
-              }
-              selectedLocalModel={
-                localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel
-              }
-              onLocalModelSelect={(modelId) => {
-                if (localTranscriptionProvider === "nvidia") {
-                  updateTranscriptionSettings({ parakeetModel: modelId });
-                } else {
-                  updateTranscriptionSettings({ whisperModel: modelId });
-                }
-              }}
-              selectedLocalProvider={localTranscriptionProvider}
-              onLocalProviderSelect={(provider) =>
-                updateTranscriptionSettings({
-                  localTranscriptionProvider: provider as "whisper" | "nvidia",
-                })
-              }
-              useLocalWhisper={useLocalWhisper}
-              onModeChange={(isLocal) => {
-                updateTranscriptionSettings({
-                  useLocalWhisper: isLocal,
-                  ...(!isLocal && !isSignedIn ? { cloudTranscriptionMode: "byok" } : {}),
-                });
-              }}
-              cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
-              setCloudTranscriptionBaseUrl={(url) =>
-                updateTranscriptionSettings({ cloudTranscriptionBaseUrl: url })
-              }
-              variant="onboarding"
-            />
-
-            {/* Language Selection - shown for both modes */}
             <div className="space-y-2 p-3 bg-muted/50 border border-border/60 rounded">
               <label className="block text-xs font-medium text-muted-foreground">
                 {t("onboarding.transcription.preferredLanguage")}
@@ -565,19 +359,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           </div>
         );
 
-      case 2: // Permissions (only for non-signed-in users) or Activation (for signed-in users)
-        // For signed-in users, this is the activation step
-        if (isSignedIn && !skipAuth) {
-          return renderActivationStep();
-        }
-
-        // For non-signed-in users, this is the permissions step
+      case 2: { // Permissions
         const platform = permissionsHook.pasteToolsInfo?.platform;
         const isMacOS = platform === "darwin";
 
         return (
           <div className="space-y-4">
-            {/* Header - compact */}
             <div className="text-center">
               <h2 className="text-lg font-semibold text-foreground tracking-tight">
                 {t("onboarding.permissions.title")}
@@ -592,8 +379,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <PermissionsSection permissions={permissionsHook} systemAudio={systemAudio} />
           </div>
         );
+      }
 
-      case 3: // Activation (only for non-signed-in users)
+      case 3: // Activation
         return renderActivationStep();
 
       default:
@@ -680,43 +468,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const canProceed = () => {
     switch (currentStep) {
       case 0:
-        return isSignedIn || skipAuth; // Authentication step
+        // Corti sign-in is optional — user can skip and configure later in Settings.
+        return true;
       case 1:
-        // For signed-in users: Setup step includes permissions
-        if (isSignedIn && !skipAuth) {
-          return areRequiredPermissionsMet(permissionsHook.micPermissionGranted);
-        }
-
-        // For non-signed-in users: Setup - check if configuration is complete
-        if (useLocalWhisper) {
-          const modelToCheck =
-            localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel;
-          return modelToCheck !== "" && isModelDownloaded;
-        } else {
-          // For cloud mode, check if appropriate API key is set
-          if (cloudTranscriptionProvider === "openai") {
-            return openaiApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "groq") {
-            return groqApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "mistral") {
-            return mistralApiKey.trim().length > 0;
-          } else if (cloudTranscriptionProvider === "custom") {
-            // Custom can work without API key for local endpoints
-            return true;
-          }
-          return openaiApiKey.trim().length > 0; // Default to OpenAI
-        }
-      case 2: {
-        // For signed-in users, this is activation step
-        if (isSignedIn && !skipAuth) {
-          return hotkey.trim() !== "";
-        }
-
-        // For non-signed-in users, this is permissions step
+        // Language is always set (defaults to "auto").
+        return true;
+      case 2:
         return areRequiredPermissionsMet(permissionsHook.micPermissionGranted);
-      }
       case 3:
-        return hotkey.trim() !== ""; // Activation step for non-signed-in users
+        return hotkey.trim() !== "";
       default:
         return false;
     }
@@ -734,11 +494,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     };
   }, []);
 
-  const onboardingPlatform =
-    typeof window !== "undefined" && window.electronAPI?.getPlatform
-      ? window.electronAPI.getPlatform()
-      : "darwin";
-
   return (
     <div
       className="h-screen flex flex-col bg-background"
@@ -754,17 +509,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         onConfirm={confirmDialog.onConfirm}
       />
 
-      <ConfirmDialog
-        open={connectivityDialog.open}
-        onOpenChange={(open) => !open && setConnectivityDialog({ open: false, cause: "" })}
-        title={t("onboarding.connectivity.title")}
-        description={t("onboarding.connectivity.body", { cause: connectivityDialog.cause })}
-        confirmText={t("onboarding.connectivity.useLocal")}
-        cancelText={t("onboarding.connectivity.continue")}
-        onConfirm={() => resolveConnectivity(true)}
-        onCancel={() => resolveConnectivity(false)}
-      />
-
       <AlertDialog
         open={alertDialog.open}
         onOpenChange={(open) => !open && hideAlertDialog()}
@@ -773,69 +517,43 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         onOk={() => {}}
       />
 
-      {/* Title Bar / drag region */}
-      {currentStep === 0 ? (
-        <div
-          className="flex items-center justify-end w-full h-10 shrink-0"
-          style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-        >
-          {onboardingPlatform !== "darwin" && (
-            <div className="pr-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-              <WindowControls />
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="shrink-0 z-10">
-          <TitleBar
-            showTitle={true}
-            className="bg-background backdrop-blur-xl border-b border-border shadow-sm"
-            actions={isSignedIn ? <SupportDropdown /> : undefined}
-          ></TitleBar>
-        </div>
-      )}
+      {/* Title Bar */}
+      <div className="shrink-0 z-10">
+        <TitleBar
+          showTitle={true}
+          className="bg-background backdrop-blur-xl border-b border-border shadow-sm"
+        ></TitleBar>
+      </div>
 
-      {/* Progress Bar - hidden on welcome/auth step */}
-      {showProgress && (
-        <div className="shrink-0 bg-background/80 backdrop-blur-2xl border-b border-white/5 px-6 md:px-12 py-3 z-10">
-          <div className="max-w-3xl mx-auto">
-            <StepProgress steps={steps.slice(1)} currentStep={currentStep - 1} />
-          </div>
+      {/* Progress Bar */}
+      <div className="shrink-0 bg-background/80 backdrop-blur-2xl border-b border-white/5 px-6 md:px-12 py-3 z-10">
+        <div className="max-w-3xl mx-auto">
+          <StepProgress steps={steps} currentStep={currentStep} />
         </div>
-      )}
+      </div>
 
       {/* Content - This will grow to fill available space */}
-      <div
-        className={`flex-1 px-6 md:px-12 overflow-y-auto ${currentStep === 0 ? "flex items-center" : "py-6"}`}
-      >
-        <div className={`w-full ${currentStep === 0 ? "max-w-sm" : "max-w-3xl"} mx-auto`}>
+      <div className="flex-1 px-6 md:px-12 overflow-y-auto py-6">
+        <div className="w-full max-w-3xl mx-auto">
           <Card className="bg-card/90 backdrop-blur-2xl border border-border/50 dark:border-white/5 shadow-lg rounded-xl overflow-hidden">
-            <CardContent className={currentStep === 0 ? "p-6" : "p-6 md:p-8"}>
-              {renderStep()}
-            </CardContent>
+            <CardContent className="p-6 md:p-8">{renderStep()}</CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Footer Navigation - hidden on welcome/auth step */}
+      {/* Footer Navigation */}
       {showProgress && (
         <div className="shrink-0 bg-background/80 backdrop-blur-2xl border-t border-white/5 px-6 md:px-12 py-3 z-10">
           <div className="max-w-3xl mx-auto flex items-center justify-between">
-            {/* Hide back button on first step for signed-in users */}
-            {!(currentStep === 1 && isSignedIn && !skipAuth) && (
-              <Button
-                onClick={prevStep}
-                variant="outline"
-                disabled={currentStep === 0}
-                className="h-8 px-5 rounded-full text-xs"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                {t("common.back")}
-              </Button>
-            )}
-
-            {/* Spacer to push next button to the right when back button is hidden */}
-            {currentStep === 1 && isSignedIn && !skipAuth && <div />}
+            <Button
+              onClick={prevStep}
+              variant="outline"
+              disabled={currentStep === 0}
+              className="h-8 px-5 rounded-full text-xs"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              {t("common.back")}
+            </Button>
 
             <div className="flex items-center gap-2">
               {currentStep === steps.length - 1 ? (
@@ -862,6 +580,379 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+interface CortiEnvOption {
+  id: string;
+  label: string;
+  region: string;
+  defaultTenant: string;
+  hasClientId: boolean;
+}
+
+function CortiLoginStep() {
+  const { t } = useTranslation();
+  const account = useCortiAccount();
+
+  const [environments, setEnvironments] = useState<CortiEnvOption[]>([]);
+  const [environmentId, setEnvironmentId] = useState<string>("eu");
+  const [tenant, setTenant] = useState<string>("");
+  const [customRegion, setCustomRegion] = useState<string>("");
+  const [regionInputValue, setRegionInputValue] = useState<string>("eu");
+  const [clientIdOverride, setClientIdOverride] = useState<string>("");
+  const [clientSecret, setClientSecret] = useState<string>("");
+  const [useClientCreds, setUseClientCreds] = useState(false);
+
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [error, setError] = useState("");
+
+  const refreshEnvironments = useCallback(async () => {
+    const envs = await window.electronAPI?.listCortiEnvironments?.();
+    if (envs) setEnvironments(envs);
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const [envs, envId, ten, customReg, idOverride, secret] = await Promise.all([
+        window.electronAPI?.listCortiEnvironments?.(),
+        window.electronAPI?.getCortiEnvironment?.(),
+        window.electronAPI?.getCortiTenant?.(),
+        window.electronAPI?.getCortiCustomRegion?.(),
+        window.electronAPI?.getCortiClientIdOverride?.(),
+        window.electronAPI?.getCortiClientSecret?.(),
+      ]);
+      if (envs) setEnvironments(envs);
+      if (envId) setEnvironmentId(envId);
+      if (ten) setTenant(ten);
+      if (customReg) setCustomRegion(customReg);
+      if (idOverride) setClientIdOverride(idOverride);
+      if (secret) {
+        setClientSecret(secret);
+        setUseClientCreds(true);
+      }
+      // Seed the advanced region text from whatever we just loaded.
+      const resolved =
+        (envId === "custom" ? customReg : envId) || "eu";
+      setRegionInputValue(resolved);
+    })();
+  }, []);
+
+  // Keep the region text in sync when the segmented control switches env.
+  useEffect(() => {
+    const resolved = environmentId === "custom" ? customRegion : environmentId;
+    setRegionInputValue(resolved || "eu");
+  }, [environmentId, customRegion]);
+
+  const currentEnvironment = environments.find((env) => env.id === environmentId);
+  const clientIdConfigured =
+    (currentEnvironment?.hasClientId ?? false) || Boolean(clientIdOverride);
+
+  const persistEnvironment = useCallback(async (nextId: string) => {
+    setEnvironmentId(nextId);
+    await window.electronAPI?.saveCortiEnvironment?.(nextId);
+    useSettingsStore.getState().setCortiEnvironment(nextId);
+  }, []);
+
+  const persistTenant = useCallback(async () => {
+    await window.electronAPI?.saveCortiTenant?.(tenant);
+    useSettingsStore.getState().setCortiTenant(tenant);
+  }, [tenant]);
+
+  // Region input accepts any string: matches a known env id (eu, us) → switches
+  // to that environment; anything else → switches to "custom" with the typed
+  // value used as the subdomain in auth.<region>.corti.app.
+  const persistRegionInput = useCallback(async () => {
+    const trimmed = regionInputValue.trim().toLowerCase();
+    const known = environments.find(
+      (env) => env.id !== "custom" && env.id === trimmed
+    );
+    if (known) {
+      setEnvironmentId(known.id);
+      await window.electronAPI?.saveCortiEnvironment?.(known.id);
+      useSettingsStore.getState().setCortiEnvironment(known.id);
+    } else {
+      setEnvironmentId("custom");
+      setCustomRegion(trimmed);
+      await Promise.all([
+        window.electronAPI?.saveCortiEnvironment?.("custom"),
+        window.electronAPI?.saveCortiCustomRegion?.(trimmed),
+      ]);
+      useSettingsStore.getState().setCortiEnvironment("custom");
+    }
+    await refreshEnvironments();
+  }, [regionInputValue, environments, refreshEnvironments]);
+
+  const persistClientId = useCallback(async () => {
+    await window.electronAPI?.saveCortiClientIdOverride?.(clientIdOverride);
+    await refreshEnvironments();
+  }, [clientIdOverride, refreshEnvironments]);
+
+  const persistClientSecret = useCallback(async () => {
+    const value = useClientCreds ? clientSecret : "";
+    await window.electronAPI?.saveCortiClientSecret?.(value);
+  }, [clientSecret, useClientCreds]);
+
+  useEffect(() => {
+    // When the toggle is switched off, drop the persisted secret so the
+    // client_credentials fallback in cortiManager doesn't get triggered.
+    if (!useClientCreds) {
+      void window.electronAPI?.saveCortiClientSecret?.("");
+    }
+  }, [useClientCreds]);
+
+  const handleSignIn = async () => {
+    setIsConnecting(true);
+    setError("");
+    // Make sure latest advanced overrides are persisted before opening browser.
+    await Promise.all([
+      window.electronAPI?.saveCortiClientIdOverride?.(clientIdOverride),
+      window.electronAPI?.saveCortiCustomRegion?.(customRegion),
+      window.electronAPI?.saveCortiTenant?.(tenant),
+    ]);
+    const result = await window.electronAPI?.cortiStartPkce?.();
+    setIsConnecting(false);
+    if (!result?.success) {
+      setError(result?.error || t("onboarding.corti.signInFailed", "Sign-in failed"));
+      return;
+    }
+    await account.refresh();
+  };
+
+  const handleSignOut = async () => {
+    await window.electronAPI?.cortiDisconnect?.();
+    await account.refresh();
+  };
+
+  // Simple region toggle shows EU/US side-by-side; "Custom" hides in advanced.
+  const simpleRegions = environments.filter((env) => env.id !== "custom");
+
+  if (account.isConnected) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center space-y-2">
+          <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center mx-auto">
+            <Check className="w-7 h-7 text-green-500" />
+          </div>
+          <h2 className="text-xl font-semibold text-foreground tracking-tight">
+            {t("onboarding.corti.connectedTitle", "You're connected")}
+          </h2>
+          <div className="space-y-0.5">
+            <p className="text-sm text-foreground">
+              {account.name || account.email || t("onboarding.corti.cortiUser", "Corti user")}
+            </p>
+            {account.name && account.email && account.email !== account.name && (
+              <p className="text-xs text-muted-foreground">{account.email}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-center">
+          <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-xs gap-1.5">
+            <LogOut className="w-3.5 h-3.5" />
+            {t("onboarding.corti.signOut", "Sign out")}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center space-y-2">
+        <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+          <UserCircle className="w-7 h-7 text-primary" />
+        </div>
+        <h2 className="text-xl font-semibold text-foreground tracking-tight">
+          {t("onboarding.corti.title", "Sign in to Corti")}
+        </h2>
+        <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
+          {t(
+            "onboarding.corti.description",
+            "We'll open your browser to finish signing in. You can skip this for now and connect later from Settings."
+          )}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {/* Segmented region toggle. Custom is reached via advanced. */}
+        {simpleRegions.length > 0 && (
+          <div className="flex items-center justify-center">
+            <div className="inline-flex items-center rounded-full bg-muted p-0.5 border border-border/40">
+              {simpleRegions.map((env) => (
+                <button
+                  key={env.id}
+                  type="button"
+                  onClick={() => void persistEnvironment(env.id)}
+                  className={cn(
+                    "px-4 py-1.5 text-xs font-medium rounded-full transition-colors",
+                    environmentId === env.id
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {env.label}
+                </button>
+              ))}
+              {environmentId === "custom" && (
+                <span className="px-4 py-1.5 text-xs font-medium rounded-full bg-background text-foreground shadow-sm">
+                  {t("onboarding.corti.customRegion", "Custom")}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <Button
+          onClick={handleSignIn}
+          disabled={isConnecting}
+          className="w-full h-10"
+        >
+          {isConnecting ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <UserCircle className="w-4 h-4 mr-2" />
+          )}
+          {isConnecting
+            ? t("onboarding.corti.opening", "Opening browser…")
+            : t("onboarding.corti.signIn", "Sign in to Corti")}
+        </Button>
+
+        {!clientIdConfigured && currentEnvironment && (
+          <div className="flex items-start gap-2 rounded-md bg-amber-500/10 p-2.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 mt-0.5 shrink-0" />
+            <p className="text-[11px] text-amber-700 dark:text-amber-300 leading-relaxed">
+              {environmentId === "custom"
+                ? t(
+                    "onboarding.corti.customClientIdMissing",
+                    "Open Advanced and enter a client ID to continue."
+                  )
+                : t(
+                    "onboarding.corti.clientIdMissing",
+                    "Client ID for {{label}} is not configured. Set {{envVar}} in .env, or override it in Advanced.",
+                    {
+                      label: currentEnvironment.label,
+                      envVar: `CORTI_CLIENT_ID_${currentEnvironment.id.toUpperCase()}`,
+                    }
+                  )}
+            </p>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-start gap-2 rounded-md bg-destructive/10 border border-destructive/30 p-2.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-destructive mt-0.5 shrink-0" />
+            <p className="text-[11px] text-destructive leading-relaxed">{error}</p>
+          </div>
+        )}
+
+        <div className="flex justify-center pt-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Sliders className="w-3 h-3" />
+                {t("onboarding.corti.advanced", "Advanced options")}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="center"
+              sideOffset={8}
+              className="w-[340px] p-4 space-y-3"
+            >
+              <div className="space-y-1">
+                <h4 className="text-xs font-semibold text-foreground">
+                  {t("onboarding.corti.advanced", "Advanced options")}
+                </h4>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  {t(
+                    "onboarding.corti.advancedHint",
+                    "For self-hosted Corti or custom OAuth clients. Most users can leave these alone."
+                  )}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide block">
+                  {t("onboarding.corti.region", "Region")}
+                </label>
+                <Input
+                  className="h-8 text-xs font-mono"
+                  placeholder="eu"
+                  value={regionInputValue}
+                  onChange={(e) => setRegionInputValue(e.target.value)}
+                  onBlur={() => void persistRegionInput()}
+                />
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  {t(
+                    "onboarding.corti.regionHint",
+                    "Used as the subdomain — auth.<region>.corti.app. Type any value (eu, us, staging…)."
+                  )}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide block">
+                  {t("onboarding.corti.tenant", "Tenant / realm")}
+                </label>
+                <Input
+                  className="h-8 text-xs font-mono"
+                  placeholder={currentEnvironment?.defaultTenant || "base"}
+                  value={tenant}
+                  onChange={(e) => setTenant(e.target.value)}
+                  onBlur={() => void persistTenant()}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide block">
+                  {t("onboarding.corti.clientIdOverride", "Client ID override")}
+                </label>
+                <Input
+                  className="h-8 text-xs font-mono"
+                  type="password"
+                  placeholder={t("onboarding.corti.clientIdOverridePlaceholder", "Optional")}
+                  value={clientIdOverride}
+                  onChange={(e) => setClientIdOverride(e.target.value)}
+                  onBlur={() => void persistClientId()}
+                />
+              </div>
+
+              <div className="space-y-2 pt-1 border-t border-border/40">
+                <div className="flex items-center justify-between gap-2 pt-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium text-foreground">
+                      {t("onboarding.corti.useClientCreds", "Use client credentials")}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      {t(
+                        "onboarding.corti.useClientCredsHint",
+                        "Skip browser sign-in. Requires a confidential OAuth client."
+                      )}
+                    </p>
+                  </div>
+                  <Toggle checked={useClientCreds} onChange={setUseClientCreds} />
+                </div>
+                {useClientCreds && (
+                  <div className="space-y-2">
+                    <Input
+                      className="h-8 text-xs font-mono"
+                      type="password"
+                      placeholder={t("onboarding.corti.clientSecret", "Client secret")}
+                      value={clientSecret}
+                      onChange={(e) => setClientSecret(e.target.value)}
+                      onBlur={() => void persistClientSecret()}
+                    />
+                  </div>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
     </div>
   );
 }

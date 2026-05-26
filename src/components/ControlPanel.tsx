@@ -11,6 +11,7 @@ import { useToast } from "./ui/useToast";
 import { useUpdater } from "../hooks/useUpdater";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../hooks/useAuth";
+import { useCortiAccount } from "../hooks/useCortiAccount";
 import { useUsage } from "../hooks/useUsage";
 import {
   useTranscriptions,
@@ -42,16 +43,11 @@ import { fetchProviders as fetchStreamingProviders } from "../stores/streamingPr
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import { syncService } from "../services/SyncService.js";
-import AcceptInvitationModal, {
-  consumePendingInvitationToken,
-  clearPendingInvitationToken,
-} from "./AcceptInvitationModal";
 import { WORKSPACES_ENABLED } from "../lib/features";
 
 const platform = getCachedPlatform();
 
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
-const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
@@ -72,8 +68,7 @@ export default function ControlPanel() {
   const [aiCTADismissed, setAiCTADismissed] = useState(
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
-  const [showReferrals, setShowReferrals] = useState(false);
-  const [invitationToken, setInvitationToken] = useState<string | null>(null);
+  const [, setInvitationToken] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
@@ -109,6 +104,7 @@ export default function ControlPanel() {
     setCloudTranscriptionMode,
   } = useSettings();
   const { isSignedIn, isLoaded: authLoaded, user } = useAuth();
+  const cortiAccount = useCortiAccount();
   const usage = useUsage();
 
   const {
@@ -252,14 +248,6 @@ export default function ControlPanel() {
     return () => unsubscribe?.();
   }, []);
 
-  useEffect(() => {
-    if (!WORKSPACES_ENABLED || !authLoaded || !isSignedIn) return;
-    const pending = consumePendingInvitationToken();
-    if (pending) {
-      setInvitationToken(pending);
-      clearPendingInvitationToken();
-    }
-  }, [authLoaded, isSignedIn]);
 
   useEffect(() => {
     if (!authLoaded || !isSignedIn || cloudMigrationProcessed.current) return;
@@ -674,23 +662,6 @@ export default function ControlPanel() {
         </Suspense>
       )}
 
-      {showReferrals && (
-        <Suspense fallback={null}>
-          <ReferralModal open={showReferrals} onOpenChange={setShowReferrals} />
-        </Suspense>
-      )}
-
-      {WORKSPACES_ENABLED && (
-        <AcceptInvitationModal
-          token={invitationToken}
-          onClose={() => setInvitationToken(null)}
-          isSignedIn={isSignedIn}
-          onSignIn={() => {
-            setInvitationToken(null);
-          }}
-        />
-      )}
-
       {showSearch && (
         <Suspense fallback={null}>
           <CommandSearch
@@ -722,17 +693,20 @@ export default function ControlPanel() {
               setSettingsSection(undefined);
               setShowSettings(true);
             }}
-            onOpenReferrals={() => setShowReferrals(true)}
+            onOpenAccount={() => {
+              setSettingsSection("account");
+              setShowSettings(true);
+            }}
             onUpgrade={() => {
               setSettingsSection("plansBilling");
               setShowSettings(true);
             }}
             isOverLimit={usage?.isOverLimit ?? false}
-            userName={user?.name}
-            userEmail={user?.email}
-            userImage={user?.image}
-            isSignedIn={isSignedIn}
-            authLoaded={authLoaded}
+            userName={cortiAccount.name}
+            userEmail={cortiAccount.email}
+            userImage={null}
+            isSignedIn={cortiAccount.isConnected}
+            authLoaded={cortiAccount.isLoaded}
             isProUser={!!(usage?.isSubscribed || usage?.isTrial)}
             usageLoaded={usage?.hasLoaded ?? false}
             updateAction={

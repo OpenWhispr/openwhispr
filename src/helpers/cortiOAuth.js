@@ -15,20 +15,65 @@ function _tokenUrl(region, tenant) {
   return `https://auth.${region}.corti.app/realms/${tenant}/protocol/openid-connect/token`;
 }
 
+function _decodeJwtPayload(token) {
+  if (!token || typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+  try {
+    const json = Buffer.from(parts[1], "base64").toString("utf8");
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+function _userFromClaims(claims) {
+  if (!claims) return null;
+  const name =
+    claims.name ||
+    [claims.given_name, claims.family_name].filter(Boolean).join(" ").trim() ||
+    claims.preferred_username ||
+    null;
+  const email = claims.email || null;
+  if (!name && !email) return null;
+  return { name, email };
+}
+
 class CortiOAuth {
   constructor(environmentManager) {
     this.environmentManager = environmentManager;
     this._accessToken = null;
     this._accessTokenExpiresAt = 0;
+    this._userInfo = null;
     this._pendingFlow = null;
   }
 
+  _setAccessToken(token, expiresInSec) {
+    this._accessToken = token;
+    this._accessTokenExpiresAt = Date.now() + (expiresInSec || 300) * 1000;
+    this._userInfo = _userFromClaims(_decodeJwtPayload(token));
+  }
+
   startPkceFlow() {
-    const region = this.environmentManager.getCortiRegion();
+    const env = this.environmentManager.getCortiEnvironment();
+    const region = env.region;
     const tenant = this.environmentManager.getCortiTenant();
     const clientId = this.environmentManager.getCortiClientId();
 
-    if (!clientId) return Promise.reject(new Error("Corti Client ID is required to connect"));
+    if (!region) {
+      return Promise.reject(
+        new Error(
+          "Corti region is not set. Pick EU or US, or enter a region in Advanced."
+        )
+      );
+    }
+
+    if (!clientId) {
+      const hint = env.clientIdEnvVar
+        ? `Set ${env.clientIdEnvVar} in your .env file, or override it in Advanced.`
+        : "Enter a Client ID in Advanced (Custom environments don't have a default).";
+      return Promise.reject(new Error(`Corti client ID for ${env.label} is not configured. ${hint}`));
+    }
 
     // Cancel any in-progress flow
     if (this._pendingFlow) {
@@ -55,14 +100,26 @@ class CortiOAuth {
         client_id: clientId,
         redirect_uri: CORTI_REDIRECT_URI,
         response_type: "code",
-        scope: "openid",
+        scope: "openid profile email",
         state,
         code_challenge: codeChallenge,
         code_challenge_method: "S256",
       });
 
-      shell.openExternal(`${_authUrl(region, tenant)}?${params.toString()}`);
-      debugLogger.debug("Corti PKCE: opened browser", { region, tenant });
+      const authUrl = `${_authUrl(region, tenant)}?${params.toString()}`;
+      debugLogger.debug("Corti PKCE: opening browser", { region, tenant, authUrl });
+      shell
+        .openExternal(authUrl)
+        .then(() => {
+          debugLogger.debug("Corti PKCE: browser opened");
+        })
+        .catch((err) => {
+          clearTimeout(timeoutId);
+          if (this._pendingFlow?.state === state) {
+            this._pendingFlow = null;
+          }
+          reject(new Error(`Could not open browser: ${err?.message || err}`));
+        });
     });
   }
 
@@ -113,8 +170,7 @@ class CortiOAuth {
         return;
       }
 
-      this._accessToken = tokenData.access_token;
-      this._accessTokenExpiresAt = Date.now() + (tokenData.expires_in || 300) * 1000;
+      this._setAccessToken(tokenData.access_token, tokenData.expires_in);
 
       if (tokenData.refresh_token) {
         await this.environmentManager.saveCortiRefreshToken(tokenData.refresh_token);
@@ -143,6 +199,7 @@ class CortiOAuth {
   async disconnect() {
     this._accessToken = null;
     this._accessTokenExpiresAt = 0;
+    this._userInfo = null;
     if (this._pendingFlow) {
       clearTimeout(this._pendingFlow.timeoutId);
       this._pendingFlow.reject(new Error("Disconnected"));
@@ -152,19 +209,34 @@ class CortiOAuth {
     debugLogger.debug("Corti PKCE disconnected");
   }
 
-  getAuthStatus() {
+  async getAuthStatus() {
     const hasRefreshToken = Boolean(this.environmentManager.getCortiRefreshToken());
     const hasLiveToken =
       Boolean(this._accessToken) &&
       Date.now() < this._accessTokenExpiresAt - TOKEN_EXPIRY_BUFFER_MS;
+    const isConnected = hasRefreshToken || hasLiveToken;
+
+    // If we have a refresh token but no decoded user info yet (e.g. just
+    // after app launch), refresh once so the JWT can be decoded. Failures
+    // here are non-fatal — we just report connected without user info.
+    if (isConnected && !this._userInfo && hasRefreshToken && !hasLiveToken) {
+      try {
+        await this.getValidAccessToken();
+      } catch (err) {
+        debugLogger.debug("Corti getAuthStatus: refresh failed", { error: err.message });
+      }
+    }
+
     return {
-      isConnected: hasRefreshToken || hasLiveToken,
-      method: hasRefreshToken || hasLiveToken ? "pkce" : null,
+      isConnected,
+      method: isConnected ? "pkce" : null,
+      user: this._userInfo,
     };
   }
 
   async _refresh(refreshToken) {
-    const region = this.environmentManager.getCortiRegion();
+    const env = this.environmentManager.getCortiEnvironment();
+    const region = env.region;
     const tenant = this.environmentManager.getCortiTenant();
     const clientId = this.environmentManager.getCortiClientId();
 
@@ -180,11 +252,11 @@ class CortiOAuth {
     if (data.error) {
       await this.environmentManager.saveCortiRefreshToken("");
       this._accessToken = null;
+      this._userInfo = null;
       throw new Error(`Corti token refresh failed: ${data.error_description || data.error}`);
     }
 
-    this._accessToken = data.access_token;
-    this._accessTokenExpiresAt = Date.now() + (data.expires_in || 300) * 1000;
+    this._setAccessToken(data.access_token, data.expires_in);
     if (data.refresh_token) {
       await this.environmentManager.saveCortiRefreshToken(data.refresh_token);
     }

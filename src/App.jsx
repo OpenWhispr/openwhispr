@@ -172,6 +172,16 @@ export default function App() {
     }
   }, [isCommandMenuOpen, isHovered, toastCount, setWindowInteractivity]);
 
+  const handleDictationToggle = React.useCallback(() => {
+    setIsCommandMenuOpen(false);
+    setWindowInteractivity(false);
+  }, [setWindowInteractivity]);
+
+  const { isRecording, isProcessing, toggleListening, cancelRecording, cancelProcessing } =
+    useAudioRecording(toast, {
+      onToggle: handleDictationToggle,
+    });
+
   useEffect(() => {
     const resizeWindow = () => {
       if (isCommandMenuOpen && toastCount > 0) {
@@ -186,16 +196,6 @@ export default function App() {
     };
     resizeWindow();
   }, [isCommandMenuOpen, toastCount]);
-
-  const handleDictationToggle = React.useCallback(() => {
-    setIsCommandMenuOpen(false);
-    setWindowInteractivity(false);
-  }, [setWindowInteractivity]);
-
-  const { isRecording, isProcessing, toggleListening, cancelRecording, cancelProcessing } =
-    useAudioRecording(toast, {
-      onToggle: handleDictationToggle,
-    });
 
   // Sync auto-hide from main process — setState directly to avoid IPC echo
   useEffect(() => {
@@ -425,7 +425,7 @@ export default function App() {
             >
               {/* Background effects */}
               <div
-                className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent transition-opacity duration-150"
+                className="absolute inset-0 bg-linear-to-br from-white/10 to-transparent transition-opacity duration-150"
                 style={{ opacity: micState === "hover" ? 0.8 : 0 }}
               ></div>
               <div

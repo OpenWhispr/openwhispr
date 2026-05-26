@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from "react";
-import { WhisperCheckResult } from "../types/electron";
+// Corti is the only STT engine — whisper.cpp was removed.
+// This hook is kept as a no-op stub so existing call sites compile until they
+// can be deleted.
 
 export interface UseWhisperReturn {
   whisperInstalled: boolean;
@@ -7,30 +8,8 @@ export interface UseWhisperReturn {
   checkWhisperInstallation: () => Promise<void>;
 }
 
-export const useWhisper = (): UseWhisperReturn => {
-  const [whisperInstalled, setWhisperInstalled] = useState(false);
-  const [checkingWhisper, setCheckingWhisper] = useState(false);
-
-  const checkWhisperInstallation = useCallback(async () => {
-    try {
-      setCheckingWhisper(true);
-      const result: WhisperCheckResult = await window.electronAPI.checkWhisperInstallation();
-      setWhisperInstalled(result.installed && result.working);
-    } catch (error) {
-      console.error("Error checking whisper.cpp installation:", error);
-      setWhisperInstalled(false);
-    } finally {
-      setCheckingWhisper(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    checkWhisperInstallation();
-  }, [checkWhisperInstallation]);
-
-  return {
-    whisperInstalled,
-    checkingWhisper,
-    checkWhisperInstallation,
-  };
-};
+export const useWhisper = (): UseWhisperReturn => ({
+  whisperInstalled: false,
+  checkingWhisper: false,
+  checkWhisperInstallation: async () => {},
+});

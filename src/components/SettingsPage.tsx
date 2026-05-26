@@ -176,11 +176,242 @@ function SectionHeader({ title, description }: { title: string; description?: st
   );
 }
 
+interface CortiEnvironmentSummary {
+  id: string;
+  label: string;
+  region: string;
+  defaultTenant: string;
+  hasClientId: boolean;
+}
+
+function CortiAccountPanel() {
+  const { t } = useTranslation();
+  const [isConnected, setIsConnected] = useState(false);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [environments, setEnvironments] = useState<CortiEnvironmentSummary[]>([]);
+  const [environmentId, setEnvironmentId] = useState<string>("");
+  const [tenant, setTenant] = useState<string>("");
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isDisconnecting, setIsDisconnecting] = useState(false);
+  const [error, setError] = useState("");
+
+  const refresh = useCallback(async () => {
+    const [envs, envId, ten, status] = await Promise.all([
+      window.electronAPI?.listCortiEnvironments?.(),
+      window.electronAPI?.getCortiEnvironment?.(),
+      window.electronAPI?.getCortiTenant?.(),
+      window.electronAPI?.cortiGetAuthStatus?.(),
+    ]);
+    if (envs) setEnvironments(envs);
+    if (envId) setEnvironmentId(envId);
+    if (ten) setTenant(ten);
+    setIsConnected(Boolean(status?.isConnected));
+    setUserName(status?.user?.name ?? null);
+    setUserEmail(status?.user?.email ?? null);
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const currentEnvironment = environments.find((env) => env.id === environmentId);
+  const clientIdConfigured = currentEnvironment?.hasClientId ?? false;
+
+  const connect = async () => {
+    setIsConnecting(true);
+    setError("");
+    const result = await window.electronAPI?.cortiStartPkce?.();
+    setIsConnecting(false);
+    if (result?.success) {
+      await refresh();
+    } else {
+      setError(result?.error || t("settingsPage.corti.connectFailed"));
+    }
+  };
+
+  const disconnect = async () => {
+    setIsDisconnecting(true);
+    await window.electronAPI?.cortiDisconnect?.();
+    setIsDisconnecting(false);
+    await refresh();
+  };
+
+  return (
+    <>
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-primary/10 dark:bg-primary/15">
+              <UserCircle className="w-5 h-5 text-primary" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium text-foreground truncate">
+                {t("settingsPage.account.cortiAccount", "Corti account")}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {currentEnvironment
+                  ? `${currentEnvironment.label} · ${tenant || currentEnvironment.defaultTenant}`
+                  : t("settingsPage.account.cortiNotConfigured", "Not configured")}
+              </p>
+            </div>
+            {isConnected ? (
+              <Badge variant="success">
+                {t("settingsPage.account.signedIn", "Signed in")}
+              </Badge>
+            ) : (
+              <Badge variant="outline">
+                {t("settingsPage.account.offline", "Signed out")}
+              </Badge>
+            )}
+          </div>
+        </SettingsPanelRow>
+        {isConnected && (
+          <>
+            <SettingsPanelRow>
+              <SettingsRow label={t("settingsPage.account.name", "Name")}>
+                <span className="text-xs text-foreground truncate max-w-[260px]">
+                  {userName || (
+                    <span className="text-muted-foreground italic">
+                      {t("settingsPage.account.notProvided", "Not provided")}
+                    </span>
+                  )}
+                </span>
+              </SettingsRow>
+            </SettingsPanelRow>
+            <SettingsPanelRow>
+              <SettingsRow label={t("settingsPage.account.email", "Email")}>
+                <span className="text-xs text-foreground truncate max-w-[260px]">
+                  {userEmail || (
+                    <span className="text-muted-foreground italic">
+                      {t("settingsPage.account.notProvided", "Not provided")}
+                    </span>
+                  )}
+                </span>
+              </SettingsRow>
+            </SettingsPanelRow>
+          </>
+        )}
+      </SettingsPanel>
+
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.corti.environment", "Environment")}
+            description={t(
+              "settingsPage.corti.environmentDescription",
+              "Pick the Corti region your account belongs to."
+            )}
+          >
+            <select
+              className="h-8 rounded-md border border-input bg-background px-2 text-xs min-w-[140px]"
+              value={environmentId}
+              onChange={async (e) => {
+                const next = e.target.value;
+                setEnvironmentId(next);
+                await window.electronAPI?.saveCortiEnvironment?.(next);
+                useSettingsStore.getState().setCortiEnvironment(next);
+                await refresh();
+              }}
+            >
+              {environments.map((env) => (
+                <option key={env.id} value={env.id}>
+                  {env.label}
+                  {env.hasClientId ? "" : " (not configured)"}
+                </option>
+              ))}
+            </select>
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.corti.tenant", "Tenant")}
+            description={t(
+              "settingsPage.corti.tenantDescription",
+              "Keycloak realm. Leave as default unless your organisation uses a custom one."
+            )}
+          >
+            <Input
+              className="h-8 text-xs w-[180px]"
+              placeholder={currentEnvironment?.defaultTenant || "base"}
+              value={tenant}
+              onChange={(e) => setTenant(e.target.value)}
+              onBlur={async () => {
+                await window.electronAPI?.saveCortiTenant?.(tenant);
+                useSettingsStore.getState().setCortiTenant(tenant);
+              }}
+            />
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+
+      {!clientIdConfigured && currentEnvironment && (
+        <Alert variant="warning">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>
+            {t("settingsPage.corti.clientIdMissingTitle", "Client ID not configured")}
+          </AlertTitle>
+          <AlertDescription>
+            {t(
+              "settingsPage.corti.clientIdMissing",
+              "Client ID for {{label}} is not configured. Set {{envVar}} in your .env file.",
+              {
+                label: currentEnvironment.label,
+                envVar: `CORTI_CLIENT_ID_${currentEnvironment.id.toUpperCase()}`,
+              }
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <SettingsPanel>
+        <SettingsPanelRow>
+          {isConnected ? (
+            <Button
+              onClick={disconnect}
+              variant="outline"
+              disabled={isDisconnecting}
+              size="sm"
+              className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+            >
+              <LogOut className="mr-1.5 h-3.5 w-3.5" />
+              {isDisconnecting
+                ? t("settingsPage.corti.disconnecting", "Signing out…")
+                : t("settingsPage.corti.disconnect", "Sign out")}
+            </Button>
+          ) : (
+            <Button
+              onClick={connect}
+              size="sm"
+              disabled={isConnecting || !clientIdConfigured}
+              className="w-full"
+            >
+              {isConnecting ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <UserCircle className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              {isConnecting
+                ? t("settingsPage.corti.connecting", "Opening browser…")
+                : t("settingsPage.corti.connect", "Sign in to Corti")}
+            </Button>
+          )}
+        </SettingsPanelRow>
+        {error && (
+          <SettingsPanelRow>
+            <p className="text-xs text-destructive">{error}</p>
+          </SettingsPanelRow>
+        )}
+      </SettingsPanel>
+    </>
+  );
+}
+
 function CortiSettingsPanel() {
   const { t } = useTranslation();
-  const [clientId, setClientId] = useState("");
+  const [environments, setEnvironments] = useState<CortiEnvironmentSummary[]>([]);
+  const [environmentId, setEnvironmentId] = useState<string>("");
   const [clientSecret, setClientSecret] = useState("");
-  const [region, setRegion] = useState<"eu" | "us">("eu");
   const [tenant, setTenant] = useState("base");
   const [mode, setMode] = useState<"websocket" | "rest">("websocket");
   const [isConnected, setIsConnected] = useState(false);
@@ -190,31 +421,29 @@ function CortiSettingsPanel() {
 
   useEffect(() => {
     Promise.all([
-      window.electronAPI?.getCortiClientId?.(),
+      window.electronAPI?.listCortiEnvironments?.(),
+      window.electronAPI?.getCortiEnvironment?.(),
       window.electronAPI?.getCortiClientSecret?.(),
-      window.electronAPI?.getCortiRegion?.(),
       window.electronAPI?.getCortiTenant?.(),
       window.electronAPI?.cortiGetAuthStatus?.(),
-    ]).then(([id, secret, reg, ten, status]) => {
-      if (id) setClientId(id);
+    ]).then(([envs, envId, secret, ten, status]) => {
+      if (envs) setEnvironments(envs);
+      if (envId) setEnvironmentId(envId);
       if (secret) setClientSecret(secret);
-      if (reg === "us") setRegion("us");
       if (ten) setTenant(ten);
       if (status?.isConnected) setIsConnected(true);
     });
   }, []);
 
-  const saveConfig = async (
-    nextRegion = region,
-    nextTenant = tenant,
-    nextClientId = clientId
-  ) => {
+  const currentEnvironment = environments.find((env) => env.id === environmentId);
+  const clientIdConfigured = currentEnvironment?.hasClientId ?? false;
+
+  const saveConfig = async (nextEnvId = environmentId, nextTenant = tenant) => {
     await Promise.all([
-      window.electronAPI?.saveCortiClientId?.(nextClientId),
-      window.electronAPI?.saveCortiRegion?.(nextRegion),
+      window.electronAPI?.saveCortiEnvironment?.(nextEnvId),
       window.electronAPI?.saveCortiTenant?.(nextTenant),
     ]);
-    useSettingsStore.getState().setCortiRegion(nextRegion);
+    useSettingsStore.getState().setCortiEnvironment(nextEnvId);
     useSettingsStore.getState().setCortiTenant(nextTenant);
   };
 
@@ -248,18 +477,23 @@ function CortiSettingsPanel() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">
-                {t("settingsPage.corti.region")}
+                {t("settingsPage.corti.environment", "Environment")}
               </label>
               <select
                 className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs"
-                value={region}
+                value={environmentId}
                 onChange={(e) => {
-                  setRegion(e.target.value as "eu" | "us");
-                  saveConfig(e.target.value as "eu" | "us", tenant, clientId);
+                  const next = e.target.value;
+                  setEnvironmentId(next);
+                  saveConfig(next, tenant);
                 }}
               >
-                <option value="eu">EU</option>
-                <option value="us">US</option>
+                {environments.map((env) => (
+                  <option key={env.id} value={env.id}>
+                    {env.label}
+                    {env.hasClientId ? "" : " (not configured)"}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -268,27 +502,26 @@ function CortiSettingsPanel() {
               </label>
               <Input
                 className="h-8 text-xs"
-                placeholder="base"
+                placeholder={currentEnvironment?.defaultTenant || "base"}
                 value={tenant}
                 onChange={(e) => setTenant(e.target.value)}
-                onBlur={() => saveConfig(region, tenant, clientId)}
+                onBlur={() => saveConfig(environmentId, tenant)}
               />
             </div>
           </div>
 
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">
-              {t("settingsPage.corti.clientId")}
-            </label>
-            <Input
-              className="h-8 text-xs font-mono"
-              type="password"
-              placeholder="client_id"
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-              onBlur={() => saveConfig(region, tenant, clientId)}
-            />
-          </div>
+          {!clientIdConfigured && currentEnvironment && (
+            <p className="text-xs text-amber-500">
+              {t(
+                "settingsPage.corti.clientIdMissing",
+                "Client ID for {{label}} is not configured. Set {{envVar}} in your .env file.",
+                {
+                  label: currentEnvironment.label,
+                  envVar: `CORTI_CLIENT_ID_${currentEnvironment.id.toUpperCase()}`,
+                }
+              )}
+            </p>
+          )}
 
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
@@ -330,7 +563,7 @@ function CortiSettingsPanel() {
                 size="sm"
                 className="h-7 text-xs"
                 onClick={connect}
-                disabled={isConnecting || !clientId}
+                disabled={isConnecting || !clientIdConfigured}
               >
                 {isConnecting ? (
                   <Loader2 className="w-3 h-3 mr-1 animate-spin" />
@@ -403,8 +636,6 @@ interface TranscriptionSectionProps {
   setTranscriptionMode: (mode: InferenceMode) => void;
   remoteTranscriptionUrl: string;
   setRemoteTranscriptionUrl: (url: string) => void;
-  showTranscriptionPreview: boolean;
-  setShowTranscriptionPreview: (value: boolean) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -437,8 +668,6 @@ function TranscriptionSection({
   setTranscriptionMode,
   remoteTranscriptionUrl,
   setRemoteTranscriptionUrl,
-  showTranscriptionPreview,
-  setShowTranscriptionPreview,
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
@@ -508,19 +737,6 @@ function TranscriptionSection({
     [localTranscriptionProvider, setParakeetModel, setWhisperModel]
   );
 
-  const renderPreviewToggle = () => (
-    <SettingsPanel>
-      <SettingsPanelRow>
-        <SettingsRow
-          label={t("settingsPage.transcription.transcriptionPreview")}
-          description={t("settingsPage.transcription.transcriptionPreviewDescription")}
-        >
-          <Toggle checked={showTranscriptionPreview} onChange={setShowTranscriptionPreview} />
-        </SettingsRow>
-      </SettingsPanelRow>
-    </SettingsPanel>
-  );
-
   const renderTranscriptionPicker = (mode?: "cloud" | "local") => (
     <TranscriptionModelPicker
       selectedCloudProvider={cloudTranscriptionProvider}
@@ -550,32 +766,7 @@ function TranscriptionSection({
 
   return (
     <div className="space-y-4">
-      <InferenceModeSelector
-        modes={transcriptionModes}
-        activeMode={transcriptionMode}
-        onSelect={handleTranscriptionModeSelect}
-      />
-
-      {transcriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {transcriptionMode === "providers" && cloudTranscriptionProvider === "corti" && (
-        <CortiSettingsPanel />
-      )}
-      {transcriptionMode === "local" && (
-        <>
-          {renderTranscriptionPicker("local")}
-          {renderPreviewToggle()}
-        </>
-      )}
-
-      {transcriptionMode === "self-hosted" && (
-        <SelfHostedPanel
-          service="transcription"
-          url={remoteTranscriptionUrl}
-          onUrlChange={setRemoteTranscriptionUrl}
-        />
-      )}
-
-      <GpuDeviceSelector purpose="transcription" />
+      <CortiSettingsPanel />
     </div>
   );
 }
@@ -657,10 +848,10 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
   );
 }
 
-type SpeechTab = "dictation" | "noteRecording";
+type SpeechTab = "dictation" | "noteRecording" | "preferences";
 type LlmTab = "dictationCleanup" | "dictationAgent" | "noteFormatting" | "chatIntelligence";
 
-const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording"];
+const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording", "preferences"];
 const LLM_TABS: LlmTab[] = [
   "dictationCleanup",
   "dictationAgent",
@@ -708,10 +899,12 @@ function SpeechToTextTabs({
   initialTab,
   renderDictation,
   renderNoteRecording,
+  renderPreferences,
 }: {
   initialTab?: SpeechTab;
   renderDictation: () => React.ReactNode;
   renderNoteRecording: () => React.ReactNode;
+  renderPreferences: () => React.ReactNode;
 }) {
   const { t } = useTranslation();
   const [tab, setTab] = useSubTab<SpeechTab>("settings.speechToTextTab", SPEECH_TABS, initialTab);
@@ -719,6 +912,7 @@ function SpeechToTextTabs({
   const subTabs = [
     { id: "dictation", name: t("settingsPage.speechToText.tabs.dictation") },
     { id: "noteRecording", name: t("settingsPage.speechToText.tabs.noteRecording") },
+    { id: "preferences", name: t("settingsModal.sections.general.label") },
   ];
 
   return (
@@ -731,16 +925,15 @@ function SpeechToTextTabs({
         providers={subTabs}
         selectedId={tab}
         onSelect={(id) => setTab(id as SpeechTab)}
-        renderIcon={(id) =>
-          id === "dictation" ? (
-            <Mic className="w-3.5 h-3.5" />
-          ) : (
-            <FileAudio className="w-3.5 h-3.5" />
-          )
-        }
+        renderIcon={(id) => {
+          if (id === "dictation") return <Mic className="w-3.5 h-3.5" />;
+          if (id === "noteRecording") return <FileAudio className="w-3.5 h-3.5" />;
+          return <Info className="w-3.5 h-3.5" />;
+        }}
       />
       <TabPanel active={tab === "dictation"}>{renderDictation()}</TabPanel>
       <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
+      <TabPanel active={tab === "preferences"}>{renderPreferences()}</TabPanel>
     </div>
   );
 }
@@ -928,6 +1121,8 @@ export default function SettingsPage({
     setPauseMediaOnDictation,
     showTranscriptionPreview,
     setShowTranscriptionPreview,
+    insertTextContinuously,
+    setInsertTextContinuously,
     autoPasteEnabled,
     setAutoPasteEnabled,
     keepTranscriptionInClipboard,
@@ -1694,139 +1889,14 @@ export default function SettingsPage({
       case "account":
         return (
           <div className="space-y-5">
-            {!AUTH_URL ? (
-              <>
-                <SectionHeader
-                  title={t("settingsPage.account.title")}
-                  description={t("settingsPage.account.notConfigured")}
-                />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <SettingsRow
-                      label={t("settingsPage.account.featuresDisabled")}
-                      description={t("settingsPage.account.featuresDisabledDescription")}
-                    >
-                      <Badge variant="warning">{t("settingsPage.account.disabled")}</Badge>
-                    </SettingsRow>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </>
-            ) : isLoaded && isSignedIn && user ? (
-              <>
-                <SectionHeader title={t("settingsPage.account.title")} />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden bg-primary/10 dark:bg-primary/15">
-                        {user.image ? (
-                          <img
-                            src={user.image}
-                            alt={user.name || t("settingsPage.account.user")}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <UserCircle className="w-5 h-5 text-primary" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-foreground truncate">
-                          {user.name || t("settingsPage.account.user")}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                      </div>
-                      <Badge variant="success">{t("settingsPage.account.signedIn")}</Badge>
-                    </div>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <Button
-                      onClick={handleSignOut}
-                      variant="outline"
-                      disabled={isSigningOut}
-                      size="sm"
-                      className="w-full text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
-                    >
-                      <LogOut className="mr-1.5 h-3.5 w-3.5" />
-                      {isSigningOut
-                        ? t("settingsPage.account.signOut.signingOut")
-                        : t("settingsPage.account.signOut.signOut")}
-                    </Button>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <SettingsRow
-                      label={t("settingsPage.account.deleteAccount.label")}
-                      description={t("settingsPage.account.deleteAccount.labelDescription")}
-                    >
-                      <Button
-                        onClick={handleDeleteAccount}
-                        variant="outline"
-                        disabled={isDeletingAccount}
-                        size="sm"
-                        className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive"
-                      >
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                        {isDeletingAccount
-                          ? t("settingsPage.account.deleteAccount.deleting")
-                          : t("settingsPage.account.deleteAccount.button")}
-                      </Button>
-                    </SettingsRow>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </>
-            ) : isLoaded ? (
-              <>
-                <SectionHeader title={t("settingsPage.account.title")} />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <SettingsRow
-                      label={t("settingsPage.account.notSignedIn")}
-                      description={t("settingsPage.account.notSignedInDescription")}
-                    >
-                      <Badge variant="outline">{t("settingsPage.account.offline")}</Badge>
-                    </SettingsRow>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-
-                <div className="rounded-lg border border-primary/20 dark:border-primary/15 bg-primary/3 dark:bg-primary/6 p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
-                      <Sparkles className="w-4 h-4 text-primary" />
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-2.5">
-                      <div>
-                        <p className="text-xs font-medium text-foreground">
-                          {t("settingsPage.account.trialCta.title")}
-                        </p>
-                        <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
-                          {t("settingsPage.account.trialCta.description")}
-                        </p>
-                      </div>
-                      <Button onClick={startOnboarding} size="sm" className="w-full">
-                        <UserCircle className="mr-1.5 h-3.5 w-3.5" />
-                        {t("settingsPage.account.trialCta.button")}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <SectionHeader title={t("settingsPage.account.title")} />
-                <SettingsPanel>
-                  <SettingsPanelRow>
-                    <div className="flex items-center justify-between">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-5 w-16 rounded-full" />
-                    </div>
-                  </SettingsPanelRow>
-                </SettingsPanel>
-              </>
-            )}
+            <SectionHeader
+              title={t("settingsPage.account.title", "Account")}
+              description={t(
+                "settingsPage.account.cortiDescription",
+                "Sign in to your Corti account to enable cloud transcription."
+              )}
+            />
+            <CortiAccountPanel />
           </div>
         );
 
@@ -4116,8 +4186,6 @@ EOF`,
                   setTranscriptionMode={setTranscriptionMode}
                   remoteTranscriptionUrl={remoteTranscriptionUrl}
                   setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
-                  showTranscriptionPreview={showTranscriptionPreview}
-                  setShowTranscriptionPreview={setShowTranscriptionPreview}
                   toast={toast}
                 />
                 {transcriptionMode === "local" &&
@@ -4131,6 +4199,36 @@ EOF`,
                 {transcriptionMode === "local" &&
                   localTranscriptionProvider !== "nvidia" &&
                   renderWhisperVadSettings()}
+              </div>
+            )}
+            renderPreferences={() => (
+              <div className="space-y-6">
+                <SettingsPanel>
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.transcription.transcriptionPreview")}
+                      description={t("settingsPage.transcription.transcriptionPreviewDescription")}
+                    >
+                      <Toggle
+                        checked={showTranscriptionPreview}
+                        onChange={setShowTranscriptionPreview}
+                      />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                  <SettingsPanelRow>
+                    <SettingsRow
+                      label={t("settingsPage.transcription.insertTextContinuously")}
+                      description={t(
+                        "settingsPage.transcription.insertTextContinuouslyDescription"
+                      )}
+                    >
+                      <Toggle
+                        checked={insertTextContinuously}
+                        onChange={setInsertTextContinuously}
+                      />
+                    </SettingsRow>
+                  </SettingsPanelRow>
+                </SettingsPanel>
               </div>
             )}
           />

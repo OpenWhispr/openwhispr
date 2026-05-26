@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Copy, X } from "lucide-react";
+import { Check, Copy, CornerDownLeft, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 type PreviewPhase = "listening" | "live" | "cleanup" | "final";
@@ -18,6 +18,9 @@ export default function TranscriptionPreviewOverlay() {
   const [copied, setCopied] = useState(false);
   const [hasOverflow, setHasOverflow] = useState(false);
   const [countdownKey, setCountdownKey] = useState(0);
+  const [insertContinuously, setInsertContinuously] = useState(true);
+  const [inserted, setInserted] = useState(false);
+  const [inserting, setInserting] = useState(false);
 
   const shellRef = useRef<HTMLDivElement | null>(null);
   const textRef = useRef<HTMLDivElement | null>(null);
@@ -26,6 +29,9 @@ export default function TranscriptionPreviewOverlay() {
   const hideTimerRef = useRef<number | null>(null);
   const copiedTimerRef = useRef<number | null>(null);
   const resetTimerRef = useRef<number | null>(null);
+  const lastSentHeightRef = useRef(0);
+  const pendingResizeFrameRef = useRef<number | null>(null);
+  const insertContinuouslyRef = useRef(true);
 
   useEffect(() => {
     phaseRef.current = phase;
@@ -34,6 +40,10 @@ export default function TranscriptionPreviewOverlay() {
   useEffect(() => {
     rawTextRef.current = rawText;
   }, [rawText]);
+
+  useEffect(() => {
+    insertContinuouslyRef.current = insertContinuously;
+  }, [insertContinuously]);
 
   const clearTimer = (timerRef: { current: number | null }) => {
     if (timerRef.current) {
@@ -68,7 +78,7 @@ export default function TranscriptionPreviewOverlay() {
   }, [phase]);
 
   const showFinalResult = useCallback(
-    (text: string) => {
+    (text: string, opts: { autoHide?: boolean } = {}) => {
       const trimmed = text.trim();
       if (!trimmed) {
         window.electronAPI?.hideDictationPreview?.();
@@ -79,34 +89,51 @@ export default function TranscriptionPreviewOverlay() {
       setFinalText(trimmed);
       setPhase("final");
       setCopied(false);
+      setInserted(false);
       setIsVisible(true);
-      startHideTimer(FINAL_HIDE_DURATION_MS);
+      if (opts.autoHide !== false) {
+        startHideTimer(FINAL_HIDE_DURATION_MS);
+      }
     },
     [clearLifecycleTimers, startHideTimer]
   );
 
   const requestResize = useCallback(() => {
-    if (!isVisible || !shellRef.current || !window.electronAPI?.resizeTranscriptionPreviewWindow) {
-      return;
-    }
-
-    const nextHeight = Math.ceil(shellRef.current.getBoundingClientRect().height) + 16;
-    window.electronAPI.resizeTranscriptionPreviewWindow(TARGET_WIDTH, nextHeight).catch(() => {});
+    if (pendingResizeFrameRef.current !== null) return;
+    pendingResizeFrameRef.current = window.requestAnimationFrame(() => {
+      pendingResizeFrameRef.current = null;
+      if (!isVisible || !shellRef.current || !window.electronAPI?.resizeTranscriptionPreviewWindow) {
+        return;
+      }
+      const nextHeight = Math.ceil(shellRef.current.getBoundingClientRect().height) + 16;
+      if (Math.abs(nextHeight - lastSentHeightRef.current) < 2) return;
+      lastSentHeightRef.current = nextHeight;
+      window.electronAPI
+        .resizeTranscriptionPreviewWindow(TARGET_WIDTH, nextHeight)
+        .catch(() => {});
+    });
   }, [isVisible]);
 
   useEffect(() => {
     if (!isVisible || !shellRef.current) return;
 
     const node = shellRef.current;
-    const frameId = window.requestAnimationFrame(() => requestResize());
+    requestResize();
     const observer = new ResizeObserver(() => requestResize());
     observer.observe(node);
 
     return () => {
-      window.cancelAnimationFrame(frameId);
+      if (pendingResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(pendingResizeFrameRef.current);
+        pendingResizeFrameRef.current = null;
+      }
       observer.disconnect();
     };
   }, [isVisible, requestResize]);
+
+  useEffect(() => {
+    if (!isVisible) lastSentHeightRef.current = 0;
+  }, [isVisible]);
 
   useEffect(() => {
     const el = textRef.current;
@@ -118,14 +145,20 @@ export default function TranscriptionPreviewOverlay() {
   }, [rawText, finalText, phase]);
 
   useEffect(() => {
+    const handlePreviewMode = window.electronAPI?.onPreviewMode?.((payload) => {
+      setInsertContinuously(payload?.insertTextContinuously !== false);
+    });
+
     const handlePreviewText = window.electronAPI?.onPreviewText?.((incoming: string) => {
       clearLifecycleTimers();
       clearTimer(copiedTimerRef);
-      setRawText(incoming?.trim?.() || "");
+      const text = incoming?.trim?.() || "";
+      setRawText(text);
       setFinalText("");
       setCopied(false);
+      setInserted(false);
       setHasOverflow(false);
-      setPhase(incoming?.trim?.() ? "live" : "listening");
+      setPhase(text ? "live" : "listening");
       setIsVisible(true);
     });
 
@@ -133,34 +166,55 @@ export default function TranscriptionPreviewOverlay() {
       const trimmedChunk = chunk?.trim?.();
       if (!trimmedChunk) return;
 
-      setRawText((prev) => (prev ? `${prev} ${trimmedChunk}` : trimmedChunk));
+      // Continuous-insert mode shows only the most recent interim chunk —
+      // finals have already been routed into the target app, so accumulating
+      // them here would just duplicate what the user already sees there.
+      if (insertContinuouslyRef.current) {
+        setRawText(trimmedChunk);
+      } else {
+        setRawText((prev) => (prev ? `${prev} ${trimmedChunk}` : trimmedChunk));
+      }
       if (phaseRef.current !== "cleanup" && phaseRef.current !== "final") {
         setPhase("live");
       }
       setIsVisible(true);
     });
 
-    const handlePreviewHold = window.electronAPI?.onPreviewHold?.((payload) => {
+    const handlePreviewHold = window.electronAPI?.onPreviewHold?.(() => {
       clearTimer(hideTimerRef);
       setCopied(false);
 
       if (phaseRef.current === "final") return;
 
-      if (payload?.showCleanup) {
-        setPhase("cleanup");
+      if (!insertContinuouslyRef.current) {
+        showFinalResult(rawTextRef.current, { autoHide: false });
       } else {
-        showFinalResult(rawTextRef.current);
+        // Continuous-insert mode: text has already been streamed into the
+        // target app, so skip the final overlay and just close.
+        window.electronAPI?.hideDictationPreview?.();
       }
     });
 
     const handlePreviewResult = window.electronAPI?.onPreviewResult?.((payload) => {
       const nextText = payload?.text?.trim?.();
+      const continuous =
+        payload && typeof payload.insertTextContinuously === "boolean"
+          ? payload.insertTextContinuously
+          : insertContinuouslyRef.current;
+
       if (!nextText) {
         window.electronAPI?.hideDictationPreview?.();
         return;
       }
 
-      showFinalResult(nextText);
+      setInsertContinuously(continuous);
+      if (continuous) {
+        // Final transcript has already been injected into the target app via
+        // streaming inserts — skip the green "Ready" overlay and just close.
+        window.electronAPI?.hideDictationPreview?.();
+        return;
+      }
+      showFinalResult(nextText, { autoHide: false });
     });
 
     const handlePreviewHide = window.electronAPI?.onPreviewHide?.(() => {
@@ -173,6 +227,7 @@ export default function TranscriptionPreviewOverlay() {
         setRawText("");
         setFinalText("");
         setCopied(false);
+        setInserted(false);
         setHasOverflow(false);
         setPhase("listening");
       }, HIDE_ANIMATION_MS);
@@ -181,6 +236,7 @@ export default function TranscriptionPreviewOverlay() {
     return () => {
       clearLifecycleTimers();
       clearTimer(copiedTimerRef);
+      handlePreviewMode?.();
       handlePreviewText?.();
       handlePreviewAppend?.();
       handlePreviewHold?.();
@@ -207,11 +263,28 @@ export default function TranscriptionPreviewOverlay() {
 
     setCopied(true);
     resetCopyState();
-    if (phaseRef.current === "final") {
+    if (phaseRef.current === "final" && insertContinuouslyRef.current) {
       startHideTimer(FINAL_HIDE_DURATION_MS);
       setCountdownKey((k) => k + 1);
     }
   }, [activeText, resetCopyState, startHideTimer]);
+
+  const handleInsert = useCallback(async () => {
+    const textToInsert = activeText.trim();
+    if (!textToInsert || inserting) return;
+
+    setInserting(true);
+    try {
+      const result = await window.electronAPI?.insertDictationPreviewText?.(textToInsert);
+      if (result?.success === false) {
+        setInserting(false);
+        return;
+      }
+      setInserted(true);
+    } catch {
+      setInserting(false);
+    }
+  }, [activeText, inserting]);
 
   const handleDismiss = useCallback(() => {
     window.electronAPI?.dismissDictationPreview?.();
@@ -233,7 +306,7 @@ export default function TranscriptionPreviewOverlay() {
       <div
         ref={shellRef}
         className={[
-          "relative overflow-hidden rounded-xl border bg-card/92 p-3 backdrop-blur-xl",
+          "relative overflow-hidden rounded-xl border bg-card/92 p-2.5 backdrop-blur-xl",
           "shadow-[0_8px_24px_rgba(0,0,0,0.14)]",
           "dark:bg-surface-2/92",
           phase === "final"
@@ -296,6 +369,29 @@ export default function TranscriptionPreviewOverlay() {
               </button>
             ) : null}
 
+            {activeText && phase === "final" && !insertContinuously ? (
+              <button
+                onClick={handleInsert}
+                disabled={inserting}
+                className={[
+                  "inline-flex h-6 items-center gap-1 rounded-md border px-1.5 text-[11px] font-medium transition-colors",
+                  inserted
+                    ? "border-emerald-500/15 text-emerald-500/70"
+                    : "border-primary/30 text-primary/80 hover:border-primary/60 hover:bg-primary/10",
+                  inserting ? "opacity-60" : "",
+                ].join(" ")}
+              >
+                {inserted ? (
+                  <Check className="h-3 w-3" />
+                ) : (
+                  <CornerDownLeft className="h-3 w-3" />
+                )}
+                {inserted
+                  ? t("transcriptionPreview.inserted", { defaultValue: "Inserted" })
+                  : t("transcriptionPreview.insert", { defaultValue: "Insert" })}
+              </button>
+            ) : null}
+
             <button
               onClick={handleDismiss}
               className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/40 transition-colors hover:bg-background/40 hover:text-muted-foreground/70"
@@ -350,7 +446,7 @@ export default function TranscriptionPreviewOverlay() {
           </div>
         )}
 
-        {phase === "final" && (
+        {phase === "final" && insertContinuously && (
           <div className="absolute bottom-0 inset-x-0 h-[2px] overflow-hidden rounded-b-xl">
             <div
               key={countdownKey}

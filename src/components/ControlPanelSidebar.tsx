@@ -6,7 +6,6 @@ import {
   BookOpen,
   Upload,
   Blocks,
-  Gift,
   Settings,
   HelpCircle,
   UserCircle,
@@ -39,8 +38,8 @@ interface ControlPanelSidebarProps {
   activeView: ControlPanelView;
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
+  onOpenAccount?: () => void;
   onOpenSearch?: () => void;
-  onOpenReferrals?: () => void;
   onUpgrade?: () => void;
   isOverLimit?: boolean;
   userName?: string | null;
@@ -57,8 +56,8 @@ export default function ControlPanelSidebar({
   activeView,
   onViewChange,
   onOpenSettings,
+  onOpenAccount,
   onOpenSearch,
-  onOpenReferrals,
   onUpgrade,
   isOverLimit,
   userName,
@@ -238,22 +237,6 @@ export default function ControlPanelSidebar({
           </div>
         )}
 
-        {isSignedIn && onOpenReferrals && (
-          <button
-            onClick={onOpenReferrals}
-            aria-label={t("sidebar.referral")}
-            className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
-          >
-            <Gift
-              size={15}
-              className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-            />
-            <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-              {t("sidebar.referral")}
-            </span>
-          </button>
-        )}
-
         {WORKSPACES_ENABLED && isSignedIn && (
           <button
             onClick={() => (activeWorkspace ? setInviteOpen(true) : setCreateWorkspaceOpen(true))}
@@ -305,31 +288,36 @@ export default function ControlPanelSidebar({
 
         <div className="mx-1 h-px bg-border/10 dark:bg-white/6 my-1.5!" />
 
-        <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md">
+        <button
+          type="button"
+          onClick={onOpenAccount}
+          aria-label={t("sidebar.account", "Account")}
+          className="group flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+        >
           {userImage ? (
             <img src={userImage} alt="" className="w-6 h-6 rounded-full shrink-0 object-cover" />
           ) : (
-            <UserCircle size={18} className="shrink-0 text-foreground/50 dark:text-foreground/45" />
+            <UserCircle size={18} className="shrink-0 text-foreground/50 dark:text-foreground/45 group-hover:text-foreground/65" />
           )}
           <div className="flex-1 min-w-0">
             {isSignedIn && (userName || userEmail) ? (
               <>
                 <p className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight">
-                  {userName || t("sidebar.defaultUser")}
+                  {userName || userEmail}
                 </p>
-                {userEmail && (
+                {userName && userEmail && userName !== userEmail && (
                   <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
                     {userEmail}
                   </p>
                 )}
               </>
             ) : authLoaded && !isSignedIn ? (
-              <p className="text-xs text-foreground/45 dark:text-foreground/55">
+              <p className="text-xs text-foreground/45 dark:text-foreground/55 group-hover:text-foreground/70 transition-colors duration-150">
                 {t("sidebar.notSignedIn")}
               </p>
             ) : null}
           </div>
-        </div>
+        </button>
       </div>
 
       {WORKSPACES_ENABLED && activeWorkspace && (

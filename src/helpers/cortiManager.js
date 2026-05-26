@@ -13,11 +13,12 @@ class CortiManager {
   }
 
   _getConfig() {
+    const env = this.environmentManager.getCortiEnvironment();
     return {
       clientId: this.environmentManager.getCortiClientId(),
       clientSecret: this.environmentManager.getCortiClientSecret(),
-      region: this.environmentManager.getCortiRegion() || "eu",
-      tenant: this.environmentManager.getCortiTenant() || "base",
+      region: env.region,
+      tenant: this.environmentManager.getCortiTenant() || env.defaultTenant,
     };
   }
 

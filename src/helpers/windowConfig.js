@@ -191,7 +191,7 @@ class WindowPositionUtil {
       size.height ||
       TRANSCRIPTION_PREVIEW_CONFIG.height ||
       TRANSCRIPTION_PREVIEW_SIZE_LIMITS.defaultHeight;
-    const GAP = 8;
+    const GAP = 2;
     const workArea = display.workArea || display.bounds;
 
     let x = Math.round(mainWindowBounds.x + (mainWindowBounds.width - width) / 2);

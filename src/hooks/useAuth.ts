@@ -1,45 +1,23 @@
-import { useEffect, useRef } from "react";
-import { authClient, isWithinGracePeriod } from "../lib/auth";
-import logger from "../utils/logger";
-import { useSettingsStore } from "../stores/settingsStore";
-
-const useStaticSession = () => ({
-  data: null,
-  isPending: false,
-  error: null,
-  refetch: async () => null,
-});
+/**
+ * Auth has been removed in favor of the Corti PKCE flow (see CortiOAuth /
+ * Settings → Corti). The remaining `useAuth` hook is a stub that keeps the
+ * many call sites compiling — every consumer behaves as if the user is
+ * "signed out" of the legacy OpenWhispr account system. Cloud-account-gated
+ * features (workspace, billing, share, sync) silently degrade.
+ */
+interface StubUser {
+  id?: string;
+  name?: string;
+  email?: string;
+  image?: string;
+}
 
 export function useAuth() {
-  const useSession = authClient?.useSession ?? useStaticSession;
-  const { data: session, isPending } = useSession();
-  const user = session?.user ?? null;
-  const rawIsSignedIn = Boolean(user);
-  const gracePeriodActive = isWithinGracePeriod();
-
-  // Only sync true to the store — signOut() handles setting false via localStorage + reload.
-  // Better Auth's useSession() flickers in Electron (renderer can't see the main-process cookie until reload).
-  const isSignedIn = rawIsSignedIn || gracePeriodActive;
-
-  const lastSyncedRef = useRef(false);
-
-  useEffect(() => {
-    if (!isPending && isSignedIn && !lastSyncedRef.current) {
-      logger.debug(
-        "Auth state sync",
-        { isSignedIn, rawIsSignedIn, gracePeriod: gracePeriodActive },
-        "auth"
-      );
-      useSettingsStore.getState().setIsSignedIn(true);
-      lastSyncedRef.current = true;
-    }
-  }, [isSignedIn, rawIsSignedIn, gracePeriodActive, isPending]);
-
   return {
-    isSignedIn,
-    isGracePeriodOnly: !rawIsSignedIn && gracePeriodActive,
-    isLoaded: !isPending,
-    session,
-    user,
+    isSignedIn: false,
+    isGracePeriodOnly: false,
+    isLoaded: true,
+    session: null as { user?: StubUser } | null,
+    user: null as StubUser | null,
   };
 }

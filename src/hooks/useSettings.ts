@@ -24,7 +24,7 @@ export interface TranscriptionSettings {
   customDictionary: string[];
   assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
-  cortiRegion: "eu" | "us";
+  cortiEnvironment: string;
   cortiTenant: string;
   cortiTranscriptionMode: "websocket" | "rest";
 }
@@ -207,7 +207,7 @@ function useSettingsInternal() {
     customDictionary: store.customDictionary,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
-    cortiRegion: store.cortiRegion,
+    cortiEnvironment: store.cortiEnvironment,
     cortiTenant: store.cortiTenant,
     cortiTranscriptionMode: store.cortiTranscriptionMode,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
@@ -291,6 +291,8 @@ function useSettingsInternal() {
     setAutoLearnCorrections,
     showTranscriptionPreview: store.showTranscriptionPreview,
     setShowTranscriptionPreview: store.setShowTranscriptionPreview,
+    insertTextContinuously: store.insertTextContinuously,
+    setInsertTextContinuously: store.setInsertTextContinuously,
     autoPasteEnabled: store.autoPasteEnabled,
     setAutoPasteEnabled: store.setAutoPasteEnabled,
     keepTranscriptionInClipboard: store.keepTranscriptionInClipboard,

@@ -256,8 +256,6 @@ const EnvironmentManager = require("./src/helpers/environment");
 const WindowManager = require("./src/helpers/windowManager");
 const DatabaseManager = require("./src/helpers/database");
 const ClipboardManager = require("./src/helpers/clipboard");
-const WhisperManager = require("./src/helpers/whisper");
-const ParakeetManager = require("./src/helpers/parakeet");
 const DiarizationManager = require("./src/helpers/diarization");
 const TrayManager = require("./src/helpers/tray");
 const IPCHandlers = require("./src/helpers/ipcHandlers");
@@ -268,7 +266,6 @@ const DevServerManager = require("./src/helpers/devServerManager");
 const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
-const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
@@ -288,8 +285,6 @@ let windowManager = null;
 let hotkeyManager = null;
 let databaseManager = null;
 let clipboardManager = null;
-let whisperManager = null;
-let parakeetManager = null;
 let diarizationManager = null;
 let trayManager = null;
 let updateManager = null;
@@ -297,7 +292,6 @@ let globeKeyManager = null;
 let windowsKeyManager = null;
 let linuxKeyManager = null;
 let textEditMonitor = null;
-let whisperCudaManager = null;
 let googleCalendarManager = null;
 let meetingDetectionEngine = null;
 let audioTapManager = null;
@@ -363,11 +357,6 @@ function initializeCoreManagers() {
   hotkeyManager = windowManager.hotkeyManager;
   databaseManager = new DatabaseManager();
   clipboardManager = new ClipboardManager();
-  whisperManager = new WhisperManager();
-  if (process.platform !== "darwin") {
-    whisperCudaManager = new WhisperCudaManager();
-  }
-  parakeetManager = new ParakeetManager();
   diarizationManager = new DiarizationManager();
   googleCalendarManager = new GoogleCalendarManager(databaseManager, windowManager);
   meetingDetectionEngine = new MeetingDetectionEngine(
@@ -393,15 +382,12 @@ function initializeCoreManagers() {
     environmentManager,
     databaseManager,
     clipboardManager,
-    whisperManager,
-    parakeetManager,
     diarizationManager,
     windowManager,
     updateManager,
     windowsKeyManager,
     linuxKeyManager,
     textEditMonitor,
-    whisperCudaManager,
     googleCalendarManager,
     meetingDetectionEngine,
     audioTapManager,
@@ -414,8 +400,6 @@ function initializeCoreManagers() {
 }
 
 function registerSidecars() {
-  if (whisperManager) sidecarRegistry.register("whisper", () => whisperManager.stopServer());
-  if (parakeetManager) sidecarRegistry.register("parakeet", () => parakeetManager.stopServer());
   if (diarizationManager) {
     sidecarRegistry.register("diarization", () => diarizationManager.shutdown());
   }
@@ -891,24 +875,6 @@ async function startApp() {
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
     }
-  });
-
-  // Non-blocking server pre-warming
-  const whisperSettings = {
-    localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
-    whisperModel: process.env.LOCAL_WHISPER_MODEL,
-    useCuda: process.env.WHISPER_CUDA_ENABLED === "true" && whisperCudaManager?.isDownloaded(),
-  };
-  whisperManager.initializeAtStartup(whisperSettings).catch((err) => {
-    debugLogger.debug("Whisper startup init error (non-fatal)", { error: err.message });
-  });
-
-  const parakeetSettings = {
-    localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
-    parakeetModel: process.env.PARAKEET_MODEL,
-  };
-  parakeetManager.initializeAtStartup(parakeetSettings).catch((err) => {
-    debugLogger.debug("Parakeet startup init error (non-fatal)", { error: err.message });
   });
 
   // TODO: drop legacy REASONING_PROVIDER / LOCAL_REASONING_MODEL fallbacks after 2 releases.

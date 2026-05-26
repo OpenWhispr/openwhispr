@@ -1660,7 +1660,7 @@
       "description": "Control what data leaves your device. Everything is off by default.",
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
-      "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
+      "usageAnalyticsDescription": "Share anonymous performance metrics. No transcription content is ever sent — only timing and error data. (Currently inactive — no analytics backend is configured.)",
       "audioRetention": "Audio Retention",
       "audioRetentionDescription": "Store audio recordings locally for re-transcription and download. Files are automatically deleted after the retention period.",
       "audioRetentionDisabled": "Disabled",
@@ -1756,6 +1756,8 @@
       },
       "transcriptionPreview": "Live Transcription Preview",
       "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup",
+      "insertTextContinuously": "Insert text continuously",
+      "insertTextContinuouslyDescription": "Automatically insert text into the target text box as you speak. When disabled, the preview overlay stays open after recording with an Insert button so you can paste manually.",
       "vad": {
         "title": "Voice Activity Detection",
         "description": "Configure how Silero VAD detects and segments speech for local Whisper transcription",
@@ -2706,6 +2708,8 @@
     "ready": "Ready",
     "copy": "Copy",
     "copied": "Copied",
+    "insert": "Insert",
+    "inserted": "Inserted",
     "waitingForInput": "Say something..."
   },
   "transcript": {

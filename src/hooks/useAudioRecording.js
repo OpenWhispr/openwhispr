@@ -17,6 +17,8 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
+  const streamingSegmentsPastedRef = useRef(false);
+  const streamingPasteQueueRef = useRef(Promise.resolve());
   const { onToggle } = options;
 
   const performStartRecording = useCallback(async () => {
@@ -24,6 +26,11 @@ export const useAudioRecording = (toast, options = {}) => {
     startLockRef.current = true;
     try {
       if (!audioManagerRef.current) return false;
+
+      setTranscript("");
+      setPartialTranscript("");
+      streamingSegmentsPastedRef.current = false;
+      streamingPasteQueueRef.current = Promise.resolve();
 
       const currentState = audioManagerRef.current.getState();
       if (currentState.isRecording || currentState.isProcessing) return false;
@@ -114,6 +121,38 @@ export const useAudioRecording = (toast, options = {}) => {
       onPartialTranscript: (text) => {
         setPartialTranscript(text);
       },
+      onStreamingCommit: (segment) => {
+        if (!segment) return;
+
+        setPartialTranscript("");
+
+        const {
+          autoPasteEnabled,
+          keepTranscriptionInClipboard,
+          insertTextContinuously,
+        } = getSettings();
+        if (!autoPasteEnabled || !insertTextContinuously || !audioManagerRef.current) return;
+
+        streamingSegmentsPastedRef.current = true;
+        streamingPasteQueueRef.current = streamingPasteQueueRef.current
+          .catch(() => {})
+          .then(async () => {
+            const pasteStart = performance.now();
+            await audioManagerRef.current.safePaste(segment, {
+              fromStreaming: true,
+              restoreClipboard: !keepTranscriptionInClipboard,
+              allowClipboardFallback: isAccessibilitySkipped(),
+            });
+            logger.info(
+              "Streaming segment paste timing",
+              {
+                pasteMs: Math.round(performance.now() - pasteStart),
+                textLength: segment.length,
+              },
+              "streaming"
+            );
+          });
+      },
       onTranscriptionComplete: async (result) => {
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.resumeMediaPlayback?.();
@@ -132,13 +171,22 @@ export const useAudioRecording = (toast, options = {}) => {
             return;
           }
 
-          setTranscript(result.text);
-          window.electronAPI?.completeDictationPreview?.({ text: result.text });
+          setTranscript("");
+          setPartialTranscript("");
+          const {
+            autoPasteEnabled,
+            keepTranscriptionInClipboard,
+            insertTextContinuously,
+          } = getSettings();
+          window.electronAPI?.completeDictationPreview?.({
+            text: result.text,
+            insertTextContinuously,
+          });
 
           const isStreaming = result.source?.includes("streaming");
-          const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
+          const alreadyLivePasted = isStreaming && streamingSegmentsPastedRef.current;
 
-          if (autoPasteEnabled) {
+          if (autoPasteEnabled && insertTextContinuously && !alreadyLivePasted) {
             const pasteStart = performance.now();
             await audioManagerRef.current.safePaste(result.text, {
               ...(isStreaming ? { fromStreaming: true } : {}),
@@ -157,6 +205,9 @@ export const useAudioRecording = (toast, options = {}) => {
           } else if (keepTranscriptionInClipboard) {
             await navigator.clipboard.writeText(result.text);
           }
+
+          streamingSegmentsPastedRef.current = false;
+          streamingPasteQueueRef.current = Promise.resolve();
 
           audioManagerRef.current.saveTranscription(result.text, result.rawText ?? result.text, {
             clientTranscriptionId: result.clientTranscriptionId,
@@ -237,11 +288,6 @@ export const useAudioRecording = (toast, options = {}) => {
       if (getSettings().pauseMediaOnDictation) {
         window.electronAPI?.resumeMediaPlayback?.();
       }
-      toast({
-        title: t("hooks.audioRecording.noAudio.title"),
-        description: t("hooks.audioRecording.noAudio.description"),
-        variant: "default",
-      });
     };
 
     const disposeNoAudio = window.electronAPI.onNoAudioDetected?.(handleNoAudioDetected);

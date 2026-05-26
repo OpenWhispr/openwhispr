@@ -1461,6 +1461,7 @@ declare global {
         sessionId: string | null;
       }>;
       onCortiPartialTranscript?: (callback: (text: string) => void) => () => void;
+      onCortiFinalTranscript?: (callback: (text: string) => void) => () => void;
       onCortiiFinalTranscript?: (callback: (text: string) => void) => () => void;
       onCortiError?: (callback: (error: string) => void) => () => void;
       onCortiSessionEnd?: (callback: (data: { text?: string }) => void) => () => void;
@@ -1472,18 +1473,33 @@ declare global {
       ) => Promise<{ success: boolean; text?: string; error?: string }>;
 
       // Corti credentials
-      getCortiClientId?: () => Promise<string>;
-      saveCortiClientId?: (value: string) => Promise<{ success: boolean }>;
+      listCortiEnvironments?: () => Promise<
+        Array<{
+          id: string;
+          label: string;
+          region: string;
+          defaultTenant: string;
+          hasClientId: boolean;
+        }>
+      >;
+      getCortiEnvironment?: () => Promise<string>;
+      saveCortiEnvironment?: (value: string) => Promise<{ success: boolean }>;
+      getCortiClientIdOverride?: () => Promise<string>;
+      saveCortiClientIdOverride?: (value: string) => Promise<{ success: boolean }>;
       getCortiClientSecret?: () => Promise<string>;
       saveCortiClientSecret?: (value: string) => Promise<{ success: boolean }>;
-      getCortiRegion?: () => Promise<string>;
-      saveCortiRegion?: (value: string) => Promise<{ success: boolean }>;
       getCortiTenant?: () => Promise<string>;
       saveCortiTenant?: (value: string) => Promise<{ success: boolean }>;
+      getCortiCustomRegion?: () => Promise<string>;
+      saveCortiCustomRegion?: (value: string) => Promise<{ success: boolean }>;
       testCortiConnection?: () => Promise<{ success: boolean; error?: string }>;
       cortiStartPkce?: () => Promise<{ success: boolean; error?: string }>;
       cortiDisconnect?: () => Promise<{ success: boolean; error?: string }>;
-      cortiGetAuthStatus?: () => Promise<{ isConnected: boolean; method: "pkce" | null }>;
+      cortiGetAuthStatus?: () => Promise<{
+        isConnected: boolean;
+        method: "pkce" | null;
+        user: { name: string | null; email: string | null } | null;
+      }>;
 
       // Agent overlay
       resizeAgentWindow?: (width: number, height: number) => Promise<void>;
@@ -1810,17 +1826,27 @@ declare global {
       onPreviewText?: (callback: (text: string) => void) => () => void;
       onPreviewAppend?: (callback: (text: string) => void) => () => void;
       onPreviewHold?: (callback: (payload: { showCleanup: boolean }) => void) => () => void;
-      onPreviewResult?: (callback: (payload: { text: string }) => void) => () => void;
+      onPreviewResult?: (
+        callback: (payload: { text: string; insertTextContinuously?: boolean }) => void
+      ) => () => void;
       onPreviewHide?: (callback: () => void) => () => void;
+      onPreviewMode?: (
+        callback: (payload: { insertTextContinuously: boolean }) => void
+      ) => () => void;
       startDictationPreview?: (opts: {
         provider: string;
         model: string;
         language?: string;
+        insertTextContinuously?: boolean;
       }) => Promise<{ success: boolean }>;
       stopDictationPreview?: (opts?: { showCleanup?: boolean }) => Promise<{ success: boolean }>;
       dismissDictationPreview?: () => Promise<{ success: boolean }>;
-      completeDictationPreview?: (payload: { text?: string }) => Promise<{ success: boolean }>;
+      completeDictationPreview?: (payload: {
+        text?: string;
+        insertTextContinuously?: boolean;
+      }) => Promise<{ success: boolean }>;
       hideDictationPreview?: () => Promise<{ success: boolean }>;
+      insertDictationPreviewText?: (text: string) => Promise<{ success: boolean; error?: string }>;
       resizeTranscriptionPreviewWindow?: (
         width: number,
         height: number

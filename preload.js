@@ -193,61 +193,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   writeClipboard: (text) => ipcRenderer.invoke("write-clipboard", text),
   checkPasteTools: () => ipcRenderer.invoke("check-paste-tools"),
 
-  // Local Whisper functions (whisper.cpp)
-  transcribeLocalWhisper: (audioBlob, options) =>
-    ipcRenderer.invoke("transcribe-local-whisper", audioBlob, options),
-  checkWhisperInstallation: () => ipcRenderer.invoke("check-whisper-installation"),
-  downloadWhisperModel: (modelName) => ipcRenderer.invoke("download-whisper-model", modelName),
-  onWhisperDownloadProgress: registerListener("whisper-download-progress"),
-  checkModelStatus: (modelName) => ipcRenderer.invoke("check-model-status", modelName),
-  listWhisperModels: () => ipcRenderer.invoke("list-whisper-models"),
-  deleteWhisperModel: (modelName) => ipcRenderer.invoke("delete-whisper-model", modelName),
-  deleteAllWhisperModels: () => ipcRenderer.invoke("delete-all-whisper-models"),
-  cancelWhisperDownload: () => ipcRenderer.invoke("cancel-whisper-download"),
   checkFFmpegAvailability: () => ipcRenderer.invoke("check-ffmpeg-availability"),
   getAudioDiagnostics: () => ipcRenderer.invoke("get-audio-diagnostics"),
 
-  // Whisper server functions (faster repeated transcriptions)
-  whisperServerStart: (modelName) => ipcRenderer.invoke("whisper-server-start", modelName),
-  whisperServerStop: () => ipcRenderer.invoke("whisper-server-stop"),
-  whisperServerStatus: () => ipcRenderer.invoke("whisper-server-status"),
-
-  // CUDA GPU acceleration
+  // GPU enumeration (used by GpuDeviceSelector)
   listGpus: () => ipcRenderer.invoke("list-gpus"),
   setGpuDeviceIndex: (purpose, index) => ipcRenderer.invoke("set-gpu-device-index", purpose, index),
   getGpuDeviceIndex: (purpose) => ipcRenderer.invoke("get-gpu-device-index", purpose),
   detectGpu: () => ipcRenderer.invoke("detect-gpu"),
-  getCudaWhisperStatus: () => ipcRenderer.invoke("get-cuda-whisper-status"),
-  downloadCudaWhisperBinary: () => ipcRenderer.invoke("download-cuda-whisper-binary"),
-  cancelCudaWhisperDownload: () => ipcRenderer.invoke("cancel-cuda-whisper-download"),
-  deleteCudaWhisperBinary: () => ipcRenderer.invoke("delete-cuda-whisper-binary"),
-  onCudaDownloadProgress: registerListener(
-    "cuda-download-progress",
-    (callback) => (_event, data) => callback(data)
-  ),
-  onCudaFallbackNotification: registerListener(
-    "cuda-fallback-notification",
-    (callback) => () => callback()
-  ),
-
-  // Local Parakeet (NVIDIA) functions
-  transcribeLocalParakeet: (audioBlob, options) =>
-    ipcRenderer.invoke("transcribe-local-parakeet", audioBlob, options),
-  checkParakeetInstallation: () => ipcRenderer.invoke("check-parakeet-installation"),
-  downloadParakeetModel: (modelName) => ipcRenderer.invoke("download-parakeet-model", modelName),
-  onParakeetDownloadProgress: registerListener("parakeet-download-progress"),
-  checkParakeetModelStatus: (modelName) =>
-    ipcRenderer.invoke("check-parakeet-model-status", modelName),
-  listParakeetModels: () => ipcRenderer.invoke("list-parakeet-models"),
-  deleteParakeetModel: (modelName) => ipcRenderer.invoke("delete-parakeet-model", modelName),
-  deleteAllParakeetModels: () => ipcRenderer.invoke("delete-all-parakeet-models"),
-  cancelParakeetDownload: () => ipcRenderer.invoke("cancel-parakeet-download"),
-  getParakeetDiagnostics: () => ipcRenderer.invoke("get-parakeet-diagnostics"),
-
-  // Parakeet server functions (faster repeated transcriptions)
-  parakeetServerStart: (modelName) => ipcRenderer.invoke("parakeet-server-start", modelName),
-  parakeetServerStop: () => ipcRenderer.invoke("parakeet-server-stop"),
-  parakeetServerStatus: () => ipcRenderer.invoke("parakeet-server-status"),
 
   // Diarization (speaker identification) functions
   downloadDiarizationModels: () => ipcRenderer.invoke("download-diarization-models"),
@@ -498,56 +451,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   sendReferralInvite: (email) => ipcRenderer.invoke("send-referral-invite", email),
   getReferralInvites: () => ipcRenderer.invoke("get-referral-invites"),
 
-  // Assembly AI Streaming
-  assemblyAiStreamingWarmup: (options) =>
-    ipcRenderer.invoke("assemblyai-streaming-warmup", options),
-  assemblyAiStreamingStart: (options) => ipcRenderer.invoke("assemblyai-streaming-start", options),
-  assemblyAiStreamingSend: (audioBuffer) =>
-    ipcRenderer.send("assemblyai-streaming-send", audioBuffer),
-  assemblyAiStreamingForceEndpoint: () => ipcRenderer.send("assemblyai-streaming-force-endpoint"),
-  assemblyAiStreamingStop: () => ipcRenderer.invoke("assemblyai-streaming-stop"),
-  assemblyAiStreamingStatus: () => ipcRenderer.invoke("assemblyai-streaming-status"),
-  onAssemblyAiPartialTranscript: registerListener(
-    "assemblyai-partial-transcript",
-    (callback) => (_event, text) => callback(text)
-  ),
-  onAssemblyAiFinalTranscript: registerListener(
-    "assemblyai-final-transcript",
-    (callback) => (_event, text) => callback(text)
-  ),
-  onAssemblyAiError: registerListener(
-    "assemblyai-error",
-    (callback) => (_event, error) => callback(error)
-  ),
-  onAssemblyAiSessionEnd: registerListener(
-    "assemblyai-session-end",
-    (callback) => (_event, data) => callback(data)
-  ),
-
-  // Deepgram Streaming
-  deepgramStreamingWarmup: (options) => ipcRenderer.invoke("deepgram-streaming-warmup", options),
-  deepgramStreamingStart: (options) => ipcRenderer.invoke("deepgram-streaming-start", options),
-  deepgramStreamingSend: (audioBuffer) => ipcRenderer.send("deepgram-streaming-send", audioBuffer),
-  deepgramStreamingFinalize: () => ipcRenderer.send("deepgram-streaming-finalize"),
-  deepgramStreamingStop: () => ipcRenderer.invoke("deepgram-streaming-stop"),
-  deepgramStreamingStatus: () => ipcRenderer.invoke("deepgram-streaming-status"),
-  onDeepgramPartialTranscript: registerListener(
-    "deepgram-partial-transcript",
-    (callback) => (_event, text) => callback(text)
-  ),
-  onDeepgramFinalTranscript: registerListener(
-    "deepgram-final-transcript",
-    (callback) => (_event, text) => callback(text)
-  ),
-  onDeepgramError: registerListener(
-    "deepgram-error",
-    (callback) => (_event, error) => callback(error)
-  ),
-  onDeepgramSessionEnd: registerListener(
-    "deepgram-session-end",
-    (callback) => (_event, data) => callback(data)
-  ),
-
   // Corti Streaming
   cortiStreamingStart: (options) => ipcRenderer.invoke("corti-streaming-start", options),
   cortiStreamingSend: (audioBuffer) => ipcRenderer.send("corti-streaming-send", audioBuffer),
@@ -555,6 +458,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   cortiStreamingStatus: () => ipcRenderer.invoke("corti-streaming-status"),
   onCortiPartialTranscript: registerListener(
     "corti-partial-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onCortiFinalTranscript: registerListener(
+    "corti-final-transcript",
     (callback) => (_event, text) => callback(text)
   ),
   onCortiiFinalTranscript: registerListener(
@@ -575,13 +482,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("transcribe-corti-rest", audioBuffer, opts),
 
   // Corti credentials
-  getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),
-  saveCortiClientId: (value) => ipcRenderer.invoke("save-corti-client-id", value),
+  listCortiEnvironments: () => ipcRenderer.invoke("list-corti-environments"),
+  getCortiEnvironment: () => ipcRenderer.invoke("get-corti-environment"),
+  saveCortiEnvironment: (value) => ipcRenderer.invoke("save-corti-environment", value),
+  getCortiClientIdOverride: () => ipcRenderer.invoke("get-corti-client-id-override"),
+  saveCortiClientIdOverride: (value) => ipcRenderer.invoke("save-corti-client-id-override", value),
   getCortiClientSecret: () => ipcRenderer.invoke("get-corti-client-secret"),
   saveCortiClientSecret: (value) => ipcRenderer.invoke("save-corti-client-secret", value),
-  getCortiRegion: () => ipcRenderer.invoke("get-corti-region"),
-  saveCortiRegion: (value) => ipcRenderer.invoke("save-corti-region", value),
   getCortiTenant: () => ipcRenderer.invoke("get-corti-tenant"),
+  getCortiCustomRegion: () => ipcRenderer.invoke("get-corti-custom-region"),
+  saveCortiCustomRegion: (value) => ipcRenderer.invoke("save-corti-custom-region", value),
   saveCortiTenant: (value) => ipcRenderer.invoke("save-corti-tenant", value),
   testCortiConnection: () => ipcRenderer.invoke("test-corti-connection"),
   cortiStartPkce: () => ipcRenderer.invoke("corti-start-pkce"),
@@ -611,28 +521,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onMeetingTranscriptionError: registerListener(
     "meeting-transcription-error",
-    (callback) => (_event, data) => callback(data)
-  ),
-
-  // Dictation realtime streaming
-  dictationRealtimeWarmup: (options) => ipcRenderer.invoke("dictation-realtime-warmup", options),
-  dictationRealtimeStart: (options) => ipcRenderer.invoke("dictation-realtime-start", options),
-  dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
-  dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
-  onDictationRealtimePartial: registerListener(
-    "dictation-realtime-partial",
-    (callback) => (_event, data) => callback(data)
-  ),
-  onDictationRealtimeFinal: registerListener(
-    "dictation-realtime-final",
-    (callback) => (_event, data) => callback(data)
-  ),
-  onDictationRealtimeError: registerListener(
-    "dictation-realtime-error",
-    (callback) => (_event, data) => callback(data)
-  ),
-  onDictationRealtimeSessionEnd: registerListener(
-    "dictation-realtime-session-end",
     (callback) => (_event, data) => callback(data)
   ),
 
@@ -750,11 +638,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   onPreviewHide: registerListener("preview-hide", (callback) => () => callback()),
+  onPreviewMode: registerListener(
+    "preview-mode",
+    (callback) => (_event, payload) => callback(payload)
+  ),
   startDictationPreview: (opts) => ipcRenderer.invoke("start-dictation-preview", opts),
   stopDictationPreview: (opts) => ipcRenderer.invoke("stop-dictation-preview", opts),
   dismissDictationPreview: () => ipcRenderer.invoke("dismiss-dictation-preview"),
   completeDictationPreview: (payload) => ipcRenderer.invoke("complete-dictation-preview", payload),
   hideDictationPreview: () => ipcRenderer.invoke("hide-dictation-preview"),
+  insertDictationPreviewText: (text) =>
+    ipcRenderer.invoke("insert-dictation-preview-text", text),
   resizeTranscriptionPreviewWindow: (width, height) =>
     ipcRenderer.invoke("resize-transcription-preview-window", width, height),
   sendDictationPreviewAudio: (data) => ipcRenderer.send("dictation-preview-audio", data),

@@ -136,26 +136,7 @@ export function MeetingTranscriptionPanel() {
 
   return (
     <div className="space-y-3">
-      <InferenceModeSelector
-        modes={transcriptionModes}
-        activeMode={meetingTranscriptionMode}
-        onSelect={handleTranscriptionModeSelect}
-      />
-
-      {meetingTranscriptionMode === "providers" && renderTranscriptionPicker("cloud")}
-      {meetingTranscriptionMode === "local" && renderTranscriptionPicker("local")}
-      {meetingTranscriptionMode === "self-hosted" && (
-        <>
-          <SelfHostedPanel
-            service="transcription"
-            url={meetingRemoteTranscriptionUrl}
-            onUrlChange={setMeetingRemoteTranscriptionUrl}
-          />
-          <p className="text-xs text-muted-foreground/80 px-1">
-            {t("settingsPage.speechToText.selfHostedStreamingNote")}
-          </p>
-        </>
-      )}
+      <TranscriptionModelPicker variant="settings" />
       <MeetingSpeakerDetectionRow />
     </div>
   );

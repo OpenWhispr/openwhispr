@@ -5,6 +5,11 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
+const {
+  DEFAULT_ENVIRONMENT_ID,
+  getEnvironment,
+  isValidEnvironmentId,
+} = require("./cortiEnvironments");
 
 const SECRET_KEYS = [
   "OPENAI_API_KEY",
@@ -57,12 +62,14 @@ const PERSISTED_KEYS = [
   "AZURE_OPENAI_API_VERSION",
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
-  "CORTI_REGION",
+  "CORTI_ENVIRONMENT",
   "CORTI_TENANT",
+  "CORTI_CUSTOM_REGION",
 ];
 
 class EnvironmentManager {
   constructor() {
+    this._envWriteQueue = Promise.resolve();
     this.loadEnvironmentVariables();
   }
 
@@ -217,20 +224,25 @@ class EnvironmentManager {
   }
 
   async _writeEnvFileAtomic(envPath) {
-    // Only strip plaintext secrets once migration has fully completed —
-    // otherwise a partial-migration recovery can lose unencrypted secrets.
-    const stripSecrets =
-      this._encryptionAvailable() && fs.existsSync(this._getMigrationSentinelPath());
-    let envContent = "# OpenWhispr Environment Variables\n";
-    for (const key of PERSISTED_KEYS) {
-      if (stripSecrets && SECRET_KEY_SET.has(key)) continue;
-      if (process.env[key]) {
-        envContent += `${key}=${process.env[key]}\n`;
+    // Serialize concurrent writes — many callers fire saveAllKeysToEnvFile()
+    // in parallel, and racing on the same .env.tmp causes ENOENT on rename.
+    const run = async () => {
+      const stripSecrets =
+        this._encryptionAvailable() && fs.existsSync(this._getMigrationSentinelPath());
+      let envContent = "# OpenWhispr Environment Variables\n";
+      for (const key of PERSISTED_KEYS) {
+        if (stripSecrets && SECRET_KEY_SET.has(key)) continue;
+        if (process.env[key]) {
+          envContent += `${key}=${process.env[key]}\n`;
+        }
       }
-    }
-    const tmpPath = `${envPath}.tmp`;
-    await fsPromises.writeFile(tmpPath, envContent, "utf8");
-    await fsPromises.rename(tmpPath, envPath);
+      const tmpPath = `${envPath}.${process.pid}.${Date.now()}.tmp`;
+      await fsPromises.writeFile(tmpPath, envContent, "utf8");
+      await fsPromises.rename(tmpPath, envPath);
+    };
+    const next = this._envWriteQueue.then(run, run);
+    this._envWriteQueue = next.catch(() => {});
+    return next;
   }
 
   _getKey(envVarName) {
@@ -406,9 +418,36 @@ class EnvironmentManager {
     return this._saveKey("VERTEX_API_KEY", key);
   }
 
-  // Corti STT
+  // Corti STT — multi-environment.
+  // The selected environment determines which CORTI_CLIENT_ID_<ID> env var is
+  // used to authenticate. Client IDs are shipped via .env (not user-entered),
+  // so they live in process.env directly rather than encrypted storage.
+  getCortiEnvironmentId() {
+    const id = this._getKey("CORTI_ENVIRONMENT");
+    return isValidEnvironmentId(id) ? id : DEFAULT_ENVIRONMENT_ID;
+  }
+  saveCortiEnvironmentId(value) {
+    const id = isValidEnvironmentId(value) ? value : DEFAULT_ENVIRONMENT_ID;
+    const result = this._saveKey("CORTI_ENVIRONMENT", id);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+  getCortiEnvironment() {
+    const env = getEnvironment(this.getCortiEnvironmentId());
+    // For the "custom" environment, the region comes from a user-entered value.
+    if (env.id === "custom") {
+      return { ...env, region: this.getCortiCustomRegion() || env.region };
+    }
+    return env;
+  }
+  // Returns the user override if set, else the per-environment client ID from .env.
+  // Lets advanced users bring their own client (typically together with a secret
+  // for client_credentials), without touching the shipped CORTI_CLIENT_ID_<ID>.
   getCortiClientId() {
-    return this._getKey("CORTI_CLIENT_ID");
+    const override = this._getKey("CORTI_CLIENT_ID");
+    if (override) return override;
+    const env = this.getCortiEnvironment();
+    return env.clientIdEnvVar ? this._getKey(env.clientIdEnvVar) : "";
   }
   saveCortiClientId(value) {
     return this._saveKey("CORTI_CLIENT_ID", value);
@@ -419,19 +458,19 @@ class EnvironmentManager {
   saveCortiClientSecret(value) {
     return this._saveKey("CORTI_CLIENT_SECRET", value);
   }
-  getCortiRegion() {
-    return this._getKey("CORTI_REGION") || "eu";
-  }
-  saveCortiRegion(value) {
-    const result = this._saveKey("CORTI_REGION", value === "us" ? "us" : "eu");
-    this.saveAllKeysToEnvFile().catch(() => {});
-    return result;
-  }
   getCortiTenant() {
-    return this._getKey("CORTI_TENANT") || "base";
+    return this._getKey("CORTI_TENANT") || this.getCortiEnvironment().defaultTenant;
   }
   saveCortiTenant(value) {
     const result = this._saveKey("CORTI_TENANT", value);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+  getCortiCustomRegion() {
+    return this._getKey("CORTI_CUSTOM_REGION");
+  }
+  saveCortiCustomRegion(value) {
+    const result = this._saveKey("CORTI_CUSTOM_REGION", value);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }
