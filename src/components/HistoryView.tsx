@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { Loader2, Sparkles, Cloud, X, Mic, Trash2 } from "lucide-react";
+import { Loader2, Cloud, X, Mic, Trash2 } from "lucide-react";
 import TranscriptionItem from "./ui/TranscriptionItem";
 import type { TranscriptionItem as TranscriptionItemType } from "../types/electron";
 import { formatHotkeyLabel } from "../utils/hotkeys";
@@ -17,9 +17,6 @@ interface HistoryViewProps {
   hotkey: string;
   showCloudMigrationBanner: boolean;
   setShowCloudMigrationBanner: (show: boolean) => void;
-  aiCTADismissed: boolean;
-  setAiCTADismissed: (dismissed: boolean) => void;
-  useCleanupModel: boolean;
   copyToClipboard: (text: string) => void;
   deleteTranscription: (id: number) => void;
   clearAllTranscriptions: () => void;
@@ -34,9 +31,6 @@ export default function HistoryView({
   hotkey,
   showCloudMigrationBanner,
   setShowCloudMigrationBanner,
-  aiCTADismissed,
-  setAiCTADismissed,
-  useCleanupModel,
   copyToClipboard,
   deleteTranscription,
   clearAllTranscriptions,
@@ -105,42 +99,6 @@ export default function HistoryView({
                   }}
                 >
                   {t("controlPanel.cloudMigration.viewSettings")}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {!useCleanupModel && !aiCTADismissed && (
-          <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
-            <button
-              onClick={() => {
-                localStorage.setItem("aiCTADismissed", "true");
-                setAiCTADismissed(true);
-              }}
-              aria-label={t("common.close")}
-              className="absolute top-2 right-2 p-1 rounded-sm text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-            >
-              <X size={14} />
-            </button>
-            <div className="flex items-start gap-3 pr-6">
-              <div className="shrink-0 w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                <Sparkles size={16} className="text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground mb-0.5">
-                  {t("controlPanel.aiCta.title")}
-                </p>
-                <p className="text-xs text-muted-foreground mb-2">
-                  {t("controlPanel.aiCta.description")}
-                </p>
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => onOpenSettings("intelligence")}
-                >
-                  {t("controlPanel.aiCta.enable")}
                 </Button>
               </div>
             </div>

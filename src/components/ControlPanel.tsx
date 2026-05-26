@@ -65,9 +65,6 @@ export default function ControlPanel() {
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
   const [settingsSection, setSettingsSection] = useState<string | undefined>();
-  const [aiCTADismissed, setAiCTADismissed] = useState(
-    () => localStorage.getItem("aiCTADismissed") === "true"
-  );
   const [, setInvitationToken] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
@@ -841,9 +838,6 @@ export default function ControlPanel() {
                 hotkey={hotkey}
                 showCloudMigrationBanner={showCloudMigrationBanner}
                 setShowCloudMigrationBanner={setShowCloudMigrationBanner}
-                aiCTADismissed={aiCTADismissed}
-                setAiCTADismissed={setAiCTADismissed}
-                useCleanupModel={useCleanupModel}
                 copyToClipboard={copyToClipboard}
                 deleteTranscription={deleteTranscription}
                 clearAllTranscriptions={clearAllTranscriptions}
@@ -895,13 +889,7 @@ export default function ControlPanel() {
             )}
             {activeView === "integrations" && (
               <Suspense fallback={null}>
-                <IntegrationsView
-                  isPaid={!!(usage?.isSubscribed || usage?.isTrial)}
-                  onUpgrade={() => {
-                    setSettingsSection("plansBilling");
-                    setShowSettings(true);
-                  }}
-                />
+                <IntegrationsView />
               </Suspense>
             )}
           </div>
