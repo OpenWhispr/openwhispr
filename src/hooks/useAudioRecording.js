@@ -94,6 +94,12 @@ export const useAudioRecording = (toast, options = {}) => {
         if (!isStreaming) {
           setPartialTranscript("");
         }
+        // When processing starts, proactively restore focus to the original
+        // app (Brave, Windsurf, etc.) — showing our window may cause focus
+        // to drift even with showInactive() (#859).
+        if (isProcessing) {
+          window.electronAPI?.restoreTargetFocus?.();
+        }
       },
       onError: (error) => {
         if (error?.title !== "Paste Error") {

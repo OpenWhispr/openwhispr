@@ -477,6 +477,7 @@ declare global {
       ) => Promise<void>;
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
+      restoreTargetFocus: () => Promise<void>;
       onToggleDictation: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;

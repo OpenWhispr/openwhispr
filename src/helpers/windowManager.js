@@ -1006,8 +1006,44 @@ class WindowManager {
     this.mainWindow.setBounds(newPos);
   }
 
+  /**
+   * Restore focus to the app that had it before the dictation panel appeared.
+   * On macOS: uses NSRunningApplication.activateWithOptions to bring the target
+   * app forward without stealing focus from the user's interaction.
+   * On other platforms: hides our window briefly and shows it inactive.
+   */
+  async restoreTargetAppFocus() {
+    // macOS: use the captured target PID to reactivate the original app
+    if (process.platform === "darwin" && this.textEditMonitor) {
+      const pid = this.textEditMonitor.lastTargetPid;
+      if (pid) {
+        await this.textEditMonitor.activateTargetPid();
+        return;
+      }
+    }
+
+    // Non-macOS or no PID available: hide our window and show it inactive
+    // so focus falls back to the previous app in the z-order.
+    if (this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isFocused()) {
+      if (process.platform === "darwin") {
+        // On macOS, hide + showInactive() returns focus to frontmost app
+        this.mainWindow.hide();
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        if (typeof this.mainWindow.showInactive === "function") {
+          this.mainWindow.showInactive();
+        } else {
+          this.mainWindow.show();
+        }
+      } else {
+        // On Windows/Linux, blur() returns focus to the previously active window
+        this.mainWindow.blur();
+        await new Promise((resolve) => setTimeout(resolve, 80));
+      }
+    }
+  }
+
   showDictationPanel(options = {}) {
-    const { focus = false } = options;
+    const { focus = false, restoreFocus = true } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       const wasHidden = !this.mainWindow.isVisible() || this.mainWindow.isMinimized();
 
@@ -1027,6 +1063,15 @@ class WindowManager {
       }
       if (focus) {
         this.mainWindow.focus();
+      }
+
+      // Restore focus to the original app after showing our panel.
+      // Delayed slightly to let the OS window manager settle and to allow
+      // captureTargetPid() (an async osascript call) to complete.
+      if (restoreFocus) {
+        setTimeout(() => {
+          this.restoreTargetAppFocus().catch(() => {});
+        }, 200);
       }
     }
   }

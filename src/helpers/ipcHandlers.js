@@ -709,6 +709,10 @@ class IPCHandlers {
       this.windowManager.showDictationPanel();
     });
 
+    ipcMain.handle("restore-target-focus", () => {
+      this.windowManager.restoreTargetAppFocus().catch(() => {});
+    });
+
     ipcMain.handle("force-stop-dictation", () => {
       if (this.windowManager?.forceStopMacCompoundPush) {
         this.windowManager.forceStopMacCompoundPush("manual");
