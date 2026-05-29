@@ -11,7 +11,7 @@ import {
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
 import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../stores/settingsStore";
-import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth.js";
+import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import { detectAgentName } from "../config/agentDetection";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
@@ -827,10 +827,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async getAPIKey() {
     const s = getSettings();
-    const provider = s.cloudTranscriptionProvider || "openai";
     if (shouldSkipTranscriptionApiKey(s)) {
       return null;
     }
+
+    const provider = s.cloudTranscriptionProvider || "openai";
 
     // Check cache (invalidate if provider changed)
     if (this.cachedApiKey !== null && this.cachedApiKeyProvider === provider) {
