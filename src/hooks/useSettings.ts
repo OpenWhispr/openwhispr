@@ -84,7 +84,7 @@ export interface ChatAgentSettings {
 
 function useSettingsInternal() {
   const store = useSettingsStore();
-  const { setCustomDictionary } = store;
+  const { setCustomDictionary, applyCustomDictionaryFromExternal } = store;
 
   // One-time initialization: sync API keys, dictation key, activation mode,
   // UI language, and dictionary from the main process / SQLite.
@@ -101,16 +101,20 @@ function useSettingsInternal() {
     });
   }, []);
 
-  // Listen for dictionary updates from main process (auto-learn corrections)
+  // Listen for dictionary updates from main process (auto-learn corrections, sync pulls).
+  // Main process / SQLite is authoritative here — we only refresh the in-memory store.
+  // We deliberately do NOT trigger a sync from this listener: pulls already fire
+  // the broadcast, and re-triggering produces a reflexive sync loop (per pull,
+  // per window). Writes that need to sync go through setCustomDictionary instead.
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.onDictionaryUpdated) return;
     const unsubscribe = window.electronAPI.onDictionaryUpdated((words: string[]) => {
       if (Array.isArray(words)) {
-        setCustomDictionary(words);
+        applyCustomDictionaryFromExternal(words);
       }
     });
     return unsubscribe;
-  }, [setCustomDictionary]);
+  }, [applyCustomDictionaryFromExternal]);
 
   // Auto-learn corrections from user edits in external apps
   const [autoLearnCorrections, setAutoLearnCorrectionsRaw] = useLocalStorage(

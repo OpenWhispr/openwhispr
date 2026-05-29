@@ -528,12 +528,52 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
 
+      // Sync columns for custom_dictionary
+      try {
+        this.db.exec("ALTER TABLE custom_dictionary ADD COLUMN client_dict_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE custom_dictionary ADD COLUMN cloud_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec(
+          "ALTER TABLE custom_dictionary ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'"
+        );
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec(
+          "ALTER TABLE custom_dictionary ADD COLUMN sync_status TEXT DEFAULT 'pending'"
+        );
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE custom_dictionary ADD COLUMN deleted_at TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE custom_dictionary ADD COLUMN updated_at DATETIME");
+        this.db.exec(
+          "UPDATE custom_dictionary SET updated_at = created_at WHERE updated_at IS NULL"
+        );
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
       // Backfill client IDs for existing rows
       const syncTables = [
         { table: "notes", col: "client_note_id" },
         { table: "folders", col: "client_folder_id" },
         { table: "agent_conversations", col: "client_conversation_id" },
         { table: "transcriptions", col: "client_transcription_id" },
+        { table: "custom_dictionary", col: "client_dict_id" },
       ];
       for (const { table, col } of syncTables) {
         const rows = this.db.prepare(`SELECT id FROM ${table} WHERE ${col} IS NULL`).all();
@@ -554,6 +594,9 @@ class DatabaseManager {
       );
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_transcriptions_client_id ON transcriptions(client_transcription_id)"
+      );
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
       );
 
       return true;
@@ -734,8 +777,9 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const stmt = this.db.prepare("SELECT word FROM custom_dictionary ORDER BY id ASC");
-      const rows = stmt.all();
+      const rows = this.db
+        .prepare("SELECT word FROM custom_dictionary WHERE deleted_at IS NULL ORDER BY id ASC")
+        .all();
       return rows.map((row) => row.word);
     } catch (error) {
       debugLogger.error("Error getting dictionary", { error: error.message }, "database");
@@ -743,25 +787,289 @@ class DatabaseManager {
     }
   }
 
-  setDictionary(words) {
+  // Diff-based update so unchanged rows keep their source/created_at/cloud_id.
+  // `sourceForNewWords` tags additions ('manual' for user-typed, 'learned' for auto-learn).
+  setDictionary(words, sourceForNewWords = "manual") {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const transaction = this.db.transaction((wordList) => {
-        this.db.prepare("DELETE FROM custom_dictionary").run();
-        const insert = this.db.prepare("INSERT OR IGNORE INTO custom_dictionary (word) VALUES (?)");
-        for (const word of wordList) {
-          const trimmed = typeof word === "string" ? word.trim() : "";
-          if (trimmed) {
-            insert.run(trimmed);
-          }
+      // Dedupe input by lower(word), preserving first occurrence's casing.
+      // The previous code relied on a SELECT snapshot + Map keyed by lower(word),
+      // which silently broke when the input contained two case-variants of the
+      // same word (Map only knew about pre-existing rows). Deduping up-front
+      // makes the diff loop's existingByLower lookup stay valid.
+      const incomingByLower = new Map();
+      for (const raw of Array.isArray(words) ? words : []) {
+        if (typeof raw !== "string") continue;
+        const trimmed = raw.trim();
+        if (!trimmed) continue;
+        const lower = trimmed.toLowerCase();
+        if (!incomingByLower.has(lower)) incomingByLower.set(lower, trimmed);
+      }
+      const cleaned = Array.from(incomingByLower.values());
+      const incomingLower = new Set(incomingByLower.keys());
+
+      const existingRows = this.db
+        .prepare(
+          "SELECT id, word, source, deleted_at FROM custom_dictionary"
+        )
+        .all();
+      const existingByLower = new Map(existingRows.map((r) => [r.word.toLowerCase(), r]));
+
+      const tombstone = this.db.prepare(
+        "UPDATE custom_dictionary SET deleted_at = datetime('now'), updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
+      );
+      const hardDelete = this.db.prepare(
+        "DELETE FROM custom_dictionary WHERE id = ? AND cloud_id IS NULL AND sync_status != 'pending'"
+      );
+      const restore = this.db.prepare(
+        "UPDATE custom_dictionary SET deleted_at = NULL, source = CASE WHEN source = 'learned' AND ? = 'manual' THEN 'manual' ELSE source END, word = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
+      );
+      const promoteSource = this.db.prepare(
+        "UPDATE custom_dictionary SET word = ?, source = 'manual', updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND source = 'learned'"
+      );
+      // Update word casing on an already-active row when input casing differs.
+      // Without this, `'Foo' → 'FOO'` is silently dropped at the SQLite layer
+      // and the UI/cloud drift from the local store.
+      const updateWord = this.db.prepare(
+        "UPDATE custom_dictionary SET word = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND word != ?"
+      );
+      // INSERT OR IGNORE guards against a UNIQUE collision in case an existing
+      // row matched lower(word) but the existingByLower map missed it (e.g.,
+      // legacy data with case-differing duplicates allowed by the old
+      // case-sensitive UNIQUE constraint).
+      const insert = this.db.prepare(
+        "INSERT OR IGNORE INTO custom_dictionary (word, source, client_dict_id, sync_status, updated_at) VALUES (?, ?, ?, 'pending', datetime('now'))"
+      );
+
+      this.db.transaction(() => {
+        for (const existing of existingRows) {
+          if (incomingLower.has(existing.word.toLowerCase())) continue;
+          if (existing.deleted_at) continue;
+          // Word removed: tombstone if synced OR in-flight, hard-delete only if
+          // truly local-only (never queued for push). The added `sync_status !=
+          // 'pending'` check prevents the race where a row mid-push gets
+          // hard-deleted, its server ack then markSynced a missing row, and
+          // the orphaned cloud row keeps re-downloading.
+          const hardResult = hardDelete.run(existing.id);
+          if (hardResult.changes === 0) tombstone.run(existing.id);
         }
-      });
-      transaction(words);
+        for (const word of cleaned) {
+          const existing = existingByLower.get(word.toLowerCase());
+          if (existing) {
+            if (existing.deleted_at) {
+              restore.run(sourceForNewWords, word, existing.id);
+            } else if (sourceForNewWords === "manual" && existing.source === "learned") {
+              promoteSource.run(word, existing.id);
+            } else {
+              updateWord.run(word, existing.id, word);
+            }
+            continue;
+          }
+          insert.run(word, sourceForNewWords, randomUUID());
+        }
+      })();
+
       return { success: true };
     } catch (error) {
       debugLogger.error("Error setting dictionary", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getPendingDictionary() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM custom_dictionary WHERE sync_status = 'pending' AND deleted_at IS NULL"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error("Error getting pending dictionary", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getPendingDictionaryDeletes() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM custom_dictionary WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error(
+        "Error getting pending dictionary deletes",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  hardDeleteDictionaryEntry(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db.prepare("DELETE FROM custom_dictionary WHERE id = ?").run(id);
+      return { success: result.changes > 0, id };
+    } catch (error) {
+      debugLogger.error(
+        "Error hard deleting dictionary entry",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  getDictionaryEntryByClientId(clientDictId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return (
+        this.db
+          .prepare("SELECT * FROM custom_dictionary WHERE client_dict_id = ?")
+          .get(clientDictId) || null
+      );
+    } catch (error) {
+      debugLogger.error(
+        "Error getting dictionary entry by client id",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  upsertDictionaryFromCloud(cloudEntry) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      // Shape validation: refuse incomplete payloads. Letting these through
+      // with optional-chained defaults silently corrupts the row (e.g., id=null
+      // matches `cloud_id IS NULL` and overwrites a local-only pending row).
+      if (!cloudEntry || typeof cloudEntry !== "object") return null;
+      if (typeof cloudEntry.id !== "string" || !cloudEntry.id) return null;
+
+      const word = typeof cloudEntry.word === "string" ? cloudEntry.word.trim() : "";
+      if (!word) return null;
+
+      const clientDictId =
+        typeof cloudEntry.client_dict_id === "string" && cloudEntry.client_dict_id
+          ? cloudEntry.client_dict_id
+          : randomUUID();
+      const incomingSource = cloudEntry.source === "learned" ? "learned" : "manual";
+      const updatedAt =
+        typeof cloudEntry.updated_at === "string" && cloudEntry.updated_at
+          ? cloudEntry.updated_at
+          : typeof cloudEntry.created_at === "string" && cloudEntry.created_at
+          ? cloudEntry.created_at
+          : new Date().toISOString();
+      const createdAt =
+        typeof cloudEntry.created_at === "string" && cloudEntry.created_at
+          ? cloudEntry.created_at
+          : updatedAt;
+
+      // Prioritized sequential lookup. Previously this used a single `OR`
+      // query with `LIMIT 1` and no `ORDER BY`, which let SQLite pick any
+      // matching row — non-deterministic when multiple identifiers matched
+      // different local rows (cross-device same-word case).
+      const byClient = this.db
+        .prepare("SELECT * FROM custom_dictionary WHERE client_dict_id = ? LIMIT 1")
+        .get(clientDictId);
+      const byCloud =
+        byClient ||
+        this.db
+          .prepare("SELECT * FROM custom_dictionary WHERE cloud_id = ? LIMIT 1")
+          .get(cloudEntry.id);
+      const existing =
+        byCloud ||
+        this.db
+          .prepare(
+            "SELECT * FROM custom_dictionary WHERE lower(word) = lower(?) LIMIT 1"
+          )
+          .get(word);
+
+      if (existing) {
+        // Source merge mirrors the server: manual is sticky. Cloud pull never
+        // demotes a local manual row to learned (the previous code's
+        // unconditional `source = ?` overwrite did exactly that).
+        const mergedSource =
+          existing.source === "manual" || incomingSource === "manual" ? "manual" : "learned";
+        this.db
+          .prepare(
+            `UPDATE custom_dictionary
+             SET cloud_id = ?, client_dict_id = ?, word = ?, source = ?,
+                 sync_status = 'synced', deleted_at = NULL, updated_at = ?
+             WHERE id = ?`
+          )
+          .run(cloudEntry.id, clientDictId, word, mergedSource, updatedAt, existing.id);
+        return this.db
+          .prepare("SELECT * FROM custom_dictionary WHERE id = ?")
+          .get(existing.id);
+      }
+
+      this.db
+        .prepare(
+          `INSERT INTO custom_dictionary
+             (word, source, client_dict_id, cloud_id, sync_status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'synced', ?, ?)`
+        )
+        .run(word, incomingSource, clientDictId, cloudEntry.id, createdAt, updatedAt);
+      return this.db
+        .prepare("SELECT * FROM custom_dictionary WHERE client_dict_id = ?")
+        .get(clientDictId);
+    } catch (error) {
+      debugLogger.error(
+        "Error upserting dictionary entry from cloud",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  markDictionaryEntrySynced(id, cloudId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare(
+          "UPDATE custom_dictionary SET sync_status = 'synced', cloud_id = ? WHERE id = ?"
+        )
+        .run(cloudId, id);
+      // Caller (SyncService) uses changes=0 to detect a race where the local
+      // row was deleted between push start and ack — it then issues a server
+      // delete so the cloud row doesn't keep re-downloading on next pull.
+      return { success: result.changes > 0, changes: result.changes };
+    } catch (error) {
+      debugLogger.error(
+        "Error marking dictionary entry synced",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  // Clear cloud_id and reset sync_status for a row whose remote target was
+  // 404'd. The next push goes through batchCreate instead of retrying the
+  // doomed PATCH forever.
+  clearDictionaryCloudId(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare(
+          "UPDATE custom_dictionary SET cloud_id = NULL, sync_status = 'pending' WHERE id = ?"
+        )
+        .run(id);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error(
+        "Error clearing dictionary cloud_id",
+        { error: error.message },
+        "database"
+      );
       throw error;
     }
   }
