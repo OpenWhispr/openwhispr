@@ -149,7 +149,7 @@
     "ffmpeg-static": "^5.2.0",
     "flatted": "^3.4.2",
     "i18next": "^26.0.4",
-    "kysely": "^0.28.14",
+    "kysely": "^0.28.17",
     "lucide-react": "^1.7.0",
     "object-assign": "^4.1.1",
     "onnxruntime-node": "^1.21.0",
