@@ -154,10 +154,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     } else if (cloudTranscriptionProvider === "custom") {
       // Custom endpoints (e.g. local whisper.cpp): no file size restrictions
     } else if (isByok) {
-      byokTooLarge = file.sizeBytes > BYOK_MAX_FILE_SIZE;
-      if (byokTooLarge && !isSignedIn) {
-        requiresAccount = true;
-      }
+      // BYOK: large files are now handled via client-side chunking (no limit)
+      isLargeFile = file.sizeBytes > BYOK_MAX_FILE_SIZE;
     } else {
       // Cloud (OpenWhispr) — user is always signed in here
       fileTooLarge = file.sizeBytes > CLOUD_PRO_MAX_FILE_SIZE;
@@ -324,7 +322,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setProgress(0);
     setChunkProgress(null);
 
-    const useChunkProgress = isOpenWhisprCloud && isLargeFile;
+    const useChunkProgress = (isOpenWhisprCloud || isByok) && isLargeFile;
 
     if (useChunkProgress) {
       progressCleanupRef.current =
