@@ -1220,17 +1220,42 @@ class ClipboardManager {
     // Some terminals (notably Konsole on X11) intermittently report no WM_CLASS via
     // xdotool, leaving WM_CLASS detection blind. Fall back to the owning process
     // name from /proc/<pid>/comm so terminal-aware paste keys still get chosen.
-    const preDetectWindowComm = (windowId) => {
+    const preDetectWindowPid = (windowId) => {
       if (!xdotoolExists || (isWayland && !xwaylandAvailable)) return null;
       try {
         const args = windowId ? ["getwindowpid", windowId] : ["getactivewindow", "getwindowpid"];
         const result = spawnSync("xdotool", args, { timeout: 1000 });
         if (result.status !== 0) return null;
         const pid = parseInt(result.stdout.toString().trim(), 10);
-        if (!Number.isFinite(pid) || pid <= 0) return null;
+        return Number.isFinite(pid) && pid > 0 ? pid : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const preDetectWindowComm = (pid) => {
+      if (!pid) return null;
+      try {
         return fs.readFileSync(`/proc/${pid}/comm`, "utf8").toLowerCase().trim() || null;
       } catch {
         return null;
+      }
+    };
+
+    // Electron apps bundle their runtime next to the executable (resources/app.asar
+    // or resources/app). Resolving the window PID to its exe via /proc spots them
+    // independent of window class, so this works on KDE and X11, not just on the
+    // blind-Wayland case where no class is reported at all.
+    const preDetectIsElectron = (pid) => {
+      if (!pid) return false;
+      try {
+        const dir = path.dirname(fs.readlinkSync(`/proc/${pid}/exe`));
+        return (
+          fs.existsSync(path.join(dir, "resources", "app.asar")) ||
+          fs.existsSync(path.join(dir, "resources", "app"))
+        );
+      } catch {
+        return false;
       }
     };
 
@@ -1251,7 +1276,15 @@ class ClipboardManager {
       }
     }
 
-    const detectedWindowComm = preDetectWindowComm(targetWindowId);
+    const detectedWindowPid = preDetectWindowPid(targetWindowId);
+    const detectedWindowComm = preDetectWindowComm(detectedWindowPid);
+    const detectedIsElectron = preDetectIsElectron(detectedWindowPid);
+    if (detectedIsElectron) {
+      this.safeLog("🪟 Electron window detected, using Shift+Insert paste", {
+        pid: detectedWindowPid,
+        windowClass: detectedWindowClass,
+      });
+    }
     const windowSignals = [detectedWindowClass, detectedWindowComm].filter(Boolean);
     const signalsMatch = (needle) => windowSignals.some((signal) => signal.includes(needle));
     const detectedIsKonsole = signalsMatch("konsole");
@@ -1260,7 +1293,10 @@ class ClipboardManager {
     // GUI apps, and (unlike Ctrl+V) is not intercepted by TUI agents like Codex,
     // Claude Code, or OpenCode as "paste image". Use it whenever the target window
     // can't be classified, or for Konsole which silently drops simulated Ctrl+Shift+V.
-    const useShiftInsert = detectedIsKonsole || (isWayland && windowSignals.length === 0);
+    // Electron apps (VS Code, Cursor) host TUI terminals too, so route them to
+    // Shift+Insert on any desktop environment, even when their class is detected.
+    const useShiftInsert =
+      detectedIsKonsole || detectedIsElectron || (isWayland && windowSignals.length === 0);
 
     // Konsole on X11 silently drops simulated Ctrl+Shift+V via XTest (a long-standing
     // focus/grab quirk), and the native fast-paste binary uses XTest. Route Konsole+X11
