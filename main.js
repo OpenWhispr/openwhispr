@@ -1362,7 +1362,16 @@ async function startApp() {
 
     const needsNativeListener = (hotkey, mode) => {
       if (!isValidHotkey(hotkey)) return false;
+      // Push-to-talk needs the native /dev/input listener for key-down/key-up;
+      // there the compositor's single toggle is a harmless no-op on release.
+      // Tap mode is what breaks: the native listener and the GNOME/KDE/Hyprland
+      // shortcut both react to one keypress with opposite effects (one toggles
+      // recording on, the other off), leaving an empty recording that backends
+      // reject ("Audio file might be corrupted or unsupported"). So in tap mode
+      // skip the native listener when a compositor shortcut owns the hotkey.
+      // See issue #864.
       if (mode === "push") return true;
+      if (hotkeyManager.isUsingNativeShortcut()) return false;
       return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey);
     };
 

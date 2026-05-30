@@ -553,6 +553,31 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return;
     }
 
+    // A recording that started and stopped within a few milliseconds (an accidental
+    // double-tap, or a hotkey double-trigger) yields an empty WebM container with no
+    // audio frames. Transcription backends reject it with "Audio file might be
+    // corrupted or unsupported". Skip it like the silence gate instead of surfacing
+    // an error. See issue #864.
+    const MIN_RECORDING_SECONDS = 0.2;
+    const MIN_AUDIO_BYTES = 256;
+    const recordingSeconds =
+      typeof metadata?.durationSeconds === "number" ? metadata.durationSeconds : null;
+    const blobSize = audioBlob?.size ?? 0;
+    if (
+      (recordingSeconds !== null && recordingSeconds < MIN_RECORDING_SECONDS) ||
+      blobSize < MIN_AUDIO_BYTES
+    ) {
+      logger.info(
+        "Skipping transcription: recording too short or empty to contain speech",
+        { blobSize, durationSeconds: recordingSeconds },
+        "audio"
+      );
+      this.isProcessing = false;
+      this.onStateChange?.({ isRecording: false, isProcessing: false });
+      this.onTranscriptionComplete?.({ success: true, text: "" });
+      return;
+    }
+
     try {
       const useLocalWhisper = settings.useLocalWhisper;
       const localProvider = settings.localTranscriptionProvider;
