@@ -99,9 +99,14 @@ export function useChatStreaming({
       const isLanAgent = chatAgentMode === "self-hosted" && !!settings.chatAgentRemoteUrl;
       const isCustomAgent =
         chatAgentMode === "providers" && settings.chatAgentProvider === "custom";
-      const isLocalProvider = !["openai", "groq", "custom", "anthropic", "gemini"].includes(
-        settings.chatAgentProvider
-      );
+      const isLocalProvider = ![
+        "openai",
+        "groq",
+        "custom",
+        "anthropic",
+        "gemini",
+        "tinfoil",
+      ].includes(settings.chatAgentProvider);
       const localModelCanUseTool =
         isLocalProvider && estimateModelSizeB(settings.chatAgentModel) >= LOCAL_TOOL_MIN_PARAMS_B;
       const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;

@@ -965,6 +965,10 @@ declare global {
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;
 
+      // Tinfoil API key management
+      getTinfoilKey?: () => Promise<string | null>;
+      saveTinfoilKey?: (key: string) => Promise<void>;
+
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;

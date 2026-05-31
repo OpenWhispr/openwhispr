@@ -60,6 +60,7 @@ provider. Skip any provider not in use.
 | `api.anthropic.com` | HTTPS | 443 | Anthropic API key configured. |
 | `generativelanguage.googleapis.com` | HTTPS | 443 | Gemini API key configured. |
 | `api.groq.com` | HTTPS | 443 | Groq API key configured. |
+| `atc.tinfoil.sh`, `inference.tinfoil.sh`, `api-github-proxy.tinfoil.sh`, `github-proxy.tinfoil.sh`, `kds-proxy.tinfoil.sh` | HTTPS | 443 | Tinfoil API key configured. Used for private inference, enclave attestation, and release verification. |
 | `api.mistral.ai` | HTTPS | 443 | Mistral API key configured. |
 
 ## Notes
