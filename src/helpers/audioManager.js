@@ -15,6 +15,7 @@ import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import { detectAgentName } from "../config/agentDetection";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
+import { isEmptyRecording } from "./recordingGuard";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
@@ -553,23 +554,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return;
     }
 
-    // A recording that started and stopped within a few milliseconds (an accidental
-    // double-tap, or a hotkey double-trigger) yields an empty WebM container with no
-    // audio frames. Transcription backends reject it with "Audio file might be
-    // corrupted or unsupported". Skip it like the silence gate instead of surfacing
-    // an error. See issue #864.
-    const MIN_RECORDING_SECONDS = 0.2;
-    const MIN_AUDIO_BYTES = 256;
-    const recordingSeconds =
-      typeof metadata?.durationSeconds === "number" ? metadata.durationSeconds : null;
+    // A recording with no audio frames — an accidental double-tap or a hotkey
+    // double-trigger that toggles on and off within milliseconds — is just an empty
+    // WebM container that backends reject ("Audio file might be corrupted or
+    // unsupported"). Skip it like the silence gate instead of surfacing an error.
+    // Gated by size only: a genuinely short real utterance can be brief yet still
+    // carry audio, so a duration gate would drop it. See issue #864.
     const blobSize = audioBlob?.size ?? 0;
-    if (
-      (recordingSeconds !== null && recordingSeconds < MIN_RECORDING_SECONDS) ||
-      blobSize < MIN_AUDIO_BYTES
-    ) {
+    if (isEmptyRecording(blobSize)) {
       logger.info(
-        "Skipping transcription: recording too short or empty to contain speech",
-        { blobSize, durationSeconds: recordingSeconds },
+        "Skipping transcription: recording is empty (no audio captured)",
+        { blobSize },
         "audio"
       );
       this.isProcessing = false;

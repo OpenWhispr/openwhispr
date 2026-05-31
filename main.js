@@ -1351,29 +1351,13 @@ async function startApp() {
   if (process.platform === "linux") {
     debugLogger.debug("[Push-to-Talk] Linux Push-to-Talk setup starting");
 
-    const {
-      isGlobeLikeHotkey: isGlobeLike,
-      isModifierOnlyHotkey,
-    } = require("./src/helpers/hotkeyManager");
-    const isValidHotkey = (hotkey) => hotkey && !isGlobeLike(hotkey);
+    const { shouldUseNativeKeyListener } = require("./src/helpers/hotkeyManager");
 
-    const isRightSideMod = (hotkey) =>
-      /^Right(Control|Ctrl|Alt|Option|Shift|Super|Win|Meta|Command|Cmd)$/i.test(hotkey);
-
-    const needsNativeListener = (hotkey, mode) => {
-      if (!isValidHotkey(hotkey)) return false;
-      // Push-to-talk needs the native /dev/input listener for key-down/key-up;
-      // there the compositor's single toggle is a harmless no-op on release.
-      // Tap mode is what breaks: the native listener and the GNOME/KDE/Hyprland
-      // shortcut both react to one keypress with opposite effects (one toggles
-      // recording on, the other off), leaving an empty recording that backends
-      // reject ("Audio file might be corrupted or unsupported"). So in tap mode
-      // skip the native listener when a compositor shortcut owns the hotkey.
-      // See issue #864.
-      if (mode === "push") return true;
-      if (hotkeyManager.isUsingNativeShortcut()) return false;
-      return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey);
-    };
+    // Whether to run the native /dev/input listener for the current hotkey/mode.
+    // The decision and the issue #864 reasoning live in shouldUseNativeKeyListener;
+    // here we just feed it the live compositor-shortcut state.
+    const needsNativeListener = (hotkey, mode) =>
+      shouldUseNativeKeyListener(hotkey, mode, hotkeyManager.isUsingNativeShortcut());
 
     linuxKeyManager.on("key-down", (_key) => {
       if (!isLiveWindow(windowManager.mainWindow)) return;
