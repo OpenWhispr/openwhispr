@@ -554,10 +554,13 @@ export function validateHotkey(
     .map((part) => part.trim())
     .filter(Boolean);
 
-  if (parts.length > 3) {
+  if (parts.length > 5 || (parts.length > 3 && platform !== "darwin")) {
     return {
       valid: false,
-      error: "Shortcuts are limited to three keys.",
+      error:
+        platform !== "darwin"
+          ? "Shortcuts are limited to three keys."
+          : "Shortcuts are limited to five keys.",
       errorCode: "TOO_MANY_KEYS",
     };
   }
