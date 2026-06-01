@@ -273,9 +273,15 @@
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5"
         },
         {
+          "id": "claude-opus-4-8",
+          "name": "Claude Opus 4.8",
+          "description": "Most capable Claude model, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8"
+        },
+        {
           "id": "claude-opus-4-7",
           "name": "Claude Opus 4.7",
-          "description": "Most capable Claude model, 1M context",
+          "description": "Powerful Opus model, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7"
         },
         {
