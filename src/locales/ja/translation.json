@@ -1747,9 +1747,10 @@
         "openai_gpt_4_1": "強力なベースライン、100 万トークンコンテキスト",
         "openai_gpt_4_1_mini": "小型 GPT-4.1 モデル",
         "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
-        "anthropic_claude_sonnet_4_5": "バランスの取れた性能",
+        "anthropic_claude_sonnet_4_6": "バランスの取れた性能",
+        "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
-        "gemini_gemini_3_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
+        "gemini_gemini_3_1_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
         "gemini_gemini_3_flash_preview": "超高速・高性能の次世代モデル",
         "gemini_gemini_2_5_flash_lite": "最低レイテンシーとコスト",
         "groq_qwen_qwen3_32b": "強力な推論モデル、131K コンテキスト",
@@ -1764,8 +1765,8 @@
         "openai_gpt_5_5": "複雑な推論のためのフロンティアモデル",
         "anthropic_claude_opus_4_8": "最も高性能な Claude モデル",
         "anthropic_claude_opus_4_7": "高性能な Opus モデル",
-        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_6": "前世代の Opus、100 万トークンコンテキスト",
+        "anthropic_claude_opus_4_5": "旧世代の Opus モデル"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
@@ -2270,23 +2271,23 @@
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabled": "音声エージェントを有効にする",
+    "enabledDescription": "エージェントに指示を口述できます。「{{agentName}}」と話しかけて起動します。設定は以下で行えます。",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "openwhisprDesc": "OpenWhispr が管理するエージェントを使用。API キーは不要です。",
+      "providers": "自分の API キーを使用",
+      "providersDesc": "自分の API キーで OpenAI、Anthropic、Gemini、Groq に接続します。",
+      "local": "ローカル",
+      "localDesc": "端末上でローカル LLM を実行。完全プライベート。",
+      "selfHosted": "セルフホスト",
+      "selfHostedDesc": "セルフホストの OpenAI 互換エンドポイントを指定します。",
+      "enterprise": "エンタープライズ",
+      "enterpriseDesc": "AWS Bedrock、Azure OpenAI、Google Vertex を使用します。"
     },
     "prompt": {
-      "title": "Agent prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "title": "エージェントプロンプト",
+      "description": "ウェイクワードが検出されたときに使用するシステムプロンプト。未設定の場合は組み込みのデフォルトが使われます。"
     }
   },
   "agentMode": {

@@ -1742,9 +1742,10 @@
         "openai_gpt_4_1": "稳定基准，1M 上下文",
         "openai_gpt_4_1_mini": "精简版 GPT-4.1",
         "openai_gpt_4_1_nano": "最低延迟 GPT-4.1",
-        "anthropic_claude_sonnet_4_5": "均衡性能",
+        "anthropic_claude_sonnet_4_6": "均衡性能",
+        "anthropic_claude_sonnet_4_5": "上一代 Sonnet",
         "anthropic_claude_haiku_4_5": "快速且接近前沿水平",
-        "gemini_gemini_3_pro_preview": "新一代旗舰模型，擅长复杂推理",
+        "gemini_gemini_3_1_pro_preview": "新一代旗舰模型，擅长复杂推理",
         "gemini_gemini_3_flash_preview": "超快速、高能力的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延迟和成本",
         "groq_qwen_qwen3_32b": "强大的推理模型，131K 上下文",
@@ -1759,8 +1760,8 @@
         "openai_gpt_5_5": "复杂推理前沿模型",
         "anthropic_claude_opus_4_8": "最强大的 Claude 模型",
         "anthropic_claude_opus_4_7": "强大的 Opus 模型",
-        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_6": "上一代 Opus，1M 上下文",
+        "anthropic_claude_opus_4_5": "更早的 Opus 模型"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",
@@ -2265,23 +2266,23 @@
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabled": "启用语音助手",
+    "enabledDescription": "向助手口述指令。说出“{{agentName}}”即可激活，可在下方配置。",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "openwhisprDesc": "使用 OpenWhispr 托管的助手，无需 API Key。",
+      "providers": "使用自己的 API Key",
+      "providersDesc": "用你自己的 API Key 连接 OpenAI、Anthropic、Gemini 或 Groq。",
+      "local": "本地",
+      "localDesc": "在你的设备上运行本地 LLM，完全私密。",
+      "selfHosted": "自托管",
+      "selfHostedDesc": "指向兼容 OpenAI 的自托管端点。",
+      "enterprise": "企业级",
+      "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。"
     },
     "prompt": {
-      "title": "Agent prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "title": "助手提示词",
+      "description": "检测到唤醒词时使用的系统提示词。未设置时回退到内置默认值。"
     }
   },
   "agentMode": {

@@ -1742,9 +1742,10 @@
         "openai_gpt_4_1": "穩健基礎，1M 上下文",
         "openai_gpt_4_1_mini": "較小的 GPT-4.1 模型",
         "openai_gpt_4_1_nano": "最低延遲的 GPT-4.1",
-        "anthropic_claude_sonnet_4_5": "均衡表現",
+        "anthropic_claude_sonnet_4_6": "均衡表現",
+        "anthropic_claude_sonnet_4_5": "上一代 Sonnet 模型",
         "anthropic_claude_haiku_4_5": "快速且接近頂尖智慧",
-        "gemini_gemini_3_pro_preview": "新一代旗艦模型，擅長複雜推理",
+        "gemini_gemini_3_1_pro_preview": "新一代旗艦模型，擅長複雜推理",
         "gemini_gemini_3_flash_preview": "超快速、高性能的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延遲和成本",
         "groq_qwen_qwen3_32b": "強大推理模型，131K 上下文",
@@ -1759,8 +1760,8 @@
         "openai_gpt_5_5": "複雜推理前沿模型",
         "anthropic_claude_opus_4_8": "最強大的 Claude 模型",
         "anthropic_claude_opus_4_7": "強大的 Opus 模型",
-        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_6": "上一代 Opus 模型，1M 上下文",
+        "anthropic_claude_opus_4_5": "較早的 Opus 模型"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",
@@ -2265,23 +2266,23 @@
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabled": "啟用語音代理",
+    "enabledDescription": "向你的代理口述指令。說出 \"{{agentName}}\" 即可啟用。可於下方設定。",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "openwhisprDesc": "使用 OpenWhispr 託管的代理，無需 API Key。",
+      "providers": "使用你自己的 API Key",
+      "providersDesc": "用你自己的 API Key 連接 OpenAI、Anthropic、Gemini 或 Groq。",
+      "local": "本機",
+      "localDesc": "在你的裝置上執行本機 LLM，完全私密。",
+      "selfHosted": "自架主機",
+      "selfHostedDesc": "指向自架的 OpenAI 相容端點。",
+      "enterprise": "企業級",
+      "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。"
     },
     "prompt": {
-      "title": "Agent prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "title": "代理提示詞",
+      "description": "偵測到喚醒詞時使用的系統提示詞。若未設定則使用內建預設值。"
     }
   },
   "agentMode": {
