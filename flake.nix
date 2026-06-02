@@ -27,5 +27,7 @@
       overlays.default = _final: _prev: {
         openwhispr = self.packages.x86_64-linux.openwhispr;
       };
+
+      nixosModules.default = import ./nix/module.nix self;
     };
 }
