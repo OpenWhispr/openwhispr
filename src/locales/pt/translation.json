@@ -1362,7 +1362,16 @@
             "step1Title": "Instalar xclip"
           }
         },
-        "xclipDesc": "Ferramenta de área de transferência para colar no KDE Wayland (xclip ou xsel)"
+        "xclipDesc": "Ferramenta de área de transferência para colar no KDE Wayland (xclip ou xsel)",
+        "nixos": {
+          "intro": "Está no NixOS. A colagem automática requer ydotool e acesso a /dev/uinput, que o NixOS concede de forma declarativa.",
+          "detected": "Detetado",
+          "manualTitle": "Adicione isto à sua configuração",
+          "manualDesc": "Configure manualmente e depois reconstrua.",
+          "flakeTitle": "A instalar pelo nosso flake?",
+          "flakeDesc": "Se instalar o OpenWhispr pelo flake, programs.openwhispr.enable ativa o ydotool, o módulo uinput e as associações de grupo por si.",
+          "rebuildNote": "Execute sudo nixos-rebuild switch, depois termine a sessão e volte a entrar para que a alteração de grupo e a regra /dev/uinput entrem em vigor. Substitua <you> pelo seu nome de utilizador."
+        }
       },
       "updates": {
         "badges": {

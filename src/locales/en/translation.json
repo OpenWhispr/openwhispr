@@ -1571,7 +1571,16 @@
             "step1Title": "Install xclip"
           }
         },
-        "xclipDesc": "Clipboard tool for KDE Wayland paste (xclip or xsel)"
+        "xclipDesc": "Clipboard tool for KDE Wayland paste (xclip or xsel)",
+        "nixos": {
+          "intro": "You're on NixOS. Auto-paste needs ydotool and /dev/uinput access, which NixOS grants declaratively.",
+          "detected": "Detected",
+          "manualTitle": "Add this to your configuration",
+          "manualDesc": "Configure it yourself, then rebuild.",
+          "flakeTitle": "Installing via our flake?",
+          "flakeDesc": "If you install OpenWhispr from the flake, programs.openwhispr.enable turns on ydotool, the uinput module and the group memberships for you.",
+          "rebuildNote": "Run sudo nixos-rebuild switch, then log out and back in so the group change and the /dev/uinput rule take effect. Replace <you> with your username."
+        }
       },
       "updates": {
         "badges": {

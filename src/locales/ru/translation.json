@@ -1390,7 +1390,16 @@
             "step1Title": "Установить xclip"
           }
         },
-        "xclipDesc": "Инструмент буфера обмена для вставки в KDE Wayland (xclip или xsel)"
+        "xclipDesc": "Инструмент буфера обмена для вставки в KDE Wayland (xclip или xsel)",
+        "nixos": {
+          "intro": "Вы используете NixOS. Для автоматической вставки требуются ydotool и доступ к /dev/uinput — NixOS предоставляет это декларативно.",
+          "detected": "Обнаружено",
+          "manualTitle": "Добавьте это в свою конфигурацию",
+          "manualDesc": "Настройте вручную, затем выполните пересборку.",
+          "flakeTitle": "Устанавливаете через наш flake?",
+          "flakeDesc": "Если вы устанавливаете OpenWhispr из flake, programs.openwhispr.enable автоматически включает ydotool, модуль uinput и нужные группы пользователей.",
+          "rebuildNote": "Выполните sudo nixos-rebuild switch, затем выйдите из системы и войдите снова, чтобы изменение группы и правило /dev/uinput вступили в силу. Замените <you> на ваше имя пользователя."
+        }
       },
       "updates": {
         "badges": {

@@ -1390,7 +1390,16 @@
             "step1Title": "xclipをインストール"
           }
         },
-        "xclipDesc": "KDE Waylandの貼り付け用クリップボードツール（xclipまたはxsel）"
+        "xclipDesc": "KDE Waylandの貼り付け用クリップボードツール（xclipまたはxsel）",
+        "nixos": {
+          "intro": "NixOSをお使いです。自動貼り付けにはydotoolと/dev/uinputへのアクセスが必要で、NixOSでは宣言的に設定できます。",
+          "detected": "検出済み",
+          "manualTitle": "設定に以下を追加してください",
+          "manualDesc": "ご自身で設定してからリビルドしてください。",
+          "flakeTitle": "flakeからインストールする場合",
+          "flakeDesc": "flakeからOpenWhisprをインストールする場合、programs.openwhispr.enableを有効にするとydotool、uinputモジュール、グループのメンバーシップが自動で設定されます。",
+          "rebuildNote": "sudo nixos-rebuild switchを実行し、グループの変更と/dev/uinputのルールを反映させるためにログアウト後に再ログインしてください。<you>はあなたのユーザー名に置き換えてください。"
+        }
       },
       "updates": {
         "badges": {

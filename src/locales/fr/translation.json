@@ -1438,7 +1438,16 @@
             "step1Title": "Installer xclip"
           }
         },
-        "xclipDesc": "Outil de presse-papiers pour le collage KDE Wayland (xclip ou xsel)"
+        "xclipDesc": "Outil de presse-papiers pour le collage KDE Wayland (xclip ou xsel)",
+        "nixos": {
+          "intro": "Vous êtes sur NixOS. Le collage automatique nécessite ydotool et l'accès à /dev/uinput, que NixOS accorde de façon déclarative.",
+          "detected": "Détecté",
+          "manualTitle": "Ajoutez ceci à votre configuration",
+          "manualDesc": "Configurez-le vous-même, puis reconstruisez.",
+          "flakeTitle": "Vous installez via notre flake ?",
+          "flakeDesc": "Si vous installez OpenWhispr depuis le flake, programs.openwhispr.enable active ydotool, le module uinput et les appartenances aux groupes pour vous.",
+          "rebuildNote": "Exécutez sudo nixos-rebuild switch, puis déconnectez-vous et reconnectez-vous pour que le changement de groupe et la règle /dev/uinput prennent effet. Remplacez <you> par votre nom d'utilisateur."
+        }
       },
       "updates": {
         "badges": {

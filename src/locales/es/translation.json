@@ -1438,7 +1438,16 @@
             "step1Title": "Instalar xclip"
           }
         },
-        "xclipDesc": "Herramienta de portapapeles para pegado en KDE Wayland (xclip o xsel)"
+        "xclipDesc": "Herramienta de portapapeles para pegado en KDE Wayland (xclip o xsel)",
+        "nixos": {
+          "intro": "Estás en NixOS. El pegado automático necesita ydotool y acceso a /dev/uinput, que NixOS concede de forma declarativa.",
+          "detected": "Detectado",
+          "manualTitle": "Añade esto a tu configuración",
+          "manualDesc": "Configúralo tú mismo y luego reconstruye.",
+          "flakeTitle": "¿Instalando mediante nuestro flake?",
+          "flakeDesc": "Si instalas OpenWhispr desde el flake, programs.openwhispr.enable activa ydotool, el módulo uinput y las pertenencias de grupo por ti.",
+          "rebuildNote": "Ejecuta sudo nixos-rebuild switch, luego cierra sesión y vuelve a abrirla para que el cambio de grupo y la regla de /dev/uinput surtan efecto. Sustituye <you> por tu nombre de usuario."
+        }
       },
       "updates": {
         "badges": {

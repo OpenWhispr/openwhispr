@@ -1385,7 +1385,16 @@
             "step1Title": "安装 xclip"
           }
         },
-        "xclipDesc": "KDE Wayland 粘贴用的剪贴板工具（xclip 或 xsel）"
+        "xclipDesc": "KDE Wayland 粘贴用的剪贴板工具（xclip 或 xsel）",
+        "nixos": {
+          "intro": "您正在使用 NixOS。自动粘贴需要 ydotool 和 /dev/uinput 访问权限，NixOS 通过声明式配置来授予这些权限。",
+          "detected": "已检测到",
+          "manualTitle": "将以下内容添加到您的配置中",
+          "manualDesc": "自行配置后重新构建。",
+          "flakeTitle": "通过我们的 flake 安装？",
+          "flakeDesc": "如果您通过 flake 安装 OpenWhispr，programs.openwhispr.enable 会自动为您启用 ydotool、uinput 模块以及相应的用户组权限。",
+          "rebuildNote": "运行 sudo nixos-rebuild switch，然后注销并重新登录，使组变更和 /dev/uinput 规则生效。将 <you> 替换为您的用户名。"
+        }
       },
       "updates": {
         "badges": {
