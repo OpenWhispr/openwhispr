@@ -201,6 +201,8 @@ export const useAudioRecording = (toast, options = {}) => {
 
     const handleToggle = async () => {
       if (!audioManagerRef.current) return;
+      // Lazily warm the mic driver on first dictation use, not at launch. See #871.
+      audioManagerRef.current.warmupMicDriver?.();
       const currentState = audioManagerRef.current.getState();
 
       if (!currentState.isRecording && !currentState.isProcessing) {
@@ -211,6 +213,7 @@ export const useAudioRecording = (toast, options = {}) => {
     };
 
     const handleStart = async () => {
+      audioManagerRef.current?.warmupMicDriver?.();
       await performStartRecording();
     };
 
