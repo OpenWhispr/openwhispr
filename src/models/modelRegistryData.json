@@ -325,6 +325,18 @@
           "name": "Gemini 2.5 Flash Lite",
           "description": "Lowest latency and cost",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_2_5_flash_lite"
+        },
+        {
+          "id": "gemma-4-31b-it",
+          "name": "Gemma 4 31B",
+          "description": "Google's largest Gemma 4, 31B dense, 256K context",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_31b_it"
+        },
+        {
+          "id": "gemma-4-26b-a4b-it",
+          "name": "Gemma 4 26B MoE",
+          "description": "Google's Gemma 4 MoE, 4B active params, 256K context",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_26b_a4b_it"
         }
       ]
     },

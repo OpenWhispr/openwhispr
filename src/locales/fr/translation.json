@@ -1801,6 +1801,8 @@
         "gemini_gemini_3_1_pro_preview": "Modèle phare nouvelle génération pour le raisonnement complexe",
         "gemini_gemini_3_flash_preview": "Modèle nouvelle génération ultra-rapide et très performant",
         "gemini_gemini_2_5_flash_lite": "Latence et coût les plus faibles",
+        "gemini_gemma_4_31b_it": "Le plus grand Gemma 4 de Google, 31B dense, contexte 256K",
+        "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE de Google, 4B paramètres actifs, contexte 256K",
         "groq_qwen_qwen3_32b": "Modèle de raisonnement puissant, contexte 131K",
         "groq_openai_gpt_oss_120b": "Modèle phare open source d'OpenAI, 500 T/s",
         "groq_openai_gpt_oss_20b": "Modèle open source rapide, 1000 T/s",

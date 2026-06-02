@@ -1853,6 +1853,8 @@
         "gemini_gemini_3_1_pro_preview": "Next-gen flagship model for complex reasoning",
         "gemini_gemini_3_flash_preview": "Ultra-fast, high-capability next-gen model",
         "gemini_gemini_2_5_flash_lite": "Lowest latency and cost",
+        "gemini_gemma_4_31b_it": "Google's largest Gemma 4, 31B dense, 256K context",
+        "gemini_gemma_4_26b_a4b_it": "Google's Gemma 4 MoE, 4B active params, 256K context",
         "groq_qwen_qwen3_32b": "Powerful reasoning model, 131K context",
         "groq_openai_gpt_oss_120b": "OpenAI's open-source flagship, 500 T/sec",
         "groq_openai_gpt_oss_20b": "Fast open-source model, 1000 T/sec",
