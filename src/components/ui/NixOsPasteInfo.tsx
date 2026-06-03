@@ -25,10 +25,8 @@ programs.openwhispr = {
   users = [ "<you>" ];
 };`;
 
-export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProps) {
-  const { t } = useTranslation();
-
-  const StatusPill = ({ ok, label }: { ok: boolean; label: string }) => (
+function StatusPill({ ok, label }: { ok: boolean; label: string }) {
+  return (
     <span className="inline-flex items-center gap-1 text-xs">
       {ok ? (
         <CircleCheck className="h-3.5 w-3.5 text-emerald-500" />
@@ -38,21 +36,28 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
       <span className="font-mono">{label}</span>
     </span>
   );
+}
 
-  const CodeBlock = ({ code }: { code: string }) => (
+function CodeBlock({ code, copyLabel }: { code: string; copyLabel: string }) {
+  return (
     <div className="flex items-start gap-1.5">
       <pre className="flex-1 text-[11px] bg-muted/60 rounded-md px-3 py-2 font-mono whitespace-pre-wrap break-all select-all overflow-x-auto">
         {code}
       </pre>
       <button
-        onClick={() => navigator.clipboard.writeText(code)}
+        onClick={() => navigator.clipboard.writeText(code).catch(() => {})}
         className="shrink-0 p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
-        title={t("settingsPage.general.waylandPaste.copy", { defaultValue: "Copy" })}
+        title={copyLabel}
       >
         <Copy className="w-3.5 h-3.5" />
       </button>
     </div>
   );
+}
+
+export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProps) {
+  const { t } = useTranslation();
+  const copyLabel = t("settingsPage.general.waylandPaste.copy", { defaultValue: "Copy" });
 
   return (
     <div className="rounded-xl border border-border p-4 space-y-4">
@@ -86,7 +91,7 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
             defaultValue: "Configure it yourself, then rebuild.",
           })}
         </p>
-        <CodeBlock code={MANUAL_CONFIG} />
+        <CodeBlock code={MANUAL_CONFIG} copyLabel={copyLabel} />
       </div>
 
       <div className="space-y-2">
@@ -101,7 +106,7 @@ export default function NixOsPasteInfo({ status, onRecheck }: NixOsPasteInfoProp
               "If you install OpenWhispr from the flake, programs.openwhispr.enable turns on ydotool, the uinput module and the group memberships for you.",
           })}
         </p>
-        <CodeBlock code={FLAKE_CONFIG} />
+        <CodeBlock code={FLAKE_CONFIG} copyLabel={copyLabel} />
       </div>
 
       <p className="text-xs text-muted-foreground">
