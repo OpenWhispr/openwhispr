@@ -2712,10 +2712,7 @@ export default function SettingsPage({
                 {(() => {
                   if (ydotoolStatus.isNixOS) {
                     return (
-                      <NixOsPasteInfo
-                        status={ydotoolStatus}
-                        onRecheck={refreshYdotoolStatus}
-                      />
+                      <NixOsPasteInfo status={ydotoolStatus} onRecheck={refreshYdotoolStatus} />
                     );
                   }
                   const checks = [
