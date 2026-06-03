@@ -1,11 +1,12 @@
 import type { InferenceProvider } from "./types";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
+import { getCloudModel } from "../../../models/ModelRegistry";
 import logger from "../../../utils/logger";
 
 interface GeminiResponse {
   candidates?: Array<{
-    content?: { parts?: Array<{ text?: string }> };
+    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
     finishReason?: string;
   }>;
   usageMetadata?: { totalTokenCount?: number };
@@ -20,22 +21,40 @@ export const geminiProvider: InferenceProvider = {
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
 
+    const generationConfig: {
+      temperature: number;
+      maxOutputTokens: number;
+      thinkingConfig?: { thinkingLevel: string };
+    } = {
+      temperature: config.temperature || 0.3,
+      maxOutputTokens:
+        config.maxTokens ||
+        Math.max(
+          2000,
+          ctx.calculateMaxTokens(
+            text.length,
+            TOKEN_LIMITS.MIN_TOKENS_GEMINI,
+            TOKEN_LIMITS.MAX_TOKENS_GEMINI,
+            TOKEN_LIMITS.TOKEN_MULTIPLIER
+          )
+        ),
+    };
+
+    // Gemma 4 always thinks and can't disable it (the API rejects thinkingBudget/"low"),
+    // but it accepts thinkingLevel "minimal"/"high". Map the existing "Disable thinking"
+    // toggle to those levels: disabled -> minimal (fast), enabled -> high. Only models that
+    // declare `thinkingLevels` in the registry get a thinkingConfig — the other Gemini
+    // models are left untouched.
+    const thinkingLevels = getCloudModel(model)?.thinkingLevels;
+    if (thinkingLevels) {
+      generationConfig.thinkingConfig = {
+        thinkingLevel: config.disableThinking ? thinkingLevels.disabled : thinkingLevels.enabled,
+      };
+    }
+
     const requestBody = {
       contents: [{ parts: [{ text: `${systemPrompt}\n\n${text}` }] }],
-      generationConfig: {
-        temperature: config.temperature || 0.3,
-        maxOutputTokens:
-          config.maxTokens ||
-          Math.max(
-            2000,
-            ctx.calculateMaxTokens(
-              text.length,
-              TOKEN_LIMITS.MIN_TOKENS_GEMINI,
-              TOKEN_LIMITS.MAX_TOKENS_GEMINI,
-              TOKEN_LIMITS.TOKEN_MULTIPLIER
-            )
-          ),
-      },
+      generationConfig,
     };
 
     const response = await withRetry(async () => {
@@ -100,7 +119,17 @@ export const geminiProvider: InferenceProvider = {
     }, createApiRetryStrategy());
 
     const candidate = response.candidates?.[0];
-    if (!candidate?.content?.parts?.[0]?.text) {
+    // Gemma 4 (and other thinking-capable Gemini models) split their output into a
+    // reasoning part flagged `thought: true` plus a separate answer part. Skip the
+    // thought parts and return only the answer; for single-part responses (e.g.
+    // gemini-2.5-flash-lite) this is a no-op.
+    const responseText = (candidate?.content?.parts ?? [])
+      .filter((part) => !part.thought)
+      .map((part) => part.text || "")
+      .join("")
+      .trim();
+
+    if (!responseText) {
       logger.logReasoning("GEMINI_EMPTY_RESPONSE", {
         model,
         finishReason: candidate?.finishReason,
@@ -113,7 +142,6 @@ export const geminiProvider: InferenceProvider = {
       throw new Error("Gemini returned empty response");
     }
 
-    const responseText = candidate.content.parts[0].text!.trim();
     logger.logReasoning("GEMINI_RESPONSE", {
       model,
       responseLength: responseText.length,
