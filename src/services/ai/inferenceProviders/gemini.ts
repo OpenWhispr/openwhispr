@@ -26,7 +26,7 @@ export const geminiProvider: InferenceProvider = {
       maxOutputTokens: number;
       thinkingConfig?: { thinkingLevel: string };
     } = {
-      temperature: config.temperature || 0.3,
+      temperature: config.temperature ?? 0.3,
       maxOutputTokens:
         config.maxTokens ||
         Math.max(
