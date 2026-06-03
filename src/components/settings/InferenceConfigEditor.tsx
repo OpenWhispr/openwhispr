@@ -13,6 +13,7 @@ import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
 import OpenAICompatiblePanel from "../OpenAICompatiblePanel";
 import { Toggle } from "../ui/toggle";
+import { ThinkingLevelSelector } from "../ui/ThinkingLevelSelector";
 import type { InferenceMode } from "../../types/electron";
 import type { InferenceScope } from "../../config/inferenceScopes";
 import {
@@ -155,6 +156,11 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       (config.provider === "custom" || !!getCloudModel(config.model)?.supportsThinking)) ||
     (config.mode === "local" && !!getLocalModel(config.model)?.supportsThinking);
 
+  // Models that always think but accept a thinking level (Gemma 4) show a
+  // Minimal/High selector instead of the on/off "Disable thinking" toggle.
+  const thinkingLevels =
+    config.mode === "providers" ? getCloudModel(config.model)?.thinkingLevels : undefined;
+
   return (
     <div className="space-y-3">
       <InferenceModeSelector modes={modes} activeMode={config.mode} onSelect={handleModeSelect} />
@@ -183,11 +189,24 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
         <div className="flex items-start justify-between gap-3 pt-1">
           <div className="flex-1 min-w-0">
             <h4 className="text-sm font-medium text-foreground">
-              {t("reasoning.disableThinking.label")}
+              {t(
+                thinkingLevels ? "reasoning.thinkingLevel.label" : "reasoning.disableThinking.label"
+              )}
             </h4>
-            <p className="text-xs text-muted-foreground">{t("reasoning.disableThinking.help")}</p>
+            <p className="text-xs text-muted-foreground">
+              {t(
+                thinkingLevels ? "reasoning.thinkingLevel.help" : "reasoning.disableThinking.help"
+              )}
+            </p>
           </div>
-          <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
+          {thinkingLevels ? (
+            <ThinkingLevelSelector
+              minimal={config.disableThinking}
+              onChange={setField("disableThinking")}
+            />
+          ) : (
+            <Toggle checked={config.disableThinking} onChange={setField("disableThinking")} />
+          )}
         </div>
       )}
 

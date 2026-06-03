@@ -370,6 +370,12 @@
       "label": "Disattiva output di ragionamento",
       "help": "Salta i token di ragionamento per un output più pulito. Consigliato per la pulizia. Alcuni server ignorano questo suggerimento."
     },
+    "thinkingLevel": {
+      "label": "Livello di ragionamento",
+      "help": "Minimo è il più veloce. Alto offre un ragionamento più completo ma è più lento.",
+      "minimal": "Minimo",
+      "high": "Alto"
+    },
     "selfHosted": {
       "endpointHelp": "Punta a un server compatibile con OpenAI sulla tua rete locale (es. Ollama, LM Studio, vLLM o llama-server)."
     },

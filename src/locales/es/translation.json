@@ -370,6 +370,12 @@
       "label": "Desactivar salida de razonamiento",
       "help": "Omite los tokens de razonamiento para una salida más limpia. Recomendado para limpieza. Algunos servidores ignoran esta indicación."
     },
+    "thinkingLevel": {
+      "label": "Nivel de razonamiento",
+      "help": "Mínimo es el más rápido. Alto ofrece un razonamiento más completo, pero es más lento.",
+      "minimal": "Mínimo",
+      "high": "Alto"
+    },
     "selfHosted": {
       "endpointHelp": "Apunta a un servidor compatible con OpenAI en tu red local (p. ej. Ollama, LM Studio, vLLM o llama-server)."
     },

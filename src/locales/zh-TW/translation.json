@@ -370,6 +370,12 @@
       "label": "停用思考輸出",
       "help": "略過推理權杖以獲得更乾淨的輸出。建議用於清理。某些伺服器會忽略此提示。"
     },
+    "thinkingLevel": {
+      "label": "思考層級",
+      "help": "「最小」最快。「高」提供更完整的推理，但速度較慢。",
+      "minimal": "最小",
+      "high": "高"
+    },
     "selfHosted": {
       "endpointHelp": "指向本地網路中相容 OpenAI 的伺服器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
     },

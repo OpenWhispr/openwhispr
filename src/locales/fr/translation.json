@@ -370,6 +370,12 @@
       "label": "Désactiver la sortie de raisonnement",
       "help": "Ignore les jetons de raisonnement pour une sortie plus propre. Recommandé pour le nettoyage. Certains serveurs ignorent cette indication."
     },
+    "thinkingLevel": {
+      "label": "Niveau de raisonnement",
+      "help": "Minimal est le plus rapide. Élevé offre un raisonnement plus complet mais est plus lent.",
+      "minimal": "Minimal",
+      "high": "Élevé"
+    },
     "selfHosted": {
       "endpointHelp": "Pointez vers un serveur compatible OpenAI sur votre réseau local (par ex. Ollama, LM Studio, vLLM ou llama-server)."
     },
