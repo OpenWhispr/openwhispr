@@ -968,7 +968,12 @@ async function startApp() {
         globeKeyIsRecording = false;
         // Engage cooldown so the next Fn press isn't treated as a re-trigger.
         globeLastStopTime = Date.now();
-        windowManager.mainWindow.webContents.send("cancel-hotkey-pressed");
+        // Cancels in the renderer and resets meeting-detection state.
+        windowManager.sendCancelDictation();
+      } else {
+        // Pre-threshold: recording never started, but the panel was already
+        // shown on globe-down — hide it so it doesn't linger.
+        windowManager.hideDictationPanel();
       }
     });
 

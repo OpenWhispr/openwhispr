@@ -467,6 +467,17 @@ class WindowManager {
     }
   }
 
+  sendCancelDictation() {
+    if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send("cancel-hotkey-pressed");
+      this._isDictatingToggle = false;
+      this.meetingDetectionEngine?.setUserRecording(false);
+    }
+  }
+
   getActivationMode() {
     return this._cachedActivationMode;
   }
