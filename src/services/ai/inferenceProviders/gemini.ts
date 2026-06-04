@@ -1,4 +1,5 @@
 import type { InferenceProvider } from "./types";
+import { getCloudModel } from "../../../models/ModelRegistry";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
 import logger from "../../../utils/logger";
@@ -44,7 +45,7 @@ export const geminiProvider: InferenceProvider = {
         ),
     };
 
-    if (config.disableThinking === true && model.startsWith("gemini-3")) {
+    if (config.disableThinking === true && getCloudModel(model)?.supportsThinking) {
       generationConfig.thinkingConfig = { thinkingLevel: "minimal", includeThoughts: false };
     }
 
