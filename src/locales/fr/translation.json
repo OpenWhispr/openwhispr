@@ -2385,7 +2385,8 @@
       "copyToClipboard": "Copier dans le presse-papiers",
       "copied": "Copié !",
       "emptyState": "Demandez-moi n'importe quoi",
-      "errorPrefix": "Erreur"
+      "errorPrefix": "Erreur",
+      "emptyResponse": "Le modèle a renvoyé une réponse vide. Vérifiez le modèle sélectionné et la compatibilité du fournisseur."
     },
     "titleBar": {
       "label": "Agent",

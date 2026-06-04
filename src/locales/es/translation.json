@@ -2385,7 +2385,8 @@
       "copyToClipboard": "Copiar al portapapeles",
       "copied": "¡Copiado!",
       "emptyState": "Preguntame lo que sea",
-      "errorPrefix": "Error"
+      "errorPrefix": "Error",
+      "emptyResponse": "El modelo devolvió una respuesta vacía. Comprueba el modelo seleccionado y la compatibilidad del proveedor."
     },
     "titleBar": {
       "label": "Agente",

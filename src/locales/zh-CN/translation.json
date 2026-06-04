@@ -2332,7 +2332,8 @@
       "copyToClipboard": "复制到剪贴板",
       "copied": "已复制！",
       "emptyState": "随便问我",
-      "errorPrefix": "错误"
+      "errorPrefix": "错误",
+      "emptyResponse": "模型返回了空回复。请检查所选模型和服务商兼容性。"
     },
     "titleBar": {
       "label": "助手",

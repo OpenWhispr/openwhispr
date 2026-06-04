@@ -2332,7 +2332,8 @@
       "copyToClipboard": "複製到剪貼簿",
       "copied": "已複製！",
       "emptyState": "隨便問我",
-      "errorPrefix": "錯誤"
+      "errorPrefix": "錯誤",
+      "emptyResponse": "模型傳回了空回覆。請檢查所選模型和服務商相容性。"
     },
     "titleBar": {
       "label": "助手",

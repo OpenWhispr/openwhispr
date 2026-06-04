@@ -15,6 +15,9 @@ import { getAIModel } from "./ai/providers";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
 import { getConfiguredOpenAIBase } from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
+import thinkingSuppressionPolicy from "./ai/thinkingSuppressionPolicy.js";
+
+const { getGroqProviderOptions } = thinkingSuppressionPolicy;
 
 export type AgentStreamChunk =
   | { type: "content"; text: string }
@@ -545,7 +548,7 @@ class ReasoningService extends BaseReasoningService {
     const lanOverride = config.lanUrl?.trim();
     const isLanCleanup = !!lanOverride || this.isLanCleanupMode();
 
-    if ((isLocalProvider || isLanCleanup) && !tools) {
+    if ((isLocalProvider || isLanCleanup || provider === "custom") && !tools) {
       const contentGen = this.processTextStreaming(messages, model, provider, config);
       for await (const text of contentGen) {
         yield { type: "content", text };
@@ -593,6 +596,8 @@ class ReasoningService extends BaseReasoningService {
 
     const useTemperature = isLocalProvider || isLanCleanup || apiConfig.supportsTemperature;
 
+    const groqProviderOptions = getGroqProviderOptions(needsDisableThinking);
+
     const result = streamText({
       model: aiModel,
       messages: messages.map((m) => ({
@@ -603,7 +608,7 @@ class ReasoningService extends BaseReasoningService {
       stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
       ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
       maxOutputTokens: config.maxTokens || 4096,
-      ...(needsDisableThinking ? { providerOptions: { groq: { reasoningEffort: "none" } } } : {}),
+      ...(groqProviderOptions ? { providerOptions: { groq: groqProviderOptions } } : {}),
     });
 
     for await (const chunk of result.fullStream) {

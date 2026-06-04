@@ -1,9 +1,14 @@
 import type { ReasoningConfig } from "../BaseReasoningService";
 import { getCloudModel, getLocalModel } from "../../models/ModelRegistry";
+import thinkingSuppressionPolicy from "./thinkingSuppressionPolicy.js";
 
-// Strict OpenAI-compatible servers (Groq, LM Studio, vLLM, LocalAI) reject
+const { applyThinkingSuppressionFields } = thinkingSuppressionPolicy;
+
+// Strict OpenAI-compatible servers (DeepSeek, LM Studio, vLLM, LocalAI) reject
 // unknown fields like `think` with "property 'think' is unsupported". Only
-// Ollama-native servers accept `think`; everyone else uses `reasoning_effort`.
+// Ollama-native servers accept `think`.
+// Other OpenAI-compatible servers may accept reasoning controls, but many reject
+// `none` because their enum only includes effort levels such as low/medium/high.
 // The `lan` provider defaults to Ollama dialect, but legacy users who
 // configured Self-Hosted as "openai-compatible" still route through `lan`
 // — honor that flag so their backend doesn't reject the request.
@@ -15,12 +20,8 @@ function usesOllamaDialect(providerKey: string): boolean {
 }
 
 function suppressThinking(requestBody: Record<string, unknown>, providerKey: string): void {
-  if (usesOllamaDialect(providerKey)) {
-    requestBody.think = false;
-  } else {
-    requestBody.reasoning_effort = "none";
-  }
-  requestBody.chat_template_kwargs = { enable_thinking: false };
+  const suppressionProvider = usesOllamaDialect(providerKey) ? "local" : providerKey;
+  applyThinkingSuppressionFields(requestBody, suppressionProvider);
 }
 
 export function applyThinkingSuppression(

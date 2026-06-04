@@ -2337,7 +2337,8 @@
       "copyToClipboard": "In Zwischenablage kopieren",
       "copied": "Kopiert!",
       "emptyState": "Frag mich alles",
-      "errorPrefix": "Fehler"
+      "errorPrefix": "Fehler",
+      "emptyResponse": "Das Modell hat eine leere Antwort zurückgegeben. Prüfe das ausgewählte Modell und die Anbieterkompatibilität."
     },
     "titleBar": {
       "label": "Agent",

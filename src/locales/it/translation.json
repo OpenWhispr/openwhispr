@@ -2337,7 +2337,8 @@
       "copyToClipboard": "Copia negli appunti",
       "copied": "Copiato!",
       "emptyState": "Chiedimi qualsiasi cosa",
-      "errorPrefix": "Errore"
+      "errorPrefix": "Errore",
+      "emptyResponse": "Il modello ha restituito una risposta vuota. Controlla il modello selezionato e la compatibilità del provider."
     },
     "titleBar": {
       "label": "Agente",

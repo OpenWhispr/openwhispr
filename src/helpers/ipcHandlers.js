@@ -37,6 +37,7 @@ const {
   sanitizeWhisperVadConfig,
   resolveContextSileroEnabled,
 } = require("./whisperVadConfig");
+const { resolveOpenWhisprApiUrl } = require("../config/openwhisprCloud");
 
 const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
@@ -3366,10 +3367,11 @@ class IPCHandlers {
     })();
 
     const getApiUrl = () =>
-      process.env.OPENWHISPR_API_URL ||
-      process.env.VITE_OPENWHISPR_API_URL ||
-      runtimeEnv.VITE_OPENWHISPR_API_URL ||
-      "";
+      resolveOpenWhisprApiUrl({
+        OPENWHISPR_API_URL: process.env.OPENWHISPR_API_URL,
+        VITE_OPENWHISPR_API_URL: process.env.VITE_OPENWHISPR_API_URL,
+        runtimeViteOpenWhisprApiUrl: runtimeEnv.VITE_OPENWHISPR_API_URL,
+      });
 
     const getAuthUrl = () =>
       process.env.AUTH_URL ||

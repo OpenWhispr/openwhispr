@@ -26,7 +26,7 @@ export function getAIModel(
     case "gemini":
       return createGoogleGenerativeAI({ apiKey })(model);
     case "custom":
-      return createOpenAI({ apiKey, baseURL })(model);
+      return createOpenAI({ apiKey, baseURL }).chat(model);
     case "local":
       return createOpenAI({ apiKey: "no-key", baseURL }).chat(model);
     default:

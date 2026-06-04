@@ -2337,7 +2337,8 @@
       "copyToClipboard": "クリップボードにコピー",
       "copied": "コピーしました！",
       "emptyState": "なんでも聞いてください",
-      "errorPrefix": "エラー"
+      "errorPrefix": "エラー",
+      "emptyResponse": "モデルが空の応答を返しました。選択したモデルとプロバイダーの互換性を確認してください。"
     },
     "titleBar": {
       "label": "エージェント",

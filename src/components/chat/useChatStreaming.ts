@@ -104,7 +104,8 @@ export function useChatStreaming({
       );
       const localModelCanUseTool =
         isLocalProvider && estimateModelSizeB(settings.chatAgentModel) >= LOCAL_TOOL_MIN_PARAMS_B;
-      const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
+      const supportsTools =
+        isCloudAgent || (!isCustomAgent && !isLocalProvider) || localModelCanUseTool;
 
       let registry: ToolRegistry | null = null;
       if (supportsTools) {
@@ -264,11 +265,16 @@ export function useChatStreaming({
           }
         }
 
+        const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
+        const hasToolCalls = !!finalMsg?.toolCalls?.length;
+        if (!fullContent.trim() && !hasToolCalls) {
+          throw new Error(t("agentMode.chat.emptyResponse"));
+        }
+
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantId ? { ...m, isStreaming: false } : m))
         );
 
-        const finalMsg = messagesRef.current.find((m) => m.id === assistantId);
         onStreamComplete?.(assistantId, fullContent, finalMsg?.toolCalls);
       } catch (error) {
         setMessages((prev) =>

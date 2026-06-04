@@ -1,4 +1,8 @@
 // API Configuration helpers
+import openwhisprCloud from "./openwhisprCloud.js";
+
+const { resolveOpenWhisprApiUrl } = openwhisprCloud;
+
 export const normalizeBaseUrl = (value?: string | null): string => {
   if (!value) return "";
 
@@ -113,7 +117,7 @@ export const CACHE_CONFIG = {
 } as const;
 
 // OpenWhispr Cloud API
-export const OPENWHISPR_API_URL = (env.VITE_OPENWHISPR_API_URL as string) || "";
+export const OPENWHISPR_API_URL = resolveOpenWhisprApiUrl(env);
 
 // Retry Configuration
 export const RETRY_CONFIG = {

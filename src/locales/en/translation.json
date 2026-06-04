@@ -2481,7 +2481,8 @@
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied!",
       "emptyState": "Ask me anything",
-      "errorPrefix": "Error"
+      "errorPrefix": "Error",
+      "emptyResponse": "The model returned an empty response. Check the selected model and provider compatibility."
     },
     "titleBar": {
       "label": "Agent",
