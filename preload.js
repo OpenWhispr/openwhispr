@@ -656,6 +656,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   checkAccessibilityTrusted: () => ipcRenderer.invoke("check-accessibility-trusted"),
 
+  // Paste-last transcription hotkey
+  updatePasteLastHotkey: (hotkey) => ipcRenderer.invoke("update-paste-last-hotkey", hotkey),
+  notifyPasteLastKeyChanged: (hotkey) => ipcRenderer.send("paste-last-key-changed", hotkey),
+  getPasteLastKey: () => ipcRenderer.invoke("get-paste-last-key"),
+  savePasteLastKey: (key) => ipcRenderer.invoke("save-paste-last-key", key),
+
   // Notify main process of activation mode changes (for Windows Push-to-Talk)
   notifyActivationModeChanged: (mode) => ipcRenderer.send("activation-mode-changed", mode),
   notifyHotkeyChanged: (hotkey) => ipcRenderer.send("hotkey-changed", hotkey),

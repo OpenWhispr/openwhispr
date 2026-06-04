@@ -33,6 +33,8 @@
       "hide": "ディクテーションパネルを非表示"
     },
     "openControlPanel": "コントロールパネルを開く",
+    "pasteLastTranscription": "最後の文字起こしを貼り付け",
+    "pasteLastTranscriptionEmpty": "最後の文字起こしを貼り付け (まだありません)",
     "quit": "OpenWhispr を終了",
     "tooltip": "OpenWhispr - 音声ディクテーション"
   },
@@ -1292,6 +1294,13 @@
         "layoutLabel": "ホットキーで起動したときに開く:",
         "layoutFullWidth": "全幅",
         "layoutSidePanel": "サイドパネル"
+      },
+      "pasteLastHotkey": {
+        "title": "最後の文字起こしを貼り付け",
+        "description": "このショートカットを押して、最新の文字起こしを即座に貼り付けます",
+        "resetToDefault": "{{hotkey}}にリセット",
+        "emptyNotificationTitle": "貼り付ける内容がありません",
+        "emptyNotificationBody": "まず文字起こしを録音してから、最後の文字起こしを貼り付けるショートカットを押してください。"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",

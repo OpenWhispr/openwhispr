@@ -33,6 +33,8 @@
       "hide": "Скрыть панель диктовки"
     },
     "openControlPanel": "Открыть панель управления",
+    "pasteLastTranscription": "Вставить последнюю транскрипцию",
+    "pasteLastTranscriptionEmpty": "Вставить последнюю транскрипцию (пока нет)",
     "quit": "Закрыть OpenWhispr",
     "tooltip": "OpenWhispr — голосовая диктовка"
   },
@@ -1292,6 +1294,13 @@
         "layoutLabel": "При запуске горячей клавишей открывать в:",
         "layoutFullWidth": "Полная ширина",
         "layoutSidePanel": "Боковая панель"
+      },
+      "pasteLastHotkey": {
+        "title": "Вставить последнюю транскрипцию",
+        "description": "Нажмите это сочетание клавиш, чтобы мгновенно вставить последнюю транскрипцию",
+        "resetToDefault": "Сбросить на {{hotkey}}",
+        "emptyNotificationTitle": "Нечего вставлять",
+        "emptyNotificationBody": "Сначала запишите транскрипцию, затем нажмите сочетание клавиш, чтобы повторить её."
       },
       "microphone": {
         "description": "Выберите устройство ввода для диктовки",

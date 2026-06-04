@@ -33,6 +33,8 @@
       "hide": "Ocultar painel de ditado"
     },
     "openControlPanel": "Abrir painel de controle",
+    "pasteLastTranscription": "Colar última transcrição",
+    "pasteLastTranscriptionEmpty": "Colar última transcrição (nenhuma ainda)",
     "quit": "Sair do OpenWhispr",
     "tooltip": "OpenWhispr - Ditado por voz"
   },
@@ -1264,6 +1266,13 @@
         "layoutLabel": "Ao acionar pelo atalho, abrir em:",
         "layoutFullWidth": "Largura total",
         "layoutSidePanel": "Painel lateral"
+      },
+      "pasteLastHotkey": {
+        "title": "Colar última transcrição",
+        "description": "Pressione este atalho para colar instantaneamente sua transcrição mais recente",
+        "resetToDefault": "Redefinir para {{hotkey}}",
+        "emptyNotificationTitle": "Nada para colar",
+        "emptyNotificationBody": "Grave primeiro uma transcrição e depois pressione o atalho para repeti-la."
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
