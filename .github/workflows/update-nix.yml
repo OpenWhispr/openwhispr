@@ -1,0 +1,83 @@
+name: Update Nix package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get release version
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if [ "$EVENT_NAME" = "release" ]; then
+            version="$RELEASE_TAG"
+          else
+            version=$(gh release view --json tagName -q .tagName)
+          fi
+          version="${version#v}"
+          if ! echo "$version" | grep -qP '^\d+\.\d+\.\d+$'; then
+            echo "::error::Invalid version format: $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check if update needed
+        id: check
+        run: |
+          current=$(grep 'version = ' nix/package.nix | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          if [ "$current" = "${{ steps.release.outputs.version }}" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download AppImage and compute hash
+        if: steps.check.outputs.skip != 'true'
+        id: hash
+        run: |
+          version="${{ steps.release.outputs.version }}"
+          url="https://github.com/${{ github.repository }}/releases/download/v${version}/OpenWhispr-${version}-linux-x86_64.AppImage"
+          tmpfile=$(mktemp)
+          curl -fSL --retry 3 --retry-delay 10 "$url" -o "$tmpfile"
+          sri="sha256-$(sha256sum "$tmpfile" | cut -d' ' -f1 | xxd -r -p | base64 -w0)"
+          rm "$tmpfile"
+          echo "sri=$sri" >> "$GITHUB_OUTPUT"
+
+      - name: Update nix/package.nix
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          version="${{ steps.release.outputs.version }}"
+          hash="${{ steps.hash.outputs.sri }}"
+          sed -i "s|version = \".*\";|version = \"${version}\";|" nix/package.nix
+          sed -i "s|hash = \"sha256-.*\";|hash = \"${hash}\";|" nix/package.nix
+
+      - name: Create pull request
+        if: steps.check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.release.outputs.version }}"
+          branch="nix/update-${version}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add nix/package.nix
+          git commit -m "nix: update to ${version}"
+          git push origin "$branch"
+
+          gh pr create \
+            --title "nix: update to ${version}" \
+            --body "Automated bump of the Nix package to v${version}."

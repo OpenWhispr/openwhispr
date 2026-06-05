@@ -15,6 +15,7 @@ import { getAIModel } from "./ai/providers";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
 import { getConfiguredOpenAIBase } from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
+import { resolveGeminiThinkingConfig } from "./ai/geminiThinking";
 
 export type AgentStreamChunk =
   | { type: "content"; text: string }
@@ -580,8 +581,20 @@ class ReasoningService extends BaseReasoningService {
 
     const modelDef = getCloudModel(model);
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
-    const needsDisableThinking =
+    const needsGroqDisableThinking =
       provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
+    // Gemini honors the same thinking mapping as the native REST path: Gemma 4
+    // maps the toggle two-way (minimal/high); supportsThinking-only models drop to
+    // minimal when disabled. @sync(gemini-thinking-config)
+    const geminiThinkingConfig =
+      provider === "gemini"
+        ? resolveGeminiThinkingConfig(modelDef, config.disableThinking)
+        : undefined;
+    const providerOptions = {
+      ...(needsGroqDisableThinking ? { groq: { reasoningEffort: "none" } } : {}),
+      ...(geminiThinkingConfig ? { google: { thinkingConfig: geminiThinkingConfig } } : {}),
+    };
+    const hasProviderOptions = Object.keys(providerOptions).length > 0;
 
     logger.logReasoning("AGENT_AI_SDK_STREAM_REQUEST", {
       model,
@@ -603,7 +616,7 @@ class ReasoningService extends BaseReasoningService {
       stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
       ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
       maxOutputTokens: config.maxTokens || 4096,
-      ...(needsDisableThinking ? { providerOptions: { groq: { reasoningEffort: "none" } } } : {}),
+      ...(hasProviderOptions ? { providerOptions } : {}),
     });
 
     for await (const chunk of result.fullStream) {

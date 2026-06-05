@@ -40,6 +40,7 @@ import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
 import PermissionCard from "./ui/PermissionCard";
 import PasteToolsInfo from "./ui/PasteToolsInfo";
+import NixOsPasteInfo from "./ui/NixOsPasteInfo";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
 import SelfHostedPanel from "./SelfHostedPanel";
 import {
@@ -861,6 +862,7 @@ export default function SettingsPage({
     isKde?: boolean;
     hasXclip?: boolean;
     hasXsel?: boolean;
+    isNixOS?: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
 
@@ -2708,6 +2710,11 @@ export default function SettingsPage({
                   })}
                 />
                 {(() => {
+                  if (ydotoolStatus.isNixOS) {
+                    return (
+                      <NixOsPasteInfo status={ydotoolStatus} onRecheck={refreshYdotoolStatus} />
+                    );
+                  }
                   const checks = [
                     {
                       key: "hasYdotool",

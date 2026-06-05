@@ -1444,7 +1444,16 @@
             "step1Title": "Instalar xclip"
           }
         },
-        "xclipDesc": "Herramienta de portapapeles para pegado en KDE Wayland (xclip o xsel)"
+        "xclipDesc": "Herramienta de portapapeles para pegado en KDE Wayland (xclip o xsel)",
+        "nixos": {
+          "intro": "Estás en NixOS. El pegado automático necesita ydotool y acceso a /dev/uinput, que NixOS concede de forma declarativa.",
+          "detected": "Detectado",
+          "manualTitle": "Añade esto a tu configuración",
+          "manualDesc": "Configúralo tú mismo y luego reconstruye.",
+          "flakeTitle": "¿Instalando mediante nuestro flake?",
+          "flakeDesc": "Si instalas OpenWhispr desde el flake, programs.openwhispr.enable activa ydotool, el módulo uinput y las pertenencias de grupo por ti.",
+          "rebuildNote": "Ejecuta sudo nixos-rebuild switch, luego cierra sesión y vuelve a abrirla para que el cambio de grupo y la regla de /dev/uinput surtan efecto. Sustituye <you> por tu nombre de usuario."
+        }
       },
       "updates": {
         "badges": {
@@ -1804,6 +1813,7 @@
         "anthropic_claude_sonnet_4_6": "Rendimiento equilibrado",
         "anthropic_claude_sonnet_4_5": "Generación anterior de Sonnet",
         "anthropic_claude_haiku_4_5": "Rápido con inteligencia cercana a la frontera",
+        "gemini_gemini_3_5_flash": "Modelo Gemini más reciente, rápido y de alta capacidad",
         "gemini_gemini_3_1_pro_preview": "Modelo insignia de nueva generación para razonamiento complejo",
         "gemini_gemini_3_flash_preview": "Modelo de nueva generación ultrarrápido y de alta capacidad",
         "gemini_gemini_2_5_flash_lite": "Menor latencia y costo",

@@ -932,6 +932,7 @@ declare global {
         hasUinput: boolean;
         hasUdevRule: boolean;
         hasGroup: boolean;
+        isNixOS: boolean;
         allGood: boolean;
       }>;
 

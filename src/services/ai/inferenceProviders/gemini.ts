@@ -1,7 +1,8 @@
 import type { InferenceProvider } from "./types";
+import { getCloudModel } from "../../../models/ModelRegistry";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
-import { getCloudModel } from "../../../models/ModelRegistry";
+import { resolveGeminiThinkingConfig, type GeminiThinkingConfig } from "../geminiThinking";
 import logger from "../../../utils/logger";
 
 interface GeminiResponse {
@@ -10,6 +11,12 @@ interface GeminiResponse {
     finishReason?: string;
   }>;
   usageMetadata?: { totalTokenCount?: number };
+}
+
+interface GeminiGenerationConfig {
+  temperature: number;
+  maxOutputTokens: number;
+  thinkingConfig?: GeminiThinkingConfig;
 }
 
 export const geminiProvider: InferenceProvider = {
@@ -21,11 +28,7 @@ export const geminiProvider: InferenceProvider = {
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
 
-    const generationConfig: {
-      temperature: number;
-      maxOutputTokens: number;
-      thinkingConfig?: { thinkingLevel: string };
-    } = {
+    const generationConfig: GeminiGenerationConfig = {
       temperature: config.temperature ?? 0.3,
       maxOutputTokens:
         config.maxTokens ||
@@ -40,16 +43,13 @@ export const geminiProvider: InferenceProvider = {
         ),
     };
 
-    // Gemma 4 always thinks and can't disable it (the API rejects thinkingBudget/"low"),
-    // but it accepts thinkingLevel "minimal"/"high". Map the existing "Disable thinking"
-    // toggle to those levels: disabled -> minimal (fast), enabled -> high. Only models that
-    // declare `thinkingLevels` in the registry get a thinkingConfig — the other Gemini
-    // models are left untouched.
-    const thinkingLevels = getCloudModel(model)?.thinkingLevels;
-    if (thinkingLevels) {
-      generationConfig.thinkingConfig = {
-        thinkingLevel: config.disableThinking ? thinkingLevels.disabled : thinkingLevels.enabled,
-      };
+    // Map the model's thinking metadata + the "Disable thinking" toggle to a
+    // thinkingConfig (see geminiThinking.ts). Gemma 4 gets a two-way minimal/high
+    // mapping; supportsThinking-only models (e.g. Gemini 3.5 Flash) only drop to
+    // minimal when disabled. Non-thinking models are left untouched.
+    const thinkingConfig = resolveGeminiThinkingConfig(getCloudModel(model), config.disableThinking);
+    if (thinkingConfig) {
+      generationConfig.thinkingConfig = thinkingConfig;
     }
 
     const requestBody = {

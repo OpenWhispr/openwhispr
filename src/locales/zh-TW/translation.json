@@ -1391,7 +1391,16 @@
             "step1Title": "安裝 xclip"
           }
         },
-        "xclipDesc": "KDE Wayland 貼上用的剪貼簿工具（xclip 或 xsel）"
+        "xclipDesc": "KDE Wayland 貼上用的剪貼簿工具（xclip 或 xsel）",
+        "nixos": {
+          "intro": "你正在使用 NixOS。自動貼上需要 ydotool 及 /dev/uinput 存取權限，NixOS 以宣告式方式授予這些權限。",
+          "detected": "已偵測",
+          "manualTitle": "將以下內容加入你的設定",
+          "manualDesc": "自行設定後重新建置。",
+          "flakeTitle": "透過我們的 flake 安裝？",
+          "flakeDesc": "若你從 flake 安裝 OpenWhispr，programs.openwhispr.enable 會自動啟用 ydotool、uinput 模組及所需的群組成員資格。",
+          "rebuildNote": "執行 sudo nixos-rebuild switch，然後登出並重新登入，使群組變更與 /dev/uinput 規則生效。將 <you> 替換為你的使用者名稱。"
+        }
       },
       "updates": {
         "badges": {
@@ -1751,6 +1760,7 @@
         "anthropic_claude_sonnet_4_6": "均衡表現",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet 模型",
         "anthropic_claude_haiku_4_5": "快速且接近頂尖智慧",
+        "gemini_gemini_3_5_flash": "最新、快速且高性能的 Gemini 模型",
         "gemini_gemini_3_1_pro_preview": "新一代旗艦模型，擅長複雜推理",
         "gemini_gemini_3_flash_preview": "超快速、高性能的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延遲和成本",
