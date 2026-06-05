@@ -5,16 +5,24 @@ import { Input } from "./ui/input";
 import { ConfirmDialog } from "./ui/dialog";
 import { useSettings } from "../hooks/useSettings";
 import { getAgentName } from "../utils/agentName";
+import type { DictionaryReplacement } from "../utils/dictionaryReplacements";
 
 export default function DictionaryView() {
   const { t } = useTranslation();
-  const { customDictionary, setCustomDictionary } = useSettings();
+  const {
+    customDictionary,
+    customDictionaryReplacements,
+    setCustomDictionary,
+    setCustomDictionaryReplacements,
+  } = useSettings();
   const agentName = getAgentName();
   const [newWord, setNewWord] = useState("");
+  const [replacementFrom, setReplacementFrom] = useState("");
+  const [replacementTo, setReplacementTo] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
 
-  const isEmpty = customDictionary.length === 0;
+  const isEmpty = customDictionary.length === 0 && customDictionaryReplacements.length === 0;
 
   const handleAdd = useCallback(() => {
     const words = newWord
@@ -35,6 +43,33 @@ export default function DictionaryView() {
     [customDictionary, setCustomDictionary, agentName]
   );
 
+  const handleAddReplacement = useCallback(() => {
+    const from = replacementFrom.trim();
+    const to = replacementTo.trim();
+    if (!from || !to) return;
+
+    const replacements = customDictionaryReplacements.filter(
+      (rule: DictionaryReplacement) => rule.from.toLocaleLowerCase() !== from.toLocaleLowerCase()
+    );
+    setCustomDictionaryReplacements([...replacements, { from, to }]);
+    setReplacementFrom("");
+    setReplacementTo("");
+  }, [
+    replacementFrom,
+    replacementTo,
+    customDictionaryReplacements,
+    setCustomDictionaryReplacements,
+  ]);
+
+  const handleRemoveReplacement = useCallback(
+    (from: string) => {
+      setCustomDictionaryReplacements(
+        customDictionaryReplacements.filter((rule: DictionaryReplacement) => rule.from !== from)
+      );
+    },
+    [customDictionaryReplacements, setCustomDictionaryReplacements]
+  );
+
   return (
     <div className="flex flex-col h-full">
       <ConfirmDialog
@@ -42,7 +77,10 @@ export default function DictionaryView() {
         onOpenChange={setConfirmClear}
         title={t("dictionary.clearTitle")}
         description={t("dictionary.clearDescription")}
-        onConfirm={() => setCustomDictionary(customDictionary.filter((w) => w === agentName))}
+        onConfirm={() => {
+          setCustomDictionary(customDictionary.filter((w) => w === agentName));
+          setCustomDictionaryReplacements([]);
+        }}
         variant="destructive"
       />
 
@@ -87,6 +125,36 @@ export default function DictionaryView() {
             )}
           </div>
 
+          <div className="w-full max-w-[260px] mt-4">
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5">
+              <Input
+                placeholder={t("dictionary.replaceFrom", { defaultValue: "From" })}
+                value={replacementFrom}
+                onChange={(e) => setReplacementFrom(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddReplacement();
+                }}
+                className="h-8 text-xs placeholder:text-foreground/20"
+              />
+              <Input
+                placeholder={t("dictionary.replaceTo", { defaultValue: "To" })}
+                value={replacementTo}
+                onChange={(e) => setReplacementTo(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddReplacement();
+                }}
+                className="h-8 text-xs placeholder:text-foreground/20"
+              />
+              <button
+                onClick={handleAddReplacement}
+                aria-label={t("dictionary.addReplacement", { defaultValue: "Add replacement" })}
+                className="w-8 h-8 flex items-center justify-center text-primary/50 hover:text-primary transition-colors"
+              >
+                <CornerDownLeft size={11} />
+              </button>
+            </div>
+          </div>
+
           <div className="flex items-center gap-1.5 mt-3">
             {["OpenWhispr", "Dr. Smith", "gRPC"].map((ex) => (
               <span
@@ -124,7 +192,7 @@ export default function DictionaryView() {
             <div className="flex items-baseline gap-2">
               <h2 className="text-xs font-semibold text-foreground">{t("dictionary.title")}</h2>
               <span className="text-xs text-foreground/15 font-mono tabular-nums">
-                {customDictionary.length}
+                {customDictionary.length + customDictionaryReplacements.length}
               </span>
             </div>
             <button
@@ -160,6 +228,33 @@ export default function DictionaryView() {
                   ⏎
                 </kbd>
               )}
+            </div>
+            <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 mt-2">
+              <Input
+                placeholder={t("dictionary.replaceFrom", { defaultValue: "Replace from" })}
+                value={replacementFrom}
+                onChange={(e) => setReplacementFrom(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddReplacement();
+                }}
+                className="h-7 text-xs placeholder:text-foreground/20"
+              />
+              <Input
+                placeholder={t("dictionary.replaceTo", { defaultValue: "with" })}
+                value={replacementTo}
+                onChange={(e) => setReplacementTo(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddReplacement();
+                }}
+                className="h-7 text-xs placeholder:text-foreground/20"
+              />
+              <button
+                onClick={handleAddReplacement}
+                aria-label={t("dictionary.addReplacement", { defaultValue: "Add replacement" })}
+                className="w-7 h-7 flex items-center justify-center text-primary/50 hover:text-primary transition-colors"
+              >
+                <CornerDownLeft size={10} />
+              </button>
             </div>
           </div>
 
@@ -199,6 +294,29 @@ export default function DictionaryView() {
                 );
               })}
             </div>
+            {customDictionaryReplacements.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                {customDictionaryReplacements.map((rule: DictionaryReplacement) => (
+                  <div
+                    key={rule.from}
+                    className="group grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2 rounded-[5px] border border-foreground/8 dark:border-white/6 bg-foreground/[0.02] dark:bg-white/[0.03] px-2.5 py-1.5 text-xs text-foreground/60"
+                  >
+                    <span className="truncate">{rule.from}</span>
+                    <span className="text-foreground/20">→</span>
+                    <span className="truncate">{rule.to}</span>
+                    <button
+                      onClick={() => handleRemoveReplacement(rule.from)}
+                      aria-label={t("dictionary.removeReplacement", {
+                        defaultValue: "Remove replacement",
+                      })}
+                      className="p-0.5 rounded-sm opacity-0 group-hover:opacity-100 text-foreground/25 hover:!text-destructive/70 transition-colors duration-150"
+                    >
+                      <X size={10} strokeWidth={2} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="px-5 pb-3 flex items-start gap-1.5">
