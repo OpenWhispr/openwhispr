@@ -1390,6 +1390,9 @@ async function startApp() {
       debugLogger.warn(
         "[Push-to-Talk] Linux key listener has no permission to access input devices"
       );
+      windowManager.setActivationModeCache("tap");
+      environmentManager.saveActivationMode("tap");
+      linuxKeyManager.stop();
       if (isLiveWindow(windowManager.mainWindow)) {
         windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
       }

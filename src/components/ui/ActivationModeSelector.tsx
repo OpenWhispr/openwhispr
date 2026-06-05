@@ -7,6 +7,7 @@ interface ActivationModeSelectorProps {
   value: ActivationMode;
   onChange: (mode: ActivationMode) => void;
   disabled?: boolean;
+  pushDisabled?: boolean;
   /** Compact variant for inline use */
   variant?: "default" | "compact";
 }
@@ -15,6 +16,7 @@ export function ActivationModeSelector({
   value,
   onChange,
   disabled = false,
+  pushDisabled = false,
   variant = "default",
 }: ActivationModeSelectorProps) {
   const { t } = useTranslation();
@@ -59,13 +61,13 @@ export function ActivationModeSelector({
 
       <button
         type="button"
-        disabled={disabled}
+        disabled={disabled || pushDisabled}
         onClick={() => onChange("push")}
         className={`
           relative z-10 flex-1 flex items-center justify-center gap-1.5 rounded
           transition-colors duration-150
           ${isCompact ? "px-2.5 py-1.5" : "px-3 py-2"}
-          ${disabled ? "cursor-not-allowed" : "cursor-pointer"}
+          ${disabled || pushDisabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}
           ${value === "push" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}
         `}
       >

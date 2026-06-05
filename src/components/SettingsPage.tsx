@@ -1080,8 +1080,11 @@ export default function SettingsPage({
         const info = await window.electronAPI?.getHotkeyModeInfo();
         if (info?.isUsingNativeShortcut) {
           setIsUsingNativeShortcut(true);
-          if (!info.supportsPushToTalk) {
-            setActivationMode("tap");
+        }
+        if (info && !info.supportsPushToTalk) {
+          setActivationMode("tap");
+          if (platform === "linux") {
+            setLinuxPttAvailable(false);
           }
         }
       } catch (error) {
@@ -1095,11 +1098,12 @@ export default function SettingsPage({
       }
     };
     checkHotkeyMode();
-  }, [setActivationMode]);
+  }, [setActivationMode, platform]);
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onLinuxPttPermissionDenied?.(() => {
       setLinuxPttAvailable(false);
+      setActivationMode("tap");
       toast({
         title: t("settingsPage.general.hotkey.linuxPttPermissionTitle"),
         description: t("settingsPage.general.hotkey.linuxPttPermissionDescription"),
@@ -3213,9 +3217,13 @@ EOF`,
                     <p className="text-xs font-medium text-muted-foreground/80 mb-2">
                       {t("settingsPage.general.hotkey.activationMode")}
                     </p>
-                    <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
-                    {getCachedPlatform() === "linux" && activationMode === "push" && (
-                      <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
+                    <ActivationModeSelector
+                      value={activationMode}
+                      onChange={setActivationMode}
+                      pushDisabled={platform === "linux" && !linuxPttAvailable}
+                    />
+                    {platform === "linux" && !linuxPttAvailable && (
+                      <LinuxPttSetupInfo isAvailable={false} />
                     )}
                   </SettingsPanelRow>
                 )}
