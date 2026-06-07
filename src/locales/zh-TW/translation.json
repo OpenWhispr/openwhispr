@@ -1155,6 +1155,12 @@
       "description": "整理轉錄文字、處理指令、修正錯誤，同時保留你的語調。",
       "enableTextCleanup": "啟用文字整理",
       "enableTextCleanupDescription": "AI 移除語助詞，修正文法和標點",
+      "preloadOnStart": "啟動時預先載入模型",
+      "preloadOnStartDescription": "在 OpenWhispr 啟動時載入清理模型，讓首次聽寫更快。",
+      "idleTimeout": "閒置時卸載",
+      "idleTimeoutDescription": "在此閒置時間後釋放 GPU 記憶體。選擇永不可在 OpenWhispr 開啟期間保持模型載入。",
+      "idleNever": "永不",
+      "idleMinutes": "{{count}} 分鐘",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "雲端供應商",
