@@ -32,6 +32,8 @@ export interface CleanupSettings {
   useDictationAgent: boolean;
   cleanupModel: string;
   cleanupProvider: string;
+  cleanupPreloadOnStart: boolean;
+  cleanupIdleTimeoutMinutes: number;
   cleanupCloudBaseUrl?: string;
   cleanupCloudMode: string;
   cleanupMode: InferenceMode;
