@@ -274,7 +274,7 @@ export type SystemAudioStrategy =
   | "native"
   | "loopback"
   | "browser-portal"
-  | "portal-helper"
+  | "pipewire-loopback"
   | "unsupported";
 
 export interface SystemAudioAccessResult {

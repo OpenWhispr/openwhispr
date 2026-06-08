@@ -3205,15 +3205,15 @@ class IPCHandlers {
         available: false,
         supportsPersistentGrant: false,
         supportsPersistentPortalGrant: false,
+        supportsSystemAudio: false,
         supportsNativeCapture: false,
         portalVersion: null,
         error: error.message,
       }));
-      const supportsPersistentGrant = !!capability?.supportsPersistentGrant;
-      const supportsPersistentPortalGrant = !!capability?.supportsPersistentPortalGrant;
+      const available = !!capability?.available;
+      const supportsSystemAudio = !!capability?.supportsSystemAudio;
       const supportsNativeCapture = !!capability?.supportsNativeCapture;
-      const restoreTokenAvailable =
-        supportsPersistentGrant && !!this.linuxPortalAudioManager?.hasStoredRestoreToken();
+      const granted = available && supportsSystemAudio && supportsNativeCapture;
       const helperError =
         typeof capability?.error === "string" &&
         !capability.error.includes("helper binary not found")
@@ -3221,20 +3221,16 @@ class IPCHandlers {
           : undefined;
 
       return buildSystemAudioAccess({
-        granted: restoreTokenAvailable,
-        status: supportsPersistentGrant
-          ? restoreTokenAvailable
-            ? "granted"
-            : "not-determined"
-          : "unknown",
-        mode: "portal",
-        supportsPersistentGrant,
-        supportsPersistentPortalGrant,
+        granted,
+        status: granted ? "granted" : "unknown",
+        mode: granted ? "loopback" : "unsupported",
+        supportsPersistentGrant: false,
+        supportsPersistentPortalGrant: false,
         supportsNativeCapture,
-        supportsOnboardingGrant: supportsPersistentGrant,
-        requiresRuntimeSharePrompt: !supportsPersistentGrant || !restoreTokenAvailable,
-        strategy: supportsPersistentGrant ? "portal-helper" : "browser-portal",
-        restoreTokenAvailable,
+        supportsOnboardingGrant: false,
+        requiresRuntimeSharePrompt: false,
+        strategy: granted ? "pipewire-loopback" : "unsupported",
+        restoreTokenAvailable: false,
         portalVersion: capability?.portalVersion ?? null,
         error: helperError,
       });
@@ -3280,21 +3276,6 @@ class IPCHandlers {
       }
 
       if (process.platform === "linux") {
-        const currentAccess = await getLinuxSystemAudioAccess();
-        if (!currentAccess.supportsOnboardingGrant) {
-          return currentAccess;
-        }
-
-        try {
-          await this.linuxPortalAudioManager?.requestAccess();
-        } catch (error) {
-          debugLogger.warn(
-            "Linux system audio persistent grant failed",
-            { error: error.message },
-            "meeting"
-          );
-        }
-
         return getLinuxSystemAudioAccess();
       }
 
@@ -4217,7 +4198,7 @@ class IPCHandlers {
     const getMeetingSystemAudioCapabilityMode = () => {
       if (this.audioTapManager?.isSupported()) return "native";
       if (process.platform === "win32") return "loopback";
-      if (process.platform === "linux") return "portal";
+      if (process.platform === "linux") return "loopback";
       return "unsupported";
     };
 
@@ -4233,15 +4214,17 @@ class IPCHandlers {
         return { mode, strategy: "native" };
       }
 
+      if (process.platform === "linux") {
+        const linuxAccess = await getLinuxSystemAudioAccess();
+        return {
+          mode: linuxAccess.mode,
+          strategy: linuxAccess.strategy || "unsupported",
+        };
+      }
+
       if (mode === "loopback") {
         return { mode, strategy: "loopback" };
       }
-
-      const linuxAccess = await getLinuxSystemAudioAccess();
-      return {
-        mode,
-        strategy: linuxAccess.strategy === "portal-helper" ? "portal-helper" : "browser-portal",
-      };
     };
 
     const hasNativeMeetingSystemAudio = () => getMeetingSystemAudioMode() === "native";
@@ -5363,7 +5346,7 @@ class IPCHandlers {
         },
         onWarning: (warning) => {
           debugLogger.warn(
-            "Linux portal system audio warning",
+            "Linux PipeWire system audio warning",
             { code: warning.code, message: warning.message },
             "meeting"
           );
@@ -5402,7 +5385,7 @@ class IPCHandlers {
         }
       }
 
-      if (systemAudioStrategy !== "portal-helper") {
+      if (systemAudioStrategy !== "pipewire-loopback") {
         return { systemAudioMode, systemAudioStrategy };
       }
 
@@ -5411,11 +5394,22 @@ class IPCHandlers {
         return { systemAudioMode, systemAudioStrategy };
       } catch (error) {
         debugLogger.warn(
-          `Linux portal helper failed ${context}, falling back to browser portal`,
+          `Linux PipeWire helper failed ${context}, falling back to mic-only`,
           { error: error.message },
           "meeting"
         );
-        return { systemAudioMode, systemAudioStrategy: "browser-portal" };
+        if (this._meetingSystemStreaming?.isConnected) {
+          await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
+            debugLogger.debug(
+              "System streaming disconnect during PipeWire fallback failed",
+              { error: disconnectError.message },
+              "meeting"
+            );
+          });
+        }
+        this._meetingSystemStreaming = null;
+        await stopLiveSpeakerIdentification().catch(() => {});
+        return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
       }
     };
 

@@ -35,6 +35,7 @@ appimageTools.wrapType2 {
     libsecret # Electron safeStorage keyring (API keys at rest)
     libnotify # Electron desktop notifications
     libpulseaudio # Chromium mic capture via PulseAudio/PipeWire
+    pipewire # Native Linux system audio helper links libpipewire-0.3
     stdenv.cc.cc.lib # libstdc++/libgomp for bundled whisper/llama/sherpa/qdrant
   ];
 

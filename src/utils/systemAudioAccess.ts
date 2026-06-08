@@ -37,9 +37,6 @@ export const getFallbackSystemAudioAccess = (
     return {
       ...DEFAULT_SYSTEM_AUDIO_ACCESS,
       status: "unknown",
-      mode: "portal",
-      requiresRuntimeSharePrompt: true,
-      strategy: "browser-portal",
     };
   }
 

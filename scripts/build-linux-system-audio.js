@@ -128,7 +128,7 @@ function tryCompile() {
     log("libpipewire-0.3 not found, building without native PipeWire capture");
   }
 
-  log("Building native portal helper");
+  log("Building native Linux system audio helper");
 
   const compileArgs = [
     "-O2",
@@ -187,7 +187,7 @@ function main() {
 
   if (!tryCompile()) {
     console.warn(
-      "[linux-system-audio-helper] Native Linux portal helper is unavailable. Linux system audio will stay on the current fallback path."
+      "[linux-system-audio-helper] Native Linux system audio helper is unavailable. Linux system audio capture will be disabled."
     );
   }
 }
