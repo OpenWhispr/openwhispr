@@ -1,4 +1,7 @@
 const { execFileSync } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 const debugLogger = require("./debugLogger");
 
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
@@ -41,6 +44,27 @@ const ELECTRON_TO_HYPRLAND_KEY = {
 // Supports: standalone keys (F4, Space), modifier+key combos, and modifier-only combos (Control+Super)
 const VALID_HOTKEY_PATTERN =
   /^((CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd)(\+(CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd))*(\+)?)?(F([1-9]|1[0-9]|2[0-4])|[A-Za-z0-9]|Space|Escape|Tab|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Enter|PrintScreen|ScrollLock|Pause|Backquote|`)?$/i;
+
+const BINDS_FILENAME = "openwhispr-binds.conf";
+
+function getHyprConfigDir() {
+  if (process.env.HYPRLAND_CONFIG) {
+    return path.dirname(path.resolve(process.env.HYPRLAND_CONFIG));
+  }
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+  return path.join(xdgConfigHome, "hypr");
+}
+
+function getHyprlandConfPath() {
+  if (process.env.HYPRLAND_CONFIG) {
+    return path.resolve(process.env.HYPRLAND_CONFIG);
+  }
+  return path.join(getHyprConfigDir(), "hyprland.conf");
+}
+
+function getBindsFilePath() {
+  return path.join(getHyprConfigDir(), BINDS_FILENAME);
+}
 
 let dbus = null;
 
@@ -231,9 +255,83 @@ class HyprlandShortcutManager {
     };
   }
 
+  _writeBindToConfig(bindLine) {
+    const bindsFile = getBindsFilePath();
+    fs.mkdirSync(path.dirname(bindsFile), { recursive: true });
+
+    let content = "";
+    try {
+      content = fs.readFileSync(bindsFile, "utf-8");
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
+    }
+
+    const lines = content.split("\n").filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) return true;
+      return !trimmed.includes(DBUS_SERVICE_NAME);
+    });
+
+    const header = "# OpenWhispr keybinds (managed automatically)\n";
+    const body = lines.join("\n").trim();
+    const newContent = header + (body ? body + "\n" : "") + bindLine + "\n";
+
+    fs.writeFileSync(bindsFile, newContent, "utf-8");
+  }
+
+  _removeBindFromConfig() {
+    const bindsFile = getBindsFilePath();
+    let content = "";
+    try {
+      content = fs.readFileSync(bindsFile, "utf-8");
+    } catch (err) {
+      if (err.code === "ENOENT") return;
+      throw err;
+    }
+
+    const lines = content.split("\n").filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) return true;
+      return !trimmed.includes(DBUS_SERVICE_NAME);
+    });
+
+    fs.writeFileSync(bindsFile, lines.join("\n"), "utf-8");
+  }
+
+  _ensureSourceInMainConfig() {
+    const mainConfig = getHyprlandConfPath();
+    let content;
+    try {
+      content = fs.readFileSync(mainConfig, "utf-8");
+    } catch (err) {
+      if (err.code === "ENOENT") return;
+      throw err;
+    }
+
+    const sourceLine = `source = ./${BINDS_FILENAME}`;
+    if (content.includes(`./${BINDS_FILENAME}`)) return;
+
+    const newContent = content.replace(/\n*$/, "") + "\n" + sourceLine + "\n";
+    fs.writeFileSync(mainConfig, newContent, "utf-8");
+    debugLogger.log("[HyprlandShortcut] Added source directive to hyprland.conf");
+  }
+
+  static hasHyprlandConfig() {
+    const mainConfig = getHyprlandConfPath();
+    try {
+      fs.accessSync(mainConfig, fs.constants.F_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Register a keybinding in Hyprland using hyprctl keyword bind.
    * The binding executes a dbus-send command that calls our Toggle() method.
+   *
+   * Also writes the bind to openwhispr-binds.conf (sourced from hyprland.conf)
+   * so it survives `hyprctl reload`.
    */
   async registerKeybinding(hotkey) {
     if (!HyprlandShortcutManager.isHyprland()) {
@@ -262,6 +360,9 @@ class HyprlandShortcutManager {
 
       // hyprctl keyword bind "MODS, key, exec, command"
       const bindValue = `${converted.bindKey}, exec, ${dbusCommand}`;
+
+      this._writeBindToConfig(`bind = ${bindValue}`);
+      this._ensureSourceInMainConfig();
 
       execFileSync("hyprctl", ["keyword", "bind", bindValue], {
         stdio: "pipe",
@@ -298,6 +399,8 @@ class HyprlandShortcutManager {
     }
 
     try {
+      this._removeBindFromConfig();
+
       execFileSync("hyprctl", ["keyword", "unbind", this.currentBinding], {
         stdio: "pipe",
         timeout: 5000,
