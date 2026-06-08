@@ -2286,6 +2286,7 @@ class IPCHandlers {
         isUsingKDE: this.windowManager.isUsingKDEHotkeys(),
         isUsingNativeShortcut,
         supportsPushToTalk,
+        hyprlandConfigMissing: this.windowManager.isHyprlandConfigMissing(),
       };
     });
 

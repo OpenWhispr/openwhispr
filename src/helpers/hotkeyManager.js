@@ -1188,6 +1188,11 @@ class HotkeyManager extends EventEmitter {
     return this.useHyprland;
   }
 
+  isHyprlandConfigMissing() {
+    if (!this.hyprlandManager) return false;
+    return !HyprlandShortcutManager.hasHyprlandConfig();
+  }
+
   isUsingKDE() {
     return this.useKDE;
   }
