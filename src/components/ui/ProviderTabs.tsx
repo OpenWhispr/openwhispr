@@ -2,6 +2,7 @@ import { ReactNode, useRef, useEffect, useLayoutEffect, useCallback } from "reac
 import { useTranslation } from "react-i18next";
 import { ProviderIcon } from "./ProviderIcon";
 import type { ColorScheme as BaseColorScheme } from "../../utils/modelPickerStyles";
+import { cn } from "../lib/utils";
 
 export interface ProviderTabItem {
   id: string;
@@ -71,11 +72,12 @@ export function ProviderTabs({
   return (
     <div
       ref={containerRef}
-      className={`relative items-center gap-1 p-0.5 ${
+      className={cn(
+        "relative items-center gap-1 p-0.5",
         scrollable
           ? "flex w-full max-w-full min-w-0 overflow-x-auto overflow-y-hidden pb-1 [&::-webkit-scrollbar-thumb]:bg-border hover:[&::-webkit-scrollbar-thumb]:bg-border-hover"
           : "inline-flex"
-      }`}
+      )}
     >
       <div
         ref={indicatorRef}
@@ -99,15 +101,15 @@ export function ProviderTabs({
               if (isDisabled) return;
               onSelect(provider.id);
             }}
-            className={`relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs transition-colors duration-150 ${
-              scrollable ? "whitespace-nowrap shrink-0" : ""
-            } ${
-              isDisabled
-                ? "text-muted-foreground/50 cursor-not-allowed ring-1 ring-border/40 dark:ring-white/5"
-                : isSelected
-                  ? "text-foreground [&_svg]:text-primary"
-                  : "text-muted-foreground ring-1 ring-border/60 dark:ring-white/10 hover:text-foreground hover:bg-foreground/4 dark:hover:bg-white/5"
-            }`}
+            className={cn(
+              "relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs transition-colors duration-150",
+              scrollable && "whitespace-nowrap shrink-0",
+              isDisabled &&
+                "text-muted-foreground/50 cursor-not-allowed ring-1 ring-border/40 dark:ring-white/5",
+              isSelected && !isDisabled
+                ? "text-foreground [&_svg]:text-primary"
+                : "text-muted-foreground ring-1 ring-border/60 dark:ring-white/10 hover:text-foreground hover:bg-foreground/4 dark:hover:bg-white/5"
+            )}
           >
             {renderIcon ? renderIcon(provider.id) : <ProviderIcon provider={provider.id} />}
             <span>{provider.name}</span>
