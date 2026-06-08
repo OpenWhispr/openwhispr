@@ -2095,13 +2095,15 @@ class IPCHandlers {
         isModifierOnlyHotkey,
         isRightSideModifier,
         isMouseButtonHotkey,
+        hasNonStandardKey,
       } = require("./hotkeyManager");
       const usesNativeListener = (hotkey) =>
         !hotkey ||
         isGlobeLikeHotkey(hotkey) ||
         isMouseButtonHotkey(hotkey) ||
         isModifierOnlyHotkey(hotkey) ||
-        isRightSideModifier(hotkey);
+        isRightSideModifier(hotkey) ||
+        hasNonStandardKey(hotkey);
 
       if (enabled) {
         // Entering capture mode — unregister ALL slots so none intercept keypresses.

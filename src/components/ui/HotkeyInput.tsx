@@ -4,6 +4,15 @@ import { AlertTriangle } from "lucide-react";
 import { formatHotkeyLabel, isGlobeLikeHotkey } from "../../utils/hotkeys";
 import { getPlatform } from "../../utils/platform";
 
+// Dead-key overrides: when e.key === "Dead", the browser gives us no printable
+// character.  Map the physical key code to the dead-key glyph so the hotkey
+// string is human-readable.
+// Currently only German QWERTZ (^) is supported.  Other layouts can be added
+// once VK_OEM mapping is verified on each target keyboard.
+const DEAD_KEY_OVERRIDES: Record<string, string> = {
+  Backquote: "^", // German QWERTZ: circumflex dead key (top-left, next to 1)
+};
+
 const CODE_TO_KEY: Record<string, string> = {
   Backquote: "`",
   Digit1: "1",
@@ -154,7 +163,12 @@ function mapKeyboardEventToHotkey(e: KeyboardEvent): string | null {
     return null;
   }
 
-  const baseKey = CODE_TO_KEY[e.code];
+  // Dead keys (e.g. ^ on German QWERTZ, ´ on Spanish) report e.key === "Dead".
+  // Use the dead-key override map to get a recognisable character.
+  const isDead = e.key === "Dead";
+  const baseKey = isDead
+    ? DEAD_KEY_OVERRIDES[e.code] ?? CODE_TO_KEY[e.code]
+    : CODE_TO_KEY[e.code];
   if (!baseKey) {
     return null;
   }

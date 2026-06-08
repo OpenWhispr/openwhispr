@@ -50,6 +50,18 @@ const MODIFIER_NAMES = new Set([
   "cmdorctrl",
 ]);
 
+// Keys that Electron's globalShortcut cannot handle: dead keys that the OS
+// input method consumes before Electron sees them.
+// Currently verified on German QWERTZ (^).  More layouts can be added once
+// the VK_OEM mapping is confirmed on each target keyboard.
+const NON_STANDARD_KEYS = new Set(["^", "caret"]);
+
+function hasNonStandardKey(hotkey) {
+  if (!hotkey) return false;
+  const parts = hotkey.split("+").map((p) => p.trim().toLowerCase());
+  return parts.some((p) => NON_STANDARD_KEYS.has(p));
+}
+
 function isModifierOnlyHotkey(hotkey) {
   if (!hotkey || !hotkey.includes("+")) return false;
   return hotkey.split("+").every((part) => MODIFIER_NAMES.has(part.toLowerCase()));
@@ -286,7 +298,8 @@ class HotkeyManager extends EventEmitter {
       !isGlobeLikeHotkey(hk) &&
       !isMouseButtonHotkey(hk) &&
       !isRightSideModifier(hk) &&
-      !isModifierOnlyHotkey(hk)
+      !isModifierOnlyHotkey(hk) &&
+      !hasNonStandardKey(hk)
     ) {
       const accel = normalizeToAccelerator(hk);
       try {
@@ -322,6 +335,7 @@ class HotkeyManager extends EventEmitter {
       !isMouseButtonHotkey(hotkey) &&
       !isRightSideModifier(hotkey) &&
       !isModifierOnlyHotkey(hotkey) &&
+      !hasNonStandardKey(hotkey) &&
       globalShortcut.isRegistered(checkAccelerator)
     ) {
       debugLogger.log(
@@ -338,7 +352,8 @@ class HotkeyManager extends EventEmitter {
       !isGlobeLikeHotkey(previousHotkey) &&
       !isMouseButtonHotkey(previousHotkey) &&
       !isRightSideModifier(previousHotkey) &&
-      !isModifierOnlyHotkey(previousHotkey)
+      !isModifierOnlyHotkey(previousHotkey) &&
+      !hasNonStandardKey(previousHotkey)
     ) {
       const prevAccelerator = normalizeToAccelerator(previousHotkey);
       try {
@@ -402,6 +417,17 @@ class HotkeyManager extends EventEmitter {
         return { success: true, hotkey };
       }
 
+      // Non-standard keys (dead keys like ^, ´, ¨, ~) cannot be registered via
+      // Electron's globalShortcut — route through native keyboard hook on Windows.
+      if (hasNonStandardKey(hotkey) && process.platform === "win32") {
+        slot.hotkey = hotkey;
+        slot.accelerator = null;
+        debugLogger.log(
+          `[HotkeyManager] Non-standard key "${hotkey}" set - using Windows native listener`
+        );
+        return { success: true, hotkey };
+      }
+
       const accelerator = normalizeToAccelerator(hotkey);
 
       const alreadyRegistered = globalShortcut.isRegistered(accelerator);
@@ -455,7 +481,8 @@ class HotkeyManager extends EventEmitter {
       isGlobeLikeHotkey(hotkey) ||
       isMouseButtonHotkey(hotkey) ||
       isRightSideModifier(hotkey) ||
-      isModifierOnlyHotkey(hotkey)
+      isModifierOnlyHotkey(hotkey) ||
+      hasNonStandardKey(hotkey)
         ? null
         : normalizeToAccelerator(hotkey);
 
@@ -487,7 +514,8 @@ class HotkeyManager extends EventEmitter {
       isGlobeLikeHotkey(previousHotkey) ||
       isMouseButtonHotkey(previousHotkey) ||
       isRightSideModifier(previousHotkey) ||
-      isModifierOnlyHotkey(previousHotkey)
+      isModifierOnlyHotkey(previousHotkey) ||
+      hasNonStandardKey(previousHotkey)
     ) {
       return;
     }
@@ -1206,3 +1234,4 @@ module.exports.isGlobeLikeHotkey = isGlobeLikeHotkey;
 module.exports.isModifierOnlyHotkey = isModifierOnlyHotkey;
 module.exports.isRightSideModifier = isRightSideModifier;
 module.exports.isMouseButtonHotkey = isMouseButtonHotkey;
+module.exports.hasNonStandardKey = hasNonStandardKey;
