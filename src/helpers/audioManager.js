@@ -66,6 +66,7 @@ const PLACEHOLDER_KEYS = {
   openai: "your_openai_api_key_here",
   groq: "your_groq_api_key_here",
   mistral: "your_mistral_api_key_here",
+  elevenlabs: "your_elevenlabs_api_key_here",
 };
 
 const isValidApiKey = (key, provider = "openai") => {
@@ -884,6 +885,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "elevenlabs") {
+      apiKey = s.elevenlabsApiKey;
+      if (!isValidApiKey(apiKey, "elevenlabs")) {
+        apiKey = await window.electronAPI.getElevenLabsKey?.();
+      }
+      if (!isValidApiKey(apiKey, "elevenlabs")) {
+        const err = new Error(
+          "ElevenLabs API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else if (provider === "groq") {
       // Prefer store value (user-entered via UI) over main process (.env)
       apiKey = s.groqApiKey;
@@ -1537,6 +1550,35 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw new Error("No text transcribed - Mistral response was empty");
       }
 
+      if (provider === "elevenlabs" && window.electronAPI?.proxyElevenLabsTranscription) {
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const result = await window.electronAPI.proxyElevenLabsTranscription({
+          audioBuffer,
+          apiKey,
+          model,
+          language,
+          keyterms: this.getKeyterms(),
+        });
+        const proxyText = result?.text;
+
+        if (proxyText && proxyText.trim().length > 0) {
+          timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+          const rawText = proxyText;
+          const reasoningStart = performance.now();
+          const text = await this.processTranscription(proxyText, "elevenlabs");
+          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+          const source = (await this.isReasoningAvailable()) ? "elevenlabs-reasoned" : "elevenlabs";
+          return { success: true, text, rawText, source, timings };
+        }
+
+        throw new Error("No text transcribed - ElevenLabs response was empty");
+      }
+
+      if (provider === "elevenlabs") {
+        throw new Error("ElevenLabs transcription bridge is unavailable in this build");
+      }
+
       logger.debug(
         "Making transcription API request",
         {
@@ -1754,6 +1796,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (provider === "custom") {
         return trimmedModel || "whisper-1";
       }
+      if (provider === "elevenlabs") {
+        return trimmedModel === "scribe_v2" ? trimmedModel : "scribe_v2";
+      }
 
       // Validate model matches provider to handle settings migration
       if (trimmedModel) {
@@ -1776,6 +1821,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Return provider-appropriate default
       if (provider === "groq") return "whisper-large-v3-turbo";
       if (provider === "mistral") return "voxtral-mini-latest";
+      if (provider === "elevenlabs") return "scribe_v2";
       return "gpt-4o-mini-transcribe";
     } catch (error) {
       return "gpt-4o-mini-transcribe";
@@ -1830,6 +1876,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         base = API_ENDPOINTS.GROQ_BASE;
       } else if (currentProvider === "mistral") {
         base = API_ENDPOINTS.MISTRAL_BASE;
+      } else if (currentProvider === "elevenlabs") {
+        base = API_ENDPOINTS.ELEVENLABS_BASE;
       } else {
         // OpenAI or other standard providers
         base = API_ENDPOINTS.TRANSCRIPTION_BASE;
@@ -1893,7 +1941,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       let endpoint;
-      if (/\/audio\/(transcriptions|translations)$/i.test(normalizedBase)) {
+      if (currentProvider === "elevenlabs") {
+        endpoint = buildApiUrl(normalizedBase, "/speech-to-text");
+        logger.debug(
+          "STT endpoint: using ElevenLabs speech-to-text path",
+          { base: normalizedBase, endpoint },
+          "transcription"
+        );
+      } else if (/\/audio\/(transcriptions|translations)$/i.test(normalizedBase)) {
         endpoint = normalizedBase;
         logger.debug("STT endpoint: using full path from config", { endpoint }, "transcription");
       } else {

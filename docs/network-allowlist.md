@@ -61,6 +61,7 @@ provider. Skip any provider not in use.
 | `generativelanguage.googleapis.com` | HTTPS | 443 | Gemini API key configured. |
 | `api.groq.com` | HTTPS | 443 | Groq API key configured. |
 | `api.mistral.ai` | HTTPS | 443 | Mistral API key configured. |
+| `api.elevenlabs.io` | HTTPS | 443 | ElevenLabs API key configured for Scribe transcription. |
 
 ## Notes
 
