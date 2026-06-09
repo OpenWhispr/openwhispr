@@ -10,6 +10,7 @@ import {
   getLocalSpeechGateDecision,
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
+import { waitForTrackReady } from "./micTrackHealth";
 import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../stores/settingsStore";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import { detectAgentName } from "../config/agentDetection";
@@ -129,6 +130,14 @@ class AudioManager {
       this.cachedApiKeyProvider = null;
     };
     window.addEventListener("api-key-changed", this._onApiKeyChanged);
+
+    // Invalidate the pinned mic device when the OS adds/removes/suspends inputs.
+    // Otherwise wake-after-idle keeps requesting a stale deviceId that yields silence.
+    this._onDeviceChange = () => {
+      this.cachedMicDeviceId = null;
+      this.micDriverWarmedUp = false;
+    };
+    navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
     this.cachedTranscriptionEndpoint = null;
     this.cachedEndpointProvider = null;
     this.cachedEndpointBaseUrl = null;
@@ -333,9 +342,32 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       const constraints = await this.getAudioConstraints();
-      const micStream = await navigator.mediaDevices.getUserMedia(constraints);
+      let micStream = await navigator.mediaDevices.getUserMedia(constraints);
+      let audioTrack = micStream.getAudioTracks()[0];
 
-      const audioTrack = micStream.getAudioTracks()[0];
+      // Wake-after-idle re-acquire: a stale/suspended device can hand back a
+      // muted or ended track that delivers only silence. Re-acquire once.
+      const trackReady = await waitForTrackReady(audioTrack, 600);
+      if (!trackReady && audioTrack) {
+        this.cachedMicDeviceId = null;
+        try {
+          const retryStream = await navigator.mediaDevices.getUserMedia(
+            await this.getAudioConstraints()
+          );
+          micStream.getTracks().forEach((track) => track.stop());
+          micStream = retryStream;
+          audioTrack = micStream.getAudioTracks()[0];
+          logger.info("Re-acquired microphone after dead/muted track", {}, "audio");
+        } catch (retryError) {
+          // Keep the original stream — best-effort, never leave micStream trackless.
+          logger.warn(
+            "Microphone re-acquire failed, using original stream",
+            { error: retryError.message },
+            "audio"
+          );
+        }
+      }
+
       if (audioTrack) {
         const settings = audioTrack.getSettings();
         logger.info(
@@ -345,6 +377,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             deviceId: settings.deviceId?.slice(0, 20) + "...",
             sampleRate: settings.sampleRate,
             channelCount: settings.channelCount,
+            muted: audioTrack.muted,
+            readyState: audioTrack.readyState,
           },
           "audio"
         );
@@ -2180,10 +2214,34 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const tConstraints = performance.now();
 
       // 1. Get mic stream (can take 10-15s on cold macOS mic driver)
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      let stream = await navigator.mediaDevices.getUserMedia(constraints);
       const tMedia = performance.now();
 
-      const audioTrack = stream.getAudioTracks()[0];
+      let audioTrack = stream.getAudioTracks()[0];
+
+      // Wake-after-idle re-acquire: a stale/suspended device can hand back a
+      // muted or ended track that delivers only silence. Re-acquire once.
+      const trackReady = await waitForTrackReady(audioTrack, 600);
+      if (!trackReady && audioTrack) {
+        this.cachedMicDeviceId = null;
+        try {
+          const retryStream = await navigator.mediaDevices.getUserMedia(
+            await this.getAudioConstraints()
+          );
+          stream.getTracks().forEach((track) => track.stop());
+          stream = retryStream;
+          audioTrack = stream.getAudioTracks()[0];
+          logger.info("Re-acquired microphone after dead/muted track", {}, "audio");
+        } catch (retryError) {
+          // Keep the original stream — best-effort, never leave stream trackless.
+          logger.warn(
+            "Microphone re-acquire failed, using original stream",
+            { error: retryError.message },
+            "audio"
+          );
+        }
+      }
+
       if (audioTrack) {
         const settings = audioTrack.getSettings();
         logger.info(
@@ -2193,6 +2251,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             deviceId: settings.deviceId?.slice(0, 20) + "...",
             sampleRate: settings.sampleRate,
             usedCachedId: !!this.cachedMicDeviceId,
+            muted: audioTrack.muted,
+            readyState: audioTrack.readyState,
           },
           "audio"
         );
@@ -2823,6 +2883,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.onStreamingCommit = null;
     if (this._onApiKeyChanged) {
       window.removeEventListener("api-key-changed", this._onApiKeyChanged);
+    }
+    if (this._onDeviceChange) {
+      navigator.mediaDevices?.removeEventListener?.("devicechange", this._onDeviceChange);
     }
   }
 }
