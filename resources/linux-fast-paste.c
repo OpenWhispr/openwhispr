@@ -21,6 +21,16 @@
 #include <atspi/atspi.h>
 #endif
 
+/* Paste key sequence. SHIFT_INSERT is the universal Linux paste shortcut —
+ * works in terminals and GUI apps, and (unlike Ctrl+V) isn't intercepted by
+ * TUI agents as "paste image". Used when window class is unknown on Wayland
+ * or when targeting Konsole (which silently drops simulated Ctrl+Shift+V). */
+typedef enum {
+    PASTE_MODE_CTRL_V        = 0,
+    PASTE_MODE_CTRL_SHIFT_V  = 1,
+    PASTE_MODE_SHIFT_INSERT  = 2,
+} paste_mode_t;
+
 #ifdef HAVE_GIO
 #include <gio/gio.h>
 
@@ -33,6 +43,7 @@
 #define PORTAL_KEY_LEFTCTRL  29
 #define PORTAL_KEY_LEFTSHIFT 42
 #define PORTAL_KEY_V         47
+#define PORTAL_KEY_INSERT    110
 
 static int portal_exit_code = 0;
 
@@ -42,7 +53,7 @@ typedef struct {
     char            *session_handle;
     char            *restore_token;
     guint            signal_id;
-    int              use_shift;
+    paste_mode_t     mode;
 } PortalData;
 
 static char *get_sender_path(GDBusConnection *conn)
@@ -64,64 +75,39 @@ static guint subscribe_response(PortalData *app, const char *request_path,
         callback, app, NULL);
 }
 
-static void portal_send_paste(PortalData *app)
+static void portal_emit_key(PortalData *app, gint32 keycode, guint32 pressed,
+                            const char *label)
 {
     GError *err = NULL;
-    GVariant *opts;
-
-    opts = g_variant_new("a{sv}", NULL);
+    GVariant *opts = g_variant_new("a{sv}", NULL);
     g_dbus_connection_call_sync(app->conn, PORTAL_BUS, PORTAL_PATH,
         PORTAL_IFACE, "NotifyKeyboardKeycode",
-        g_variant_new("(o@a{sv}iu)", app->session_handle, opts,
-                       (gint32)PORTAL_KEY_LEFTCTRL, (guint32)1),
+        g_variant_new("(o@a{sv}iu)", app->session_handle, opts, keycode, pressed),
         NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
-    if (err) { fprintf(stderr, "Ctrl press: %s\n", err->message); g_clear_error(&err); }
+    if (err) { fprintf(stderr, "%s: %s\n", label, err->message); g_clear_error(&err); }
+}
 
-    if (app->use_shift) {
-        opts = g_variant_new("a{sv}", NULL);
-        g_dbus_connection_call_sync(app->conn, PORTAL_BUS, PORTAL_PATH,
-            PORTAL_IFACE, "NotifyKeyboardKeycode",
-            g_variant_new("(o@a{sv}iu)", app->session_handle, opts,
-                           (gint32)PORTAL_KEY_LEFTSHIFT, (guint32)1),
-            NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
-        if (err) { fprintf(stderr, "Shift press: %s\n", err->message); g_clear_error(&err); }
+static void portal_send_paste(PortalData *app)
+{
+    if (app->mode == PASTE_MODE_SHIFT_INSERT) {
+        portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 1, "Shift press");
+        portal_emit_key(app, PORTAL_KEY_INSERT,    1, "Insert press");
+        usleep(20000);
+        portal_emit_key(app, PORTAL_KEY_INSERT,    0, "Insert release");
+        portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 0, "Shift release");
+    } else {
+        const int use_shift = (app->mode == PASTE_MODE_CTRL_SHIFT_V);
+
+        portal_emit_key(app, PORTAL_KEY_LEFTCTRL, 1, "Ctrl press");
+        if (use_shift)
+            portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 1, "Shift press");
+        portal_emit_key(app, PORTAL_KEY_V, 1, "V press");
+        usleep(20000);
+        portal_emit_key(app, PORTAL_KEY_V, 0, "V release");
+        if (use_shift)
+            portal_emit_key(app, PORTAL_KEY_LEFTSHIFT, 0, "Shift release");
+        portal_emit_key(app, PORTAL_KEY_LEFTCTRL, 0, "Ctrl release");
     }
-
-    opts = g_variant_new("a{sv}", NULL);
-    g_dbus_connection_call_sync(app->conn, PORTAL_BUS, PORTAL_PATH,
-        PORTAL_IFACE, "NotifyKeyboardKeycode",
-        g_variant_new("(o@a{sv}iu)", app->session_handle, opts,
-                       (gint32)PORTAL_KEY_V, (guint32)1),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
-    if (err) { fprintf(stderr, "V press: %s\n", err->message); g_clear_error(&err); }
-
-    usleep(20000);
-
-    opts = g_variant_new("a{sv}", NULL);
-    g_dbus_connection_call_sync(app->conn, PORTAL_BUS, PORTAL_PATH,
-        PORTAL_IFACE, "NotifyKeyboardKeycode",
-        g_variant_new("(o@a{sv}iu)", app->session_handle, opts,
-                       (gint32)PORTAL_KEY_V, (guint32)0),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
-    if (err) { fprintf(stderr, "V release: %s\n", err->message); g_clear_error(&err); }
-
-    if (app->use_shift) {
-        opts = g_variant_new("a{sv}", NULL);
-        g_dbus_connection_call_sync(app->conn, PORTAL_BUS, PORTAL_PATH,
-            PORTAL_IFACE, "NotifyKeyboardKeycode",
-            g_variant_new("(o@a{sv}iu)", app->session_handle, opts,
-                           (gint32)PORTAL_KEY_LEFTSHIFT, (guint32)0),
-            NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
-        if (err) { fprintf(stderr, "Shift release: %s\n", err->message); g_clear_error(&err); }
-    }
-
-    opts = g_variant_new("a{sv}", NULL);
-    g_dbus_connection_call_sync(app->conn, PORTAL_BUS, PORTAL_PATH,
-        PORTAL_IFACE, "NotifyKeyboardKeycode",
-        g_variant_new("(o@a{sv}iu)", app->session_handle, opts,
-                       (gint32)PORTAL_KEY_LEFTCTRL, (guint32)0),
-        NULL, G_DBUS_CALL_FLAGS_NONE, -1, NULL, &err);
-    if (err) { fprintf(stderr, "Ctrl release: %s\n", err->message); g_clear_error(&err); }
 
     g_main_loop_quit(app->loop);
 }
@@ -278,10 +264,10 @@ static gboolean on_portal_timeout(gpointer user_data)
     return G_SOURCE_REMOVE;
 }
 
-static int paste_via_portal(int use_shift, const char *restore_token)
+static int paste_via_portal(paste_mode_t mode, const char *restore_token)
 {
     PortalData app = { 0 };
-    app.use_shift = use_shift;
+    app.mode = mode;
     if (restore_token) app.restore_token = g_strdup(restore_token);
 
     GError *err = NULL;
@@ -475,7 +461,12 @@ static void emit(int fd, int type, int code, int val) {
     }
 }
 
-static int paste_via_uinput(int use_shift) {
+static void emit_key(int fd, int code, int val) {
+    emit(fd, EV_KEY, code, val);
+    emit(fd, EV_SYN, SYN_REPORT, 0);
+}
+
+static int paste_via_uinput(paste_mode_t mode) {
     int fd = open("/dev/uinput", O_WRONLY | O_NONBLOCK);
     if (fd < 0) {
         fprintf(stderr, "Cannot open /dev/uinput: %s\n", strerror(errno));
@@ -485,7 +476,8 @@ static int paste_via_uinput(int use_shift) {
     if (ioctl(fd, UI_SET_EVBIT, EV_KEY) < 0 ||
         ioctl(fd, UI_SET_KEYBIT, KEY_LEFTCTRL) < 0 ||
         ioctl(fd, UI_SET_KEYBIT, KEY_LEFTSHIFT) < 0 ||
-        ioctl(fd, UI_SET_KEYBIT, KEY_V) < 0) {
+        ioctl(fd, UI_SET_KEYBIT, KEY_V) < 0 ||
+        ioctl(fd, UI_SET_KEYBIT, KEY_INSERT) < 0) {
         close(fd);
         return 4;
     }
@@ -505,32 +497,27 @@ static int paste_via_uinput(int use_shift) {
 
     usleep(50000);
 
-    emit(fd, EV_KEY, KEY_LEFTCTRL, 1);
-    emit(fd, EV_SYN, SYN_REPORT, 0);
+    if (mode == PASTE_MODE_SHIFT_INSERT) {
+        emit_key(fd, KEY_LEFTSHIFT, 1);
+        usleep(8000);
+        emit_key(fd, KEY_INSERT, 1);
+        usleep(8000);
+        emit_key(fd, KEY_INSERT, 0);
+        usleep(8000);
+        emit_key(fd, KEY_LEFTSHIFT, 0);
+    } else {
+        const int use_shift = (mode == PASTE_MODE_CTRL_SHIFT_V);
 
-    if (use_shift) {
-        emit(fd, EV_KEY, KEY_LEFTSHIFT, 1);
-        emit(fd, EV_SYN, SYN_REPORT, 0);
+        emit_key(fd, KEY_LEFTCTRL, 1);
+        if (use_shift) emit_key(fd, KEY_LEFTSHIFT, 1);
+        usleep(8000);
+        emit_key(fd, KEY_V, 1);
+        usleep(8000);
+        emit_key(fd, KEY_V, 0);
+        usleep(8000);
+        if (use_shift) emit_key(fd, KEY_LEFTSHIFT, 0);
+        emit_key(fd, KEY_LEFTCTRL, 0);
     }
-
-    usleep(8000);
-
-    emit(fd, EV_KEY, KEY_V, 1);
-    emit(fd, EV_SYN, SYN_REPORT, 0);
-    usleep(8000);
-
-    emit(fd, EV_KEY, KEY_V, 0);
-    emit(fd, EV_SYN, SYN_REPORT, 0);
-
-    usleep(8000);
-
-    if (use_shift) {
-        emit(fd, EV_KEY, KEY_LEFTSHIFT, 0);
-        emit(fd, EV_SYN, SYN_REPORT, 0);
-    }
-
-    emit(fd, EV_KEY, KEY_LEFTCTRL, 0);
-    emit(fd, EV_SYN, SYN_REPORT, 0);
 
     usleep(20000);
 
@@ -603,8 +590,42 @@ static int send_media_play_pause(void) {
     return 0;
 }
 
+/* Resolve the paste key sequence. --shift-insert wins outright (used when the
+ * caller already knows context is unknown or Konsole). Otherwise: terminal
+ * detection via atspi, then X11 class, then parent class — same fallback
+ * chain the binary used before this enum existed. */
+static paste_mode_t resolve_paste_mode(int force_terminal, int force_shift_insert,
+                                       Window target_window)
+{
+    if (force_shift_insert) return PASTE_MODE_SHIFT_INSERT;
+
+    int is_term = force_terminal;
+#ifdef HAVE_ATSPI
+    if (!is_term) { int r = detect_terminal_atspi(); if (r >= 0) is_term = r; }
+#endif
+    if (!is_term) {
+        Display *dpy = XOpenDisplay(NULL);
+        if (dpy) {
+            Window win = (target_window != None) ? target_window : get_active_window(dpy);
+            if (win != None) {
+                XClassHint hint;
+                if (XGetClassHint(dpy, win, &hint)) {
+                    is_term = is_terminal(hint.res_class) || is_terminal(hint.res_name);
+                    XFree(hint.res_name);
+                    XFree(hint.res_class);
+                } else {
+                    is_term = check_parent_terminal(dpy, win);
+                }
+            }
+            XCloseDisplay(dpy);
+        }
+    }
+    return is_term ? PASTE_MODE_CTRL_SHIFT_V : PASTE_MODE_CTRL_V;
+}
+
 int main(int argc, char *argv[]) {
     int force_terminal = 0;
+    int force_shift_insert = 0;
     int use_uinput = 0;
     int use_portal = 0;
     int media_play_pause = 0;
@@ -614,6 +635,8 @@ int main(int argc, char *argv[]) {
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--terminal") == 0) {
             force_terminal = 1;
+        } else if (strcmp(argv[i], "--shift-insert") == 0) {
+            force_shift_insert = 1;
         } else if (strcmp(argv[i], "--uinput") == 0) {
             use_uinput = 1;
         } else if (strcmp(argv[i], "--portal") == 0) {
@@ -633,28 +656,8 @@ int main(int argc, char *argv[]) {
 
     if (use_portal) {
 #ifdef HAVE_GIO
-        int shift = force_terminal;
-#ifdef HAVE_ATSPI
-        if (!shift) { int r = detect_terminal_atspi(); if (r >= 0) shift = r; }
-#endif
-        if (!shift) {
-            Display *dpy = XOpenDisplay(NULL);
-            if (dpy) {
-                Window win = (target_window != None) ? target_window : get_active_window(dpy);
-                if (win != None) {
-                    XClassHint hint;
-                    if (XGetClassHint(dpy, win, &hint)) {
-                        shift = is_terminal(hint.res_class) || is_terminal(hint.res_name);
-                        XFree(hint.res_name);
-                        XFree(hint.res_class);
-                    } else {
-                        shift = check_parent_terminal(dpy, win);
-                    }
-                }
-                XCloseDisplay(dpy);
-            }
-        }
-        return paste_via_portal(shift, restore_token);
+        paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
+        return paste_via_portal(mode, restore_token);
 #else
         fprintf(stderr, "portal support not compiled in\n");
         return 5;
@@ -663,28 +666,8 @@ int main(int argc, char *argv[]) {
 
     if (use_uinput) {
 #ifdef HAVE_UINPUT
-        int shift = force_terminal;
-#ifdef HAVE_ATSPI
-        if (!shift) { int r = detect_terminal_atspi(); if (r >= 0) shift = r; }
-#endif
-        if (!shift) {
-            Display *dpy = XOpenDisplay(NULL);
-            if (dpy) {
-                Window win = (target_window != None) ? target_window : get_active_window(dpy);
-                if (win != None) {
-                    XClassHint hint;
-                    if (XGetClassHint(dpy, win, &hint)) {
-                        shift = is_terminal(hint.res_class) || is_terminal(hint.res_name);
-                        XFree(hint.res_name);
-                        XFree(hint.res_class);
-                    } else {
-                        shift = check_parent_terminal(dpy, win);
-                    }
-                }
-                XCloseDisplay(dpy);
-            }
-        }
-        return paste_via_uinput(shift);
+        paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
+        return paste_via_uinput(mode);
 #else
         fprintf(stderr, "uinput support not compiled in\n");
         return 3;
@@ -704,40 +687,37 @@ int main(int argc, char *argv[]) {
         activate_window(dpy, target_window);
     }
 
-    Window win = (target_window != None) ? target_window : get_active_window(dpy);
+    paste_mode_t mode = resolve_paste_mode(force_terminal, force_shift_insert, target_window);
 
-    int use_shift = force_terminal;
-#ifdef HAVE_ATSPI
-    if (!use_shift) { int r = detect_terminal_atspi(); if (r >= 0) use_shift = r; }
-#endif
-    if (!use_shift && win != None) {
-        XClassHint hint;
-        if (XGetClassHint(dpy, win, &hint)) {
-            use_shift = is_terminal(hint.res_class) || is_terminal(hint.res_name);
-            XFree(hint.res_name);
-            XFree(hint.res_class);
-        } else {
-            use_shift = check_parent_terminal(dpy, win);
-        }
-    }
+    if (mode == PASTE_MODE_SHIFT_INSERT) {
+        KeyCode shift  = XKeysymToKeycode(dpy, XK_Shift_L);
+        KeyCode insert = XKeysymToKeycode(dpy, XK_Insert);
 
-    KeyCode ctrl = XKeysymToKeycode(dpy, XK_Control_L);
-    KeyCode shift = XKeysymToKeycode(dpy, XK_Shift_L);
-    KeyCode v = XKeysymToKeycode(dpy, XK_v);
-
-    XTestFakeKeyEvent(dpy, ctrl, True, CurrentTime);
-    if (use_shift)
         XTestFakeKeyEvent(dpy, shift, True, CurrentTime);
-    usleep(8000);
-
-    XTestFakeKeyEvent(dpy, v, True, CurrentTime);
-    usleep(8000);
-    XTestFakeKeyEvent(dpy, v, False, CurrentTime);
-
-    usleep(8000);
-    if (use_shift)
+        usleep(8000);
+        XTestFakeKeyEvent(dpy, insert, True, CurrentTime);
+        usleep(8000);
+        XTestFakeKeyEvent(dpy, insert, False, CurrentTime);
+        usleep(8000);
         XTestFakeKeyEvent(dpy, shift, False, CurrentTime);
-    XTestFakeKeyEvent(dpy, ctrl, False, CurrentTime);
+    } else {
+        const int use_shift = (mode == PASTE_MODE_CTRL_SHIFT_V);
+        KeyCode ctrl = XKeysymToKeycode(dpy, XK_Control_L);
+        KeyCode shift = XKeysymToKeycode(dpy, XK_Shift_L);
+        KeyCode v = XKeysymToKeycode(dpy, XK_v);
+
+        XTestFakeKeyEvent(dpy, ctrl, True, CurrentTime);
+        if (use_shift)
+            XTestFakeKeyEvent(dpy, shift, True, CurrentTime);
+        usleep(8000);
+        XTestFakeKeyEvent(dpy, v, True, CurrentTime);
+        usleep(8000);
+        XTestFakeKeyEvent(dpy, v, False, CurrentTime);
+        usleep(8000);
+        if (use_shift)
+            XTestFakeKeyEvent(dpy, shift, False, CurrentTime);
+        XTestFakeKeyEvent(dpy, ctrl, False, CurrentTime);
+    }
 
     XFlush(dpy);
     usleep(20000);

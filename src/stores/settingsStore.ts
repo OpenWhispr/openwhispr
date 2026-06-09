@@ -1592,6 +1592,13 @@ export function setResolvedLLMConfig(
     if (value === undefined) continue;
     const storeKey = def.storeKeys[field as keyof InferenceScopeStoreKeys];
     if (!storeKey) continue;
+    // cleanupCustomApiKey is a secret kept in the OS secure store, not
+    // localStorage (which is stripped on startup). Route it through the
+    // dedicated setter so it survives restarts.
+    if (storeKey === "cleanupCustomApiKey") {
+      useSettingsStore.getState().setCleanupCustomApiKey(value as string);
+      continue;
+    }
     if (isBrowser) {
       localStorage.setItem(
         storeKey as string,

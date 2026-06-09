@@ -15,6 +15,7 @@ const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const AudioStorageManager = require("./audioStorage");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
+const { applySmartSpacing } = require("./smartSpacing");
 const {
   transcriptsOverlap,
   transcriptsLooselyOverlap,
@@ -1465,7 +1466,26 @@ class IPCHandlers {
           await new Promise((resolve) => setTimeout(resolve, 80));
         }
       }
-      const result = await this.clipboardManager.pasteText(text, {
+
+      // Smart spacing (#856): macOS reads the preceding char via Accessibility
+      // and prepends a space when needed; Windows/Linux (and macOS when the
+      // read fails) append a trailing space instead — the next paste then
+      // sees a leading space and self-corrects.
+      let mode = "append";
+      let precedingChar;
+      if (process.platform === "darwin" && activated && this.textEditMonitor) {
+        const ax = await this.textEditMonitor.getPrecedingChar(targetPid);
+        if (ax.state === "ok") {
+          mode = "prepend";
+          precedingChar = ax.char;
+        } else if (ax.state === "start") {
+          mode = "prepend";
+          precedingChar = "";
+        }
+      }
+      const textToPaste = applySmartSpacing({ text, mode, precedingChar });
+
+      const result = await this.clipboardManager.pasteText(textToPaste, {
         ...options,
         webContents: event.sender,
       });

@@ -1,0 +1,6 @@
+{
+  "extends": "electron-builder.json",
+  "win": {
+    "azureSignOptions": null
+  }
+}
