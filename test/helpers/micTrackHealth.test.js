@@ -84,3 +84,105 @@ test("resolves true after timeout if the track quietly unmuted without firing", 
   assert.equal(await pending, true);
   assert.equal(track._listenerCount, 0);
 });
+
+// Fake MediaStream: one track plus a stop-tracking flag, matching the bits reacquireIfDead touches.
+class FakeStream {
+  constructor(track) {
+    this.track = track;
+    this.stopped = false;
+  }
+
+  getAudioTracks() {
+    return this.track ? [this.track] : [];
+  }
+
+  getTracks() {
+    return this.track ? [this.track] : [];
+  }
+}
+
+const noopLogger = { info() {}, warn() {} };
+
+function stubGetUserMedia(impl) {
+  const original = globalThis.navigator;
+  Object.defineProperty(globalThis, "navigator", {
+    value: { mediaDevices: { getUserMedia: impl } },
+    configurable: true,
+  });
+  return () =>
+    Object.defineProperty(globalThis, "navigator", { value: original, configurable: true });
+}
+
+test("reacquireIfDead returns the original stream and never retries a healthy track", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const stream = new FakeStream(new FakeTrack({ muted: false }));
+  let called = false;
+  const restore = stubGetUserMedia(async () => {
+    called = true;
+  });
+  try {
+    const result = await reacquireIfDead(stream, () => ({}), noopLogger);
+    assert.equal(result, stream);
+    assert.equal(called, false);
+    assert.equal(stream.stopped, false);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead returns the original stream for a trackless stream", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const stream = new FakeStream(null);
+  let called = false;
+  const restore = stubGetUserMedia(async () => {
+    called = true;
+  });
+  try {
+    assert.equal(await reacquireIfDead(stream, () => ({}), noopLogger), stream);
+    assert.equal(called, false);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead re-acquires once and stops the dead stream", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const deadTrack = new FakeTrack({ readyState: "ended" });
+  deadTrack.stop = () => {
+    deadTrack._stopped = true;
+  };
+  const stream = new FakeStream(deadTrack);
+  const fresh = new FakeStream(new FakeTrack({ muted: false }));
+  let constraintsCleared = false;
+  const restore = stubGetUserMedia(async () => fresh);
+  try {
+    const result = await reacquireIfDead(
+      stream,
+      () => {
+        constraintsCleared = true;
+        return {};
+      },
+      noopLogger
+    );
+    assert.equal(result, fresh);
+    assert.equal(constraintsCleared, true);
+    assert.equal(deadTrack._stopped, true);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead falls back to the original stream when the retry fails", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const deadTrack = new FakeTrack({ readyState: "ended" });
+  deadTrack.stop = () => {};
+  const stream = new FakeStream(deadTrack);
+  const restore = stubGetUserMedia(async () => {
+    throw new Error("device busy");
+  });
+  try {
+    assert.equal(await reacquireIfDead(stream, () => ({}), noopLogger), stream);
+  } finally {
+    restore();
+  }
+});
