@@ -266,15 +266,16 @@ class HyprlandShortcutManager {
       if (err.code !== "ENOENT") throw err;
     }
 
+    const header = "# OpenWhispr keybinds (managed automatically)";
     const lines = content.split("\n").filter((line) => {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) return true;
+      if (!trimmed || trimmed === header) return false;
+      if (trimmed.startsWith("#")) return true;
       return !trimmed.includes(DBUS_SERVICE_NAME);
     });
 
-    const header = "# OpenWhispr keybinds (managed automatically)\n";
     const body = lines.join("\n").trim();
-    const newContent = header + (body ? body + "\n" : "") + bindLine + "\n";
+    const newContent = header + "\n" + (body ? body + "\n" : "") + bindLine + "\n";
 
     fs.writeFileSync(bindsFile, newContent, "utf-8");
   }
