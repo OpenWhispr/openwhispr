@@ -54,6 +54,7 @@ const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
+const PhrasesView = React.lazy(() => import("./PhrasesView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
 const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
 const ChatView = React.lazy(() => import("./chat/ChatView"));
@@ -902,6 +903,11 @@ export default function ControlPanel() {
             {activeView === "dictionary" && (
               <Suspense fallback={null}>
                 <DictionaryView />
+              </Suspense>
+            )}
+            {activeView === "phrases" && (
+              <Suspense fallback={null}>
+                <PhrasesView />
               </Suspense>
             )}
             {activeView === "upload" && (
