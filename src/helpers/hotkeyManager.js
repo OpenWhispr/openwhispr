@@ -63,6 +63,20 @@ function isMouseButtonHotkey(hotkey) {
   return /^MouseButton[45]$/i.test(hotkey || "");
 }
 
+// Decide whether the native /dev/input key listener should run for a hotkey.
+// In tap mode, when a compositor shortcut (GNOME/KDE/Hyprland) already owns the
+// hotkey (isUsingNativeShortcut), the native listener must stay off: otherwise it
+// and the compositor both fire for one keypress and the recording toggles on then
+// instantly off, leaving an empty blob. Push-to-talk still needs the native
+// listener for key-down/key-up, where the compositor's single toggle is a no-op
+// on release. See issue #864.
+function shouldUseNativeKeyListener(hotkey, mode, isUsingNativeShortcut) {
+  if (!hotkey || isGlobeLikeHotkey(hotkey)) return false;
+  if (mode === "push") return true;
+  if (isUsingNativeShortcut) return false;
+  return isRightSideModifier(hotkey) || isModifierOnlyHotkey(hotkey);
+}
+
 function normalizeToAccelerator(hotkey) {
   let accelerator = hotkey.startsWith("Fn+") ? hotkey.slice(3) : hotkey;
   accelerator = accelerator
@@ -1206,3 +1220,4 @@ module.exports.isGlobeLikeHotkey = isGlobeLikeHotkey;
 module.exports.isModifierOnlyHotkey = isModifierOnlyHotkey;
 module.exports.isRightSideModifier = isRightSideModifier;
 module.exports.isMouseButtonHotkey = isMouseButtonHotkey;
+module.exports.shouldUseNativeKeyListener = shouldUseNativeKeyListener;

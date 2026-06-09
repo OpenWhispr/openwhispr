@@ -1351,20 +1351,13 @@ async function startApp() {
   if (process.platform === "linux") {
     debugLogger.debug("[Push-to-Talk] Linux Push-to-Talk setup starting");
 
-    const {
-      isGlobeLikeHotkey: isGlobeLike,
-      isModifierOnlyHotkey,
-    } = require("./src/helpers/hotkeyManager");
-    const isValidHotkey = (hotkey) => hotkey && !isGlobeLike(hotkey);
+    const { shouldUseNativeKeyListener } = require("./src/helpers/hotkeyManager");
 
-    const isRightSideMod = (hotkey) =>
-      /^Right(Control|Ctrl|Alt|Option|Shift|Super|Win|Meta|Command|Cmd)$/i.test(hotkey);
-
-    const needsNativeListener = (hotkey, mode) => {
-      if (!isValidHotkey(hotkey)) return false;
-      if (mode === "push") return true;
-      return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey);
-    };
+    // Whether to run the native /dev/input listener for the current hotkey/mode.
+    // The decision and the issue #864 reasoning live in shouldUseNativeKeyListener;
+    // here we just feed it the live compositor-shortcut state.
+    const needsNativeListener = (hotkey, mode) =>
+      shouldUseNativeKeyListener(hotkey, mode, hotkeyManager.isUsingNativeShortcut());
 
     linuxKeyManager.on("key-down", (_key) => {
       if (!isLiveWindow(windowManager.mainWindow)) return;

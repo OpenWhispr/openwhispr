@@ -16,6 +16,7 @@ import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import { detectAgentName } from "../config/agentDetection";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
+import { isEmptyRecording } from "./recordingGuard";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
@@ -563,6 +564,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           speechWindowCount: speechGateDecision.speechWindowCount,
           maxConsecutiveSpeechWindows: speechGateDecision.maxConsecutiveSpeechWindows,
         },
+        "audio"
+      );
+      this.isProcessing = false;
+      this.onStateChange?.({ isRecording: false, isProcessing: false });
+      this.onTranscriptionComplete?.({ success: true, text: "" });
+      return;
+    }
+
+    // A recording with no audio frames — an accidental double-tap or a hotkey
+    // double-trigger that toggles on and off within milliseconds — is just an empty
+    // WebM container that backends reject ("Audio file might be corrupted or
+    // unsupported"). Skip it like the silence gate instead of surfacing an error.
+    // Gated by size only: a genuinely short real utterance can be brief yet still
+    // carry audio, so a duration gate would drop it. See issue #864.
+    const blobSize = audioBlob?.size ?? 0;
+    if (isEmptyRecording(blobSize)) {
+      logger.info(
+        "Skipping transcription: recording is empty (no audio captured)",
+        { blobSize },
         "audio"
       );
       this.isProcessing = false;
