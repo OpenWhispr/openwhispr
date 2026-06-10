@@ -1051,6 +1051,27 @@ async function startApp() {
       windowManager.handleMacPushModifierUp("fn");
     });
 
+    // Another key was pressed while Fn was held — user is using Fn as a
+    // navigation modifier (Fn+Arrow → Home, Fn+Backspace → Forward Delete, etc.).
+    // Cancel any bare-Fn push-to-talk in progress instead of transcribing noise.
+    // Only the bare-Fn path uses globeKeyDownTime/globeKeyIsRecording, so compound
+    // Fn-hotkey push-to-talk and tap mode are untouched.
+    globeKeyManager.on("globe-interrupted", () => {
+      if (globeKeyDownTime === 0 && !globeKeyIsRecording) {
+        return;
+      }
+      const wasRecording = globeKeyIsRecording;
+      debugLogger?.debug("[Globe] Fn+key interrupted push-to-talk", { wasRecording });
+      globeKeyDownTime = 0;
+      globeKeyIsRecording = false;
+      globeLastStopTime = Date.now();
+      if (wasRecording) {
+        windowManager.sendCancelDictation();
+      } else {
+        windowManager.hideDictationPanel();
+      }
+    });
+
     globeKeyManager.on("modifier-up", (modifier) => {
       if (windowManager?.handleMacPushModifierUp) {
         windowManager.handleMacPushModifierUp(modifier);
