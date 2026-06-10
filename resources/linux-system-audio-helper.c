@@ -38,6 +38,8 @@ typedef struct {
     struct pw_stream *pw_stream;
     int audio_pipe_fds[2];
     guint audio_source_id;
+    gint audio_dropped_bytes; /* atomic; RT thread increments, main loop reads */
+    gboolean drop_warning_emitted;
     gboolean stream_format_ok;
     gboolean start_event_emitted;
 #endif
@@ -174,6 +176,7 @@ static void print_probe_json(gboolean ok, gboolean native_capture, const char *e
     fflush(stdout);
 }
 
+#ifdef HAVE_PIPEWIRE
 static void finish_start(Helper *app, int exit_code)
 {
     app->exit_code = exit_code;
@@ -182,7 +185,6 @@ static void finish_start(Helper *app, int exit_code)
     }
 }
 
-#ifdef HAVE_PIPEWIRE
 typedef struct {
     struct pw_thread_loop *loop;
     struct pw_context *context;
@@ -540,12 +542,40 @@ static void enqueue_audio_bytes(Helper *app, const uint8_t *data, uint32_t size)
         ssize_t written = write(app->audio_pipe_fds[AUDIO_PIPE_WRITE], data, chunk_size);
 
         if (written != (ssize_t)chunk_size) {
+            uint32_t dropped = size;
+
+            if (written > 0 && (uint32_t)written <= size) {
+                dropped -= (uint32_t)written;
+            }
+
+            g_atomic_int_add(&app->audio_dropped_bytes, (gint)dropped);
             return;
         }
 
         data += chunk_size;
         size -= chunk_size;
     }
+}
+
+static void maybe_warn_dropped_audio(Helper *app)
+{
+    if (app->drop_warning_emitted) {
+        return;
+    }
+
+    gint dropped_bytes = g_atomic_int_get(&app->audio_dropped_bytes);
+    if (dropped_bytes <= 0) {
+        return;
+    }
+
+    app->drop_warning_emitted = TRUE;
+    gchar *message = g_strdup_printf(
+        "System audio PCM frames dropped under backpressure (%d bytes so far); "
+        "expect gaps in captured audio",
+        dropped_bytes);
+
+    emit_event("warning", "audio_frames_dropped", message);
+    g_free(message);
 }
 
 static gboolean on_audio_pipe_readable(gint fd, GIOCondition condition, gpointer user_data)
@@ -581,6 +611,8 @@ static gboolean on_audio_pipe_readable(gint fd, GIOCondition condition, gpointer
         app->audio_source_id = 0;
         return G_SOURCE_REMOVE;
     }
+
+    maybe_warn_dropped_audio(app);
 
     if (condition & (G_IO_HUP | G_IO_ERR | G_IO_NVAL)) {
         app->audio_source_id = 0;
