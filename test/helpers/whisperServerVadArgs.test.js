@@ -1,9 +1,7 @@
-const test = require("node:test");
-const assert = require("node:assert/strict");
+import { it, expect } from "vitest";
+import WhisperServerManager from "../../src/helpers/whisperServer";
 
-const WhisperServerManager = require("../../src/helpers/whisperServer");
-
-test("buildWhisperServerArgs includes VAD flags when enabled and model path provided", () => {
+it("buildWhisperServerArgs includes VAD flags when enabled and model path provided", () => {
   const args = WhisperServerManager.buildWhisperServerArgs({
     modelPath: "/tmp/model.bin",
     port: 8180,
@@ -20,7 +18,7 @@ test("buildWhisperServerArgs includes VAD flags when enabled and model path prov
     },
   });
 
-  assert.deepEqual(args, [
+  expect(args).toEqual([
     "--model",
     "/tmp/model.bin",
     "--host",
@@ -47,7 +45,7 @@ test("buildWhisperServerArgs includes VAD flags when enabled and model path prov
   ]);
 });
 
-test("buildWhisperServerArgs omits VAD flags when vadModelPath is missing", () => {
+it("buildWhisperServerArgs omits VAD flags when vadModelPath is missing", () => {
   const args = WhisperServerManager.buildWhisperServerArgs({
     modelPath: "/tmp/model.bin",
     port: 8180,
@@ -56,11 +54,11 @@ test("buildWhisperServerArgs omits VAD flags when vadModelPath is missing", () =
     vadModelPath: null,
   });
 
-  assert.equal(args.includes("--vad"), false);
-  assert.equal(args.includes("--vad-model"), false);
+  expect(args.includes("--vad")).toBe(false);
+  expect(args.includes("--vad-model")).toBe(false);
 });
 
-test("getVadSignature changes when VAD settings or model path change", () => {
+it("getVadSignature changes when VAD settings or model path change", () => {
   const a = WhisperServerManager.getVadSignature({
     vadEnabled: true,
     vadModelPath: "/m.bin",
@@ -82,7 +80,7 @@ test("getVadSignature changes when VAD settings or model path change", () => {
     vadConfig: { threshold: 0.5 },
   });
 
-  assert.notEqual(a, b);
-  assert.notEqual(b, c);
-  assert.equal(c, d);
+  expect(a).not.toBe(b);
+  expect(b).not.toBe(c);
+  expect(c).toBe(d);
 });
