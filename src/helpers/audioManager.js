@@ -910,6 +910,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "corti") {
+      // Tokens are minted in the main process; only verify credentials exist here
+      let clientId = s.cortiClientId;
+      let clientSecret = s.cortiClientSecret;
+      if (!clientId?.trim() || !clientSecret?.trim()) {
+        [clientId, clientSecret] = await Promise.all([
+          window.electronAPI.getCortiClientId?.(),
+          window.electronAPI.getCortiClientSecret?.(),
+        ]);
+      }
+      if (!clientId?.trim() || !clientSecret?.trim()) {
+        const err = new Error(
+          "Corti credentials not found. Please set your Client ID and Client Secret in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+      apiKey = null;
     } else if (provider === "groq") {
       // Prefer store value (user-entered via UI) over main process (.env)
       apiKey = s.groqApiKey;
@@ -1569,6 +1587,37 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw new Error("No text transcribed - Mistral response was empty");
       }
 
+      // Corti uses OAuth client credentials and an interaction-based REST flow — proxy through main process
+      if (provider === "corti" && window.electronAPI?.proxyCortiTranscription) {
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const proxyData = {
+          audioBuffer,
+          // Corti requires a concrete primaryLanguage; default to English when auto-detecting
+          language: language || "en",
+          environment: apiSettings.cortiEnvironment || "us",
+          tenant: (apiSettings.cortiTenant || "").trim() || "base",
+        };
+
+        const result = await window.electronAPI.proxyCortiTranscription(proxyData);
+        const proxyText = result?.text;
+
+        if (proxyText && proxyText.trim().length > 0) {
+          if (this.isDictionaryEcho(proxyText)) {
+            throw new Error("No audio detected");
+          }
+          timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+          const rawText = proxyText;
+          const reasoningStart = performance.now();
+          const text = await this.processTranscription(proxyText, "corti");
+          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+          const source = (await this.isReasoningAvailable()) ? "corti-reasoned" : "corti";
+          return { success: true, text, rawText, source, timings };
+        }
+
+        throw new Error("No text transcribed - Corti response was empty");
+      }
+
       logger.debug(
         "Making transcription API request",
         {
@@ -1799,6 +1848,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const isGroqModel = trimmedModel.startsWith("whisper-large-v3");
         const isOpenAIModel = trimmedModel.startsWith("gpt-4o") || trimmedModel === "whisper-1";
         const isMistralModel = trimmedModel.startsWith("voxtral-");
+        const isCortiModel = trimmedModel.startsWith("corti-");
 
         if (provider === "groq" && isGroqModel) {
           return trimmedModel;
@@ -1809,12 +1859,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (provider === "mistral" && isMistralModel) {
           return trimmedModel;
         }
+        if (provider === "corti" && isCortiModel) {
+          return trimmedModel;
+        }
         // Model doesn't match provider - fall through to default
       }
 
       // Return provider-appropriate default
       if (provider === "groq") return "whisper-large-v3-turbo";
       if (provider === "mistral") return "voxtral-mini-latest";
+      if (provider === "corti") return "corti-transcribe";
       return "gpt-4o-mini-transcribe";
     } catch (error) {
       return "gpt-4o-mini-transcribe";

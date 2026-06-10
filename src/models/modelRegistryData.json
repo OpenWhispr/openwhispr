@@ -191,6 +191,19 @@
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
         }
       ]
+    },
+    {
+      "id": "corti",
+      "name": "Corti",
+      "baseUrl": "https://api.us.corti.app/v2",
+      "models": [
+        {
+          "id": "corti-transcribe",
+          "name": "Corti Transcribe",
+          "description": "Clinical-grade medical transcription",
+          "descriptionKey": "models.descriptions.transcription.corti_transcribe"
+        }
+      ]
     }
   ],
   "cloudProviders": [

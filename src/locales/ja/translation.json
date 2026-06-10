@@ -429,7 +429,13 @@
       "whisperModelDescription": "モデル",
       "parakeetModelDescription": "NVIDIA Parakeet モデル"
     },
-    "whisperModels": "Whisper モデル"
+    "whisperModels": "Whisper モデル",
+    "corti": {
+      "clientId": "クライアントID",
+      "clientSecret": "クライアントシークレット",
+      "environment": "データリージョン",
+      "tenant": "テナント"
+    }
   },
   "hooks": {
     "audioRecording": {
@@ -1747,7 +1753,8 @@
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
-        "mistral_voxtral_mini_latest": "高速多言語文字起こし"
+        "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "corti_transcribe": "臨床グレードの医療文字起こし"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",

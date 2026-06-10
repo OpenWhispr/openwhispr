@@ -401,7 +401,13 @@
       "whisperModelDescription": "Modelo",
       "parakeetModelDescription": "Modelo NVIDIA Parakeet"
     },
-    "whisperModels": "Modelos Whisper"
+    "whisperModels": "Modelos Whisper",
+    "corti": {
+      "clientId": "ID do cliente",
+      "clientSecret": "Segredo do cliente",
+      "environment": "Região de dados",
+      "tenant": "Tenant"
+    }
   },
   "hooks": {
     "audioRecording": {
@@ -1719,7 +1725,8 @@
         "openai_whisper_1": "Modelo Whisper original",
         "groq_whisper_large_v3_turbo": "Velocidade 216x em tempo real",
         "groq_whisper_large_v3": "Modelo Large v3, rápido e preciso",
-        "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida"
+        "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida",
+        "corti_transcribe": "Transcrição médica de nível clínico"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo forte de raciocínio",

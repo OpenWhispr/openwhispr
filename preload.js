@@ -358,6 +358,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
 
+  // Corti API
+  getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),
+  saveCortiClientId: (key) => ipcRenderer.invoke("save-corti-client-id", key),
+  getCortiClientSecret: () => ipcRenderer.invoke("get-corti-client-secret"),
+  saveCortiClientSecret: (key) => ipcRenderer.invoke("save-corti-client-secret", key),
+  proxyCortiTranscription: (data) => ipcRenderer.invoke("proxy-corti-transcription", data),
+
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
   saveCustomTranscriptionKey: (key) => ipcRenderer.invoke("save-custom-transcription-key", key),

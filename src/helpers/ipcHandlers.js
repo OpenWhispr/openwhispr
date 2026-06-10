@@ -2532,6 +2532,43 @@ class IPCHandlers {
       }
     );
 
+    ipcMain.handle("get-corti-client-id", async () => {
+      return this.environmentManager.getCortiClientId();
+    });
+
+    ipcMain.handle("save-corti-client-id", async (event, key) => {
+      return this.environmentManager.saveCortiClientId(key);
+    });
+
+    ipcMain.handle("get-corti-client-secret", async () => {
+      return this.environmentManager.getCortiClientSecret();
+    });
+
+    ipcMain.handle("save-corti-client-secret", async (event, key) => {
+      return this.environmentManager.saveCortiClientSecret(key);
+    });
+
+    ipcMain.handle(
+      "proxy-corti-transcription",
+      async (event, { audioBuffer, language, environment, tenant }) => {
+        const clientId = this.environmentManager.getCortiClientId();
+        const clientSecret = this.environmentManager.getCortiClientSecret();
+        if (!clientId || !clientSecret) {
+          throw new Error("Corti credentials not configured");
+        }
+
+        const { transcribeAudio } = require("./cortiTranscription");
+        return transcribeAudio({
+          environment,
+          tenant,
+          clientId,
+          clientSecret,
+          audioBuffer,
+          language,
+        });
+      }
+    );
+
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -6234,13 +6271,13 @@ class IPCHandlers {
 
     ipcMain.handle(
       "transcribe-audio-file-byok",
-      async (event, { filePath, apiKey, baseUrl, model }) => {
+      async (
+        event,
+        { filePath, apiKey, baseUrl, model, provider, language, environment, tenant }
+      ) => {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
-          if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
-          if (!baseUrl) throw new Error("No transcription endpoint configured.");
-
           const fileSize = fs.statSync(filePath).size;
           if (fileSize > BYOK_FILE_SIZE_LIMIT) {
             return {
@@ -6248,6 +6285,27 @@ class IPCHandlers {
               error: "File too large. Maximum size for bring-your-own-key is 25 MB.",
             };
           }
+
+          if (provider === "corti") {
+            const clientId = this.environmentManager.getCortiClientId();
+            const clientSecret = this.environmentManager.getCortiClientSecret();
+            if (!clientId || !clientSecret) {
+              throw new Error("Corti credentials not configured. Add them in Settings.");
+            }
+            const { transcribeAudio } = require("./cortiTranscription");
+            const { text } = await transcribeAudio({
+              environment,
+              tenant,
+              clientId,
+              clientSecret,
+              audioBuffer: fs.readFileSync(filePath),
+              language: language || "en",
+            });
+            return { success: true, text };
+          }
+
+          if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
+          if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
           const audioBuffer = fs.readFileSync(filePath);
           const ext = path.extname(filePath).toLowerCase().replace(".", "");

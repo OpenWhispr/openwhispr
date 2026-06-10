@@ -976,6 +976,18 @@ declare global {
         contextBias?: string[];
       }) => Promise<{ text: string }>;
 
+      // Corti credential management
+      getCortiClientId?: () => Promise<string | null>;
+      saveCortiClientId?: (key: string) => Promise<void>;
+      getCortiClientSecret?: () => Promise<string | null>;
+      saveCortiClientSecret?: (key: string) => Promise<void>;
+      proxyCortiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        language: string;
+        environment: string;
+        tenant: string;
+      }) => Promise<{ text: string }>;
+
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;
@@ -1223,6 +1235,10 @@ declare global {
         apiKey: string;
         baseUrl: string;
         model: string;
+        provider?: string;
+        language?: string;
+        environment?: string;
+        tenant?: string;
       }) => Promise<{
         success: boolean;
         text?: string;

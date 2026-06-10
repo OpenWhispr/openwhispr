@@ -429,7 +429,13 @@
       "whisperModelDescription": "模型",
       "parakeetModelDescription": "NVIDIA Parakeet 模型"
     },
-    "whisperModels": "Whisper 模型"
+    "whisperModels": "Whisper 模型",
+    "corti": {
+      "clientId": "客户端 ID",
+      "clientSecret": "客户端密钥",
+      "environment": "数据区域",
+      "tenant": "租户"
+    }
   },
   "hooks": {
     "audioRecording": {
@@ -1742,7 +1748,8 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍实时速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
-        "mistral_voxtral_mini_latest": "快速多语言转录"
+        "mistral_voxtral_mini_latest": "快速多语言转录",
+        "corti_transcribe": "临床级医疗转录"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",
