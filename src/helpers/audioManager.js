@@ -1749,6 +1749,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
     } catch (error) {
+      if (error.message === "No audio detected") {
+        throw error;
+      }
+
       const isOpenAIMode = !getSettings().useLocalWhisper;
 
       if (allowLocalFallback && isOpenAIMode) {

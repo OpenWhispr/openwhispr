@@ -16,8 +16,6 @@ export function matchesDictionaryPrompt(text, dictionaryPrompt) {
   const dictWords = new Set(normalizedPrompt.split(" "));
   const uniqueTextWords = new Set(normalizedText.split(" "));
 
-  if (uniqueTextWords.size === 0 || dictWords.size === 0) return false;
-
   let matchCount = 0;
   for (const word of uniqueTextWords) {
     if (dictWords.has(word)) matchCount++;
