@@ -66,6 +66,7 @@ export interface TranscriptionProviderData {
   id: string;
   name: string;
   baseUrl: string;
+  apiType?: "openai-compatible" | "elevenlabs";
   models: TranscriptionModelDefinition[];
 }
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Transcription
+
+- **ElevenLabs Scribe v2 BYOK transcription.** Added ElevenLabs as a first-class cloud transcription provider using the native `/v1/speech-to-text` API with `xi-api-key`, `model_id=scribe_v2`, language hints, and custom dictionary keyterms. This covers batch dictation and Notes audio/video upload; realtime transcription remains on the existing streaming providers.
+
 ## [1.7.2] - 2026-05-20
 
 A small patch on top of 1.7.1: zero unnecessary macOS Keychain prompts on first launch, working cloud transcription on Electron's `net.fetch`, the Note Formatting selector now actually controls model routing, Wave Terminal pastes via the terminal path, and a notes view stability fix.

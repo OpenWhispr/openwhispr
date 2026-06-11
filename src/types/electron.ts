@@ -976,6 +976,17 @@ declare global {
         contextBias?: string[];
       }) => Promise<{ text: string }>;
 
+      // ElevenLabs API key management
+      getElevenLabsKey?: () => Promise<string | null>;
+      saveElevenLabsKey?: (key: string) => Promise<void>;
+      proxyElevenLabsTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        apiKey?: string | null;
+        model?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ text: string; language?: string | null }>;
+
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
       saveCustomTranscriptionKey?: (key: string) => Promise<void>;
@@ -1223,10 +1234,14 @@ declare global {
         apiKey: string;
         baseUrl: string;
         model: string;
+        provider?: string;
+        language?: string | null;
+        keyterms?: string[];
       }) => Promise<{
         success: boolean;
         text?: string;
         error?: string;
+        language?: string | null;
       }>;
 
       // Usage limit events

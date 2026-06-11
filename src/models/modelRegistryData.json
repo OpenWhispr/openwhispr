@@ -191,6 +191,20 @@
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
         }
       ]
+    },
+    {
+      "id": "elevenlabs",
+      "name": "ElevenLabs",
+      "baseUrl": "https://api.elevenlabs.io/v1",
+      "apiType": "elevenlabs",
+      "models": [
+        {
+          "id": "scribe_v2",
+          "name": "Scribe v2",
+          "description": "Accurate multilingual transcription with keyterm prompting",
+          "descriptionKey": "models.descriptions.transcription.elevenlabs_scribe_v2"
+        }
+      ]
     }
   ],
   "cloudProviders": [

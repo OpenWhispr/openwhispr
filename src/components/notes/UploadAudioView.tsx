@@ -37,6 +37,7 @@ import {
   getSettings,
 } from "../../stores/settingsStore";
 import { generateNoteTitle } from "../../utils/generateTitle";
+import { getBaseLanguageCode } from "../../utils/languageSupport";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
 
@@ -117,7 +118,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     openaiApiKey,
     groqApiKey,
     mistralApiKey,
+    elevenlabsApiKey,
     customTranscriptionApiKey,
+    customDictionary,
     updateTranscriptionSettings,
   } = useSettings();
 
@@ -199,7 +202,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 ? groqApiKey
                 : cloudTranscriptionProvider === "mistral"
                   ? mistralApiKey
-                  : customTranscriptionApiKey;
+                  : cloudTranscriptionProvider === "elevenlabs"
+                    ? elevenlabsApiKey
+                    : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -231,6 +236,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     openaiApiKey,
     groqApiKey,
     mistralApiKey,
+    elevenlabsApiKey,
     customTranscriptionApiKey,
   ]);
 
@@ -244,6 +250,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     const name =
       cloudTranscriptionProvider === "custom"
         ? t("notes.upload.custom")
+        : cloudTranscriptionProvider === "elevenlabs"
+          ? "ElevenLabs"
         : cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1);
     return `${name} · ${cloudTranscriptionModel}`;
   };
@@ -256,6 +264,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return groqApiKey;
       case "mistral":
         return mistralApiKey;
+      case "elevenlabs":
+        return elevenlabsApiKey;
       case "custom":
         return customTranscriptionApiKey || "";
       default:
@@ -373,6 +383,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           apiKey: getActiveApiKey(),
           baseUrl: cloudTranscriptionBaseUrl || "",
           model: cloudTranscriptionModel,
+          provider: cloudTranscriptionProvider,
+          language: getBaseLanguageCode(getSettings().preferredLanguage),
+          keyterms: customDictionary,
         });
       }
 

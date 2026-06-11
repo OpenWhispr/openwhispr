@@ -12,6 +12,7 @@ const SECRET_KEYS = [
   "GEMINI_API_KEY",
   "GROQ_API_KEY",
   "MISTRAL_API_KEY",
+  "ELEVENLABS_API_KEY",
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "CUSTOM_TRANSCRIPTION_API_KEY",
@@ -287,6 +288,14 @@ class EnvironmentManager {
 
   saveMistralKey(key) {
     return this._saveKey("MISTRAL_API_KEY", key);
+  }
+
+  getElevenLabsKey() {
+    return this._getKey("ELEVENLABS_API_KEY");
+  }
+
+  saveElevenLabsKey(key) {
+    return this._saveKey("ELEVENLABS_API_KEY", key);
   }
 
   getAssemblyAIKey() {

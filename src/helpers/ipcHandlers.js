@@ -63,6 +63,8 @@ function parseAttendees(raw) {
 }
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
+const ELEVENLABS_TRANSCRIPTION_URL = "https://api.elevenlabs.io/v1/speech-to-text";
+const ELEVENLABS_UNSUPPORTED_KEYTERM_CHARS = /[<>{}\[\]\\]/;
 
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
@@ -95,11 +97,13 @@ function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   parts.push("\r\n");
 
   for (const [name, value] of Object.entries(fields)) {
-    if (value != null) {
+    const values = Array.isArray(value) ? value : [value];
+    for (const fieldValue of values) {
+      if (fieldValue == null) continue;
       parts.push(
         `--${boundary}\r\n` +
           `Content-Disposition: form-data; name="${name}"\r\n\r\n` +
-          `${value}\r\n`
+          `${fieldValue}\r\n`
       );
     }
   }
@@ -150,6 +154,109 @@ function interpretTranscribeResponse(data) {
     throw new Error(data.data?.error || `API error: ${data.statusCode}`);
   }
   return data.data;
+}
+
+function normalizeElevenLabsKeyterms(keyterms) {
+  const rawTerms = Array.isArray(keyterms)
+    ? keyterms
+    : typeof keyterms === "string"
+      ? keyterms.split(",")
+      : [];
+  const normalized = [];
+  const seen = new Set();
+
+  for (const rawTerm of rawTerms) {
+    const term = String(rawTerm || "")
+      .trim()
+      .replace(/\s+/g, " ");
+    if (!term) continue;
+    if (term.length >= 50) continue;
+    if (term.split(/\s+/).length > 5) continue;
+    if (ELEVENLABS_UNSUPPORTED_KEYTERM_CHARS.test(term)) continue;
+
+    const dedupeKey = term.toLocaleLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    normalized.push(term);
+    if (normalized.length >= 1000) break;
+  }
+
+  return normalized;
+}
+
+function buildElevenLabsFields({ model, language, keyterms }) {
+  const fields = {
+    model_id: model || "scribe_v2",
+    timestamps_granularity: "none",
+    tag_audio_events: "false",
+  };
+  if (language && language !== "auto") {
+    fields.language_code = language;
+  }
+  const normalizedKeyterms = normalizeElevenLabsKeyterms(keyterms);
+  if (normalizedKeyterms.length > 0) {
+    fields.keyterms = normalizedKeyterms;
+  }
+  return fields;
+}
+
+function buildElevenLabsError(statusCode, data) {
+  const detail = data?.detail;
+  const message =
+    data?.error?.message ||
+    data?.error ||
+    data?.message ||
+    (typeof detail === "string" ? detail : detail?.message) ||
+    `API error: ${statusCode}`;
+  const err = new Error(`ElevenLabs API Error: ${statusCode} ${message}`);
+  if (statusCode === 401 || statusCode === 403) err.code = "INVALID_KEY";
+  else if (statusCode === 402) err.code = "PAYMENT_REQUIRED";
+  else if (statusCode === 429) err.code = "LIMIT_REACHED";
+  else if (statusCode >= 500) err.code = "SERVER_ERROR";
+  return err;
+}
+
+async function transcribeWithElevenLabs({
+  audioBuffer,
+  apiKey,
+  model,
+  language,
+  keyterms,
+  fileName = "audio.webm",
+  contentType = "audio/webm",
+}) {
+  const resolvedApiKey = (apiKey || "").trim();
+  if (!resolvedApiKey) {
+    const err = new Error("ElevenLabs API key not configured");
+    err.code = "API_KEY_MISSING";
+    throw err;
+  }
+
+  const buffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+  const { body, boundary } = buildMultipartBody(
+    buffer,
+    fileName,
+    contentType,
+    buildElevenLabsFields({ model, language, keyterms })
+  );
+
+  const data = await postMultipart(new URL(ELEVENLABS_TRANSCRIPTION_URL), body, boundary, {
+    "xi-api-key": resolvedApiKey,
+  });
+
+  if (data.statusCode !== 200) {
+    throw buildElevenLabsError(data.statusCode, data.data);
+  }
+
+  const text = data.data?.text;
+  if (typeof text !== "string" || text.trim().length === 0) {
+    throw new Error("No text transcribed - ElevenLabs response was empty");
+  }
+
+  return {
+    text,
+    language: data.data?.language_code || data.data?.language || null,
+  };
 }
 
 async function chunkedCloudTranscribe({
@@ -491,6 +598,7 @@ class IPCHandlers {
   _resolveByokModel(provider, configuredModel) {
     const trimmed = (configuredModel || "").trim();
     if (provider === "custom") return trimmed || "whisper-1";
+    if (provider === "elevenlabs") return trimmed === "scribe_v2" ? trimmed : "scribe_v2";
     if (trimmed) {
       const isGroq = trimmed.startsWith("whisper-large-v3");
       const isOpenAI = trimmed.startsWith("gpt-4o") || trimmed === "whisper-1";
@@ -2532,6 +2640,28 @@ class IPCHandlers {
       }
     );
 
+    ipcMain.handle("get-elevenlabs-key", async () => {
+      return this.environmentManager.getElevenLabsKey();
+    });
+
+    ipcMain.handle("save-elevenlabs-key", async (event, key) => {
+      return this.environmentManager.saveElevenLabsKey(key);
+    });
+
+    ipcMain.handle(
+      "proxy-elevenlabs-transcription",
+      async (event, { audioBuffer, apiKey, model, language, keyterms }) => {
+        const resolvedApiKey = apiKey || this.environmentManager.getElevenLabsKey();
+        return transcribeWithElevenLabs({
+          audioBuffer,
+          apiKey: resolvedApiKey,
+          model,
+          language,
+          keyterms,
+        });
+      }
+    );
+
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -3661,6 +3791,8 @@ class IPCHandlers {
           } else if (provider === "mistral") {
             apiKey = this.environmentManager.getMistralKey();
             endpoint = MISTRAL_TRANSCRIPTION_URL;
+          } else if (provider === "elevenlabs") {
+            apiKey = this.environmentManager.getElevenLabsKey();
           } else if (provider === "custom") {
             apiKey = this.environmentManager.getCustomTranscriptionKey();
             const base = (settings?.cloudTranscriptionBaseUrl || "").trim();
@@ -3677,25 +3809,36 @@ class IPCHandlers {
             throw new Error(`${provider} API key not configured`);
           }
 
-          const formData = new FormData();
-          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
-          formData.append("model", model);
-          if (language) formData.append("language", language);
-          const headers = {};
-          if (provider === "mistral") {
-            headers["x-api-key"] = apiKey;
-          } else if (apiKey) {
-            headers.Authorization = `Bearer ${apiKey}`;
-          }
-
-          const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
-          }
-          const data = await response.json();
-          if (data?.text) {
+          if (provider === "elevenlabs") {
+            const data = await transcribeWithElevenLabs({
+              audioBuffer: buffer,
+              apiKey,
+              model,
+              language,
+              keyterms: this._getDictionarySafe(),
+            });
             result = { text: data.text, source: provider, model };
+          } else {
+            const formData = new FormData();
+            formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+            formData.append("model", model);
+            if (language) formData.append("language", language);
+            const headers = {};
+            if (provider === "mistral") {
+              headers["x-api-key"] = apiKey;
+            } else if (apiKey) {
+              headers.Authorization = `Bearer ${apiKey}`;
+            }
+
+            const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
+            }
+            const data = await response.json();
+            if (data?.text) {
+              result = { text: data.text, source: provider, model };
+            }
           }
         }
 
@@ -6234,12 +6377,11 @@ class IPCHandlers {
 
     ipcMain.handle(
       "transcribe-audio-file-byok",
-      async (event, { filePath, apiKey, baseUrl, model }) => {
+      async (event, { filePath, apiKey, baseUrl, model, provider, language, keyterms }) => {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
-          if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
           const fileSize = fs.statSync(filePath).size;
           if (fileSize > BYOK_FILE_SIZE_LIMIT) {
@@ -6253,6 +6395,21 @@ class IPCHandlers {
           const ext = path.extname(filePath).toLowerCase().replace(".", "");
           const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
           const fileName = path.basename(filePath);
+
+          if (provider === "elevenlabs") {
+            const result = await transcribeWithElevenLabs({
+              audioBuffer,
+              apiKey,
+              model,
+              language,
+              keyterms,
+              fileName,
+              contentType,
+            });
+            return { success: true, text: result.text, language: result.language };
+          }
+
+          if (!baseUrl) throw new Error("No transcription endpoint configured.");
 
           let transcriptionUrl = baseUrl.replace(/\/+$/, "");
           if (!transcriptionUrl.endsWith("/audio/transcriptions")) {
