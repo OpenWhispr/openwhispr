@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import ShareNoteDialog from "./ShareNoteDialog";
 import { useShareCacheEntry } from "../../stores/noteStore";
-import { SHARING_ENABLED } from "../../lib/features";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
@@ -785,7 +784,7 @@ export default function NoteEditor({
                   )}
                 </div>
               )}
-              {SHARING_ENABLED && note.cloud_id && (
+              {note.cloud_id && (
                 <button
                   type="button"
                   onClick={() => setShareDialogOpen(true)}
@@ -979,7 +978,7 @@ export default function NoteEditor({
           onNewChat={embeddedChat.startNewChat}
         />
       )}
-      {SHARING_ENABLED && note.cloud_id && (
+      {note.cloud_id && (
         <ShareNoteDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={note} />
       )}
     </div>

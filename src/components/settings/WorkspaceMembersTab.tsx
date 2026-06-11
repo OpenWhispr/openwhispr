@@ -4,9 +4,11 @@ import { Trash2, MoreVertical, Mail, X } from "lucide-react";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { InvitationsService } from "../../services/InvitationsService";
+import { useDialogs } from "../../hooks/useDialogs";
 import { Button } from "../ui/button";
+import { ConfirmDialog } from "../ui/dialog";
 import { useToast } from "../ui/useToast";
-import type { Workspace, WorkspaceInvitation } from "../../types/electron";
+import type { Workspace, WorkspaceInvitation, WorkspaceMember } from "../../types/electron";
 import InviteTeammateDialog from "../InviteTeammateDialog";
 import {
   DropdownMenu,
@@ -23,6 +25,7 @@ interface Props {
 export default function WorkspaceMembersTab({ workspace }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const members = useWorkspaceStore((s) => s.members);
   const refreshMembers = useWorkspaceStore((s) => s.refreshMembers);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
@@ -60,26 +63,51 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
     }
   }
 
-  async function handleRemove(userId: string) {
-    try {
-      await WorkspacesService.removeMember(workspace.id, userId);
-      await refreshMembers(workspace.id);
-    } catch (error) {
-      toast({
-        title: t("common.error"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
-      });
-    }
+  function confirmRemoveMember(member: WorkspaceMember) {
+    showConfirmDialog({
+      title: t("settingsPage.workspace.members.removeConfirm.title"),
+      description: t("settingsPage.workspace.members.removeConfirm.description", {
+        name: member.name || member.email,
+        workspace: workspace.name,
+      }),
+      confirmText: t("settingsPage.workspace.members.remove"),
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await WorkspacesService.removeMember(workspace.id, member.user_id);
+          await refreshMembers(workspace.id);
+        } catch (error) {
+          toast({
+            title: t("common.error"),
+            description: error instanceof Error ? error.message : t("common.unknownError"),
+            variant: "destructive",
+          });
+        }
+      },
+    });
   }
 
-  async function handleRevoke(inviteId: string) {
-    try {
-      await InvitationsService.revoke(workspace.id, inviteId);
-      await refreshInvitations();
-    } catch {
-      // toast handled inline
-    }
+  function confirmRevokeInvitation(inv: WorkspaceInvitation) {
+    showConfirmDialog({
+      title: t("settingsPage.workspace.invites.revokeConfirm.title"),
+      description: t("settingsPage.workspace.invites.revokeConfirm.description", {
+        email: inv.email,
+      }),
+      confirmText: t("settingsPage.workspace.invites.revoke"),
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await InvitationsService.revoke(workspace.id, inv.id);
+          await refreshInvitations();
+        } catch (error) {
+          toast({
+            title: t("settingsPage.workspace.invites.revokeFailed"),
+            description: error instanceof Error ? error.message : t("common.unknownError"),
+            variant: "destructive",
+          });
+        }
+      },
+    });
   }
 
   async function handleResend(inviteId: string) {
@@ -175,7 +203,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                   )}
                   <DropdownMenuItem
                     className="text-destructive"
-                    onSelect={() => handleRemove(member.user_id)}
+                    onSelect={() => confirmRemoveMember(member)}
                   >
                     <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                     {t("settingsPage.workspace.members.remove")}
@@ -217,7 +245,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                 </Button>
                 <button
                   type="button"
-                  onClick={() => handleRevoke(inv.id)}
+                  onClick={() => confirmRevokeInvitation(inv)}
                   aria-label={t("settingsPage.workspace.invites.revoke")}
                   className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
                 >
@@ -235,6 +263,17 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
         workspaceId={workspace.id}
         workspaceName={workspace.name}
         onInvited={refreshInvitations}
+      />
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => !open && hideConfirmDialog()}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        onConfirm={confirmDialog.onConfirm}
+        variant={confirmDialog.variant}
       />
     </div>
   );

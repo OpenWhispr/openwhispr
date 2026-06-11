@@ -1680,13 +1680,22 @@
         "promote": "Promouvoir administrateur",
         "demote": "Rétrograder membre",
         "transferOwnership": "Transférer la propriété",
-        "remove": "Retirer de l'espace"
+        "remove": "Retirer de l'espace",
+        "removeConfirm": {
+          "title": "Remove this member?",
+          "description": "{{name}} will lose access to {{workspace}} immediately."
+        }
       },
       "invites": {
         "title": "Invitations en attente",
         "resend": "Renvoyer",
         "revoke": "Révoquer",
-        "resent": "Invitation renvoyée"
+        "resent": "Invitation renvoyée",
+        "revokeFailed": "Could not revoke invitation",
+        "revokeConfirm": {
+          "title": "Revoke this invitation?",
+          "description": "The invitation link for {{email}} will stop working."
+        }
       },
       "teams": {
         "title": "Équipes",
@@ -1697,7 +1706,11 @@
         "createTitle": "Créer une équipe",
         "nameLabel": "Nom de l'équipe",
         "descriptionLabel": "Description",
-        "memberCount": "{{count}} membres"
+        "memberCount": "{{count}} membres",
+        "deleteConfirm": {
+          "title": "Delete this team?",
+          "description": "{{name}} will be removed. Shared notes stay with the workspace."
+        }
       },
       "billing": {
         "title": "Facturation",
@@ -1706,7 +1719,20 @@
         "seats": "Sièges",
         "nextInvoice": "Prochaine facture",
         "manageStripe": "Gérer dans Stripe",
-        "startSubscription": "Démarrer l'abonnement"
+        "startSubscription": "Démarrer l'abonnement",
+        "planLabel": {
+          "business": "Business",
+          "pro": "Pro",
+          "free": "Free"
+        },
+        "status": {
+          "active": "Active",
+          "trialing": "Trialing",
+          "past_due": "Past due",
+          "canceled": "Canceled",
+          "incomplete": "Incomplete",
+          "unpaid": "Unpaid"
+        }
       },
       "developer": {
         "title": "Clés API",
@@ -1722,7 +1748,45 @@
         "lastUsed": "Dernière utilisation {{date}}",
         "neverUsed": "Jamais utilisée",
         "keyCreatedTitle": "Clé API créée",
-        "keyCreatedDescription": "Copiez cette clé maintenant — vous ne pourrez plus la voir."
+        "keyCreatedDescription": "Copiez cette clé maintenant — vous ne pourrez plus la voir.",
+        "revokeConfirm": {
+          "title": "Revoke this key?",
+          "description": "{{name}} will stop working immediately. Any integration using it will start failing."
+        },
+        "scopes": {
+          "notes": {
+            "title": "Notes",
+            "read": "Read notes",
+            "write": "Write notes"
+          },
+          "folders": {
+            "title": "Folders",
+            "read": "Read folders",
+            "write": "Write folders"
+          },
+          "transcriptions": {
+            "title": "Transcriptions",
+            "read": "Read transcriptions"
+          },
+          "members": {
+            "title": "Members",
+            "read": "Read members",
+            "write": "Manage members"
+          },
+          "billing": {
+            "title": "Billing",
+            "read": "Read billing"
+          },
+          "full": {
+            "title": "Full access",
+            "admin": "Workspace admin"
+          }
+        }
+      },
+      "signInRequired": {
+        "title": "Sign in to manage workspaces",
+        "description": "Workspaces require an OpenWhispr account.",
+        "signIn": "Sign in"
       }
     }
   },
@@ -2554,7 +2618,8 @@
           "invalidEmail": "Inserisci un indirizzo email valido",
           "alreadyInvited": "{{email}} è già stato invitato",
           "inviteFailed": "Impossibile inviare l'invito. Riprova.",
-          "linkUnavailable": "Genera o ruota il link per copiarlo"
+          "linkUnavailable": "Genera o ruota il link per copiarlo",
+          "loadFailed": "Couldn't load share settings"
         }
       }
     }
@@ -2705,7 +2770,8 @@
       "signInToAccept": "Connectez-vous pour accepter",
       "successTitle": "Vous êtes membre",
       "successDescription": "Bienvenue dans {{name}}.",
-      "errorTitle": "Impossible d'accepter l'invitation"
+      "errorTitle": "Impossible d'accepter l'invitation",
+      "sentTo": "Invitation sent to {{email}}"
     }
   }
 }

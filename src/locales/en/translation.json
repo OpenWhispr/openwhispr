@@ -1092,13 +1092,22 @@
         "promote": "Make admin",
         "demote": "Make member",
         "transferOwnership": "Transfer ownership",
-        "remove": "Remove from workspace"
+        "remove": "Remove from workspace",
+        "removeConfirm": {
+          "title": "Remove this member?",
+          "description": "{{name}} will lose access to {{workspace}} immediately."
+        }
       },
       "invites": {
         "title": "Pending invitations",
         "resend": "Resend",
         "revoke": "Revoke",
-        "resent": "Invitation resent"
+        "resent": "Invitation resent",
+        "revokeFailed": "Could not revoke invitation",
+        "revokeConfirm": {
+          "title": "Revoke this invitation?",
+          "description": "The invitation link for {{email}} will stop working."
+        }
       },
       "teams": {
         "title": "Teams",
@@ -1109,7 +1118,11 @@
         "createTitle": "Create team",
         "nameLabel": "Team name",
         "descriptionLabel": "Description",
-        "memberCount": "{{count}} members"
+        "memberCount": "{{count}} members",
+        "deleteConfirm": {
+          "title": "Delete this team?",
+          "description": "{{name}} will be removed. Shared notes stay with the workspace."
+        }
       },
       "billing": {
         "title": "Billing",
@@ -1118,7 +1131,20 @@
         "seats": "Seats",
         "nextInvoice": "Next invoice",
         "manageStripe": "Manage in Stripe",
-        "startSubscription": "Start subscription"
+        "startSubscription": "Start subscription",
+        "planLabel": {
+          "business": "Business",
+          "pro": "Pro",
+          "free": "Free"
+        },
+        "status": {
+          "active": "Active",
+          "trialing": "Trialing",
+          "past_due": "Past due",
+          "canceled": "Canceled",
+          "incomplete": "Incomplete",
+          "unpaid": "Unpaid"
+        }
       },
       "developer": {
         "title": "API keys",
@@ -1134,7 +1160,45 @@
         "lastUsed": "Last used {{date}}",
         "neverUsed": "Never used",
         "keyCreatedTitle": "API key created",
-        "keyCreatedDescription": "Copy this key now — you won't be able to see it again."
+        "keyCreatedDescription": "Copy this key now — you won't be able to see it again.",
+        "revokeConfirm": {
+          "title": "Revoke this key?",
+          "description": "{{name}} will stop working immediately. Any integration using it will start failing."
+        },
+        "scopes": {
+          "notes": {
+            "title": "Notes",
+            "read": "Read notes",
+            "write": "Write notes"
+          },
+          "folders": {
+            "title": "Folders",
+            "read": "Read folders",
+            "write": "Write folders"
+          },
+          "transcriptions": {
+            "title": "Transcriptions",
+            "read": "Read transcriptions"
+          },
+          "members": {
+            "title": "Members",
+            "read": "Read members",
+            "write": "Manage members"
+          },
+          "billing": {
+            "title": "Billing",
+            "read": "Read billing"
+          },
+          "full": {
+            "title": "Full access",
+            "admin": "Workspace admin"
+          }
+        }
+      },
+      "signInRequired": {
+        "title": "Sign in to manage workspaces",
+        "description": "Workspaces require an OpenWhispr account.",
+        "signIn": "Sign in"
       }
     },
     "account": {
@@ -1984,7 +2048,8 @@
       "signInToAccept": "Sign in to accept",
       "successTitle": "You're in",
       "successDescription": "Welcome to {{name}}.",
-      "errorTitle": "Couldn't accept invitation"
+      "errorTitle": "Couldn't accept invitation",
+      "sentTo": "Invitation sent to {{email}}"
     }
   },
   "chat": {
@@ -2650,7 +2715,8 @@
           "invalidEmail": "Enter a valid email address",
           "alreadyInvited": "{{email}} is already invited",
           "inviteFailed": "Couldn't send the invitation. Try again.",
-          "linkUnavailable": "Generate or rotate the link to copy it"
+          "linkUnavailable": "Generate or rotate the link to copy it",
+          "loadFailed": "Couldn't load share settings"
         }
       }
     }

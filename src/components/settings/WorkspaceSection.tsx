@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Users, UserPlus, Trash2 } from "lucide-react";
+import { Users, UserPlus, Trash2, Lock } from "lucide-react";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
+import { useAuth } from "../../hooks/useAuth";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -41,6 +42,7 @@ interface Props {
 
 export default function WorkspaceSection({ initialSubTab }: Props) {
   const { t } = useTranslation();
+  const { isSignedIn } = useAuth();
   const { workspaces, activeWorkspaceId, setActiveWorkspaceId, loaded, refresh } =
     useWorkspaceStore();
   const [tab, setTab] = useLocalStorage<WorkspaceTab>(
@@ -50,8 +52,8 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
   const [createOpen, setCreateOpen] = useState(false);
 
   useEffect(() => {
-    if (!loaded) void refresh();
-  }, [loaded, refresh]);
+    if (isSignedIn && !loaded) void refresh();
+  }, [isSignedIn, loaded, refresh]);
 
   const workspace = activeWorkspaceId
     ? workspaces.find((w) => w.id === activeWorkspaceId)
@@ -62,6 +64,30 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
       setActiveWorkspaceId(workspaces[0].id);
     }
   }, [activeWorkspaceId, workspaces, setActiveWorkspaceId]);
+
+  if (!isSignedIn) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-xs font-semibold text-foreground">
+            {t("settingsPage.workspace.title")}
+          </h3>
+          <p className="text-xs text-muted-foreground/80 mt-0.5">
+            {t("settingsPage.workspace.description")}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-6 text-center">
+          <Lock className="w-5 h-5 text-muted-foreground/60 mx-auto mb-2" />
+          <p className="text-xs font-medium text-foreground mb-1">
+            {t("settingsPage.workspace.signInRequired.title")}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {t("settingsPage.workspace.signInRequired.description")}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!loaded) {
     return (

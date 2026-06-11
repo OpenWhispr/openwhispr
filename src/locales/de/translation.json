@@ -1680,13 +1680,22 @@
         "promote": "Zum Administrator machen",
         "demote": "Zum Mitglied machen",
         "transferOwnership": "Eigentum übertragen",
-        "remove": "Aus Workspace entfernen"
+        "remove": "Aus Workspace entfernen",
+        "removeConfirm": {
+          "title": "Remove this member?",
+          "description": "{{name}} will lose access to {{workspace}} immediately."
+        }
       },
       "invites": {
         "title": "Ausstehende Einladungen",
         "resend": "Erneut senden",
         "revoke": "Widerrufen",
-        "resent": "Einladung erneut gesendet"
+        "resent": "Einladung erneut gesendet",
+        "revokeFailed": "Could not revoke invitation",
+        "revokeConfirm": {
+          "title": "Revoke this invitation?",
+          "description": "The invitation link for {{email}} will stop working."
+        }
       },
       "teams": {
         "title": "Teams",
@@ -1697,7 +1706,11 @@
         "createTitle": "Team erstellen",
         "nameLabel": "Team-Name",
         "descriptionLabel": "Beschreibung",
-        "memberCount": "{{count}} Mitglieder"
+        "memberCount": "{{count}} Mitglieder",
+        "deleteConfirm": {
+          "title": "Delete this team?",
+          "description": "{{name}} will be removed. Shared notes stay with the workspace."
+        }
       },
       "billing": {
         "title": "Abrechnung",
@@ -1706,7 +1719,20 @@
         "seats": "Plätze",
         "nextInvoice": "Nächste Rechnung",
         "manageStripe": "In Stripe verwalten",
-        "startSubscription": "Abonnement starten"
+        "startSubscription": "Abonnement starten",
+        "planLabel": {
+          "business": "Business",
+          "pro": "Pro",
+          "free": "Free"
+        },
+        "status": {
+          "active": "Active",
+          "trialing": "Trialing",
+          "past_due": "Past due",
+          "canceled": "Canceled",
+          "incomplete": "Incomplete",
+          "unpaid": "Unpaid"
+        }
       },
       "developer": {
         "title": "API-Schlüssel",
@@ -1722,7 +1748,45 @@
         "lastUsed": "Zuletzt verwendet {{date}}",
         "neverUsed": "Nie verwendet",
         "keyCreatedTitle": "API-Schlüssel erstellt",
-        "keyCreatedDescription": "Kopieren Sie diesen Schlüssel jetzt — Sie können ihn nicht erneut sehen."
+        "keyCreatedDescription": "Kopieren Sie diesen Schlüssel jetzt — Sie können ihn nicht erneut sehen.",
+        "revokeConfirm": {
+          "title": "Revoke this key?",
+          "description": "{{name}} will stop working immediately. Any integration using it will start failing."
+        },
+        "scopes": {
+          "notes": {
+            "title": "Notes",
+            "read": "Read notes",
+            "write": "Write notes"
+          },
+          "folders": {
+            "title": "Folders",
+            "read": "Read folders",
+            "write": "Write folders"
+          },
+          "transcriptions": {
+            "title": "Transcriptions",
+            "read": "Read transcriptions"
+          },
+          "members": {
+            "title": "Members",
+            "read": "Read members",
+            "write": "Manage members"
+          },
+          "billing": {
+            "title": "Billing",
+            "read": "Read billing"
+          },
+          "full": {
+            "title": "Full access",
+            "admin": "Workspace admin"
+          }
+        }
+      },
+      "signInRequired": {
+        "title": "Sign in to manage workspaces",
+        "description": "Workspaces require an OpenWhispr account.",
+        "signIn": "Sign in"
       }
     }
   },
@@ -2554,7 +2618,8 @@
           "invalidEmail": "Gib eine gültige E-Mail-Adresse ein",
           "alreadyInvited": "{{email}} ist bereits eingeladen",
           "inviteFailed": "Die Einladung konnte nicht gesendet werden. Versuche es erneut.",
-          "linkUnavailable": "Generiere oder rotiere den Link, um ihn zu kopieren"
+          "linkUnavailable": "Generiere oder rotiere den Link, um ihn zu kopieren",
+          "loadFailed": "Couldn't load share settings"
         }
       }
     }
@@ -2705,7 +2770,8 @@
       "signInToAccept": "Anmelden zum Annehmen",
       "successTitle": "Beigetreten",
       "successDescription": "Willkommen bei {{name}}.",
-      "errorTitle": "Einladung konnte nicht angenommen werden"
+      "errorTitle": "Einladung konnte nicht angenommen werden",
+      "sentTo": "Invitation sent to {{email}}"
     }
   }
 }

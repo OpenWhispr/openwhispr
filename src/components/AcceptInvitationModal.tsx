@@ -88,13 +88,18 @@ export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSi
         <DialogHeader>
           <DialogTitle>{t("workspaces.accept.title")}</DialogTitle>
           {preview && (
-            <DialogDescription>
-              {t("workspaces.accept.description", {
-                inviter: preview.inviter_name || preview.inviter_email || "",
-                workspace: preview.workspace_name,
-                role: preview.workspace_role,
-              })}
-            </DialogDescription>
+            <>
+              <DialogDescription>
+                {t("workspaces.accept.description", {
+                  inviter: preview.inviter_name || preview.inviter_email || "",
+                  workspace: preview.workspace_name,
+                  role: preview.workspace_role,
+                })}
+              </DialogDescription>
+              <DialogDescription className="text-xs text-muted-foreground/80 mt-1">
+                {t("workspaces.accept.sentTo", { email: preview.email })}
+              </DialogDescription>
+            </>
           )}
           {error && <DialogDescription className="text-destructive">{error}</DialogDescription>}
           {loading && <DialogDescription>{t("workspaces.accept.loading")}</DialogDescription>}
