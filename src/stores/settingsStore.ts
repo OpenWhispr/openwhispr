@@ -492,6 +492,7 @@ export interface SettingsState
   setAnthropicApiKey: (key: string) => void;
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
+  setTinfoilApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
@@ -618,6 +619,7 @@ const SECRET_IPC_SAVERS = {
   anthropic: "saveAnthropicKey",
   gemini: "saveGeminiKey",
   groq: "saveGroqKey",
+  tinfoil: "saveTinfoilKey",
   mistral: "saveMistralKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
@@ -655,6 +657,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "anthropicApiKey",
   "geminiApiKey",
   "groqApiKey",
+  "tinfoilApiKey",
   "mistralApiKey",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
@@ -667,7 +670,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
 ] as const;
 
 function invalidateApiKeyCaches(
-  provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom"
+  provider?: "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "mistral" | "custom"
 ) {
   if (provider) {
     if (_ReasoningService) {
@@ -722,6 +725,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   anthropicApiKey: "",
   geminiApiKey: "",
   groqApiKey: "",
+  tinfoilApiKey: "",
   mistralApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
@@ -1067,6 +1071,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ groqApiKey: key });
     debouncedSaveSecret("groq", key);
     invalidateApiKeyCaches("groq");
+  },
+  setTinfoilApiKey: (key: string) => {
+    set({ tinfoilApiKey: key });
+    debouncedSaveSecret("tinfoil", key);
+    invalidateApiKeyCaches("tinfoil");
   },
   setMistralApiKey: (key: string) => {
     set({ mistralApiKey: key });
@@ -1445,6 +1454,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.anthropicApiKey !== undefined) s.setAnthropicApiKey(keys.anthropicApiKey);
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
+    if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
@@ -1651,6 +1661,7 @@ export async function initializeSettings(): Promise<void> {
         anthropic,
         gemini,
         groq,
+        tinfoil,
         mistral,
         customTx,
         customRx,
@@ -1664,6 +1675,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getAnthropicKey?.(),
         window.electronAPI.getGeminiKey?.(),
         window.electronAPI.getGroqKey?.(),
+        window.electronAPI.getTinfoilKey?.(),
         window.electronAPI.getMistralKey?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
         window.electronAPI.getCleanupCustomKey?.(),
@@ -1679,6 +1691,7 @@ export async function initializeSettings(): Promise<void> {
         anthropicApiKey: anthropic || "",
         geminiApiKey: gemini || "",
         groqApiKey: groq || "",
+        tinfoilApiKey: tinfoil || "",
         mistralApiKey: mistral || "",
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",

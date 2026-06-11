@@ -2486,6 +2486,14 @@ class IPCHandlers {
       return this.environmentManager.saveGroqKey(key);
     });
 
+    ipcMain.handle("get-tinfoil-key", async () => {
+      return this.environmentManager.getTinfoilKey();
+    });
+
+    ipcMain.handle("save-tinfoil-key", async (event, key) => {
+      return this.environmentManager.saveTinfoilKey(key);
+    });
+
     ipcMain.handle("get-mistral-key", async () => {
       return this.environmentManager.getMistralKey();
     });

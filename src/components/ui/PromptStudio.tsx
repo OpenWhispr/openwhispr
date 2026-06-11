@@ -38,6 +38,7 @@ const PROVIDER_CONFIG: Record<string, ProviderConfig> = {
   anthropic: { label: "Anthropic", apiKeyStorageKey: "anthropicApiKey" },
   gemini: { label: "Gemini", apiKeyStorageKey: "geminiApiKey" },
   groq: { label: "Groq", apiKeyStorageKey: "groqApiKey" },
+  tinfoil: { label: "Tinfoil", apiKeyStorageKey: "tinfoilApiKey" },
   openwhispr: { label: "OpenWhispr Cloud" },
   custom: {
     label: "Custom endpoint",

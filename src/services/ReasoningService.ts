@@ -15,6 +15,7 @@ import { getAIModel } from "./ai/providers";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
 import { getConfiguredOpenAIBase } from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
+import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 
 export type AgentStreamChunk =
   | { type: "content"; text: string }
@@ -62,7 +63,7 @@ class ReasoningService extends BaseReasoningService {
   }
 
   private async getApiKey(
-    provider: "openai" | "anthropic" | "gemini" | "groq" | "custom"
+    provider: "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom"
   ): Promise<string> {
     if (provider === "custom") {
       let customKey = "";
@@ -100,6 +101,7 @@ class ReasoningService extends BaseReasoningService {
           anthropic: () => window.electronAPI.getAnthropicKey(),
           gemini: () => window.electronAPI.getGeminiKey(),
           groq: () => window.electronAPI.getGroqKey(),
+          tinfoil: () => window.electronAPI.getTinfoilKey?.(),
         };
         apiKey = (await keyGetters[provider]()) ?? undefined;
 
@@ -335,7 +337,7 @@ class ReasoningService extends BaseReasoningService {
     provider: string,
     config: ReasoningConfig & { systemPrompt: string }
   ): AsyncGenerator<string, void, unknown> {
-    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "custom"];
+    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "tinfoil", "custom"];
     const isLocalProvider = !cloudProviders.includes(provider);
 
     const settings = getSettings();
@@ -356,7 +358,13 @@ class ReasoningService extends BaseReasoningService {
       }
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
-      const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom";
+      const providerKey = provider as
+        | "openai"
+        | "groq"
+        | "gemini"
+        | "anthropic"
+        | "tinfoil"
+        | "custom";
       const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
       apiKey = overrideKey || (await this.getApiKey(providerKey));
 
@@ -367,6 +375,8 @@ class ReasoningService extends BaseReasoningService {
         case "gemini":
           endpoint = buildApiUrl(API_ENDPOINTS.GEMINI, "/openai/chat/completions");
           break;
+        case "tinfoil":
+          throw new Error("Tinfoil streaming must use the verified SDK transport");
         case "openai":
         case "custom":
           endpoint = buildApiUrl(
@@ -538,7 +548,7 @@ class ReasoningService extends BaseReasoningService {
       );
     }
 
-    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "custom"];
+    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "tinfoil", "custom"];
     const isLocalProvider = !cloudProviders.includes(provider);
 
     const settings = getSettings();
@@ -567,7 +577,13 @@ class ReasoningService extends BaseReasoningService {
       }
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
-      const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom";
+      const providerKey = provider as
+        | "openai"
+        | "groq"
+        | "gemini"
+        | "anthropic"
+        | "tinfoil"
+        | "custom";
       const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
       apiKey = overrideKey || (await this.getApiKey(providerKey));
       baseURL =
@@ -576,7 +592,7 @@ class ReasoningService extends BaseReasoningService {
     const apiConfig = getOpenAiApiConfig(model);
 
     const aiProvider = isLocalProvider || isLanCleanup ? "local" : provider;
-    const aiModel = getAIModel(aiProvider, model, apiKey, baseURL);
+    const aiModel = await getAIModel(aiProvider, model, apiKey, baseURL);
 
     const modelDef = getCloudModel(model);
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
@@ -858,6 +874,7 @@ class ReasoningService extends BaseReasoningService {
       const anthropicKey = await window.electronAPI?.getAnthropicKey?.();
       const geminiKey = await window.electronAPI?.getGeminiKey?.();
       const groqKey = await window.electronAPI?.getGroqKey?.();
+      const tinfoilKey = await window.electronAPI?.getTinfoilKey?.();
       const localAvailable = await window.electronAPI?.checkLocalReasoningAvailable?.();
 
       logger.logReasoning("API_KEY_CHECK", {
@@ -865,10 +882,11 @@ class ReasoningService extends BaseReasoningService {
         hasAnthropic: !!anthropicKey,
         hasGemini: !!geminiKey,
         hasGroq: !!groqKey,
+        hasTinfoil: !!tinfoilKey,
         hasLocal: !!localAvailable,
       });
 
-      return !!(openaiKey || anthropicKey || geminiKey || groqKey || localAvailable);
+      return !!(openaiKey || anthropicKey || geminiKey || groqKey || tinfoilKey || localAvailable);
     } catch (error) {
       logger.logReasoning("API_KEY_CHECK_ERROR", {
         error: (error as Error).message,
@@ -880,15 +898,19 @@ class ReasoningService extends BaseReasoningService {
   }
 
   clearApiKeyCache(
-    provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom"
+    provider?: "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "mistral" | "custom"
   ): void {
     if (provider) {
       if (provider !== "custom") {
         this.apiKeyCache.delete(provider);
       }
+      if (provider === "tinfoil") {
+        clearTinfoilClientCache();
+      }
       logger.logReasoning("API_KEY_CACHE_CLEARED", { provider });
     } else {
       this.apiKeyCache.clear();
+      clearTinfoilClientCache();
       logger.logReasoning("API_KEY_CACHE_CLEARED", { provider: "all" });
     }
   }
