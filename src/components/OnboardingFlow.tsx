@@ -879,12 +879,17 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             showTitle={true}
             className="bg-background backdrop-blur-xl border-b border-border shadow-sm"
             actions={isSignedIn ? <SupportDropdown /> : undefined}
+            center={
+              onboardingPlatform === "darwin" ? (
+                <StepProgress steps={steps.slice(1)} currentStep={currentStep - 1} />
+              ) : undefined
+            }
           ></TitleBar>
         </div>
       )}
 
-      {/* Progress Bar - hidden on welcome/auth step */}
-      {showProgress && (
+      {/* Progress bar — on macOS it lives centered in the title bar instead */}
+      {showProgress && onboardingPlatform !== "darwin" && (
         <div className="shrink-0 bg-background/80 backdrop-blur-2xl border-b border-white/5 px-6 md:px-12 py-3 z-10">
           <div className="max-w-3xl mx-auto">
             <StepProgress steps={steps.slice(1)} currentStep={currentStep - 1} />

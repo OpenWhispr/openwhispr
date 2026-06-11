@@ -222,9 +222,9 @@
     },
     "useCase": {
       "title": "你为什么来到这里？",
-      "description": "我们是一个小团队，每周都在发布改进。告诉我们你的使用目的，我们就能为你正确配置 OpenWhispr。",
+      "description": "我们是一个小团队，每周发布更新。你的选择会为你配置应用，也告诉我们接下来该做什么。",
       "noteLabel": "还有什么想告诉我们的吗？",
-      "notePlaceholder": "可选 — 例如“我口述放射科报告”或“我写很多邮件”",
+      "notePlaceholder": "可选",
       "options": {
         "dictation": {
           "title": "更快地写作",

@@ -201,9 +201,9 @@
     },
     "useCase": {
       "title": "O que traz você aqui?",
-      "description": "Somos uma equipe pequena lançando melhorias toda semana. Saber por que você veio nos ajuda a configurar o OpenWhispr do jeito certo para você.",
+      "description": "Somos uma equipe pequena lançando melhorias toda semana. O que você escolher configura o app para você — e nos diz o que construir em seguida.",
       "noteLabel": "Algo mais que gostaria de nos contar?",
-      "notePlaceholder": "Opcional — p. ex. “Dito laudos de radiologia” ou “Escrevo muitos e-mails”",
+      "notePlaceholder": "Opcional",
       "options": {
         "dictation": {
           "title": "Escrever mais rápido",

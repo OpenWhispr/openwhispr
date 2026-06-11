@@ -222,9 +222,9 @@
     },
     "useCase": {
       "title": "Why are you here?",
-      "description": "We're a small team shipping improvements every week. Telling us what you came for helps us set OpenWhispr up properly for you.",
+      "description": "We're a small team shipping every week. What you pick sets up the app for you — and tells us what to build next.",
       "noteLabel": "Anything else you'd like us to know?",
-      "notePlaceholder": "Optional — e.g. “I dictate radiology reports” or “I write a lot of emails”",
+      "notePlaceholder": "Optional",
       "options": {
         "dictation": {
           "title": "Writing faster",

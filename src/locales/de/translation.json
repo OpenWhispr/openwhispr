@@ -222,9 +222,9 @@
     },
     "useCase": {
       "title": "Was führt dich hierher?",
-      "description": "Wir sind ein kleines Team und liefern jede Woche Verbesserungen. Zu wissen, wofür du gekommen bist, hilft uns, OpenWhispr richtig für dich einzurichten.",
+      "description": "Wir sind ein kleines Team und liefern jede Woche. Deine Auswahl richtet die App für dich ein — und sagt uns, was wir als Nächstes bauen sollen.",
       "noteLabel": "Möchtest du uns noch etwas mitteilen?",
-      "notePlaceholder": "Optional — z. B. „Ich diktiere Radiologie-Befunde“ oder „Ich schreibe viele E-Mails“",
+      "notePlaceholder": "Optional",
       "options": {
         "dictation": {
           "title": "Schneller schreiben",

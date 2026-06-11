@@ -24,15 +24,17 @@ export default function UseCaseStep({
 
   return (
     <div className="space-y-4">
-      <div className="text-center space-y-0.5">
+      <div className="text-center space-y-1">
         <h2 className="text-lg font-semibold text-foreground tracking-tight">
           {t("onboarding.useCase.title")}
         </h2>
-        <p className="text-xs text-muted-foreground">{t("onboarding.useCase.description")}</p>
+        <p className="text-xs text-muted-foreground leading-relaxed max-w-md mx-auto">
+          {t("onboarding.useCase.description")}
+        </p>
       </div>
 
       <div className="space-y-1.5">
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
           {t("onboarding.useCase.selectHint")}
         </p>
         {USE_CASE_OPTIONS.map(({ id, icon }) => (

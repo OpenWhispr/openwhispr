@@ -7,6 +7,7 @@ interface TitleBarProps {
   children?: React.ReactNode;
   className?: string;
   actions?: React.ReactNode;
+  center?: React.ReactNode;
 }
 
 export default function TitleBar({
@@ -15,6 +16,7 @@ export default function TitleBar({
   children,
   className = "",
   actions,
+  center,
 }: TitleBarProps) {
   const platform =
     typeof window !== "undefined" && window.electronAPI?.getPlatform
@@ -24,9 +26,17 @@ export default function TitleBar({
   return (
     <div className={`bg-background border-b border-border select-none ${className}`}>
       <div
-        className="flex items-center justify-between h-12 px-4"
+        className="relative flex items-center justify-between h-12 px-4"
         style={{ WebkitAppRegion: "drag" }}
       >
+        {center && (
+          <div
+            className="absolute left-1/2 -translate-x-1/2"
+            style={{ WebkitAppRegion: "no-drag" }}
+          >
+            {center}
+          </div>
+        )}
         <div className="flex items-center gap-2" style={{ WebkitAppRegion: "no-drag" }}>
           {platform !== "darwin" ? (
             actions
