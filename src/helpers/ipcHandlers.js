@@ -1419,6 +1419,26 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("export-dictionary", async (event, words) => {
+      try {
+        const { dialog } = require("electron");
+        const fs = require("fs");
+
+        const result = await dialog.showSaveDialog({
+          defaultPath: "dictionary.txt",
+          filters: [{ name: "Text", extensions: ["txt"] }],
+        });
+
+        if (result.canceled || !result.filePath) return { success: false };
+
+        fs.writeFileSync(result.filePath, words.join("\n"), "utf-8");
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Error exporting dictionary", { error: error.message }, "dictionary");
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("select-audio-file", async () => {
       const { dialog } = require("electron");
       const result = await dialog.showOpenDialog({
