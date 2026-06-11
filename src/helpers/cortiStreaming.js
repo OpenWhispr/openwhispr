@@ -295,12 +295,6 @@ class CortiStreaming {
     this.closeResolve = null;
   }
 
-  cleanupAll() {
-    this.cleanup();
-    this.accumulatedText = "";
-    this.completedSegments = [];
-  }
-
   getStatus() {
     return {
       isConnected: this.isConnected,

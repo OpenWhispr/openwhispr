@@ -19,6 +19,10 @@ async function request(token, tenant, url, options = {}) {
   return response;
 }
 
+async function requestJson(token, tenant, url, options) {
+  return (await request(token, tenant, url, options)).json();
+}
+
 // Corti's WSS /transcribe endpoint is a strictly real-time engine — replaying a
 // finished recording faster than real time drops audio. Pre-recorded dictation
 // goes through the interaction REST flow instead: create → upload → transcribe.
@@ -39,36 +43,40 @@ async function transcribeAudio({
     "transcription"
   );
 
-  const { interactionId } = await (
-    await request(token, tenant, `${base}/interactions/`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        encounter: {
-          identifier: `openwhispr-${crypto.randomUUID()}`,
-          status: "completed",
-          type: "consultation",
-        },
-      }),
-    })
-  ).json();
+  const { interactionId } = await requestJson(token, tenant, `${base}/interactions/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      encounter: {
+        identifier: `openwhispr-${crypto.randomUUID()}`,
+        status: "completed",
+        type: "consultation",
+      },
+    }),
+  });
 
   try {
-    const { recordingId } = await (
-      await request(token, tenant, `${base}/interactions/${interactionId}/recordings/`, {
+    const { recordingId } = await requestJson(
+      token,
+      tenant,
+      `${base}/interactions/${interactionId}/recordings/`,
+      {
         method: "POST",
         headers: { "Content-Type": "application/octet-stream" },
         body: Buffer.from(audioBuffer),
-      })
-    ).json();
+      }
+    );
 
-    const transcript = await (
-      await request(token, tenant, `${base}/interactions/${interactionId}/transcripts/`, {
+    const transcript = await requestJson(
+      token,
+      tenant,
+      `${base}/interactions/${interactionId}/transcripts/`,
+      {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recordingId, primaryLanguage: language, isDictation: true }),
-      })
-    ).json();
+      }
+    );
 
     return { text: (transcript.transcripts || []).map((utterance) => utterance.text).join(" ") };
   } finally {

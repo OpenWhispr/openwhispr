@@ -659,6 +659,22 @@ class IPCHandlers {
     }
   }
 
+  // Mints a Corti access token from stored BYOK credentials. Shared by the
+  // dictation streaming handlers and the meeting realtime-token resolver.
+  async _mintStoredCortiToken(options = {}) {
+    const clientId = this.environmentManager.getCortiClientId();
+    const clientSecret = this.environmentManager.getCortiClientSecret();
+    if (!clientId || !clientSecret) {
+      const err = new Error("No Corti credentials configured. Add them in Settings.");
+      err.code = "NO_API";
+      throw err;
+    }
+    const environment = options.environment || "us";
+    const tenant = (options.tenant || "").trim() || "base";
+    const token = await getCortiToken({ environment, tenant, clientId, clientSecret });
+    return { token, environment, tenant };
+  }
+
   setupHandlers() {
     ipcMain.handle("window-minimize", () => {
       if (this.windowManager.controlPanelWindow) {
@@ -4256,18 +4272,8 @@ class IPCHandlers {
       }
 
       if (options.provider === "corti-realtime") {
-        const clientId = this.environmentManager.getCortiClientId();
-        const clientSecret = this.environmentManager.getCortiClientSecret();
-        if (!clientId || !clientSecret) {
-          throw new Error("No Corti credentials configured. Add them in Settings.");
-        }
         // One token covers both meeting streams; it's only used at the WSS handshake.
-        const token = await getCortiToken({
-          environment: options.environment || "us",
-          tenant: (options.tenant || "").trim() || "base",
-          clientId,
-          clientSecret,
-        });
+        const { token } = await this._mintStoredCortiToken(options);
         return streams === 2 ? [token, token] : token;
       }
 
@@ -7115,26 +7121,9 @@ class IPCHandlers {
       return this.deepgramStreaming.getStatus();
     });
 
-    // Corti BYOK streaming — tokens are minted locally from stored credentials.
-    const mintCortiStreamingToken = (options) => {
-      const clientId = this.environmentManager.getCortiClientId();
-      const clientSecret = this.environmentManager.getCortiClientSecret();
-      if (!clientId || !clientSecret) {
-        const err = new Error("Corti credentials not configured");
-        err.code = "NO_API";
-        throw err;
-      }
-      return getCortiToken({
-        environment: options.environment || "us",
-        tenant: (options.tenant || "").trim() || "base",
-        clientId,
-        clientSecret,
-      });
-    };
-
     ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {
       try {
-        await mintCortiStreamingToken(options);
+        await this._mintStoredCortiToken(options);
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message, code: error.code };
@@ -7150,7 +7139,7 @@ class IPCHandlers {
           await this.cortiStreaming.disconnect(false);
         }
 
-        const token = await mintCortiStreamingToken(options);
+        const { token, environment, tenant } = await this._mintStoredCortiToken(options);
         const win = BrowserWindow.fromWebContents(event.sender);
 
         this.cortiStreaming.onPartialTranscript = (text) => {
@@ -7168,8 +7157,8 @@ class IPCHandlers {
 
         await this.cortiStreaming.connect({
           token,
-          environment: options.environment || "us",
-          tenant: (options.tenant || "").trim() || "base",
+          environment,
+          tenant,
           language: options.language,
           keyterms: options.keyterms,
         });
@@ -7190,17 +7179,13 @@ class IPCHandlers {
 
     ipcMain.handle("corti-streaming-stop", async () => {
       try {
+        const model = this.cortiStreaming?.currentModel || "corti-transcribe";
         const audioBytesSent = this.cortiStreaming?.audioBytesSent || 0;
         let result = { text: "" };
         if (this.cortiStreaming) {
           result = await this.cortiStreaming.disconnect(true);
         }
-        return {
-          success: true,
-          text: result?.text || "",
-          model: "corti-transcribe",
-          audioBytesSent,
-        };
+        return { success: true, text: result?.text || "", model, audioBytesSent };
       } catch (error) {
         debugLogger.error("Corti streaming stop error", { error: error.message }, "streaming");
         return { success: false, error: error.message };
