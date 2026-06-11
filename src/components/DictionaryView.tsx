@@ -1,13 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CornerDownLeft, Download, Info, Pencil, Upload, X } from "lucide-react";
+import { CornerDownLeft, Download, Pencil, Upload, X } from "lucide-react";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { ConfirmDialog } from "./ui/dialog";
 import { useToast } from "./ui/useToast";
 import { useSettings } from "../hooks/useSettings";
-import { useAgentName } from "../utils/agentName";
+import { getAgentName } from "../utils/agentName";
 
 const parseWords = (text: string): string[] =>
   text
@@ -18,7 +18,7 @@ const parseWords = (text: string): string[] =>
 export default function DictionaryView() {
   const { t } = useTranslation();
   const { customDictionary, setCustomDictionary } = useSettings();
-  const { agentName, setAgentName } = useAgentName();
+  const agentName = getAgentName();
   const { toast } = useToast();
 
   const [newWord, setNewWord] = useState("");
@@ -26,10 +26,7 @@ export default function DictionaryView() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [editingWord, setEditingWord] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
-  const [editingAgentName, setEditingAgentName] = useState(false);
-  const [agentNameInput, setAgentNameInput] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
 
   const pendingImportCount = useMemo(() => parseWords(bulkText).length, [bulkText]);
 
@@ -84,12 +81,6 @@ export default function DictionaryView() {
     setEditingWord(null);
   }, [editingWord, editValue, customDictionary, setCustomDictionary]);
 
-  const commitAgentName = useCallback(() => {
-    const trimmed = agentNameInput.trim();
-    if (trimmed && trimmed !== agentName) setAgentName(trimmed);
-    setEditingAgentName(false);
-  }, [agentNameInput, agentName, setAgentName]);
-
   const handleExport = useCallback(async () => {
     const result = await window.electronAPI?.exportDictionary?.(customDictionary);
     if (result?.error) {
@@ -113,56 +104,6 @@ export default function DictionaryView() {
       />
 
       <div className="px-5 py-4 flex flex-col gap-3">
-        {/* ─── Voice agent header ─── */}
-        <div className="rounded-md border border-foreground/8 dark:border-white/6 bg-foreground/[0.02] dark:bg-white/[0.03] px-4 py-3 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/80 to-primary/40 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-foreground/30">{t("dictionary.voiceAgent")}</p>
-            {editingAgentName ? (
-              <Input
-                autoFocus
-                value={agentNameInput}
-                onChange={(e) => setAgentNameInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") commitAgentName();
-                  if (e.key === "Escape") setEditingAgentName(false);
-                }}
-                onBlur={() => setEditingAgentName(false)}
-                className="h-7 mt-0.5 text-sm font-semibold max-w-[220px]"
-              />
-            ) : (
-              <h2 className="text-sm font-semibold text-foreground truncate">{agentName}</h2>
-            )}
-          </div>
-          <button
-            onClick={() => {
-              setAgentNameInput(agentName);
-              setEditingAgentName(true);
-            }}
-            aria-label={t("dictionary.editAgentName")}
-            className="p-1 text-foreground/25 hover:text-foreground/60 transition-colors"
-          >
-            <Pencil size={12} />
-          </button>
-          <div className="w-px h-4 bg-foreground/10 dark:bg-white/8" />
-          <button
-            onClick={() => setShowInfo(!showInfo)}
-            aria-expanded={showInfo}
-            className="text-xs text-foreground/25 hover:text-foreground/50 transition-colors"
-          >
-            {t("dictionary.howItWorks")}
-          </button>
-        </div>
-
-        {showInfo && (
-          <div className="rounded-md bg-foreground/[0.02] dark:bg-white/[0.02] border border-foreground/5 dark:border-white/4 px-3 py-2.5 flex items-start gap-1.5">
-            <Info size={9} className="text-foreground/15 mt-px shrink-0" />
-            <p className="text-xs text-foreground/25 leading-[1.6]">
-              {t("dictionary.howItWorksDetail")}
-            </p>
-          </div>
-        )}
-
         {/* ─── Add word ─── */}
         <div>
           <div className="relative">
