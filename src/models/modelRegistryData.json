@@ -201,7 +201,8 @@
           "id": "corti-transcribe",
           "name": "Corti Transcribe",
           "description": "Clinical-grade medical transcription",
-          "descriptionKey": "models.descriptions.transcription.corti_transcribe"
+          "descriptionKey": "models.descriptions.transcription.corti_transcribe",
+          "streaming": true
         }
       ]
     }

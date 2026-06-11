@@ -11,7 +11,9 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
+const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
+const { getCortiToken } = require("./cortiAuth");
 const AudioStorageManager = require("./audioStorage");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
@@ -43,12 +45,14 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
   "assemblyai-realtime": AssemblyAiStreaming,
   "deepgram-realtime": DeepgramStreaming,
+  "corti-realtime": CortiStreaming,
 };
 const ALLOWED_MEETING_PROVIDERS = new Set([
   "local",
   "openai-realtime",
   "assemblyai-realtime",
   "deepgram-realtime",
+  "corti-realtime",
 ]);
 
 function parseAttendees(raw) {
@@ -293,6 +297,7 @@ class IPCHandlers {
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
+    this.cortiStreaming = null;
     this._dictationStreaming = null;
     this._dictationConnectPromise = null;
     this._dictationIdleTimer = null;
@@ -4250,6 +4255,22 @@ class IPCHandlers {
         });
       }
 
+      if (options.provider === "corti-realtime") {
+        const clientId = this.environmentManager.getCortiClientId();
+        const clientSecret = this.environmentManager.getCortiClientSecret();
+        if (!clientId || !clientSecret) {
+          throw new Error("No Corti credentials configured. Add them in Settings.");
+        }
+        // One token covers both meeting streams; it's only used at the WSS handshake.
+        const token = await getCortiToken({
+          environment: options.environment || "us",
+          tenant: (options.tenant || "").trim() || "base",
+          clientId,
+          clientSecret,
+        });
+        return streams === 2 ? [token, token] : token;
+      }
+
       if (options.mode === "byok") {
         const apiKey = this.environmentManager.getOpenAIKey();
         if (!apiKey) throw new Error("No OpenAI API key configured. Add your key in Settings.");
@@ -4322,6 +4343,9 @@ class IPCHandlers {
         model: options.model,
         language: options.language,
         preconfigured: options.mode !== "byok",
+        environment: options.environment,
+        tenant: options.tenant,
+        keyterms: options.keyterms,
       };
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
       let pairs;
@@ -7089,6 +7113,105 @@ class IPCHandlers {
         return { isConnected: false, sessionId: null };
       }
       return this.deepgramStreaming.getStatus();
+    });
+
+    // Corti BYOK streaming — tokens are minted locally from stored credentials.
+    const mintCortiStreamingToken = (options) => {
+      const clientId = this.environmentManager.getCortiClientId();
+      const clientSecret = this.environmentManager.getCortiClientSecret();
+      if (!clientId || !clientSecret) {
+        const err = new Error("Corti credentials not configured");
+        err.code = "NO_API";
+        throw err;
+      }
+      return getCortiToken({
+        environment: options.environment || "us",
+        tenant: (options.tenant || "").trim() || "base",
+        clientId,
+        clientSecret,
+      });
+    };
+
+    ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {
+      try {
+        await mintCortiStreamingToken(options);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message, code: error.code };
+      }
+    });
+
+    ipcMain.handle("corti-streaming-start", async (event, options = {}) => {
+      try {
+        if (!this.cortiStreaming) {
+          this.cortiStreaming = new CortiStreaming();
+        }
+        if (this.cortiStreaming.isConnected) {
+          await this.cortiStreaming.disconnect(false);
+        }
+
+        const token = await mintCortiStreamingToken(options);
+        const win = BrowserWindow.fromWebContents(event.sender);
+
+        this.cortiStreaming.onPartialTranscript = (text) => {
+          if (win && !win.isDestroyed()) win.webContents.send("corti-partial-transcript", text);
+        };
+        this.cortiStreaming.onFinalTranscript = (text) => {
+          if (win && !win.isDestroyed()) win.webContents.send("corti-final-transcript", text);
+        };
+        this.cortiStreaming.onError = (error) => {
+          if (win && !win.isDestroyed()) win.webContents.send("corti-error", error.message);
+        };
+        this.cortiStreaming.onSessionEnd = (data) => {
+          if (win && !win.isDestroyed()) win.webContents.send("corti-session-end", data);
+        };
+
+        await this.cortiStreaming.connect({
+          token,
+          environment: options.environment || "us",
+          tenant: (options.tenant || "").trim() || "base",
+          language: options.language,
+          keyterms: options.keyterms,
+        });
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Corti streaming start error", { error: error.message }, "streaming");
+        return { success: false, error: error.message, code: error.code };
+      }
+    });
+
+    ipcMain.on("corti-streaming-send", (_event, audioBuffer) => {
+      this.cortiStreaming?.sendAudio(Buffer.from(audioBuffer));
+    });
+
+    ipcMain.on("corti-streaming-finalize", () => {
+      this.cortiStreaming?.finalize();
+    });
+
+    ipcMain.handle("corti-streaming-stop", async () => {
+      try {
+        const audioBytesSent = this.cortiStreaming?.audioBytesSent || 0;
+        let result = { text: "" };
+        if (this.cortiStreaming) {
+          result = await this.cortiStreaming.disconnect(true);
+        }
+        return {
+          success: true,
+          text: result?.text || "",
+          model: "corti-transcribe",
+          audioBytesSent,
+        };
+      } catch (error) {
+        debugLogger.error("Corti streaming stop error", { error: error.message }, "streaming");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("corti-streaming-status", async () => {
+      if (!this.cortiStreaming) {
+        return { isConnected: false, sessionId: null };
+      }
+      return this.cortiStreaming.getStatus();
     });
 
     // Agent mode handlers

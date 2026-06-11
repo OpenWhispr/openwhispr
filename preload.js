@@ -555,6 +555,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, data) => callback(data)
   ),
 
+  // Corti streaming (BYOK)
+  cortiStreamingWarmup: (options) => ipcRenderer.invoke("corti-streaming-warmup", options),
+  cortiStreamingStart: (options) => ipcRenderer.invoke("corti-streaming-start", options),
+  cortiStreamingSend: (audioBuffer) => ipcRenderer.send("corti-streaming-send", audioBuffer),
+  cortiStreamingFinalize: () => ipcRenderer.send("corti-streaming-finalize"),
+  cortiStreamingStop: () => ipcRenderer.invoke("corti-streaming-stop"),
+  cortiStreamingStatus: () => ipcRenderer.invoke("corti-streaming-status"),
+  onCortiPartialTranscript: registerListener(
+    "corti-partial-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onCortiFinalTranscript: registerListener(
+    "corti-final-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onCortiError: registerListener("corti-error", (callback) => (_event, error) => callback(error)),
+  onCortiSessionEnd: registerListener(
+    "corti-session-end",
+    (callback) => (_event, data) => callback(data)
+  ),
+
   // Meeting transcription (streaming, dual-channel)
   meetingTranscriptionPrepare: (options) =>
     ipcRenderer.invoke("meeting-transcription-prepare", options),

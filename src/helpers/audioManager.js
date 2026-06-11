@@ -111,6 +111,18 @@ const STREAMING_PROVIDERS = {
     onError: (cb) => window.electronAPI.onDictationRealtimeError(cb),
     onSessionEnd: (cb) => window.electronAPI.onDictationRealtimeSessionEnd(cb),
   },
+  corti: {
+    warmup: (opts) => window.electronAPI.cortiStreamingWarmup(opts),
+    start: (opts) => window.electronAPI.cortiStreamingStart(opts),
+    send: (buf) => window.electronAPI.cortiStreamingSend(buf),
+    finalize: () => window.electronAPI.cortiStreamingFinalize(),
+    stop: () => window.electronAPI.cortiStreamingStop(),
+    status: () => window.electronAPI.cortiStreamingStatus(),
+    onPartial: (cb) => window.electronAPI.onCortiPartialTranscript(cb),
+    onFinal: (cb) => window.electronAPI.onCortiFinalTranscript(cb),
+    onError: (cb) => window.electronAPI.onCortiError(cb),
+    onSessionEnd: (cb) => window.electronAPI.onCortiSessionEnd(cb),
+  },
 };
 
 class AudioManager {
@@ -251,16 +263,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getStreamingProvider() {
-    const { cloudTranscriptionModel } = getSettings();
-    if (REALTIME_MODELS.has(cloudTranscriptionModel)) {
-      return STREAMING_PROVIDERS["openai-realtime"];
-    }
-    const defaultProvider = this.context === "notes" ? "deepgram" : "openai-realtime";
-    const providerName = this.sttConfig?.streamingProvider || defaultProvider;
-    return STREAMING_PROVIDERS[providerName] || STREAMING_PROVIDERS[defaultProvider];
+    const fallback = this.context === "notes" ? "deepgram" : "openai-realtime";
+    return STREAMING_PROVIDERS[this.getStreamingProviderName()] || STREAMING_PROVIDERS[fallback];
   }
 
   getStreamingProviderName() {
+    const s = getSettings();
+    if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
+      return "corti";
+    }
+    if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
+      return "openai-realtime";
+    }
     const defaultProvider = this.context === "notes" ? "deepgram" : "openai-realtime";
     return this.sttConfig?.streamingProvider || defaultProvider;
   }
@@ -2130,6 +2144,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const s = getSettings();
     if (s.useLocalWhisper) return false;
 
+    // Corti (BYOK) streams over its own WSS — independent of OpenWhispr Cloud.
+    if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
+      return !!(s.cortiClientId && s.cortiClientSecret);
+    }
+
     // For dictation/agent: respect sttConfig mode from the API — this allows
     // batch mode even for realtime-capable models (e.g. gpt-4o-mini-transcribe).
     if (this.context !== "notes" && this.sttConfig?.dictation?.mode === "batch") {
@@ -2169,6 +2188,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             preferredLanguage: warmupLang,
             cloudTranscriptionModel,
             cloudTranscriptionMode,
+            cortiEnvironment,
+            cortiTenant,
           } = getSettings();
           const res = await provider.warmup({
             sampleRate: 16000,
@@ -2176,6 +2197,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             keyterms: this.getKeyterms(),
             model: cloudTranscriptionModel,
             mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
+            environment: cortiEnvironment,
+            tenant: cortiTenant,
           });
           // Throw error to trigger retry if AUTH_EXPIRED
           if (!res.success && res.code) {
@@ -2401,6 +2424,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           preferredLanguage: preferredLang,
           cloudTranscriptionModel,
           cloudTranscriptionMode,
+          cortiEnvironment,
+          cortiTenant,
           useLocalWhisper,
         } = getSettings();
         const res = await provider.start({
@@ -2409,6 +2434,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           keyterms: this.getKeyterms(),
           model: cloudTranscriptionModel,
           mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
+          environment: cortiEnvironment,
+          tenant: cortiTenant,
         });
 
         if (!res.success) {

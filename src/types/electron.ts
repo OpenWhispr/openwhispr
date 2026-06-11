@@ -1458,6 +1458,34 @@ declare global {
         callback: (data: { audioDuration?: number; text?: string }) => void
       ) => () => void;
 
+      // Corti streaming (BYOK)
+      cortiStreamingWarmup?: (options?: {
+        environment?: string;
+        tenant?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      cortiStreamingStart?: (options?: {
+        environment?: string;
+        tenant?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      cortiStreamingSend?: (audioBuffer: ArrayBuffer) => void;
+      cortiStreamingFinalize?: () => void;
+      cortiStreamingStop?: () => Promise<{
+        success: boolean;
+        text?: string;
+        model?: string;
+        audioBytesSent?: number;
+        error?: string;
+      }>;
+      cortiStreamingStatus?: () => Promise<{ isConnected: boolean; sessionId: string | null }>;
+      onCortiPartialTranscript?: (callback: (text: string) => void) => () => void;
+      onCortiFinalTranscript?: (callback: (text: string) => void) => () => void;
+      onCortiError?: (callback: (error: string) => void) => () => void;
+      onCortiSessionEnd?: (callback: (data: { text?: string }) => void) => () => void;
+
       // Agent overlay
       resizeAgentWindow?: (width: number, height: number) => Promise<void>;
       getAgentWindowBounds?: () => Promise<{
