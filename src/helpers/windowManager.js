@@ -452,6 +452,18 @@ class WindowManager {
     }
   }
 
+  sendToggleVoiceAgent() {
+    if (this.hotkeyManager.isInListeningMode()) {
+      return;
+    }
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.showDictationPanel();
+      this.mainWindow.webContents.send("toggle-voice-agent");
+      this._isDictatingToggle = !this._isDictatingToggle;
+      this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
+    }
+  }
+
   sendStartDictation() {
     if (this.hotkeyManager.isInListeningMode()) {
       return;

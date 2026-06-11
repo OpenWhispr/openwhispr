@@ -769,6 +769,8 @@ export default function SettingsPage({
 
   const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
   const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
+  const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
+  const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
   const meetingAudioDetection = useSettingsStore((s) => s.meetingAudioDetection);
   const setMeetingAudioDetection = useSettingsStore((s) => s.setMeetingAudioDetection);
 
@@ -928,10 +930,11 @@ export default function SettingsPage({
         {
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [meetingKey, chatAgentKey, t]
+    [meetingKey, chatAgentKey, voiceAgentKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -941,10 +944,11 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [dictationKey, chatAgentKey, t]
+    [dictationKey, chatAgentKey, voiceAgentKey, t]
   );
 
   const validateAgentHotkey = useCallback(
@@ -954,10 +958,25 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [dictationKey, meetingKey, t]
+    [dictationKey, meetingKey, voiceAgentKey, t]
+  );
+
+  const validateVoiceAgentHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+          "agentMode.settings.hotkey": chatAgentKey,
+        },
+        t
+      ),
+    [dictationKey, meetingKey, chatAgentKey, t]
   );
 
   const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
@@ -3302,6 +3321,31 @@ EOF`,
                       className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
                     >
                       {t("agentMode.settings.clearHotkey")}
+                    </button>
+                  )}
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Voice Agent Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.voiceAgentHotkey.title")}
+                description={t("settingsPage.general.voiceAgentHotkey.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyInput
+                    value={voiceAgentKey}
+                    onChange={setVoiceAgentKey}
+                    validate={validateVoiceAgentHotkey}
+                  />
+                  {voiceAgentKey && (
+                    <button
+                      onClick={() => setVoiceAgentKey("")}
+                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+                    >
+                      {t("settingsPage.general.voiceAgentHotkey.clear")}
                     </button>
                   )}
                 </SettingsPanelRow>

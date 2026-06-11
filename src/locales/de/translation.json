@@ -172,7 +172,8 @@
       "welcome": "Willkommen",
       "setup": "Einrichtung",
       "permissions": "Berechtigungen",
-      "activation": "Aktivierung"
+      "activation": "Aktivierung",
+      "voiceAgent": "Sprachagent"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Dieser Hotkey konnte nicht registriert werden",
@@ -217,6 +218,14 @@
       "hotkeyToStartStop": "{{hotkey}} zum Starten/Stoppen",
       "holdHotkey": "{{hotkey}} gedrückt halten",
       "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden..."
+    },
+    "voiceAgent": {
+      "title": "Sprachagent-Hotkey",
+      "description": "Sprechen Sie mit Ihrem KI-Agenten per Tastendruck",
+      "hotkey": "Hotkey",
+      "clear": "Hotkey entfernen",
+      "howItWorks": "Diktate, die mit diesem Hotkey gestartet werden, gehen direkt als Anweisung an {{agentName}} — ohne Aktivierungswort, die Textbereinigung wird übersprungen.",
+      "optionalNote": "Optional — Sie können ihn jederzeit in den Einstellungen festlegen oder ändern."
     },
     "connectivity": {
       "title": "OpenWhispr Cloud ist aus diesem Netzwerk nicht erreichbar",
@@ -1298,6 +1307,11 @@
         "layoutLabel": "Beim Auslösen per Hotkey öffnen in:",
         "layoutFullWidth": "Volle Breite",
         "layoutSidePanel": "Seitenleiste"
+      },
+      "voiceAgentHotkey": {
+        "title": "Sprachagent-Hotkey",
+        "description": "Startet ein Diktat, das direkt an Ihren KI-Agenten geht und die Textbereinigung überspringt",
+        "clear": "Hotkey entfernen"
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",

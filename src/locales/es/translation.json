@@ -172,7 +172,8 @@
       "welcome": "Bienvenido",
       "setup": "Configuración",
       "permissions": "Permisos",
-      "activation": "Activación"
+      "activation": "Activación",
+      "voiceAgent": "Agente de voz"
     },
     "hotkey": {
       "couldNotRegisterTitle": "No se pudo registrar ese atajo",
@@ -217,6 +218,14 @@
       "hotkeyToStartStop": "{{hotkey}} para iniciar/detener",
       "holdHotkey": "Mantener {{hotkey}}",
       "textareaPlaceholder": "Haz clic aquí y usa tu atajo para dictar..."
+    },
+    "voiceAgent": {
+      "title": "Atajo del agente de voz",
+      "description": "Habla con tu agente de IA con una sola pulsación",
+      "hotkey": "Atajo",
+      "clear": "Eliminar atajo",
+      "howItWorks": "El dictado iniciado con este atajo se envía directamente a {{agentName}} como instrucción: no necesitas decir su nombre y se omite la corrección de texto.",
+      "optionalNote": "Opcional: puedes configurarlo o cambiarlo en cualquier momento en los ajustes."
     },
     "connectivity": {
       "title": "No podemos conectar con OpenWhispr Cloud desde esta red",
@@ -1346,6 +1355,11 @@
         "layoutLabel": "Al activarse con el atajo, abrir en:",
         "layoutFullWidth": "Ancho completo",
         "layoutSidePanel": "Panel lateral"
+      },
+      "voiceAgentHotkey": {
+        "title": "Atajo del agente de voz",
+        "description": "Inicia un dictado que va directamente a tu agente de IA, omitiendo la corrección de texto",
+        "clear": "Eliminar atajo"
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",

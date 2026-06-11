@@ -172,7 +172,8 @@
       "welcome": "歡迎",
       "setup": "設定",
       "permissions": "權限",
-      "activation": "啟用"
+      "activation": "啟用",
+      "voiceAgent": "語音助手"
     },
     "hotkey": {
       "couldNotRegisterTitle": "無法註冊該快捷鍵",
@@ -217,6 +218,14 @@
       "hotkeyToStartStop": "{{hotkey}} 開始/停止",
       "holdHotkey": "按住 {{hotkey}}",
       "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入..."
+    },
+    "voiceAgent": {
+      "title": "語音助手快捷鍵",
+      "description": "一鍵喚起你的 AI 助手",
+      "hotkey": "快捷鍵",
+      "clear": "移除快捷鍵",
+      "howItWorks": "使用此快捷鍵開始的語音輸入會作為指令直接傳送給 {{agentName}}——無需喚醒詞，並跳過文字整理。",
+      "optionalNote": "選用——你可以隨時在設定中新增或修改。"
     },
     "connectivity": {
       "title": "無法從此網路連線到 OpenWhispr Cloud",
@@ -1293,6 +1302,11 @@
         "layoutLabel": "透過快捷鍵觸發時,開啟方式:",
         "layoutFullWidth": "全寬",
         "layoutSidePanel": "側邊欄"
+      },
+      "voiceAgentHotkey": {
+        "title": "語音助手快捷鍵",
+        "description": "開始一段直接傳送給 AI 助手的語音輸入，跳過文字整理",
+        "clear": "移除快捷鍵"
       },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",

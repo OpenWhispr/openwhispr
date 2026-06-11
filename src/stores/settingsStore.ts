@@ -536,6 +536,7 @@ export interface SettingsState
 
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
+  setVoiceAgentKey: (key: string) => void;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setActivationMode: (mode: "tap" | "push") => void;
 
@@ -760,6 +761,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   dictationKey: readString("dictationKey", ""),
   meetingKey: readString("meetingKey", ""),
+  voiceAgentKey: readString("voiceAgentKey", ""),
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
@@ -1200,6 +1202,45 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setMeetingKey: (key: string) => {
     if (isBrowser) localStorage.setItem("meetingKey", key);
     set({ meetingKey: key });
+  },
+  setVoiceAgentKey: (key: string) => {
+    if (!isBrowser) {
+      useSettingsStore.setState({ voiceAgentKey: key });
+      return;
+    }
+
+    const updateVoiceAgentHotkey = window.electronAPI?.updateVoiceAgentHotkey;
+    if (!updateVoiceAgentHotkey) {
+      localStorage.setItem("voiceAgentKey", key);
+      useSettingsStore.setState({ voiceAgentKey: key });
+      return;
+    }
+
+    const previousKey = get().voiceAgentKey;
+
+    void updateVoiceAgentHotkey(key)
+      .then((result) => {
+        if (!result?.success) {
+          localStorage.setItem("voiceAgentKey", previousKey);
+          useSettingsStore.setState({ voiceAgentKey: previousKey });
+          logger.warn(
+            "Failed to update voice agent hotkey",
+            { hotkey: key, message: result?.message },
+            "settings"
+          );
+          return;
+        }
+
+        localStorage.setItem("voiceAgentKey", key);
+        useSettingsStore.setState({ voiceAgentKey: key });
+      })
+      .catch((error) => {
+        logger.warn(
+          "Failed to update voice agent hotkey",
+          { hotkey: key, error: error instanceof Error ? error.message : String(error) },
+          "settings"
+        );
+      });
   },
 
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => {
@@ -1778,6 +1819,20 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync chat agent hotkey on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync voice agent hotkey from main process
+    try {
+      const envKey = await window.electronAPI.getVoiceAgentKey?.();
+      if (envKey && envKey !== state.voiceAgentKey) {
+        createStringSetter("voiceAgentKey")(envKey);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync voice agent hotkey on startup",
         { error: (err as Error).message },
         "settings"
       );

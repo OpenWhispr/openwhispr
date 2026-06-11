@@ -172,7 +172,8 @@
       "welcome": "欢迎",
       "setup": "设置",
       "permissions": "权限",
-      "activation": "激活"
+      "activation": "激活",
+      "voiceAgent": "语音助手"
     },
     "hotkey": {
       "couldNotRegisterTitle": "无法注册该快捷键",
@@ -217,6 +218,14 @@
       "hotkeyToStartStop": "{{hotkey}} 开始/停止",
       "holdHotkey": "按住 {{hotkey}}",
       "textareaPlaceholder": "点击此处，然后使用快捷键进行听写..."
+    },
+    "voiceAgent": {
+      "title": "语音助手快捷键",
+      "description": "一键唤起你的 AI 助手",
+      "hotkey": "快捷键",
+      "clear": "移除快捷键",
+      "howItWorks": "使用此快捷键开始的听写会作为指令直接发送给 {{agentName}}——无需唤醒词，并跳过文本整理。",
+      "optionalNote": "可选——你可以随时在设置中添加或修改。"
     },
     "connectivity": {
       "title": "无法从该网络连接到 OpenWhispr Cloud",
@@ -1293,6 +1302,11 @@
         "layoutLabel": "通过快捷键触发时,打开方式:",
         "layoutFullWidth": "全宽",
         "layoutSidePanel": "侧边栏"
+      },
+      "voiceAgentHotkey": {
+        "title": "语音助手快捷键",
+        "description": "开始一段直接发送给 AI 助手的听写，跳过文本整理",
+        "clear": "移除快捷键"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",

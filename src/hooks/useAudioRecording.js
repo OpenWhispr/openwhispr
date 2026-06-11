@@ -19,7 +19,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const stopLockRef = useRef(false);
   const { onToggle } = options;
 
-  const performStartRecording = useCallback(async () => {
+  const performStartRecording = useCallback(async ({ voiceAgentRequested = false } = {}) => {
     if (startLockRef.current) return false;
     startLockRef.current = true;
     try {
@@ -27,6 +27,8 @@ export const useAudioRecording = (toast, options = {}) => {
 
       const currentState = audioManagerRef.current.getState();
       if (currentState.isRecording || currentState.isProcessing) return false;
+
+      audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
 
       // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
       if (!audioManagerRef.current.sttConfig) {
@@ -199,12 +201,12 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     });
 
-    const handleToggle = async () => {
+    const handleToggle = async ({ voiceAgentRequested = false } = {}) => {
       if (!audioManagerRef.current) return;
       const currentState = audioManagerRef.current.getState();
 
       if (!currentState.isRecording && !currentState.isProcessing) {
-        await performStartRecording();
+        await performStartRecording({ voiceAgentRequested });
       } else if (currentState.isRecording) {
         await performStopRecording();
       }
@@ -220,6 +222,11 @@ export const useAudioRecording = (toast, options = {}) => {
 
     const disposeToggle = window.electronAPI.onToggleDictation(() => {
       handleToggle();
+      onToggle?.();
+    });
+
+    const disposeVoiceAgentToggle = window.electronAPI.onToggleVoiceAgent?.(() => {
+      handleToggle({ voiceAgentRequested: true });
       onToggle?.();
     });
 
@@ -249,6 +256,7 @@ export const useAudioRecording = (toast, options = {}) => {
     // Cleanup
     return () => {
       disposeToggle?.();
+      disposeVoiceAgentToggle?.();
       disposeStart?.();
       disposeStop?.();
       disposeNoAudio?.();

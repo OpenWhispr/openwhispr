@@ -172,7 +172,8 @@
       "welcome": "Benvenuto",
       "setup": "Configurazione",
       "permissions": "Permessi",
-      "activation": "Attivazione"
+      "activation": "Attivazione",
+      "voiceAgent": "Agente vocale"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Impossibile registrare questa scorciatoia",
@@ -217,6 +218,14 @@
       "hotkeyToStartStop": "{{hotkey}} per avviare/fermare",
       "holdHotkey": "Tieni premuto {{hotkey}}",
       "textareaPlaceholder": "Clicca qui e usa la scorciatoia per dettare..."
+    },
+    "voiceAgent": {
+      "title": "Scorciatoia dell'agente vocale",
+      "description": "Parla con il tuo agente IA con un solo tasto",
+      "hotkey": "Scorciatoia",
+      "clear": "Rimuovi scorciatoia",
+      "howItWorks": "La dettatura avviata con questa scorciatoia viene inviata direttamente a {{agentName}} come istruzione: non serve pronunciare il nome e la correzione del testo viene saltata.",
+      "optionalNote": "Facoltativo — puoi impostarla o modificarla in qualsiasi momento nelle impostazioni."
     },
     "connectivity": {
       "title": "Non riusciamo a raggiungere OpenWhispr Cloud da questa rete",
@@ -1298,6 +1307,11 @@
         "layoutLabel": "Quando attivata da scorciatoia, apri in:",
         "layoutFullWidth": "Larghezza completa",
         "layoutSidePanel": "Pannello laterale"
+      },
+      "voiceAgentHotkey": {
+        "title": "Scorciatoia dell'agente vocale",
+        "description": "Avvia una dettatura inviata direttamente al tuo agente IA, saltando la correzione del testo",
+        "clear": "Rimuovi scorciatoia"
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",

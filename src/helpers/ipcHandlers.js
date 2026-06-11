@@ -7225,6 +7225,35 @@ class IPCHandlers {
       };
     });
 
+    ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
+      const hotkeyManager = this.windowManager.hotkeyManager;
+      const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
+      if (!voiceAgentCallback) {
+        return { success: false, message: "Voice agent hotkey callback not initialized" };
+      }
+
+      if (!hotkey) {
+        hotkeyManager.unregisterSlot("voiceAgent");
+        this.environmentManager.saveVoiceAgentKey?.("");
+        return { success: true, message: "Voice agent hotkey cleared" };
+      }
+
+      const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback);
+      if (result.success) {
+        this.environmentManager.saveVoiceAgentKey?.(hotkey);
+        return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
+      }
+
+      return {
+        success: false,
+        message: result.error || `Failed to update voice agent hotkey to: ${hotkey}`,
+      };
+    });
+
+    ipcMain.handle("get-voice-agent-key", async () => {
+      return this.environmentManager.getVoiceAgentKey?.() || "";
+    });
+
     ipcMain.handle("get-agent-key", async () => {
       return this.environmentManager.getAgentKey?.() || "";
     });

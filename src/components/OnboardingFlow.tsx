@@ -10,6 +10,7 @@ import {
   Settings,
   Shield,
   Command,
+  Sparkles,
   UserCircle,
 } from "lucide-react";
 import TitleBar from "./TitleBar";
@@ -33,6 +34,7 @@ import { useAuth } from "../hooks/useAuth";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { getValidationMessage } from "../utils/hotkeyValidator";
+import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getCachedPlatform, getPlatform } from "../utils/platform";
 import logger from "../utils/logger";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
@@ -47,7 +49,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { t } = useTranslation();
   const { isSignedIn } = useAuth();
 
-  const getMaxStep = () => (isSignedIn ? 2 : 3);
+  const getMaxStep = () => (isSignedIn ? 3 : 4);
 
   const [currentStep, setCurrentStep, removeCurrentStep] = useLocalStorage(
     "onboardingCurrentStep",
@@ -86,6 +88,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     groqApiKey,
     mistralApiKey,
     dictationKey,
+    voiceAgentKey,
+    setVoiceAgentKey,
     activationMode,
     setActivationMode,
     setDictationKey,
@@ -125,6 +129,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     []
   );
 
+  const validateVoiceAgentHotkey = useCallback(
+    (newHotkey: string) =>
+      validateHotkeyForSlot(newHotkey, { "settingsPage.general.hotkey.title": hotkey }, t),
+    [hotkey, t]
+  );
+
   const permissionsHook = usePermissions(showAlertDialog);
   useClipboard(showAlertDialog); // Initialize clipboard hook for permission checks
 
@@ -148,12 +158,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
             { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
             { id: "activation", title: t("onboarding.steps.activation"), icon: Command },
+            { id: "voiceAgent", title: t("onboarding.steps.voiceAgent"), icon: Sparkles },
           ]
         : [
             { id: "welcome", title: t("onboarding.steps.welcome"), icon: UserCircle },
             { id: "setup", title: t("onboarding.steps.setup"), icon: Settings },
             { id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield },
             { id: "activation", title: t("onboarding.steps.activation"), icon: Command },
+            { id: "voiceAgent", title: t("onboarding.steps.voiceAgent"), icon: Sparkles },
           ],
     [isSignedIn, skipAuth, t]
   );
@@ -593,8 +605,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           </div>
         );
 
-      case 3: // Activation (only for non-signed-in users)
+      case 3: // Voice agent (signed-in users) or Activation (non-signed-in users)
+        if (isSignedIn && !skipAuth) {
+          return renderVoiceAgentStep();
+        }
         return renderActivationStep();
+
+      case 4: // Voice agent (only for non-signed-in users)
+        return renderVoiceAgentStep();
 
       default:
         return null;
@@ -677,6 +695,53 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     </div>
   );
 
+  const renderVoiceAgentStep = () => (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="text-center space-y-0.5">
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">
+          {t("onboarding.voiceAgent.title")}
+        </h2>
+        <p className="text-xs text-muted-foreground">{t("onboarding.voiceAgent.description")}</p>
+      </div>
+
+      {/* Hotkey section */}
+      <div className="rounded-lg border border-border-subtle bg-surface-1 overflow-hidden">
+        <div className="p-4 border-b border-border-subtle">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              {t("onboarding.voiceAgent.hotkey")}
+            </span>
+            {voiceAgentKey && (
+              <button
+                onClick={() => setVoiceAgentKey("")}
+                className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+              >
+                {t("onboarding.voiceAgent.clear")}
+              </button>
+            )}
+          </div>
+          <HotkeyInput
+            value={voiceAgentKey}
+            onChange={setVoiceAgentKey}
+            variant="hero"
+            validate={validateVoiceAgentHotkey}
+          />
+        </div>
+
+        <div className="p-4">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("onboarding.voiceAgent.howItWorks", { agentName })}
+          </p>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground/60 text-center">
+        {t("onboarding.voiceAgent.optionalNote")}
+      </p>
+    </div>
+  );
+
   const canProceed = () => {
     switch (currentStep) {
       case 0:
@@ -716,7 +781,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return areRequiredPermissionsMet(permissionsHook.micPermissionGranted);
       }
       case 3:
-        return hotkey.trim() !== ""; // Activation step for non-signed-in users
+        // Voice agent step (signed-in) is optional; activation (non-signed-in)
+        // requires a hotkey
+        if (isSignedIn && !skipAuth) {
+          return true;
+        }
+        return hotkey.trim() !== "";
+      case 4:
+        return true; // Voice agent step is optional for non-signed-in users
       default:
         return false;
     }

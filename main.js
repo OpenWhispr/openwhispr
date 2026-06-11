@@ -821,6 +821,29 @@ async function startApp() {
     }
   }
 
+  // Set up voice agent hotkey (dictation routed straight to the dictation
+  // agent, bypassing cleanup)
+  const voiceAgentHotkeyCallback = () => {
+    windowManager.sendToggleVoiceAgent();
+  };
+  windowManager._voiceAgentHotkeyCallback = voiceAgentHotkeyCallback;
+
+  const savedVoiceAgentKey = environmentManager.getVoiceAgentKey?.() || "";
+  if (savedVoiceAgentKey) {
+    const result = await hotkeyManager.registerSlot(
+      "voiceAgent",
+      savedVoiceAgentKey,
+      voiceAgentHotkeyCallback
+    );
+    if (!result.success) {
+      debugLogger.warn(
+        "Failed to restore voice agent hotkey",
+        { hotkey: savedVoiceAgentKey },
+        "hotkey"
+      );
+    }
+  }
+
   // Set up meeting mode hotkey
   const meetingHotkeyCallback = () => {
     if (hotkeyManager.isInListeningMode()) return;

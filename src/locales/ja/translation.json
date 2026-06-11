@@ -172,7 +172,8 @@
       "welcome": "ようこそ",
       "setup": "セットアップ",
       "permissions": "権限",
-      "activation": "アクティベーション"
+      "activation": "アクティベーション",
+      "voiceAgent": "ボイスエージェント"
     },
     "hotkey": {
       "couldNotRegisterTitle": "ホットキーを登録できませんでした",
@@ -217,6 +218,14 @@
       "hotkeyToStartStop": "{{hotkey}} で開始/停止",
       "holdHotkey": "{{hotkey}} を押し続ける",
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
+    },
+    "voiceAgent": {
+      "title": "ボイスエージェントホットキー",
+      "description": "ワンキーでAIエージェントに話しかけられます",
+      "hotkey": "ホットキー",
+      "clear": "ホットキーを削除",
+      "howItWorks": "このホットキーで開始したディクテーションは、コマンドとして{{agentName}}に直接送信されます。ウェイクワードは不要で、テキスト補正はスキップされます。",
+      "optionalNote": "任意です。設定からいつでも追加・変更できます。"
     },
     "connectivity": {
       "title": "このネットワークから OpenWhispr Cloud に接続できません",
@@ -1298,6 +1307,11 @@
         "layoutLabel": "ホットキーで起動したときに開く:",
         "layoutFullWidth": "全幅",
         "layoutSidePanel": "サイドパネル"
+      },
+      "voiceAgentHotkey": {
+        "title": "ボイスエージェントホットキー",
+        "description": "AIエージェントに直接送信するディクテーションを開始します（テキスト補正はスキップ）",
+        "clear": "ホットキーを削除"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",

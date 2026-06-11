@@ -172,7 +172,8 @@
       "welcome": "Welcome",
       "setup": "Setup",
       "permissions": "Permissions",
-      "activation": "Activation"
+      "activation": "Activation",
+      "voiceAgent": "Voice Agent"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Couldn't register that hotkey",
@@ -217,6 +218,14 @@
       "hotkeyToStartStop": "{{hotkey}} to start/stop",
       "holdHotkey": "Hold {{hotkey}}",
       "textareaPlaceholder": "Click here and use your hotkey to dictate..."
+    },
+    "voiceAgent": {
+      "title": "Voice Agent Hotkey",
+      "description": "Talk to your AI agent with a single keypress",
+      "hotkey": "Hotkey",
+      "clear": "Remove hotkey",
+      "howItWorks": "Dictation started with this hotkey goes straight to {{agentName}} as a command — no wake word needed, and text cleanup is skipped.",
+      "optionalNote": "Optional — you can set or change it anytime in Settings."
     },
     "connectivity": {
       "title": "We can't reach OpenWhispr Cloud from this network",
@@ -1479,6 +1488,11 @@
         "layoutLabel": "When triggered by hotkey, open in:",
         "layoutFullWidth": "Full width",
         "layoutSidePanel": "Side panel"
+      },
+      "voiceAgentHotkey": {
+        "title": "Voice Agent Hotkey",
+        "description": "Start a dictation that goes straight to your AI agent, skipping text cleanup",
+        "clear": "Remove hotkey"
       },
       "microphone": {
         "description": "Select which input device to use for dictation",

@@ -144,7 +144,8 @@
       "welcome": "Boas-vindas",
       "setup": "Configuração",
       "permissions": "Permissões",
-      "activation": "Ativação"
+      "activation": "Ativação",
+      "voiceAgent": "Agente de voz"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Não foi possível registrar esse atalho",
@@ -189,6 +190,14 @@
       "hotkeyToStartStop": "{{hotkey}} para iniciar/parar",
       "holdHotkey": "Segure {{hotkey}}",
       "textareaPlaceholder": "Clique aqui e use seu atalho para ditar..."
+    },
+    "voiceAgent": {
+      "title": "Atalho do agente de voz",
+      "description": "Fale com seu agente de IA com um único atalho",
+      "hotkey": "Atalho",
+      "clear": "Remover atalho",
+      "howItWorks": "O ditado iniciado com este atalho é enviado diretamente para {{agentName}} como instrução: não é preciso dizer o nome e a limpeza de texto é ignorada.",
+      "optionalNote": "Opcional — você pode definir ou alterar a qualquer momento nas configurações."
     },
     "connectivity": {
       "title": "Não conseguimos acessar o OpenWhispr Cloud nesta rede",
@@ -1270,6 +1279,11 @@
         "layoutLabel": "Ao acionar pelo atalho, abrir em:",
         "layoutFullWidth": "Largura total",
         "layoutSidePanel": "Painel lateral"
+      },
+      "voiceAgentHotkey": {
+        "title": "Atalho do agente de voz",
+        "description": "Inicia um ditado que vai direto para seu agente de IA, ignorando a limpeza de texto",
+        "clear": "Remover atalho"
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
