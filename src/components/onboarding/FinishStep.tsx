@@ -9,7 +9,8 @@ import { useSettings } from "../../hooks/useSettings";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { USE_CASE_IDS } from "./useCases";
 
-const CORTI_CONSOLE_URL = "https://console.corti.app";
+const CORTI_SIGNUP_URL =
+  "https://www.corti.ai/?utm_source=referral&utm_content=&utm_campaign=openwhispr";
 
 interface FinishStepProps {
   isCloudUser: boolean;
@@ -69,7 +70,7 @@ export default function FinishStep({
 
         <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-1 p-3">
           <button
-            onClick={() => window.electronAPI?.openExternal?.(CORTI_CONSOLE_URL)}
+            onClick={() => window.electronAPI?.openExternal?.(CORTI_SIGNUP_URL)}
             className="inline-flex items-center gap-1 text-xs font-medium text-link hover:underline"
           >
             {t("onboarding.finish.corti.createAccount")}
@@ -79,6 +80,12 @@ export default function FinishStep({
             {t("onboarding.finish.corti.creditBadge")}
           </span>
         </div>
+
+        <ol className="list-decimal list-inside space-y-0.5 px-1 text-xs text-muted-foreground">
+          <li>{t("onboarding.finish.corti.step1")}</li>
+          <li>{t("onboarding.finish.corti.step2")}</li>
+          <li>{t("onboarding.finish.corti.step3")}</li>
+        </ol>
 
         <div className="space-y-2">
           <div className="space-y-1.5">

@@ -270,7 +270,10 @@
         "creditBadge": "$50 free credit",
         "regionHint": "Choose where your audio is processed — US or EU.",
         "useCorti": "Use Corti",
-        "skip": "Not now"
+        "skip": "Not now",
+        "step1": "Sign up on corti.ai",
+        "step2": "Open the Corti console and create API credentials",
+        "step3": "Paste your Client ID and Secret below"
       }
     }
   },

@@ -270,7 +270,10 @@
         "creditBadge": "50 $ Gratis-Guthaben",
         "regionHint": "Wähle, wo dein Audio verarbeitet wird — USA oder EU.",
         "useCorti": "Corti verwenden",
-        "skip": "Jetzt nicht"
+        "skip": "Jetzt nicht",
+        "step1": "Registriere dich auf corti.ai",
+        "step2": "Öffne die Corti-Konsole und erstelle API-Zugangsdaten",
+        "step3": "Füge Client-ID und Secret unten ein"
       }
     }
   },

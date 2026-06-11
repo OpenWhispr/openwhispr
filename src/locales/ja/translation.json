@@ -270,7 +270,10 @@
         "creditBadge": "50ドルの無料クレジット",
         "regionHint": "音声の処理場所を選べます — 米国または EU。",
         "useCorti": "Corti を使う",
-        "skip": "後で"
+        "skip": "後で",
+        "step1": "corti.ai でアカウントを作成",
+        "step2": "Corti コンソールで API 認証情報を作成",
+        "step3": "Client ID と Secret を下に貼り付け"
       }
     }
   },

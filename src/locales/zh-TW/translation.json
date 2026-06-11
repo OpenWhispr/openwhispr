@@ -270,7 +270,10 @@
         "creditBadge": "50 美元免費額度",
         "regionHint": "選擇音訊處理地區 — 美國或歐盟。",
         "useCorti": "使用 Corti",
-        "skip": "暫時不用"
+        "skip": "暫時不用",
+        "step1": "在 corti.ai 註冊",
+        "step2": "開啟 Corti 控制台並建立 API 憑證",
+        "step3": "在下方貼上 Client ID 和 Secret"
       }
     }
   },

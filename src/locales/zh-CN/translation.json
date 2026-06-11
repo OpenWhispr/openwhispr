@@ -270,7 +270,10 @@
         "creditBadge": "50 美元免费额度",
         "regionHint": "选择音频处理地区 — 美国或欧盟。",
         "useCorti": "使用 Corti",
-        "skip": "暂不需要"
+        "skip": "暂不需要",
+        "step1": "在 corti.ai 注册",
+        "step2": "打开 Corti 控制台并创建 API 凭据",
+        "step3": "在下方粘贴 Client ID 和 Secret"
       }
     }
   },
