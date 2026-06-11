@@ -28,7 +28,7 @@ import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { createExternalLinkHandler } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
-import type { CudaWhisperStatus } from "../types/electron";
+import type { CudaWhisperStatus, VulkanWhisperStatus } from "../types/electron";
 import logger from "../utils/logger";
 
 interface LocalModel {
@@ -289,6 +289,14 @@ export default function TranscriptionModelPicker({
     percentage: 0,
   });
   const [cudaDismissed, setCudaDismissed] = useState(false);
+  const [vulkanStatus, setVulkanStatus] = useState<VulkanWhisperStatus | null>(null);
+  const [vulkanDownloading, setVulkanDownloading] = useState(false);
+  const [vulkanProgress, setVulkanProgress] = useState<DownloadProgress>({
+    downloadedBytes: 0,
+    totalBytes: 0,
+    percentage: 0,
+  });
+  const [vulkanDismissed, setVulkanDismissed] = useState(false);
 
   useEffect(() => {
     if (selectedLocalProvider !== internalLocalProvider) {
@@ -457,6 +465,10 @@ export default function TranscriptionModelPicker({
       ?.getCudaWhisperStatus?.()
       ?.then(setCudaStatus)
       .catch(() => {});
+    window.electronAPI
+      ?.getVulkanWhisperStatus?.()
+      ?.then(setVulkanStatus)
+      .catch(() => {});
   }, [effectiveLocal, internalLocalProvider]);
 
   useEffect(() => {
@@ -466,6 +478,14 @@ export default function TranscriptionModelPicker({
     });
     return cleanup;
   }, [cudaDownloading]);
+
+  useEffect(() => {
+    if (!vulkanDownloading) return;
+    const cleanup = window.electronAPI?.onVulkanWhisperDownloadProgress?.((data: DownloadProgress) => {
+      setVulkanProgress(data);
+    });
+    return cleanup;
+  }, [vulkanDownloading]);
 
   const handleCudaDownload = async () => {
     setCudaDownloading(true);
@@ -489,6 +509,30 @@ export default function TranscriptionModelPicker({
   const handleCudaCancel = async () => {
     await window.electronAPI?.cancelCudaWhisperDownload?.();
     setCudaDownloading(false);
+  };
+
+  const handleVulkanDownload = async () => {
+    setVulkanDownloading(true);
+    try {
+      const result = await window.electronAPI?.downloadVulkanWhisperBinary?.();
+      if (result?.success) {
+        const status = await window.electronAPI?.getVulkanWhisperStatus?.();
+        setVulkanStatus(status || null);
+      }
+    } finally {
+      setVulkanDownloading(false);
+    }
+  };
+
+  const handleVulkanDelete = async () => {
+    await window.electronAPI?.deleteVulkanWhisperBinary?.();
+    const status = await window.electronAPI?.getVulkanWhisperStatus?.();
+    setVulkanStatus(status || null);
+  };
+
+  const handleVulkanCancel = async () => {
+    await window.electronAPI?.cancelVulkanWhisperDownload?.();
+    setVulkanDownloading(false);
   };
 
   const {
@@ -971,6 +1015,71 @@ export default function TranscriptionModelPicker({
                         </Button>
                         <button
                           onClick={() => setCudaDismissed(true)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {t("gpu.dismiss")}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+          {vulkanDownloading && internalLocalProvider === "whisper" && (
+            <div>
+              <DownloadProgressBar modelName="GPU acceleration" progress={vulkanProgress} />
+              <div className="px-2.5 pb-1 flex justify-end">
+                <button
+                  onClick={handleVulkanCancel}
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {internalLocalProvider === "whisper" &&
+            !vulkanDismissed &&
+            !vulkanDownloading &&
+            getCachedPlatform() !== "darwin" &&
+            !cudaStatus?.gpuInfo.hasNvidiaGpu &&
+            vulkanStatus?.gpuInfo.hasVulkanGpu && (
+              <div className="rounded-md border border-border bg-surface-1 p-2.5">
+                {vulkanStatus.downloaded ? (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Check size={13} className="text-success" />
+                      <span className="text-xs font-medium text-foreground">{t("gpu.active")}</span>
+                    </div>
+                    <Button
+                      onClick={handleVulkanDelete}
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                    >
+                      {t("gpu.remove")}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2.5">
+                    <Zap size={13} className="text-primary shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground">
+                        {t("gpu.transcriptionBanner")}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <Button
+                          onClick={handleVulkanDownload}
+                          size="sm"
+                          variant="default"
+                          className="h-6 px-2.5 text-xs"
+                        >
+                          {t("gpu.enableButton")}
+                        </Button>
+                        <button
+                          onClick={() => setVulkanDismissed(true)}
                           className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                         >
                           {t("gpu.dismiss")}
