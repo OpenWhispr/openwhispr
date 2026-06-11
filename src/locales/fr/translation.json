@@ -2267,7 +2267,28 @@
     "howItWorks": "Comment ça marche",
     "howItWorksDetail": "Les mots sont transmis comme indices contextuels au modèle vocal, l'aidant à reconnaître les termes peu courants. Pour les mots difficiles, essayez d'ajouter du contexte comme « Le mot est Synty » en plus du mot lui-même.",
     "autoManaged": "Géré automatiquement — synchronisé depuis le nom de l'agent",
-    "inputHint": "Séparez les mots par des virgules. Ajoutez des phrases de contexte comme « Le mot est Synty » pour une meilleure reconnaissance."
+    "inputHint": "Séparez les mots par des virgules. Ajoutez des phrases de contexte comme « Le mot est Synty » pour une meilleure reconnaissance.",
+    "tabDictionary": "Dictionnaire",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "description": "Des raccourcis pour ce que vous dites souvent. Prononcez le déclencheur et OpenWhispr le remplace aussitôt, sans rien retaper.",
+      "new": "Nouveau snippet",
+      "add": "Ajouter un snippet",
+      "edit": "Modifier {{trigger}}",
+      "remove": "Supprimer {{trigger}}",
+      "howItWorksDetail": "Prononcez un mot déclencheur pendant la dictée et il sera remplacé par votre texte enregistré : liens, intros, signatures, prompts réutilisables. Les déclencheurs sont aussi transmis au modèle vocal pour être reconnus avec précision.",
+      "inputHint": "Cliquez sur un snippet pour le modifier. Les déclencheurs sont détectés partout dans la dictée, sans tenir compte de la casse.",
+      "createTitle": "Nouveau snippet",
+      "editTitle": "Modifier le snippet",
+      "dialogDescription": "Quand vous prononcez le déclencheur, il est remplacé par votre texte enregistré.",
+      "triggerLabel": "Déclencheur",
+      "triggerPlaceholder": "ex. mon agenda",
+      "replacementLabel": "Remplacement",
+      "replacementPlaceholder": "Texte à insérer quand vous dites le déclencheur…",
+      "create": "Créer le snippet",
+      "duplicate": "Un snippet avec ce déclencheur existe déjà"
+    }
   },
   "support": {
     "documentation": "Documentation",

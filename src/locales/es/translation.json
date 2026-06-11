@@ -2204,7 +2204,28 @@
     "description": "Enseña a la IA tu vocabulario: nombres, jerga y términos que podría pasar por alto",
     "clearTitle": "¿Borrar el diccionario?",
     "clearDescription": "Esto eliminará todas las palabras de tu diccionario personalizado. Esta acción no se puede deshacer.",
-    "addPlaceholder": "Añadir una palabra o frase..."
+    "addPlaceholder": "Añadir una palabra o frase...",
+    "tabDictionary": "Diccionario",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "description": "Atajos para lo que dices a menudo. Di el disparador y OpenWhispr lo expande al instante, sin volver a escribir.",
+      "new": "Nuevo snippet",
+      "add": "Añadir snippet",
+      "edit": "Editar {{trigger}}",
+      "remove": "Eliminar {{trigger}}",
+      "howItWorksDetail": "Di una palabra disparadora al dictar y se reemplazará por tu texto guardado: enlaces, presentaciones, despedidas, prompts reutilizables. Los disparadores también se envían al modelo de voz para reconocerlos con precisión.",
+      "inputHint": "Haz clic en un snippet para editarlo. Los disparadores coinciden en cualquier parte del dictado, sin distinguir mayúsculas.",
+      "createTitle": "Nuevo snippet",
+      "editTitle": "Editar snippet",
+      "dialogDescription": "Cuando digas el disparador, se reemplazará por tu texto guardado.",
+      "triggerLabel": "Disparador",
+      "triggerPlaceholder": "p. ej. mi agenda",
+      "replacementLabel": "Reemplazo",
+      "replacementPlaceholder": "Texto que se insertará al decir el disparador…",
+      "create": "Crear snippet",
+      "duplicate": "Ya existe un snippet con este disparador"
+    }
   },
   "sidebar": {
     "home": "Inicio",

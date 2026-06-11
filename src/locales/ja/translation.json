@@ -2084,7 +2084,28 @@
     "description": "AIに語彙を学習させましょう — 名前、専門用語、見落とされがちな表現など",
     "clearTitle": "辞書をクリアしますか？",
     "clearDescription": "カスタム辞書のすべての単語が削除されます。この操作は元に戻せません。",
-    "addPlaceholder": "単語やフレーズを追加..."
+    "addPlaceholder": "単語やフレーズを追加...",
+    "tabDictionary": "辞書",
+    "tabSnippets": "スニペット",
+    "snippets": {
+      "title": "スニペット",
+      "description": "よく言うことのショートカット。トリガーを話すと、OpenWhisprがその場で保存したテキストに置き換えます。",
+      "new": "新規スニペット",
+      "add": "スニペットを追加",
+      "edit": "{{trigger}}を編集",
+      "remove": "{{trigger}}を削除",
+      "howItWorksDetail": "口述中にトリガーワードを話すと、保存したテキスト(リンク、自己紹介、署名、再利用するプロンプトなど)に置き換わります。トリガーは音声モデルにも渡されるため、正確に認識されます。",
+      "inputHint": "スニペットをクリックして編集できます。トリガーは口述のどこでも、大文字小文字を区別せずに認識されます。",
+      "createTitle": "新規スニペット",
+      "editTitle": "スニペットを編集",
+      "dialogDescription": "トリガーを話すと、保存したテキストに置き換わります。",
+      "triggerLabel": "トリガー",
+      "triggerPlaceholder": "例: カレンダーリンク",
+      "replacementLabel": "置換テキスト",
+      "replacementPlaceholder": "トリガーを話したときに挿入されるテキスト…",
+      "create": "スニペットを作成",
+      "duplicate": "このトリガーのスニペットは既に存在します"
+    }
   },
   "referral": {
     "title": "紹介して特典をゲット",

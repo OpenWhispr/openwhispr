@@ -2363,7 +2363,28 @@
     "howItWorks": "How it works",
     "howItWorksDetail": "Words are fed as context hints to the speech model, helping it recognize uncommon terms. For difficult words, try adding context like \"The word is Synty\" alongside the word itself.",
     "autoManaged": "Auto-managed — synced from agent name",
-    "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition."
+    "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition.",
+    "tabDictionary": "Dictionary",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "description": "Shortcuts for things you say often. Speak the trigger and OpenWhispr expands it in place — no retyping.",
+      "new": "New snippet",
+      "add": "Add snippet",
+      "edit": "Edit {{trigger}}",
+      "remove": "Remove {{trigger}}",
+      "howItWorksDetail": "Say a trigger word while dictating and it's replaced with your saved text — links, intros, sign-offs, reusable prompts. Triggers are also fed to the speech model so they're recognized accurately.",
+      "inputHint": "Click a snippet to edit it. Triggers match anywhere in your dictation, regardless of case.",
+      "createTitle": "New snippet",
+      "editTitle": "Edit snippet",
+      "dialogDescription": "When you speak the trigger, it's replaced with your saved text.",
+      "triggerLabel": "Trigger",
+      "triggerPlaceholder": "e.g. cal link",
+      "replacementLabel": "Replacement",
+      "replacementPlaceholder": "Text to insert when you say the trigger…",
+      "create": "Create snippet",
+      "duplicate": "A snippet with this trigger already exists"
+    }
   },
   "support": {
     "documentation": "Documentation",

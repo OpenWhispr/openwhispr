@@ -2156,7 +2156,28 @@
     "description": "Bringe der KI dein Vokabular bei – Namen, Fachbegriffe und Ausdrücke, die sie sonst übersehen könnte",
     "clearTitle": "Wörterbuch leeren?",
     "clearDescription": "Dadurch werden alle Wörter aus deinem benutzerdefinierten Wörterbuch entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
-    "addPlaceholder": "Ein Wort oder eine Phrase hinzufügen..."
+    "addPlaceholder": "Ein Wort oder eine Phrase hinzufügen...",
+    "tabDictionary": "Wörterbuch",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "description": "Kurzbefehle für Dinge, die du oft sagst. Sprich den Auslöser und OpenWhispr ersetzt ihn sofort – ohne erneutes Tippen.",
+      "new": "Neues Snippet",
+      "add": "Snippet hinzufügen",
+      "edit": "{{trigger}} bearbeiten",
+      "remove": "{{trigger}} entfernen",
+      "howItWorksDetail": "Sprich beim Diktieren ein Auslösewort und es wird durch deinen gespeicherten Text ersetzt – Links, Intros, Grußformeln, wiederverwendbare Prompts. Auslöser werden auch an das Sprachmodell übergeben, damit sie zuverlässig erkannt werden.",
+      "inputHint": "Klicke auf ein Snippet, um es zu bearbeiten. Auslöser werden überall im Diktat erkannt, unabhängig von Groß- und Kleinschreibung.",
+      "createTitle": "Neues Snippet",
+      "editTitle": "Snippet bearbeiten",
+      "dialogDescription": "Wenn du den Auslöser sprichst, wird er durch deinen gespeicherten Text ersetzt.",
+      "triggerLabel": "Auslöser",
+      "triggerPlaceholder": "z. B. mein Kalender",
+      "replacementLabel": "Ersetzung",
+      "replacementPlaceholder": "Text, der beim Sprechen des Auslösers eingefügt wird …",
+      "create": "Snippet erstellen",
+      "duplicate": "Ein Snippet mit diesem Auslöser existiert bereits"
+    }
   },
   "sidebar": {
     "home": "Startseite",

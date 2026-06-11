@@ -3,6 +3,7 @@ import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type { Snippet } from "../utils/snippets";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -22,6 +23,7 @@ export interface TranscriptionSettings {
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
   customDictionary: string[];
+  snippets: Snippet[];
   assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
 }
@@ -204,6 +206,8 @@ function useSettingsInternal() {
     cleanupMode: store.cleanupMode,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
     customDictionary: store.customDictionary,
+    snippets: store.snippets,
+    setSnippets: store.setSnippets,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,

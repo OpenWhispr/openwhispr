@@ -4,6 +4,7 @@ import AudioManager from "../helpers/audioManager";
 import logger from "../utils/logger";
 import { playStartCue, playStopCue } from "../utils/dictationCues";
 import { getSettings } from "../stores/settingsStore";
+import { expandSnippets } from "../utils/snippets";
 import { getRecordingErrorTitle, getRecordingErrorDescription } from "../utils/recordingErrors";
 import { isAccessibilitySkipped } from "../utils/permissions";
 
@@ -131,6 +132,8 @@ export const useAudioRecording = (toast, options = {}) => {
             });
             return;
           }
+
+          result.text = expandSnippets(result.text, getSettings().snippets);
 
           setTranscript(result.text);
           window.electronAPI?.completeDictationPreview?.({ text: result.text });

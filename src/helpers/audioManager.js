@@ -17,6 +17,7 @@ import { detectAgentName } from "../config/agentDetection";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
+import { getDictionaryHintWords } from "../utils/snippets";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
@@ -49,7 +50,7 @@ function resolveReasoningRoute(text, settings, agentName) {
         systemPrompt: resolvePrompt("dictationAgent", {
           agentName,
           language: settings.preferredLanguage,
-          customDictionary: settings.customDictionary,
+          customDictionary: getDictionaryHintWords(settings),
           uiLanguage: settings.uiLanguage,
         }),
       },
@@ -228,7 +229,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getCustomDictionaryPrompt() {
-    const words = getSettings().customDictionary;
+    const words = getDictionaryHintWords(getSettings());
     return words.length > 0 ? words.join(", ") : null;
   }
 
@@ -1401,7 +1402,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const reasonResult = await withSessionRefresh(async () => {
           const res = await window.electronAPI.cloudReason(processedText, {
             agentName,
-            customDictionary: settings.customDictionary,
+            customDictionary: getDictionaryHintWords(settings),
             customPrompt: this.getCustomPrompt(),
             language: settings.preferredLanguage || "auto",
             locale: settings.uiLanguage || "en",
@@ -2679,7 +2680,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(finalText, {
               agentName,
-              customDictionary: stSettings.customDictionary,
+              customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
               language: stSettings.preferredLanguage || "auto",
               locale: stSettings.uiLanguage || "en",

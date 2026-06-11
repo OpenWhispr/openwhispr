@@ -2151,7 +2151,28 @@
     "description": "教 AI 学习你的词汇 — 名字、行话和它可能遗漏的术语",
     "clearTitle": "清空词典？",
     "clearDescription": "这将删除自定义词典中的所有词汇，此操作无法撤销。",
-    "addPlaceholder": "添加词语或短语..."
+    "addPlaceholder": "添加词语或短语...",
+    "tabDictionary": "词典",
+    "tabSnippets": "片段",
+    "snippets": {
+      "title": "片段",
+      "description": "为常说的话创建快捷方式。说出触发词，OpenWhispr 会立即替换为你保存的文本。",
+      "new": "新建片段",
+      "add": "添加片段",
+      "edit": "编辑 {{trigger}}",
+      "remove": "删除 {{trigger}}",
+      "howItWorksDetail": "听写时说出触发词，它会被替换为你保存的文本：链接、开场白、签名、可复用的提示词。触发词也会提供给语音模型，以便准确识别。",
+      "inputHint": "点击片段即可编辑。触发词在听写中的任何位置都会被识别，不区分大小写。",
+      "createTitle": "新建片段",
+      "editTitle": "编辑片段",
+      "dialogDescription": "当你说出触发词时，它会被替换为你保存的文本。",
+      "triggerLabel": "触发词",
+      "triggerPlaceholder": "例如：我的日程链接",
+      "replacementLabel": "替换文本",
+      "replacementPlaceholder": "说出触发词时插入的文本…",
+      "create": "创建片段",
+      "duplicate": "已存在使用此触发词的片段"
+    }
   },
   "sidebar": {
     "home": "首页",

@@ -24,6 +24,7 @@ import type {
   ThemeSettings,
   ChatAgentSettings,
 } from "../hooks/useSettings";
+import type { Snippet } from "../utils/snippets";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -139,7 +140,7 @@ const BOOLEAN_SETTINGS = new Set([
   "gcalPrimaryOnly",
 ]);
 
-const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
+const ARRAY_SETTINGS = new Set(["customDictionary", "snippets", "gcalAccounts"]);
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
@@ -480,6 +481,7 @@ export interface SettingsState
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
+  setSnippets: (snippets: Snippet[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
@@ -723,6 +725,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cortiEnvironment: readString("cortiEnvironment", "us"),
   cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
+  snippets: (() => {
+    try {
+      const parsed = JSON.parse(readString("snippets", "[]"));
+      return Array.isArray(parsed) ? (parsed as Snippet[]) : [];
+    } catch {
+      return [];
+    }
+  })(),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
@@ -1046,6 +1056,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
         "settings"
       );
     });
+  },
+
+  setSnippets: (snippets: Snippet[]) => {
+    if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
+    set({ snippets });
   },
 
   setUiLanguage: (language: string) => {
@@ -1449,6 +1464,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.cloudTranscriptionMode !== undefined)
       s.setCloudTranscriptionMode(settings.cloudTranscriptionMode);
     if (settings.customDictionary !== undefined) s.setCustomDictionary(settings.customDictionary);
+    if (settings.snippets !== undefined) s.setSnippets(settings.snippets);
     if (settings.assemblyAiStreaming !== undefined)
       s.setAssemblyAiStreaming(settings.assemblyAiStreaming);
     if (settings.showTranscriptionPreview !== undefined)
