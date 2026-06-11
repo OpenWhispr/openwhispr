@@ -370,6 +370,12 @@
       "label": "禁用思考输出",
       "help": "跳过推理令牌以获得更清晰的输出。推荐用于清理。某些服务器会忽略此提示。"
     },
+    "thinkingLevel": {
+      "label": "思考级别",
+      "help": "“最小”最快。“高”提供更完整的推理，但速度较慢。",
+      "minimal": "最小",
+      "high": "高"
+    },
     "selfHosted": {
       "endpointHelp": "指向本地网络中兼容 OpenAI 的服务器（例如 Ollama、LM Studio、vLLM 或 llama-server）。"
     },

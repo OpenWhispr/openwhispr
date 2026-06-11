@@ -40,6 +40,9 @@ export interface CloudModelDefinition {
   descriptionKey?: string;
   disableThinking?: boolean;
   supportsThinking?: boolean;
+  // Gemini-only: maps the "Disable thinking" toggle to a thinkingConfig.thinkingLevel.
+  // Set on models (Gemma 4) that always think and only accept "minimal"/"high".
+  thinkingLevels?: { disabled: string; enabled: string };
   tokenParam?: "max_tokens" | "max_completion_tokens";
   supportsTemperature?: boolean;
 }

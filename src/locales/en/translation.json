@@ -370,6 +370,12 @@
       "label": "Disable thinking output",
       "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."
     },
+    "thinkingLevel": {
+      "label": "Thinking level",
+      "help": "Minimal is fastest. High gives fuller reasoning but is slower.",
+      "minimal": "Minimal",
+      "high": "High"
+    },
     "selfHosted": {
       "endpointHelp": "Point to an OpenAI-compatible server on your local network (e.g. Ollama, LM Studio, vLLM, or llama-server)."
     },

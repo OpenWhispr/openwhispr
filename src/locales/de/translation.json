@@ -370,6 +370,12 @@
       "label": "Denkausgabe deaktivieren",
       "help": "Überspringt Reasoning-Token für eine sauberere Ausgabe. Empfohlen für Bereinigung. Einige Server ignorieren diesen Hinweis."
     },
+    "thinkingLevel": {
+      "label": "Denkstufe",
+      "help": "Minimal ist am schnellsten. Hoch liefert ausführlicheres Denken, ist aber langsamer.",
+      "minimal": "Minimal",
+      "high": "Hoch"
+    },
     "selfHosted": {
       "endpointHelp": "Zeige auf einen OpenAI-kompatiblen Server in deinem lokalen Netzwerk (z. B. Ollama, LM Studio, vLLM oder llama-server)."
     },

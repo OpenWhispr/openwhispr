@@ -370,6 +370,12 @@
       "label": "思考出力を無効にする",
       "help": "推論トークンをスキップして出力をクリーンに保ちます。クリーンアップに推奨。一部のサーバーはこのヒントを無視します。"
     },
+    "thinkingLevel": {
+      "label": "思考レベル",
+      "help": "「最小」が最速です。「高」はより詳細な推論を行いますが、低速です。",
+      "minimal": "最小",
+      "high": "高"
+    },
     "selfHosted": {
       "endpointHelp": "ローカルネットワーク上の OpenAI 互換サーバーを指定します（例: Ollama、LM Studio、vLLM、llama-server）。"
     },

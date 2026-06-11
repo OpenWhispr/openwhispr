@@ -342,6 +342,12 @@
       "label": "Desativar saída de raciocínio",
       "help": "Ignora tokens de raciocínio para uma saída mais limpa. Recomendado para limpeza. Alguns servidores ignoram esta dica."
     },
+    "thinkingLevel": {
+      "label": "Nível de raciocínio",
+      "help": "Mínimo é o mais rápido. Alto oferece um raciocínio mais completo, mas é mais lento.",
+      "minimal": "Mínimo",
+      "high": "Alto"
+    },
     "selfHosted": {
       "endpointHelp": "Aponte para um servidor compatível com OpenAI na sua rede local (ex.: Ollama, LM Studio, vLLM ou llama-server)."
     },
