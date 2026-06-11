@@ -18,6 +18,7 @@ import type {
   TranscriptionSettings,
   CleanupSettings,
   HotkeySettings,
+  OnboardingSettings,
   MicrophoneSettings,
   ApiKeySettings,
   PrivacySettings,
@@ -139,7 +140,7 @@ const BOOLEAN_SETTINGS = new Set([
   "gcalPrimaryOnly",
 ]);
 
-const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
+const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts", "onboardingUseCases"]);
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
@@ -347,6 +348,7 @@ export interface SettingsState
     TranscriptionSettings,
     CleanupSettings,
     HotkeySettings,
+    OnboardingSettings,
     MicrophoneSettings,
     ApiKeySettings,
     PrivacySettings,
@@ -537,6 +539,8 @@ export interface SettingsState
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
+  setOnboardingUseCases: (useCases: string[]) => void;
+  setOnboardingUseCaseNote: (note: string) => void;
   setActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
@@ -760,6 +764,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   dictationKey: readString("dictationKey", ""),
   meetingKey: readString("meetingKey", ""),
+  onboardingUseCases: readStringArray("onboardingUseCases", []),
+  onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
@@ -1206,6 +1212,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) localStorage.setItem("meetingHotkeyLayoutMode", mode);
     set({ meetingHotkeyLayoutMode: mode });
   },
+
+  setOnboardingUseCases: (useCases: string[]) => {
+    if (isBrowser) localStorage.setItem("onboardingUseCases", JSON.stringify(useCases));
+    set({ onboardingUseCases: useCases });
+  },
+
+  setOnboardingUseCaseNote: createStringSetter("onboardingUseCaseNote"),
 
   setActivationMode: (mode: "tap" | "push") => {
     if (isBrowser) localStorage.setItem("activationMode", mode);

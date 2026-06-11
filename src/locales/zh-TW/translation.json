@@ -101,13 +101,6 @@
     "accessibility": "此平台不支援輔助使用設定。",
     "systemAudio": "系統音訊設定在此平台上不可用。"
   },
-  "titleBar": {
-    "quitTitle": "結束 OpenWhispr",
-    "quitConfirmTitle": "確定要結束 OpenWhispr？",
-    "quitConfirmDescription": "這將關閉 OpenWhispr 並停止背景程序。",
-    "quit": "結束",
-    "cancel": "取消"
-  },
   "upgradePrompt": {
     "paymentFailed": "我們無法處理你的付款",
     "weeklyLimit": "你已達到每週使用上限",
@@ -172,7 +165,10 @@
       "welcome": "歡迎",
       "setup": "設定",
       "permissions": "權限",
-      "activation": "啟用"
+      "activation": "啟用",
+      "useCase": "關於你",
+      "meeting": "會議",
+      "finish": "完成"
     },
     "hotkey": {
       "couldNotRegisterTitle": "無法註冊該快捷鍵",
@@ -186,17 +182,17 @@
     "permissions": {
       "title": "權限",
       "microphoneTitle": "麥克風",
-      "microphoneDescription": "錄製您的聲音用於轉錄",
+      "microphoneDescription": "將你的語音轉為文字。按下快捷鍵之前不會錄製任何內容。",
       "grant": "授權",
       "grantAccess": "授予存取權限",
       "accessibilityTitle": "輔助使用",
-      "accessibilityDescription": "允許將轉錄文字自動貼上到任何應用程式",
+      "accessibilityDescription": "將完成的文字直接輸入到你正在使用的應用程式 — 文件、郵件、聊天。",
       "testAndGrant": "測試並授權",
       "requiredForApp": "OpenWhispr 運作所需",
       "microphoneRequired": "需要麥克風存取權限",
       "openSystemSettings": "打開系統設定",
       "systemAudioTitle": "系統音訊",
-      "systemAudioDescription": "轉錄會議、通話、講座、播客和其他系統音訊。",
+      "systemAudioDescription": "讓會議錄音機聽到通話另一方的聲音 — 會議、講座、Podcast。你可以稍後在「設定」中開啟。",
       "optional": "可選",
       "recommended": "建議",
       "accessibilityTroubleshooting": "在系統設定 → 輔助使用中，將 OpenWhispr 的開關關閉再重新開啟。如果無效，請將 OpenWhispr 從清單中移除後重新加入。還是不行？請寄信至 support@openwhispr.com。"
@@ -223,6 +219,62 @@
       "body": "{{cause}} 你可以切換到本機引擎，或繼續並稍後再試。",
       "useLocal": "使用本機引擎",
       "continue": "仍然繼續"
+    },
+    "useCase": {
+      "title": "你為什麼來到這裡？",
+      "description": "我們是一個小團隊，每週發布更新。你的選擇會為你設定應用程式，也告訴我們接下來該做什麼。",
+      "noteLabel": "還有什麼想告訴我們的嗎？",
+      "notePlaceholder": "選填",
+      "options": {
+        "dictation": {
+          "title": "更快地寫作",
+          "description": "在任何應用程式中口述，而不是打字"
+        },
+        "meetings": {
+          "title": "會議筆記與摘要",
+          "description": "錄製、轉寫並總結會議"
+        },
+        "healthcare": {
+          "title": "醫療、臨床與治療轉寫",
+          "description": "口述病歷、諮商紀錄和報告"
+        },
+        "translation": {
+          "title": "語言翻譯",
+          "description": "說一種語言，輸出另一種"
+        },
+        "ai": {
+          "title": "與我的 AI 對話",
+          "description": "用語音驅動 ChatGPT、Claude 等代理"
+        }
+      },
+      "selectHint": "可複選"
+    },
+    "meeting": {
+      "title": "會議筆記",
+      "description": "擷取並總結你的會議",
+      "autoDetect": "OpenWhispr 會自動偵測你是否正在開會，並提議開始記錄 — 未經你確認不會錄製任何內容。",
+      "hotkeyLabel": "會議快捷鍵",
+      "hotkeyHint": "選填 — 在任何會議中按下即可立即開始記錄。"
+    },
+    "finish": {
+      "title": "一切就緒",
+      "cloudDescription": "你正在使用 OpenWhispr Cloud — 快速、準確、零資料保留，每週免費 2,000 字。希望一切都在裝置上？可在「設定」中切換到本機處理。",
+      "localDescription": "你已設定本機處理或自備金鑰。可隨時在「設定」中調整音訊處理方式。",
+      "cleanupNote": "AI 文字清理使用合理的預設值，可隨時在「設定」中調整。",
+      "openSettings": "開啟設定",
+      "skipForNow": "暫時略過",
+      "corti": {
+        "title": "你告訴我們你是為臨床轉寫而來",
+        "description": "我們與 Corti 合作 — 臨床級語音轉文字，準確率最高，並符合 HIPAA。",
+        "createAccount": "建立你的 Corti 帳戶",
+        "creditBadge": "50 美元免費額度",
+        "regionHint": "選擇音訊處理地區 — 美國或歐盟。",
+        "useCorti": "使用 Corti",
+        "skip": "暫時不用",
+        "step1": "在 corti.ai 註冊",
+        "step2": "開啟 Corti 控制台並建立 API 憑證",
+        "step3": "在下方貼上 Client ID 和 Secret"
+      }
     }
   },
   "streaming": {
@@ -725,7 +777,8 @@
     "resendIn": "{{seconds}} 秒後可重新寄送",
     "verifiedDescription": "你的帳號已設定完成。",
     "verifiedTitle": "電子郵件已驗證",
-    "waiting": "等待驗證中..."
+    "waiting": "等待驗證中...",
+    "backToSignIn": "返回登入"
   },
   "errorBoundary": {
     "description": "發生意外錯誤。請重新載入後再試。",

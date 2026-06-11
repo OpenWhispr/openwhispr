@@ -101,13 +101,6 @@
     "accessibility": "このプラットフォームではアクセシビリティ設定を利用できません。",
     "systemAudio": "システムオーディオの設定はこのプラットフォームでは利用できません。"
   },
-  "titleBar": {
-    "quitTitle": "OpenWhispr を終了",
-    "quitConfirmTitle": "OpenWhispr を終了しますか？",
-    "quitConfirmDescription": "OpenWhispr を終了し、バックグラウンドプロセスを停止します。",
-    "quit": "終了",
-    "cancel": "キャンセル"
-  },
   "upgradePrompt": {
     "paymentFailed": "お支払いを処理できませんでした",
     "weeklyLimit": "週間の利用上限に達しました",
@@ -172,7 +165,10 @@
       "welcome": "ようこそ",
       "setup": "セットアップ",
       "permissions": "権限",
-      "activation": "アクティベーション"
+      "activation": "アクティベーション",
+      "useCase": "あなたについて",
+      "meeting": "会議",
+      "finish": "完了"
     },
     "hotkey": {
       "couldNotRegisterTitle": "ホットキーを登録できませんでした",
@@ -186,17 +182,17 @@
     "permissions": {
       "title": "権限",
       "microphoneTitle": "マイク",
-      "microphoneDescription": "文字起こしのためにあなたの声を録音します",
+      "microphoneDescription": "あなたの声をテキストに変換します。ホットキーを押すまで何も録音されません。",
       "grant": "許可",
       "grantAccess": "アクセスを許可",
       "accessibilityTitle": "アクセシビリティ",
-      "accessibilityDescription": "文字起こしテキストを任意のアプリに自動貼り付けします",
+      "accessibilityDescription": "完成したテキストを、今使っているアプリ（ドキュメント、メール、チャット）に直接入力します。",
       "testAndGrant": "テストして許可",
       "requiredForApp": "OpenWhispr の動作に必要です",
       "microphoneRequired": "マイクへのアクセスが必要です",
       "openSystemSettings": "システム設定を開く",
       "systemAudioTitle": "システムオーディオ",
-      "systemAudioDescription": "会議、通話、講義、ポッドキャストなど、システム音声を文字起こしします。",
+      "systemAudioDescription": "会議レコーダーが通話の相手側の音声（会議、講義、ポッドキャストなど）を聴けるようにします。後から設定で有効にできます。",
       "optional": "任意",
       "recommended": "推奨",
       "accessibilityTroubleshooting": "システム設定 → アクセシビリティで、OpenWhisprのスイッチをオフにしてから再度オンにしてください。それでもうまくいかない場合は、リストからOpenWhisprを削除して再度追加してみてください。それでも解決しませんか？support@openwhispr.com までメールでお問い合わせください。"
@@ -223,6 +219,62 @@
       "body": "{{cause}} ローカルエンジンに切り替えるか、続行して後でもう一度お試しください。",
       "useLocal": "ローカルエンジンを使う",
       "continue": "そのまま続行"
+    },
+    "useCase": {
+      "title": "どんな目的でお使いですか？",
+      "description": "私たちは小さなチームで、毎週リリースしています。選んだ内容に合わせてアプリを設定し、次に何を作るかの参考にします。",
+      "noteLabel": "他に伝えておきたいことはありますか？",
+      "notePlaceholder": "任意",
+      "options": {
+        "dictation": {
+          "title": "より速く書く",
+          "description": "タイピングの代わりにどのアプリでも音声入力"
+        },
+        "meetings": {
+          "title": "会議のメモと要約",
+          "description": "会議を録音・文字起こし・要約"
+        },
+        "healthcare": {
+          "title": "医療・臨床・セラピーの文字起こし",
+          "description": "患者メモ、セッション記録、レポートを音声入力"
+        },
+        "translation": {
+          "title": "言語の翻訳",
+          "description": "話す言語とは別の言語で入力"
+        },
+        "ai": {
+          "title": "AI との対話",
+          "description": "ChatGPT、Claude などのエージェントを声で操作"
+        }
+      },
+      "selectHint": "当てはまるものをすべて選択してください"
+    },
+    "meeting": {
+      "title": "会議メモ",
+      "description": "会議を記録して要約します",
+      "autoDetect": "OpenWhispr は会議中であることを自動的に検出し、メモの開始を提案します。あなたの操作なしに録音されることはありません。",
+      "hotkeyLabel": "会議ホットキー",
+      "hotkeyHint": "任意 — 会議中に押すとすぐにメモを開始できます。"
+    },
+    "finish": {
+      "title": "準備完了",
+      "cloudDescription": "OpenWhispr Cloud をご利用中です — 高速・高精度、データ保持なし、毎週 2,000 ワード無料。すべてを端末内で処理したい場合は、設定からローカル処理に切り替えられます。",
+      "localDescription": "ローカル処理またはご自身の API キーで設定済みです。音声の処理方法はいつでも設定から変更できます。",
+      "cleanupNote": "AI によるテキスト整形は適切な初期設定で動作します。設定からいつでも調整できます。",
+      "openSettings": "設定を開く",
+      "skipForNow": "今はスキップ",
+      "corti": {
+        "title": "臨床文字起こしが目的とのことですね",
+        "description": "私たちは Corti と提携しています — 最高精度の臨床グレード音声認識で、HIPAA に準拠しています。",
+        "createAccount": "Corti アカウントを作成",
+        "creditBadge": "50ドルの無料クレジット",
+        "regionHint": "音声の処理場所を選べます — 米国または EU。",
+        "useCorti": "Corti を使う",
+        "skip": "後で",
+        "step1": "corti.ai でアカウントを作成",
+        "step2": "Corti コンソールで API 認証情報を作成",
+        "step3": "Client ID と Secret を下に貼り付け"
+      }
     }
   },
   "streaming": {
@@ -725,7 +777,8 @@
     "resendIn": "{{seconds}} 秒後に再送信可能",
     "verifiedDescription": "アカウントの設定が完了しました。",
     "verifiedTitle": "メール確認完了",
-    "waiting": "確認を待っています..."
+    "waiting": "確認を待っています...",
+    "backToSignIn": "サインインに戻る"
   },
   "errorBoundary": {
     "description": "予期しないエラーが発生しました。再読み込みしてもう一度お試しください。",

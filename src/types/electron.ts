@@ -883,7 +883,6 @@ declare global {
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
 
       // App management
-      appQuit: () => Promise<void>;
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
 
       // Update operations

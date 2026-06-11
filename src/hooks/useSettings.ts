@@ -45,6 +45,11 @@ export interface HotkeySettings {
   activationMode: "tap" | "push";
 }
 
+export interface OnboardingSettings {
+  onboardingUseCases: string[];
+  onboardingUseCaseNote: string;
+}
+
 export interface MicrophoneSettings {
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
@@ -258,6 +263,10 @@ function useSettingsInternal() {
     setCleanupCustomApiKey: store.setCleanupCustomApiKey,
     setDictationKey: store.setDictationKey,
     setMeetingKey: store.setMeetingKey,
+    onboardingUseCases: store.onboardingUseCases,
+    setOnboardingUseCases: store.setOnboardingUseCases,
+    onboardingUseCaseNote: store.onboardingUseCaseNote,
+    setOnboardingUseCaseNote: store.setOnboardingUseCaseNote,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,

@@ -101,13 +101,6 @@
     "accessibility": "Bedienungshilfen-Einstellungen sind auf dieser Plattform nicht verfügbar.",
     "systemAudio": "Systemaudio-Einstellungen sind auf dieser Plattform nicht verfügbar."
   },
-  "titleBar": {
-    "quitTitle": "OpenWhispr beenden",
-    "quitConfirmTitle": "OpenWhispr beenden?",
-    "quitConfirmDescription": "Dadurch wird OpenWhispr geschlossen und Hintergrundprozesse werden gestoppt.",
-    "quit": "Beenden",
-    "cancel": "Abbrechen"
-  },
   "upgradePrompt": {
     "paymentFailed": "Ihre Zahlung konnte nicht verarbeitet werden",
     "weeklyLimit": "Sie haben Ihr Wochenlimit erreicht",
@@ -172,7 +165,10 @@
       "welcome": "Willkommen",
       "setup": "Einrichtung",
       "permissions": "Berechtigungen",
-      "activation": "Aktivierung"
+      "activation": "Aktivierung",
+      "useCase": "Über dich",
+      "meeting": "Meetings",
+      "finish": "Fertig"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Dieser Hotkey konnte nicht registriert werden",
@@ -186,17 +182,17 @@
     "permissions": {
       "title": "Berechtigungen",
       "microphoneTitle": "Mikrofon",
-      "microphoneDescription": "Nimmt Ihre Stimme für die Transkription auf",
+      "microphoneDescription": "Wandelt deine Sprache in Text um. Es wird nichts aufgenommen, bis du deinen Hotkey drückst.",
       "grant": "Erteilen",
       "grantAccess": "Zugriff gewähren",
       "accessibilityTitle": "Bedienungshilfen",
-      "accessibilityDescription": "Ermöglicht das automatische Einfügen transkribierter Texte in jede App",
+      "accessibilityDescription": "Fügt den fertigen Text direkt in die App ein, in der du gerade bist — Dokumente, E-Mail, Chat.",
       "testAndGrant": "Testen & erteilen",
       "requiredForApp": "Erforderlich, damit OpenWhispr funktioniert",
       "microphoneRequired": "Mikrofonzugriff erforderlich",
       "openSystemSettings": "Systemeinstellungen öffnen",
       "systemAudioTitle": "Systemaudio",
-      "systemAudioDescription": "Transkribiert Meetings, Anrufe, Vorträge, Podcasts und andere Systemaudios.",
+      "systemAudioDescription": "Lässt den Meeting-Rekorder die Gegenseite deiner Anrufe hören — Meetings, Vorlesungen, Podcasts. Kann später in den Einstellungen aktiviert werden.",
       "optional": "Optional",
       "recommended": "Empfohlen",
       "accessibilityTroubleshooting": "Schalte in Systemeinstellungen → Bedienungshilfen den Schalter für OpenWhispr aus und wieder ein. Wenn das nicht hilft, entferne OpenWhispr aus der Liste und füge es erneut hinzu. Klappt's immer noch nicht? Schreib an support@openwhispr.com."
@@ -223,6 +219,62 @@
       "body": "{{cause}} Sie können zur lokalen Engine wechseln oder fortfahren und es später erneut versuchen.",
       "useLocal": "Lokale Engine verwenden",
       "continue": "Trotzdem fortfahren"
+    },
+    "useCase": {
+      "title": "Was führt dich hierher?",
+      "description": "Wir sind ein kleines Team und liefern jede Woche. Deine Auswahl richtet die App für dich ein — und sagt uns, was wir als Nächstes bauen sollen.",
+      "noteLabel": "Möchtest du uns noch etwas mitteilen?",
+      "notePlaceholder": "Optional",
+      "options": {
+        "dictation": {
+          "title": "Schneller schreiben",
+          "description": "Diktiere in jede App, statt zu tippen"
+        },
+        "meetings": {
+          "title": "Meeting-Notizen & Zusammenfassungen",
+          "description": "Meetings aufnehmen, transkribieren und zusammenfassen"
+        },
+        "healthcare": {
+          "title": "Medizinische, klinische & Therapie-Transkription",
+          "description": "Diktiere Patientennotizen, Sitzungsnotizen und Berichte"
+        },
+        "translation": {
+          "title": "Sprachen übersetzen",
+          "description": "Sprich eine Sprache, schreibe eine andere"
+        },
+        "ai": {
+          "title": "Mit meiner KI sprechen",
+          "description": "Steuere ChatGPT, Claude und andere Agenten per Stimme"
+        }
+      },
+      "selectHint": "Wähle alles Zutreffende aus"
+    },
+    "meeting": {
+      "title": "Meeting-Notizen",
+      "description": "Erfasse und fasse deine Meetings zusammen",
+      "autoDetect": "OpenWhispr erkennt automatisch, wenn du in einem Meeting bist, und bietet an, Notizen zu starten — ohne dich wird nichts aufgenommen.",
+      "hotkeyLabel": "Meeting-Hotkey",
+      "hotkeyHint": "Optional — drücke ihn in jedem Meeting, um sofort eine Notiz zu starten."
+    },
+    "finish": {
+      "title": "Alles bereit",
+      "cloudDescription": "Du nutzt OpenWhispr Cloud — schnell, präzise, keine Datenspeicherung und 2.000 Wörter gratis pro Woche. Lieber alles auf dem Gerät? Wechsle in den Einstellungen zur lokalen Verarbeitung.",
+      "localDescription": "Du bist mit lokaler Verarbeitung oder deinem eigenen Schlüssel eingerichtet. Passe die Audioverarbeitung jederzeit in den Einstellungen an.",
+      "cleanupNote": "Die KI-Textbereinigung läuft mit sinnvollen Standardwerten. Du kannst sie jederzeit in den Einstellungen anpassen.",
+      "openSettings": "Einstellungen öffnen",
+      "skipForNow": "Vorerst überspringen",
+      "corti": {
+        "title": "Du hast uns gesagt, dass du für klinische Transkription hier bist",
+        "description": "Wir sind eine Partnerschaft mit Corti eingegangen — klinische Spracherkennung mit höchster Genauigkeit, HIPAA-konform.",
+        "createAccount": "Corti-Konto erstellen",
+        "creditBadge": "50 $ Gratis-Guthaben",
+        "regionHint": "Wähle, wo dein Audio verarbeitet wird — USA oder EU.",
+        "useCorti": "Corti verwenden",
+        "skip": "Jetzt nicht",
+        "step1": "Registriere dich auf corti.ai",
+        "step2": "Öffne die Corti-Konsole und erstelle API-Zugangsdaten",
+        "step3": "Füge Client-ID und Secret unten ein"
+      }
     }
   },
   "streaming": {
@@ -725,7 +777,8 @@
     "resendIn": "Erneut senden in {{seconds}}s",
     "verifiedDescription": "Ihr Konto ist eingerichtet.",
     "verifiedTitle": "E-Mail bestätigt",
-    "waiting": "Warte auf Bestätigung..."
+    "waiting": "Warte auf Bestätigung...",
+    "backToSignIn": "Zurück zur Anmeldung"
   },
   "errorBoundary": {
     "description": "Ein unerwarteter Fehler ist aufgetreten. Bitte laden Sie die Seite neu.",

@@ -554,11 +554,10 @@ class ClipboardManager {
           // Try user journal first; fall back to system journal when
           // /var/log/journal/ is missing and entries land there instead.
           for (const prefix of [["--user"], []]) {
-            const journalResult = spawnSync(
-              "journalctl",
-              [...prefix, ...baseJournalArgs],
-              { timeout: 1000, stdio: "pipe" }
-            );
+            const journalResult = spawnSync("journalctl", [...prefix, ...baseJournalArgs], {
+              timeout: 1000,
+              stdio: "pipe",
+            });
             if (journalResult.status === 0) {
               const lines = journalResult.stdout.toString().split("\n");
               for (let i = lines.length - 1; i >= 0; i--) {
