@@ -2159,7 +2159,8 @@
     "exportFailed": "导出失败",
     "empty": "暂无词语",
     "editWord": "编辑 {{word}}",
-    "wordsReady_one": "{{count}} 个词语就绪"
+    "wordsReady_one": "{{count}} 个词语就绪",
+    "noMatches": "无匹配项 — 按 Enter 添加“{{word}}”"
   },
   "sidebar": {
     "home": "首页",

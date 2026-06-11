@@ -2371,7 +2371,8 @@
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
     "empty": "No words yet",
-    "editWord": "Edit {{word}}"
+    "editWord": "Edit {{word}}",
+    "noMatches": "No matches — press Enter to add \"{{word}}\""
   },
   "support": {
     "documentation": "Documentation",

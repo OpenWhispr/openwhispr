@@ -2164,7 +2164,8 @@
     "exportDictionary": "Esporta dizionario",
     "exportFailed": "Esportazione non riuscita",
     "empty": "Nessuna parola",
-    "editWord": "Modifica {{word}}"
+    "editWord": "Modifica {{word}}",
+    "noMatches": "Nessuna corrispondenza — premi Invio per aggiungere \"{{word}}\""
   },
   "sidebar": {
     "home": "Home",

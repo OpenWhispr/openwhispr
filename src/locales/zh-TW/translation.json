@@ -2159,7 +2159,8 @@
     "exportFailed": "匯出失敗",
     "empty": "尚無詞語",
     "editWord": "編輯 {{word}}",
-    "wordsReady_one": "{{count}} 個詞語就緒"
+    "wordsReady_one": "{{count}} 個詞語就緒",
+    "noMatches": "無相符項目 — 按 Enter 新增「{{word}}」"
   },
   "sidebar": {
     "home": "首頁",

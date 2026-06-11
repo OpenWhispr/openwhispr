@@ -2164,7 +2164,8 @@
     "exportDictionary": "Wörterbuch exportieren",
     "exportFailed": "Export fehlgeschlagen",
     "empty": "Noch keine Wörter",
-    "editWord": "{{word}} bearbeiten"
+    "editWord": "{{word}} bearbeiten",
+    "noMatches": "Keine Treffer — Enter drücken, um \"{{word}}\" hinzuzufügen"
   },
   "sidebar": {
     "home": "Startseite",

@@ -2092,7 +2092,8 @@
     "exportFailed": "エクスポートに失敗しました",
     "empty": "まだ単語がありません",
     "editWord": "{{word}} を編集",
-    "wordsReady_one": "{{count}} 個の単語が準備完了"
+    "wordsReady_one": "{{count}} 個の単語が準備完了",
+    "noMatches": "一致なし — Enter キーで「{{word}}」を追加"
   },
   "referral": {
     "title": "紹介して特典をゲット",

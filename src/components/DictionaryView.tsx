@@ -30,6 +30,15 @@ export default function DictionaryView() {
 
   const pendingImportCount = useMemo(() => parseWords(bulkText).length, [bulkText]);
 
+  const searchQuery = newWord.trim().toLowerCase();
+  const visibleWords = useMemo(
+    () =>
+      searchQuery
+        ? customDictionary.filter((w) => w.toLowerCase().includes(searchQuery))
+        : customDictionary,
+    [customDictionary, searchQuery]
+  );
+
   const addWords = useCallback(
     (text: string): number => {
       const existing = new Set(customDictionary.map((w) => w.toLowerCase()));
@@ -209,9 +218,13 @@ export default function DictionaryView() {
 
           {customDictionary.length === 0 ? (
             <p className="py-6 text-xs text-foreground/20 text-center">{t("dictionary.empty")}</p>
+          ) : visibleWords.length === 0 ? (
+            <p className="py-6 text-xs text-foreground/20 text-center">
+              {t("dictionary.noMatches", { word: newWord.trim() })}
+            </p>
           ) : (
             <ul>
-              {customDictionary.map((word) => {
+              {visibleWords.map((word) => {
                 const isAgentName = word === agentName;
                 const isEditing = editingWord === word;
                 return (

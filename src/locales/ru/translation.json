@@ -2168,7 +2168,8 @@
     "exportDictionary": "Экспортировать словарь",
     "exportFailed": "Не удалось экспортировать",
     "empty": "Пока нет слов",
-    "editWord": "Изменить {{word}}"
+    "editWord": "Изменить {{word}}",
+    "noMatches": "Совпадений нет — нажмите Enter, чтобы добавить «{{word}}»"
   },
   "sidebar": {
     "home": "Главная",
