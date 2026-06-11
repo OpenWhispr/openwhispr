@@ -139,7 +139,7 @@
     "@tiptap/react": "^3.22.3",
     "@tiptap/starter-kit": "^3.22.3",
     "ai": "^6.0.116",
-    "better-auth": "^1.6.9",
+    "better-auth": "^1.6.11",
     "better-sqlite3": "^12.8.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
