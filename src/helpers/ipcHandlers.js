@@ -2847,6 +2847,17 @@ class IPCHandlers {
         });
       }
 
+      if (prefs.cleanupPreloadOnStart) {
+        setVars.CLEANUP_PRELOAD_ON_START = "true";
+      } else {
+        clearVars.push("CLEANUP_PRELOAD_ON_START");
+      }
+
+      if (typeof prefs.cleanupIdleTimeoutMinutes === "number") {
+        const minutes = Math.max(0, Math.floor(prefs.cleanupIdleTimeoutMinutes));
+        setVars.CLEANUP_IDLE_TIMEOUT_MS = String(minutes * 60 * 1000);
+      }
+
       this._syncStartupEnv(setVars, clearVars);
     });
 
