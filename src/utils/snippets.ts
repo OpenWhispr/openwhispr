@@ -23,8 +23,7 @@ function buildMatcher(snippets: Snippet[]): SnippetMatcher | null {
   const escaped = [...replacements.keys()]
     .sort((a, b) => b.length - a.length)
     .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  // Unicode-aware word boundaries: a trigger matches only when surrounded by
-  // start/end, whitespace, punctuation, or symbols — never inside a word.
+  // Unicode-aware word boundaries — triggers never match inside a word.
   const regex = new RegExp(
     `(?<=^|[\\s\\p{P}\\p{S}])(?:${escaped.join("|")})(?=$|[\\s\\p{P}\\p{S}])`,
     "giu"
@@ -33,10 +32,9 @@ function buildMatcher(snippets: Snippet[]): SnippetMatcher | null {
 }
 
 /**
- * Replace every spoken trigger with its saved text. Pure synchronous string
- * transform — runs once on the final transcript, after STT and any cleanup.
- * The compiled matcher is memoized against the snippets array reference
- * (the settings store replaces the array on every change).
+ * Replace every spoken trigger with its saved text in a single pass. The
+ * matcher is memoized against the snippets array reference (the settings
+ * store replaces the array on every change).
  */
 export function expandSnippets(text: string, snippets: Snippet[]): string {
   if (!text || snippets.length === 0) return text;
@@ -50,9 +48,8 @@ export function expandSnippets(text: string, snippets: Snippet[]): string {
 }
 
 /**
- * Dictionary words plus snippet triggers — the combined hint list fed to the
- * STT prompt and cleanup-model dictionary suffix so spoken triggers are
- * transcribed accurately and preserved verbatim through cleanup.
+ * Dictionary words plus snippet triggers — the hint list fed to the STT
+ * prompt and cleanup-model dictionary suffix so triggers survive both.
  */
 export function getDictionaryHintWords(settings: {
   customDictionary: string[];

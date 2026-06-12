@@ -136,12 +136,14 @@ export default function SnippetsView() {
     setSnippets(snippets.filter((s) => s.trigger !== trigger));
   };
 
-  const isDuplicateTrigger = (trigger: string) =>
-    snippets.some(
-      (s) =>
-        s.trigger.toLowerCase() === trigger.toLowerCase() &&
-        s.trigger.toLowerCase() !== editing?.trigger.toLowerCase()
-    );
+  const isDuplicateTrigger = (trigger: string) => {
+    const lower = trigger.toLowerCase();
+    const editingLower = editing?.trigger.toLowerCase();
+    return snippets.some((s) => {
+      const existing = s.trigger.toLowerCase();
+      return existing === lower && existing !== editingLower;
+    });
+  };
 
   return (
     <div className="px-5 py-4">
