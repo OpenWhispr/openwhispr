@@ -172,7 +172,8 @@
       "welcome": "Welcome",
       "setup": "Setup",
       "permissions": "Permissions",
-      "activation": "Activation"
+      "activation": "Activation",
+      "voiceAgent": "Voice Agent"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Couldn't register that hotkey",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} to start/stop",
       "holdHotkey": "Hold {{hotkey}}",
       "textareaPlaceholder": "Click here and use your hotkey to dictate..."
+    },
+    "voiceAgent": {
+      "title": "Voice Agent Hotkey",
+      "description": "Talk to your AI agent with a single keypress",
+      "hotkey": "Hotkey",
+      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. {{agentName}} types the result wherever your cursor is. No need to say “Hey {{agentName}}” first.",
+      "optionalNote": "Optional — you can set or change it anytime in Settings."
     },
     "connectivity": {
       "title": "We can't reach OpenWhispr Cloud from this network",
@@ -905,7 +913,8 @@
     "pressAnyKeyMac": "Press any key or ⌘⇧K",
     "recording": "Recording",
     "tryShortcut": "Try Ctrl+Shift+K",
-    "tryShortcutMac": "Try ⌘⇧K"
+    "tryShortcutMac": "Try ⌘⇧K",
+    "remove": "Remove hotkey"
   },
   "languageSelector": {
     "noLanguagesFound": "No languages found",
@@ -1475,10 +1484,13 @@
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",
         "description": "Start meeting mode and snap the panel to the side of the screen",
-        "clear": "Remove hotkey",
         "layoutLabel": "When triggered by hotkey, open in:",
         "layoutFullWidth": "Full width",
         "layoutSidePanel": "Side panel"
+      },
+      "voiceAgentHotkey": {
+        "title": "Voice Agent Hotkey",
+        "description": "Speak a request — your AI agent types the result, not your words"
       },
       "microphone": {
         "description": "Select which input device to use for dictation",
@@ -2497,9 +2509,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Agent Hotkey",
-      "hotkeyDescription": "Hotkey to toggle the agent overlay",
-      "clearHotkey": "Remove hotkey",
+      "hotkey": "Chat Agent Hotkey",
+      "hotkeyDescription": "Open and close the chat agent overlay",
       "model": "Agent Model",
       "modelDescription": "AI model used for agent conversations",
       "systemPrompt": "System Prompt",

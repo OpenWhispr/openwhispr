@@ -172,7 +172,8 @@
       "welcome": "Benvenuto",
       "setup": "Configurazione",
       "permissions": "Permessi",
-      "activation": "Attivazione"
+      "activation": "Attivazione",
+      "voiceAgent": "Agente vocale"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Impossibile registrare questa scorciatoia",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} per avviare/fermare",
       "holdHotkey": "Tieni premuto {{hotkey}}",
       "textareaPlaceholder": "Clicca qui e usa la scorciatoia per dettare..."
+    },
+    "voiceAgent": {
+      "title": "Scorciatoia dell'agente vocale",
+      "description": "Parla con il tuo agente IA con un solo tasto",
+      "hotkey": "Scorciatoia",
+      "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. {{agentName}} scrive il risultato dove si trova il cursore. Non serve dire prima “Hey {{agentName}}”.",
+      "optionalNote": "Facoltativo — puoi impostarla o modificarla in qualsiasi momento nelle impostazioni."
     },
     "connectivity": {
       "title": "Non riusciamo a raggiungere OpenWhispr Cloud da questa rete",
@@ -809,7 +817,8 @@
     "pressAnyKeyMac": "Premi un tasto qualsiasi o ⌘⇧K",
     "recording": "Registrazione",
     "tryShortcut": "Prova Ctrl+Shift+K",
-    "tryShortcutMac": "Prova ⌘⇧K"
+    "tryShortcutMac": "Prova ⌘⇧K",
+    "remove": "Rimuovi scorciatoia"
   },
   "languageSelector": {
     "noLanguagesFound": "Nessuna lingua trovata",
@@ -1294,10 +1303,13 @@
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",
         "description": "Avvia la modalità meeting e posiziona il pannello a lato dello schermo",
-        "clear": "Rimuovi scorciatoia",
         "layoutLabel": "Quando attivata da scorciatoia, apri in:",
         "layoutFullWidth": "Larghezza completa",
         "layoutSidePanel": "Pannello laterale"
+      },
+      "voiceAgentHotkey": {
+        "title": "Scorciatoia dell'agente vocale",
+        "description": "Di' cosa ti serve — il tuo agente IA scrive il risultato, non le tue parole"
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",
@@ -2353,9 +2365,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Tasto Agente",
-      "hotkeyDescription": "Tasto di scelta rapida per alternare l'overlay agente",
-      "clearHotkey": "Rimuovi scorciatoia",
+      "hotkey": "Scorciatoia dell'agente chat",
+      "hotkeyDescription": "Apre e chiude l'overlay dell'agente chat",
       "model": "Modello Agente",
       "modelDescription": "Modello IA utilizzato per le conversazioni agente",
       "systemPrompt": "Prompt di Sistema",

@@ -172,7 +172,8 @@
       "welcome": "Willkommen",
       "setup": "Einrichtung",
       "permissions": "Berechtigungen",
-      "activation": "Aktivierung"
+      "activation": "Aktivierung",
+      "voiceAgent": "Sprachagent"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Dieser Hotkey konnte nicht registriert werden",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} zum Starten/Stoppen",
       "holdHotkey": "{{hotkey}} gedrückt halten",
       "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden..."
+    },
+    "voiceAgent": {
+      "title": "Sprachagent-Hotkey",
+      "description": "Sprechen Sie mit Ihrem KI-Agenten per Tastendruck",
+      "hotkey": "Hotkey",
+      "howItWorks": "Drücken Sie die Taste und sagen Sie, was Sie möchten — zum Beispiel „schreibe eine kurze Dankesnachricht“. {{agentName}} schreibt das Ergebnis direkt an Ihren Cursor. Sie müssen nicht zuerst „Hey {{agentName}}“ sagen.",
+      "optionalNote": "Optional — Sie können ihn jederzeit in den Einstellungen festlegen oder ändern."
     },
     "connectivity": {
       "title": "OpenWhispr Cloud ist aus diesem Netzwerk nicht erreichbar",
@@ -809,7 +817,8 @@
     "pressAnyKeyMac": "Beliebige Taste drücken oder ⌘⇧K",
     "recording": "Aufnahme",
     "tryShortcut": "Versuchen Sie Ctrl+Shift+K",
-    "tryShortcutMac": "Versuchen Sie ⌘⇧K"
+    "tryShortcutMac": "Versuchen Sie ⌘⇧K",
+    "remove": "Hotkey entfernen"
   },
   "languageSelector": {
     "noLanguagesFound": "Keine Sprachen gefunden",
@@ -1294,10 +1303,13 @@
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
         "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben",
-        "clear": "Hotkey entfernen",
         "layoutLabel": "Beim Auslösen per Hotkey öffnen in:",
         "layoutFullWidth": "Volle Breite",
         "layoutSidePanel": "Seitenleiste"
+      },
+      "voiceAgentHotkey": {
+        "title": "Sprachagent-Hotkey",
+        "description": "Sagen Sie, was Sie brauchen — Ihr KI-Agent schreibt das Ergebnis, nicht Ihre Worte"
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
@@ -2353,9 +2365,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Agent-Tastenkombination",
-      "hotkeyDescription": "Tastenkombination zum Umschalten des Agent-Overlays",
-      "clearHotkey": "Hotkey entfernen",
+      "hotkey": "Chat-Agent-Hotkey",
+      "hotkeyDescription": "Öffnet und schließt das Chat-Agent-Overlay",
       "model": "Agent-Modell",
       "modelDescription": "KI-Modell für Agent-Unterhaltungen",
       "systemPrompt": "System-Prompt",

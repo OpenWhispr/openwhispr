@@ -172,7 +172,8 @@
       "welcome": "Bienvenido",
       "setup": "Configuración",
       "permissions": "Permisos",
-      "activation": "Activación"
+      "activation": "Activación",
+      "voiceAgent": "Agente de voz"
     },
     "hotkey": {
       "couldNotRegisterTitle": "No se pudo registrar ese atajo",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} para iniciar/detener",
       "holdHotkey": "Mantener {{hotkey}}",
       "textareaPlaceholder": "Haz clic aquí y usa tu atajo para dictar..."
+    },
+    "voiceAgent": {
+      "title": "Atajo del agente de voz",
+      "description": "Habla con tu agente de IA con una sola pulsación",
+      "hotkey": "Atajo",
+      "howItWorks": "Pulsa la tecla y di lo que quieres, por ejemplo «escribe una breve nota de agradecimiento». {{agentName}} escribe el resultado donde esté el cursor. No hace falta decir «Hey {{agentName}}» antes.",
+      "optionalNote": "Opcional: puedes configurarlo o cambiarlo en cualquier momento en los ajustes."
     },
     "connectivity": {
       "title": "No podemos conectar con OpenWhispr Cloud desde esta red",
@@ -857,7 +865,8 @@
     "pressAnyKeyMac": "Pulsa cualquier tecla o ⌘⇧K",
     "recording": "Grabando",
     "tryShortcut": "Prueba Ctrl+Shift+K",
-    "tryShortcutMac": "Prueba ⌘⇧K"
+    "tryShortcutMac": "Prueba ⌘⇧K",
+    "remove": "Eliminar atajo"
   },
   "languageSelector": {
     "noLanguagesFound": "No se encontraron idiomas",
@@ -1342,10 +1351,13 @@
       "meetingHotkey": {
         "title": "Atajo modo reunión",
         "description": "Iniciar modo reunión y ajustar el panel al lado de la pantalla",
-        "clear": "Eliminar atajo",
         "layoutLabel": "Al activarse con el atajo, abrir en:",
         "layoutFullWidth": "Ancho completo",
         "layoutSidePanel": "Panel lateral"
+      },
+      "voiceAgentHotkey": {
+        "title": "Atajo del agente de voz",
+        "description": "Di lo que necesitas y tu agente de IA escribe el resultado, no tus palabras"
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
@@ -2401,9 +2413,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Tecla del Agente",
-      "hotkeyDescription": "Tecla de acceso rápido para alternar la superposición del agente",
-      "clearHotkey": "Eliminar atajo",
+      "hotkey": "Atajo del agente de chat",
+      "hotkeyDescription": "Abre y cierra la superposición del agente de chat",
       "model": "Modelo del Agente",
       "modelDescription": "Modelo de IA utilizado para conversaciones del agente",
       "systemPrompt": "Prompt del Sistema",

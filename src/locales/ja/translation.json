@@ -172,7 +172,8 @@
       "welcome": "ようこそ",
       "setup": "セットアップ",
       "permissions": "権限",
-      "activation": "アクティベーション"
+      "activation": "アクティベーション",
+      "voiceAgent": "ボイスエージェント"
     },
     "hotkey": {
       "couldNotRegisterTitle": "ホットキーを登録できませんでした",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} で開始/停止",
       "holdHotkey": "{{hotkey}} を押し続ける",
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
+    },
+    "voiceAgent": {
+      "title": "ボイスエージェントホットキー",
+      "description": "ワンキーでAIエージェントに話しかけられます",
+      "hotkey": "ホットキー",
+      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えば、{{agentName}}がカーソル位置に結果を入力します。「Hey {{agentName}}」と言う必要はありません。",
+      "optionalNote": "任意です。設定からいつでも追加・変更できます。"
     },
     "connectivity": {
       "title": "このネットワークから OpenWhispr Cloud に接続できません",
@@ -809,7 +817,8 @@
     "pressAnyKeyMac": "任意のキーまたは ⌘⇧K を押してください",
     "recording": "記録中",
     "tryShortcut": "Ctrl+Shift+K をお試しください",
-    "tryShortcutMac": "⌘⇧K をお試しください"
+    "tryShortcutMac": "⌘⇧K をお試しください",
+    "remove": "ホットキーを削除"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
@@ -1294,10 +1303,13 @@
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",
         "description": "ミーティングモードを開始し、パネルを画面の横に配置する",
-        "clear": "ホットキーを削除",
         "layoutLabel": "ホットキーで起動したときに開く:",
         "layoutFullWidth": "全幅",
         "layoutSidePanel": "サイドパネル"
+      },
+      "voiceAgentHotkey": {
+        "title": "ボイスエージェントホットキー",
+        "description": "話しかけるだけで、AIエージェントが言葉そのままではなく結果を入力します"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -2353,9 +2365,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "エージェントホットキー",
-      "hotkeyDescription": "エージェントオーバーレイを切り替えるホットキー",
-      "clearHotkey": "ホットキーを削除",
+      "hotkey": "チャットエージェントホットキー",
+      "hotkeyDescription": "チャットエージェントのオーバーレイを開閉します",
       "model": "エージェントモデル",
       "modelDescription": "エージェント会話に使用するAIモデル",
       "systemPrompt": "システムプロンプト",

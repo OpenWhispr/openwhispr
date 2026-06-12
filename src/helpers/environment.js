@@ -41,6 +41,7 @@ const PERSISTED_KEYS = [
   "LLAMA_VULKAN_ENABLED",
   "DICTATION_KEY",
   "CHAT_AGENT_KEY",
+  "VOICE_AGENT_KEY",
   "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
@@ -457,6 +458,16 @@ class EnvironmentManager {
   saveAgentKey(key) {
     delete process.env.AGENT_KEY;
     const result = this._saveKey("CHAT_AGENT_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getVoiceAgentKey() {
+    return this._getKey("VOICE_AGENT_KEY");
+  }
+
+  saveVoiceAgentKey(key) {
+    const result = this._saveKey("VOICE_AGENT_KEY", key);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

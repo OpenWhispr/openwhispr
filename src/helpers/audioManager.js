@@ -14,6 +14,7 @@ import { reacquireIfDead } from "./micTrackHealth";
 import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../stores/settingsStore";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import { detectAgentName } from "../config/agentDetection";
+import { resolveDictationRouteKind } from "./dictationRouting";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
@@ -22,15 +23,19 @@ import { getDictionaryHintWords } from "../utils/snippets";
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
-function resolveReasoningRoute(text, settings, agentName) {
+function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
   const cleanupReachable =
     !!settings.useCleanupModel && (!!settings.cleanupModel?.trim() || isCloudCleanupMode());
   const agentModel = settings.dictationAgentModel?.trim() || "";
   const agentReachable = !!settings.useDictationAgent && agentModel.length > 0;
-  if (!cleanupReachable && !agentReachable) return { kind: "skip" };
 
-  const invoked = !!agentName && detectAgentName(text, agentName);
-  if (agentReachable && invoked) {
+  const kind = resolveDictationRouteKind({
+    cleanupReachable,
+    agentReachable,
+    agentInvoked: !!agentName && detectAgentName(text, agentName),
+    voiceAgentRequested,
+  });
+  if (kind === "agent") {
     const provider = settings.dictationAgentProvider?.trim() || undefined;
     const isSelfHostedAgent =
       settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl;
@@ -56,7 +61,7 @@ function resolveReasoningRoute(text, settings, agentName) {
       },
     };
   }
-  if (cleanupReachable) {
+  if (kind === "cleanup") {
     return {
       kind: "cleanup",
       config: { disableThinking: settings.cleanupDisableThinking },
@@ -178,6 +183,7 @@ class AudioManager {
     this.streamingFallbackRecorder = null;
     this.streamingFallbackChunks = [];
     this.skipReasoning = false;
+    this.voiceAgentRequested = false;
     this.context = "dictation";
     this.sttConfig = null;
     this.lastAudioBlob = null;
@@ -254,6 +260,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   setSkipReasoning(skip) {
     this.skipReasoning = skip;
+  }
+
+  setVoiceAgentRequested(requested) {
+    this.voiceAgentRequested = requested;
   }
 
   setContext(context) {
@@ -1154,7 +1164,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
     if (useReasoning) {
       try {
-        const route = resolveReasoningRoute(normalizedText, getSettings(), agentName);
+        const route = resolveReasoningRoute(
+          normalizedText,
+          getSettings(),
+          agentName,
+          this.voiceAgentRequested
+        );
         if (route.kind === "skip") return normalizedText;
 
         const targetModel = route.kind === "agent" ? route.model : cleanupModel;
@@ -1400,7 +1415,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (processedText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
-      const route = resolveReasoningRoute(processedText, settings, agentName);
+      const route = resolveReasoningRoute(
+        processedText,
+        settings,
+        agentName,
+        this.voiceAgentRequested
+      );
       const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
 
       if (route.kind === "agent") {

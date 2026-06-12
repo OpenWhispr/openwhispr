@@ -172,7 +172,8 @@
       "welcome": "Bienvenue",
       "setup": "Configuration",
       "permissions": "Permissions",
-      "activation": "Activation"
+      "activation": "Activation",
+      "voiceAgent": "Agent vocal"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Impossible d'enregistrer ce raccourci",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} pour démarrer/arrêter",
       "holdHotkey": "Maintenir {{hotkey}}",
       "textareaPlaceholder": "Cliquez ici puis utilisez votre raccourci pour dicter..."
+    },
+    "voiceAgent": {
+      "title": "Raccourci de l'agent vocal",
+      "description": "Parlez à votre agent IA d'une simple touche",
+      "hotkey": "Raccourci",
+      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». {{agentName}} écrit le résultat là où se trouve votre curseur. Pas besoin de dire « Hey {{agentName}} » d'abord.",
+      "optionalNote": "Facultatif — vous pouvez le définir ou le modifier à tout moment dans les réglages."
     },
     "connectivity": {
       "title": "Impossible d'atteindre OpenWhispr Cloud depuis ce réseau",
@@ -857,7 +865,8 @@
     "pressAnyKeyMac": "Appuyez sur une touche ou ⌘⇧K",
     "recording": "Enregistrement",
     "tryShortcut": "Essayez Ctrl+Shift+K",
-    "tryShortcutMac": "Essayez ⌘⇧K"
+    "tryShortcutMac": "Essayez ⌘⇧K",
+    "remove": "Supprimer le raccourci"
   },
   "languageSelector": {
     "noLanguagesFound": "Aucune langue trouvée",
@@ -1342,10 +1351,13 @@
       "meetingHotkey": {
         "title": "Raccourci mode réunion",
         "description": "Démarrer le mode réunion et ancrer le panneau sur le côté de l'écran",
-        "clear": "Supprimer le raccourci",
         "layoutLabel": "Lors du déclenchement par raccourci, ouvrir en :",
         "layoutFullWidth": "Pleine largeur",
         "layoutSidePanel": "Panneau latéral"
+      },
+      "voiceAgentHotkey": {
+        "title": "Raccourci de l'agent vocal",
+        "description": "Dites ce que vous voulez — votre agent IA écrit le résultat, pas vos mots"
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
@@ -2401,9 +2413,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Raccourci Agent",
-      "hotkeyDescription": "Raccourci clavier pour basculer la fenêtre agent",
-      "clearHotkey": "Supprimer le raccourci",
+      "hotkey": "Raccourci de l'agent de chat",
+      "hotkeyDescription": "Affiche ou masque la fenêtre de l'agent de chat",
       "model": "Modèle Agent",
       "modelDescription": "Modèle IA utilisé pour les conversations agent",
       "systemPrompt": "Prompt système",

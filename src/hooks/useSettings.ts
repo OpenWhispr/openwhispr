@@ -43,6 +43,7 @@ export interface CleanupSettings {
 export interface HotkeySettings {
   dictationKey: string;
   meetingKey: string;
+  voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
   activationMode: "tap" | "push";
 }
@@ -225,6 +226,7 @@ function useSettingsInternal() {
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
+    voiceAgentKey: store.voiceAgentKey,
     meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
     setMeetingHotkeyLayoutMode: store.setMeetingHotkeyLayoutMode,
     theme: store.theme,
@@ -264,6 +266,7 @@ function useSettingsInternal() {
     setCleanupCustomApiKey: store.setCleanupCustomApiKey,
     setDictationKey: store.setDictationKey,
     setMeetingKey: store.setMeetingKey,
+    setVoiceAgentKey: store.setVoiceAgentKey,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,

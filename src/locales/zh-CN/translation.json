@@ -172,7 +172,8 @@
       "welcome": "欢迎",
       "setup": "设置",
       "permissions": "权限",
-      "activation": "激活"
+      "activation": "激活",
+      "voiceAgent": "语音助手"
     },
     "hotkey": {
       "couldNotRegisterTitle": "无法注册该快捷键",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} 开始/停止",
       "holdHotkey": "按住 {{hotkey}}",
       "textareaPlaceholder": "点击此处，然后使用快捷键进行听写..."
+    },
+    "voiceAgent": {
+      "title": "语音助手快捷键",
+      "description": "一键唤起你的 AI 助手",
+      "hotkey": "快捷键",
+      "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。{{agentName}} 会把结果输入到光标所在的位置。无需先说“Hey {{agentName}}”。",
+      "optionalNote": "可选——你可以随时在设置中添加或修改。"
     },
     "connectivity": {
       "title": "无法从该网络连接到 OpenWhispr Cloud",
@@ -809,7 +817,8 @@
     "pressAnyKeyMac": "按任意键或 ⌘⇧K",
     "recording": "录制中",
     "tryShortcut": "试试 Ctrl+Shift+K",
-    "tryShortcutMac": "试试 ⌘⇧K"
+    "tryShortcutMac": "试试 ⌘⇧K",
+    "remove": "移除快捷键"
   },
   "languageSelector": {
     "noLanguagesFound": "未找到匹配的语言",
@@ -1289,10 +1298,13 @@
       "meetingHotkey": {
         "title": "会议模式快捷键",
         "description": "启动会议模式并将面板固定到屏幕侧边",
-        "clear": "移除快捷键",
         "layoutLabel": "通过快捷键触发时,打开方式:",
         "layoutFullWidth": "全宽",
         "layoutSidePanel": "侧边栏"
+      },
+      "voiceAgentHotkey": {
+        "title": "语音助手快捷键",
+        "description": "说出你的需求，AI 助手会输入结果，而不是你说的原话"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",
@@ -2348,9 +2360,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "助手热键",
-      "hotkeyDescription": "切换助手覆盖层的热键",
-      "clearHotkey": "移除快捷键",
+      "hotkey": "聊天助手快捷键",
+      "hotkeyDescription": "打开或关闭聊天助手窗口",
       "model": "助手模型",
       "modelDescription": "用于助手对话的AI模型",
       "systemPrompt": "系统提示词",

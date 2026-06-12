@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   hideWindow: () => ipcRenderer.invoke("hide-window"),
   showDictationPanel: () => ipcRenderer.invoke("show-dictation-panel"),
   onToggleDictation: registerListener("toggle-dictation", (callback) => () => callback()),
+  onToggleVoiceAgent: registerListener("toggle-voice-agent", (callback) => () => callback()),
   onStartDictation: registerListener("start-dictation", (callback) => () => callback()),
   onStopDictation: registerListener("stop-dictation", (callback) => () => callback()),
 
@@ -716,6 +717,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Agent mode
   updateAgentHotkey: (hotkey) => ipcRenderer.invoke("update-agent-hotkey", hotkey),
+  updateVoiceAgentHotkey: (hotkey) => ipcRenderer.invoke("update-voice-agent-hotkey", hotkey),
+  getVoiceAgentKey: () => ipcRenderer.invoke("get-voice-agent-key"),
   getAgentKey: () => ipcRenderer.invoke("get-agent-key"),
   saveAgentKey: (key) => ipcRenderer.invoke("save-agent-key", key),
   onAgentStartRecording: registerListener("agent-start-recording", (callback) => () => callback()),
