@@ -14,6 +14,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { useSettings } from "../hooks/useSettings";
+import { getCachedPlatform } from "../utils/platform";
 import type { Snippet } from "../utils/snippets";
 
 const EXAMPLE_KEYS = ["linkedin", "rewrite", "intro", "signoff"] as const;
@@ -141,6 +142,7 @@ export default function SnippetsView() {
   const closePanel = () => {
     setPanelOpen(false);
     setExpansion("");
+    triggerInputRef.current?.focus();
   };
 
   const handleCreate = () => {
@@ -207,17 +209,31 @@ export default function SnippetsView() {
             autoFocus
             value={expansion}
             onChange={(e) => setExpansion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") closePanel();
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && canCreate) handleCreate();
+            }}
             placeholder={t("dictionary.snippets.replacementPlaceholder")}
             rows={4}
             className="min-h-[72px] resize-none border-0 shadow-none rounded-none bg-transparent p-0 text-xs text-foreground placeholder:text-foreground/20 hover:border-0 focus:border-0 focus:ring-0"
           />
-          <div className="flex items-center justify-end gap-2 pt-1.5">
-            <Button variant="ghost" size="sm" onClick={closePanel}>
-              {t("common.cancel")}
-            </Button>
-            <Button size="sm" onClick={handleCreate} disabled={!canCreate}>
-              {t("dictionary.snippets.create")}
-            </Button>
+          <div className="flex items-center justify-between pt-1.5">
+            <div className="flex items-center gap-0.5">
+              <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
+                {getCachedPlatform() === "darwin" ? "⌘" : "Ctrl"}
+              </kbd>
+              <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
+                ⏎
+              </kbd>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={closePanel}>
+                {t("common.cancel")}
+              </Button>
+              <Button size="sm" onClick={handleCreate} disabled={!canCreate}>
+                {t("dictionary.snippets.create")}
+              </Button>
+            </div>
           </div>
         </div>
       )}
