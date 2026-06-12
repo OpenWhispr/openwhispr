@@ -73,12 +73,18 @@ jobs:
       - name: Install Linux build and packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev
+          sudo apt-get install -y rpm libx11-dev libxtst-dev libatspi2.0-dev libglib2.0-dev libpipewire-0.3-dev pkg-config
 
       - name: Create runtime env
         run: |
           echo "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" >> .env
           echo "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" >> .env
+
+      - name: Verify PipeWire system audio helper build
+        run: |
+          npm run compile:linux-system-audio
+          # supportsNativeCapture reflects compile-time PipeWire linkage, so this passes on CI runners with no PipeWire daemon (where "ok" is false).
+          resources/bin/linux-system-audio-helper probe | grep '"supportsNativeCapture":true'
 
       - name: Build Application
         run: npm run build:linux -- --publish always

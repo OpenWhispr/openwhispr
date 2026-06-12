@@ -180,6 +180,19 @@
       ]
     },
     {
+      "id": "xai",
+      "name": "xAI",
+      "baseUrl": "https://api.x.ai/v1",
+      "models": [
+        {
+          "id": "grok-stt",
+          "name": "Grok STT",
+          "description": "High-accuracy speech recognition by xAI",
+          "descriptionKey": "models.descriptions.transcription.xai_grok_stt"
+        }
+      ]
+    },
+    {
       "id": "mistral",
       "name": "Mistral",
       "baseUrl": "https://api.mistral.ai/v1",

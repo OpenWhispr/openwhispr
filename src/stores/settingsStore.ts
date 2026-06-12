@@ -24,6 +24,7 @@ import type {
   ThemeSettings,
   ChatAgentSettings,
 } from "../hooks/useSettings";
+import type { Snippet } from "../utils/snippets";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -139,7 +140,7 @@ const BOOLEAN_SETTINGS = new Set([
   "gcalPrimaryOnly",
 ]);
 
-const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
+const ARRAY_SETTINGS = new Set(["customDictionary", "snippets", "gcalAccounts"]);
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
@@ -480,6 +481,7 @@ export interface SettingsState
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
+  setSnippets: (snippets: Snippet[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
@@ -492,6 +494,7 @@ export interface SettingsState
   setAnthropicApiKey: (key: string) => void;
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
+  setXaiApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
   setCortiClientId: (key: string) => void;
   setCortiClientSecret: (key: string) => void;
@@ -679,6 +682,7 @@ const SECRET_IPC_SAVERS = {
   anthropic: "saveAnthropicKey",
   gemini: "saveGeminiKey",
   groq: "saveGroqKey",
+  xai: "saveXaiKey",
   mistral: "saveMistralKey",
   cortiClientId: "saveCortiClientId",
   cortiClientSecret: "saveCortiClientSecret",
@@ -718,6 +722,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "anthropicApiKey",
   "geminiApiKey",
   "groqApiKey",
+  "xaiApiKey",
   "mistralApiKey",
   "cortiClientId",
   "cortiClientSecret",
@@ -776,6 +781,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cortiEnvironment: readString("cortiEnvironment", "us"),
   cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
+  snippets: (() => {
+    try {
+      const parsed = JSON.parse(readString("snippets", "[]"));
+      return Array.isArray(parsed) ? (parsed as Snippet[]) : [];
+    } catch {
+      return [];
+    }
+  })(),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
@@ -789,6 +802,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   anthropicApiKey: "",
   geminiApiKey: "",
   groqApiKey: "",
+  xaiApiKey: "",
   mistralApiKey: "",
   cortiClientId: "",
   cortiClientSecret: "",
@@ -1102,6 +1116,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     });
   },
 
+  setSnippets: (snippets: Snippet[]) => {
+    if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
+    set({ snippets });
+  },
+
   setUiLanguage: (language: string) => {
     const normalized = normalizeUiLanguage(language);
     if (isBrowser) localStorage.setItem("uiLanguage", normalized);
@@ -1137,6 +1156,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ groqApiKey: key });
     debouncedSaveSecret("groq", key);
     invalidateApiKeyCaches("groq");
+  },
+  setXaiApiKey: (key: string) => {
+    set({ xaiApiKey: key });
+    debouncedSaveSecret("xai", key);
+    invalidateApiKeyCaches();
   },
   setMistralApiKey: (key: string) => {
     set({ mistralApiKey: key });
@@ -1474,6 +1498,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.cloudTranscriptionMode !== undefined)
       s.setCloudTranscriptionMode(settings.cloudTranscriptionMode);
     if (settings.customDictionary !== undefined) s.setCustomDictionary(settings.customDictionary);
+    if (settings.snippets !== undefined) s.setSnippets(settings.snippets);
     if (settings.assemblyAiStreaming !== undefined)
       s.setAssemblyAiStreaming(settings.assemblyAiStreaming);
     if (settings.showTranscriptionPreview !== undefined)
@@ -1498,6 +1523,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.anthropicApiKey !== undefined) s.setAnthropicApiKey(keys.anthropicApiKey);
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
+    if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
@@ -1706,6 +1732,7 @@ export async function initializeSettings(): Promise<void> {
         anthropic,
         gemini,
         groq,
+        xai,
         mistral,
         cortiClientId,
         cortiClientSecret,
@@ -1721,6 +1748,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getAnthropicKey?.(),
         window.electronAPI.getGeminiKey?.(),
         window.electronAPI.getGroqKey?.(),
+        window.electronAPI.getXaiKey?.(),
         window.electronAPI.getMistralKey?.(),
         window.electronAPI.getCortiClientId?.(),
         window.electronAPI.getCortiClientSecret?.(),
@@ -1738,6 +1766,7 @@ export async function initializeSettings(): Promise<void> {
         anthropicApiKey: anthropic || "",
         geminiApiKey: gemini || "",
         groqApiKey: groq || "",
+        xaiApiKey: xai || "",
         mistralApiKey: mistral || "",
         cortiClientId: cortiClientId || "",
         cortiClientSecret: cortiClientSecret || "",

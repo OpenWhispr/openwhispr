@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
+  exportDictionary: (words) => ipcRenderer.invoke("export-dictionary", words),
   searchNotes: (query, limit) => ipcRenderer.invoke("db-search-notes", query, limit),
   semanticSearchNotes: (query, limit) =>
     ipcRenderer.invoke("db-semantic-search-notes", query, limit),
@@ -353,6 +354,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Groq API
   getGroqKey: () => ipcRenderer.invoke("get-groq-key"),
   saveGroqKey: (key) => ipcRenderer.invoke("save-groq-key", key),
+
+  // xAI API
+  getXaiKey: () => ipcRenderer.invoke("get-xai-key"),
+  saveXaiKey: (key) => ipcRenderer.invoke("save-xai-key", key),
+  proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
 
   // Mistral API
   getMistralKey: () => ipcRenderer.invoke("get-mistral-key"),
