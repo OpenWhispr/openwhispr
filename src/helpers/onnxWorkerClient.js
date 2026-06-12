@@ -8,7 +8,8 @@ const RESPAWN_BACKOFF_MS = [1000, 2000, 4000, 8000, 16000, 30000];
 const MAX_RESPAWN_ATTEMPTS = 5;
 const SHUTDOWN_TIMEOUT_MS = 5000;
 
-const WORKER_SCRIPT = path.join(__dirname, "..", "workers", "onnxWorker.js");
+const WORKER_SCRIPT = path.join(__dirname, "..", "workers", "onnxWorker.js")
+  .replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
 
 class WorkerCrashedError extends Error {
   constructor(message = "ONNX worker crashed") {

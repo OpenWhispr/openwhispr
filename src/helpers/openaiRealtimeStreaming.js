@@ -5,6 +5,7 @@ const WEBSOCKET_TIMEOUT_MS = 15000;
 const DISCONNECT_TIMEOUT_MS = 3000;
 const SAMPLE_RATE = 24000;
 const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
+const SESSION_PREEMPT_MS = 55 * 60 * 1000;
 
 class OpenAIRealtimeStreaming {
   constructor() {
@@ -17,6 +18,9 @@ class OpenAIRealtimeStreaming {
     this.onFinalTranscript = null;
     this.onError = null;
     this.onSessionEnd = null;
+    this.onSessionExpired = null;
+    this._sessionExpired = false;
+    this._sessionTimer = null;
     this.pendingResolve = null;
     this.pendingReject = null;
     this.connectionTimeout = null;
@@ -50,6 +54,7 @@ class OpenAIRealtimeStreaming {
     this.coldStartBuffer = [];
     this.coldStartBufferSize = 0;
     this.speechStartedAt = null;
+    this._sessionExpired = false;
 
     const url = "wss://api.openai.com/v1/realtime?intent=transcription";
     debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
@@ -104,7 +109,7 @@ class OpenAIRealtimeStreaming {
           this.pendingResolve = null;
         }
         this.cleanup();
-        if (wasActive && !this.isDisconnecting) {
+        if (wasActive && !this.isDisconnecting && !this._sessionExpired) {
           this.onSessionEnd?.({ text: this.getFullTranscript() });
         }
       });
@@ -118,14 +123,13 @@ class OpenAIRealtimeStreaming {
       switch (event.type) {
         case "session.created": {
           if (this.preconfigured) {
-            // Server-side ephemeral token already configured the session;
-            // sending an update would strip language and noise-reduction.
             debugLogger.debug("OpenAI Realtime session created (preconfigured)", {
               model: this.model,
             });
             this.isConnected = true;
             this.isConnecting = false;
             clearTimeout(this.connectionTimeout);
+            this._startSessionTimer();
             if (this.pendingResolve) {
               this.pendingResolve();
               this.pendingResolve = null;
@@ -165,6 +169,7 @@ class OpenAIRealtimeStreaming {
             this.isConnected = true;
             this.isConnecting = false;
             clearTimeout(this.connectionTimeout);
+            this._startSessionTimer();
             debugLogger.debug("OpenAI Realtime session configured", {
               model: this.model,
             });
@@ -214,6 +219,12 @@ class OpenAIRealtimeStreaming {
         case "error": {
           const errCode = event.error?.code;
           const errMsg = event.error?.message || "OpenAI Realtime error";
+          if (errCode === "session_expired") {
+            debugLogger.warn("OpenAI Realtime session expired", { message: errMsg });
+            this._sessionExpired = true;
+            this.onSessionExpired?.();
+            break;
+          }
           const isEmptyBuffer =
             errCode === "input_audio_buffer_commit_empty" ||
             errMsg.includes("buffer too small") ||
@@ -240,8 +251,24 @@ class OpenAIRealtimeStreaming {
     }
   }
 
+  _startSessionTimer() {
+    clearTimeout(this._sessionTimer);
+    this._sessionTimer = setTimeout(() => {
+      if (!this.isConnected) return;
+      debugLogger.debug("OpenAI Realtime session approaching 60min limit, requesting reconnect");
+      this.onSessionExpired?.();
+    }, SESSION_PREEMPT_MS);
+  }
+
   sendAudio(pcmBuffer) {
-    if (!this.ws) return false;
+    if (!this.ws) {
+      if (this.coldStartBufferSize < COLD_START_BUFFER_MAX) {
+        const copy = Buffer.from(pcmBuffer);
+        this.coldStartBuffer.push(copy);
+        this.coldStartBufferSize += copy.length;
+      }
+      return false;
+    }
 
     if (this.ws.readyState !== WebSocket.OPEN) {
       if (
@@ -348,6 +375,8 @@ class OpenAIRealtimeStreaming {
   cleanup() {
     clearTimeout(this.connectionTimeout);
     this.connectionTimeout = null;
+    clearTimeout(this._sessionTimer);
+    this._sessionTimer = null;
 
     if (this.ws) {
       try {

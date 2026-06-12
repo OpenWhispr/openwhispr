@@ -24,6 +24,7 @@
     "src/hooks/**/*",
     "src/models/**/*",
     "src/services/localReasoningBridge.js",
+    "src/workers/**/*",
     "src/types/**/*",
     "src/utils.js",
     "src/utils/**/*",
@@ -88,7 +89,8 @@
     "**/node_modules/ffmpeg-static/**/*",
     "**/node_modules/better-sqlite3/**/*",
     "**/node_modules/onnxruntime-node/**/*",
-    "**/node_modules/@napi-rs/keyring/**/*"
+    "**/node_modules/@napi-rs/keyring/**/*",
+    "src/workers/**/*"
   ],
   "extraResources": [
     ".env",
