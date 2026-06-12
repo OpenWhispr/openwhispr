@@ -2278,10 +2278,8 @@
     "tabSnippets": "Snippets",
     "snippets": {
       "title": "Snippets",
-      "add": "Ajouter un snippet",
       "edit": "Modifier {{trigger}}",
       "remove": "Supprimer {{trigger}}",
-      "createTitle": "Nouveau snippet",
       "editTitle": "Modifier le snippet",
       "dialogDescription": "Quand vous prononcez le déclencheur, il est remplacé par votre texte enregistré.",
       "triggerLabel": "Déclencheur",
@@ -2303,7 +2301,8 @@
         "introText": "Bonjour, j'aimerais trouver un moment pour échanger cette semaine…",
         "signoffTrigger": "Signature",
         "signoffText": "Cordialement, Alex · alex@example.com"
-      }
+      },
+      "addPlaceholder": "Ajoutez une phrase déclencheur — « mon agenda », « mon LinkedIn »"
     },
     "emptyTitle": "Votre dictionnaire est vide",
     "emptyDescription": "Ajoutez les mots que {{agentName}} doit toujours reconnaître : noms, outils, acronymes.",

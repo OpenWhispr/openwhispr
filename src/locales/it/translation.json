@@ -2167,10 +2167,8 @@
     "tabSnippets": "Snippet",
     "snippets": {
       "title": "Snippet",
-      "add": "Aggiungi snippet",
       "edit": "Modifica {{trigger}}",
       "remove": "Rimuovi {{trigger}}",
-      "createTitle": "Nuovo snippet",
       "editTitle": "Modifica snippet",
       "dialogDescription": "Quando pronunci il trigger, viene sostituito con il tuo testo salvato.",
       "triggerLabel": "Trigger",
@@ -2192,7 +2190,8 @@
         "introText": "Ciao, mi piacerebbe trovare un momento per parlare questa settimana…",
         "signoffTrigger": "Firma",
         "signoffText": "Saluti, Alex · alex@example.com"
-      }
+      },
+      "addPlaceholder": "Aggiungi una frase trigger: \"mio calendario\", \"il mio LinkedIn\""
     },
     "emptyTitle": "Il tuo dizionario è vuoto",
     "emptyDescription": "Aggiungi le parole che {{agentName}} deve sempre riconoscere: nomi, strumenti, acronimi.",

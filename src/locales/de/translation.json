@@ -2167,10 +2167,8 @@
     "tabSnippets": "Snippets",
     "snippets": {
       "title": "Snippets",
-      "add": "Snippet hinzufügen",
       "edit": "{{trigger}} bearbeiten",
       "remove": "{{trigger}} entfernen",
-      "createTitle": "Neues Snippet",
       "editTitle": "Snippet bearbeiten",
       "dialogDescription": "Wenn du den Auslöser sprichst, wird er durch deinen gespeicherten Text ersetzt.",
       "triggerLabel": "Auslöser",
@@ -2192,7 +2190,8 @@
         "introText": "Hallo, ich würde mich freuen, diese Woche Zeit für ein Gespräch zu finden …",
         "signoffTrigger": "Grußformel",
         "signoffText": "Viele Grüße, Alex · alex@example.com"
-      }
+      },
+      "addPlaceholder": "Auslöser-Phrase hinzufügen – „mein Kalender“, „mein LinkedIn“"
     },
     "emptyTitle": "Dein Wörterbuch ist leer",
     "emptyDescription": "Füge Wörter hinzu, die {{agentName}} immer richtig erkennen soll: Namen, Tools, Abkürzungen.",

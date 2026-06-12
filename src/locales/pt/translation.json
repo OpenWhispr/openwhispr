@@ -2167,10 +2167,8 @@
     "tabSnippets": "Snippets",
     "snippets": {
       "title": "Snippets",
-      "add": "Adicionar snippet",
       "edit": "Editar {{trigger}}",
       "remove": "Remover {{trigger}}",
-      "createTitle": "Novo snippet",
       "editTitle": "Editar snippet",
       "dialogDescription": "Quando você falar o gatilho, ele será substituído pelo seu texto salvo.",
       "triggerLabel": "Gatilho",
@@ -2192,7 +2190,8 @@
         "introText": "Olá, adoraria encontrar um horário para conversar esta semana…",
         "signoffTrigger": "Assinatura",
         "signoffText": "Abraços, Alex · alex@example.com"
-      }
+      },
+      "addPlaceholder": "Adicione uma frase-gatilho — \"minha agenda\", \"meu LinkedIn\""
     },
     "emptyTitle": "Seu dicionário está vazio",
     "emptyDescription": "Adicione palavras que {{agentName}} deve sempre acertar: nomes, ferramentas, siglas.",

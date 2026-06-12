@@ -2215,10 +2215,8 @@
     "tabSnippets": "Snippets",
     "snippets": {
       "title": "Snippets",
-      "add": "Añadir snippet",
       "edit": "Editar {{trigger}}",
       "remove": "Eliminar {{trigger}}",
-      "createTitle": "Nuevo snippet",
       "editTitle": "Editar snippet",
       "dialogDescription": "Cuando digas el disparador, se reemplazará por tu texto guardado.",
       "triggerLabel": "Disparador",
@@ -2240,7 +2238,8 @@
         "introText": "Hola, me encantaría encontrar un momento para hablar esta semana…",
         "signoffTrigger": "Despedida",
         "signoffText": "Saludos, Alex · alex@example.com"
-      }
+      },
+      "addPlaceholder": "Añade una frase disparadora: \"mi agenda\", \"mi LinkedIn\""
     },
     "emptyTitle": "Tu diccionario está vacío",
     "emptyDescription": "Añade palabras que {{agentName}} siempre debe reconocer: nombres, herramientas, siglas.",

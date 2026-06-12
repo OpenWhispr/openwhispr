@@ -2162,10 +2162,8 @@
     "tabSnippets": "片段",
     "snippets": {
       "title": "片段",
-      "add": "添加片段",
       "edit": "编辑 {{trigger}}",
       "remove": "删除 {{trigger}}",
-      "createTitle": "新建片段",
       "editTitle": "编辑片段",
       "dialogDescription": "当你说出触发词时，它会被替换为你保存的文本。",
       "triggerLabel": "触发词",
@@ -2187,7 +2185,8 @@
         "introText": "你好，希望本周能找个时间聊聊…",
         "signoffTrigger": "签名",
         "signoffText": "祝好，Alex · alex@example.com"
-      }
+      },
+      "addPlaceholder": "添加触发词——“我的日程链接”“签名”"
     },
     "emptyTitle": "你的词典是空的",
     "emptyDescription": "添加希望{{agentName}}始终识别正确的词：名字、工具、缩写。",

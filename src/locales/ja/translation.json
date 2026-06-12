@@ -2095,10 +2095,8 @@
     "tabSnippets": "スニペット",
     "snippets": {
       "title": "スニペット",
-      "add": "スニペットを追加",
       "edit": "{{trigger}}を編集",
       "remove": "{{trigger}}を削除",
-      "createTitle": "新規スニペット",
       "editTitle": "スニペットを編集",
       "dialogDescription": "トリガーを話すと、保存したテキストに置き換わります。",
       "triggerLabel": "トリガー",
@@ -2120,7 +2118,8 @@
         "introText": "こんにちは、今週どこかでお話しできれば嬉しいです…",
         "signoffTrigger": "署名",
         "signoffText": "よろしくお願いします。Alex · alex@example.com"
-      }
+      },
+      "addPlaceholder": "トリガーフレーズを追加 — 「カレンダーリンク」「署名」など"
     },
     "emptyTitle": "辞書は空です",
     "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",

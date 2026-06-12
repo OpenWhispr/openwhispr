@@ -2374,10 +2374,8 @@
     "tabSnippets": "Snippets",
     "snippets": {
       "title": "Snippets",
-      "add": "Add snippet",
       "edit": "Edit {{trigger}}",
       "remove": "Remove {{trigger}}",
-      "createTitle": "New snippet",
       "editTitle": "Edit snippet",
       "dialogDescription": "When you speak the trigger, it's replaced with your saved text.",
       "triggerLabel": "Trigger",
@@ -2399,7 +2397,8 @@
         "introText": "Hey, would love to find some time to chat later this week…",
         "signoffTrigger": "Sign off",
         "signoffText": "Best, Alex · alex@example.com"
-      }
+      },
+      "addPlaceholder": "Add a trigger phrase — \"investor ask\", \"cal link\""
     },
     "emptyTitle": "Your dictionary is empty",
     "emptyDescription": "Add words {{agentName}} should always get right: names, tools, acronyms.",
