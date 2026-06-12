@@ -1,10 +1,7 @@
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
 import { getCachedPlatform } from "./platform";
 
-export type RendererSystemAudioStrategy = Extract<
-  SystemAudioStrategy,
-  "loopback" | "browser-portal"
->;
+export type RendererSystemAudioStrategy = Extract<SystemAudioStrategy, "loopback">;
 
 export const DEFAULT_SYSTEM_AUDIO_ACCESS: SystemAudioAccessResult = {
   granted: false,
@@ -43,17 +40,13 @@ export const getFallbackSystemAudioAccess = (
   return DEFAULT_SYSTEM_AUDIO_ACCESS;
 };
 
-export const canManageSystemAudioInApp = ({
-  mode,
-  supportsOnboardingGrant,
-}: Pick<SystemAudioAccessResult, "mode" | "supportsOnboardingGrant">) =>
-  mode === "native" || (mode === "portal" && !!supportsOnboardingGrant);
+export const canManageSystemAudioInApp = ({ mode }: Pick<SystemAudioAccessResult, "mode">) =>
+  mode === "native";
 
 export const isRendererSystemAudioStrategy = (
   strategy: SystemAudioStrategy | undefined | null
-): strategy is RendererSystemAudioStrategy =>
-  strategy === "loopback" || strategy === "browser-portal";
+): strategy is RendererSystemAudioStrategy => strategy === "loopback";
 
 export const getDisplayCaptureModeForStrategy = (
-  strategy: RendererSystemAudioStrategy
-): "loopback" | "portal" => (strategy === "loopback" ? "loopback" : "portal");
+  _strategy: RendererSystemAudioStrategy
+): "loopback" | "portal" => "loopback";

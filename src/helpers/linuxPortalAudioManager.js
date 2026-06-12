@@ -93,19 +93,6 @@ class LinuxPortalAudioManager {
     return promise;
   }
 
-  async requestAccess() {
-    const capability = await this.getCapability();
-    const granted = capability.available && capability.supportsNativeCapture;
-
-    return {
-      granted,
-      status: granted ? "granted" : "unknown",
-      restoreTokenAvailable: false,
-      portalVersion: capability.portalVersion,
-      error: capability.error,
-    };
-  }
-
   async start({ onChunk, onError, onWarning } = {}) {
     const capability = await this.getCapability();
     if (!capability.available || !capability.supportsSystemAudio) {

@@ -83,6 +83,7 @@ jobs:
       - name: Verify PipeWire system audio helper build
         run: |
           npm run compile:linux-system-audio
+          # supportsNativeCapture reflects compile-time PipeWire linkage, so this passes on CI runners with no PipeWire daemon (where "ok" is false).
           resources/bin/linux-system-audio-helper probe | grep '"supportsNativeCapture":true'
 
       - name: Build Application

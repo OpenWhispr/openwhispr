@@ -270,12 +270,7 @@ export interface AudioDiagnosticsResult {
 }
 
 export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
-export type SystemAudioStrategy =
-  | "native"
-  | "loopback"
-  | "browser-portal"
-  | "pipewire-loopback"
-  | "unsupported";
+export type SystemAudioStrategy = "native" | "loopback" | "pipewire-loopback" | "unsupported";
 
 export interface SystemAudioAccessResult {
   granted: boolean;

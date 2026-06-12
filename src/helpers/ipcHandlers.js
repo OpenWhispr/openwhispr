@@ -3224,13 +3224,8 @@ class IPCHandlers {
         granted,
         status: granted ? "granted" : "unknown",
         mode: granted ? "loopback" : "unsupported",
-        supportsPersistentGrant: false,
-        supportsPersistentPortalGrant: false,
         supportsNativeCapture,
-        supportsOnboardingGrant: false,
-        requiresRuntimeSharePrompt: false,
         strategy: granted ? "pipewire-loopback" : "unsupported",
-        restoreTokenAvailable: false,
         portalVersion: capability?.portalVersion ?? null,
         error: helperError,
       });
@@ -5354,6 +5349,20 @@ class IPCHandlers {
       });
     };
 
+    const fallBackToMicOnly = async (context) => {
+      if (this._meetingSystemStreaming?.isConnected) {
+        await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
+          debugLogger.debug(
+            `System streaming disconnect during ${context} fallback failed`,
+            { error: disconnectError.message },
+            "meeting"
+          );
+        });
+      }
+      this._meetingSystemStreaming = null;
+      await stopLiveSpeakerIdentification().catch(() => {});
+    };
+
     const startMeetingSystemAudio = async (
       event,
       systemAudioMode,
@@ -5370,17 +5379,7 @@ class IPCHandlers {
             { error: error.message },
             "meeting"
           );
-          if (this._meetingSystemStreaming?.isConnected) {
-            await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
-              debugLogger.debug(
-                "System streaming disconnect during native fallback failed",
-                { error: disconnectError.message },
-                "meeting"
-              );
-            });
-          }
-          this._meetingSystemStreaming = null;
-          await stopLiveSpeakerIdentification().catch(() => {});
+          await fallBackToMicOnly("native");
           return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
         }
       }
@@ -5398,17 +5397,7 @@ class IPCHandlers {
           { error: error.message },
           "meeting"
         );
-        if (this._meetingSystemStreaming?.isConnected) {
-          await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
-            debugLogger.debug(
-              "System streaming disconnect during PipeWire fallback failed",
-              { error: disconnectError.message },
-              "meeting"
-            );
-          });
-        }
-        this._meetingSystemStreaming = null;
-        await stopLiveSpeakerIdentification().catch(() => {});
+        await fallBackToMicOnly("PipeWire");
         return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
       }
     };
