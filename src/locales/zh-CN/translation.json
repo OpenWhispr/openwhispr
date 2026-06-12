@@ -2143,7 +2143,6 @@
     "addWord": "添加词语",
     "removeWord": "移除 {{word}}",
     "clearAll": "全部清除",
-    "autoManaged": "助手名称（自动管理）",
     "clearTitle": "清空词典？",
     "clearDescription": "这将删除自定义词典中的所有词汇，此操作无法撤销。",
     "addPlaceholder": "输入词语",
@@ -2194,7 +2193,8 @@
     "emptyTitle": "你的词典是空的",
     "emptyDescription": "添加希望{{agentName}}始终识别正确的词：名字、工具、缩写。",
     "addFirstWord": "添加第一个词",
-    "importList": "导入列表"
+    "importList": "导入列表",
+    "agentDefault": "默认添加"
   },
   "sidebar": {
     "home": "首页",

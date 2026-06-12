@@ -2148,7 +2148,6 @@
     "addWord": "Aggiungi parola",
     "removeWord": "Rimuovi {{word}}",
     "clearAll": "Cancella tutto",
-    "autoManaged": "Gestito automaticamente",
     "clearTitle": "Svuotare il dizionario?",
     "clearDescription": "Verranno rimossi tutti i termini dal tuo dizionario personalizzato. Questa azione non può essere annullata.",
     "addPlaceholder": "Digita una parola",
@@ -2199,7 +2198,8 @@
     "emptyTitle": "Il tuo dizionario è vuoto",
     "emptyDescription": "Aggiungi le parole che {{agentName}} deve sempre riconoscere: nomi, strumenti, acronimi.",
     "addFirstWord": "Aggiungi la tua prima parola",
-    "importList": "Importa un elenco"
+    "importList": "Importa un elenco",
+    "agentDefault": "Aggiunto di default"
   },
   "sidebar": {
     "home": "Home",

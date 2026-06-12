@@ -2148,7 +2148,6 @@
     "addWord": "Wort hinzufügen",
     "removeWord": "{{word}} entfernen",
     "clearAll": "Alle löschen",
-    "autoManaged": "Agent-Name (automatisch verwaltet)",
     "clearTitle": "Wörterbuch leeren?",
     "clearDescription": "Dadurch werden alle Wörter aus deinem benutzerdefinierten Wörterbuch entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
     "addPlaceholder": "Wort eingeben",
@@ -2199,7 +2198,8 @@
     "emptyTitle": "Dein Wörterbuch ist leer",
     "emptyDescription": "Füge Wörter hinzu, die {{agentName}} immer richtig erkennen soll: Namen, Tools, Abkürzungen.",
     "addFirstWord": "Füge dein erstes Wort hinzu",
-    "importList": "Liste importieren"
+    "importList": "Liste importieren",
+    "agentDefault": "Standardmäßig enthalten"
   },
   "sidebar": {
     "home": "Startseite",

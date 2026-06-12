@@ -1,6 +1,15 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, CornerDownLeft, Download, Pencil, Plus, Upload, X } from "lucide-react";
+import {
+  BookOpen,
+  CornerDownLeft,
+  Download,
+  Pencil,
+  Plus,
+  Sparkles,
+  Upload,
+  X,
+} from "lucide-react";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
@@ -31,18 +40,18 @@ export default function DictionaryView() {
   const [confirmClear, setConfirmClear] = useState(false);
   const addInputRef = useRef<HTMLInputElement>(null);
 
-  const onlyAgentWord =
-    customDictionary.length > 0 && customDictionary.every((w) => w === agentName);
-
   const pendingImportCount = useMemo(() => parseWords(bulkText).length, [bulkText]);
+
+  const userWords = useMemo(
+    () => customDictionary.filter((w) => w !== agentName),
+    [customDictionary, agentName]
+  );
 
   const searchQuery = newWord.trim().toLowerCase();
   const visibleWords = useMemo(
     () =>
-      searchQuery
-        ? customDictionary.filter((w) => w.toLowerCase().includes(searchQuery))
-        : customDictionary,
-    [customDictionary, searchQuery]
+      searchQuery ? userWords.filter((w) => w.toLowerCase().includes(searchQuery)) : userWords,
+    [userWords, searchQuery]
   );
 
   const addWords = useCallback(
@@ -73,10 +82,9 @@ export default function DictionaryView() {
 
   const handleRemove = useCallback(
     (word: string) => {
-      if (word === agentName) return;
       setCustomDictionary(customDictionary.filter((w) => w !== word));
     },
-    [customDictionary, setCustomDictionary, agentName]
+    [customDictionary, setCustomDictionary]
   );
 
   const startEdit = useCallback((word: string) => {
@@ -230,9 +238,20 @@ export default function DictionaryView() {
             </div>
           )}
 
+          {/* ─── Agent name (always recognized) ─── */}
+          <div className="rounded-md border border-primary/15 dark:border-primary/20 bg-primary/3 dark:bg-primary/6 px-4 py-2.5 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles size={11} className="text-primary/70 shrink-0" />
+              <span className="text-xs font-medium text-primary truncate">{agentName}</span>
+            </div>
+            <span className="text-xs text-foreground/25 shrink-0">
+              {t("dictionary.agentDefault")}
+            </span>
+          </div>
+
           {/* ─── Dictionary list ─── */}
           <div className="rounded-md border border-foreground/8 dark:border-white/6 bg-foreground/[0.02] dark:bg-white/[0.03] px-4 py-3">
-            {customDictionary.length > 0 && (
+            {userWords.length > 0 && (
               <>
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-semibold text-foreground/40">
@@ -259,7 +278,7 @@ export default function DictionaryView() {
               </>
             )}
 
-            {customDictionary.length === 0 ? (
+            {userWords.length === 0 ? (
               emptyState
             ) : visibleWords.length === 0 ? (
               <p className="py-6 text-xs text-foreground/20 text-center">
@@ -268,13 +287,11 @@ export default function DictionaryView() {
             ) : (
               <ul>
                 {visibleWords.map((word) => {
-                  const isAgentName = word === agentName;
                   const isEditing = editingWord === word;
                   return (
                     <li
                       key={word}
                       className="group flex items-center gap-2 h-9 border-b border-foreground/4 dark:border-white/3 last:border-b-0"
-                      title={isAgentName ? t("dictionary.autoManaged") : undefined}
                     >
                       {isEditing ? (
                         <Input
@@ -289,15 +306,9 @@ export default function DictionaryView() {
                           className="h-7 text-xs flex-1"
                         />
                       ) : (
-                        <span
-                          className={`flex-1 text-xs truncate ${
-                            isAgentName ? "text-primary" : "text-foreground/60"
-                          }`}
-                        >
-                          {word}
-                        </span>
+                        <span className="flex-1 text-xs truncate text-foreground/60">{word}</span>
                       )}
-                      {!isAgentName && !isEditing && (
+                      {!isEditing && (
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                           <button
                             onClick={() => startEdit(word)}
@@ -320,8 +331,6 @@ export default function DictionaryView() {
                 })}
               </ul>
             )}
-
-            {onlyAgentWord && visibleWords.length > 0 && emptyState}
           </div>
         </div>
       </TabsContent>

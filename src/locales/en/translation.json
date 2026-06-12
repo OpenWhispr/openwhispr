@@ -2358,7 +2358,6 @@
     "addPlaceholder": "Type a word",
     "removeWord": "Remove {{word}}",
     "clearAll": "Clear all",
-    "autoManaged": "Auto-managed — synced from agent name",
     "add": "Add",
     "importWords": "Import words",
     "separatorHint": "Separate with commas — OpenWhispr, Supabase, John Snow, ARR",
@@ -2406,7 +2405,8 @@
     "emptyTitle": "Your dictionary is empty",
     "emptyDescription": "Add words {{agentName}} should always get right: names, tools, acronyms.",
     "addFirstWord": "Add your first word",
-    "importList": "Import a list"
+    "importList": "Import a list",
+    "agentDefault": "Added by default"
   },
   "support": {
     "documentation": "Documentation",

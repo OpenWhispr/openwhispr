@@ -2076,7 +2076,6 @@
     "addWord": "単語を追加",
     "removeWord": "{{word}} を削除",
     "clearAll": "すべてクリア",
-    "autoManaged": "自動管理",
     "clearTitle": "辞書をクリアしますか？",
     "clearDescription": "カスタム辞書のすべての単語が削除されます。この操作は元に戻せません。",
     "addPlaceholder": "単語を入力",
@@ -2127,7 +2126,8 @@
     "emptyTitle": "辞書は空です",
     "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
     "addFirstWord": "最初の単語を追加",
-    "importList": "リストをインポート"
+    "importList": "リストをインポート",
+    "agentDefault": "デフォルトで追加済み"
   },
   "referral": {
     "title": "紹介して特典をゲット",

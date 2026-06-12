@@ -2262,7 +2262,6 @@
     "addPlaceholder": "Saisissez un mot",
     "removeWord": "Supprimer {{word}}",
     "clearAll": "Tout effacer",
-    "autoManaged": "Géré automatiquement — synchronisé depuis le nom de l'agent",
     "add": "Ajouter",
     "importWords": "Importer des mots",
     "separatorHint": "Séparez par des virgules — OpenWhispr, Supabase, John Snow, ARR",
@@ -2310,7 +2309,8 @@
     "emptyTitle": "Votre dictionnaire est vide",
     "emptyDescription": "Ajoutez les mots que {{agentName}} doit toujours reconnaître : noms, outils, acronymes.",
     "addFirstWord": "Ajoutez votre premier mot",
-    "importList": "Importer une liste"
+    "importList": "Importer une liste",
+    "agentDefault": "Ajouté par défaut"
   },
   "support": {
     "documentation": "Documentation",

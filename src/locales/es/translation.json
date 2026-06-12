@@ -2196,7 +2196,6 @@
     "addWord": "Añadir palabra",
     "removeWord": "Eliminar {{word}}",
     "clearAll": "Borrar todo",
-    "autoManaged": "Nombre del agente (gestionado automáticamente)",
     "clearTitle": "¿Borrar el diccionario?",
     "clearDescription": "Esto eliminará todas las palabras de tu diccionario personalizado. Esta acción no se puede deshacer.",
     "addPlaceholder": "Escribe una palabra",
@@ -2247,7 +2246,8 @@
     "emptyTitle": "Tu diccionario está vacío",
     "emptyDescription": "Añade palabras que {{agentName}} siempre debe reconocer: nombres, herramientas, siglas.",
     "addFirstWord": "Añade tu primera palabra",
-    "importList": "Importar una lista"
+    "importList": "Importar una lista",
+    "agentDefault": "Añadido por defecto"
   },
   "sidebar": {
     "home": "Inicio",

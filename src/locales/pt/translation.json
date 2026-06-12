@@ -2148,7 +2148,6 @@
     "addWord": "Adicionar palavra",
     "removeWord": "Remover {{word}}",
     "clearAll": "Limpar tudo",
-    "autoManaged": "Gerenciado automaticamente",
     "clearTitle": "Limpar o dicionário?",
     "clearDescription": "Isso removerá todas as palavras do seu dicionário personalizado. Esta ação não pode ser desfeita.",
     "addPlaceholder": "Digite uma palavra",
@@ -2199,7 +2198,8 @@
     "emptyTitle": "Seu dicionário está vazio",
     "emptyDescription": "Adicione palavras que {{agentName}} deve sempre acertar: nomes, ferramentas, siglas.",
     "addFirstWord": "Adicione sua primeira palavra",
-    "importList": "Importar uma lista"
+    "importList": "Importar uma lista",
+    "agentDefault": "Adicionado por padrão"
   },
   "sidebar": {
     "home": "Início",
