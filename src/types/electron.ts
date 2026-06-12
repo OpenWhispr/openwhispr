@@ -602,6 +602,7 @@ declare global {
         noteId: number,
         format: "txt" | "srt" | "json" | "md"
       ) => Promise<{ success: boolean; error?: string }>;
+      exportDictionary: (words: string[]) => Promise<{ success: boolean; error?: string }>;
       searchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
       semanticSearchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
       semanticReindexAll: () => Promise<{ success: boolean; indexed?: number; error?: string }>;
