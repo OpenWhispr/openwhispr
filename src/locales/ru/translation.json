@@ -2192,7 +2192,7 @@
       "examples": {
         "linkedinTrigger": "Мой LinkedIn",
         "linkedinText": "linkedin.com/in/you",
-        "rewriteTrigger": "Промпт переписывания",
+        "rewriteTrigger": "Промпт для переписывания",
         "rewriteText": "Перепиши это более кратко и профессионально",
         "introTrigger": "Вступительное письмо",
         "introText": "Привет, буду рад найти время пообщаться на этой неделе…",
