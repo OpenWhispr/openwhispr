@@ -442,7 +442,8 @@
       "errorTitles": {
         "sessionExpired": "Sesión expirada",
         "offline": "Sin conexión",
-        "dailyLimitReached": "Límite diario alcanzado"
+        "dailyLimitReached": "Límite diario alcanzado",
+        "providerRateLimited": "Límite de tasa del proveedor"
       },
       "fallback": {
         "title": "Modo de respaldo",
@@ -455,7 +456,8 @@
       "errorDescriptions": {
         "sessionExpired": "Tu sesión de OpenWhispr Cloud no está disponible. Vuelve a iniciar sesión desde Ajustes.",
         "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
-        "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan."
+        "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan.",
+        "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo."
       }
     },
     "clipboard": {

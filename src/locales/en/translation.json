@@ -442,7 +442,8 @@
       "errorTitles": {
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",
-        "dailyLimitReached": "Daily Limit Reached"
+        "dailyLimitReached": "Daily Limit Reached",
+        "providerRateLimited": "Provider Rate Limited"
       },
       "fallback": {
         "title": "Fallback Mode",
@@ -455,7 +456,8 @@
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
         "offline": "You're offline. Cloud transcription requires an internet connection.",
-        "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan."
+        "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
+        "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again."
       }
     },
     "clipboard": {

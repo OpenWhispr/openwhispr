@@ -14,6 +14,7 @@ export type TranscriptionErrorCode =
   | "AUTH_EXPIRED"
   | "AUTH_REQUIRED"
   | "LIMIT_REACHED"
+  | "PROVIDER_RATE_LIMITED"
   | "API_KEY_MISSING"
   | "INVALID_KEY"
   | "MODEL_NOT_AVAILABLE"

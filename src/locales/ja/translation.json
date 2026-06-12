@@ -442,7 +442,8 @@
       "errorTitles": {
         "sessionExpired": "セッション期限切れ",
         "offline": "オフラインです",
-        "dailyLimitReached": "1 日の上限に達しました"
+        "dailyLimitReached": "1 日の上限に達しました",
+        "providerRateLimited": "プロバイダーのレート制限"
       },
       "fallback": {
         "title": "フォールバックモード",
@@ -455,7 +456,8 @@
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
-        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。"
+        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
+        "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。"
       }
     },
     "clipboard": {

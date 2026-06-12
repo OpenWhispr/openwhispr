@@ -442,7 +442,8 @@
       "errorTitles": {
         "sessionExpired": "Sitzung abgelaufen",
         "offline": "Sie sind offline",
-        "dailyLimitReached": "Tägliches Limit erreicht"
+        "dailyLimitReached": "Tägliches Limit erreicht",
+        "providerRateLimited": "Anbieter-Ratenlimit erreicht"
       },
       "fallback": {
         "title": "Fallback-Modus",
@@ -455,7 +456,8 @@
       "errorDescriptions": {
         "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
         "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
-        "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan."
+        "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan.",
+        "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut."
       }
     },
     "clipboard": {

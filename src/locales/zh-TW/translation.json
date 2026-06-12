@@ -442,7 +442,8 @@
       "errorTitles": {
         "sessionExpired": "工作階段已過期",
         "offline": "你目前離線",
-        "dailyLimitReached": "已達每日上限"
+        "dailyLimitReached": "已達每日上限",
+        "providerRateLimited": "服務商速率限制"
       },
       "fallback": {
         "title": "備援模式",
@@ -455,7 +456,8 @@
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
-        "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。"
+        "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。",
+        "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。"
       }
     },
     "clipboard": {

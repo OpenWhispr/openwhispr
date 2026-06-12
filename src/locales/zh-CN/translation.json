@@ -442,7 +442,8 @@
       "errorTitles": {
         "sessionExpired": "会话已过期",
         "offline": "你已离线",
-        "dailyLimitReached": "已达到每日上限"
+        "dailyLimitReached": "已达到每日上限",
+        "providerRateLimited": "服务商速率限制"
       },
       "fallback": {
         "title": "回退模式",
@@ -455,7 +456,8 @@
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 会话不可用。请到「设置」中重新登录。",
         "offline": "你目前离线。云端转录需要互联网连接。",
-        "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。"
+        "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。",
+        "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。"
       }
     },
     "clipboard": {

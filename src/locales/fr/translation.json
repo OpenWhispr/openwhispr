@@ -442,7 +442,8 @@
       "errorTitles": {
         "sessionExpired": "Session expirée",
         "offline": "Vous êtes hors ligne",
-        "dailyLimitReached": "Limite quotidienne atteinte"
+        "dailyLimitReached": "Limite quotidienne atteinte",
+        "providerRateLimited": "Limite de débit du fournisseur"
       },
       "fallback": {
         "title": "Mode de secours",
@@ -455,7 +456,8 @@
       "errorDescriptions": {
         "sessionExpired": "Votre session OpenWhispr Cloud est indisponible. Reconnectez-vous depuis Paramètres.",
         "offline": "Vous êtes hors ligne. La transcription cloud nécessite une connexion Internet.",
-        "dailyLimitReached": "Vous avez atteint votre limite de transcription du jour. Réessayez demain ou améliorez votre forfait."
+        "dailyLimitReached": "Vous avez atteint votre limite de transcription du jour. Réessayez demain ou améliorez votre forfait.",
+        "providerRateLimited": "Votre fournisseur de transcription a limité la requête. Patientez un instant et réessayez."
       }
     },
     "clipboard": {

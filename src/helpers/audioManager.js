@@ -1389,53 +1389,61 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const route = resolveReasoningRoute(processedText, settings, agentName);
       const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
 
-      if (route.kind === "agent") {
-        const reasoned = await this.processWithReasoningModel(
-          processedText,
-          route.model,
-          agentName,
-          route.config
-        );
-        if (reasoned) processedText = reasoned;
-      } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
-        const reasonResult = await withSessionRefresh(async () => {
-          const res = await window.electronAPI.cloudReason(processedText, {
-            agentName,
-            customDictionary: settings.customDictionary,
-            customPrompt: this.getCustomPrompt(),
-            language: settings.preferredLanguage || "auto",
-            locale: settings.uiLanguage || "en",
-            sttProvider: result.sttProvider,
-            sttModel: result.sttModel,
-            sttProcessingMs: result.sttProcessingMs,
-            sttWordCount: result.sttWordCount,
-            sttLanguage: result.sttLanguage,
-            audioDurationMs: result.audioDurationMs,
-            audioSizeBytes,
-            audioFormat,
-          });
-          if (!res.success) {
-            const err = new Error(res.error || "Cloud reasoning failed");
-            err.code = res.code;
-            throw err;
-          }
-          return res;
-        });
-
-        if (reasonResult.success) {
-          processedText = reasonResult.text;
-        }
-      } else if (route.kind === "cleanup") {
-        const effectiveModel = getEffectiveCleanupModel();
-        if (effectiveModel) {
+      try {
+        if (route.kind === "agent") {
           const reasoned = await this.processWithReasoningModel(
             processedText,
-            effectiveModel,
+            route.model,
             agentName,
             route.config
           );
           if (reasoned) processedText = reasoned;
+        } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
+          const reasonResult = await withSessionRefresh(async () => {
+            const res = await window.electronAPI.cloudReason(processedText, {
+              agentName,
+              customDictionary: settings.customDictionary,
+              customPrompt: this.getCustomPrompt(),
+              language: settings.preferredLanguage || "auto",
+              locale: settings.uiLanguage || "en",
+              sttProvider: result.sttProvider,
+              sttModel: result.sttModel,
+              sttProcessingMs: result.sttProcessingMs,
+              sttWordCount: result.sttWordCount,
+              sttLanguage: result.sttLanguage,
+              audioDurationMs: result.audioDurationMs,
+              audioSizeBytes,
+              audioFormat,
+            });
+            if (!res.success) {
+              const err = new Error(res.error || "Cloud reasoning failed");
+              err.code = res.code;
+              throw err;
+            }
+            return res;
+          });
+
+          if (reasonResult.success) {
+            processedText = reasonResult.text;
+          }
+        } else if (route.kind === "cleanup") {
+          const effectiveModel = getEffectiveCleanupModel();
+          if (effectiveModel) {
+            const reasoned = await this.processWithReasoningModel(
+              processedText,
+              effectiveModel,
+              agentName,
+              route.config
+            );
+            if (reasoned) processedText = reasoned;
+          }
         }
+      } catch (reasonError) {
+        logger.error(
+          "Cloud reasoning failed, using raw transcription",
+          { error: reasonError.message },
+          "transcription"
+        );
       }
       timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
     }
@@ -1699,8 +1707,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const err = new Error(`API Error: ${response.status} ${errorText}`);
         if (response.status === 401) err.code = "INVALID_KEY";
         else if (response.status === 429) {
-          err.code = "LIMIT_REACHED";
-          err.messageKey = "hooks.audioRecording.errorDescriptions.dailyLimitReached";
+          // The user's own provider rate-limited the request — not an OpenWhispr plan limit
+          err.code = "PROVIDER_RATE_LIMITED";
+          err.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";
         } else if (response.status >= 500) err.code = "SERVER_ERROR";
         throw err;
       }
