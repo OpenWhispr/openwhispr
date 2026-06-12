@@ -57,6 +57,7 @@ export interface ApiKeySettings {
   anthropicApiKey: string;
   geminiApiKey: string;
   groqApiKey: string;
+  xaiApiKey: string;
   mistralApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
@@ -220,6 +221,7 @@ function useSettingsInternal() {
     anthropicApiKey: store.anthropicApiKey,
     geminiApiKey: store.geminiApiKey,
     groqApiKey: store.groqApiKey,
+    xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,

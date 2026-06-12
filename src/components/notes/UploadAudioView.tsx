@@ -117,6 +117,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setCloudTranscriptionMode,
     openaiApiKey,
     groqApiKey,
+    xaiApiKey,
     mistralApiKey,
     customTranscriptionApiKey,
     updateTranscriptionSettings,
@@ -205,9 +206,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               ? openaiApiKey
               : cloudTranscriptionProvider === "groq"
                 ? groqApiKey
-                : cloudTranscriptionProvider === "mistral"
-                  ? mistralApiKey
-                  : customTranscriptionApiKey;
+                : cloudTranscriptionProvider === "xai"
+                  ? xaiApiKey
+                  : cloudTranscriptionProvider === "mistral"
+                    ? mistralApiKey
+                    : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -238,6 +241,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
+    xaiApiKey,
     mistralApiKey,
     customTranscriptionApiKey,
     cortiClientId,
@@ -264,6 +268,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return openaiApiKey;
       case "groq":
         return groqApiKey;
+      case "xai":
+        return xaiApiKey;
       case "mistral":
         return mistralApiKey;
       case "custom":

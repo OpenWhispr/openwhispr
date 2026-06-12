@@ -84,6 +84,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
+    xaiApiKey,
     mistralApiKey,
     dictationKey,
     activationMode,
@@ -698,6 +699,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             return openaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "groq") {
             return groqApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "xai") {
+            return xaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "mistral") {
             return mistralApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "custom") {

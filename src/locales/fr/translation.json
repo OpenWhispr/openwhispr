@@ -1802,7 +1802,8 @@
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
-        "corti_transcribe": "Transcription médicale de qualité clinique"
+        "corti_transcribe": "Transcription médicale de qualité clinique",
+        "xai_grok_stt": "Reconnaissance vocale haute précision par xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Modèle de raisonnement performant",
