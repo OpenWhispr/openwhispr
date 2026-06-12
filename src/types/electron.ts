@@ -967,6 +967,15 @@ declare global {
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;
 
+      // xAI API key management
+      getXaiKey?: () => Promise<string | null>;
+      saveXaiKey?: (key: string) => Promise<void>;
+      proxyXaiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ text: string }>;
+
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;

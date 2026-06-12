@@ -202,6 +202,7 @@ interface TranscriptionModelPickerProps {
 const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq" },
+  { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
   { id: "corti", name: "Corti" },
   { id: "custom", name: "Custom" },
@@ -211,6 +212,7 @@ interface ProviderCredentialField {
   key:
     | "openaiApiKey"
     | "groqApiKey"
+    | "xaiApiKey"
     | "mistralApiKey"
     | "cortiClientId"
     | "cortiClientSecret"
@@ -233,6 +235,10 @@ const PROVIDER_CREDENTIALS: Record<
   groq: {
     consoleUrl: "https://console.groq.com/keys",
     fields: [{ key: "groqApiKey", input: "secret" }],
+  },
+  xai: {
+    consoleUrl: "https://console.x.ai",
+    fields: [{ key: "xaiApiKey", input: "secret" }],
   },
   mistral: {
     consoleUrl: "https://console.mistral.ai/api-keys",
@@ -328,6 +334,8 @@ export default function TranscriptionModelPicker({
   const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
   const groqApiKey = useSettingsStore((s) => s.groqApiKey);
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
+  const xaiApiKey = useSettingsStore((s) => s.xaiApiKey);
+  const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
@@ -700,6 +708,7 @@ export default function TranscriptionModelPicker({
   const credentialValues: Record<ProviderCredentialField["key"], string> = {
     openaiApiKey,
     groqApiKey,
+    xaiApiKey,
     mistralApiKey,
     cortiClientId,
     cortiClientSecret,
@@ -709,6 +718,7 @@ export default function TranscriptionModelPicker({
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
     openaiApiKey: setOpenaiApiKey,
     groqApiKey: setGroqApiKey,
+    xaiApiKey: setXaiApiKey,
     mistralApiKey: setMistralApiKey,
     cortiClientId: setCortiClientId,
     cortiClientSecret: setCortiClientSecret,

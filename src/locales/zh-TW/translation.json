@@ -1749,7 +1749,8 @@
         "groq_whisper_large_v3_turbo": "216 倍即時速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
-        "corti_transcribe": "臨床級醫療轉錄"
+        "corti_transcribe": "臨床級醫療轉錄",
+        "xai_grok_stt": "xAI 高精度語音辨識"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",

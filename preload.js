@@ -354,6 +354,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getGroqKey: () => ipcRenderer.invoke("get-groq-key"),
   saveGroqKey: (key) => ipcRenderer.invoke("save-groq-key", key),
 
+  // xAI API
+  getXaiKey: () => ipcRenderer.invoke("get-xai-key"),
+  saveXaiKey: (key) => ipcRenderer.invoke("save-xai-key", key),
+  proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
+
   // Mistral API
   getMistralKey: () => ipcRenderer.invoke("get-mistral-key"),
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),

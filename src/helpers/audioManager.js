@@ -67,6 +67,7 @@ function resolveReasoningRoute(text, settings, agentName) {
 const PLACEHOLDER_KEYS = {
   openai: "your_openai_api_key_here",
   groq: "your_groq_api_key_here",
+  xai: "your_xai_api_key_here",
   mistral: "your_mistral_api_key_here",
 };
 
@@ -955,6 +956,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "xai") {
+      apiKey = s.xaiApiKey;
+      if (!isValidApiKey(apiKey, "xai")) {
+        apiKey = await window.electronAPI.getXaiKey?.();
+      }
+      if (!isValidApiKey(apiKey, "xai")) {
+        const err = new Error(
+          "xAI API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else {
       // Default to OpenAI
       // Prefer store value (user-entered via UI) over main process (.env)
@@ -1561,6 +1574,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider === "custom" ||
         (!endpoint.includes("api.openai.com") &&
           !endpoint.includes("api.groq.com") &&
+          !endpoint.includes("api.x.ai") &&
           !endpoint.includes("api.mistral.ai"));
 
       const apiCallStart = performance.now();
@@ -1599,6 +1613,39 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
 
         throw new Error("No text transcribed - Mistral response was empty");
+      }
+
+      // xAI STT has a non-OpenAI-compatible API — proxy through main process. See #910.
+      if (provider === "xai" && window.electronAPI?.proxyXaiTranscription) {
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const proxyData = { audioBuffer, language: language !== "auto" ? language : undefined };
+
+        const keyterms = this.getKeyterms()
+          .map((t) => t.trim().slice(0, 50))
+          .filter(Boolean)
+          .slice(0, 100);
+        if (keyterms.length > 0) {
+          proxyData.keyterms = keyterms;
+        }
+
+        const result = await window.electronAPI.proxyXaiTranscription(proxyData);
+        const proxyText = result?.text;
+
+        if (proxyText && proxyText.trim().length > 0) {
+          if (this.isDictionaryEcho(proxyText)) {
+            throw new Error("No audio detected");
+          }
+          timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+          const rawText = proxyText;
+          const reasoningStart = performance.now();
+          const text = await this.processTranscription(proxyText, "xai");
+          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+          const source = (await this.isReasoningAvailable()) ? "xai-reasoned" : "xai";
+          return { success: true, text, rawText, source, timings };
+        }
+
+        throw new Error("No text transcribed - xAI response was empty");
       }
 
       // Corti uses OAuth client credentials and an interaction-based REST flow — proxy through main process
@@ -1881,6 +1928,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // Return provider-appropriate default
       if (provider === "groq") return "whisper-large-v3-turbo";
+      if (provider === "xai") return "grok-stt";
       if (provider === "mistral") return "voxtral-mini-latest";
       if (provider === "corti") return "corti-transcribe";
       return "gpt-4o-mini-transcribe";
@@ -1935,6 +1983,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         base = currentBaseUrl.trim() || API_ENDPOINTS.TRANSCRIPTION_BASE;
       } else if (currentProvider === "groq") {
         base = API_ENDPOINTS.GROQ_BASE;
+      } else if (currentProvider === "xai") {
+        base = API_ENDPOINTS.XAI_BASE;
       } else if (currentProvider === "mistral") {
         base = API_ENDPOINTS.MISTRAL_BASE;
       } else {

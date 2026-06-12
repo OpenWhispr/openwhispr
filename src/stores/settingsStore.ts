@@ -492,6 +492,7 @@ export interface SettingsState
   setAnthropicApiKey: (key: string) => void;
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
+  setXaiApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
   setCortiClientId: (key: string) => void;
   setCortiClientSecret: (key: string) => void;
@@ -626,6 +627,7 @@ const SECRET_IPC_SAVERS = {
   anthropic: "saveAnthropicKey",
   gemini: "saveGeminiKey",
   groq: "saveGroqKey",
+  xai: "saveXaiKey",
   mistral: "saveMistralKey",
   cortiClientId: "saveCortiClientId",
   cortiClientSecret: "saveCortiClientSecret",
@@ -665,6 +667,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "anthropicApiKey",
   "geminiApiKey",
   "groqApiKey",
+  "xaiApiKey",
   "mistralApiKey",
   "cortiClientId",
   "cortiClientSecret",
@@ -736,6 +739,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   anthropicApiKey: "",
   geminiApiKey: "",
   groqApiKey: "",
+  xaiApiKey: "",
   mistralApiKey: "",
   cortiClientId: "",
   cortiClientSecret: "",
@@ -1083,6 +1087,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ groqApiKey: key });
     debouncedSaveSecret("groq", key);
     invalidateApiKeyCaches("groq");
+  },
+  setXaiApiKey: (key: string) => {
+    set({ xaiApiKey: key });
+    debouncedSaveSecret("xai", key);
+    invalidateApiKeyCaches();
   },
   setMistralApiKey: (key: string) => {
     set({ mistralApiKey: key });
@@ -1473,6 +1482,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.anthropicApiKey !== undefined) s.setAnthropicApiKey(keys.anthropicApiKey);
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
+    if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
@@ -1681,6 +1691,7 @@ export async function initializeSettings(): Promise<void> {
         anthropic,
         gemini,
         groq,
+        xai,
         mistral,
         cortiClientId,
         cortiClientSecret,
@@ -1696,6 +1707,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getAnthropicKey?.(),
         window.electronAPI.getGeminiKey?.(),
         window.electronAPI.getGroqKey?.(),
+        window.electronAPI.getXaiKey?.(),
         window.electronAPI.getMistralKey?.(),
         window.electronAPI.getCortiClientId?.(),
         window.electronAPI.getCortiClientSecret?.(),
@@ -1713,6 +1725,7 @@ export async function initializeSettings(): Promise<void> {
         anthropicApiKey: anthropic || "",
         geminiApiKey: gemini || "",
         groqApiKey: groq || "",
+        xaiApiKey: xai || "",
         mistralApiKey: mistral || "",
         cortiClientId: cortiClientId || "",
         cortiClientSecret: cortiClientSecret || "",

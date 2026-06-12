@@ -11,6 +11,7 @@ const SECRET_KEYS = [
   "ANTHROPIC_API_KEY",
   "GEMINI_API_KEY",
   "GROQ_API_KEY",
+  "XAI_API_KEY",
   "MISTRAL_API_KEY",
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
@@ -281,6 +282,14 @@ class EnvironmentManager {
 
   saveGroqKey(key) {
     return this._saveKey("GROQ_API_KEY", key);
+  }
+
+  getXaiKey() {
+    return this._getKey("XAI_API_KEY");
+  }
+
+  saveXaiKey(key) {
+    return this._saveKey("XAI_API_KEY", key);
   }
 
   getMistralKey() {
