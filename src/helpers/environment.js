@@ -58,6 +58,10 @@ const PERSISTED_KEYS = [
   "VERTEX_LOCATION",
 ];
 
+// Module-level so writes are serialized across all instances — hotkeyManager
+// creates its own EnvironmentManager alongside the main.js singleton.
+let envWriteQueue = Promise.resolve();
+
 class EnvironmentManager {
   constructor() {
     this.loadEnvironmentVariables();
@@ -213,7 +217,14 @@ class EnvironmentManager {
     );
   }
 
-  async _writeEnvFileAtomic(envPath) {
+  _writeEnvFileAtomic(envPath) {
+    // Concurrent write+rename pairs share the same .env.tmp path, and the
+    // loser's rename throws ENOENT (#903).
+    envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._writeEnvFile(envPath));
+    return envWriteQueue;
+  }
+
+  async _writeEnvFile(envPath) {
     // Only strip plaintext secrets once migration has fully completed —
     // otherwise a partial-migration recovery can lose unencrypted secrets.
     const stripSecrets =
