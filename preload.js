@@ -917,4 +917,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getUpdateNotificationData: () => ipcRenderer.invoke("get-update-notification-data"),
   updateNotificationReady: () => ipcRenderer.invoke("update-notification-ready"),
   updateNotificationRespond: (action) => ipcRenderer.invoke("update-notification-respond", action),
+
+  selfHostedKeepAliveStart: (url) => ipcRenderer.invoke("self-hosted-keep-alive-start", url),
+  selfHostedKeepAliveStop: () => ipcRenderer.invoke("self-hosted-keep-alive-stop"),
 });
