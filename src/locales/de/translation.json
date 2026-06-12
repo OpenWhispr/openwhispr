@@ -223,7 +223,6 @@
       "title": "Sprachagent-Hotkey",
       "description": "Sprechen Sie mit Ihrem KI-Agenten per Tastendruck",
       "hotkey": "Hotkey",
-      "clear": "Hotkey entfernen",
       "howItWorks": "Diktate, die mit diesem Hotkey gestartet werden, gehen direkt als Anweisung an {{agentName}} — ohne Aktivierungswort, die Textbereinigung wird übersprungen.",
       "optionalNote": "Optional — Sie können ihn jederzeit in den Einstellungen festlegen oder ändern."
     },
@@ -818,7 +817,8 @@
     "pressAnyKeyMac": "Beliebige Taste drücken oder ⌘⇧K",
     "recording": "Aufnahme",
     "tryShortcut": "Versuchen Sie Ctrl+Shift+K",
-    "tryShortcutMac": "Versuchen Sie ⌘⇧K"
+    "tryShortcutMac": "Versuchen Sie ⌘⇧K",
+    "remove": "Hotkey entfernen"
   },
   "languageSelector": {
     "noLanguagesFound": "Keine Sprachen gefunden",
@@ -1303,15 +1303,13 @@
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
         "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben",
-        "clear": "Hotkey entfernen",
         "layoutLabel": "Beim Auslösen per Hotkey öffnen in:",
         "layoutFullWidth": "Volle Breite",
         "layoutSidePanel": "Seitenleiste"
       },
       "voiceAgentHotkey": {
         "title": "Sprachagent-Hotkey",
-        "description": "Startet ein Diktat, das direkt an Ihren KI-Agenten geht und die Textbereinigung überspringt",
-        "clear": "Hotkey entfernen"
+        "description": "Startet ein Diktat, das direkt an Ihren KI-Agenten geht und die Textbereinigung überspringt"
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
@@ -2327,7 +2325,6 @@
     "settings": {
       "hotkey": "Agent-Tastenkombination",
       "hotkeyDescription": "Tastenkombination zum Umschalten des Agent-Overlays",
-      "clearHotkey": "Hotkey entfernen",
       "model": "Agent-Modell",
       "modelDescription": "KI-Modell für Agent-Unterhaltungen",
       "systemPrompt": "System-Prompt",

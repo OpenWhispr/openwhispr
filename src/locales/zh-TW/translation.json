@@ -223,7 +223,6 @@
       "title": "語音助手快捷鍵",
       "description": "一鍵喚起你的 AI 助手",
       "hotkey": "快捷鍵",
-      "clear": "移除快捷鍵",
       "howItWorks": "使用此快捷鍵開始的語音輸入會作為指令直接傳送給 {{agentName}}——無需喚醒詞，並跳過文字整理。",
       "optionalNote": "選用——你可以隨時在設定中新增或修改。"
     },
@@ -818,7 +817,8 @@
     "pressAnyKeyMac": "按下任意按鍵或 ⌘⇧K",
     "recording": "記錄中",
     "tryShortcut": "試試 Ctrl+Shift+K",
-    "tryShortcutMac": "試試 ⌘⇧K"
+    "tryShortcutMac": "試試 ⌘⇧K",
+    "remove": "移除快捷鍵"
   },
   "languageSelector": {
     "noLanguagesFound": "找不到語言",
@@ -1298,15 +1298,13 @@
       "meetingHotkey": {
         "title": "會議模式快捷鍵",
         "description": "啟動會議模式並將面板固定到螢幕側邊",
-        "clear": "移除快捷鍵",
         "layoutLabel": "透過快捷鍵觸發時,開啟方式:",
         "layoutFullWidth": "全寬",
         "layoutSidePanel": "側邊欄"
       },
       "voiceAgentHotkey": {
         "title": "語音助手快捷鍵",
-        "description": "開始一段直接傳送給 AI 助手的語音輸入，跳過文字整理",
-        "clear": "移除快捷鍵"
+        "description": "開始一段直接傳送給 AI 助手的語音輸入，跳過文字整理"
       },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",
@@ -2322,7 +2320,6 @@
     "settings": {
       "hotkey": "助手熱鍵",
       "hotkeyDescription": "切換助手覆蓋層的熱鍵",
-      "clearHotkey": "移除快捷鍵",
       "model": "助手模型",
       "modelDescription": "用於助手對話的AI模型",
       "systemPrompt": "系統提示詞",

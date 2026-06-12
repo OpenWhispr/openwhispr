@@ -3229,10 +3229,12 @@ EOF`,
 
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
                   <SettingsPanelRow>
-                    <p className="text-xs font-medium text-muted-foreground/80 mb-2">
-                      {t("settingsPage.general.hotkey.activationMode")}
-                    </p>
-                    <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-muted-foreground/80">
+                        {t("settingsPage.general.hotkey.activationMode")}
+                      </span>
+                      <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                    </div>
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
                     )}
@@ -3254,21 +3256,13 @@ EOF`,
                     onChange={async (newHotkey) => {
                       await registerMeetingHotkey(newHotkey);
                     }}
+                    onClear={async () => {
+                      await window.electronAPI?.registerMeetingHotkey?.("");
+                      setMeetingKey("");
+                    }}
                     disabled={isMeetingHotkeyRegistering}
                     validate={validateMeetingHotkey}
                   />
-                  {meetingKey && (
-                    <button
-                      onClick={async () => {
-                        await window.electronAPI?.registerMeetingHotkey?.("");
-                        setMeetingKey("");
-                      }}
-                      disabled={isMeetingHotkeyRegistering}
-                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
-                    >
-                      {t("settingsPage.general.meetingHotkey.clear")}
-                    </button>
-                  )}
                 </SettingsPanelRow>
                 <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/40 dark:border-white/5">
                   <span className="text-xs text-muted-foreground/80">
@@ -3313,16 +3307,9 @@ EOF`,
                   <HotkeyInput
                     value={chatAgentKey}
                     onChange={setChatAgentKey}
+                    onClear={() => setChatAgentKey("")}
                     validate={validateAgentHotkey}
                   />
-                  {chatAgentKey && (
-                    <button
-                      onClick={() => setChatAgentKey("")}
-                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
-                    >
-                      {t("agentMode.settings.clearHotkey")}
-                    </button>
-                  )}
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
@@ -3338,16 +3325,9 @@ EOF`,
                   <HotkeyInput
                     value={voiceAgentKey}
                     onChange={setVoiceAgentKey}
+                    onClear={() => setVoiceAgentKey("")}
                     validate={validateVoiceAgentHotkey}
                   />
-                  {voiceAgentKey && (
-                    <button
-                      onClick={() => setVoiceAgentKey("")}
-                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
-                    >
-                      {t("settingsPage.general.voiceAgentHotkey.clear")}
-                    </button>
-                  )}
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>

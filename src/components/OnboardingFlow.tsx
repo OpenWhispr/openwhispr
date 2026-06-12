@@ -665,11 +665,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   : t("onboarding.activation.holdDescription")}
               </p>
             </div>
-            <ActivationModeSelector
-              value={activationMode}
-              onChange={setActivationMode}
-              variant="compact"
-            />
+            <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
           </div>
         )}
       </div>
@@ -712,18 +708,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {t("onboarding.voiceAgent.hotkey")}
             </span>
-            {voiceAgentKey && (
-              <button
-                onClick={() => setVoiceAgentKey("")}
-                className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
-              >
-                {t("onboarding.voiceAgent.clear")}
-              </button>
-            )}
           </div>
           <HotkeyInput
             value={voiceAgentKey}
             onChange={setVoiceAgentKey}
+            onClear={() => setVoiceAgentKey("")}
             variant="hero"
             validate={validateVoiceAgentHotkey}
           />

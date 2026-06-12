@@ -223,7 +223,6 @@
       "title": "Raccourci de l'agent vocal",
       "description": "Parlez à votre agent IA d'une simple touche",
       "hotkey": "Raccourci",
-      "clear": "Supprimer le raccourci",
       "howItWorks": "La dictée lancée avec ce raccourci est envoyée directement à {{agentName}} comme instruction — aucun mot d'activation requis, et le nettoyage du texte est ignoré.",
       "optionalNote": "Facultatif — vous pouvez le définir ou le modifier à tout moment dans les réglages."
     },
@@ -866,7 +865,8 @@
     "pressAnyKeyMac": "Appuyez sur une touche ou ⌘⇧K",
     "recording": "Enregistrement",
     "tryShortcut": "Essayez Ctrl+Shift+K",
-    "tryShortcutMac": "Essayez ⌘⇧K"
+    "tryShortcutMac": "Essayez ⌘⇧K",
+    "remove": "Supprimer le raccourci"
   },
   "languageSelector": {
     "noLanguagesFound": "Aucune langue trouvée",
@@ -1351,15 +1351,13 @@
       "meetingHotkey": {
         "title": "Raccourci mode réunion",
         "description": "Démarrer le mode réunion et ancrer le panneau sur le côté de l'écran",
-        "clear": "Supprimer le raccourci",
         "layoutLabel": "Lors du déclenchement par raccourci, ouvrir en :",
         "layoutFullWidth": "Pleine largeur",
         "layoutSidePanel": "Panneau latéral"
       },
       "voiceAgentHotkey": {
         "title": "Raccourci de l'agent vocal",
-        "description": "Lance une dictée envoyée directement à votre agent IA, sans nettoyage du texte",
-        "clear": "Supprimer le raccourci"
+        "description": "Lance une dictée envoyée directement à votre agent IA, sans nettoyage du texte"
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
@@ -2375,7 +2373,6 @@
     "settings": {
       "hotkey": "Raccourci Agent",
       "hotkeyDescription": "Raccourci clavier pour basculer la fenêtre agent",
-      "clearHotkey": "Supprimer le raccourci",
       "model": "Modèle Agent",
       "modelDescription": "Modèle IA utilisé pour les conversations agent",
       "systemPrompt": "Prompt système",

@@ -195,7 +195,6 @@
       "title": "Atalho do agente de voz",
       "description": "Fale com seu agente de IA com um único atalho",
       "hotkey": "Atalho",
-      "clear": "Remover atalho",
       "howItWorks": "O ditado iniciado com este atalho é enviado diretamente para {{agentName}} como instrução: não é preciso dizer o nome e a limpeza de texto é ignorada.",
       "optionalNote": "Opcional — você pode definir ou alterar a qualquer momento nas configurações."
     },
@@ -790,7 +789,8 @@
     "pressAnyKeyMac": "Pressione qualquer tecla ou ⌘⇧K",
     "recording": "Gravando",
     "tryShortcut": "Tente Ctrl+Shift+K",
-    "tryShortcutMac": "Tente ⌘⇧K"
+    "tryShortcutMac": "Tente ⌘⇧K",
+    "remove": "Remover atalho"
   },
   "languageSelector": {
     "noLanguagesFound": "Nenhum idioma encontrado",
@@ -1275,15 +1275,13 @@
       "meetingHotkey": {
         "title": "Atalho modo reunião",
         "description": "Iniciar modo reunião e posicionar o painel ao lado da tela",
-        "clear": "Remover atalho",
         "layoutLabel": "Ao acionar pelo atalho, abrir em:",
         "layoutFullWidth": "Largura total",
         "layoutSidePanel": "Painel lateral"
       },
       "voiceAgentHotkey": {
         "title": "Atalho do agente de voz",
-        "description": "Inicia um ditado que vai direto para seu agente de IA, ignorando a limpeza de texto",
-        "clear": "Remover atalho"
+        "description": "Inicia um ditado que vai direto para seu agente de IA, ignorando a limpeza de texto"
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
@@ -2327,7 +2325,6 @@
     "settings": {
       "hotkey": "Tecla do Agente",
       "hotkeyDescription": "Tecla de atalho para alternar a sobreposição do agente",
-      "clearHotkey": "Remover atalho",
       "model": "Modelo do Agente",
       "modelDescription": "Modelo de IA usado para conversas do agente",
       "systemPrompt": "Prompt do Sistema",

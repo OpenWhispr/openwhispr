@@ -223,7 +223,6 @@
       "title": "Atajo del agente de voz",
       "description": "Habla con tu agente de IA con una sola pulsación",
       "hotkey": "Atajo",
-      "clear": "Eliminar atajo",
       "howItWorks": "El dictado iniciado con este atajo se envía directamente a {{agentName}} como instrucción: no necesitas decir su nombre y se omite la corrección de texto.",
       "optionalNote": "Opcional: puedes configurarlo o cambiarlo en cualquier momento en los ajustes."
     },
@@ -866,7 +865,8 @@
     "pressAnyKeyMac": "Pulsa cualquier tecla o ⌘⇧K",
     "recording": "Grabando",
     "tryShortcut": "Prueba Ctrl+Shift+K",
-    "tryShortcutMac": "Prueba ⌘⇧K"
+    "tryShortcutMac": "Prueba ⌘⇧K",
+    "remove": "Eliminar atajo"
   },
   "languageSelector": {
     "noLanguagesFound": "No se encontraron idiomas",
@@ -1351,15 +1351,13 @@
       "meetingHotkey": {
         "title": "Atajo modo reunión",
         "description": "Iniciar modo reunión y ajustar el panel al lado de la pantalla",
-        "clear": "Eliminar atajo",
         "layoutLabel": "Al activarse con el atajo, abrir en:",
         "layoutFullWidth": "Ancho completo",
         "layoutSidePanel": "Panel lateral"
       },
       "voiceAgentHotkey": {
         "title": "Atajo del agente de voz",
-        "description": "Inicia un dictado que va directamente a tu agente de IA, omitiendo la corrección de texto",
-        "clear": "Eliminar atajo"
+        "description": "Inicia un dictado que va directamente a tu agente de IA, omitiendo la corrección de texto"
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",
@@ -2375,7 +2373,6 @@
     "settings": {
       "hotkey": "Tecla del Agente",
       "hotkeyDescription": "Tecla de acceso rápido para alternar la superposición del agente",
-      "clearHotkey": "Eliminar atajo",
       "model": "Modelo del Agente",
       "modelDescription": "Modelo de IA utilizado para conversaciones del agente",
       "systemPrompt": "Prompt del Sistema",
