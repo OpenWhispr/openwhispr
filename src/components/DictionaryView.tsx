@@ -195,7 +195,6 @@ export default function DictionaryView() {
                 </button>
               </div>
             </div>
-            <p className="mt-1.5 text-xs text-foreground/15">{t("dictionary.separatorHint")}</p>
           </div>
 
           {/* ─── Bulk import ─── */}
