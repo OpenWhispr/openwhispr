@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CornerDownLeft, Download, Pencil, Upload, X } from "lucide-react";
+import { BookOpen, CornerDownLeft, Download, Pencil, Plus, Upload, X } from "lucide-react";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
@@ -29,6 +29,10 @@ export default function DictionaryView() {
   const [editingWord, setEditingWord] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [confirmClear, setConfirmClear] = useState(false);
+  const addInputRef = useRef<HTMLInputElement>(null);
+
+  const onlyAgentWord =
+    customDictionary.length > 0 && customDictionary.every((w) => w === agentName);
 
   const pendingImportCount = useMemo(() => parseWords(bulkText).length, [bulkText]);
 
@@ -103,6 +107,29 @@ export default function DictionaryView() {
     }
   }, [customDictionary, toast, t]);
 
+  const emptyState = (
+    <div className="flex flex-col items-center text-center py-8">
+      <div className="w-10 h-10 rounded-[10px] bg-gradient-to-b from-primary/8 to-primary/4 dark:from-primary/12 dark:to-primary/6 border border-primary/10 dark:border-primary/15 flex items-center justify-center mb-3.5">
+        <BookOpen size={17} strokeWidth={1.5} className="text-primary/50 dark:text-primary/60" />
+      </div>
+      <h4 className="text-xs font-semibold text-foreground mb-1">{t("dictionary.emptyTitle")}</h4>
+      <p className="text-xs text-foreground/30 leading-relaxed max-w-[240px] mb-4">
+        {t("dictionary.emptyDescription", { agentName })}
+      </p>
+      <Button size="sm" onClick={() => addInputRef.current?.focus()}>
+        <Plus size={12} />
+        {t("dictionary.addFirstWord")}
+      </Button>
+      <button
+        onClick={() => setShowBulkImport(true)}
+        className="mt-3 flex items-center gap-1.5 text-xs text-foreground/30 hover:text-foreground/60 transition-colors"
+      >
+        <Upload size={11} />
+        {t("dictionary.importList")}
+      </button>
+    </div>
+  );
+
   return (
     <Tabs defaultValue="dictionary" className="flex flex-col h-full">
       <ConfirmDialog
@@ -131,6 +158,7 @@ export default function DictionaryView() {
           <div>
             <div className="relative">
               <Input
+                ref={addInputRef}
                 placeholder={t("dictionary.addPlaceholder")}
                 value={newWord}
                 onChange={(e) => setNewWord(e.target.value)}
@@ -204,34 +232,35 @@ export default function DictionaryView() {
 
           {/* ─── Dictionary list ─── */}
           <div className="rounded-md border border-foreground/8 dark:border-white/6 bg-foreground/[0.02] dark:bg-white/[0.03] px-4 py-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-foreground/40">
-                {t("dictionary.yourDictionary")}
-              </h3>
-              <div className="flex items-center gap-3">
-                {customDictionary.length > 0 && (
-                  <button
-                    onClick={() => setConfirmClear(true)}
-                    aria-label={t("dictionary.clearAll")}
-                    className="text-xs text-foreground/15 hover:text-destructive/70 transition-colors"
-                  >
-                    {t("dictionary.clearAll")}
-                  </button>
-                )}
-                <button
-                  onClick={handleExport}
-                  disabled={customDictionary.length === 0}
-                  aria-label={t("dictionary.exportDictionary")}
-                  className="text-foreground/25 enabled:hover:text-foreground/60 disabled:text-foreground/10 transition-colors"
-                >
-                  <Download size={12} />
-                </button>
-              </div>
-            </div>
-            <div className="mt-2.5 border-t border-dashed border-foreground/10 dark:border-white/8" />
+            {customDictionary.length > 0 && (
+              <>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold text-foreground/40">
+                    {t("dictionary.yourDictionary")}
+                  </h3>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setConfirmClear(true)}
+                      aria-label={t("dictionary.clearAll")}
+                      className="text-xs text-foreground/15 hover:text-destructive/70 transition-colors"
+                    >
+                      {t("dictionary.clearAll")}
+                    </button>
+                    <button
+                      onClick={handleExport}
+                      aria-label={t("dictionary.exportDictionary")}
+                      className="text-foreground/25 hover:text-foreground/60 transition-colors"
+                    >
+                      <Download size={12} />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2.5 border-t border-dashed border-foreground/10 dark:border-white/8" />
+              </>
+            )}
 
             {customDictionary.length === 0 ? (
-              <p className="py-6 text-xs text-foreground/20 text-center">{t("dictionary.empty")}</p>
+              emptyState
             ) : visibleWords.length === 0 ? (
               <p className="py-6 text-xs text-foreground/20 text-center">
                 {t("dictionary.noMatches", { word: newWord.trim() })}
@@ -291,6 +320,8 @@ export default function DictionaryView() {
                 })}
               </ul>
             )}
+
+            {onlyAgentWord && visibleWords.length > 0 && emptyState}
           </div>
         </div>
       </TabsContent>

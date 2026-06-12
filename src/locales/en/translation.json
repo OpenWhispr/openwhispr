@@ -2370,7 +2370,6 @@
     "yourDictionary": "Your dictionary",
     "exportDictionary": "Export dictionary",
     "exportFailed": "Export failed",
-    "empty": "No words yet",
     "editWord": "Edit {{word}}",
     "noMatches": "No matches — press Enter to add \"{{word}}\"",
     "tabDictionary": "Dictionary",
@@ -2380,7 +2379,6 @@
       "add": "Add snippet",
       "edit": "Edit {{trigger}}",
       "remove": "Remove {{trigger}}",
-      "empty": "No snippets yet — speak a trigger word and it expands to your saved text",
       "createTitle": "New snippet",
       "editTitle": "Edit snippet",
       "dialogDescription": "When you speak the trigger, it's replaced with your saved text.",
@@ -2389,8 +2387,26 @@
       "replacementLabel": "Replacement",
       "replacementPlaceholder": "Text to insert when you say the trigger…",
       "create": "Create snippet",
-      "duplicate": "A snippet with this trigger already exists"
-    }
+      "duplicate": "A snippet with this trigger already exists",
+      "emptyTitle": "The stuff you shouldn't have to say",
+      "emptyTitleAccent": "twice",
+      "emptyDescription": "Speak a trigger word and OpenWhispr replaces it with whatever you saved — URLs, intros, sign-offs, prompts.",
+      "new": "New snippet",
+      "examples": {
+        "linkedinTrigger": "My LinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "Rewrite prompt",
+        "rewriteText": "Rewrite this to be more concise and professional",
+        "introTrigger": "Intro email",
+        "introText": "Hey, would love to find some time to chat later this week…",
+        "signoffTrigger": "Sign off",
+        "signoffText": "Best, Alex · alex@example.com"
+      }
+    },
+    "emptyTitle": "Your dictionary is empty",
+    "emptyDescription": "Add words {{agentName}} should always get right: names, tools, acronyms.",
+    "addFirstWord": "Add your first word",
+    "importList": "Import a list"
   },
   "support": {
     "documentation": "Documentation",

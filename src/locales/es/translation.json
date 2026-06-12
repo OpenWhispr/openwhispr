@@ -2211,7 +2211,6 @@
     "yourDictionary": "Tu diccionario",
     "exportDictionary": "Exportar diccionario",
     "exportFailed": "Error al exportar",
-    "empty": "Aún no hay palabras",
     "editWord": "Editar {{word}}",
     "noMatches": "Sin coincidencias — pulsa Enter para añadir \"{{word}}\"",
     "tabDictionary": "Diccionario",
@@ -2221,7 +2220,6 @@
       "add": "Añadir snippet",
       "edit": "Editar {{trigger}}",
       "remove": "Eliminar {{trigger}}",
-      "empty": "Aún no hay snippets: di un disparador y se expandirá a tu texto guardado",
       "createTitle": "Nuevo snippet",
       "editTitle": "Editar snippet",
       "dialogDescription": "Cuando digas el disparador, se reemplazará por tu texto guardado.",
@@ -2230,8 +2228,26 @@
       "replacementLabel": "Reemplazo",
       "replacementPlaceholder": "Texto que se insertará al decir el disparador…",
       "create": "Crear snippet",
-      "duplicate": "Ya existe un snippet con este disparador"
-    }
+      "duplicate": "Ya existe un snippet con este disparador",
+      "emptyTitle": "Lo que no deberías tener que decir",
+      "emptyTitleAccent": "dos veces",
+      "emptyDescription": "Di una palabra disparadora y OpenWhispr la reemplaza por lo que guardaste: URLs, presentaciones, despedidas, prompts.",
+      "new": "Nuevo snippet",
+      "examples": {
+        "linkedinTrigger": "Mi LinkedIn",
+        "linkedinText": "linkedin.com/in/tu",
+        "rewriteTrigger": "Prompt de reescritura",
+        "rewriteText": "Reescribe esto para que sea más conciso y profesional",
+        "introTrigger": "Email de presentación",
+        "introText": "Hola, me encantaría encontrar un momento para hablar esta semana…",
+        "signoffTrigger": "Despedida",
+        "signoffText": "Saludos, Alex · alex@example.com"
+      }
+    },
+    "emptyTitle": "Tu diccionario está vacío",
+    "emptyDescription": "Añade palabras que {{agentName}} siempre debe reconocer: nombres, herramientas, siglas.",
+    "addFirstWord": "Añade tu primera palabra",
+    "importList": "Importar una lista"
   },
   "sidebar": {
     "home": "Inicio",

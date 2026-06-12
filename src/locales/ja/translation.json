@@ -2090,7 +2090,6 @@
     "yourDictionary": "あなたの辞書",
     "exportDictionary": "辞書をエクスポート",
     "exportFailed": "エクスポートに失敗しました",
-    "empty": "まだ単語がありません",
     "editWord": "{{word}} を編集",
     "wordsReady_one": "{{count}} 個の単語が準備完了",
     "noMatches": "一致なし — Enter キーで「{{word}}」を追加",
@@ -2101,7 +2100,6 @@
       "add": "スニペットを追加",
       "edit": "{{trigger}}を編集",
       "remove": "{{trigger}}を削除",
-      "empty": "スニペットはまだありません。トリガーを話すと保存したテキストに展開されます",
       "createTitle": "新規スニペット",
       "editTitle": "スニペットを編集",
       "dialogDescription": "トリガーを話すと、保存したテキストに置き換わります。",
@@ -2110,8 +2108,26 @@
       "replacementLabel": "置換テキスト",
       "replacementPlaceholder": "トリガーを話したときに挿入されるテキスト…",
       "create": "スニペットを作成",
-      "duplicate": "このトリガーのスニペットは既に存在します"
-    }
+      "duplicate": "このトリガーのスニペットは既に存在します",
+      "emptyTitle": "同じことを言うのは",
+      "emptyTitleAccent": "一度だけ",
+      "emptyDescription": "トリガーワードを話すと、OpenWhisprが保存した内容に置き換えます。URL、自己紹介、署名、プロンプトなど。",
+      "new": "新規スニペット",
+      "examples": {
+        "linkedinTrigger": "私のLinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "書き直しプロンプト",
+        "rewriteText": "これをより簡潔でプロフェッショナルに書き直して",
+        "introTrigger": "挨拶メール",
+        "introText": "こんにちは、今週どこかでお話しできれば嬉しいです…",
+        "signoffTrigger": "署名",
+        "signoffText": "よろしくお願いします。Alex · alex@example.com"
+      }
+    },
+    "emptyTitle": "辞書は空です",
+    "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
+    "addFirstWord": "最初の単語を追加",
+    "importList": "リストをインポート"
   },
   "referral": {
     "title": "紹介して特典をゲット",

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Pencil, X } from "lucide-react";
+import { Mic, Pencil, Plus, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,8 @@ import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import { useSettings } from "../hooks/useSettings";
 import type { Snippet } from "../utils/snippets";
+
+const EXAMPLE_KEYS = ["linkedin", "rewrite", "intro", "signoff"] as const;
 
 interface SnippetDialogProps {
   open: boolean;
@@ -152,23 +154,53 @@ export default function SnippetsView() {
       />
 
       <div className="rounded-md border border-foreground/8 dark:border-white/6 bg-foreground/[0.02] dark:bg-white/[0.03] px-4 py-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-foreground/40">
-            {t("dictionary.snippets.title")}
-          </h3>
-          <button
-            onClick={openCreate}
-            className="text-xs text-foreground/30 hover:text-primary transition-colors"
-          >
-            {t("dictionary.snippets.add")}
-          </button>
-        </div>
-        <div className="mt-2.5 border-t border-dashed border-foreground/10 dark:border-white/8" />
+        {snippets.length > 0 && (
+          <>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-foreground/40">
+                {t("dictionary.snippets.title")}
+              </h3>
+              <button
+                onClick={openCreate}
+                className="text-xs text-foreground/30 hover:text-primary transition-colors"
+              >
+                {t("dictionary.snippets.add")}
+              </button>
+            </div>
+            <div className="mt-2.5 border-t border-dashed border-foreground/10 dark:border-white/8" />
+          </>
+        )}
 
         {snippets.length === 0 ? (
-          <p className="py-6 text-xs text-foreground/20 text-center">
-            {t("dictionary.snippets.empty")}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-5 px-2 py-6">
+            <div className="flex-1 min-w-[220px]">
+              <h4 className="text-sm font-semibold text-foreground leading-snug">
+                {t("dictionary.snippets.emptyTitle")}{" "}
+                <span className="text-primary">{t("dictionary.snippets.emptyTitleAccent")}</span>
+              </h4>
+              <p className="mt-1.5 text-xs text-foreground/30 leading-relaxed">
+                {t("dictionary.snippets.emptyDescription")}
+              </p>
+              <Button size="sm" className="mt-4" onClick={openCreate}>
+                <Plus size={12} />
+                {t("dictionary.snippets.new")}
+              </Button>
+            </div>
+            <div className="flex-1 min-w-[260px] rounded-md border border-foreground/8 dark:border-white/6 bg-foreground/[0.02] dark:bg-white/[0.03] px-3.5 py-3 flex flex-col gap-2.5">
+              {EXAMPLE_KEYS.map((key) => (
+                <div key={key} className="flex items-start gap-2">
+                  <span className="shrink-0 inline-flex items-center gap-1 rounded-[5px] bg-primary/10 dark:bg-primary/15 border border-primary/15 dark:border-primary/20 px-1.5 py-0.5 text-xs text-primary">
+                    <Mic size={9} />
+                    {t(`dictionary.snippets.examples.${key}Trigger`)}
+                  </span>
+                  <span className="shrink-0 text-xs text-foreground/20 mt-0.5">→</span>
+                  <span className="min-w-0 text-xs text-foreground/40 leading-relaxed">
+                    {t(`dictionary.snippets.examples.${key}Text`)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
           <ul>
             {snippets.map((snippet) => (

@@ -2163,7 +2163,6 @@
     "yourDictionary": "Seu dicionário",
     "exportDictionary": "Exportar dicionário",
     "exportFailed": "Falha ao exportar",
-    "empty": "Nenhuma palavra ainda",
     "editWord": "Editar {{word}}",
     "noMatches": "Nenhuma correspondência — pressione Enter para adicionar \"{{word}}\"",
     "tabDictionary": "Dicionário",
@@ -2173,7 +2172,6 @@
       "add": "Adicionar snippet",
       "edit": "Editar {{trigger}}",
       "remove": "Remover {{trigger}}",
-      "empty": "Nenhum snippet ainda — fale um gatilho e ele se expandirá para o seu texto salvo",
       "createTitle": "Novo snippet",
       "editTitle": "Editar snippet",
       "dialogDescription": "Quando você falar o gatilho, ele será substituído pelo seu texto salvo.",
@@ -2182,8 +2180,26 @@
       "replacementLabel": "Substituição",
       "replacementPlaceholder": "Texto a inserir quando você disser o gatilho…",
       "create": "Criar snippet",
-      "duplicate": "Já existe um snippet com esse gatilho"
-    }
+      "duplicate": "Já existe um snippet com esse gatilho",
+      "emptyTitle": "O que você não deveria ter que dizer",
+      "emptyTitleAccent": "duas vezes",
+      "emptyDescription": "Fale um gatilho e o OpenWhispr o substitui pelo que você salvou: URLs, introduções, assinaturas, prompts.",
+      "new": "Novo snippet",
+      "examples": {
+        "linkedinTrigger": "Meu LinkedIn",
+        "linkedinText": "linkedin.com/in/voce",
+        "rewriteTrigger": "Prompt de reescrita",
+        "rewriteText": "Reescreva isto para ficar mais conciso e profissional",
+        "introTrigger": "Email de apresentação",
+        "introText": "Olá, adoraria encontrar um horário para conversar esta semana…",
+        "signoffTrigger": "Assinatura",
+        "signoffText": "Abraços, Alex · alex@example.com"
+      }
+    },
+    "emptyTitle": "Seu dicionário está vazio",
+    "emptyDescription": "Adicione palavras que {{agentName}} deve sempre acertar: nomes, ferramentas, siglas.",
+    "addFirstWord": "Adicione sua primeira palavra",
+    "importList": "Importar uma lista"
   },
   "sidebar": {
     "home": "Início",

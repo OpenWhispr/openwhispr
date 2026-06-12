@@ -2163,7 +2163,6 @@
     "yourDictionary": "Dein Wörterbuch",
     "exportDictionary": "Wörterbuch exportieren",
     "exportFailed": "Export fehlgeschlagen",
-    "empty": "Noch keine Wörter",
     "editWord": "{{word}} bearbeiten",
     "noMatches": "Keine Treffer — Enter drücken, um \"{{word}}\" hinzuzufügen",
     "tabDictionary": "Wörterbuch",
@@ -2173,7 +2172,6 @@
       "add": "Snippet hinzufügen",
       "edit": "{{trigger}} bearbeiten",
       "remove": "{{trigger}} entfernen",
-      "empty": "Noch keine Snippets – sprich einen Auslöser und er wird zu deinem gespeicherten Text erweitert",
       "createTitle": "Neues Snippet",
       "editTitle": "Snippet bearbeiten",
       "dialogDescription": "Wenn du den Auslöser sprichst, wird er durch deinen gespeicherten Text ersetzt.",
@@ -2182,8 +2180,26 @@
       "replacementLabel": "Ersetzung",
       "replacementPlaceholder": "Text, der beim Sprechen des Auslösers eingefügt wird …",
       "create": "Snippet erstellen",
-      "duplicate": "Ein Snippet mit diesem Auslöser existiert bereits"
-    }
+      "duplicate": "Ein Snippet mit diesem Auslöser existiert bereits",
+      "emptyTitle": "Sag es nur",
+      "emptyTitleAccent": "einmal",
+      "emptyDescription": "Sprich ein Auslösewort und OpenWhispr ersetzt es durch deinen gespeicherten Text – Links, Intros, Grußformeln, Prompts.",
+      "new": "Neues Snippet",
+      "examples": {
+        "linkedinTrigger": "Mein LinkedIn",
+        "linkedinText": "linkedin.com/in/du",
+        "rewriteTrigger": "Umschreib-Prompt",
+        "rewriteText": "Schreibe das prägnanter und professioneller um",
+        "introTrigger": "Intro-E-Mail",
+        "introText": "Hallo, ich würde mich freuen, diese Woche Zeit für ein Gespräch zu finden …",
+        "signoffTrigger": "Grußformel",
+        "signoffText": "Viele Grüße, Alex · alex@example.com"
+      }
+    },
+    "emptyTitle": "Dein Wörterbuch ist leer",
+    "emptyDescription": "Füge Wörter hinzu, die {{agentName}} immer richtig erkennen soll: Namen, Tools, Abkürzungen.",
+    "addFirstWord": "Füge dein erstes Wort hinzu",
+    "importList": "Liste importieren"
   },
   "sidebar": {
     "home": "Startseite",

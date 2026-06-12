@@ -2157,7 +2157,6 @@
     "yourDictionary": "你的词典",
     "exportDictionary": "导出词典",
     "exportFailed": "导出失败",
-    "empty": "暂无词语",
     "editWord": "编辑 {{word}}",
     "wordsReady_one": "{{count}} 个词语就绪",
     "noMatches": "无匹配项 — 按 Enter 添加“{{word}}”",
@@ -2168,7 +2167,6 @@
       "add": "添加片段",
       "edit": "编辑 {{trigger}}",
       "remove": "删除 {{trigger}}",
-      "empty": "还没有片段——说出触发词，它会展开为你保存的文本",
       "createTitle": "新建片段",
       "editTitle": "编辑片段",
       "dialogDescription": "当你说出触发词时，它会被替换为你保存的文本。",
@@ -2177,8 +2175,26 @@
       "replacementLabel": "替换文本",
       "replacementPlaceholder": "说出触发词时插入的文本…",
       "create": "创建片段",
-      "duplicate": "已存在使用此触发词的片段"
-    }
+      "duplicate": "已存在使用此触发词的片段",
+      "emptyTitle": "同样的话，只说",
+      "emptyTitleAccent": "一遍",
+      "emptyDescription": "说出触发词，OpenWhispr 会把它替换为你保存的内容：链接、开场白、签名、提示词。",
+      "new": "新建片段",
+      "examples": {
+        "linkedinTrigger": "我的 LinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "改写提示词",
+        "rewriteText": "把这段话改写得更简洁、更专业",
+        "introTrigger": "开场邮件",
+        "introText": "你好，希望本周能找个时间聊聊…",
+        "signoffTrigger": "签名",
+        "signoffText": "祝好，Alex · alex@example.com"
+      }
+    },
+    "emptyTitle": "你的词典是空的",
+    "emptyDescription": "添加希望{{agentName}}始终识别正确的词：名字、工具、缩写。",
+    "addFirstWord": "添加第一个词",
+    "importList": "导入列表"
   },
   "sidebar": {
     "home": "首页",

@@ -2274,7 +2274,6 @@
     "yourDictionary": "Votre dictionnaire",
     "exportDictionary": "Exporter le dictionnaire",
     "exportFailed": "Échec de l'exportation",
-    "empty": "Aucun mot pour l'instant",
     "editWord": "Modifier {{word}}",
     "noMatches": "Aucune correspondance — appuyez sur Entrée pour ajouter « {{word}} »",
     "tabDictionary": "Dictionnaire",
@@ -2284,7 +2283,6 @@
       "add": "Ajouter un snippet",
       "edit": "Modifier {{trigger}}",
       "remove": "Supprimer {{trigger}}",
-      "empty": "Aucun snippet pour l'instant — prononcez un déclencheur et il sera remplacé par votre texte enregistré",
       "createTitle": "Nouveau snippet",
       "editTitle": "Modifier le snippet",
       "dialogDescription": "Quand vous prononcez le déclencheur, il est remplacé par votre texte enregistré.",
@@ -2293,8 +2291,26 @@
       "replacementLabel": "Remplacement",
       "replacementPlaceholder": "Texte à insérer quand vous dites le déclencheur…",
       "create": "Créer le snippet",
-      "duplicate": "Un snippet avec ce déclencheur existe déjà"
-    }
+      "duplicate": "Un snippet avec ce déclencheur existe déjà",
+      "emptyTitle": "Ce que vous ne devriez pas avoir à dire",
+      "emptyTitleAccent": "deux fois",
+      "emptyDescription": "Prononcez un mot déclencheur et OpenWhispr le remplace par ce que vous avez enregistré : URL, intros, signatures, prompts.",
+      "new": "Nouveau snippet",
+      "examples": {
+        "linkedinTrigger": "Mon LinkedIn",
+        "linkedinText": "linkedin.com/in/vous",
+        "rewriteTrigger": "Prompt de réécriture",
+        "rewriteText": "Réécris ceci de façon plus concise et professionnelle",
+        "introTrigger": "Email d'intro",
+        "introText": "Bonjour, j'aimerais trouver un moment pour échanger cette semaine…",
+        "signoffTrigger": "Signature",
+        "signoffText": "Cordialement, Alex · alex@example.com"
+      }
+    },
+    "emptyTitle": "Votre dictionnaire est vide",
+    "emptyDescription": "Ajoutez les mots que {{agentName}} doit toujours reconnaître : noms, outils, acronymes.",
+    "addFirstWord": "Ajoutez votre premier mot",
+    "importList": "Importer une liste"
   },
   "support": {
     "documentation": "Documentation",
