@@ -352,8 +352,8 @@ class HyprlandShortcutManager {
     }
 
     try {
-      // First unregister any existing binding
-      if (this.currentBinding) {
+      // First unregister any existing OpenWhispr binding if the hotkey changed.
+      if (this.currentBinding && this.currentBinding !== converted.bindKey) {
         await this.unregisterKeybinding();
       }
 
@@ -362,8 +362,17 @@ class HyprlandShortcutManager {
       // hyprctl keyword bind "MODS, key, exec, command"
       const bindValue = `${converted.bindKey}, exec, ${dbusCommand}`;
 
-      this._writeBindToConfig(`bind = ${bindValue}`);
-      this._ensureSourceInMainConfig();
+      try {
+        execFileSync("hyprctl", ["keyword", "unbind", converted.bindKey], {
+          stdio: "pipe",
+          timeout: 5000,
+        });
+      } catch (err) {
+        debugLogger.log(
+          `[HyprlandShortcut] Pre-bind unbind for "${converted.bindKey}" failed, continuing:`,
+          err.message
+        );
+      }
 
       execFileSync("hyprctl", ["keyword", "bind", bindValue], {
         stdio: "pipe",
@@ -372,6 +381,17 @@ class HyprlandShortcutManager {
 
       this.currentBinding = converted.bindKey;
       this.isRegistered = true;
+
+      try {
+        this._writeBindToConfig(`bind = ${bindValue}`);
+        this._ensureSourceInMainConfig();
+      } catch (err) {
+        debugLogger.log(
+          "[HyprlandShortcut] Failed to persist keybinding; runtime bind is still active:",
+          err.message
+        );
+      }
+
       debugLogger.log(
         `[HyprlandShortcut] Keybinding "${hotkey}" (${converted.bindKey}) registered successfully`
       );
