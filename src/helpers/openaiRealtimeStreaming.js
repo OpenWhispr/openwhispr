@@ -33,7 +33,7 @@ class OpenAIRealtimeStreaming {
   }
 
   async connect(options = {}) {
-    const { apiKey, model, preconfigured, url: customUrl, inputRate } = options;
+    const { apiKey, model, preconfigured, url: customUrl, inputRate, createSocket } = options;
     if (!apiKey) throw new Error("OpenAI API key is required");
 
     if (this.isConnected || this.isConnecting) {
@@ -55,6 +55,20 @@ class OpenAIRealtimeStreaming {
     const url = customUrl || "wss://api.openai.com/v1/realtime?intent=transcription";
     debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
 
+    // A socket factory (used by attested providers, which must verify the
+    // enclave before dialing) builds the socket asynchronously; otherwise dial
+    // directly. Attestation cost falls outside the connection timeout below.
+    let ws;
+    try {
+      ws = createSocket
+        ? await createSocket()
+        : new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+    } catch (err) {
+      this.isConnecting = false;
+      this.cleanup();
+      throw err;
+    }
+
     return new Promise((resolve, reject) => {
       this.pendingResolve = resolve;
       this.pendingReject = reject;
@@ -65,11 +79,7 @@ class OpenAIRealtimeStreaming {
         reject(new Error("OpenAI Realtime connection timeout"));
       }, WEBSOCKET_TIMEOUT_MS);
 
-      this.ws = new WebSocket(url, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-      });
+      this.ws = ws;
 
       this.ws.on("open", () => {
         debugLogger.debug("OpenAI Realtime WebSocket opened");

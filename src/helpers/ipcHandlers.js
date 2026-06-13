@@ -12,13 +12,14 @@ const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
+const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 
 // Tinfoil serves an OpenAI Realtime-compatible transcription endpoint inside a
-// confidential enclave. Same client as OpenAI; only the URL, key, and the
-// declared capture rate differ (we send the worklet's true 16kHz instead of
-// letting the server resample a 24kHz declaration).
-const TINFOIL_REALTIME_URL =
-  "wss://voxtral-mini-4b-realtime.realtime.inf10.tinfoil.sh/v1/realtime?intent=transcription";
+// confidential enclave. Same client as OpenAI; the socket is dialed through
+// the tinfoil SDK so the enclave is attested and the TLS connection pinned,
+// and the declared capture rate is the worklet's true 16kHz (no server-side
+// resample of a 24kHz declaration).
+const TINFOIL_REALTIME_MODEL = "voxtral-mini-4b-realtime";
 const AudioStorageManager = require("./audioStorage");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
@@ -5149,8 +5150,10 @@ class IPCHandlers {
           isTinfoil
             ? {
                 apiKey,
-                url: process.env.TINFOIL_REALTIME_URL || TINFOIL_REALTIME_URL,
+                model: TINFOIL_REALTIME_MODEL,
                 inputRate: 16000,
+                createSocket: () =>
+                  createTinfoilRealtimeSocket({ model: TINFOIL_REALTIME_MODEL, apiKey }),
               }
             : { apiKey, model: options.model || "gpt-4o-mini-transcribe", preconfigured: isCloud }
         );
