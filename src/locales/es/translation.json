@@ -1795,7 +1795,8 @@
         "openai_whisper_1": "Modelo Whisper original",
         "groq_whisper_large_v3": "Reconocimiento de voz de alta precisión",
         "groq_whisper_large_v3_turbo": "Velocidad 216x en tiempo real",
-        "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida"
+        "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
+        "tinfoil_voxtral_mini_realtime": "Transcripción en streaming verificablemente privada"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",

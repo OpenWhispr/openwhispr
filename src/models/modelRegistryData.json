@@ -191,6 +191,20 @@
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
         }
       ]
+    },
+    {
+      "id": "tinfoil",
+      "name": "Tinfoil",
+      "baseUrl": "https://inference.tinfoil.sh/v1",
+      "models": [
+        {
+          "id": "voxtral-mini-4b-realtime",
+          "name": "Voxtral Mini Realtime",
+          "description": "Verifiably private streaming transcription",
+          "descriptionKey": "models.descriptions.transcription.tinfoil_voxtral_mini_realtime",
+          "streaming": true
+        }
+      ]
     }
   ],
   "cloudProviders": [

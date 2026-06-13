@@ -493,6 +493,7 @@ export interface SettingsState
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
+  setTinfoilApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
 
@@ -619,6 +620,7 @@ const SECRET_IPC_SAVERS = {
   gemini: "saveGeminiKey",
   groq: "saveGroqKey",
   mistral: "saveMistralKey",
+  tinfoil: "saveTinfoilKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
   bedrockAccessKeyId: "saveBedrockAccessKeyId",
@@ -656,6 +658,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "geminiApiKey",
   "groqApiKey",
   "mistralApiKey",
+  "tinfoilApiKey",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
@@ -667,7 +670,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
 ] as const;
 
 function invalidateApiKeyCaches(
-  provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom"
+  provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "tinfoil" | "custom"
 ) {
   if (provider) {
     if (_ReasoningService) {
@@ -723,6 +726,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   geminiApiKey: "",
   groqApiKey: "",
   mistralApiKey: "",
+  tinfoilApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -1072,6 +1076,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ mistralApiKey: key });
     debouncedSaveSecret("mistral", key);
     invalidateApiKeyCaches("mistral");
+  },
+  setTinfoilApiKey: (key: string) => {
+    set({ tinfoilApiKey: key });
+    debouncedSaveSecret("tinfoil", key);
+    invalidateApiKeyCaches("tinfoil");
   },
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
@@ -1446,6 +1455,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
+    if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -1652,6 +1662,7 @@ export async function initializeSettings(): Promise<void> {
         gemini,
         groq,
         mistral,
+        tinfoil,
         customTx,
         customRx,
         bedrockAccessKeyId,
@@ -1665,6 +1676,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getGeminiKey?.(),
         window.electronAPI.getGroqKey?.(),
         window.electronAPI.getMistralKey?.(),
+        window.electronAPI.getTinfoilKey?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
         window.electronAPI.getCleanupCustomKey?.(),
         window.electronAPI.getBedrockAccessKeyId?.(),
@@ -1680,6 +1692,7 @@ export async function initializeSettings(): Promise<void> {
         geminiApiKey: gemini || "",
         groqApiKey: groq || "",
         mistralApiKey: mistral || "",
+        tinfoilApiKey: tinfoil || "",
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",
         bedrockAccessKeyId: bedrockAccessKeyId || "",
