@@ -873,7 +873,7 @@ export default function TranscriptionModelPicker({
                         {
                           groq: "https://console.groq.com/keys",
                           mistral: "https://console.mistral.ai/api-keys",
-                          tinfoil: "https://tinfoil.sh/dashboard",
+                          tinfoil: "https://tinfoil.sh/inference",
                           openai: "https://platform.openai.com/api-keys",
                         }[selectedCloudProvider] || "https://platform.openai.com/api-keys"
                       )}
