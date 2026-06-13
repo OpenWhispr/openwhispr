@@ -14,6 +14,10 @@ function usesOllamaDialect(providerKey: string): boolean {
   return window.localStorage?.getItem("remoteReasoningType") !== "openai-compatible";
 }
 
+function isLocalServer(providerKey: string): boolean {
+  return providerKey === "local" || providerKey === "lan";
+}
+
 function suppressThinking(requestBody: Record<string, unknown>, providerKey: string): void {
   if (providerKey === "gemini") {
     requestBody.reasoning_effort = "minimal";
@@ -23,9 +27,13 @@ function suppressThinking(requestBody: Record<string, unknown>, providerKey: str
   if (usesOllamaDialect(providerKey)) {
     requestBody.think = false;
   } else {
-    requestBody.reasoning_effort = "none";
+    // Custom endpoints (Cerebras, etc.) may not accept "none" —
+    // "low" is the safest universally-supported minimum.
+    requestBody.reasoning_effort = providerKey === "custom" ? "low" : "none";
   }
-  requestBody.chat_template_kwargs = { enable_thinking: false };
+  if (isLocalServer(providerKey)) {
+    requestBody.chat_template_kwargs = { enable_thinking: false };
+  }
 }
 
 export function applyThinkingSuppression(
