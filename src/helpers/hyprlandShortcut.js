@@ -46,6 +46,19 @@ const VALID_HOTKEY_PATTERN =
   /^((CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd)(\+(CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd))*(\+)?)?(F([1-9]|1[0-9]|2[0-4])|[A-Za-z0-9]|Space|Escape|Tab|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Enter|PrintScreen|ScrollLock|Pause|Backquote|`)?$/i;
 
 const BINDS_FILENAME = "openwhispr-binds.conf";
+const MANAGED_HEADER_LINES = [
+  "# OpenWhispr keybinds (managed automatically)",
+  "# If you delete this file, also remove the matching source line from your Hyprland config.",
+];
+
+function isManagedHeaderLine(line) {
+  return MANAGED_HEADER_LINES.includes(line.trim());
+}
+
+function buildManagedBindsContent(lines = []) {
+  const body = lines.join("\n").trim();
+  return MANAGED_HEADER_LINES.join("\n") + "\n" + (body ? body + "\n" : "");
+}
 
 function getHyprConfigDir() {
   if (process.env.HYPRLAND_CONFIG) {
@@ -266,16 +279,14 @@ class HyprlandShortcutManager {
       if (err.code !== "ENOENT") throw err;
     }
 
-    const header = "# OpenWhispr keybinds (managed automatically)";
     const lines = content.split("\n").filter((line) => {
       const trimmed = line.trim();
-      if (!trimmed || trimmed === header) return false;
+      if (!trimmed || isManagedHeaderLine(trimmed)) return false;
       if (trimmed.startsWith("#")) return true;
       return !trimmed.includes(DBUS_SERVICE_NAME);
     });
 
-    const body = lines.join("\n").trim();
-    const newContent = header + "\n" + (body ? body + "\n" : "") + bindLine + "\n";
+    const newContent = buildManagedBindsContent([...lines, bindLine]);
 
     fs.writeFileSync(bindsFile, newContent, "utf-8");
   }
@@ -292,11 +303,12 @@ class HyprlandShortcutManager {
 
     const lines = content.split("\n").filter((line) => {
       const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) return true;
+      if (!trimmed || isManagedHeaderLine(trimmed)) return false;
+      if (trimmed.startsWith("#")) return true;
       return !trimmed.includes(DBUS_SERVICE_NAME);
     });
 
-    fs.writeFileSync(bindsFile, lines.join("\n"), "utf-8");
+    fs.writeFileSync(bindsFile, buildManagedBindsContent(lines), "utf-8");
   }
 
   _ensureSourceInMainConfig() {
