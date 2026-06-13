@@ -1470,7 +1470,9 @@
         "linuxPttPermissionDescription": "Run this command and log out/in: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Hold to Speak needs setup",
         "linuxPttSetupDescription": "Your user needs access to keyboard input devices.",
-        "linuxPttSetupNote": "After running the command, log out and log back in."
+        "linuxPttSetupNote": "After running the command, log out and log back in.",
+        "hyprlandConfigMissingTitle": "Hyprland config not found",
+        "hyprlandConfigMissingDescription": "Your hyprland.conf was not found, so keybinds will not survive config reload. Create a config at ~/.config/hypr/hyprland.conf for persistent keybinds."
       },
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",

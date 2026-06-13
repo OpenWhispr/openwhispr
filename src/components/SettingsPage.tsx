@@ -961,6 +961,7 @@ export default function SettingsPage({
   );
 
   const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
+  const [hyprlandConfigMissing, setHyprlandConfigMissing] = useState(false);
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -1083,6 +1084,9 @@ export default function SettingsPage({
           if (!info.supportsPushToTalk) {
             setActivationMode("tap");
           }
+        }
+        if (info?.hyprlandConfigMissing) {
+          setHyprlandConfigMissing(true);
         }
       } catch (error) {
         logger.error("Failed to check hotkey mode", error, "settings");
@@ -3177,6 +3181,17 @@ EOF`,
       case "hotkeys":
         return (
           <div className="space-y-6">
+            {hyprlandConfigMissing && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>
+                  {t("settingsPage.general.hotkey.hyprlandConfigMissingTitle")}
+                </AlertTitle>
+                <AlertDescription>
+                  {t("settingsPage.general.hotkey.hyprlandConfigMissingDescription")}
+                </AlertDescription>
+              </Alert>
+            )}
             {/* Dictation Hotkey */}
             <div>
               <SectionHeader

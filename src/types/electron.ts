@@ -915,6 +915,7 @@ declare global {
         isUsingHyprland: boolean;
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
+        hyprlandConfigMissing: boolean;
       }>;
 
       // Wayland paste diagnostics
