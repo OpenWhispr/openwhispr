@@ -100,6 +100,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
   const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
+  const [isUsingHyprland, setIsUsingHyprland] = useState(false);
   const readableHotkey = formatHotkeyLabel(hotkey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
     useDialogs();
@@ -170,6 +171,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           if (!info.supportsPushToTalk) {
             setActivationMode("tap");
           }
+        }
+        if (info?.isUsingHyprland) {
+          setIsUsingHyprland(true);
         }
       } catch (error) {
         logger.error("Failed to check hotkey mode", { error }, "onboarding");
@@ -615,10 +619,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       <div className="rounded-lg border border-border-subtle bg-surface-1 overflow-hidden">
         {/* Hotkey section */}
         <div className="p-4 border-b border-border-subtle">
-          <div className="flex items-center justify-between mb-3">
+          <div className="mb-3">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               {t("onboarding.activation.hotkey")}
             </span>
+            {isUsingHyprland && (
+              <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">
+                {t("settingsPage.general.hotkey.hyprlandUnbindDescription")}
+              </p>
+            )}
           </div>
           <HotkeyInput
             value={hotkey}

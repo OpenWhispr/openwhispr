@@ -1466,7 +1466,8 @@
         "linuxPttSetupDescription": "Your user needs access to keyboard input devices.",
         "linuxPttSetupNote": "After running the command, log out and log back in.",
         "hyprlandConfigMissingTitle": "Hyprland config not found",
-        "hyprlandConfigMissingDescription": "Your hyprland.conf was not found, so keybinds will not survive config reload. Create a config at ~/.config/hypr/hyprland.conf for persistent keybinds."
+        "hyprlandConfigMissingDescription": "Your hyprland.conf was not found, so keybinds will not survive config reload. Create a config at ~/.config/hypr/hyprland.conf for persistent keybinds.",
+        "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut."
       },
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",
