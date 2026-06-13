@@ -10,7 +10,7 @@
     },
     "noteFiles": {
       "title": "将笔记保存为文件",
-      "description": "自动将笔记和转录保存为文件���磁盘，按文件夹分类",
+      "description": "自动将笔记和转录保存为磁盘上的文件，按文件夹分类",
       "path": "保存位置",
       "changePath": "更改位置",
       "rebuild": "重建所有文件",
@@ -429,7 +429,13 @@
       "whisperModelDescription": "模型",
       "parakeetModelDescription": "NVIDIA Parakeet 模型"
     },
-    "whisperModels": "Whisper 模型"
+    "whisperModels": "Whisper 模型",
+    "corti": {
+      "clientId": "客户端 ID",
+      "clientSecret": "客户端密钥",
+      "environment": "数据区域",
+      "tenant": "租户"
+    }
   },
   "hooks": {
     "audioRecording": {
@@ -1385,7 +1391,16 @@
             "step1Title": "安装 xclip"
           }
         },
-        "xclipDesc": "KDE Wayland 粘贴用的剪贴板工具（xclip 或 xsel）"
+        "xclipDesc": "KDE Wayland 粘贴用的剪贴板工具（xclip 或 xsel）",
+        "nixos": {
+          "intro": "您正在使用 NixOS。自动粘贴需要 ydotool 和 /dev/uinput 访问权限，NixOS 通过声明式配置来授予这些权限。",
+          "detected": "已检测到",
+          "manualTitle": "将以下内容添加到您的配置中",
+          "manualDesc": "自行配置后重新构建。",
+          "flakeTitle": "通过我们的 flake 安装？",
+          "flakeDesc": "如果您通过 flake 安装 OpenWhispr，programs.openwhispr.enable 会自动为您启用 ydotool、uinput 模块以及相应的用户组权限。",
+          "rebuildNote": "运行 sudo nixos-rebuild switch，然后注销并重新登录，使组变更和 /dev/uinput 规则生效。将 <you> 替换为您的用户名。"
+        }
       },
       "updates": {
         "badges": {
@@ -1733,7 +1748,9 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍实时速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
-        "mistral_voxtral_mini_latest": "快速多语言转录"
+        "mistral_voxtral_mini_latest": "快速多语言转录",
+        "corti_transcribe": "临床级医疗转录",
+        "xai_grok_stt": "xAI 高精度语音识别"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",
@@ -1742,11 +1759,15 @@
         "openai_gpt_4_1": "稳定基准，1M 上下文",
         "openai_gpt_4_1_mini": "精简版 GPT-4.1",
         "openai_gpt_4_1_nano": "最低延迟 GPT-4.1",
-        "anthropic_claude_sonnet_4_5": "均衡性能",
+        "anthropic_claude_sonnet_4_6": "均衡性能",
+        "anthropic_claude_sonnet_4_5": "上一代 Sonnet",
         "anthropic_claude_haiku_4_5": "快速且接近前沿水平",
-        "gemini_gemini_3_pro_preview": "新一代旗舰模型，擅长复杂推理",
+        "gemini_gemini_3_5_flash": "最新、快速且高能力的 Gemini 模型",
+        "gemini_gemini_3_1_pro_preview": "新一代旗舰模型，擅长复杂推理",
         "gemini_gemini_3_flash_preview": "超快速、高能力的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延迟和成本",
+        "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
+        "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活跃参数，256K 上下文",
         "groq_qwen_qwen3_32b": "强大的推理模型，131K 上下文",
         "groq_openai_gpt_oss_120b": "OpenAI 开源旗舰，500 T/秒",
         "groq_openai_gpt_oss_20b": "快速开源模型，1000 T/秒",
@@ -1757,9 +1778,10 @@
         "groq_compound_mini": "快速 Compound 系统，3x 更低延迟",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文",
         "openai_gpt_5_5": "复杂推理前沿模型",
-        "anthropic_claude_opus_4_7": "最强大的 Claude 模型",
-        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_8": "最强大的 Claude 模型",
+        "anthropic_claude_opus_4_7": "强大的 Opus 模型",
+        "anthropic_claude_opus_4_6": "上一代 Opus，1M 上下文",
+        "anthropic_claude_opus_4_5": "更早的 Opus 模型"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",
@@ -2122,15 +2144,56 @@
     "addWord": "添加词语",
     "removeWord": "移除 {{word}}",
     "clearAll": "全部清除",
-    "howItWorks": "工作原理",
-    "howItWorksDetail": "你添加的词汇会被包含在 AI 提示词中，以便模型在转录整理时能够识别并保留这些词汇。",
-    "autoManaged": "助手名称（自动管理）",
-    "inputHint": "按回车键添加",
-    "title": "自定义词典",
-    "description": "教 AI 学习你的词汇 — 名字、行话和它可能遗漏的术语",
     "clearTitle": "清空词典？",
     "clearDescription": "这将删除自定义词典中的所有词汇，此操作无法撤销。",
-    "addPlaceholder": "添加词语或短语..."
+    "addPlaceholder": "用逗号分隔添加多个词——OpenWhispr、Supabase、ARR",
+    "add": "添加",
+    "importWords": "导入词语",
+    "importPlaceholder": "粘贴以逗号分隔的词语...",
+    "separateWithCommas": "用逗号分隔",
+    "wordsReady_other": "{{count}} 个词语就绪",
+    "import": "导入",
+    "yourDictionary": "你的词典",
+    "exportDictionary": "导出词典",
+    "exportFailed": "导出失败",
+    "editWord": "编辑 {{word}}",
+    "wordsReady_one": "{{count}} 个词语就绪",
+    "noMatches": "无匹配项 — 按 Enter 添加“{{word}}”",
+    "tabDictionary": "词典",
+    "tabSnippets": "片段",
+    "snippets": {
+      "title": "片段",
+      "edit": "编辑 {{trigger}}",
+      "remove": "删除 {{trigger}}",
+      "editTitle": "编辑片段",
+      "dialogDescription": "当你说出触发词时，它会被替换为你保存的文本。",
+      "triggerLabel": "触发词",
+      "triggerPlaceholder": "例如：我的日程链接",
+      "replacementLabel": "替换文本",
+      "replacementPlaceholder": "说出触发词时插入的文本…",
+      "create": "创建片段",
+      "duplicate": "已存在使用此触发词的片段",
+      "emptyTitle": "同样的话，只说",
+      "emptyTitleAccent": "一遍",
+      "emptyDescription": "说出触发词，OpenWhispr 会把它替换为你保存的内容：链接、开场白、签名、提示词。",
+      "new": "新建片段",
+      "examples": {
+        "linkedinTrigger": "我的 LinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "改写提示词",
+        "rewriteText": "把这段话改写得更简洁、更专业",
+        "introTrigger": "开场邮件",
+        "introText": "你好，希望本周能找个时间聊聊…",
+        "signoffTrigger": "签名",
+        "signoffText": "祝好，Alex · alex@example.com"
+      },
+      "addPlaceholder": "添加触发词——“我的日程链接”“签名”"
+    },
+    "emptyTitle": "你的词典是空的",
+    "emptyDescription": "添加希望{{agentName}}始终识别正确的词：名字、工具、缩写。",
+    "addFirstWord": "添加第一个词",
+    "importList": "导入列表",
+    "agentDefault": "默认添加"
   },
   "sidebar": {
     "home": "首页",
@@ -2264,23 +2327,23 @@
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabled": "启用语音助手",
+    "enabledDescription": "向助手口述指令。说出“{{agentName}}”即可激活，可在下方配置。",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "openwhisprDesc": "使用 OpenWhispr 托管的助手，无需 API Key。",
+      "providers": "使用自己的 API Key",
+      "providersDesc": "用你自己的 API Key 连接 OpenAI、Anthropic、Gemini 或 Groq。",
+      "local": "本地",
+      "localDesc": "在你的设备上运行本地 LLM，完全私密。",
+      "selfHosted": "自托管",
+      "selfHostedDesc": "指向兼容 OpenAI 的自托管端点。",
+      "enterprise": "企业级",
+      "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。"
     },
     "prompt": {
-      "title": "Agent prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "title": "助手提示词",
+      "description": "检测到唤醒词时使用的系统提示词。未设置时回退到内置默认值。"
     }
   },
   "agentMode": {

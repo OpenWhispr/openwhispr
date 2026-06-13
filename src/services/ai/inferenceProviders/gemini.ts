@@ -1,4 +1,5 @@
 import type { InferenceProvider } from "./types";
+import { getCloudModel } from "../../../models/ModelRegistry";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS } from "../../../config/constants";
 import logger from "../../../utils/logger";
@@ -11,6 +12,15 @@ interface GeminiResponse {
   usageMetadata?: { totalTokenCount?: number };
 }
 
+interface GeminiGenerationConfig {
+  temperature: number;
+  maxOutputTokens: number;
+  thinkingConfig?: {
+    thinkingLevel: "minimal" | "low" | "medium" | "high";
+    includeThoughts: boolean;
+  };
+}
+
 export const geminiProvider: InferenceProvider = {
   id: "gemini",
   async call({ text, model, agentName, config, ctx }) {
@@ -20,22 +30,28 @@ export const geminiProvider: InferenceProvider = {
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
 
+    const generationConfig: GeminiGenerationConfig = {
+      temperature: config.temperature || 0.3,
+      maxOutputTokens:
+        config.maxTokens ||
+        Math.max(
+          2000,
+          ctx.calculateMaxTokens(
+            text.length,
+            TOKEN_LIMITS.MIN_TOKENS_GEMINI,
+            TOKEN_LIMITS.MAX_TOKENS_GEMINI,
+            TOKEN_LIMITS.TOKEN_MULTIPLIER
+          )
+        ),
+    };
+
+    if (config.disableThinking === true && getCloudModel(model)?.supportsThinking) {
+      generationConfig.thinkingConfig = { thinkingLevel: "minimal", includeThoughts: false };
+    }
+
     const requestBody = {
       contents: [{ parts: [{ text: `${systemPrompt}\n\n${text}` }] }],
-      generationConfig: {
-        temperature: config.temperature || 0.3,
-        maxOutputTokens:
-          config.maxTokens ||
-          Math.max(
-            2000,
-            ctx.calculateMaxTokens(
-              text.length,
-              TOKEN_LIMITS.MIN_TOKENS_GEMINI,
-              TOKEN_LIMITS.MAX_TOKENS_GEMINI,
-              TOKEN_LIMITS.TOKEN_MULTIPLIER
-            )
-          ),
-      },
+      generationConfig,
     };
 
     const response = await withRetry(async () => {

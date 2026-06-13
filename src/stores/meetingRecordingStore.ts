@@ -124,6 +124,21 @@ const getMeetingTranscriptionOptions = () => {
     };
   }
 
+  // Corti (BYOK) streams over its own WSS — independent of the server-driven catalog.
+  const selectedProvider =
+    state.meetingCloudTranscriptionProvider || state.cloudTranscriptionProvider;
+  if (resolved.cloudTranscriptionMode === "byok" && selectedProvider === "corti") {
+    return {
+      provider: "corti-realtime" as const,
+      model: "corti-transcribe",
+      mode: "byok" as const,
+      language,
+      environment: state.cortiEnvironment,
+      tenant: state.cortiTenant,
+      keyterms: (state.customDictionary ?? []).filter(Boolean),
+    };
+  }
+
   const catalog = useStreamingProvidersStore.getState().providers;
   const provider =
     catalog?.find((p) => p.id === resolved.cloudTranscriptionProvider) ?? catalog?.[0];
@@ -209,7 +224,7 @@ const ensureRendererSystemAudioCapture = async ({
   systemAudioStrategy,
   systemCaptureResult,
 }: {
-  initialDisplayCaptureStrategy: "loopback" | "browser-portal" | null;
+  initialDisplayCaptureStrategy: "loopback" | null;
   systemAudioStrategy: SystemAudioStrategy;
   systemCaptureResult: { stream: MediaStream | null; error: Error | null };
 }) => {
@@ -1082,13 +1097,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
         systemProcessor = processor;
       });
     } else if (systemCaptureError) {
-      if (systemAudioStrategy === "browser-portal") {
-        logger.warn(
-          "Linux system audio capture failed, continuing with mic only",
-          { error: systemCaptureError.message },
-          "meeting"
-        );
-      } else if (systemAudioStrategy === "loopback") {
+      if (systemAudioStrategy === "loopback") {
         logger.warn(
           "System audio loopback failed, continuing with mic only",
           { error: systemCaptureError.message },

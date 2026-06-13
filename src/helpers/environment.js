@@ -11,9 +11,12 @@ const SECRET_KEYS = [
   "ANTHROPIC_API_KEY",
   "GEMINI_API_KEY",
   "GROQ_API_KEY",
+  "XAI_API_KEY",
   "MISTRAL_API_KEY",
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
+  "CORTI_CLIENT_ID",
+  "CORTI_CLIENT_SECRET",
   "CUSTOM_TRANSCRIPTION_API_KEY",
   "CUSTOM_CLEANUP_API_KEY",
   "BEDROCK_ACCESS_KEY_ID",
@@ -55,6 +58,10 @@ const PERSISTED_KEYS = [
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
 ];
+
+// Module-level so writes are serialized across all instances — hotkeyManager
+// creates its own EnvironmentManager alongside the main.js singleton.
+let envWriteQueue = Promise.resolve();
 
 class EnvironmentManager {
   constructor() {
@@ -211,7 +218,14 @@ class EnvironmentManager {
     );
   }
 
-  async _writeEnvFileAtomic(envPath) {
+  _writeEnvFileAtomic(envPath) {
+    // Concurrent write+rename pairs share the same .env.tmp path, and the
+    // loser's rename throws ENOENT (#903).
+    envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._writeEnvFile(envPath));
+    return envWriteQueue;
+  }
+
+  async _writeEnvFile(envPath) {
     // Only strip plaintext secrets once migration has fully completed —
     // otherwise a partial-migration recovery can lose unencrypted secrets.
     const stripSecrets =
@@ -281,6 +295,14 @@ class EnvironmentManager {
     return this._saveKey("GROQ_API_KEY", key);
   }
 
+  getXaiKey() {
+    return this._getKey("XAI_API_KEY");
+  }
+
+  saveXaiKey(key) {
+    return this._saveKey("XAI_API_KEY", key);
+  }
+
   getMistralKey() {
     return this._getKey("MISTRAL_API_KEY");
   }
@@ -303,6 +325,22 @@ class EnvironmentManager {
 
   saveDeepgramKey(key) {
     return this._saveKey("DEEPGRAM_API_KEY", key);
+  }
+
+  getCortiClientId() {
+    return this._getKey("CORTI_CLIENT_ID");
+  }
+
+  saveCortiClientId(key) {
+    return this._saveKey("CORTI_CLIENT_ID", key);
+  }
+
+  getCortiClientSecret() {
+    return this._getKey("CORTI_CLIENT_SECRET");
+  }
+
+  saveCortiClientSecret(key) {
+    return this._saveKey("CORTI_CLIENT_SECRET", key);
   }
 
   getCustomTranscriptionKey() {

@@ -37,6 +37,7 @@ import {
   getSettings,
 } from "../../stores/settingsStore";
 import { generateNoteTitle } from "../../utils/generateTitle";
+import { getBaseLanguageCode } from "../../utils/languageSupport";
 
 const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
 
@@ -116,11 +117,17 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setCloudTranscriptionMode,
     openaiApiKey,
     groqApiKey,
+    xaiApiKey,
     mistralApiKey,
     customTranscriptionApiKey,
     updateTranscriptionSettings,
   } = useSettings();
 
+  const cortiClientId = useSettingsStore((s) => s.cortiClientId);
+  const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
+  const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
+  const cortiTenant = useSettingsStore((s) => s.cortiTenant);
+  const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
   const isCloudCleanup = useSettingsStore(selectIsCloudCleanupMode);
   const effectiveCleanupModel = useSettingsStore((s) =>
     selectIsCloudCleanupMode(s) ? "" : s.cleanupModel
@@ -191,15 +198,19 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         if (cloudTranscriptionProvider === "custom") {
           // Custom providers only need a base URL; API key is truly optional
           if (!cancelled) setProviderReady(!!cloudTranscriptionBaseUrl?.trim());
+        } else if (cloudTranscriptionProvider === "corti") {
+          if (!cancelled) setProviderReady(!!(cortiClientId && cortiClientSecret));
         } else {
           const key =
             cloudTranscriptionProvider === "openai"
               ? openaiApiKey
               : cloudTranscriptionProvider === "groq"
                 ? groqApiKey
-                : cloudTranscriptionProvider === "mistral"
-                  ? mistralApiKey
-                  : customTranscriptionApiKey;
+                : cloudTranscriptionProvider === "xai"
+                  ? xaiApiKey
+                  : cloudTranscriptionProvider === "mistral"
+                    ? mistralApiKey
+                    : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -230,8 +241,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
+    xaiApiKey,
     mistralApiKey,
     customTranscriptionApiKey,
+    cortiClientId,
+    cortiClientSecret,
   ]);
 
   const getActiveModelLabel = (): string => {
@@ -254,6 +268,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return openaiApiKey;
       case "groq":
         return groqApiKey;
+      case "xai":
+        return xaiApiKey;
       case "mistral":
         return mistralApiKey;
       case "custom":
@@ -373,6 +389,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           apiKey: getActiveApiKey(),
           baseUrl: cloudTranscriptionBaseUrl || "",
           model: cloudTranscriptionModel,
+          provider: cloudTranscriptionProvider,
+          language: getBaseLanguageCode(preferredLanguage) || "en",
+          environment: cortiEnvironment,
+          tenant: cortiTenant,
         });
       }
 

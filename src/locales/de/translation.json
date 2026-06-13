@@ -429,7 +429,13 @@
       "whisperModelDescription": "Modell",
       "parakeetModelDescription": "NVIDIA-Parakeet-Modell"
     },
-    "whisperModels": "Whisper-Modelle"
+    "whisperModels": "Whisper-Modelle",
+    "corti": {
+      "clientId": "Client-ID",
+      "clientSecret": "Client-Secret",
+      "environment": "Datenregion",
+      "tenant": "Tenant"
+    }
   },
   "hooks": {
     "audioRecording": {
@@ -1390,7 +1396,16 @@
             "step1Title": "xclip installieren"
           }
         },
-        "xclipDesc": "Zwischenablage-Tool für KDE-Wayland-Einfügen (xclip oder xsel)"
+        "xclipDesc": "Zwischenablage-Tool für KDE-Wayland-Einfügen (xclip oder xsel)",
+        "nixos": {
+          "intro": "Sie verwenden NixOS. Für das automatische Einfügen werden ydotool und Zugriff auf /dev/uinput benötigt, was NixOS deklarativ gewährt.",
+          "detected": "Erkannt",
+          "manualTitle": "Fügen Sie dies zu Ihrer Konfiguration hinzu",
+          "manualDesc": "Selbst konfigurieren, dann neu bauen.",
+          "flakeTitle": "Installation über unser flake?",
+          "flakeDesc": "Wenn Sie OpenWhispr über das flake installieren, aktiviert programs.openwhispr.enable automatisch ydotool, das uinput-Modul und die erforderlichen Gruppenmitgliedschaften.",
+          "rebuildNote": "Führen Sie sudo nixos-rebuild switch aus, dann ab- und wieder anmelden, damit die Gruppenänderung und die /dev/uinput-Regel wirksam werden. Ersetzen Sie <you> durch Ihren Benutzernamen."
+        }
       },
       "updates": {
         "badges": {
@@ -1738,7 +1753,9 @@
         "openai_whisper_1": "Originales Whisper-Modell",
         "groq_whisper_large_v3": "Hochpräzise Spracherkennung",
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
-        "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription"
+        "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
+        "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
+        "xai_grok_stt": "Hochpräzise Spracherkennung von xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",
@@ -1747,11 +1764,15 @@
         "openai_gpt_4_1": "Starke Basis, 1M Kontext",
         "openai_gpt_4_1_mini": "Kleineres GPT-4.1-Modell",
         "openai_gpt_4_1_nano": "GPT-4.1 mit der niedrigsten Latenz",
-        "anthropic_claude_sonnet_4_5": "Ausgewogene Leistung",
+        "anthropic_claude_sonnet_4_6": "Ausgewogene Leistung",
+        "anthropic_claude_sonnet_4_5": "Vorherige Sonnet-Generation",
         "anthropic_claude_haiku_4_5": "Schnell mit nahezu Frontier-Intelligenz",
-        "gemini_gemini_3_pro_preview": "Flaggschiff der nächsten Generation für komplexes Reasoning",
+        "gemini_gemini_3_5_flash": "Neuestes schnelles, leistungsstarkes Gemini-Modell",
+        "gemini_gemini_3_1_pro_preview": "Flaggschiff der nächsten Generation für komplexes Reasoning",
         "gemini_gemini_3_flash_preview": "Ultraschnelles Modell der nächsten Generation mit hoher Leistungsfähigkeit",
         "gemini_gemini_2_5_flash_lite": "Niedrigste Latenz und Kosten",
+        "gemini_gemma_4_31b_it": "Googles größtes Gemma 4, 31B dicht, 256K Kontext",
+        "gemini_gemma_4_26b_a4b_it": "Googles Gemma 4 MoE, 4B aktive Parameter, 256K Kontext",
         "groq_qwen_qwen3_32b": "Leistungsstarkes Reasoning-Modell, 131K Kontext",
         "groq_openai_gpt_oss_120b": "OpenAIs Open-Source-Flaggschiff, 500 T/s",
         "groq_openai_gpt_oss_20b": "Schnelles Open-Source-Modell, 1000 T/s",
@@ -1762,9 +1783,10 @@
         "groq_compound_mini": "Schnelles Compound-System, 3x niedrigere Latenz",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, 256K Kontext",
         "openai_gpt_5_5": "Frontier-Modell für komplexes Reasoning",
-        "anthropic_claude_opus_4_7": "Leistungsstärkstes Claude-Modell",
-        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_8": "Leistungsstärkstes Claude-Modell",
+        "anthropic_claude_opus_4_7": "Leistungsstarkes Opus-Modell",
+        "anthropic_claude_opus_4_6": "Vorherige Opus-Generation, 1M Kontext",
+        "anthropic_claude_opus_4_5": "Früheres Opus-Modell"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",
@@ -2127,15 +2149,56 @@
     "addWord": "Wort hinzufügen",
     "removeWord": "{{word}} entfernen",
     "clearAll": "Alle löschen",
-    "howItWorks": "So funktioniert es",
-    "howItWorksDetail": "Hinzugefügte Wörter werden in den KI-Prompt aufgenommen, damit das Modell diese Begriffe bei der Transkriptionsbereinigung erkennt und beibehält.",
-    "autoManaged": "Agent-Name (automatisch verwaltet)",
-    "inputHint": "Enter drücken zum Hinzufügen",
-    "title": "Benutzerdefiniertes Wörterbuch",
-    "description": "Bringe der KI dein Vokabular bei – Namen, Fachbegriffe und Ausdrücke, die sie sonst übersehen könnte",
     "clearTitle": "Wörterbuch leeren?",
     "clearDescription": "Dadurch werden alle Wörter aus deinem benutzerdefinierten Wörterbuch entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
-    "addPlaceholder": "Ein Wort oder eine Phrase hinzufügen..."
+    "addPlaceholder": "Wörter durch Kommas getrennt hinzufügen – OpenWhispr, Supabase, John Snow, ARR",
+    "add": "Hinzufügen",
+    "importWords": "Wörter importieren",
+    "importPlaceholder": "Wörter durch Kommas getrennt einfügen...",
+    "separateWithCommas": "Mit Kommas trennen",
+    "wordsReady_one": "{{count}} Wort bereit",
+    "wordsReady_other": "{{count}} Wörter bereit",
+    "import": "Importieren",
+    "yourDictionary": "Dein Wörterbuch",
+    "exportDictionary": "Wörterbuch exportieren",
+    "exportFailed": "Export fehlgeschlagen",
+    "editWord": "{{word}} bearbeiten",
+    "noMatches": "Keine Treffer — Enter drücken, um \"{{word}}\" hinzuzufügen",
+    "tabDictionary": "Wörterbuch",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "edit": "{{trigger}} bearbeiten",
+      "remove": "{{trigger}} entfernen",
+      "editTitle": "Snippet bearbeiten",
+      "dialogDescription": "Wenn du den Auslöser sprichst, wird er durch deinen gespeicherten Text ersetzt.",
+      "triggerLabel": "Auslöser",
+      "triggerPlaceholder": "z. B. mein Kalender",
+      "replacementLabel": "Ersetzung",
+      "replacementPlaceholder": "Text, der beim Sprechen des Auslösers eingefügt wird …",
+      "create": "Snippet erstellen",
+      "duplicate": "Ein Snippet mit diesem Auslöser existiert bereits",
+      "emptyTitle": "Sag es nur",
+      "emptyTitleAccent": "einmal",
+      "emptyDescription": "Sprich ein Auslösewort und OpenWhispr ersetzt es durch deinen gespeicherten Text – Links, Intros, Grußformeln, Prompts.",
+      "new": "Neues Snippet",
+      "examples": {
+        "linkedinTrigger": "Mein LinkedIn",
+        "linkedinText": "linkedin.com/in/du",
+        "rewriteTrigger": "Umschreib-Prompt",
+        "rewriteText": "Schreibe das prägnanter und professioneller um",
+        "introTrigger": "Intro-E-Mail",
+        "introText": "Hallo, ich würde mich freuen, diese Woche Zeit für ein Gespräch zu finden …",
+        "signoffTrigger": "Grußformel",
+        "signoffText": "Viele Grüße, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Auslöser-Phrase hinzufügen – „mein Kalender“, „mein LinkedIn“"
+    },
+    "emptyTitle": "Dein Wörterbuch ist leer",
+    "emptyDescription": "Füge Wörter hinzu, die {{agentName}} immer richtig erkennen soll: Namen, Tools, Abkürzungen.",
+    "addFirstWord": "Füge dein erstes Wort hinzu",
+    "importList": "Liste importieren",
+    "agentDefault": "Standardmäßig enthalten"
   },
   "sidebar": {
     "home": "Startseite",
@@ -2269,23 +2332,23 @@
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabled": "Voice Agent aktivieren",
+    "enabledDescription": "Diktieren Sie Anweisungen an Ihren Agenten. Aktivieren Sie ihn, indem Sie \"{{agentName}}\" sagen. Unten konfigurierbar.",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "openwhisprDesc": "Den von OpenWhispr verwalteten Agenten nutzen, kein API-Schlüssel nötig.",
+      "providers": "Eigenen Schlüssel nutzen",
+      "providersDesc": "Mit Ihrem eigenen API-Schlüssel an OpenAI, Anthropic, Gemini oder Groq anbinden.",
+      "local": "Lokal",
+      "localDesc": "Ein lokales LLM auf Ihrem Gerät ausführen, voll privat.",
+      "selfHosted": "Selbst gehostet",
+      "selfHostedDesc": "Auf einen selbst gehosteten, OpenAI-kompatiblen Endpunkt verweisen.",
       "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "enterpriseDesc": "AWS Bedrock, Azure OpenAI oder Google Vertex nutzen."
     },
     "prompt": {
-      "title": "Agent prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "title": "Agent-Prompt",
+      "description": "Der System-Prompt, der bei Erkennung des Aktivierungsworts verwendet wird. Fällt auf die integrierte Standardvorgabe zurück."
     }
   },
   "agentMode": {

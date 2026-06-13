@@ -429,7 +429,13 @@
       "whisperModelDescription": "Modèle",
       "parakeetModelDescription": "Modèle NVIDIA Parakeet"
     },
-    "whisperModels": "Modèles Whisper"
+    "whisperModels": "Modèles Whisper",
+    "corti": {
+      "clientId": "ID client",
+      "clientSecret": "Secret client",
+      "environment": "Région des données",
+      "tenant": "Tenant"
+    }
   },
   "hooks": {
     "audioRecording": {
@@ -1438,7 +1444,16 @@
             "step1Title": "Installer xclip"
           }
         },
-        "xclipDesc": "Outil de presse-papiers pour le collage KDE Wayland (xclip ou xsel)"
+        "xclipDesc": "Outil de presse-papiers pour le collage KDE Wayland (xclip ou xsel)",
+        "nixos": {
+          "intro": "Vous êtes sur NixOS. Le collage automatique nécessite ydotool et l'accès à /dev/uinput, que NixOS accorde de façon déclarative.",
+          "detected": "Détecté",
+          "manualTitle": "Ajoutez ceci à votre configuration",
+          "manualDesc": "Configurez-le vous-même, puis reconstruisez.",
+          "flakeTitle": "Vous installez via notre flake ?",
+          "flakeDesc": "Si vous installez OpenWhispr depuis le flake, programs.openwhispr.enable active ydotool, le module uinput et les appartenances aux groupes pour vous.",
+          "rebuildNote": "Exécutez sudo nixos-rebuild switch, puis déconnectez-vous et reconnectez-vous pour que le changement de groupe et la règle /dev/uinput prennent effet. Remplacez <you> par votre nom d'utilisateur."
+        }
       },
       "updates": {
         "badges": {
@@ -1786,7 +1801,9 @@
         "openai_whisper_1": "Modèle Whisper original",
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
-        "mistral_voxtral_mini_latest": "Transcription multilingue rapide"
+        "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
+        "corti_transcribe": "Transcription médicale de qualité clinique",
+        "xai_grok_stt": "Reconnaissance vocale haute précision par xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Modèle de raisonnement performant",
@@ -1795,11 +1812,15 @@
         "openai_gpt_4_1": "Base solide, contexte 1M",
         "openai_gpt_4_1_mini": "Modèle GPT-4.1 plus petit",
         "openai_gpt_4_1_nano": "GPT-4.1 à la latence la plus faible",
-        "anthropic_claude_sonnet_4_5": "Performances équilibrées",
+        "anthropic_claude_sonnet_4_6": "Performances équilibrées",
+        "anthropic_claude_sonnet_4_5": "Génération Sonnet précédente",
         "anthropic_claude_haiku_4_5": "Rapide avec une intelligence de pointe",
-        "gemini_gemini_3_pro_preview": "Modèle phare nouvelle génération pour le raisonnement complexe",
+        "gemini_gemini_3_5_flash": "Dernier modèle Gemini rapide et très performant",
+        "gemini_gemini_3_1_pro_preview": "Modèle phare nouvelle génération pour le raisonnement complexe",
         "gemini_gemini_3_flash_preview": "Modèle nouvelle génération ultra-rapide et très performant",
         "gemini_gemini_2_5_flash_lite": "Latence et coût les plus faibles",
+        "gemini_gemma_4_31b_it": "Le plus grand Gemma 4 de Google, 31B dense, contexte 256K",
+        "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE de Google, 4B paramètres actifs, contexte 256K",
         "groq_qwen_qwen3_32b": "Modèle de raisonnement puissant, contexte 131K",
         "groq_openai_gpt_oss_120b": "Modèle phare open source d'OpenAI, 500 T/s",
         "groq_openai_gpt_oss_20b": "Modèle open source rapide, 1000 T/s",
@@ -1810,9 +1831,10 @@
         "groq_compound_mini": "Système compound rapide, 3x latence réduite",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexte 256K",
         "openai_gpt_5_5": "Modèle frontier pour le raisonnement complexe",
-        "anthropic_claude_opus_4_7": "Modèle Claude le plus performant",
-        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_8": "Modèle Claude le plus performant",
+        "anthropic_claude_opus_4_7": "Modèle Opus puissant",
+        "anthropic_claude_opus_4_6": "Génération Opus précédente, contexte 1M",
+        "anthropic_claude_opus_4_5": "Modèle Opus antérieur"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Rapide et économique. Parfait pour nettoyer le texte.",
@@ -2235,18 +2257,59 @@
     }
   },
   "dictionary": {
-    "title": "Dictionnaire personnalisé",
-    "description": "Apprenez à l'IA votre vocabulaire — noms, jargon et termes qu'elle pourrait autrement manquer",
     "clearTitle": "Vider le dictionnaire ?",
     "clearDescription": "Cela supprimera tous les mots de votre dictionnaire personnalisé. Cette action est irréversible.",
     "addWord": "Ajouter un mot",
-    "addPlaceholder": "Ajouter un mot ou une expression...",
+    "addPlaceholder": "Ajoutez des mots séparés par des virgules — OpenWhispr, Supabase, John Snow, ARR",
     "removeWord": "Supprimer {{word}}",
     "clearAll": "Tout effacer",
-    "howItWorks": "Comment ça marche",
-    "howItWorksDetail": "Les mots sont transmis comme indices contextuels au modèle vocal, l'aidant à reconnaître les termes peu courants. Pour les mots difficiles, essayez d'ajouter du contexte comme « Le mot est Synty » en plus du mot lui-même.",
-    "autoManaged": "Géré automatiquement — synchronisé depuis le nom de l'agent",
-    "inputHint": "Séparez les mots par des virgules. Ajoutez des phrases de contexte comme « Le mot est Synty » pour une meilleure reconnaissance."
+    "add": "Ajouter",
+    "importWords": "Importer des mots",
+    "importPlaceholder": "Collez des mots séparés par des virgules...",
+    "separateWithCommas": "Séparez par des virgules",
+    "wordsReady_one": "{{count}} mot prêt",
+    "wordsReady_other": "{{count}} mots prêts",
+    "import": "Importer",
+    "yourDictionary": "Votre dictionnaire",
+    "exportDictionary": "Exporter le dictionnaire",
+    "exportFailed": "Échec de l'exportation",
+    "editWord": "Modifier {{word}}",
+    "noMatches": "Aucune correspondance — appuyez sur Entrée pour ajouter « {{word}} »",
+    "tabDictionary": "Dictionnaire",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "edit": "Modifier {{trigger}}",
+      "remove": "Supprimer {{trigger}}",
+      "editTitle": "Modifier le snippet",
+      "dialogDescription": "Quand vous prononcez le déclencheur, il est remplacé par votre texte enregistré.",
+      "triggerLabel": "Déclencheur",
+      "triggerPlaceholder": "ex. mon agenda",
+      "replacementLabel": "Remplacement",
+      "replacementPlaceholder": "Texte à insérer quand vous dites le déclencheur…",
+      "create": "Créer le snippet",
+      "duplicate": "Un snippet avec ce déclencheur existe déjà",
+      "emptyTitle": "Ce que vous ne devriez pas avoir à dire",
+      "emptyTitleAccent": "deux fois",
+      "emptyDescription": "Prononcez un mot déclencheur et OpenWhispr le remplace par ce que vous avez enregistré : URL, intros, signatures, prompts.",
+      "new": "Nouveau snippet",
+      "examples": {
+        "linkedinTrigger": "Mon LinkedIn",
+        "linkedinText": "linkedin.com/in/vous",
+        "rewriteTrigger": "Prompt de réécriture",
+        "rewriteText": "Réécris ceci de façon plus concise et professionnelle",
+        "introTrigger": "Email d'intro",
+        "introText": "Bonjour, j'aimerais trouver un moment pour échanger cette semaine…",
+        "signoffTrigger": "Signature",
+        "signoffText": "Cordialement, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Ajoutez une phrase déclencheur — « mon agenda », « mon LinkedIn »"
+    },
+    "emptyTitle": "Votre dictionnaire est vide",
+    "emptyDescription": "Ajoutez les mots que {{agentName}} doit toujours reconnaître : noms, outils, acronymes.",
+    "addFirstWord": "Ajoutez votre premier mot",
+    "importList": "Importer une liste",
+    "agentDefault": "Ajouté par défaut"
   },
   "support": {
     "documentation": "Documentation",
@@ -2317,23 +2380,23 @@
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabled": "Activer l'agent vocal",
+    "enabledDescription": "Dictez des instructions à votre agent. Activez-le en disant « \"{{agentName}}\" ». Configurable ci-dessous.",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
+      "openwhisprDesc": "Utilisez l'agent géré par OpenWhispr, sans clé API.",
+      "providers": "Utilisez votre propre clé API",
+      "providersDesc": "Connectez-vous à OpenAI, Anthropic, Gemini ou Groq avec votre propre clé API.",
       "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
+      "localDesc": "Exécutez un LLM local sur votre appareil, 100 % privé.",
+      "selfHosted": "Auto-hébergé",
+      "selfHostedDesc": "Pointez vers un point de terminaison auto-hébergé compatible OpenAI.",
       "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "enterpriseDesc": "Utilisez AWS Bedrock, Azure OpenAI ou Google Vertex."
     },
     "prompt": {
-      "title": "Agent prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "title": "Invite de l'agent",
+      "description": "L'invite système utilisée lorsque le mot de réveil est détecté. Revient à l'invite par défaut intégrée."
     }
   },
   "agentMode": {

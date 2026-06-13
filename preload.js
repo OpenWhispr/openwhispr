@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   deleteNote: (id) => ipcRenderer.invoke("db-delete-note", id),
   exportNote: (noteId, format) => ipcRenderer.invoke("export-note", noteId, format),
   exportTranscript: (noteId, format) => ipcRenderer.invoke("export-transcript", noteId, format),
+  exportDictionary: (words) => ipcRenderer.invoke("export-dictionary", words),
   searchNotes: (query, limit) => ipcRenderer.invoke("db-search-notes", query, limit),
   semanticSearchNotes: (query, limit) =>
     ipcRenderer.invoke("db-semantic-search-notes", query, limit),
@@ -353,10 +354,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getGroqKey: () => ipcRenderer.invoke("get-groq-key"),
   saveGroqKey: (key) => ipcRenderer.invoke("save-groq-key", key),
 
+  // xAI API
+  getXaiKey: () => ipcRenderer.invoke("get-xai-key"),
+  saveXaiKey: (key) => ipcRenderer.invoke("save-xai-key", key),
+  proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
+
   // Mistral API
   getMistralKey: () => ipcRenderer.invoke("get-mistral-key"),
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
+
+  // Corti API
+  getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),
+  saveCortiClientId: (key) => ipcRenderer.invoke("save-corti-client-id", key),
+  getCortiClientSecret: () => ipcRenderer.invoke("get-corti-client-secret"),
+  saveCortiClientSecret: (key) => ipcRenderer.invoke("save-corti-client-secret", key),
+  proxyCortiTranscription: (data) => ipcRenderer.invoke("proxy-corti-transcription", data),
 
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),
@@ -545,6 +558,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   onDeepgramSessionEnd: registerListener(
     "deepgram-session-end",
+    (callback) => (_event, data) => callback(data)
+  ),
+
+  // Corti streaming (BYOK)
+  cortiStreamingWarmup: (options) => ipcRenderer.invoke("corti-streaming-warmup", options),
+  cortiStreamingStart: (options) => ipcRenderer.invoke("corti-streaming-start", options),
+  cortiStreamingSend: (audioBuffer) => ipcRenderer.send("corti-streaming-send", audioBuffer),
+  cortiStreamingFinalize: () => ipcRenderer.send("corti-streaming-finalize"),
+  cortiStreamingStop: () => ipcRenderer.invoke("corti-streaming-stop"),
+  cortiStreamingStatus: () => ipcRenderer.invoke("corti-streaming-status"),
+  onCortiPartialTranscript: registerListener(
+    "corti-partial-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onCortiFinalTranscript: registerListener(
+    "corti-final-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+  onCortiError: registerListener("corti-error", (callback) => (_event, error) => callback(error)),
+  onCortiSessionEnd: registerListener(
+    "corti-session-end",
     (callback) => (_event, data) => callback(data)
   ),
 

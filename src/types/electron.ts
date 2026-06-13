@@ -270,12 +270,7 @@ export interface AudioDiagnosticsResult {
 }
 
 export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
-export type SystemAudioStrategy =
-  | "native"
-  | "loopback"
-  | "browser-portal"
-  | "portal-helper"
-  | "unsupported";
+export type SystemAudioStrategy = "native" | "loopback" | "pipewire-loopback" | "unsupported";
 
 export interface SystemAudioAccessResult {
   granted: boolean;
@@ -602,6 +597,7 @@ declare global {
         noteId: number,
         format: "txt" | "srt" | "json" | "md"
       ) => Promise<{ success: boolean; error?: string }>;
+      exportDictionary: (words: string[]) => Promise<{ success: boolean; error?: string }>;
       searchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
       semanticSearchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
       semanticReindexAll: () => Promise<{ success: boolean; indexed?: number; error?: string }>;
@@ -932,6 +928,7 @@ declare global {
         hasUinput: boolean;
         hasUdevRule: boolean;
         hasGroup: boolean;
+        isNixOS: boolean;
         allGood: boolean;
       }>;
 
@@ -965,6 +962,15 @@ declare global {
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;
 
+      // xAI API key management
+      getXaiKey?: () => Promise<string | null>;
+      saveXaiKey?: (key: string) => Promise<void>;
+      proxyXaiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ text: string }>;
+
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;
@@ -973,6 +979,18 @@ declare global {
         model?: string;
         language?: string;
         contextBias?: string[];
+      }) => Promise<{ text: string }>;
+
+      // Corti credential management
+      getCortiClientId?: () => Promise<string | null>;
+      saveCortiClientId?: (key: string) => Promise<void>;
+      getCortiClientSecret?: () => Promise<string | null>;
+      saveCortiClientSecret?: (key: string) => Promise<void>;
+      proxyCortiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        language: string;
+        environment: string;
+        tenant: string;
       }) => Promise<{ text: string }>;
 
       // Custom endpoint API keys
@@ -1222,6 +1240,10 @@ declare global {
         apiKey: string;
         baseUrl: string;
         model: string;
+        provider?: string;
+        language?: string;
+        environment?: string;
+        tenant?: string;
       }) => Promise<{
         success: boolean;
         text?: string;
@@ -1440,6 +1462,34 @@ declare global {
       onDeepgramSessionEnd?: (
         callback: (data: { audioDuration?: number; text?: string }) => void
       ) => () => void;
+
+      // Corti streaming (BYOK)
+      cortiStreamingWarmup?: (options?: {
+        environment?: string;
+        tenant?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      cortiStreamingStart?: (options?: {
+        environment?: string;
+        tenant?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      cortiStreamingSend?: (audioBuffer: ArrayBuffer) => void;
+      cortiStreamingFinalize?: () => void;
+      cortiStreamingStop?: () => Promise<{
+        success: boolean;
+        text?: string;
+        model?: string;
+        audioBytesSent?: number;
+        error?: string;
+      }>;
+      cortiStreamingStatus?: () => Promise<{ isConnected: boolean; sessionId: string | null }>;
+      onCortiPartialTranscript?: (callback: (text: string) => void) => () => void;
+      onCortiFinalTranscript?: (callback: (text: string) => void) => () => void;
+      onCortiError?: (callback: (error: string) => void) => () => void;
+      onCortiSessionEnd?: (callback: (data: { text?: string }) => void) => () => void;
 
       // Agent overlay
       resizeAgentWindow?: (width: number, height: number) => Promise<void>;

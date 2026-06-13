@@ -165,7 +165,7 @@ export default function ModelCardList({
               {/* Recommended badge */}
               {model.recommended && (
                 <span className="text-xs font-medium text-primary px-1.5 py-0.5 bg-primary/10 rounded-sm shrink-0">
-                  Recommended
+                  {t("common.recommended")}
                 </span>
               )}
 
@@ -174,7 +174,7 @@ export default function ModelCardList({
                 {/* Selected/Active badge */}
                 {isSelected && (
                   <span className="text-xs font-medium text-primary px-2 py-0.5 bg-primary/10 rounded-sm">
-                    Active
+                    {t("common.active")}
                   </span>
                 )}
 
