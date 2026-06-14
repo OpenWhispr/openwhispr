@@ -329,14 +329,26 @@ class HyprlandShortcutManager {
     debugLogger.log("[HyprlandShortcut] Added source directive to hyprland.conf");
   }
 
-  static hasHyprlandConfig() {
+  static getHyprlandConfigStatus() {
     const mainConfig = getHyprlandConfPath();
+    const status = {
+      path: mainConfig,
+      canWrite: false,
+    };
+
     try {
       fs.accessSync(mainConfig, fs.constants.F_OK);
-      return true;
-    } catch {
-      return false;
+      try {
+        fs.accessSync(mainConfig, fs.constants.W_OK);
+        status.canWrite = true;
+      } catch (err) {
+        debugLogger.log("[HyprlandShortcut] Hyprland config is not writable:", mainConfig);
+      }
+    } catch (err) {
+      debugLogger.log("[HyprlandShortcut] Hyprland config not found:", mainConfig);
     }
+
+    return status;
   }
 
   /**
@@ -445,10 +457,7 @@ class HyprlandShortcutManager {
     try {
       this._removeBindFromConfig();
     } catch (err) {
-      debugLogger.log(
-        "[HyprlandShortcut] Failed to remove persisted keybinding:",
-        err.message
-      );
+      debugLogger.log("[HyprlandShortcut] Failed to remove persisted keybinding:", err.message);
     }
 
     debugLogger.log(`[HyprlandShortcut] Keybinding "${binding}" unregistered successfully`);

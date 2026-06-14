@@ -919,8 +919,8 @@ declare global {
         isUsingHyprland: boolean;
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
-        hyprlandConfigMissing: boolean;
       }>;
+      getHyprlandConfigStatus?: () => Promise<{ canWrite: boolean; path: string } | null>;
 
       // Wayland paste diagnostics
       getYdotoolStatus?: () => Promise<{

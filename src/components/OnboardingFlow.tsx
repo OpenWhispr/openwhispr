@@ -18,6 +18,7 @@ import PermissionsSection from "./ui/PermissionsSection";
 import SupportDropdown from "./ui/SupportDropdown";
 import StepProgress from "./ui/StepProgress";
 import { AlertDialog, ConfirmDialog } from "./ui/dialog";
+import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useDialogs } from "../hooks/useDialogs";
 import { usePermissions } from "../hooks/usePermissions";
@@ -101,6 +102,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const [isModelDownloaded, setIsModelDownloaded] = useState(false);
   const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
   const [isUsingHyprland, setIsUsingHyprland] = useState(false);
+  const [hyprlandConfigStatus, setHyprlandConfigStatus] = useState<{
+    canWrite: boolean;
+    path: string;
+  } | null>(null);
   const readableHotkey = formatHotkeyLabel(hotkey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
     useDialogs();
@@ -174,6 +179,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         }
         if (info?.isUsingHyprland) {
           setIsUsingHyprland(true);
+          const configStatus = await window.electronAPI?.getHyprlandConfigStatus?.();
+          if (configStatus) {
+            setHyprlandConfigStatus(configStatus);
+          }
         }
       } catch (error) {
         logger.error("Failed to check hotkey mode", { error }, "onboarding");
@@ -614,6 +623,19 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         </h2>
         <p className="text-xs text-muted-foreground">{t("onboarding.activation.description")}</p>
       </div>
+
+      {isUsingHyprland && hyprlandConfigStatus && !hyprlandConfigStatus.canWrite && (
+        <Alert>
+          <AlertTitle>
+            {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningTitle")}
+          </AlertTitle>
+          <AlertDescription>
+            {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningDescription", {
+              path: hyprlandConfigStatus.path,
+            })}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Unified control surface */}
       <div className="rounded-lg border border-border-subtle bg-surface-1 overflow-hidden">

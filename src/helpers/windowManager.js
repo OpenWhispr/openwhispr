@@ -524,8 +524,8 @@ class WindowManager {
     return this.hotkeyManager.isUsingHyprland();
   }
 
-  isHyprlandConfigMissing() {
-    return this.hotkeyManager.isHyprlandConfigMissing();
+  getHyprlandConfigStatus() {
+    return this.hotkeyManager.getHyprlandConfigStatus();
   }
 
   isUsingKDEHotkeys() {

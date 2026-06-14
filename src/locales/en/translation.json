@@ -1465,8 +1465,8 @@
         "linuxPttSetupTitle": "Hold to Speak needs setup",
         "linuxPttSetupDescription": "Your user needs access to keyboard input devices.",
         "linuxPttSetupNote": "After running the command, log out and log back in.",
-        "hyprlandConfigMissingTitle": "Hyprland config not found",
-        "hyprlandConfigMissingDescription": "Your hyprland.conf was not found, so keybinds will not survive config reload. Create a config at ~/.config/hypr/hyprland.conf for persistent keybinds.",
+        "hyprlandConfigWriteWarningTitle": "Hyprland keybinds will not persist",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr cannot write to {{path}}, so keybinds will not survive a Hyprland config reload. Make sure the file exists and is writable.",
         "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut."
       },
       "meetingHotkey": {
