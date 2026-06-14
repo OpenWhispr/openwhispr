@@ -5,6 +5,7 @@ const { net } = require("electron");
 const { execFile } = require("child_process");
 const { pipeline } = require("stream");
 const debugLogger = require("./debugLogger");
+const { verifyFileSha256 } = require("./fileIntegrity");
 
 const USER_AGENT = "OpenWhispr/1.0";
 const PROGRESS_THROTTLE_MS = 100;
@@ -251,7 +252,13 @@ async function fetchJson(url, options = {}) {
 }
 
 async function downloadFile(url, destPath, options = {}) {
-  const { onProgress, maxRetries = DEFAULT_MAX_RETRIES, signal, expectedSize = 0 } = options;
+  const {
+    onProgress,
+    maxRetries = DEFAULT_MAX_RETRIES,
+    signal,
+    expectedSize = 0,
+    expectedSha256,
+  } = options;
 
   const tempPath = `${destPath}.tmp`;
 
@@ -296,6 +303,17 @@ async function downloadFile(url, destPath, options = {}) {
         startOffset,
         expectedSize,
       });
+
+      // Supply-chain integrity gate: verify the payload BEFORE promoting the
+      // temp file to its final (executable) path. A checksum mismatch is fatal
+      // and intentionally not retryable — re-downloading the same bytes from a
+      // compromised source would fail identically.
+      if (expectedSha256) {
+        await verifyFileSha256(tempPath, expectedSha256);
+        debugLogger.info("Checksum verified", { destPath });
+      } else {
+        debugLogger.warn("Downloading without integrity pin", { url, destPath });
+      }
 
       // Atomic move to final path
       try {

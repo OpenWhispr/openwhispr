@@ -357,13 +357,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async startRecording() {
+    let micStream = null;
     try {
       if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") {
         return false;
       }
 
       const constraints = await this.getAudioConstraints();
-      const micStream = await reacquireIfDead(
+      micStream = await reacquireIfDead(
         await navigator.mediaDevices.getUserMedia(constraints),
         () => {
           this.cachedMicDeviceId = null;
@@ -425,13 +426,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       };
 
       this.mediaRecorder.onstop = async () => {
-        if (this._silenceInterval) {
-          clearInterval(this._silenceInterval);
-          this._silenceInterval = null;
-        }
-        this._silenceCtx?.close().catch(() => {});
-        this._silenceCtx = null;
-        this._silenceAnalyser = null;
+        this._teardownSilenceGate();
 
         this.cleanupPreview({ showCleanup: this.shouldShowPreviewCleanupState() });
 
@@ -498,6 +493,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       return true;
     } catch (error) {
+      // Release any resources acquired before the failure: the silence-gate
+      // interval/AudioContext and the microphone stream. Without this, a throw
+      // from `new MediaRecorder()` (e.g. unsupported mimeType) leaves the mic
+      // open and the 100ms interval firing forever.
+      this._teardownSilenceGate();
+      if (micStream) {
+        micStream.getTracks().forEach((track) => track.stop());
+      }
+
       let errorTitle = "Recording Error";
       let errorDescription = `Failed to access microphone: ${error.message}`;
 
@@ -530,9 +534,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return false;
   }
 
+  // Tears down the silence-detection gate (interval + AudioContext + analyser).
+  // Idempotent and safe to call from any path that ends a recording.
+  _teardownSilenceGate() {
+    if (this._silenceInterval) {
+      clearInterval(this._silenceInterval);
+      this._silenceInterval = null;
+    }
+    this._silenceCtx?.close().catch(() => {});
+    this._silenceCtx = null;
+    this._silenceAnalyser = null;
+  }
+
   cancelRecording() {
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
       this.mediaRecorder.onstop = () => {
+        this._teardownSilenceGate();
         this.cleanupPreview({ dismiss: true });
         this.isRecording = false;
         this.isProcessing = false;
@@ -2984,6 +3001,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this.mediaRecorder?.state === "recording") {
       this.stopRecording();
     }
+    this._teardownSilenceGate();
     if (this.persistentAudioContext && this.persistentAudioContext.state !== "closed") {
       this.persistentAudioContext.close().catch(() => {});
       this.persistentAudioContext = null;

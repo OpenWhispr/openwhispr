@@ -2,6 +2,7 @@ const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const { execSync } = require("child_process");
+const { verifyFileSha256 } = require("../../src/helpers/fileIntegrity");
 
 const REQUEST_TIMEOUT = 30000;
 const MAX_RETRIES = 3;
@@ -141,7 +142,8 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function downloadFile(url, dest, retryCount = 0) {
+function downloadFile(url, dest, options = {}) {
+  const { expectedSha256, retryCount = 0 } = options;
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(dest);
     let activeRequest = null;
@@ -198,9 +200,23 @@ function downloadFile(url, dest, retryCount = 0) {
 
         response.pipe(file);
         file.on("finish", () => {
-          file.close();
-          console.log(" Done");
-          resolve();
+          file.close(() => {
+            if (!expectedSha256) {
+              console.log(" Done");
+              resolve();
+              return;
+            }
+            // Supply-chain integrity gate: verify before the binary is used.
+            verifyFileSha256(dest, expectedSha256)
+              .then(() => {
+                console.log(" Done (checksum OK)");
+                resolve();
+              })
+              .catch((err) => {
+                if (fs.existsSync(dest)) fs.unlinkSync(dest);
+                reject(err);
+              });
+          });
         });
 
         file.on("error", (err) => {
@@ -233,7 +249,7 @@ function downloadFile(url, dest, retryCount = 0) {
       if (fs.existsSync(dest)) {
         fs.unlinkSync(dest);
       }
-      return downloadFile(url, dest, retryCount + 1);
+      return downloadFile(url, dest, { ...options, retryCount: retryCount + 1 });
     }
     throw error;
   });
