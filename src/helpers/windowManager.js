@@ -1128,7 +1128,8 @@ class WindowManager {
       ...position,
     });
 
-    if (process.platform === "darwin") {
+    if (process.platform !== "linux") {
+      // macOS and Windows: pass mouse events through so the overlay doesn't block clicks
       this.notificationWindow.setIgnoreMouseEvents(true, { forward: true });
     }
 

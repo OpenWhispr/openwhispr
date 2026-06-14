@@ -756,7 +756,7 @@ export default function ControlPanel() {
         </div>
         <main className="flex-1 flex flex-col overflow-hidden">
           <div
-            className="flex items-center justify-between w-full h-10 shrink-0"
+            className="flex items-center w-full h-10 shrink-0 relative"
             style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
           >
             {isSidePanelLayout && (
@@ -774,6 +774,11 @@ export default function ControlPanel() {
                   {t("controlPanel.backToNotes")}
                 </Button>
               </div>
+            )}
+            {platform !== "darwin" && !isSidePanelLayout && (
+              <span className="absolute left-1/2 -translate-x-1/2 text-xs font-medium text-muted-foreground/60 pointer-events-none select-none tracking-wide">
+                OpenWhispr
+              </span>
             )}
             <div className="flex-1" />
             {platform !== "darwin" && (
