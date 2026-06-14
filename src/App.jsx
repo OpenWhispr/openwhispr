@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import "./index.css";
-import { X } from "lucide-react";
+import { X, Mic, MicOff, EyeOff } from "lucide-react";
 import { useToast } from "./components/ui/useToast";
 import { LoadingDots } from "./components/ui/LoadingDots";
 import { useHotkey } from "./hooks/useHotkey";
@@ -10,36 +10,41 @@ import { useWindowDrag } from "./hooks/useWindowDrag";
 import { useAudioRecording } from "./hooks/useAudioRecording";
 import { useSettingsStore } from "./stores/settingsStore";
 
-// Sound Wave Icon Component (for idle/hover states)
+// Sound Wave Icon — 5 thin bars at graduated heights
 const SoundWaveIcon = ({ size = 16 }) => {
+  const barHeights = [0.45, 0.75, 1.0, 0.75, 0.45];
+  const barWidth = Math.max(1.5, size * 0.13);
   return (
-    <div className="flex items-center justify-center gap-1">
-      <div
-        className={`bg-white rounded-full`}
-        style={{ width: size * 0.25, height: size * 0.6 }}
-      ></div>
-      <div className={`bg-white rounded-full`} style={{ width: size * 0.25, height: size }}></div>
-      <div
-        className={`bg-white rounded-full`}
-        style={{ width: size * 0.25, height: size * 0.6 }}
-      ></div>
+    <div className="flex items-center justify-center gap-px">
+      {barHeights.map((h, i) => (
+        <div
+          key={i}
+          className="bg-white rounded-full"
+          style={{ width: barWidth, height: size * h }}
+        />
+      ))}
     </div>
   );
 };
 
-// Voice Wave Animation Component (for processing state)
+// Voice Wave Indicator — staggered bounce animation using existing waveform-bar keyframe
 const VoiceWaveIndicator = ({ isListening }) => {
+  const bars = [0.45, 0.75, 1.0, 0.75, 0.45];
+  const size = 16;
+  const barWidth = Math.max(1.5, size * 0.13);
   return (
-    <div className="flex items-center justify-center gap-0.5">
-      {[...Array(4)].map((_, i) => (
+    <div className="flex items-center justify-center gap-px" style={{ height: size }}>
+      {bars.map((h, i) => (
         <div
           key={i}
-          className={`w-0.5 bg-white rounded-full transition-[height] duration-150 ${
-            isListening ? "animate-pulse h-4" : "h-2"
-          }`}
+          className="bg-white rounded-full"
           style={{
-            animationDelay: isListening ? `${i * 0.1}s` : "0s",
-            animationDuration: isListening ? `${0.6 + i * 0.1}s` : "0s",
+            width: barWidth,
+            height: size * h,
+            transformOrigin: "center",
+            animation: isListening
+              ? `waveform-bar ${0.5 + i * 0.06}s ease-in-out ${i * 0.09}s infinite`
+              : "none",
           }}
         />
       ))}
@@ -126,7 +131,7 @@ export default function App() {
 
     const unsubscribeCorrections = window.electronAPI?.onCorrectionsLearned?.((words) => {
       if (words && words.length > 0) {
-        const wordList = words.map((w) => `\u201c${w}\u201d`).join(", ");
+        const wordList = words.map((w) => `“${w}”`).join(", ");
         let toastId;
         toastId = toast({
           title: t("app.toasts.addedToDict", { words: wordList }),
@@ -287,29 +292,50 @@ export default function App() {
 
   const getMicButtonProps = () => {
     const baseClasses =
-      "rounded-full w-10 h-10 flex items-center justify-center relative overflow-hidden border-2 border-white/70 cursor-pointer";
+      "rounded-full w-10 h-10 flex items-center justify-center relative overflow-hidden border border-white/25 cursor-pointer";
 
     switch (micState) {
       case "idle":
+        return {
+          className: `${baseClasses} bg-gradient-to-br from-zinc-800/75 to-black/85`,
+          tooltip: formatHotkeyLabel(hotkey),
+          style: {
+            boxShadow: "0 2px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)",
+          },
+        };
       case "hover":
         return {
-          className: `${baseClasses} bg-black/50 cursor-pointer`,
+          className: `${baseClasses} bg-gradient-to-br from-zinc-600/85 to-zinc-900/90 scale-105`,
           tooltip: formatHotkeyLabel(hotkey),
+          style: {
+            boxShadow:
+              "0 0 0 3px rgba(255,255,255,0.12), 0 4px 20px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.12)",
+          },
         };
       case "recording":
         return {
-          className: `${baseClasses} bg-primary cursor-pointer`,
+          className: `${baseClasses} bg-primary scale-110 border-white/10`,
           tooltip: t("app.mic.recording"),
+          style: {
+            boxShadow:
+              "0 0 0 5px rgba(255,255,255,0.15), 0 0 28px rgba(255,255,255,0.08), 0 4px 16px rgba(0,0,0,0.4)",
+          },
         };
       case "processing":
         return {
-          className: `${baseClasses} bg-accent cursor-not-allowed`,
+          className: `${baseClasses} bg-accent scale-105 border-white/10 cursor-not-allowed`,
           tooltip: t("app.mic.processing"),
+          style: {
+            boxShadow: "0 0 0 3px rgba(255,255,255,0.08), 0 4px 16px rgba(0,0,0,0.4)",
+          },
         };
       default:
         return {
-          className: `${baseClasses} bg-black/50 cursor-pointer`,
-          style: { transform: "scale(0.8)" },
+          className: `${baseClasses} bg-gradient-to-br from-zinc-800/75 to-black/85`,
+          style: {
+            transform: "scale(0.8)",
+            boxShadow: "0 2px 12px rgba(0,0,0,0.5)",
+          },
           tooltip: t("app.mic.clickToSpeak"),
         };
     }
@@ -385,7 +411,6 @@ export default function App() {
                       Math.pow(e.clientY - dragStartPos.y, 2)
                   );
                   if (distance > 5) {
-                    // 5px threshold for drag
                     setHasDragged(true);
                   }
                 }
@@ -415,50 +440,36 @@ export default function App() {
                 ...micProps.style,
                 cursor:
                   micState === "processing"
-                    ? "not-allowed !important"
+                    ? "not-allowed"
                     : isDragging
-                      ? "grabbing !important"
-                      : "pointer !important",
+                      ? "grabbing"
+                      : "pointer",
                 transition:
-                  "transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s ease-out",
+                  "transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease-out, box-shadow 0.2s ease-out",
               }}
             >
-              {/* Background effects */}
+              {/* Shine overlay — brightens on hover */}
               <div
-                className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent transition-opacity duration-150"
-                style={{ opacity: micState === "hover" ? 0.8 : 0 }}
-              ></div>
-              <div
-                className="absolute inset-0 transition-colors duration-150"
-                style={{
-                  backgroundColor: micState === "hover" ? "rgba(0,0,0,0.1)" : "transparent",
-                }}
-              ></div>
+                className="absolute inset-0 bg-gradient-to-br from-white/12 to-transparent transition-opacity duration-200"
+                style={{ opacity: micState === "hover" ? 1 : 0 }}
+              />
 
               {/* Dynamic content based on state */}
               {micState === "idle" || micState === "hover" ? (
-                <SoundWaveIcon size={micState === "idle" ? 12 : 14} />
+                <SoundWaveIcon size={micState === "idle" ? 13 : 15} />
               ) : micState === "recording" ? (
                 <LoadingDots />
               ) : micState === "processing" ? (
                 <VoiceWaveIndicator isListening={true} />
               ) : null}
-
-              {/* State indicator ring for recording */}
-              {micState === "recording" && (
-                <div className="absolute inset-0 rounded-full border-2 border-primary/50 animate-pulse"></div>
-              )}
-
-              {/* State indicator ring for processing */}
-              {micState === "processing" && (
-                <div className="absolute inset-0 rounded-full border-2 border-primary/30 opacity-50"></div>
-              )}
             </button>
           </Tooltip>
+
+          {/* Right-click command menu */}
           {isCommandMenuOpen && (
             <div
               ref={commandMenuRef}
-              className="absolute bottom-full right-0 mb-3 w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow-lg backdrop-blur-sm"
+              className="absolute bottom-full right-0 mb-3 w-52 rounded-xl border border-border/70 bg-popover/95 text-popover-foreground shadow-2xl backdrop-blur-md overflow-hidden"
               onMouseEnter={() => {
                 setWindowInteractivity(true);
               }}
@@ -468,27 +479,41 @@ export default function App() {
                 }
               }}
             >
-              <button
-                className="w-full px-3 py-2 text-left text-sm font-medium hover:bg-muted focus:bg-muted focus:outline-none"
-                onClick={() => {
-                  toggleListening();
-                }}
-              >
-                {isRecording
-                  ? t("app.commandMenu.stopListening")
-                  : t("app.commandMenu.startListening")}
-              </button>
-              <div className="h-px bg-border" />
-              <button
-                className="w-full px-3 py-2 text-left text-sm hover:bg-muted focus:bg-muted focus:outline-none"
-                onClick={() => {
-                  setIsCommandMenuOpen(false);
-                  setWindowInteractivity(false);
-                  handleClose();
-                }}
-              >
-                {t("app.commandMenu.hideForNow")}
-              </button>
+              <div className="px-3 pt-2.5 pb-1">
+                <p className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
+                  OpenWhispr
+                </p>
+              </div>
+              <div className="px-1.5 pb-1.5 flex flex-col gap-0.5">
+                <button
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left text-sm rounded-lg hover:bg-muted focus:bg-muted focus:outline-none transition-colors duration-100"
+                  onClick={() => {
+                    toggleListening();
+                  }}
+                >
+                  {isRecording ? (
+                    <MicOff size={14} className="shrink-0 text-destructive" />
+                  ) : (
+                    <Mic size={14} className="shrink-0 text-primary" />
+                  )}
+                  <span className="font-medium">
+                    {isRecording
+                      ? t("app.commandMenu.stopListening")
+                      : t("app.commandMenu.startListening")}
+                  </span>
+                </button>
+                <button
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 text-left text-sm rounded-lg hover:bg-muted focus:bg-muted focus:outline-none transition-colors duration-100"
+                  onClick={() => {
+                    setIsCommandMenuOpen(false);
+                    setWindowInteractivity(false);
+                    handleClose();
+                  }}
+                >
+                  <EyeOff size={14} className="shrink-0 text-muted-foreground" />
+                  <span>{t("app.commandMenu.hideForNow")}</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
