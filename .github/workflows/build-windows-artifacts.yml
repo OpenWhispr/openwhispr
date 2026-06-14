@@ -66,7 +66,7 @@ jobs:
 
       - name: Create unsigned electron-builder config
         run: |
-          node -e "const fs=require('fs'); const cfg=JSON.parse(fs.readFileSync('electron-builder.json','utf8')); delete cfg.win.azureSignOptions; cfg.win.sign=null; cfg.win.signAndEditExecutable=false; cfg.win.verifyUpdateCodeSignature=false; cfg.publish=null; fs.writeFileSync('electron-builder.unsigned.json', JSON.stringify(cfg, null, 2));"
+          node -e "const fs=require('fs'); const cfg=JSON.parse(fs.readFileSync('electron-builder.json','utf8')); delete cfg.win.azureSignOptions; cfg.win.signAndEditExecutable=false; cfg.win.verifyUpdateCodeSignature=false; cfg.publish=null; fs.writeFileSync('electron-builder.unsigned.json', JSON.stringify(cfg, null, 2));"
 
       - name: Create runtime env file
         run: |
