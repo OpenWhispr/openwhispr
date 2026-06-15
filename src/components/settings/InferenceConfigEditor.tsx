@@ -13,6 +13,7 @@ import ReasoningModelSelector from "../ReasoningModelSelector";
 import EnterpriseSection from "../EnterpriseSection";
 import OpenAICompatiblePanel from "../OpenAICompatiblePanel";
 import { Toggle } from "../ui/toggle";
+import { Input } from "../ui/input";
 import type { InferenceMode } from "../../types/electron";
 import type { InferenceScope } from "../../config/inferenceScopes";
 import {
@@ -58,6 +59,8 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
   const { t } = useTranslation();
   const config = useSettingsStore(useShallow((s) => selectResolvedLLMConfig(s, scope)));
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const selfHostedRequestTimeoutMs = useSettingsStore((s) => s.selfHostedRequestTimeoutMs);
+  const setSelfHostedRequestTimeoutMs = useSettingsStore((s) => s.setSelfHostedRequestTimeoutMs);
 
   const prefix = MODE_LABEL_PREFIX[scope];
   const modes: InferenceModeOption[] = [
@@ -177,6 +180,31 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
             </p>
           }
         />
+      )}
+
+      {config.mode === "self-hosted" && (
+        <div className="flex items-start justify-between gap-3 pt-1">
+          <div className="flex-1 min-w-0">
+            <h4 className="text-sm font-medium text-foreground">
+              {t("reasoning.requestTimeout.label")}
+            </h4>
+            <p className="text-xs text-muted-foreground">{t("reasoning.requestTimeout.help")}</p>
+          </div>
+          <Input
+            type="number"
+            min={10}
+            max={3600}
+            step={10}
+            value={Math.round(selfHostedRequestTimeoutMs / 1000)}
+            onChange={(e) => {
+              const secs = parseInt(e.target.value, 10);
+              if (Number.isFinite(secs) && secs >= 10) {
+                setSelfHostedRequestTimeoutMs(secs * 1000);
+              }
+            }}
+            className="h-8 text-sm w-24 text-right"
+          />
+        </div>
       )}
 
       {showThinkingToggle && (

@@ -176,9 +176,10 @@ class ReasoningService extends BaseReasoningService {
       requestBody: JSON.stringify(requestBody).substring(0, 200),
     });
 
+    const requestTimeoutMs = config.requestTimeoutMs ?? getSettings().selfHostedRequestTimeoutMs ?? 120000;
     const response = await withRetry(async () => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
       try {
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -233,7 +234,7 @@ class ReasoningService extends BaseReasoningService {
         return jsonResponse;
       } catch (error) {
         if ((error as Error).name === "AbortError") {
-          throw new Error("Request timed out after 30s");
+          throw new Error(`Request timed out after ${requestTimeoutMs / 1000}s`);
         }
         throw error;
       } finally {
@@ -303,11 +304,15 @@ class ReasoningService extends BaseReasoningService {
 
     const startTime = Date.now();
     try {
+      const resolvedConfig: ReasoningConfig = {
+        requestTimeoutMs: getSettings().selfHostedRequestTimeoutMs ?? 120000,
+        ...config,
+      };
       const result = await handler.call({
         text,
         model: trimmedModel,
         agentName,
-        config,
+        config: resolvedConfig,
         ctx: this.providerContext,
       });
 
@@ -421,7 +426,8 @@ class ReasoningService extends BaseReasoningService {
 
     this.streamAbortController = new AbortController();
     const controller = this.streamAbortController;
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const streamTimeoutMs = config.requestTimeoutMs ?? getSettings().selfHostedRequestTimeoutMs ?? 120000;
+    const timeoutId = setTimeout(() => controller.abort(), streamTimeoutMs);
 
     let response: Response;
     try {

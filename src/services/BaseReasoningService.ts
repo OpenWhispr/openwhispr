@@ -12,6 +12,8 @@ export interface ReasoningConfig {
   customApiKey?: string;
   provider?: string;
   disableThinking?: boolean;
+  /** Override the HTTP request timeout (ms) for self-hosted / LAN LLM requests. */
+  requestTimeoutMs?: number;
 }
 
 export abstract class BaseReasoningService {

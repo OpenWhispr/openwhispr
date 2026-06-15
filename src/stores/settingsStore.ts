@@ -35,6 +35,14 @@ function readString(key: string, fallback: string): string {
   return localStorage.getItem(key) ?? fallback;
 }
 
+function readNumber(key: string, fallback: number): number {
+  if (!isBrowser) return fallback;
+  const stored = localStorage.getItem(key);
+  if (stored === null) return fallback;
+  const parsed = Number(stored);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function readBoolean(key: string, fallback: boolean): boolean {
   if (!isBrowser) return fallback;
   const stored = localStorage.getItem(key);
@@ -390,6 +398,9 @@ export interface SettingsState
   remoteTranscriptionUrl: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
+  /** Request timeout in ms for self-hosted / LAN LLM calls. Default: 120000 (2 min). */
+  selfHostedRequestTimeoutMs: number;
+  setSelfHostedRequestTimeoutMs: (ms: number) => void;
 
   meetingTranscriptionMode: InferenceMode;
   meetingUseLocalWhisper: boolean;
@@ -604,6 +615,13 @@ function createStringSetter(key: string) {
 
 function createBooleanSetter(key: string) {
   return (value: boolean) => {
+    if (isBrowser) localStorage.setItem(key, String(value));
+    useSettingsStore.setState({ [key]: value });
+  };
+}
+
+function createNumberSetter(key: string) {
+  return (value: number) => {
     if (isBrowser) localStorage.setItem(key, String(value));
     useSettingsStore.setState({ [key]: value });
   };
@@ -881,6 +899,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return "openwhispr" as InferenceMode;
   })(),
   cleanupRemoteUrl: readString("cleanupRemoteUrl", ""),
+  selfHostedRequestTimeoutMs: readNumber("selfHostedRequestTimeoutMs", 120000),
 
   meetingTranscriptionMode: (() => {
     const v = readString("meetingTranscriptionMode", "openwhispr");
@@ -930,6 +949,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setRemoteTranscriptionUrl: createStringSetter("remoteTranscriptionUrl"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
+  setSelfHostedRequestTimeoutMs: createNumberSetter("selfHostedRequestTimeoutMs"),
 
   setMeetingTranscriptionMode: createStringSetter("meetingTranscriptionMode") as (
     mode: InferenceMode
