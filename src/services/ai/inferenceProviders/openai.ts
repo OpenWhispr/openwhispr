@@ -171,7 +171,8 @@ export const openaiProvider: InferenceProvider = {
 
       for (const { url: endpoint, type } of endpointCandidates) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+        const timeoutMs = config.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
         try {
           const maxTokens =
             config.maxTokens ||
@@ -237,7 +238,7 @@ export const openaiProvider: InferenceProvider = {
           return res.json();
         } catch (error) {
           if ((error as Error).name === "AbortError") {
-            throw new Error("Request timed out after 30s");
+            throw new Error(`Request timed out after ${timeoutMs / 1000}s`);
           }
           lastError = error as Error;
           if (type === "responses") {

@@ -370,6 +370,10 @@
       "label": "Disable thinking output",
       "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."
     },
+    "requestTimeout": {
+      "label": "Request timeout (seconds)",
+      "help": "How long to wait for a response from your self-hosted server. Increase this for large models that generate slowly."
+    },
     "selfHosted": {
       "endpointHelp": "Point to an OpenAI-compatible server on your local network (e.g. Ollama, LM Studio, vLLM, or llama-server)."
     },
