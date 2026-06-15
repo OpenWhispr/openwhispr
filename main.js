@@ -260,6 +260,7 @@ const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
 const AudioTapManager = require("./src/helpers/audioTapManager");
 const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager");
+const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
@@ -288,6 +289,7 @@ let googleCalendarManager = null;
 let meetingDetectionEngine = null;
 let audioTapManager = null;
 let linuxPortalAudioManager = null;
+let windowsLoopbackAudioManager = null;
 let meetingAecManager = null;
 let qdrantManager = null;
 let ipcHandlers = null;
@@ -382,6 +384,10 @@ function initializeCoreManagers() {
   textEditMonitor = new TextEditMonitor();
   audioTapManager = new AudioTapManager();
   linuxPortalAudioManager = new LinuxPortalAudioManager();
+  windowsLoopbackAudioManager = new WindowsLoopbackAudioManager();
+  // Warm the capability cache off the hot path so the first meeting start
+  // doesn't pay the probe spawn. No-ops on non-Windows.
+  windowsLoopbackAudioManager.getCapability().catch(() => {});
   cleanupOrphanedLinuxRestoreToken();
   meetingAecManager = new MeetingAecManager();
   windowManager.textEditMonitor = textEditMonitor;
@@ -404,6 +410,7 @@ function initializeCoreManagers() {
     meetingDetectionEngine,
     audioTapManager,
     linuxPortalAudioManager,
+    windowsLoopbackAudioManager,
     meetingAecManager,
     getTrayManager: () => trayManager,
     oauthProtocolRegistered: protocolRegistered,
@@ -1515,9 +1522,21 @@ if (gotSingleInstanceLock) {
     .then(() => {
       if (process.platform === "win32") {
         session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
-          desktopCapturer.getSources({ types: ["screen"] }).then((sources) => {
-            callback({ video: sources[0], audio: "loopback" });
-          });
+          // Only the loopback audio track is used; the video source is
+          // discarded by the renderer, so skip thumbnail generation.
+          desktopCapturer
+            .getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } })
+            .then((sources) => {
+              if (sources.length > 0) {
+                callback({ video: sources[0], audio: "loopback" });
+              } else {
+                callback(null);
+              }
+            })
+            .catch((error) => {
+              console.error("Display media request failed:", error);
+              callback(null);
+            });
         });
       }
 
@@ -1621,6 +1640,7 @@ function performSyncTeardown() {
   if (googleCalendarManager) googleCalendarManager.stop();
   if (audioTapManager) audioTapManager.stop().catch(() => {});
   if (linuxPortalAudioManager) linuxPortalAudioManager.stop().catch(() => {});
+  if (windowsLoopbackAudioManager) windowsLoopbackAudioManager.stop().catch(() => {});
   if (meetingAecManager) meetingAecManager.stop().catch(() => {});
   if (ipcHandlers) ipcHandlers._cleanupTextEditMonitor();
   if (textEditMonitor) textEditMonitor.stopMonitoring();
