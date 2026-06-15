@@ -429,7 +429,13 @@
       "whisperModelDescription": "Модель",
       "parakeetModelDescription": "Модель NVIDIA Parakeet"
     },
-    "whisperModels": "Модели Whisper"
+    "whisperModels": "Модели Whisper",
+    "corti": {
+      "clientId": "ID клиента",
+      "clientSecret": "Секрет клиента",
+      "environment": "Регион данных",
+      "tenant": "Тенант"
+    }
   },
   "hooks": {
     "audioRecording": {
@@ -1748,7 +1754,9 @@
         "groq_whisper_large_v3_turbo": "Скорость в 216 раз быстрее реального времени",
         "groq_whisper_large_v3": "Модель Large v3, быстрая и точная",
         "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция",
-        "elevenlabs_scribe_v2": "Точная многоязычная транскрипция с подсказками ключевых терминов"
+        "elevenlabs_scribe_v2": "Точная многоязычная транскрипция с подсказками ключевых терминов",
+        "corti_transcribe": "Медицинская транскрипция клинического уровня",
+        "xai_grok_stt": "Высокоточное распознавание речи от xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Сильная модель рассуждения",
@@ -2144,15 +2152,58 @@
     "addWord": "Добавить слово",
     "removeWord": "Удалить {{word}}",
     "clearAll": "Очистить все",
-    "howItWorks": "Как это работает",
-    "howItWorksDetail": "Добавленные слова включаются в промпт ИИ, чтобы модель распознавала и сохраняла эти термины при очистке транскрипции.",
-    "autoManaged": "Имя агента (управляется автоматически)",
-    "inputHint": "Нажмите Enter для добавления",
-    "addPlaceholder": "Добавить слово или фразу...",
-    "title": "Словарь",
-    "description": "Добавьте слова для улучшения транскрипции",
+    "addPlaceholder": "Добавьте слова через запятую — OpenWhispr, Supabase, John Snow, ARR",
     "clearTitle": "Очистить словарь?",
-    "clearDescription": "Все слова будут удалены без возможности восстановления."
+    "clearDescription": "Все слова будут удалены без возможности восстановления.",
+    "add": "Добавить",
+    "importWords": "Импортировать слова",
+    "importPlaceholder": "Вставьте слова, разделённые запятыми...",
+    "separateWithCommas": "Разделяйте запятыми",
+    "wordsReady_one": "{{count}} слово готово",
+    "wordsReady_few": "{{count}} слова готовы",
+    "wordsReady_many": "{{count}} слов готово",
+    "wordsReady_other": "{{count}} слова готово",
+    "import": "Импортировать",
+    "yourDictionary": "Ваш словарь",
+    "exportDictionary": "Экспортировать словарь",
+    "exportFailed": "Не удалось экспортировать",
+    "editWord": "Изменить {{word}}",
+    "noMatches": "Совпадений нет — нажмите Enter, чтобы добавить «{{word}}»",
+    "tabDictionary": "Словарь",
+    "tabSnippets": "Сниппеты",
+    "snippets": {
+      "title": "Сниппеты",
+      "edit": "Изменить {{trigger}}",
+      "remove": "Удалить {{trigger}}",
+      "editTitle": "Изменить сниппет",
+      "dialogDescription": "Когда вы произносите триггер, он заменяется сохранённым текстом.",
+      "triggerLabel": "Триггер",
+      "triggerPlaceholder": "например, мой календарь",
+      "replacementLabel": "Замена",
+      "replacementPlaceholder": "Текст, который будет вставлен при произнесении триггера…",
+      "create": "Создать сниппет",
+      "duplicate": "Сниппет с таким триггером уже существует",
+      "emptyTitle": "То, что не нужно повторять",
+      "emptyTitleAccent": "дважды",
+      "emptyDescription": "Произнесите слово-триггер, и OpenWhispr заменит его сохранённым текстом: ссылки, приветствия, подписи, промпты.",
+      "new": "Новый сниппет",
+      "examples": {
+        "linkedinTrigger": "Мой LinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "Промпт для переписывания",
+        "rewriteText": "Перепиши это более кратко и профессионально",
+        "introTrigger": "Вступительное письмо",
+        "introText": "Привет, буду рад найти время пообщаться на этой неделе…",
+        "signoffTrigger": "Подпись",
+        "signoffText": "С уважением, Алекс · alex@example.com"
+      },
+      "addPlaceholder": "Добавьте фразу-триггер — «мой календарь», «мой LinkedIn»"
+    },
+    "emptyTitle": "Ваш словарь пуст",
+    "emptyDescription": "Добавьте слова, которые {{agentName}} всегда должен распознавать: имена, инструменты, аббревиатуры.",
+    "addFirstWord": "Добавьте первое слово",
+    "importList": "Импортировать список",
+    "agentDefault": "Добавлено по умолчанию"
   },
   "sidebar": {
     "home": "Главная",

@@ -3,6 +3,7 @@ import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type { Snippet } from "../utils/snippets";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -22,6 +23,7 @@ export interface TranscriptionSettings {
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
   customDictionary: string[];
+  snippets: Snippet[];
   assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
 }
@@ -55,8 +57,11 @@ export interface ApiKeySettings {
   anthropicApiKey: string;
   geminiApiKey: string;
   groqApiKey: string;
+  xaiApiKey: string;
   mistralApiKey: string;
   elevenlabsApiKey: string;
+  cortiClientId: string;
+  cortiClientSecret: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
@@ -203,6 +208,8 @@ function useSettingsInternal() {
     cleanupMode: store.cleanupMode,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
     customDictionary: store.customDictionary,
+    snippets: store.snippets,
+    setSnippets: store.setSnippets,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
@@ -215,6 +222,7 @@ function useSettingsInternal() {
     anthropicApiKey: store.anthropicApiKey,
     geminiApiKey: store.geminiApiKey,
     groqApiKey: store.groqApiKey,
+    xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
     elevenlabsApiKey: store.elevenlabsApiKey,
     dictationKey: store.dictationKey,
@@ -252,7 +260,6 @@ function useSettingsInternal() {
     setGeminiApiKey: store.setGeminiApiKey,
     setGroqApiKey: store.setGroqApiKey,
     setMistralApiKey: store.setMistralApiKey,
-    setElevenlabsApiKey: store.setElevenlabsApiKey,
     customTranscriptionApiKey: store.customTranscriptionApiKey,
     setCustomTranscriptionApiKey: store.setCustomTranscriptionApiKey,
     cleanupCustomApiKey: store.cleanupCustomApiKey,

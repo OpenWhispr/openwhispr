@@ -117,6 +117,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setCloudTranscriptionMode,
     openaiApiKey,
     groqApiKey,
+    xaiApiKey,
     mistralApiKey,
     elevenlabsApiKey,
     customTranscriptionApiKey,
@@ -124,6 +125,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     updateTranscriptionSettings,
   } = useSettings();
 
+  const cortiClientId = useSettingsStore((s) => s.cortiClientId);
+  const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
+  const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
+  const cortiTenant = useSettingsStore((s) => s.cortiTenant);
+  const preferredLanguage = useSettingsStore((s) => s.preferredLanguage);
   const isCloudCleanup = useSettingsStore(selectIsCloudCleanupMode);
   const effectiveCleanupModel = useSettingsStore((s) =>
     selectIsCloudCleanupMode(s) ? "" : s.cleanupModel
@@ -194,17 +200,21 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         if (cloudTranscriptionProvider === "custom") {
           // Custom providers only need a base URL; API key is truly optional
           if (!cancelled) setProviderReady(!!cloudTranscriptionBaseUrl?.trim());
+        } else if (cloudTranscriptionProvider === "corti") {
+          if (!cancelled) setProviderReady(!!(cortiClientId && cortiClientSecret));
         } else {
           const key =
             cloudTranscriptionProvider === "openai"
               ? openaiApiKey
               : cloudTranscriptionProvider === "groq"
                 ? groqApiKey
-                : cloudTranscriptionProvider === "mistral"
-                  ? mistralApiKey
-                  : cloudTranscriptionProvider === "elevenlabs"
-                    ? elevenlabsApiKey
-                    : customTranscriptionApiKey;
+                : cloudTranscriptionProvider === "xai"
+                  ? xaiApiKey
+                  : cloudTranscriptionProvider === "mistral"
+                    ? mistralApiKey
+                    : cloudTranscriptionProvider === "elevenlabs"
+                      ? elevenlabsApiKey
+                      : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -235,9 +245,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
+    xaiApiKey,
     mistralApiKey,
     elevenlabsApiKey,
     customTranscriptionApiKey,
+    cortiClientId,
+    cortiClientSecret,
   ]);
 
   const getActiveModelLabel = (): string => {
@@ -250,8 +263,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     const name =
       cloudTranscriptionProvider === "custom"
         ? t("notes.upload.custom")
-        : cloudTranscriptionProvider === "elevenlabs"
-          ? "ElevenLabs"
         : cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1);
     return `${name} · ${cloudTranscriptionModel}`;
   };
@@ -262,6 +273,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return openaiApiKey;
       case "groq":
         return groqApiKey;
+      case "xai":
+        return xaiApiKey;
       case "mistral":
         return mistralApiKey;
       case "elevenlabs":
@@ -384,8 +397,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           baseUrl: cloudTranscriptionBaseUrl || "",
           model: cloudTranscriptionModel,
           provider: cloudTranscriptionProvider,
-          language: getBaseLanguageCode(getSettings().preferredLanguage),
-          keyterms: customDictionary,
+          language: getBaseLanguageCode(preferredLanguage) || "en",
+          keyterms: cloudTranscriptionProvider === "elevenlabs" ? customDictionary : undefined,
+          environment: cortiEnvironment,
+          tenant: cortiTenant,
         });
       }
 

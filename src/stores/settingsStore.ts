@@ -24,6 +24,7 @@ import type {
   ThemeSettings,
   ChatAgentSettings,
 } from "../hooks/useSettings";
+import type { Snippet } from "../utils/snippets";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -139,7 +140,7 @@ const BOOLEAN_SETTINGS = new Set([
   "gcalPrimaryOnly",
 ]);
 
-const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
+const ARRAY_SETTINGS = new Set(["customDictionary", "snippets", "gcalAccounts"]);
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
@@ -480,6 +481,7 @@ export interface SettingsState
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
+  setSnippets: (snippets: Snippet[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
@@ -492,10 +494,19 @@ export interface SettingsState
   setAnthropicApiKey: (key: string) => void;
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
+  setXaiApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
   setElevenlabsApiKey: (key: string) => void;
+  setCortiClientId: (key: string) => void;
+  setCortiClientSecret: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
+
+  // Corti (BYOK)
+  cortiEnvironment: string;
+  cortiTenant: string;
+  setCortiEnvironment: (value: string) => void;
+  setCortiTenant: (value: string) => void;
 
   // Enterprise providers
   bedrockAuthMode: string;
@@ -619,8 +630,11 @@ const SECRET_IPC_SAVERS = {
   anthropic: "saveAnthropicKey",
   gemini: "saveGeminiKey",
   groq: "saveGroqKey",
+  xai: "saveXaiKey",
   mistral: "saveMistralKey",
   elevenlabs: "saveElevenLabsKey",
+  cortiClientId: "saveCortiClientId",
+  cortiClientSecret: "saveCortiClientSecret",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
   bedrockAccessKeyId: "saveBedrockAccessKeyId",
@@ -657,8 +671,11 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "anthropicApiKey",
   "geminiApiKey",
   "groqApiKey",
+  "xaiApiKey",
   "mistralApiKey",
   "elevenlabsApiKey",
+  "cortiClientId",
+  "cortiClientSecret",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
   "cleanupCustomApiKey",
@@ -711,7 +728,17 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
+  cortiEnvironment: readString("cortiEnvironment", "us"),
+  cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
+  snippets: (() => {
+    try {
+      const parsed = JSON.parse(readString("snippets", "[]"));
+      return Array.isArray(parsed) ? (parsed as Snippet[]) : [];
+    } catch {
+      return [];
+    }
+  })(),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
@@ -725,8 +752,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   anthropicApiKey: "",
   geminiApiKey: "",
   groqApiKey: "",
+  xaiApiKey: "",
   mistralApiKey: "",
   elevenlabsApiKey: "",
+  cortiClientId: "",
+  cortiClientSecret: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -1036,6 +1066,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     });
   },
 
+  setSnippets: (snippets: Snippet[]) => {
+    if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
+    set({ snippets });
+  },
+
   setUiLanguage: (language: string) => {
     const normalized = normalizeUiLanguage(language);
     if (isBrowser) localStorage.setItem("uiLanguage", normalized);
@@ -1072,6 +1107,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     debouncedSaveSecret("groq", key);
     invalidateApiKeyCaches("groq");
   },
+  setXaiApiKey: (key: string) => {
+    set({ xaiApiKey: key });
+    debouncedSaveSecret("xai", key);
+    invalidateApiKeyCaches();
+  },
   setMistralApiKey: (key: string) => {
     set({ mistralApiKey: key });
     debouncedSaveSecret("mistral", key);
@@ -1082,6 +1122,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     debouncedSaveSecret("elevenlabs", key);
     invalidateApiKeyCaches();
   },
+  setCortiClientId: (key: string) => {
+    set({ cortiClientId: key });
+    debouncedSaveSecret("cortiClientId", key);
+    invalidateApiKeyCaches();
+  },
+  setCortiClientSecret: (key: string) => {
+    set({ cortiClientSecret: key });
+    debouncedSaveSecret("cortiClientSecret", key);
+    invalidateApiKeyCaches();
+  },
+  setCortiEnvironment: createStringSetter("cortiEnvironment"),
+  setCortiTenant: createStringSetter("cortiTenant"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -1430,6 +1482,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.cloudTranscriptionMode !== undefined)
       s.setCloudTranscriptionMode(settings.cloudTranscriptionMode);
     if (settings.customDictionary !== undefined) s.setCustomDictionary(settings.customDictionary);
+    if (settings.snippets !== undefined) s.setSnippets(settings.snippets);
     if (settings.assemblyAiStreaming !== undefined)
       s.setAssemblyAiStreaming(settings.assemblyAiStreaming);
     if (settings.showTranscriptionPreview !== undefined)
@@ -1454,8 +1507,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.anthropicApiKey !== undefined) s.setAnthropicApiKey(keys.anthropicApiKey);
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
+    if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
     if (keys.elevenlabsApiKey !== undefined) s.setElevenlabsApiKey(keys.elevenlabsApiKey);
+    if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
+    if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
     if (keys.cleanupCustomApiKey !== undefined) s.setCleanupCustomApiKey(keys.cleanupCustomApiKey);
@@ -1661,8 +1717,11 @@ export async function initializeSettings(): Promise<void> {
         anthropic,
         gemini,
         groq,
+        xai,
         mistral,
         elevenlabs,
+        cortiClientId,
+        cortiClientSecret,
         customTx,
         customRx,
         bedrockAccessKeyId,
@@ -1675,8 +1734,11 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getAnthropicKey?.(),
         window.electronAPI.getGeminiKey?.(),
         window.electronAPI.getGroqKey?.(),
+        window.electronAPI.getXaiKey?.(),
         window.electronAPI.getMistralKey?.(),
         window.electronAPI.getElevenLabsKey?.(),
+        window.electronAPI.getCortiClientId?.(),
+        window.electronAPI.getCortiClientSecret?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
         window.electronAPI.getCleanupCustomKey?.(),
         window.electronAPI.getBedrockAccessKeyId?.(),
@@ -1691,8 +1753,11 @@ export async function initializeSettings(): Promise<void> {
         anthropicApiKey: anthropic || "",
         geminiApiKey: gemini || "",
         groqApiKey: groq || "",
+        xaiApiKey: xai || "",
         mistralApiKey: mistral || "",
         elevenlabsApiKey: elevenlabs || "",
+        cortiClientId: cortiClientId || "",
+        cortiClientSecret: cortiClientSecret || "",
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",
         bedrockAccessKeyId: bedrockAccessKeyId || "",

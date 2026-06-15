@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Download, Trash2, Cloud, Lock, X, Zap, Check } from "lucide-react";
 import { ProviderIcon } from "./ui/ProviderIcon";
 import { ProviderTabs } from "./ui/ProviderTabs";
@@ -201,10 +202,77 @@ interface TranscriptionModelPickerProps {
 const CLOUD_PROVIDER_TABS = [
   { id: "openai", name: "OpenAI" },
   { id: "groq", name: "Groq" },
+  { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
   { id: "elevenlabs", name: "ElevenLabs" },
+  { id: "corti", name: "Corti" },
   { id: "custom", name: "Custom" },
 ];
+
+interface ProviderCredentialField {
+  key:
+    | "openaiApiKey"
+    | "groqApiKey"
+    | "xaiApiKey"
+    | "mistralApiKey"
+    | "elevenlabsApiKey"
+    | "cortiClientId"
+    | "cortiClientSecret"
+    | "cortiEnvironment"
+    | "cortiTenant";
+  input: "secret" | "text" | "select";
+  labelKey?: string;
+  placeholder?: string;
+  options?: Array<{ value: string; label: string }>;
+}
+
+const PROVIDER_CREDENTIALS: Record<
+  string,
+  { consoleUrl: string; fields: ProviderCredentialField[] }
+> = {
+  openai: {
+    consoleUrl: "https://platform.openai.com/api-keys",
+    fields: [{ key: "openaiApiKey", input: "secret" }],
+  },
+  groq: {
+    consoleUrl: "https://console.groq.com/keys",
+    fields: [{ key: "groqApiKey", input: "secret" }],
+  },
+  xai: {
+    consoleUrl: "https://console.x.ai",
+    fields: [{ key: "xaiApiKey", input: "secret" }],
+  },
+  mistral: {
+    consoleUrl: "https://console.mistral.ai/api-keys",
+    fields: [{ key: "mistralApiKey", input: "secret" }],
+  },
+  elevenlabs: {
+    consoleUrl: "https://elevenlabs.io/app/settings/api-keys",
+    fields: [{ key: "elevenlabsApiKey", input: "secret" }],
+  },
+  corti: {
+    consoleUrl: "https://console.corti.app",
+    fields: [
+      { key: "cortiClientId", input: "secret", labelKey: "transcription.corti.clientId" },
+      { key: "cortiClientSecret", input: "secret", labelKey: "transcription.corti.clientSecret" },
+      {
+        key: "cortiEnvironment",
+        input: "select",
+        labelKey: "transcription.corti.environment",
+        options: [
+          { value: "us", label: "US" },
+          { value: "eu", label: "EU" },
+        ],
+      },
+      {
+        key: "cortiTenant",
+        input: "text",
+        labelKey: "transcription.corti.tenant",
+        placeholder: "base",
+      },
+    ],
+  },
+};
 
 const VALID_CLOUD_PROVIDER_IDS = CLOUD_PROVIDER_TABS.map((p) => p.id);
 
@@ -272,10 +340,20 @@ export default function TranscriptionModelPicker({
   const setOpenaiApiKey = useSettingsStore((s) => s.setOpenaiApiKey);
   const groqApiKey = useSettingsStore((s) => s.groqApiKey);
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
+  const xaiApiKey = useSettingsStore((s) => s.xaiApiKey);
+  const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
   const elevenlabsApiKey = useSettingsStore((s) => s.elevenlabsApiKey);
   const setElevenlabsApiKey = useSettingsStore((s) => s.setElevenlabsApiKey);
+  const cortiClientId = useSettingsStore((s) => s.cortiClientId);
+  const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
+  const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
+  const setCortiClientSecret = useSettingsStore((s) => s.setCortiClientSecret);
+  const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
+  const setCortiEnvironment = useSettingsStore((s) => s.setCortiEnvironment);
+  const cortiTenant = useSettingsStore((s) => s.cortiTenant);
+  const setCortiTenant = useSettingsStore((s) => s.setCortiTenant);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
@@ -594,7 +672,7 @@ export default function TranscriptionModelPicker({
         const providerNormalized = normalizeBaseUrl(provider.baseUrl);
         if (normalized === providerNormalized) {
           onCloudProviderSelect(provider.id);
-          onCloudModelSelect(provider.models[0]?.id || "whisper-1");
+          onCloudModelSelect("whisper-1");
           break;
         }
       }
@@ -632,6 +710,31 @@ export default function TranscriptionModelPicker({
     () => cloudProviders.find((p) => p.id === selectedCloudProvider),
     [cloudProviders, selectedCloudProvider]
   );
+
+  const providerCredentials =
+    PROVIDER_CREDENTIALS[selectedCloudProvider] ?? PROVIDER_CREDENTIALS.openai;
+  const credentialValues: Record<ProviderCredentialField["key"], string> = {
+    openaiApiKey,
+    groqApiKey,
+    xaiApiKey,
+    mistralApiKey,
+    elevenlabsApiKey,
+    cortiClientId,
+    cortiClientSecret,
+    cortiEnvironment,
+    cortiTenant,
+  };
+  const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
+    openaiApiKey: setOpenaiApiKey,
+    groqApiKey: setGroqApiKey,
+    xaiApiKey: setXaiApiKey,
+    mistralApiKey: setMistralApiKey,
+    elevenlabsApiKey: setElevenlabsApiKey,
+    cortiClientId: setCortiClientId,
+    cortiClientSecret: setCortiClientSecret,
+    cortiEnvironment: setCortiEnvironment,
+    cortiTenant: setCortiTenant,
+  };
 
   const cloudModelOptions = useMemo(() => {
     if (!currentCloudProvider) return [];
@@ -822,7 +925,7 @@ export default function TranscriptionModelPicker({
             selectedId={selectedCloudProvider}
             onSelect={handleCloudProviderChange}
             colorScheme="purple"
-            scrollable
+            wrap
           />
 
           <div>
@@ -862,51 +965,55 @@ export default function TranscriptionModelPicker({
               </div>
             ) : (
               <div className="space-y-2">
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-medium text-foreground">
-                      {t("common.apiKey")}
-                    </label>
-                    <button
-                      type="button"
-                      onClick={createExternalLinkHandler(
-                        {
-                          groq: "https://console.groq.com/keys",
-                          mistral: "https://console.mistral.ai/api-keys",
-                          elevenlabs: "https://elevenlabs.io/app/settings/api-keys",
-                          openai: "https://platform.openai.com/api-keys",
-                        }[selectedCloudProvider] || "https://platform.openai.com/api-keys"
+                {providerCredentials.fields.map((field, index) => (
+                  <div key={field.key} className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-foreground">
+                        {field.labelKey ? t(field.labelKey) : t("common.apiKey")}
+                      </label>
+                      {index === 0 && (
+                        <button
+                          type="button"
+                          onClick={createExternalLinkHandler(providerCredentials.consoleUrl)}
+                          className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
+                        >
+                          {t("transcription.getKey")}
+                        </button>
                       )}
-                      className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
-                    >
-                      {t("transcription.getKey")}
-                    </button>
+                    </div>
+                    {field.input === "secret" ? (
+                      <ApiKeyInput
+                        apiKey={credentialValues[field.key]}
+                        setApiKey={credentialSetters[field.key]}
+                        label=""
+                        helpText=""
+                      />
+                    ) : field.input === "select" ? (
+                      <Select
+                        value={credentialValues[field.key]}
+                        onValueChange={credentialSetters[field.key]}
+                      >
+                        <SelectTrigger className="h-8 text-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {field.options?.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Input
+                        value={credentialValues[field.key]}
+                        onChange={(e) => credentialSetters[field.key](e.target.value)}
+                        placeholder={field.placeholder}
+                        className="h-8 text-sm"
+                      />
+                    )}
                   </div>
-                  <ApiKeyInput
-                    apiKey={
-                      {
-                        groq: groqApiKey,
-                        mistral: mistralApiKey,
-                        elevenlabs: elevenlabsApiKey,
-                        openai: openaiApiKey,
-                      }[
-                        selectedCloudProvider
-                      ] || openaiApiKey
-                    }
-                    setApiKey={
-                      {
-                        groq: setGroqApiKey,
-                        mistral: setMistralApiKey,
-                        elevenlabs: setElevenlabsApiKey,
-                        openai: setOpenaiApiKey,
-                      }[
-                        selectedCloudProvider
-                      ] || setOpenaiApiKey
-                    }
-                    label=""
-                    helpText=""
-                  />
-                </div>
+                ))}
 
                 <div className="space-y-1.5">
                   <label className="text-xs font-medium text-foreground">{t("common.model")}</label>

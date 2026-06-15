@@ -333,6 +333,17 @@ function setupProductionPath() {
 }
 
 // Phase 1: Initialize managers + IPC handlers before window content loads
+// Best-effort cleanup of the orphaned portal restore-token file older builds wrote. See PR #904.
+const LINUX_RESTORE_TOKEN_FILENAME = ".linux-system-audio-restore-token.json";
+
+function cleanupOrphanedLinuxRestoreToken() {
+  if (process.platform !== "linux") return;
+  try {
+    const fs = require("fs");
+    fs.unlinkSync(path.join(app.getPath("userData"), LINUX_RESTORE_TOKEN_FILENAME));
+  } catch {}
+}
+
 function initializeCoreManagers() {
   setupProductionPath();
 
@@ -371,6 +382,7 @@ function initializeCoreManagers() {
   textEditMonitor = new TextEditMonitor();
   audioTapManager = new AudioTapManager();
   linuxPortalAudioManager = new LinuxPortalAudioManager();
+  cleanupOrphanedLinuxRestoreToken();
   meetingAecManager = new MeetingAecManager();
   windowManager.textEditMonitor = textEditMonitor;
 

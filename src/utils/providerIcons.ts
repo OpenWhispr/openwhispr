@@ -11,6 +11,7 @@ import gemmaIcon from "@/assets/icons/providers/gemma.svg";
 import bedrockIcon from "@/assets/icons/providers/bedrock.svg";
 import azureIcon from "@/assets/icons/providers/azure.svg";
 import vertexIcon from "@/assets/icons/providers/vertex.svg";
+import xaiIcon from "@/assets/icons/providers/xai.svg";
 import elevenlabsIcon from "@/assets/icons/providers/elevenlabs.svg";
 
 export const PROVIDER_ICONS: Record<string, string> = {
@@ -28,6 +29,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   bedrock: bedrockIcon,
   azure: azureIcon,
   vertex: vertexIcon,
+  xai: xaiIcon,
   elevenlabs: elevenlabsIcon,
 };
 
@@ -35,7 +37,14 @@ export function getProviderIcon(provider: string): string | undefined {
   return PROVIDER_ICONS[provider];
 }
 
-export const MONOCHROME_PROVIDERS = ["openai", "whisper", "anthropic", "openai-oss", "elevenlabs"] as const;
+export const MONOCHROME_PROVIDERS = [
+  "openai",
+  "whisper",
+  "anthropic",
+  "openai-oss",
+  "xai",
+  "elevenlabs",
+] as const;
 
 export function isMonochromeProvider(provider: string): boolean {
   return (MONOCHROME_PROVIDERS as readonly string[]).includes(provider);

@@ -429,7 +429,13 @@
       "whisperModelDescription": "Model",
       "parakeetModelDescription": "NVIDIA Parakeet Model"
     },
-    "whisperModels": "Whisper Models"
+    "whisperModels": "Whisper Models",
+    "corti": {
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "environment": "Data Region",
+      "tenant": "Tenant"
+    }
   },
   "hooks": {
     "audioRecording": {
@@ -1848,7 +1854,9 @@
         "groq_whisper_large_v3": "High accuracy speech recognition",
         "groq_whisper_large_v3_turbo": "216x real-time speed",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
-        "elevenlabs_scribe_v2": "Accurate multilingual transcription with keyterm prompting"
+        "elevenlabs_scribe_v2": "Accurate multilingual transcription with keyterm prompting",
+        "corti_transcribe": "Clinical-grade medical transcription",
+        "xai_grok_stt": "High-accuracy speech recognition by xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -2346,18 +2354,59 @@
     }
   },
   "dictionary": {
-    "title": "Custom Dictionary",
-    "description": "Teach the AI your vocabulary — names, jargon, and terms it might otherwise miss",
     "clearTitle": "Clear dictionary?",
     "clearDescription": "This will remove all words from your custom dictionary. This action cannot be undone.",
     "addWord": "Add word",
-    "addPlaceholder": "Add a word or phrase...",
+    "addPlaceholder": "Add words separated by commas — OpenWhispr, Supabase, John Snow, ARR",
     "removeWord": "Remove {{word}}",
     "clearAll": "Clear all",
-    "howItWorks": "How it works",
-    "howItWorksDetail": "Words are fed as context hints to the speech model, helping it recognize uncommon terms. For difficult words, try adding context like \"The word is Synty\" alongside the word itself.",
-    "autoManaged": "Auto-managed — synced from agent name",
-    "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition."
+    "add": "Add",
+    "importWords": "Import words",
+    "importPlaceholder": "Paste words separated by commas...",
+    "separateWithCommas": "Separate with commas",
+    "wordsReady_one": "{{count}} word ready",
+    "wordsReady_other": "{{count}} words ready",
+    "import": "Import",
+    "yourDictionary": "Your dictionary",
+    "exportDictionary": "Export dictionary",
+    "exportFailed": "Export failed",
+    "editWord": "Edit {{word}}",
+    "noMatches": "No matches — press Enter to add \"{{word}}\"",
+    "tabDictionary": "Dictionary",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "edit": "Edit {{trigger}}",
+      "remove": "Remove {{trigger}}",
+      "editTitle": "Edit snippet",
+      "dialogDescription": "When you speak the trigger, it's replaced with your saved text.",
+      "triggerLabel": "Trigger",
+      "triggerPlaceholder": "e.g. cal link",
+      "replacementLabel": "Replacement",
+      "replacementPlaceholder": "Text to insert when you say the trigger…",
+      "create": "Create snippet",
+      "duplicate": "A snippet with this trigger already exists",
+      "emptyTitle": "The stuff you shouldn't have to say",
+      "emptyTitleAccent": "twice",
+      "emptyDescription": "Speak a trigger word and OpenWhispr replaces it with whatever you saved — URLs, intros, sign-offs, prompts.",
+      "new": "New snippet",
+      "examples": {
+        "linkedinTrigger": "My LinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "Rewrite prompt",
+        "rewriteText": "Rewrite this to be more concise and professional",
+        "introTrigger": "Intro email",
+        "introText": "Hey, would love to find some time to chat later this week…",
+        "signoffTrigger": "Sign off",
+        "signoffText": "Best, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Add a trigger phrase — \"investor ask\", \"cal link\""
+    },
+    "emptyTitle": "Your dictionary is empty",
+    "emptyDescription": "Add words {{agentName}} should always get right: names, tools, acronyms.",
+    "addFirstWord": "Add your first word",
+    "importList": "Import a list",
+    "agentDefault": "Added by default"
   },
   "support": {
     "documentation": "Documentation",

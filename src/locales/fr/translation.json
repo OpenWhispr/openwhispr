@@ -429,7 +429,13 @@
       "whisperModelDescription": "Modèle",
       "parakeetModelDescription": "Modèle NVIDIA Parakeet"
     },
-    "whisperModels": "Modèles Whisper"
+    "whisperModels": "Modèles Whisper",
+    "corti": {
+      "clientId": "ID client",
+      "clientSecret": "Secret client",
+      "environment": "Région des données",
+      "tenant": "Tenant"
+    }
   },
   "hooks": {
     "audioRecording": {
@@ -1796,7 +1802,9 @@
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
-        "elevenlabs_scribe_v2": "Transcription multilingue précise avec guidage par mots-clés"
+        "elevenlabs_scribe_v2": "Transcription multilingue précise avec guidage par mots-clés",
+        "corti_transcribe": "Transcription médicale de qualité clinique",
+        "xai_grok_stt": "Reconnaissance vocale haute précision par xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Modèle de raisonnement performant",
@@ -2250,18 +2258,59 @@
     }
   },
   "dictionary": {
-    "title": "Dictionnaire personnalisé",
-    "description": "Apprenez à l'IA votre vocabulaire — noms, jargon et termes qu'elle pourrait autrement manquer",
     "clearTitle": "Vider le dictionnaire ?",
     "clearDescription": "Cela supprimera tous les mots de votre dictionnaire personnalisé. Cette action est irréversible.",
     "addWord": "Ajouter un mot",
-    "addPlaceholder": "Ajouter un mot ou une expression...",
+    "addPlaceholder": "Ajoutez des mots séparés par des virgules — OpenWhispr, Supabase, John Snow, ARR",
     "removeWord": "Supprimer {{word}}",
     "clearAll": "Tout effacer",
-    "howItWorks": "Comment ça marche",
-    "howItWorksDetail": "Les mots sont transmis comme indices contextuels au modèle vocal, l'aidant à reconnaître les termes peu courants. Pour les mots difficiles, essayez d'ajouter du contexte comme « Le mot est Synty » en plus du mot lui-même.",
-    "autoManaged": "Géré automatiquement — synchronisé depuis le nom de l'agent",
-    "inputHint": "Séparez les mots par des virgules. Ajoutez des phrases de contexte comme « Le mot est Synty » pour une meilleure reconnaissance."
+    "add": "Ajouter",
+    "importWords": "Importer des mots",
+    "importPlaceholder": "Collez des mots séparés par des virgules...",
+    "separateWithCommas": "Séparez par des virgules",
+    "wordsReady_one": "{{count}} mot prêt",
+    "wordsReady_other": "{{count}} mots prêts",
+    "import": "Importer",
+    "yourDictionary": "Votre dictionnaire",
+    "exportDictionary": "Exporter le dictionnaire",
+    "exportFailed": "Échec de l'exportation",
+    "editWord": "Modifier {{word}}",
+    "noMatches": "Aucune correspondance — appuyez sur Entrée pour ajouter « {{word}} »",
+    "tabDictionary": "Dictionnaire",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "edit": "Modifier {{trigger}}",
+      "remove": "Supprimer {{trigger}}",
+      "editTitle": "Modifier le snippet",
+      "dialogDescription": "Quand vous prononcez le déclencheur, il est remplacé par votre texte enregistré.",
+      "triggerLabel": "Déclencheur",
+      "triggerPlaceholder": "ex. mon agenda",
+      "replacementLabel": "Remplacement",
+      "replacementPlaceholder": "Texte à insérer quand vous dites le déclencheur…",
+      "create": "Créer le snippet",
+      "duplicate": "Un snippet avec ce déclencheur existe déjà",
+      "emptyTitle": "Ce que vous ne devriez pas avoir à dire",
+      "emptyTitleAccent": "deux fois",
+      "emptyDescription": "Prononcez un mot déclencheur et OpenWhispr le remplace par ce que vous avez enregistré : URL, intros, signatures, prompts.",
+      "new": "Nouveau snippet",
+      "examples": {
+        "linkedinTrigger": "Mon LinkedIn",
+        "linkedinText": "linkedin.com/in/vous",
+        "rewriteTrigger": "Prompt de réécriture",
+        "rewriteText": "Réécris ceci de façon plus concise et professionnelle",
+        "introTrigger": "Email d'intro",
+        "introText": "Bonjour, j'aimerais trouver un moment pour échanger cette semaine…",
+        "signoffTrigger": "Signature",
+        "signoffText": "Cordialement, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Ajoutez une phrase déclencheur — « mon agenda », « mon LinkedIn »"
+    },
+    "emptyTitle": "Votre dictionnaire est vide",
+    "emptyDescription": "Ajoutez les mots que {{agentName}} doit toujours reconnaître : noms, outils, acronymes.",
+    "addFirstWord": "Ajoutez votre premier mot",
+    "importList": "Importer une liste",
+    "agentDefault": "Ajouté par défaut"
   },
   "support": {
     "documentation": "Documentation",

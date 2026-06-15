@@ -10,11 +10,14 @@ import {
   getLocalSpeechGateDecision,
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
+import { reacquireIfDead } from "./micTrackHealth";
 import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../stores/settingsStore";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import { detectAgentName } from "../config/agentDetection";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
+import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
+import { getDictionaryHintWords } from "../utils/snippets";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
@@ -47,7 +50,7 @@ function resolveReasoningRoute(text, settings, agentName) {
         systemPrompt: resolvePrompt("dictationAgent", {
           agentName,
           language: settings.preferredLanguage,
-          customDictionary: settings.customDictionary,
+          customDictionary: getDictionaryHintWords(settings),
           uiLanguage: settings.uiLanguage,
         }),
       },
@@ -65,6 +68,7 @@ function resolveReasoningRoute(text, settings, agentName) {
 const PLACEHOLDER_KEYS = {
   openai: "your_openai_api_key_here",
   groq: "your_groq_api_key_here",
+  xai: "your_xai_api_key_here",
   mistral: "your_mistral_api_key_here",
   elevenlabs: "your_elevenlabs_api_key_here",
 };
@@ -110,6 +114,18 @@ const STREAMING_PROVIDERS = {
     onError: (cb) => window.electronAPI.onDictationRealtimeError(cb),
     onSessionEnd: (cb) => window.electronAPI.onDictationRealtimeSessionEnd(cb),
   },
+  corti: {
+    warmup: (opts) => window.electronAPI.cortiStreamingWarmup(opts),
+    start: (opts) => window.electronAPI.cortiStreamingStart(opts),
+    send: (buf) => window.electronAPI.cortiStreamingSend(buf),
+    finalize: () => window.electronAPI.cortiStreamingFinalize(),
+    stop: () => window.electronAPI.cortiStreamingStop(),
+    status: () => window.electronAPI.cortiStreamingStatus(),
+    onPartial: (cb) => window.electronAPI.onCortiPartialTranscript(cb),
+    onFinal: (cb) => window.electronAPI.onCortiFinalTranscript(cb),
+    onError: (cb) => window.electronAPI.onCortiError(cb),
+    onSessionEnd: (cb) => window.electronAPI.onCortiSessionEnd(cb),
+  },
 };
 
 class AudioManager {
@@ -130,6 +146,14 @@ class AudioManager {
       this.cachedApiKeyProvider = null;
     };
     window.addEventListener("api-key-changed", this._onApiKeyChanged);
+
+    // Invalidate the pinned mic device when the OS adds/removes/suspends inputs.
+    // Otherwise wake-after-idle keeps requesting a stale deviceId that yields silence.
+    this._onDeviceChange = () => {
+      this.cachedMicDeviceId = null;
+      this.micDriverWarmedUp = false;
+    };
+    navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
     this.cachedTranscriptionEndpoint = null;
     this.cachedEndpointProvider = null;
     this.cachedEndpointBaseUrl = null;
@@ -207,8 +231,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getCustomDictionaryPrompt() {
-    const words = getSettings().customDictionary;
+    const words = getDictionaryHintWords(getSettings());
     return words.length > 0 ? words.join(", ") : null;
+  }
+
+  isDictionaryEcho(text) {
+    return matchesDictionaryPrompt(text, this.getCustomDictionaryPrompt());
   }
 
   setCallbacks({
@@ -238,16 +266,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   getStreamingProvider() {
-    const { cloudTranscriptionModel } = getSettings();
-    if (REALTIME_MODELS.has(cloudTranscriptionModel)) {
-      return STREAMING_PROVIDERS["openai-realtime"];
-    }
-    const defaultProvider = this.context === "notes" ? "deepgram" : "openai-realtime";
-    const providerName = this.sttConfig?.streamingProvider || defaultProvider;
-    return STREAMING_PROVIDERS[providerName] || STREAMING_PROVIDERS[defaultProvider];
+    const fallback = this.context === "notes" ? "deepgram" : "openai-realtime";
+    return STREAMING_PROVIDERS[this.getStreamingProviderName()] || STREAMING_PROVIDERS[fallback];
   }
 
   getStreamingProviderName() {
+    const s = getSettings();
+    if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
+      return "corti";
+    }
+    if (REALTIME_MODELS.has(s.cloudTranscriptionModel)) {
+      return "openai-realtime";
+    }
     const defaultProvider = this.context === "notes" ? "deepgram" : "openai-realtime";
     return this.sttConfig?.streamingProvider || defaultProvider;
   }
@@ -334,9 +364,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       const constraints = await this.getAudioConstraints();
-      const micStream = await navigator.mediaDevices.getUserMedia(constraints);
-
+      const micStream = await reacquireIfDead(
+        await navigator.mediaDevices.getUserMedia(constraints),
+        () => {
+          this.cachedMicDeviceId = null;
+          return this.getAudioConstraints();
+        },
+        logger
+      );
       const audioTrack = micStream.getAudioTracks()[0];
+
       if (audioTrack) {
         const settings = audioTrack.getSettings();
         logger.info(
@@ -346,6 +383,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             deviceId: settings.deviceId?.slice(0, 20) + "...",
             sampleRate: settings.sampleRate,
             channelCount: settings.channelCount,
+            muted: audioTrack.muted,
+            readyState: audioTrack.readyState,
           },
           "audio"
         );
@@ -714,6 +753,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
 
       if (result.success && result.text) {
+        if (this.isDictionaryEcho(result.text)) {
+          throw new Error("No audio detected");
+        }
         const rawText = result.text;
         const reasoningStart = performance.now();
         const text = await this.processTranscription(result.text, "local");
@@ -897,6 +939,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         err.code = "API_KEY_MISSING";
         throw err;
       }
+    } else if (provider === "corti") {
+      // Tokens are minted in the main process; only verify credentials exist here
+      let clientId = s.cortiClientId;
+      let clientSecret = s.cortiClientSecret;
+      if (!clientId?.trim() || !clientSecret?.trim()) {
+        [clientId, clientSecret] = await Promise.all([
+          window.electronAPI.getCortiClientId?.(),
+          window.electronAPI.getCortiClientSecret?.(),
+        ]);
+      }
+      if (!clientId?.trim() || !clientSecret?.trim()) {
+        const err = new Error(
+          "Corti credentials not found. Please set your Client ID and Client Secret in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+      apiKey = null;
     } else if (provider === "groq") {
       // Prefer store value (user-entered via UI) over main process (.env)
       apiKey = s.groqApiKey;
@@ -906,6 +966,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!isValidApiKey(apiKey, "groq")) {
         const err = new Error(
           "Groq API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "xai") {
+      apiKey = s.xaiApiKey;
+      if (!isValidApiKey(apiKey, "xai")) {
+        apiKey = await window.electronAPI.getXaiKey?.();
+      }
+      if (!isValidApiKey(apiKey, "xai")) {
+        const err = new Error(
+          "xAI API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
         throw err;
@@ -1334,6 +1406,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     timings.transcriptionProcessingDurationMs = Math.round(performance.now() - transcriptionStart);
 
     const rawText = result.text;
+    if (this.isDictionaryEcho(rawText)) {
+      throw new Error("No audio detected");
+    }
     let processedText = result.text;
     if (processedText && !this.skipReasoning) {
       const reasoningStart = performance.now();
@@ -1353,7 +1428,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const reasonResult = await withSessionRefresh(async () => {
           const res = await window.electronAPI.cloudReason(processedText, {
             agentName,
-            customDictionary: settings.customDictionary,
+            customDictionary: getDictionaryHintWords(settings),
             customPrompt: this.getCustomPrompt(),
             language: settings.preferredLanguage || "auto",
             locale: settings.uiLanguage || "en",
@@ -1513,6 +1588,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider === "custom" ||
         (!endpoint.includes("api.openai.com") &&
           !endpoint.includes("api.groq.com") &&
+          !endpoint.includes("api.x.ai") &&
           !endpoint.includes("api.mistral.ai"));
 
       const apiCallStart = performance.now();
@@ -1537,6 +1613,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const proxyText = result?.text;
 
         if (proxyText && proxyText.trim().length > 0) {
+          if (this.isDictionaryEcho(proxyText)) {
+            throw new Error("No audio detected");
+          }
           timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
           const rawText = proxyText;
           const reasoningStart = performance.now();
@@ -1562,6 +1641,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const proxyText = result?.text;
 
         if (proxyText && proxyText.trim().length > 0) {
+          if (this.isDictionaryEcho(proxyText)) {
+            throw new Error("No audio detected");
+          }
           timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
           const rawText = proxyText;
           const reasoningStart = performance.now();
@@ -1577,6 +1659,70 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       if (provider === "elevenlabs") {
         throw new Error("ElevenLabs transcription bridge is unavailable in this build");
+      }
+
+      // xAI STT has a non-OpenAI-compatible API — proxy through main process. See #910.
+      if (provider === "xai" && window.electronAPI?.proxyXaiTranscription) {
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const proxyData = { audioBuffer, language: language !== "auto" ? language : undefined };
+
+        const keyterms = this.getKeyterms()
+          .map((t) => t.trim().slice(0, 50))
+          .filter(Boolean)
+          .slice(0, 100);
+        if (keyterms.length > 0) {
+          proxyData.keyterms = keyterms;
+        }
+
+        const result = await window.electronAPI.proxyXaiTranscription(proxyData);
+        const proxyText = result?.text;
+
+        if (proxyText && proxyText.trim().length > 0) {
+          if (this.isDictionaryEcho(proxyText)) {
+            throw new Error("No audio detected");
+          }
+          timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+          const rawText = proxyText;
+          const reasoningStart = performance.now();
+          const text = await this.processTranscription(proxyText, "xai");
+          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+          const source = (await this.isReasoningAvailable()) ? "xai-reasoned" : "xai";
+          return { success: true, text, rawText, source, timings };
+        }
+
+        throw new Error("No text transcribed - xAI response was empty");
+      }
+
+      // Corti uses OAuth client credentials and an interaction-based REST flow — proxy through main process
+      if (provider === "corti" && window.electronAPI?.proxyCortiTranscription) {
+        const audioBuffer = await optimizedAudio.arrayBuffer();
+        const proxyData = {
+          audioBuffer,
+          // Corti requires a concrete primaryLanguage; default to English when auto-detecting
+          language: language || "en",
+          environment: apiSettings.cortiEnvironment || "us",
+          tenant: (apiSettings.cortiTenant || "").trim() || "base",
+        };
+
+        const result = await window.electronAPI.proxyCortiTranscription(proxyData);
+        const proxyText = result?.text;
+
+        if (proxyText && proxyText.trim().length > 0) {
+          if (this.isDictionaryEcho(proxyText)) {
+            throw new Error("No audio detected");
+          }
+          timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+          const rawText = proxyText;
+          const reasoningStart = performance.now();
+          const text = await this.processTranscription(proxyText, "corti");
+          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+          const source = (await this.isReasoningAvailable()) ? "corti-reasoned" : "corti";
+          return { success: true, text, rawText, source, timings };
+        }
+
+        throw new Error("No text transcribed - Corti response was empty");
       }
 
       logger.debug(
@@ -1706,6 +1852,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       // Check for text - handle both empty string and missing field
       if (result.text && result.text.trim().length > 0) {
+        if (this.isDictionaryEcho(result.text)) {
+          throw new Error("No audio detected");
+        }
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const rawText = result.text;
 
@@ -1756,6 +1905,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         );
       }
     } catch (error) {
+      if (error.message === "No audio detected") {
+        throw error;
+      }
+
       const isOpenAIMode = !getSettings().useLocalWhisper;
 
       if (allowLocalFallback && isOpenAIMode) {
@@ -1805,6 +1958,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const isGroqModel = trimmedModel.startsWith("whisper-large-v3");
         const isOpenAIModel = trimmedModel.startsWith("gpt-4o") || trimmedModel === "whisper-1";
         const isMistralModel = trimmedModel.startsWith("voxtral-");
+        const isCortiModel = trimmedModel.startsWith("corti-");
 
         if (provider === "groq" && isGroqModel) {
           return trimmedModel;
@@ -1815,13 +1969,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (provider === "mistral" && isMistralModel) {
           return trimmedModel;
         }
+        if (provider === "corti" && isCortiModel) {
+          return trimmedModel;
+        }
         // Model doesn't match provider - fall through to default
       }
 
       // Return provider-appropriate default
       if (provider === "groq") return "whisper-large-v3-turbo";
+      if (provider === "xai") return "grok-stt";
       if (provider === "mistral") return "voxtral-mini-latest";
       if (provider === "elevenlabs") return "scribe_v2";
+      if (provider === "corti") return "corti-transcribe";
       return "gpt-4o-mini-transcribe";
     } catch (error) {
       return "gpt-4o-mini-transcribe";
@@ -1874,6 +2033,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         base = currentBaseUrl.trim() || API_ENDPOINTS.TRANSCRIPTION_BASE;
       } else if (currentProvider === "groq") {
         base = API_ENDPOINTS.GROQ_BASE;
+      } else if (currentProvider === "xai") {
+        base = API_ENDPOINTS.XAI_BASE;
       } else if (currentProvider === "mistral") {
         base = API_ENDPOINTS.MISTRAL_BASE;
       } else if (currentProvider === "elevenlabs") {
@@ -2092,6 +2253,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const s = getSettings();
     if (s.useLocalWhisper) return false;
 
+    // Corti (BYOK) streams over its own WSS — independent of OpenWhispr Cloud.
+    if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
+      return !!(s.cortiClientId && s.cortiClientSecret);
+    }
+
     // For dictation/agent: respect sttConfig mode from the API — this allows
     // batch mode even for realtime-capable models (e.g. gpt-4o-mini-transcribe).
     if (this.context !== "notes" && this.sttConfig?.dictation?.mode === "batch") {
@@ -2131,6 +2297,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             preferredLanguage: warmupLang,
             cloudTranscriptionModel,
             cloudTranscriptionMode,
+            cortiEnvironment,
+            cortiTenant,
           } = getSettings();
           const res = await provider.warmup({
             sampleRate: 16000,
@@ -2138,6 +2306,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             keyterms: this.getKeyterms(),
             model: cloudTranscriptionModel,
             mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
+            environment: cortiEnvironment,
+            tenant: cortiTenant,
           });
           // Throw error to trigger retry if AUTH_EXPIRED
           if (!res.success && res.code) {
@@ -2235,10 +2405,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const tConstraints = performance.now();
 
       // 1. Get mic stream (can take 10-15s on cold macOS mic driver)
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const rawStream = await navigator.mediaDevices.getUserMedia(constraints);
       const tMedia = performance.now();
 
+      const stream = await reacquireIfDead(
+        rawStream,
+        () => {
+          this.cachedMicDeviceId = null;
+          return this.getAudioConstraints();
+        },
+        logger
+      );
       const audioTrack = stream.getAudioTracks()[0];
+
       if (audioTrack) {
         const settings = audioTrack.getSettings();
         logger.info(
@@ -2248,6 +2427,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             deviceId: settings.deviceId?.slice(0, 20) + "...",
             sampleRate: settings.sampleRate,
             usedCachedId: !!this.cachedMicDeviceId,
+            muted: audioTrack.muted,
+            readyState: audioTrack.readyState,
           },
           "audio"
         );
@@ -2352,6 +2533,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           preferredLanguage: preferredLang,
           cloudTranscriptionModel,
           cloudTranscriptionMode,
+          cortiEnvironment,
+          cortiTenant,
           useLocalWhisper,
         } = getSettings();
         const res = await provider.start({
@@ -2360,6 +2543,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           keyterms: this.getKeyterms(),
           model: cloudTranscriptionModel,
           mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
+          environment: cortiEnvironment,
+          tenant: cortiTenant,
         });
 
         if (!res.success) {
@@ -2603,7 +2788,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(finalText, {
               agentName,
-              customDictionary: stSettings.customDictionary,
+              customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
               language: stSettings.preferredLanguage || "auto",
               locale: stSettings.uiLanguage || "en",
@@ -2878,6 +3063,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.onStreamingCommit = null;
     if (this._onApiKeyChanged) {
       window.removeEventListener("api-key-changed", this._onApiKeyChanged);
+    }
+    if (this._onDeviceChange) {
+      navigator.mediaDevices?.removeEventListener?.("devicechange", this._onDeviceChange);
     }
   }
 }
