@@ -1436,7 +1436,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           return res;
         });
 
-        if (reasonResult.success) {
+        // Keep the raw transcription if cloud cleanup returns empty text;
+        // an empty cleanup result must not wipe good text (matches streaming path).
+        if (reasonResult.success && reasonResult.text) {
           processedText = reasonResult.text;
         }
       } else if (route.kind === "cleanup") {
