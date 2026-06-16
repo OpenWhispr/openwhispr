@@ -9,27 +9,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.7.3] - 2026-06-15
 
-A reworked first-run experience: onboarding now opens by asking what you'll use OpenWhispr for and tailors the rest of setup around it, including an inline Corti setup path for healthcare users. Plus a leaner meeting-detection setting and a fix that stops Settings from grabbing your microphone.
+A big release: two new transcription providers (Corti for clinical-grade medical dictation and xAI), a reworked onboarding flow built around what you'll use OpenWhispr for, spoken Snippets, a dedicated Voice Agent hotkey, a redesigned dictionary, OS-level notification controls, Linux PipeWire system-audio capture, new AI models, and a stack of fixes across paste, audio, settings, and Linux window managers.
+
+### Transcription
+
+- **Corti — clinical-grade medical transcription (BYOK).** New bring-your-own-key cloud provider built on Corti (corti.ai) for HIPAA-compliant, clinical-grade speech-to-text in dictation and uploaded-audio notes. The main-process client mints OAuth2 client-credentials tokens and stores credentials in the encrypted keychain like every other key. (#929)
+- **xAI speech-to-text.** Added xAI as a cloud transcription provider. (#942)
+- **Corti onboarding polish.** Added the Corti provider icon, and the "Get a key" link plus the onboarding Corti links now point to the corti.ai homepage with referral UTM tracking instead of the bare console.
+- **Self-hosted servers skip the API-key check** so local / self-hosted transcription endpoints work without a key. (#835)
+
+### Reasoning & models
+
+- **New models:** Claude Opus 4.8 (#884), Gemini 3.5 Flash (#837), and Gemma 4 (#892) are now selectable in their respective model pickers.
+- **Correct limit-error handling for BYOK and cloud reasoning.** (#941)
+
+### Dictation & notes
+
+- **Snippets — spoken trigger-word expansion.** Save trigger → replacement pairs (e.g. "cal link" → "cal.com/anna/30min"); when a trigger is spoken during dictation it's replaced before pasting. (#934)
+- **Voice Agent hotkey.** A dedicated global hotkey that sends a dictation straight to the dictation agent as a command — no wake word — and always bypasses the cleanup model, separate from the chat-agent overlay hotkey. (#932)
+- **Smart spacing around dictated text** so inserted text spaces correctly against surrounding content. (#856, #868)
+- **Redesigned dictionary page** — list view with hover-revealed inline edit/remove, an agent header card, and bulk import/export. (#933)
+- **Dictionary prompt-echo fix** so dictionary terms no longer leak into transcripts. (#852)
 
 ### Onboarding
 
 - **Intent capture up front.** A new "About you" step lets you multi-select what you'll use OpenWhispr for — dictation, meetings, healthcare, translation, AI commands, or uploading audio — and the rest of onboarding adapts to your choices.
-- **Dedicated meeting setup step.** Healthcare and meeting users get an optional meeting-hotkey step that explains automatic meeting detection (nothing is recorded without you).
-- **Inline Corti setup for healthcare.** When you pick healthcare, the finish step offers Corti — clinical-grade, HIPAA-compliant speech-to-text — and lets you enter Corti credentials right there or open Settings with the Corti provider preselected. A "Skip for now" escape keeps it optional.
-- **Skippable optional steps.** Optional steps now show a Skip button so you can move through setup at your own pace.
-- **Cleaner chrome.** Onboarding progress now lives in the macOS title bar, the quit button was removed from the title bar, and the email-verification screen gained a back-to-sign-in escape. Subtle text actions across the auth screens use the shared Button ghost variant.
+- **Dedicated meeting setup step** with an optional meeting hotkey and an explanation of automatic meeting detection (nothing is recorded without you).
+- **Inline Corti setup for healthcare.** Picking healthcare surfaces Corti on the finish step — enter Corti credentials right there or open Settings with the Corti provider preselected, with a "Skip for now" escape.
+- **Skippable optional steps**, onboarding progress moved into the macOS title bar, the quit button removed from the title bar, a back-to-sign-in escape on email verification, and ghost-variant styling for subtle auth actions.
+- **Provider chips styling fix** on the notes onboarding screen. (#916)
 
-### Transcription
+### Settings & notifications
 
-- **Corti provider polish.** Added the Corti provider icon, and the "Get a key" link (plus the onboarding Corti links) now point to the corti.ai homepage with referral UTM tracking instead of the bare console.
+- **OS-level notification controls.** New settings to scope which OS-level interruptions OpenWhispr raises. (#781)
+- **Remove button for the agent hotkey.** (#824)
+- **Simpler meeting detection.** Audio-based meeting detection is now driven by the notification toggle (`notificationsEnabled && notifyMeetingDetection`) instead of a separate Audio Detection setting; the standalone setting, its UI section, and the now-dead detection translations were removed so a detector can't burn CPU while notifications are off.
+- **Settings no longer grabs the microphone.** Opening Settings used to call `getUserMedia` to read device labels, which started a mic session and interrupted other audio (e.g. paused music on macOS). It now enumerates devices first and only falls back to `getUserMedia` when labels are missing because permission hasn't been granted.
+- **Custom cleanup API key persists across restarts.** (#893)
+- **Download progress is preserved across tab switches.** (#735)
+- **Select trigger background aligned** with surrounding controls. (#825)
 
-### Meetings
+### Linux
 
-- **Simpler meeting-detection setting.** Audio-based meeting detection is now driven by the notification toggle (`notificationsEnabled && notifyMeetingDetection`) instead of a separate Audio Detection setting. The standalone setting, its UI section, and the now-dead detection translations were removed, so a detector can no longer burn CPU while notifications are off.
+- **PipeWire system-audio capture** for transcriptions via a direct PipeWire loopback (replacing the ScreenCast portal path). (#904)
+- **Nix flake** for one-command install, plus a GitHub Action. (#886)
+- **Paste reliability:** Shift+Insert paste for Electron app windows (#873) and when the window context is unknown (#827); the ydotool socket is now propagated to spawned clients (#962).
+- **Dictation hotkey no longer dies in Hyprland** on config reload. (#919)
+- **Fall back to the system journal** when the user journal has no KWin entries. (#776)
 
 ### Fixes
 
-- **Settings no longer grabs the microphone.** Opening Settings used to call `getUserMedia` to read device labels, which started a mic session and interrupted other audio (e.g. paused music on macOS). It now enumerates devices first and only falls back to `getUserMedia` when labels are missing because permission hasn't been granted yet.
+- **Auto-paste in Chromium-based apps on macOS.** (#668, #823)
+- **Mic re-acquired when it goes silent after idle.** (#922)
+- **Serialize `.env` writes** to prevent an ENOENT rename race. (#940)
+- **Fall back to JS extraction** when system unzip is unavailable. (#775)
+- **Localized Language Models settings** across all locales (#887); fixed zh-CN note-files description mojibake (#848).
 
 ## [1.7.2] - 2026-05-20
 
