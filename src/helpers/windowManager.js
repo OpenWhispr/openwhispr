@@ -440,16 +440,24 @@ class WindowManager {
     this.handleWindowsPushKeyUp();
   }
 
-  sendToggleDictation() {
+  _sendDictationToggle(channel) {
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.showDictationPanel();
-      this.mainWindow.webContents.send("toggle-dictation");
+      this.mainWindow.webContents.send(channel);
       this._isDictatingToggle = !this._isDictatingToggle;
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     }
+  }
+
+  sendToggleDictation() {
+    this._sendDictationToggle("toggle-dictation");
+  }
+
+  sendToggleVoiceAgent() {
+    this._sendDictationToggle("toggle-voice-agent");
   }
 
   sendStartDictation() {

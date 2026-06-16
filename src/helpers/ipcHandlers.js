@@ -68,6 +68,37 @@ function parseAttendees(raw) {
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
 
+const XAI_STT_URL = "https://api.x.ai/v1/stt";
+
+// xAI STT supports 25 languages; language must be in this set to enable ITN via format=true
+const XAI_STT_LANGUAGES = new Set([
+  "ar",
+  "cs",
+  "da",
+  "de",
+  "en",
+  "es",
+  "fa",
+  "fil",
+  "fr",
+  "hi",
+  "id",
+  "it",
+  "ja",
+  "ko",
+  "mk",
+  "ms",
+  "nl",
+  "pl",
+  "pt",
+  "ro",
+  "ru",
+  "sv",
+  "th",
+  "tr",
+  "vi",
+]);
+
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
 
@@ -505,6 +536,7 @@ class IPCHandlers {
       if (provider === "mistral" && isMistral) return trimmed;
     }
     if (provider === "groq") return "whisper-large-v3-turbo";
+    if (provider === "xai") return "grok-stt";
     if (provider === "mistral") return "voxtral-mini-latest";
     return "gpt-4o-mini-transcribe";
   }
@@ -1411,6 +1443,26 @@ class IPCHandlers {
         return { success: true };
       } catch (error) {
         debugLogger.error("Error exporting transcript", { error: error.message }, "notes");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("export-dictionary", async (event, words) => {
+      try {
+        const { dialog } = require("electron");
+        const fs = require("fs");
+
+        const result = await dialog.showSaveDialog({
+          defaultPath: "dictionary.txt",
+          filters: [{ name: "Text", extensions: ["txt"] }],
+        });
+
+        if (result.canceled || !result.filePath) return { success: false };
+
+        fs.writeFileSync(result.filePath, words.join("\n"), "utf-8");
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Error exporting dictionary", { error: error.message }, "dictionary");
         return { success: false, error: error.message };
       }
     });
@@ -2503,6 +2555,50 @@ class IPCHandlers {
       return this.environmentManager.saveGroqKey(key);
     });
 
+    ipcMain.handle("get-xai-key", async () => {
+      return this.environmentManager.getXaiKey();
+    });
+
+    ipcMain.handle("save-xai-key", async (event, key) => {
+      return this.environmentManager.saveXaiKey(key);
+    });
+
+    ipcMain.handle(
+      "proxy-xai-transcription",
+      async (event, { audioBuffer, language, keyterms }) => {
+        const apiKey = this.environmentManager.getXaiKey();
+        if (!apiKey) {
+          throw new Error("xAI API key not configured");
+        }
+
+        const formData = new FormData();
+        const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
+        formData.append("file", audioBlob, "audio.webm");
+        if (language && language !== "auto" && XAI_STT_LANGUAGES.has(language)) {
+          formData.append("language", language);
+          formData.append("format", "true");
+        }
+        if (keyterms && keyterms.length > 0) {
+          for (const term of keyterms) {
+            formData.append("keyterm", term);
+          }
+        }
+
+        const response = await proxyFetch(XAI_STT_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}` },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`xAI API Error: ${response.status} ${errorText}`);
+        }
+
+        return await response.json();
+      }
+    );
+
     ipcMain.handle("get-mistral-key", async () => {
       return this.environmentManager.getMistralKey();
     });
@@ -3279,15 +3375,15 @@ class IPCHandlers {
         available: false,
         supportsPersistentGrant: false,
         supportsPersistentPortalGrant: false,
+        supportsSystemAudio: false,
         supportsNativeCapture: false,
         portalVersion: null,
         error: error.message,
       }));
-      const supportsPersistentGrant = !!capability?.supportsPersistentGrant;
-      const supportsPersistentPortalGrant = !!capability?.supportsPersistentPortalGrant;
+      const available = !!capability?.available;
+      const supportsSystemAudio = !!capability?.supportsSystemAudio;
       const supportsNativeCapture = !!capability?.supportsNativeCapture;
-      const restoreTokenAvailable =
-        supportsPersistentGrant && !!this.linuxPortalAudioManager?.hasStoredRestoreToken();
+      const granted = available && supportsSystemAudio && supportsNativeCapture;
       const helperError =
         typeof capability?.error === "string" &&
         !capability.error.includes("helper binary not found")
@@ -3295,20 +3391,11 @@ class IPCHandlers {
           : undefined;
 
       return buildSystemAudioAccess({
-        granted: restoreTokenAvailable,
-        status: supportsPersistentGrant
-          ? restoreTokenAvailable
-            ? "granted"
-            : "not-determined"
-          : "unknown",
-        mode: "portal",
-        supportsPersistentGrant,
-        supportsPersistentPortalGrant,
+        granted,
+        status: granted ? "granted" : "unknown",
+        mode: granted ? "loopback" : "unsupported",
         supportsNativeCapture,
-        supportsOnboardingGrant: supportsPersistentGrant,
-        requiresRuntimeSharePrompt: !supportsPersistentGrant || !restoreTokenAvailable,
-        strategy: supportsPersistentGrant ? "portal-helper" : "browser-portal",
-        restoreTokenAvailable,
+        strategy: granted ? "pipewire-loopback" : "unsupported",
         portalVersion: capability?.portalVersion ?? null,
         error: helperError,
       });
@@ -3354,21 +3441,6 @@ class IPCHandlers {
       }
 
       if (process.platform === "linux") {
-        const currentAccess = await getLinuxSystemAudioAccess();
-        if (!currentAccess.supportsOnboardingGrant) {
-          return currentAccess;
-        }
-
-        try {
-          await this.linuxPortalAudioManager?.requestAccess();
-        } catch (error) {
-          debugLogger.warn(
-            "Linux system audio persistent grant failed",
-            { error: error.message },
-            "meeting"
-          );
-        }
-
         return getLinuxSystemAudioAccess();
       }
 
@@ -3712,6 +3784,9 @@ class IPCHandlers {
           if (provider === "groq") {
             apiKey = this.environmentManager.getGroqKey();
             endpoint = "https://api.groq.com/openai/v1/audio/transcriptions";
+          } else if (provider === "xai") {
+            apiKey = this.environmentManager.getXaiKey();
+            endpoint = XAI_STT_URL;
           } else if (provider === "mistral") {
             apiKey = this.environmentManager.getMistralKey();
             endpoint = MISTRAL_TRANSCRIPTION_URL;
@@ -3733,8 +3808,16 @@ class IPCHandlers {
 
           const formData = new FormData();
           formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
-          formData.append("model", model);
-          if (language) formData.append("language", language);
+          if (provider === "xai") {
+            // xAI STT does not accept a model field; language only when in supported set
+            if (language && XAI_STT_LANGUAGES.has(language)) {
+              formData.append("language", language);
+              formData.append("format", "true");
+            }
+          } else {
+            formData.append("model", model);
+            if (language) formData.append("language", language);
+          }
           const headers = {};
           if (provider === "mistral") {
             headers["x-api-key"] = apiKey;
@@ -4297,7 +4380,7 @@ class IPCHandlers {
     const getMeetingSystemAudioCapabilityMode = () => {
       if (this.audioTapManager?.isSupported()) return "native";
       if (process.platform === "win32") return "loopback";
-      if (process.platform === "linux") return "portal";
+      if (process.platform === "linux") return "loopback";
       return "unsupported";
     };
 
@@ -4313,15 +4396,17 @@ class IPCHandlers {
         return { mode, strategy: "native" };
       }
 
+      if (process.platform === "linux") {
+        const linuxAccess = await getLinuxSystemAudioAccess();
+        return {
+          mode: linuxAccess.mode,
+          strategy: linuxAccess.strategy || "unsupported",
+        };
+      }
+
       if (mode === "loopback") {
         return { mode, strategy: "loopback" };
       }
-
-      const linuxAccess = await getLinuxSystemAudioAccess();
-      return {
-        mode,
-        strategy: linuxAccess.strategy === "portal-helper" ? "portal-helper" : "browser-portal",
-      };
     };
 
     const hasNativeMeetingSystemAudio = () => getMeetingSystemAudioMode() === "native";
@@ -5446,12 +5531,26 @@ class IPCHandlers {
         },
         onWarning: (warning) => {
           debugLogger.warn(
-            "Linux portal system audio warning",
+            "Linux PipeWire system audio warning",
             { code: warning.code, message: warning.message },
             "meeting"
           );
         },
       });
+    };
+
+    const fallBackToMicOnly = async (context) => {
+      if (this._meetingSystemStreaming?.isConnected) {
+        await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
+          debugLogger.debug(
+            `System streaming disconnect during ${context} fallback failed`,
+            { error: disconnectError.message },
+            "meeting"
+          );
+        });
+      }
+      this._meetingSystemStreaming = null;
+      await stopLiveSpeakerIdentification().catch(() => {});
     };
 
     const startMeetingSystemAudio = async (
@@ -5470,22 +5569,12 @@ class IPCHandlers {
             { error: error.message },
             "meeting"
           );
-          if (this._meetingSystemStreaming?.isConnected) {
-            await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
-              debugLogger.debug(
-                "System streaming disconnect during native fallback failed",
-                { error: disconnectError.message },
-                "meeting"
-              );
-            });
-          }
-          this._meetingSystemStreaming = null;
-          await stopLiveSpeakerIdentification().catch(() => {});
+          await fallBackToMicOnly("native");
           return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
         }
       }
 
-      if (systemAudioStrategy !== "portal-helper") {
+      if (systemAudioStrategy !== "pipewire-loopback") {
         return { systemAudioMode, systemAudioStrategy };
       }
 
@@ -5494,11 +5583,12 @@ class IPCHandlers {
         return { systemAudioMode, systemAudioStrategy };
       } catch (error) {
         debugLogger.warn(
-          `Linux portal helper failed ${context}, falling back to browser portal`,
+          `Linux PipeWire helper failed ${context}, falling back to mic-only`,
           { error: error.message },
           "meeting"
         );
-        return { systemAudioMode, systemAudioStrategy: "browser-portal" };
+        await fallBackToMicOnly("PipeWire");
+        return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
       }
     };
 
@@ -6331,21 +6421,38 @@ class IPCHandlers {
           }
 
           if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
-          if (!baseUrl) throw new Error("No transcription endpoint configured.");
+          if (!baseUrl && provider !== "xai") {
+            throw new Error("No transcription endpoint configured.");
+          }
 
           const audioBuffer = fs.readFileSync(filePath);
           const ext = path.extname(filePath).toLowerCase().replace(".", "");
           const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
           const fileName = path.basename(filePath);
 
-          let transcriptionUrl = baseUrl.replace(/\/+$/, "");
-          if (!transcriptionUrl.endsWith("/audio/transcriptions")) {
-            transcriptionUrl += "/audio/transcriptions";
+          let transcriptionUrl;
+          const multipartFields = {};
+          if (provider === "xai") {
+            // xAI STT has a fixed endpoint and accepts no model field. See #910.
+            transcriptionUrl = XAI_STT_URL;
+            if (language && XAI_STT_LANGUAGES.has(language)) {
+              multipartFields.language = language;
+              multipartFields.format = "true";
+            }
+          } else {
+            transcriptionUrl = baseUrl.replace(/\/+$/, "");
+            if (!transcriptionUrl.endsWith("/audio/transcriptions")) {
+              transcriptionUrl += "/audio/transcriptions";
+            }
+            multipartFields.model = model || "whisper-1";
           }
 
-          const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, {
-            model: model || "whisper-1",
-          });
+          const { body, boundary } = buildMultipartBody(
+            audioBuffer,
+            fileName,
+            contentType,
+            multipartFields
+          );
 
           const url = new URL(transcriptionUrl);
           const data = await postMultipart(url, body, boundary, {
@@ -7219,6 +7326,35 @@ class IPCHandlers {
         success: false,
         message: result.error || `Failed to update agent hotkey to: ${hotkey}`,
       };
+    });
+
+    ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
+      const hotkeyManager = this.windowManager.hotkeyManager;
+      const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
+      if (!voiceAgentCallback) {
+        return { success: false, message: "Voice agent hotkey callback not initialized" };
+      }
+
+      if (!hotkey) {
+        hotkeyManager.unregisterSlot("voiceAgent");
+        this.environmentManager.saveVoiceAgentKey?.("");
+        return { success: true, message: "Voice agent hotkey cleared" };
+      }
+
+      const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback);
+      if (result.success) {
+        this.environmentManager.saveVoiceAgentKey?.(hotkey);
+        return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
+      }
+
+      return {
+        success: false,
+        message: result.error || `Failed to update voice agent hotkey to: ${hotkey}`,
+      };
+    });
+
+    ipcMain.handle("get-voice-agent-key", async () => {
+      return this.environmentManager.getVoiceAgentKey?.() || "";
     });
 
     ipcMain.handle("get-agent-key", async () => {

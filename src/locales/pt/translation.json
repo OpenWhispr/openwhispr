@@ -147,7 +147,8 @@
       "activation": "Ativação",
       "useCase": "Sobre você",
       "meeting": "Reuniões",
-      "finish": "Concluir"
+      "finish": "Concluir",
+      "voiceAgent": "Agente de voz"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Não foi possível registrar esse atalho",
@@ -192,6 +193,13 @@
       "hotkeyToStartStop": "{{hotkey}} para iniciar/parar",
       "holdHotkey": "Segure {{hotkey}}",
       "textareaPlaceholder": "Clique aqui e use seu atalho para ditar..."
+    },
+    "voiceAgent": {
+      "title": "Atalho do agente de voz",
+      "description": "Fale com seu agente de IA com um único atalho",
+      "hotkey": "Atalho",
+      "howItWorks": "Pressione a tecla e diga o que quer — por exemplo, “escreva uma breve nota de agradecimento”. {{agentName}} escreve o resultado onde estiver o cursor. Não precisa dizer “Hey {{agentName}}” antes.",
+      "optionalNote": "Opcional — você pode definir ou alterar a qualquer momento nas configurações."
     },
     "connectivity": {
       "title": "Não conseguimos acessar o OpenWhispr Cloud nesta rede",
@@ -841,7 +849,8 @@
     "pressAnyKeyMac": "Pressione qualquer tecla ou ⌘⇧K",
     "recording": "Gravando",
     "tryShortcut": "Tente Ctrl+Shift+K",
-    "tryShortcutMac": "Tente ⌘⇧K"
+    "tryShortcutMac": "Tente ⌘⇧K",
+    "remove": "Remover atalho"
   },
   "languageSelector": {
     "noLanguagesFound": "Nenhum idioma encontrado",
@@ -1326,10 +1335,13 @@
       "meetingHotkey": {
         "title": "Atalho modo reunião",
         "description": "Iniciar modo reunião e posicionar o painel ao lado da tela",
-        "clear": "Remover atalho",
         "layoutLabel": "Ao acionar pelo atalho, abrir em:",
         "layoutFullWidth": "Largura total",
         "layoutSidePanel": "Painel lateral"
+      },
+      "voiceAgentHotkey": {
+        "title": "Atalho do agente de voz",
+        "description": "Diga o que você precisa — seu agente de IA escreve o resultado, não suas palavras"
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",
@@ -1786,7 +1798,8 @@
         "groq_whisper_large_v3_turbo": "Velocidade 216x em tempo real",
         "groq_whisper_large_v3": "Modelo Large v3, rápido e preciso",
         "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida",
-        "corti_transcribe": "Transcrição médica de nível clínico"
+        "corti_transcribe": "Transcrição médica de nível clínico",
+        "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo forte de raciocínio",
@@ -2201,15 +2214,56 @@
     "addWord": "Adicionar palavra",
     "removeWord": "Remover {{word}}",
     "clearAll": "Limpar tudo",
-    "howItWorks": "Como funciona",
-    "howItWorksDetail": "As palavras adicionadas são incluídas no prompt de IA para que o modelo saiba procurar e preservar esses termos durante a limpeza da transcrição.",
-    "autoManaged": "Gerenciado automaticamente",
-    "inputHint": "Pressione Enter para adicionar",
-    "title": "Dicionário personalizado",
-    "description": "Ensine a IA o seu vocabulário — nomes, jargões e termos que ela poderia não reconhecer",
     "clearTitle": "Limpar o dicionário?",
     "clearDescription": "Isso removerá todas as palavras do seu dicionário personalizado. Esta ação não pode ser desfeita.",
-    "addPlaceholder": "Adicionar uma palavra ou frase..."
+    "addPlaceholder": "Adicione palavras separadas por vírgulas — OpenWhispr, Supabase, John Snow, ARR",
+    "add": "Adicionar",
+    "importWords": "Importar palavras",
+    "importPlaceholder": "Cole palavras separadas por vírgulas...",
+    "separateWithCommas": "Separe com vírgulas",
+    "wordsReady_one": "{{count}} palavra pronta",
+    "wordsReady_other": "{{count}} palavras prontas",
+    "import": "Importar",
+    "yourDictionary": "Seu dicionário",
+    "exportDictionary": "Exportar dicionário",
+    "exportFailed": "Falha ao exportar",
+    "editWord": "Editar {{word}}",
+    "noMatches": "Nenhuma correspondência — pressione Enter para adicionar \"{{word}}\"",
+    "tabDictionary": "Dicionário",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "edit": "Editar {{trigger}}",
+      "remove": "Remover {{trigger}}",
+      "editTitle": "Editar snippet",
+      "dialogDescription": "Quando você falar o gatilho, ele será substituído pelo seu texto salvo.",
+      "triggerLabel": "Gatilho",
+      "triggerPlaceholder": "ex.: minha agenda",
+      "replacementLabel": "Substituição",
+      "replacementPlaceholder": "Texto a inserir quando você disser o gatilho…",
+      "create": "Criar snippet",
+      "duplicate": "Já existe um snippet com esse gatilho",
+      "emptyTitle": "O que você não deveria ter que dizer",
+      "emptyTitleAccent": "duas vezes",
+      "emptyDescription": "Fale um gatilho e o OpenWhispr o substitui pelo que você salvou: URLs, introduções, assinaturas, prompts.",
+      "new": "Novo snippet",
+      "examples": {
+        "linkedinTrigger": "Meu LinkedIn",
+        "linkedinText": "linkedin.com/in/voce",
+        "rewriteTrigger": "Prompt de reescrita",
+        "rewriteText": "Reescreva isto para ficar mais conciso e profissional",
+        "introTrigger": "Email de apresentação",
+        "introText": "Olá, adoraria encontrar um horário para conversar esta semana…",
+        "signoffTrigger": "Assinatura",
+        "signoffText": "Abraços, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Adicione uma frase-gatilho — \"minha agenda\", \"meu LinkedIn\""
+    },
+    "emptyTitle": "Seu dicionário está vazio",
+    "emptyDescription": "Adicione palavras que {{agentName}} deve sempre acertar: nomes, ferramentas, siglas.",
+    "addFirstWord": "Adicione sua primeira palavra",
+    "importList": "Importar uma lista",
+    "agentDefault": "Adicionado por padrão"
   },
   "sidebar": {
     "home": "Início",
@@ -2364,9 +2418,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Tecla do Agente",
-      "hotkeyDescription": "Tecla de atalho para alternar a sobreposição do agente",
-      "clearHotkey": "Remover atalho",
+      "hotkey": "Atalho do agente de chat",
+      "hotkeyDescription": "Abre e fecha a sobreposição do agente de chat",
       "model": "Modelo do Agente",
       "modelDescription": "Modelo de IA usado para conversas do agente",
       "systemPrompt": "Prompt do Sistema",

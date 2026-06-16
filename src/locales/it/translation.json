@@ -168,7 +168,8 @@
       "activation": "Attivazione",
       "useCase": "Su di te",
       "meeting": "Riunioni",
-      "finish": "Fine"
+      "finish": "Fine",
+      "voiceAgent": "Agente vocale"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Impossibile registrare questa scorciatoia",
@@ -213,6 +214,13 @@
       "hotkeyToStartStop": "{{hotkey}} per avviare/fermare",
       "holdHotkey": "Tieni premuto {{hotkey}}",
       "textareaPlaceholder": "Clicca qui e usa la scorciatoia per dettare..."
+    },
+    "voiceAgent": {
+      "title": "Scorciatoia dell'agente vocale",
+      "description": "Parla con il tuo agente IA con un solo tasto",
+      "hotkey": "Scorciatoia",
+      "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. {{agentName}} scrive il risultato dove si trova il cursore. Non serve dire prima “Hey {{agentName}}”.",
+      "optionalNote": "Facoltativo — puoi impostarla o modificarla in qualsiasi momento nelle impostazioni."
     },
     "connectivity": {
       "title": "Non riusciamo a raggiungere OpenWhispr Cloud da questa rete",
@@ -862,7 +870,8 @@
     "pressAnyKeyMac": "Premi un tasto qualsiasi o ⌘⇧K",
     "recording": "Registrazione",
     "tryShortcut": "Prova Ctrl+Shift+K",
-    "tryShortcutMac": "Prova ⌘⇧K"
+    "tryShortcutMac": "Prova ⌘⇧K",
+    "remove": "Rimuovi scorciatoia"
   },
   "languageSelector": {
     "noLanguagesFound": "Nessuna lingua trovata",
@@ -1347,10 +1356,13 @@
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",
         "description": "Avvia la modalità meeting e posiziona il pannello a lato dello schermo",
-        "clear": "Rimuovi scorciatoia",
         "layoutLabel": "Quando attivata da scorciatoia, apri in:",
         "layoutFullWidth": "Larghezza completa",
         "layoutSidePanel": "Pannello laterale"
+      },
+      "voiceAgentHotkey": {
+        "title": "Scorciatoia dell'agente vocale",
+        "description": "Di' cosa ti serve — il tuo agente IA scrive il risultato, non le tue parole"
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",
@@ -1807,7 +1819,8 @@
         "groq_whisper_large_v3_turbo": "Velocità 216x in tempo reale",
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
-        "corti_transcribe": "Trascrizione medica di livello clinico"
+        "corti_transcribe": "Trascrizione medica di livello clinico",
+        "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",
@@ -2201,15 +2214,56 @@
     "addWord": "Aggiungi parola",
     "removeWord": "Rimuovi {{word}}",
     "clearAll": "Cancella tutto",
-    "howItWorks": "Come funziona",
-    "howItWorksDetail": "Le parole aggiunte vengono incluse nel prompt dell'IA, in modo che il modello sappia cercare e preservare questi termini durante la correzione della trascrizione.",
-    "autoManaged": "Gestito automaticamente",
-    "inputHint": "Premi Invio per aggiungere",
-    "title": "Dizionario personalizzato",
-    "description": "Insegna all'IA il tuo vocabolario — nomi, gergo e termini che potrebbe altrimenti non riconoscere",
     "clearTitle": "Svuotare il dizionario?",
     "clearDescription": "Verranno rimossi tutti i termini dal tuo dizionario personalizzato. Questa azione non può essere annullata.",
-    "addPlaceholder": "Aggiungi una parola o una frase..."
+    "addPlaceholder": "Aggiungi parole separate da virgole: OpenWhispr, Supabase, John Snow, ARR",
+    "add": "Aggiungi",
+    "importWords": "Importa parole",
+    "importPlaceholder": "Incolla parole separate da virgole...",
+    "separateWithCommas": "Separa con virgole",
+    "wordsReady_one": "{{count}} parola pronta",
+    "wordsReady_other": "{{count}} parole pronte",
+    "import": "Importa",
+    "yourDictionary": "Il tuo dizionario",
+    "exportDictionary": "Esporta dizionario",
+    "exportFailed": "Esportazione non riuscita",
+    "editWord": "Modifica {{word}}",
+    "noMatches": "Nessuna corrispondenza — premi Invio per aggiungere \"{{word}}\"",
+    "tabDictionary": "Dizionario",
+    "tabSnippets": "Snippet",
+    "snippets": {
+      "title": "Snippet",
+      "edit": "Modifica {{trigger}}",
+      "remove": "Rimuovi {{trigger}}",
+      "editTitle": "Modifica snippet",
+      "dialogDescription": "Quando pronunci il trigger, viene sostituito con il tuo testo salvato.",
+      "triggerLabel": "Trigger",
+      "triggerPlaceholder": "es. mio calendario",
+      "replacementLabel": "Sostituzione",
+      "replacementPlaceholder": "Testo da inserire quando pronunci il trigger…",
+      "create": "Crea snippet",
+      "duplicate": "Esiste già uno snippet con questo trigger",
+      "emptyTitle": "Quello che non dovresti dover dire",
+      "emptyTitleAccent": "due volte",
+      "emptyDescription": "Pronuncia un trigger e OpenWhispr lo sostituisce con ciò che hai salvato: URL, presentazioni, firme, prompt.",
+      "new": "Nuovo snippet",
+      "examples": {
+        "linkedinTrigger": "Il mio LinkedIn",
+        "linkedinText": "linkedin.com/in/tu",
+        "rewriteTrigger": "Prompt di riscrittura",
+        "rewriteText": "Riscrivi questo testo in modo più conciso e professionale",
+        "introTrigger": "Email di presentazione",
+        "introText": "Ciao, mi piacerebbe trovare un momento per parlare questa settimana…",
+        "signoffTrigger": "Firma",
+        "signoffText": "Saluti, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Aggiungi una frase trigger: \"mio calendario\", \"il mio LinkedIn\""
+    },
+    "emptyTitle": "Il tuo dizionario è vuoto",
+    "emptyDescription": "Aggiungi le parole che {{agentName}} deve sempre riconoscere: nomi, strumenti, acronimi.",
+    "addFirstWord": "Aggiungi la tua prima parola",
+    "importList": "Importa un elenco",
+    "agentDefault": "Aggiunto di default"
   },
   "sidebar": {
     "home": "Home",
@@ -2364,9 +2418,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Tasto Agente",
-      "hotkeyDescription": "Tasto di scelta rapida per alternare l'overlay agente",
-      "clearHotkey": "Rimuovi scorciatoia",
+      "hotkey": "Scorciatoia dell'agente chat",
+      "hotkeyDescription": "Apre e chiude l'overlay dell'agente chat",
       "model": "Modello Agente",
       "modelDescription": "Modello IA utilizzato per le conversazioni agente",
       "systemPrompt": "Prompt di Sistema",

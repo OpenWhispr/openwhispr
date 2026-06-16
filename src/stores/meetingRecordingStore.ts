@@ -224,7 +224,7 @@ const ensureRendererSystemAudioCapture = async ({
   systemAudioStrategy,
   systemCaptureResult,
 }: {
-  initialDisplayCaptureStrategy: "loopback" | "browser-portal" | null;
+  initialDisplayCaptureStrategy: "loopback" | null;
   systemAudioStrategy: SystemAudioStrategy;
   systemCaptureResult: { stream: MediaStream | null; error: Error | null };
 }) => {
@@ -1097,13 +1097,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
         systemProcessor = processor;
       });
     } else if (systemCaptureError) {
-      if (systemAudioStrategy === "browser-portal") {
-        logger.warn(
-          "Linux system audio capture failed, continuing with mic only",
-          { error: systemCaptureError.message },
-          "meeting"
-        );
-      } else if (systemAudioStrategy === "loopback") {
+      if (systemAudioStrategy === "loopback") {
         logger.warn(
           "System audio loopback failed, continuing with mic only",
           { error: systemCaptureError.message },

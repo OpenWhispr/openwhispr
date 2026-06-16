@@ -11,6 +11,7 @@ const SECRET_KEYS = [
   "ANTHROPIC_API_KEY",
   "GEMINI_API_KEY",
   "GROQ_API_KEY",
+  "XAI_API_KEY",
   "MISTRAL_API_KEY",
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
@@ -40,6 +41,7 @@ const PERSISTED_KEYS = [
   "LLAMA_VULKAN_ENABLED",
   "DICTATION_KEY",
   "CHAT_AGENT_KEY",
+  "VOICE_AGENT_KEY",
   "MEETING_KEY",
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
@@ -57,6 +59,10 @@ const PERSISTED_KEYS = [
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
 ];
+
+// Module-level so writes are serialized across all instances — hotkeyManager
+// creates its own EnvironmentManager alongside the main.js singleton.
+let envWriteQueue = Promise.resolve();
 
 class EnvironmentManager {
   constructor() {
@@ -213,7 +219,14 @@ class EnvironmentManager {
     );
   }
 
-  async _writeEnvFileAtomic(envPath) {
+  _writeEnvFileAtomic(envPath) {
+    // Concurrent write+rename pairs share the same .env.tmp path, and the
+    // loser's rename throws ENOENT (#903).
+    envWriteQueue = envWriteQueue.catch(() => {}).then(() => this._writeEnvFile(envPath));
+    return envWriteQueue;
+  }
+
+  async _writeEnvFile(envPath) {
     // Only strip plaintext secrets once migration has fully completed —
     // otherwise a partial-migration recovery can lose unencrypted secrets.
     const stripSecrets =
@@ -281,6 +294,14 @@ class EnvironmentManager {
 
   saveGroqKey(key) {
     return this._saveKey("GROQ_API_KEY", key);
+  }
+
+  getXaiKey() {
+    return this._getKey("XAI_API_KEY");
+  }
+
+  saveXaiKey(key) {
+    return this._saveKey("XAI_API_KEY", key);
   }
 
   getMistralKey() {
@@ -437,6 +458,16 @@ class EnvironmentManager {
   saveAgentKey(key) {
     delete process.env.AGENT_KEY;
     const result = this._saveKey("CHAT_AGENT_KEY", key);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  getVoiceAgentKey() {
+    return this._getKey("VOICE_AGENT_KEY");
+  }
+
+  saveVoiceAgentKey(key) {
+    const result = this._saveKey("VOICE_AGENT_KEY", key);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

@@ -37,6 +37,7 @@ import { useAuth } from "../hooks/useAuth";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { getValidationMessage } from "../utils/hotkeyValidator";
+import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getCachedPlatform, getPlatform } from "../utils/platform";
 import logger from "../utils/logger";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
@@ -49,7 +50,7 @@ import { USE_CASE_IDS } from "./onboarding/useCases";
 import { cloudPost } from "../services/cloudApi";
 
 // Highest possible step index across flow variants (skip-auth with meeting step).
-const MAX_STEP_INDEX = 6;
+const MAX_STEP_INDEX = 7;
 
 interface OnboardingFlowProps {
   onComplete: (options?: { openSettings?: boolean }) => void;
@@ -93,10 +94,13 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     cloudTranscriptionBaseUrl,
     openaiApiKey,
     groqApiKey,
+    xaiApiKey,
     mistralApiKey,
     dictationKey,
     meetingKey,
     setMeetingKey,
+    voiceAgentKey,
+    setVoiceAgentKey,
     activationMode,
     setActivationMode,
     setDictationKey,
@@ -143,6 +147,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     []
   );
 
+  const validateVoiceAgentHotkey = useCallback(
+    (newHotkey: string) =>
+      validateHotkeyForSlot(newHotkey, { "settingsPage.general.hotkey.title": hotkey }, t),
+    [hotkey, t]
+  );
+
   const permissionsHook = usePermissions(showAlertDialog);
   useClipboard(showAlertDialog); // Initialize clipboard hook for permission checks
 
@@ -172,6 +182,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       list.push({ id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield });
     }
     list.push({ id: "activation", title: t("onboarding.steps.activation"), icon: Command });
+    list.push({ id: "voiceAgent", title: t("onboarding.steps.voiceAgent"), icon: Sparkles });
     if (showMeetingStep) {
       list.push({ id: "meeting", title: t("onboarding.steps.meeting"), icon: Users });
     }
@@ -664,6 +675,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       case "activation":
         return renderActivationStep();
 
+      case "voiceAgent":
+        return renderVoiceAgentStep();
+
       case "meeting":
         return (
           <MeetingSetupStep
@@ -734,11 +748,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   : t("onboarding.activation.holdDescription")}
               </p>
             </div>
-            <ActivationModeSelector
-              value={activationMode}
-              onChange={setActivationMode}
-              variant="compact"
-            />
+            <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
           </div>
         )}
       </div>
@@ -761,6 +771,46 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           className="text-sm resize-none"
         />
       </div>
+    </div>
+  );
+
+  const renderVoiceAgentStep = () => (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="text-center space-y-0.5">
+        <h2 className="text-lg font-semibold text-foreground tracking-tight">
+          {t("onboarding.voiceAgent.title")}
+        </h2>
+        <p className="text-xs text-muted-foreground">{t("onboarding.voiceAgent.description")}</p>
+      </div>
+
+      {/* Hotkey section */}
+      <div className="rounded-lg border border-border-subtle bg-surface-1 overflow-hidden">
+        <div className="p-4 border-b border-border-subtle">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              {t("onboarding.voiceAgent.hotkey")}
+            </span>
+          </div>
+          <HotkeyInput
+            value={voiceAgentKey}
+            onChange={setVoiceAgentKey}
+            onClear={() => setVoiceAgentKey("")}
+            variant="hero"
+            validate={validateVoiceAgentHotkey}
+          />
+        </div>
+
+        <div className="p-4">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {t("onboarding.voiceAgent.howItWorks", { agentName })}
+          </p>
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground/60 text-center">
+        {t("onboarding.voiceAgent.optionalNote")}
+      </p>
     </div>
   );
 
@@ -787,6 +837,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             return openaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "groq") {
             return groqApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "xai") {
+            return xaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "mistral") {
             return mistralApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "corti") {
@@ -801,6 +853,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         return areRequiredPermissionsMet(permissionsHook.micPermissionGranted);
       case "activation":
         return hotkey.trim() !== "";
+      case "voiceAgent":
+        return true; // Voice agent hotkey is optional
       case "meeting":
         return true; // Meeting hotkey is optional
       case "finish":

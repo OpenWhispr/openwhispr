@@ -168,7 +168,8 @@
       "activation": "アクティベーション",
       "useCase": "あなたについて",
       "meeting": "会議",
-      "finish": "完了"
+      "finish": "完了",
+      "voiceAgent": "ボイスエージェント"
     },
     "hotkey": {
       "couldNotRegisterTitle": "ホットキーを登録できませんでした",
@@ -213,6 +214,13 @@
       "hotkeyToStartStop": "{{hotkey}} で開始/停止",
       "holdHotkey": "{{hotkey}} を押し続ける",
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
+    },
+    "voiceAgent": {
+      "title": "ボイスエージェントホットキー",
+      "description": "ワンキーでAIエージェントに話しかけられます",
+      "hotkey": "ホットキー",
+      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えば、{{agentName}}がカーソル位置に結果を入力します。「Hey {{agentName}}」と言う必要はありません。",
+      "optionalNote": "任意です。設定からいつでも追加・変更できます。"
     },
     "connectivity": {
       "title": "このネットワークから OpenWhispr Cloud に接続できません",
@@ -862,7 +870,8 @@
     "pressAnyKeyMac": "任意のキーまたは ⌘⇧K を押してください",
     "recording": "記録中",
     "tryShortcut": "Ctrl+Shift+K をお試しください",
-    "tryShortcutMac": "⌘⇧K をお試しください"
+    "tryShortcutMac": "⌘⇧K をお試しください",
+    "remove": "ホットキーを削除"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
@@ -1347,10 +1356,13 @@
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",
         "description": "ミーティングモードを開始し、パネルを画面の横に配置する",
-        "clear": "ホットキーを削除",
         "layoutLabel": "ホットキーで起動したときに開く:",
         "layoutFullWidth": "全幅",
         "layoutSidePanel": "サイドパネル"
+      },
+      "voiceAgentHotkey": {
+        "title": "ボイスエージェントホットキー",
+        "description": "話しかけるだけで、AIエージェントが言葉そのままではなく結果を入力します"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -1807,7 +1819,8 @@
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
-        "corti_transcribe": "臨床グレードの医療文字起こし"
+        "corti_transcribe": "臨床グレードの医療文字起こし",
+        "xai_grok_stt": "xAIによる高精度音声認識"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -2129,15 +2142,56 @@
     "addWord": "単語を追加",
     "removeWord": "{{word}} を削除",
     "clearAll": "すべてクリア",
-    "howItWorks": "仕組み",
-    "howItWorksDetail": "追加した単語は AI プロンプトに含まれ、文字起こし時にこれらの用語を正確に認識・保持します。",
-    "autoManaged": "自動管理",
-    "inputHint": "Enter で追加",
-    "title": "カスタム辞書",
-    "description": "AIに語彙を学習させましょう — 名前、専門用語、見落とされがちな表現など",
     "clearTitle": "辞書をクリアしますか？",
     "clearDescription": "カスタム辞書のすべての単語が削除されます。この操作は元に戻せません。",
-    "addPlaceholder": "単語やフレーズを追加..."
+    "addPlaceholder": "カンマ区切りで単語を追加 — OpenWhispr、Supabase、ARR など",
+    "add": "追加",
+    "importWords": "単語をインポート",
+    "importPlaceholder": "カンマ区切りの単語を貼り付け...",
+    "separateWithCommas": "カンマで区切る",
+    "wordsReady_other": "{{count}} 個の単語が準備完了",
+    "import": "インポート",
+    "yourDictionary": "あなたの辞書",
+    "exportDictionary": "辞書をエクスポート",
+    "exportFailed": "エクスポートに失敗しました",
+    "editWord": "{{word}} を編集",
+    "wordsReady_one": "{{count}} 個の単語が準備完了",
+    "noMatches": "一致なし — Enter キーで「{{word}}」を追加",
+    "tabDictionary": "辞書",
+    "tabSnippets": "スニペット",
+    "snippets": {
+      "title": "スニペット",
+      "edit": "{{trigger}}を編集",
+      "remove": "{{trigger}}を削除",
+      "editTitle": "スニペットを編集",
+      "dialogDescription": "トリガーを話すと、保存したテキストに置き換わります。",
+      "triggerLabel": "トリガー",
+      "triggerPlaceholder": "例: カレンダーリンク",
+      "replacementLabel": "置換テキスト",
+      "replacementPlaceholder": "トリガーを話したときに挿入されるテキスト…",
+      "create": "スニペットを作成",
+      "duplicate": "このトリガーのスニペットは既に存在します",
+      "emptyTitle": "同じことを言うのは",
+      "emptyTitleAccent": "一度だけ",
+      "emptyDescription": "トリガーワードを話すと、OpenWhisprが保存した内容に置き換えます。URL、自己紹介、署名、プロンプトなど。",
+      "new": "新規スニペット",
+      "examples": {
+        "linkedinTrigger": "私のLinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "書き直しプロンプト",
+        "rewriteText": "これをより簡潔でプロフェッショナルに書き直して",
+        "introTrigger": "挨拶メール",
+        "introText": "こんにちは、今週どこかでお話しできれば嬉しいです…",
+        "signoffTrigger": "署名",
+        "signoffText": "よろしくお願いします。Alex · alex@example.com"
+      },
+      "addPlaceholder": "トリガーフレーズを追加 — 「カレンダーリンク」「署名」など"
+    },
+    "emptyTitle": "辞書は空です",
+    "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
+    "addFirstWord": "最初の単語を追加",
+    "importList": "リストをインポート",
+    "agentDefault": "デフォルトで追加済み"
   },
   "referral": {
     "title": "紹介して特典をゲット",
@@ -2364,9 +2418,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "エージェントホットキー",
-      "hotkeyDescription": "エージェントオーバーレイを切り替えるホットキー",
-      "clearHotkey": "ホットキーを削除",
+      "hotkey": "チャットエージェントホットキー",
+      "hotkeyDescription": "チャットエージェントのオーバーレイを開閉します",
       "model": "エージェントモデル",
       "modelDescription": "エージェント会話に使用するAIモデル",
       "systemPrompt": "システムプロンプト",
