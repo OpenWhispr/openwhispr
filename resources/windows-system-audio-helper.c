@@ -599,7 +599,12 @@ int main(int argc, char *argv[])
     } else {
         _setmode(_fileno(stdout), _O_BINARY);
         SetConsoleCtrlHandler(console_ctrl_handler, TRUE);
-        CreateThread(NULL, 0, stdin_monitor_thread, NULL, 0, NULL);
+        HANDLE stdinThread = CreateThread(NULL, 0, stdin_monitor_thread, NULL, 0, NULL);
+        if (stdinThread) {
+            CloseHandle(stdinThread);
+        } else {
+            emit_event("warning", "stdin_monitor_failed", "Parent-death detection unavailable");
+        }
         exitCode = run_capture(excludePid, sampleRate);
     }
 

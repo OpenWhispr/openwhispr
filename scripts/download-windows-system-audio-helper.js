@@ -52,13 +52,15 @@ async function main() {
   } else {
     console.log("\n[windows-system-audio-helper] Fetching latest release...");
   }
-  const tagToFind = VERSION_OVERRIDE || TAG_PREFIX;
-  const release = await fetchLatestRelease(REPO, { tagPrefix: tagToFind });
+  const release = await fetchLatestRelease(
+    REPO,
+    VERSION_OVERRIDE ? { tag: VERSION_OVERRIDE } : { tagPrefix: TAG_PREFIX }
+  );
 
   if (!release) {
     console.error(
-      "[windows-system-audio-helper] Could not find a release matching prefix:",
-      TAG_PREFIX
+      "[windows-system-audio-helper] Could not find a release matching:",
+      VERSION_OVERRIDE || TAG_PREFIX
     );
     console.log(
       "[windows-system-audio-helper] Meeting system audio will use Chromium loopback fallback"

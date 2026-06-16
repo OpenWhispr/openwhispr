@@ -68,6 +68,13 @@ class WindowsLoopbackAudioManager {
     }
 
     const promise = this._probeCapability()
+      // Cache only definitive probe results. A thrown probe (timeout, spawn
+      // failure) is transient and falls through to the catch without caching,
+      // so it doesn't pin "unavailable" for the whole session.
+      .then((capability) => {
+        this.cachedCapability = capability;
+        return capability;
+      })
       .catch((error) => {
         debugLogger.warn(
           "[WindowsLoopbackAudioManager] Capability probe failed",
@@ -75,10 +82,6 @@ class WindowsLoopbackAudioManager {
           "meeting"
         );
         return { available: false, error: error.message };
-      })
-      .then((capability) => {
-        this.cachedCapability = capability;
-        return capability;
       })
       .finally(() => {
         this.capabilityPromise = null;
