@@ -537,6 +537,16 @@ function reserveSpeakerIndex(speakerId?: string) {
   nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, idx + 1);
 }
 
+// Other-speaker cap is expectedCount - 1 (the mic track is "you"); mirrors the
+// backend cap so live labels can't climb past the count the user expects.
+function mintPlaceholderSpeakerId(): string {
+  const expected = useMeetingRecordingStore.getState().sessionExpectedCount;
+  const cap = Math.max(1, expected - 1);
+  const index = Math.min(nextPlaceholderSpeakerIndex, cap - 1);
+  nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, index + 1);
+  return `speaker_${index}`;
+}
+
 function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment {
   if (segment.source !== "system" || segment.speaker) return segment;
 
@@ -584,8 +594,7 @@ function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment
     });
   }
 
-  const speakerId = `speaker_${nextPlaceholderSpeakerIndex}`;
-  nextPlaceholderSpeakerIndex += 1;
+  const speakerId = mintPlaceholderSpeakerId();
 
   return normalizeTranscriptSegment({
     ...segment,
@@ -888,9 +897,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
           } else {
             useMeetingRecordingStore.setState({ systemPartial: data.text });
             if (!systemPartialSpeakerIdValue) {
-              const speakerId = `speaker_${nextPlaceholderSpeakerIndex}`;
-              nextPlaceholderSpeakerIndex += 1;
-              setSystemPartialSpeakerIdentity(speakerId, null);
+              // Reuse the recent system speaker before minting — the partial id is
+              // cleared after every final, so always minting spawned one per utterance.
+              const carried = getRecentSystemSpeaker(Date.now());
+              setSystemPartialSpeakerIdentity(
+                carried?.speakerId ?? mintPlaceholderSpeakerId(),
+                carried?.speakerName ?? null
+              );
             }
           }
           return;
