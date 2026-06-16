@@ -3,6 +3,7 @@ import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type { Snippet } from "../utils/snippets";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -22,6 +23,7 @@ export interface TranscriptionSettings {
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
   customDictionary: string[];
+  snippets: Snippet[];
   assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
 }
@@ -41,6 +43,7 @@ export interface CleanupSettings {
 export interface HotkeySettings {
   dictationKey: string;
   meetingKey: string;
+  voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
   activationMode: "tap" | "push";
 }
@@ -55,6 +58,7 @@ export interface ApiKeySettings {
   anthropicApiKey: string;
   geminiApiKey: string;
   groqApiKey: string;
+  xaiApiKey: string;
   mistralApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
@@ -204,6 +208,8 @@ function useSettingsInternal() {
     cleanupMode: store.cleanupMode,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
     customDictionary: store.customDictionary,
+    snippets: store.snippets,
+    setSnippets: store.setSnippets,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
@@ -216,9 +222,11 @@ function useSettingsInternal() {
     anthropicApiKey: store.anthropicApiKey,
     geminiApiKey: store.geminiApiKey,
     groqApiKey: store.groqApiKey,
+    xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
+    voiceAgentKey: store.voiceAgentKey,
     meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
     setMeetingHotkeyLayoutMode: store.setMeetingHotkeyLayoutMode,
     theme: store.theme,
@@ -258,6 +266,7 @@ function useSettingsInternal() {
     setCleanupCustomApiKey: store.setCleanupCustomApiKey,
     setDictationKey: store.setDictationKey,
     setMeetingKey: store.setMeetingKey,
+    setVoiceAgentKey: store.setVoiceAgentKey,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,

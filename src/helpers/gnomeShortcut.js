@@ -19,6 +19,10 @@ const SLOT_CONFIG = {
     path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-meeting/",
     name: "OpenWhispr Meeting",
   },
+  voiceAgent: {
+    path: "/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr-voice-agent/",
+    name: "OpenWhispr Voice Agent",
+  },
 };
 
 const KEYBINDING_SCHEMA = "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding";
@@ -84,6 +88,7 @@ class GnomeShortcutManager {
     this.dictationCallback = null;
     this.agentCallback = null;
     this.meetingCallback = null;
+    this.voiceAgentCallback = null;
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
   }
@@ -122,6 +127,14 @@ class GnomeShortcutManager {
     debugLogger.log("[GnomeShortcut] Meeting callback registered");
   }
 
+  setVoiceAgentCallback(callback) {
+    this.voiceAgentCallback = callback;
+    if (this._ifaceRef) {
+      this._ifaceRef._voiceAgentCallback = callback;
+    }
+    debugLogger.log("[GnomeShortcut] Voice agent callback registered");
+  }
+
   async initDBusService(dictationCallback) {
     this.dictationCallback = dictationCallback;
 
@@ -135,7 +148,12 @@ class GnomeShortcutManager {
       await this.bus.requestName(DBUS_SERVICE_NAME, 0);
 
       const InterfaceClass = this._createInterfaceClass(dbusModule);
-      const iface = new InterfaceClass(dictationCallback, this.agentCallback, this.meetingCallback);
+      const iface = new InterfaceClass(
+        dictationCallback,
+        this.agentCallback,
+        this.meetingCallback,
+        this.voiceAgentCallback
+      );
       // Keep a reference so setAgentCallback() can update it later
       this._ifaceRef = iface;
       this.bus.export(DBUS_OBJECT_PATH, iface);
@@ -154,11 +172,12 @@ class GnomeShortcutManager {
 
   _createInterfaceClass(dbusModule) {
     class OpenWhisprInterface extends dbusModule.interface.Interface {
-      constructor(dictationCallback, agentCallback, meetingCallback) {
+      constructor(dictationCallback, agentCallback, meetingCallback, voiceAgentCallback) {
         super(DBUS_INTERFACE);
         this._dictationCallback = dictationCallback;
         this._agentCallback = agentCallback || null;
         this._meetingCallback = meetingCallback || null;
+        this._voiceAgentCallback = voiceAgentCallback || null;
       }
 
       Toggle() {
@@ -178,6 +197,12 @@ class GnomeShortcutManager {
           this._meetingCallback();
         }
       }
+
+      ToggleVoiceAgent() {
+        if (this._voiceAgentCallback) {
+          this._voiceAgentCallback();
+        }
+      }
     }
 
     OpenWhisprInterface.configureMembers({
@@ -185,6 +210,7 @@ class GnomeShortcutManager {
         Toggle: { inSignature: "", outSignature: "" },
         ToggleAgent: { inSignature: "", outSignature: "" },
         ToggleMeeting: { inSignature: "", outSignature: "" },
+        ToggleVoiceAgent: { inSignature: "", outSignature: "" },
       },
     });
 
@@ -217,6 +243,7 @@ class GnomeShortcutManager {
       dictation: "Toggle",
       agent: "ToggleAgent",
       meeting: "ToggleMeeting",
+      voiceAgent: "ToggleVoiceAgent",
     };
     const dbusMethod = SLOT_DBUS_METHOD[slotName] || "Toggle";
     const command = `dbus-send --session --type=method_call --dest=${DBUS_SERVICE_NAME} ${DBUS_OBJECT_PATH} ${DBUS_INTERFACE}.${dbusMethod}`;

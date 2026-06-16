@@ -350,7 +350,10 @@ class ClipboardManager {
 
     for (const socketPath of socketPaths) {
       try {
-        if (fs.statSync(socketPath)) return true;
+        fs.accessSync(socketPath, fs.constants.W_OK);
+        // Export so spawned ydotool clients inherit this socket instead of their own default.
+        process.env.YDOTOOL_SOCKET = socketPath;
+        return true;
       } catch {}
     }
 

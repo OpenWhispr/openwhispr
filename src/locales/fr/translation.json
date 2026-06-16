@@ -172,7 +172,8 @@
       "welcome": "Bienvenue",
       "setup": "Configuration",
       "permissions": "Permissions",
-      "activation": "Activation"
+      "activation": "Activation",
+      "voiceAgent": "Agent vocal"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Impossible d'enregistrer ce raccourci",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} pour démarrer/arrêter",
       "holdHotkey": "Maintenir {{hotkey}}",
       "textareaPlaceholder": "Cliquez ici puis utilisez votre raccourci pour dicter..."
+    },
+    "voiceAgent": {
+      "title": "Raccourci de l'agent vocal",
+      "description": "Parlez à votre agent IA d'une simple touche",
+      "hotkey": "Raccourci",
+      "howItWorks": "Appuyez sur la touche et dites ce que vous voulez, par exemple « écris un petit mot de remerciement ». {{agentName}} écrit le résultat là où se trouve votre curseur. Pas besoin de dire « Hey {{agentName}} » d'abord.",
+      "optionalNote": "Facultatif — vous pouvez le définir ou le modifier à tout moment dans les réglages."
     },
     "connectivity": {
       "title": "Impossible d'atteindre OpenWhispr Cloud depuis ce réseau",
@@ -859,7 +867,8 @@
     "pressAnyKeyMac": "Appuyez sur une touche ou ⌘⇧K",
     "recording": "Enregistrement",
     "tryShortcut": "Essayez Ctrl+Shift+K",
-    "tryShortcutMac": "Essayez ⌘⇧K"
+    "tryShortcutMac": "Essayez ⌘⇧K",
+    "remove": "Supprimer le raccourci"
   },
   "languageSelector": {
     "noLanguagesFound": "Aucune langue trouvée",
@@ -1344,10 +1353,13 @@
       "meetingHotkey": {
         "title": "Raccourci mode réunion",
         "description": "Démarrer le mode réunion et ancrer le panneau sur le côté de l'écran",
-        "clear": "Supprimer le raccourci",
         "layoutLabel": "Lors du déclenchement par raccourci, ouvrir en :",
         "layoutFullWidth": "Pleine largeur",
         "layoutSidePanel": "Panneau latéral"
+      },
+      "voiceAgentHotkey": {
+        "title": "Raccourci de l'agent vocal",
+        "description": "Dites ce que vous voulez — votre agent IA écrit le résultat, pas vos mots"
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",
@@ -1804,7 +1816,8 @@
         "groq_whisper_large_v3": "Reconnaissance vocale haute précision",
         "groq_whisper_large_v3_turbo": "Vitesse 216x en temps réel",
         "mistral_voxtral_mini_latest": "Transcription multilingue rapide",
-        "corti_transcribe": "Transcription médicale de qualité clinique"
+        "corti_transcribe": "Transcription médicale de qualité clinique",
+        "xai_grok_stt": "Reconnaissance vocale haute précision par xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Modèle de raisonnement performant",
@@ -2261,13 +2274,11 @@
     "clearTitle": "Vider le dictionnaire ?",
     "clearDescription": "Cela supprimera tous les mots de votre dictionnaire personnalisé. Cette action est irréversible.",
     "addWord": "Ajouter un mot",
-    "addPlaceholder": "Saisissez un mot",
+    "addPlaceholder": "Ajoutez des mots séparés par des virgules — OpenWhispr, Supabase, John Snow, ARR",
     "removeWord": "Supprimer {{word}}",
     "clearAll": "Tout effacer",
-    "autoManaged": "Géré automatiquement — synchronisé depuis le nom de l'agent",
     "add": "Ajouter",
     "importWords": "Importer des mots",
-    "separatorHint": "Séparez par des virgules — OpenWhispr, Supabase, John Snow, ARR",
     "importPlaceholder": "Collez des mots séparés par des virgules...",
     "separateWithCommas": "Séparez par des virgules",
     "wordsReady_one": "{{count}} mot prêt",
@@ -2276,9 +2287,43 @@
     "yourDictionary": "Votre dictionnaire",
     "exportDictionary": "Exporter le dictionnaire",
     "exportFailed": "Échec de l'exportation",
-    "empty": "Aucun mot pour l'instant",
     "editWord": "Modifier {{word}}",
-    "noMatches": "Aucune correspondance — appuyez sur Entrée pour ajouter « {{word}} »"
+    "noMatches": "Aucune correspondance — appuyez sur Entrée pour ajouter « {{word}} »",
+    "tabDictionary": "Dictionnaire",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "edit": "Modifier {{trigger}}",
+      "remove": "Supprimer {{trigger}}",
+      "editTitle": "Modifier le snippet",
+      "dialogDescription": "Quand vous prononcez le déclencheur, il est remplacé par votre texte enregistré.",
+      "triggerLabel": "Déclencheur",
+      "triggerPlaceholder": "ex. mon agenda",
+      "replacementLabel": "Remplacement",
+      "replacementPlaceholder": "Texte à insérer quand vous dites le déclencheur…",
+      "create": "Créer le snippet",
+      "duplicate": "Un snippet avec ce déclencheur existe déjà",
+      "emptyTitle": "Ce que vous ne devriez pas avoir à dire",
+      "emptyTitleAccent": "deux fois",
+      "emptyDescription": "Prononcez un mot déclencheur et OpenWhispr le remplace par ce que vous avez enregistré : URL, intros, signatures, prompts.",
+      "new": "Nouveau snippet",
+      "examples": {
+        "linkedinTrigger": "Mon LinkedIn",
+        "linkedinText": "linkedin.com/in/vous",
+        "rewriteTrigger": "Prompt de réécriture",
+        "rewriteText": "Réécris ceci de façon plus concise et professionnelle",
+        "introTrigger": "Email d'intro",
+        "introText": "Bonjour, j'aimerais trouver un moment pour échanger cette semaine…",
+        "signoffTrigger": "Signature",
+        "signoffText": "Cordialement, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Ajoutez une phrase déclencheur — « mon agenda », « mon LinkedIn »"
+    },
+    "emptyTitle": "Votre dictionnaire est vide",
+    "emptyDescription": "Ajoutez les mots que {{agentName}} doit toujours reconnaître : noms, outils, acronymes.",
+    "addFirstWord": "Ajoutez votre premier mot",
+    "importList": "Importer une liste",
+    "agentDefault": "Ajouté par défaut"
   },
   "support": {
     "documentation": "Documentation",
@@ -2370,9 +2415,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Raccourci Agent",
-      "hotkeyDescription": "Raccourci clavier pour basculer la fenêtre agent",
-      "clearHotkey": "Supprimer le raccourci",
+      "hotkey": "Raccourci de l'agent de chat",
+      "hotkeyDescription": "Affiche ou masque la fenêtre de l'agent de chat",
       "model": "Modèle Agent",
       "modelDescription": "Modèle IA utilisé pour les conversations agent",
       "systemPrompt": "Prompt système",

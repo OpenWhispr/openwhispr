@@ -24,6 +24,7 @@ import type {
   ThemeSettings,
   ChatAgentSettings,
 } from "../hooks/useSettings";
+import type { Snippet } from "../utils/snippets";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -139,7 +140,7 @@ const BOOLEAN_SETTINGS = new Set([
   "gcalPrimaryOnly",
 ]);
 
-const ARRAY_SETTINGS = new Set(["customDictionary", "gcalAccounts"]);
+const ARRAY_SETTINGS = new Set(["customDictionary", "snippets", "gcalAccounts"]);
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
@@ -480,6 +481,7 @@ export interface SettingsState
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
+  setSnippets: (snippets: Snippet[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
@@ -492,6 +494,7 @@ export interface SettingsState
   setAnthropicApiKey: (key: string) => void;
   setGeminiApiKey: (key: string) => void;
   setGroqApiKey: (key: string) => void;
+  setXaiApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
   setCortiClientId: (key: string) => void;
   setCortiClientSecret: (key: string) => void;
@@ -536,6 +539,7 @@ export interface SettingsState
 
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
+  setVoiceAgentKey: (key: string) => void;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setActivationMode: (mode: "tap" | "push") => void;
 
@@ -606,6 +610,58 @@ function createBooleanSetter(key: string) {
   };
 }
 
+// Setter for hotkeys that must be registered with the main process before
+// being persisted. Rolls back to the previous key if registration fails.
+function createRegisteredHotkeySetter(
+  key: "chatAgentKey" | "voiceAgentKey",
+  label: string,
+  getRegisterFn: () =>
+    | ((hotkey: string) => Promise<{ success: boolean; message: string }>)
+    | undefined,
+  fallbackSave?: (hotkey: string) => void
+) {
+  return (hotkey: string) => {
+    if (!isBrowser) {
+      useSettingsStore.setState({ [key]: hotkey });
+      return;
+    }
+
+    const registerFn = getRegisterFn();
+    if (!registerFn) {
+      localStorage.setItem(key, hotkey);
+      useSettingsStore.setState({ [key]: hotkey });
+      fallbackSave?.(hotkey);
+      return;
+    }
+
+    const previousKey = useSettingsStore.getState()[key];
+
+    void registerFn(hotkey)
+      .then((result) => {
+        if (!result?.success) {
+          localStorage.setItem(key, previousKey);
+          useSettingsStore.setState({ [key]: previousKey });
+          logger.warn(
+            `Failed to update ${label}`,
+            { hotkey, message: result?.message },
+            "settings"
+          );
+          return;
+        }
+
+        localStorage.setItem(key, hotkey);
+        useSettingsStore.setState({ [key]: hotkey });
+      })
+      .catch((error) => {
+        logger.warn(
+          `Failed to update ${label}`,
+          { hotkey, error: error instanceof Error ? error.message : String(error) },
+          "settings"
+        );
+      });
+  };
+}
+
 let envPersistTimer: ReturnType<typeof setTimeout> | null = null;
 function debouncedPersistToEnv() {
   if (!isBrowser) return;
@@ -626,6 +682,7 @@ const SECRET_IPC_SAVERS = {
   anthropic: "saveAnthropicKey",
   gemini: "saveGeminiKey",
   groq: "saveGroqKey",
+  xai: "saveXaiKey",
   mistral: "saveMistralKey",
   cortiClientId: "saveCortiClientId",
   cortiClientSecret: "saveCortiClientSecret",
@@ -665,6 +722,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "anthropicApiKey",
   "geminiApiKey",
   "groqApiKey",
+  "xaiApiKey",
   "mistralApiKey",
   "cortiClientId",
   "cortiClientSecret",
@@ -723,6 +781,14 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cortiEnvironment: readString("cortiEnvironment", "us"),
   cortiTenant: readString("cortiTenant", "base"),
   customDictionary: readStringArray("customDictionary", []),
+  snippets: (() => {
+    try {
+      const parsed = JSON.parse(readString("snippets", "[]"));
+      return Array.isArray(parsed) ? (parsed as Snippet[]) : [];
+    } catch {
+      return [];
+    }
+  })(),
   assemblyAiStreaming: readBoolean("assemblyAiStreaming", true),
 
   autoGenerateNoteTitle: readBoolean("autoGenerateNoteTitle", true),
@@ -736,6 +802,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   anthropicApiKey: "",
   geminiApiKey: "",
   groqApiKey: "",
+  xaiApiKey: "",
   mistralApiKey: "",
   cortiClientId: "",
   cortiClientSecret: "",
@@ -760,6 +827,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   dictationKey: readString("dictationKey", ""),
   meetingKey: readString("meetingKey", ""),
+  voiceAgentKey: readString("voiceAgentKey", ""),
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
@@ -1048,6 +1116,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     });
   },
 
+  setSnippets: (snippets: Snippet[]) => {
+    if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
+    set({ snippets });
+  },
+
   setUiLanguage: (language: string) => {
     const normalized = normalizeUiLanguage(language);
     if (isBrowser) localStorage.setItem("uiLanguage", normalized);
@@ -1083,6 +1156,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ groqApiKey: key });
     debouncedSaveSecret("groq", key);
     invalidateApiKeyCaches("groq");
+  },
+  setXaiApiKey: (key: string) => {
+    set({ xaiApiKey: key });
+    debouncedSaveSecret("xai", key);
+    invalidateApiKeyCaches();
   },
   setMistralApiKey: (key: string) => {
     set({ mistralApiKey: key });
@@ -1201,6 +1279,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) localStorage.setItem("meetingKey", key);
     set({ meetingKey: key });
   },
+  setVoiceAgentKey: createRegisteredHotkeySetter(
+    "voiceAgentKey",
+    "voice agent hotkey",
+    () => window.electronAPI?.updateVoiceAgentHotkey
+  ),
 
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => {
     if (isBrowser) localStorage.setItem("meetingHotkeyLayoutMode", mode);
@@ -1378,46 +1461,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setChatAgentModel: createStringSetter("chatAgentModel"),
   setChatAgentProvider: createStringSetter("chatAgentProvider"),
-  setChatAgentKey: (key: string) => {
-    if (!isBrowser) {
-      useSettingsStore.setState({ chatAgentKey: key });
-      return;
-    }
-
-    const updateAgentHotkey = window.electronAPI?.updateAgentHotkey;
-    if (!updateAgentHotkey) {
-      localStorage.setItem("chatAgentKey", key);
-      useSettingsStore.setState({ chatAgentKey: key });
-      window.electronAPI?.saveAgentKey?.(key);
-      return;
-    }
-
-    const previousKey = get().chatAgentKey;
-
-    void updateAgentHotkey(key)
-      .then((result) => {
-        if (!result?.success) {
-          localStorage.setItem("chatAgentKey", previousKey);
-          useSettingsStore.setState({ chatAgentKey: previousKey });
-          logger.warn(
-            "Failed to update chat agent hotkey",
-            { hotkey: key, message: result?.message },
-            "settings"
-          );
-          return;
-        }
-
-        localStorage.setItem("chatAgentKey", key);
-        useSettingsStore.setState({ chatAgentKey: key });
-      })
-      .catch((error) => {
-        logger.warn(
-          "Failed to update chat agent hotkey",
-          { hotkey: key, error: error instanceof Error ? error.message : String(error) },
-          "settings"
-        );
-      });
-  },
+  setChatAgentKey: createRegisteredHotkeySetter(
+    "chatAgentKey",
+    "chat agent hotkey",
+    () => window.electronAPI?.updateAgentHotkey,
+    (key) => window.electronAPI?.saveAgentKey?.(key)
+  ),
   setChatAgentCloudMode: createStringSetter("chatAgentCloudMode"),
   setChatAgentMode: createStringSetter("chatAgentMode") as (mode: InferenceMode) => void,
   setChatAgentCloudBaseUrl: createStringSetter("chatAgentCloudBaseUrl"),
@@ -1449,6 +1498,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.cloudTranscriptionMode !== undefined)
       s.setCloudTranscriptionMode(settings.cloudTranscriptionMode);
     if (settings.customDictionary !== undefined) s.setCustomDictionary(settings.customDictionary);
+    if (settings.snippets !== undefined) s.setSnippets(settings.snippets);
     if (settings.assemblyAiStreaming !== undefined)
       s.setAssemblyAiStreaming(settings.assemblyAiStreaming);
     if (settings.showTranscriptionPreview !== undefined)
@@ -1473,6 +1523,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.anthropicApiKey !== undefined) s.setAnthropicApiKey(keys.anthropicApiKey);
     if (keys.geminiApiKey !== undefined) s.setGeminiApiKey(keys.geminiApiKey);
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
+    if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
@@ -1681,6 +1732,7 @@ export async function initializeSettings(): Promise<void> {
         anthropic,
         gemini,
         groq,
+        xai,
         mistral,
         cortiClientId,
         cortiClientSecret,
@@ -1696,6 +1748,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getAnthropicKey?.(),
         window.electronAPI.getGeminiKey?.(),
         window.electronAPI.getGroqKey?.(),
+        window.electronAPI.getXaiKey?.(),
         window.electronAPI.getMistralKey?.(),
         window.electronAPI.getCortiClientId?.(),
         window.electronAPI.getCortiClientSecret?.(),
@@ -1713,6 +1766,7 @@ export async function initializeSettings(): Promise<void> {
         anthropicApiKey: anthropic || "",
         geminiApiKey: gemini || "",
         groqApiKey: groq || "",
+        xaiApiKey: xai || "",
         mistralApiKey: mistral || "",
         cortiClientId: cortiClientId || "",
         cortiClientSecret: cortiClientSecret || "",
@@ -1778,6 +1832,20 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync chat agent hotkey on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync voice agent hotkey from main process
+    try {
+      const envKey = await window.electronAPI.getVoiceAgentKey?.();
+      if (envKey && envKey !== state.voiceAgentKey) {
+        createStringSetter("voiceAgentKey")(envKey);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync voice agent hotkey on startup",
         { error: (err as Error).message },
         "settings"
       );

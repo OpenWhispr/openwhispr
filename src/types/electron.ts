@@ -271,12 +271,7 @@ export interface AudioDiagnosticsResult {
 }
 
 export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
-export type SystemAudioStrategy =
-  | "native"
-  | "loopback"
-  | "browser-portal"
-  | "portal-helper"
-  | "unsupported";
+export type SystemAudioStrategy = "native" | "loopback" | "pipewire-loopback" | "unsupported";
 
 export interface SystemAudioAccessResult {
   granted: boolean;
@@ -479,6 +474,7 @@ declare global {
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       onToggleDictation: (callback: () => void) => () => void;
+      onToggleVoiceAgent?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
 
@@ -922,6 +918,7 @@ declare global {
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
       }>;
+      getHyprlandConfigStatus?: () => Promise<{ canWrite: boolean; path: string } | null>;
 
       // Wayland paste diagnostics
       getYdotoolStatus?: () => Promise<{
@@ -967,6 +964,15 @@ declare global {
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;
+
+      // xAI API key management
+      getXaiKey?: () => Promise<string | null>;
+      saveXaiKey?: (key: string) => Promise<void>;
+      proxyXaiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ text: string }>;
 
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
@@ -1332,6 +1338,8 @@ declare global {
 
       // Agent Mode
       updateAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      getVoiceAgentKey?: () => Promise<string>;
       getAgentKey?: () => Promise<string>;
       saveAgentKey?: (key: string) => Promise<void>;
       createAgentConversation?: (
