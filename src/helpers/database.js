@@ -547,9 +547,7 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
       try {
-        this.db.exec(
-          "ALTER TABLE custom_dictionary ADD COLUMN sync_status TEXT DEFAULT 'pending'"
-        );
+        this.db.exec("ALTER TABLE custom_dictionary ADD COLUMN sync_status TEXT DEFAULT 'pending'");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
@@ -794,11 +792,8 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      // Dedupe input by lower(word), preserving first occurrence's casing.
-      // The previous code relied on a SELECT snapshot + Map keyed by lower(word),
-      // which silently broke when the input contained two case-variants of the
-      // same word (Map only knew about pre-existing rows). Deduping up-front
-      // makes the diff loop's existingByLower lookup stay valid.
+      // Dedupe input by lower(word), keeping the first occurrence's casing, so
+      // the diff loop sees at most one incoming entry per word.
       const incomingByLower = new Map();
       for (const raw of Array.isArray(words) ? words : []) {
         if (typeof raw !== "string") continue;
@@ -811,9 +806,7 @@ class DatabaseManager {
       const incomingLower = new Set(incomingByLower.keys());
 
       const existingRows = this.db
-        .prepare(
-          "SELECT id, word, source, deleted_at FROM custom_dictionary"
-        )
+        .prepare("SELECT id, word, source, deleted_at FROM custom_dictionary")
         .all();
       const existingByLower = new Map(existingRows.map((r) => [r.word.toLowerCase(), r]));
 
@@ -829,16 +822,13 @@ class DatabaseManager {
       const promoteSource = this.db.prepare(
         "UPDATE custom_dictionary SET word = ?, source = 'manual', updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND source = 'learned'"
       );
-      // Update word casing on an already-active row when input casing differs.
-      // Without this, `'Foo' → 'FOO'` is silently dropped at the SQLite layer
-      // and the UI/cloud drift from the local store.
+      // Updates word casing on an active row (guarded on word != ? so an
+      // unchanged row stays untouched and keeps its sync_status).
       const updateWord = this.db.prepare(
         "UPDATE custom_dictionary SET word = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND word != ?"
       );
-      // INSERT OR IGNORE guards against a UNIQUE collision in case an existing
-      // row matched lower(word) but the existingByLower map missed it (e.g.,
-      // legacy data with case-differing duplicates allowed by the old
-      // case-sensitive UNIQUE constraint).
+      // INSERT OR IGNORE in case a legacy case-variant row collides on the
+      // case-sensitive UNIQUE(word) that existingByLower didn't catch.
       const insert = this.db.prepare(
         "INSERT OR IGNORE INTO custom_dictionary (word, source, client_dict_id, sync_status, updated_at) VALUES (?, ?, ?, 'pending', datetime('now'))"
       );
@@ -847,14 +837,8 @@ class DatabaseManager {
         for (const existing of existingRows) {
           if (incomingLower.has(existing.word.toLowerCase())) continue;
           if (existing.deleted_at) continue;
-          // Word removed: hard-delete any row that has no cloud_id (never
-          // synced), tombstone the rest (synced rows the server must be told
-          // about). We intentionally hard-delete cloud_id-less rows even while
-          // a push is in flight: SyncService.pushPendingDictionary detects the
-          // resulting markDictionarySynced `changes === 0` and deletes the
-          // orphaned cloud row, so there's no re-download loop. Guarding on
-          // sync_status here would instead leak permanent tombstones for words
-          // added and removed before they ever sync.
+          // Removed word: hard-delete if never synced (no cloud_id), else
+          // tombstone so the next push tells the server about the deletion.
           const hardResult = hardDelete.run(existing.id);
           if (hardResult.changes === 0) tombstone.run(existing.id);
         }
@@ -949,9 +933,7 @@ class DatabaseManager {
   upsertDictionaryFromCloud(cloudEntry) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      // Shape validation: refuse incomplete payloads. Letting these through
-      // with optional-chained defaults silently corrupts the row (e.g., id=null
-      // matches `cloud_id IS NULL` and overwrites a local-only pending row).
+      // Reject incomplete payloads rather than corrupt a row with defaults.
       if (!cloudEntry || typeof cloudEntry !== "object") return null;
       if (typeof cloudEntry.id !== "string" || !cloudEntry.id) return null;
 
@@ -967,17 +949,15 @@ class DatabaseManager {
         typeof cloudEntry.updated_at === "string" && cloudEntry.updated_at
           ? cloudEntry.updated_at
           : typeof cloudEntry.created_at === "string" && cloudEntry.created_at
-          ? cloudEntry.created_at
-          : new Date().toISOString();
+            ? cloudEntry.created_at
+            : new Date().toISOString();
       const createdAt =
         typeof cloudEntry.created_at === "string" && cloudEntry.created_at
           ? cloudEntry.created_at
           : updatedAt;
 
-      // Prioritized sequential lookup. Previously this used a single `OR`
-      // query with `LIMIT 1` and no `ORDER BY`, which let SQLite pick any
-      // matching row — non-deterministic when multiple identifiers matched
-      // different local rows (cross-device same-word case).
+      // Resolve the local row deterministically: client_dict_id, then cloud_id,
+      // then word.
       const byClient = this.db
         .prepare("SELECT * FROM custom_dictionary WHERE client_dict_id = ? LIMIT 1")
         .get(clientDictId);
@@ -989,15 +969,11 @@ class DatabaseManager {
       const existing =
         byCloud ||
         this.db
-          .prepare(
-            "SELECT * FROM custom_dictionary WHERE lower(word) = lower(?) LIMIT 1"
-          )
+          .prepare("SELECT * FROM custom_dictionary WHERE lower(word) = lower(?) LIMIT 1")
           .get(word);
 
       if (existing) {
-        // Source merge mirrors the server: manual is sticky. Cloud pull never
-        // demotes a local manual row to learned (the previous code's
-        // unconditional `source = ?` overwrite did exactly that).
+        // Manual is sticky — a pull never demotes a local manual row to learned.
         const mergedSource =
           existing.source === "manual" || incomingSource === "manual" ? "manual" : "learned";
         this.db
@@ -1008,9 +984,7 @@ class DatabaseManager {
              WHERE id = ?`
           )
           .run(cloudEntry.id, clientDictId, word, mergedSource, updatedAt, existing.id);
-        return this.db
-          .prepare("SELECT * FROM custom_dictionary WHERE id = ?")
-          .get(existing.id);
+        return this.db.prepare("SELECT * FROM custom_dictionary WHERE id = ?").get(existing.id);
       }
 
       this.db
@@ -1036,14 +1010,14 @@ class DatabaseManager {
   markDictionaryEntrySynced(id, cloudId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      // Guard on deleted_at so a delete or tombstone that raced the push isn't
+      // flipped back to 'synced' (which would strand the deletion). changes=0
+      // signals that race to SyncService, which reconciles the cloud row.
       const result = this.db
         .prepare(
-          "UPDATE custom_dictionary SET sync_status = 'synced', cloud_id = ? WHERE id = ?"
+          "UPDATE custom_dictionary SET sync_status = 'synced', cloud_id = ? WHERE id = ? AND deleted_at IS NULL"
         )
         .run(cloudId, id);
-      // Caller (SyncService) uses changes=0 to detect a race where the local
-      // row was deleted between push start and ack — it then issues a server
-      // delete so the cloud row doesn't keep re-downloading on next pull.
       return { success: result.changes > 0, changes: result.changes };
     } catch (error) {
       debugLogger.error(
@@ -1055,9 +1029,8 @@ class DatabaseManager {
     }
   }
 
-  // Clear cloud_id and reset sync_status for a row whose remote target was
-  // 404'd. The next push goes through batchCreate instead of retrying the
-  // doomed PATCH forever.
+  // Clears cloud_id after a 404 so the next push re-creates the row via
+  // batchCreate instead of retrying the dead PATCH.
   clearDictionaryCloudId(id) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -1068,11 +1041,7 @@ class DatabaseManager {
         .run(id);
       return { success: result.changes > 0 };
     } catch (error) {
-      debugLogger.error(
-        "Error clearing dictionary cloud_id",
-        { error: error.message },
-        "database"
-      );
+      debugLogger.error("Error clearing dictionary cloud_id", { error: error.message }, "database");
       throw error;
     }
   }

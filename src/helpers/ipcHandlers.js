@@ -618,9 +618,8 @@ class IPCHandlers {
           return;
         }
 
-        // Broadcast the post-save normalized list — not the raw input which
-        // contains case-variant duplicates and unpromoted entries. Otherwise
-        // renderers briefly show ghost rows until the next refresh.
+        // Broadcast the post-save normalized list, not the raw input (which
+        // still has case-variant dupes), so renderers don't flash ghost rows.
         this.broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
 
         // Show the overlay so the toast is visible (it may have been hidden after dictation)
@@ -899,9 +898,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-broadcast-dictionary-updated", async () => {
-      // Always emit the normalized list straight from SQLite — never a
-      // caller-supplied payload — so renderers see the post-dedupe, post-
-      // case-merge truth rather than a stale auto-learn input array.
+      // Emit the normalized list straight from SQLite so renderers see the
+      // post-dedupe truth, never a caller-supplied payload.
       const words = this.databaseManager.getDictionary();
       this.broadcastToWindows("dictionary-updated", words);
       return { success: true };

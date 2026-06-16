@@ -101,11 +101,9 @@ function useSettingsInternal() {
     });
   }, []);
 
-  // Listen for dictionary updates from main process (auto-learn corrections, sync pulls).
-  // Main process / SQLite is authoritative here — we only refresh the in-memory store.
-  // We deliberately do NOT trigger a sync from this listener: pulls already fire
-  // the broadcast, and re-triggering produces a reflexive sync loop (per pull,
-  // per window). Writes that need to sync go through setCustomDictionary instead.
+  // Refresh the in-memory store from main-process broadcasts (auto-learn, sync
+  // pulls) without re-triggering a sync — that would loop, since pulls emit the
+  // broadcast. Writes that must sync go through setCustomDictionary instead.
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.onDictionaryUpdated) return;
     const unsubscribe = window.electronAPI.onDictionaryUpdated((words: string[]) => {

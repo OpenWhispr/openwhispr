@@ -20,13 +20,15 @@ const BATCH_SIZE = 50;
 const TRANSCRIPTION_BATCH_SIZE = 100;
 const DICTIONARY_BATCH_SIZE = 200;
 
-// SQLite `datetime('now')` produces "YYYY-MM-DD HH:MM:SS" (no T, no Z); the
-// cloud sends ISO 8601 with `T...Z`. Lexical comparison of the two formats
-// gives the wrong answer ('T' (0x54) > ' ' (0x20)), so we normalize to a
-// canonical ISO with `Z` before any greater-than compare in the pull loop.
+// SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
+// the cloud sends ISO 8601 "YYYY-MM-DDTHH:MM:SS.sssZ". Normalize both to
+// millis-precision ISO so the pull loop's lexical greater-than compares
+// correctly — without the ".000" pad a whole-second local value sorts after a
+// sub-second cloud value at the same instant ('Z' > '.').
 function normalizeTimestamp(value: string | null | undefined): string {
   if (!value) return "";
-  return value.replace(" ", "T").replace(/Z$/, "") + "Z";
+  const iso = value.replace(" ", "T").replace(/Z$/, "");
+  return (/\.\d+$/.test(iso) ? iso : `${iso}.000`) + "Z";
 }
 
 class SyncService {
@@ -50,9 +52,8 @@ class SyncService {
       await this.syncNotes();
       await this.syncConversations();
       await this.syncTranscriptions();
-      // Drain dictionaryDirty: edits made during the awaits above set the flag
-      // (syncing is already true), so re-run until clean rather than letting
-      // them stall until the next manual trigger.
+      // Edits during the awaits above set dictionaryDirty (syncing is already
+      // true), so re-run until clean rather than stalling until the next trigger.
       do {
         this.dictionaryDirty = false;
         await this.syncDictionary();
@@ -67,9 +68,8 @@ class SyncService {
 
   async syncDictionaryNow(): Promise<void> {
     if (!this.canSync()) return;
-    // If a sync is already in flight, flag a re-run rather than dropping the
-    // request. Without this, user edits made during a syncAll silently stay
-    // pending until the next manual trigger.
+    // A sync already running will drain dictionaryDirty before it finishes, so
+    // flag a re-run instead of dropping this request.
     if (this.syncing) {
       this.dictionaryDirty = true;
       return;
@@ -633,10 +633,8 @@ class SyncService {
   }
 
   private async syncDictionary(): Promise<void> {
-    // Fail loud if any dictionary IPC binding is missing (preload/renderer
-    // version skew). A silent no-op via optional chaining would lose user data
-    // without any signal, so assert the whole surface up front — the helpers
-    // below then rely on every binding being present.
+    // Fail loud on preload skew: a missing binding silently optional-chained to
+    // a no-op would lose user data, so assert the whole surface up front.
     const api = window.electronAPI;
     const required = [
       "getPendingDictionary",
@@ -675,9 +673,8 @@ class SyncService {
         });
         await window.electronAPI.markDictionarySynced?.(entry.id, entry.cloud_id!);
       } catch (err) {
-        // 404 means the server row was tombstoned/purged by another device.
-        // Clear the stale cloud_id so the next push goes through batchCreate
-        // rather than retrying the doomed PATCH forever.
+        // 404: another device purged the cloud row. Clear the stale cloud_id so
+        // the next push re-creates it via batchCreate instead of retrying PATCH.
         if (isHttpStatus(err, 404)) {
           await window.electronAPI.clearDictionaryCloudId?.(entry.id);
         } else {
@@ -706,9 +703,8 @@ class SyncService {
             unmatched += 1;
             continue;
           }
-          // If markDictionarySynced reports 0 changes, the local row was
-          // deleted between the snapshot and the ack — issue a follow-up
-          // server delete so we don't leave an orphan in the cloud.
+          // 0 changes means the local row was deleted between snapshot and ack —
+          // delete the freshly-created server row so we don't orphan it.
           const result = await window.electronAPI.markDictionarySynced?.(local.id, server.id);
           if (result && result.changes === 0) {
             try {
@@ -737,8 +733,7 @@ class SyncService {
         await DictionaryService.delete(entry.cloud_id);
         await window.electronAPI.hardDeleteDictionary?.(entry.id);
       } catch (err) {
-        // 404 from the server means the row is already gone — equivalent to
-        // success from the client's perspective. Hard-delete locally.
+        // 404 means the row is already gone server-side — treat as success.
         if (isHttpStatus(err, 404)) {
           await window.electronAPI.hardDeleteDictionary?.(entry.id);
         } else {
@@ -780,8 +775,7 @@ class SyncService {
             continue;
           }
 
-          // Normalize before comparing so local SQLite "YYYY-MM-DD HH:MM:SS"
-          // and cloud "YYYY-MM-DDTHH:MM:SS.sssZ" compare correctly.
+          // Last-writer-wins on normalized timestamps (see normalizeTimestamp).
           const cloudTs = normalizeTimestamp(cloudEntry.updated_at);
           const localTs = local ? normalizeTimestamp(local.updated_at) : "";
           if (!local || cloudTs > localTs) {
@@ -791,21 +785,18 @@ class SyncService {
             changed = true;
           }
 
-          const entryTs = normalizeTimestamp(cloudEntry.updated_at);
-          if (entryTs > maxUpdatedAt) {
-            maxUpdatedAt = entryTs;
+          if (cloudTs > maxUpdatedAt) {
+            maxUpdatedAt = cloudTs;
             maxId = cloudEntry.id;
-          } else if (entryTs === maxUpdatedAt && cloudEntry.id > maxId) {
+          } else if (cloudTs === maxUpdatedAt && cloudEntry.id > maxId) {
             maxId = cloudEntry.id;
           }
         }
 
         if (!hasMore) break;
         const last = entries[entries.length - 1];
-        // Defensive stall-detection: if both cursor components are unchanged
-        // after a non-empty page, the server didn't advance — bail rather
-        // than loop. The composite (updated_at, id) cursor is what actually
-        // moves the iteration forward through same-timestamp clusters.
+        // Stall guard: if the (updated_at, id) cursor didn't advance after a
+        // full page, bail rather than loop forever.
         if (last.updated_at === cursor && last.id === cursorId) break;
         cursor = last.updated_at;
         cursorId = last.id;
