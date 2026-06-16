@@ -327,7 +327,8 @@
         "badge": "Discarded",
         "recording": "Discarded recording",
         "recordingWithDuration": "Discarded recording · {{duration}}",
-        "recover": "Recover"
+        "recover": "Recover",
+        "recovered": "Recovered"
       }
     },
     "cloudMigration": {

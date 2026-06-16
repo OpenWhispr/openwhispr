@@ -25,7 +25,7 @@ interface HistoryViewProps {
   clearAllTranscriptions: () => void;
   onOpenSettings: (section?: string) => void;
   onShowAudioInFolder: (id: number) => void;
-  onRetryTranscription: (id: number) => Promise<void>;
+  onRetryTranscription: (id: number, options?: { isRecover?: boolean }) => Promise<void>;
   showDiscarded: boolean;
   onToggleDiscarded: () => void;
 }

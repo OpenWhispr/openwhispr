@@ -327,7 +327,8 @@
         "badge": "Verworfen",
         "recording": "Verworfene Aufnahme",
         "recordingWithDuration": "Verworfene Aufnahme · {{duration}}",
-        "recover": "Wiederherstellen"
+        "recover": "Wiederherstellen",
+        "recovered": "Wiederhergestellt"
       }
     },
     "cloudMigration": {

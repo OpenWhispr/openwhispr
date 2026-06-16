@@ -327,7 +327,8 @@
         "badge": "Scartata",
         "recording": "Registrazione scartata",
         "recordingWithDuration": "Registrazione scartata · {{duration}}",
-        "recover": "Recupera"
+        "recover": "Recupera",
+        "recovered": "Recuperata"
       }
     },
     "cloudMigration": {

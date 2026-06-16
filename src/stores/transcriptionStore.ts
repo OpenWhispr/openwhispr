@@ -3,16 +3,17 @@ import type { TranscriptionItem } from "../types/electron";
 
 interface TranscriptionState {
   transcriptions: TranscriptionItem[];
+  includeDiscarded: boolean;
 }
 
 const useTranscriptionStore = create<TranscriptionState>()(() => ({
   transcriptions: [],
+  includeDiscarded: false,
 }));
 
 let hasBoundIpcListeners = false;
 const DEFAULT_LIMIT = 50;
 let currentLimit = DEFAULT_LIMIT;
-let currentIncludeDiscarded = false;
 
 function ensureIpcListeners() {
   if (hasBoundIpcListeners || typeof window === "undefined") {
@@ -68,18 +69,20 @@ function ensureIpcListeners() {
   });
 }
 
-export async function initializeTranscriptions(limit = DEFAULT_LIMIT, includeDiscarded = false) {
+export async function initializeTranscriptions(
+  limit = currentLimit,
+  includeDiscarded = useTranscriptionStore.getState().includeDiscarded
+) {
   currentLimit = limit;
-  currentIncludeDiscarded = includeDiscarded;
   ensureIpcListeners();
   const items = await window.electronAPI.getTranscriptions(limit, { includeDiscarded });
-  useTranscriptionStore.setState({ transcriptions: items });
+  useTranscriptionStore.setState({ transcriptions: items, includeDiscarded });
   return items;
 }
 
 export function addTranscription(item: TranscriptionItem) {
   if (!item) return;
-  if (item.status === "discarded" && !currentIncludeDiscarded) return;
+  if (item.status === "discarded" && !useTranscriptionStore.getState().includeDiscarded) return;
   const { transcriptions } = useTranscriptionStore.getState();
   const withoutDuplicate = transcriptions.filter((existing) => existing.id !== item.id);
   useTranscriptionStore.setState({
@@ -109,4 +112,8 @@ export function clearTranscriptions() {
 
 export function useTranscriptions() {
   return useTranscriptionStore((state) => state.transcriptions);
+}
+
+export function useShowDiscarded() {
+  return useTranscriptionStore((state) => state.includeDiscarded);
 }

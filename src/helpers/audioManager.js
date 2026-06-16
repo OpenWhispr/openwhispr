@@ -2229,28 +2229,44 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async saveDiscardedTranscription(blob, durationSeconds) {
+    let savedId = null;
     try {
       const result = await window.electronAPI.saveTranscription("", null, {
         status: "discarded",
       });
       if (!result?.id) return;
-      syncService.debouncedPush("transcription", result.id);
+      savedId = result.id;
 
       if (blob) {
         const durationMs = durationSeconds ? Math.round(durationSeconds * 1000) : null;
         const arrayBuffer = await blob.arrayBuffer();
-        await window.electronAPI.saveTranscriptionAudio(result.id, arrayBuffer, {
+        await window.electronAPI.saveTranscriptionAudio(savedId, arrayBuffer, {
           durationMs,
           provider: null,
           model: null,
         });
       }
+
+      syncService.debouncedPush("transcription", savedId);
     } catch (error) {
       logger.error(
         "Failed to save discarded transcription record",
         { error: error.message },
         "audio"
       );
+      // A discarded row is only recoverable through its audio; if the audio save
+      // failed, drop the dead row instead of leaving an empty unrecoverable entry. See #907.
+      if (savedId != null) {
+        try {
+          await window.electronAPI.deleteTranscription(savedId);
+        } catch (cleanupError) {
+          logger.warn(
+            "Failed to clean up discarded row after audio save failure",
+            { error: cleanupError.message },
+            "audio"
+          );
+        }
+      }
     }
   }
 

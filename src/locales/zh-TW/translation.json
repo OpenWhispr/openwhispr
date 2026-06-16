@@ -327,7 +327,8 @@
         "badge": "已捨棄",
         "recording": "已捨棄的錄音",
         "recordingWithDuration": "已捨棄的錄音 · {{duration}}",
-        "recover": "復原"
+        "recover": "復原",
+        "recovered": "已復原"
       }
     },
     "cloudMigration": {

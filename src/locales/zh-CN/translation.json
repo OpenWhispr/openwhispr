@@ -327,7 +327,8 @@
         "badge": "已放弃",
         "recording": "已放弃的录音",
         "recordingWithDuration": "已放弃的录音 · {{duration}}",
-        "recover": "恢复"
+        "recover": "恢复",
+        "recovered": "已恢复"
       }
     },
     "cloudMigration": {

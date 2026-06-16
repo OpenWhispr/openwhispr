@@ -604,10 +604,10 @@ class DatabaseManager {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const sql = includeDiscarded
-        ? "SELECT * FROM transcriptions WHERE deleted_at IS NULL ORDER BY timestamp DESC LIMIT ?"
-        : "SELECT * FROM transcriptions WHERE deleted_at IS NULL AND status != 'discarded' ORDER BY timestamp DESC LIMIT ?";
-      const stmt = this.db.prepare(sql);
+      const statusFilter = includeDiscarded ? "" : " AND status != 'discarded'";
+      const stmt = this.db.prepare(
+        `SELECT * FROM transcriptions WHERE deleted_at IS NULL${statusFilter} ORDER BY timestamp DESC LIMIT ?`
+      );
       const transcriptions = stmt.all(limit);
       return transcriptions;
     } catch (error) {

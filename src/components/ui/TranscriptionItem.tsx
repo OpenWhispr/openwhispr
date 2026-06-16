@@ -32,7 +32,7 @@ interface TranscriptionItemProps {
   onCopy: (text: string) => void;
   onDelete: (id: number) => void;
   onShowAudioInFolder?: (id: number) => void;
-  onRetryTranscription?: (id: number) => Promise<void>;
+  onRetryTranscription?: (id: number, options?: { isRecover?: boolean }) => Promise<void>;
   onOpenSettings?: () => void;
 }
 
@@ -62,7 +62,7 @@ export default function TranscriptionItem({
     if (isRetrying || !onRetryTranscription) return;
     setIsRetrying(true);
     try {
-      await onRetryTranscription(item.id);
+      await onRetryTranscription(item.id, { isRecover: item.status === "discarded" });
     } finally {
       setIsRetrying(false);
     }

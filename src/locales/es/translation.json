@@ -285,7 +285,8 @@
         "badge": "Descartada",
         "recording": "Grabación descartada",
         "recordingWithDuration": "Grabación descartada · {{duration}}",
-        "recover": "Recuperar"
+        "recover": "Recuperar",
+        "recovered": "Recuperada"
       },
       "copiedTitle": "¡Copiado!",
       "copiedDescription": "Texto copiado al portapapeles",

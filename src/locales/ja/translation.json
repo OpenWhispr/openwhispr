@@ -327,7 +327,8 @@
         "badge": "破棄済み",
         "recording": "破棄した録音",
         "recordingWithDuration": "破棄した録音 · {{duration}}",
-        "recover": "復元"
+        "recover": "復元",
+        "recovered": "復元しました"
       }
     },
     "cloudMigration": {

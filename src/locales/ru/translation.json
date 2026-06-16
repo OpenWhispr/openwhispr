@@ -327,7 +327,8 @@
         "badge": "Отменено",
         "recording": "Отменённая запись",
         "recordingWithDuration": "Отменённая запись · {{duration}}",
-        "recover": "Восстановить"
+        "recover": "Восстановить",
+        "recovered": "Восстановлено"
       }
     },
     "cloudMigration": {
