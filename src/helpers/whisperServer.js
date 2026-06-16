@@ -18,6 +18,21 @@ const STARTUP_TIMEOUT_MS = 30000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 
+// Windows STATUS_ILLEGAL_INSTRUCTION (0xC000001D). whisper.cpp's CPU build uses
+// AVX/AVX2 instructions; CPUs without them crash immediately on startup. The
+// same crash surfaces as a SIGILL signal on macOS/Linux.
+const WIN_ILLEGAL_INSTRUCTION_EXIT_CODE = 3221225501;
+
+function getStartupCrashHint({ exitCode, exitSignal } = {}) {
+  const illegalInstruction =
+    exitSignal === "SIGILL" || exitCode === WIN_ILLEGAL_INSTRUCTION_EXIT_CODE;
+  if (!illegalInstruction) return "";
+  return (
+    " — your CPU lacks an instruction set (AVX) required by the local Whisper engine. " +
+    "Use a cloud transcription provider or the NVIDIA (Parakeet) local engine instead."
+  );
+}
+
 function isVadActive(options = {}) {
   return options.vadEnabled === true && !!options.vadModelPath;
 }
@@ -375,6 +390,7 @@ class WhisperServerManager extends EventEmitter {
 
     let stderrBuffer = "";
     let exitCode = null;
+    let exitSignal = null;
     let earlyExit = false;
 
     this.process.stdout.on("data", (data) => {
@@ -391,10 +407,11 @@ class WhisperServerManager extends EventEmitter {
       this.ready = false;
     });
 
-    this.process.on("close", (code) => {
+    this.process.on("close", (code, signal) => {
       exitCode = code;
+      exitSignal = signal;
       if (Date.now() - startTime < 10000) earlyExit = true;
-      debugLogger.debug("whisper-server process exited", { code });
+      debugLogger.debug("whisper-server process exited", { code, signal });
       this.ready = false;
       this.process = null;
       this.stopHealthCheck();
@@ -402,7 +419,7 @@ class WhisperServerManager extends EventEmitter {
     });
 
     try {
-      await this.waitForReady(() => ({ stderr: stderrBuffer, exitCode }));
+      await this.waitForReady(() => ({ stderr: stderrBuffer, exitCode, exitSignal }));
     } catch (err) {
       if (usingCuda && earlyExit) {
         debugLogger.warn("CUDA whisper-server failed, falling back to CPU", {
@@ -436,9 +453,16 @@ class WhisperServerManager extends EventEmitter {
       if (!this.process || this.process.killed) {
         const info = getProcessInfo ? getProcessInfo() : {};
         const stderr = info.stderr ? info.stderr.trim().slice(0, 200) : "";
-        const details = stderr || (info.exitCode !== null ? `exit code: ${info.exitCode}` : "");
+        const details =
+          stderr ||
+          (info.exitCode !== null
+            ? `exit code: ${info.exitCode}`
+            : info.exitSignal
+              ? `signal: ${info.exitSignal}`
+              : "");
+        const hint = getStartupCrashHint(info);
         throw new Error(
-          `whisper-server process died during startup${details ? `: ${details}` : ""}`
+          `whisper-server process died during startup${details ? `: ${details}` : ""}${hint}`
         );
       }
 
@@ -711,3 +735,4 @@ class WhisperServerManager extends EventEmitter {
 module.exports = WhisperServerManager;
 module.exports.buildWhisperServerArgs = buildWhisperServerArgs;
 module.exports.getVadSignature = getVadSignature;
+module.exports.getStartupCrashHint = getStartupCrashHint;

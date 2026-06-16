@@ -15,6 +15,7 @@ export function getRecordingErrorTitle(error: RecordingError, t: TFunction): str
   if (error.code === "OFFLINE") return t("hooks.audioRecording.errorTitles.offline");
   if (error.code === "LIMIT_REACHED")
     return t("hooks.audioRecording.errorTitles.dailyLimitReached");
+  if (error.code === "CPU_UNSUPPORTED") return t("hooks.audioRecording.errorTitles.cpuUnsupported");
   return error.title;
 }
 

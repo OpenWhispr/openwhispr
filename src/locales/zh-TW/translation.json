@@ -450,7 +450,8 @@
       "errorTitles": {
         "sessionExpired": "工作階段已過期",
         "offline": "你目前離線",
-        "dailyLimitReached": "已達每日上限"
+        "dailyLimitReached": "已達每日上限",
+        "cpuUnsupported": "不支援本機 Whisper"
       },
       "fallback": {
         "title": "備援模式",
@@ -463,7 +464,8 @@
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
-        "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。"
+        "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。",
+        "cpuUnsupported": "您電腦的處理器無法執行本機 Whisper。請改用雲端供應商或 NVIDIA Parakeet。"
       }
     },
     "clipboard": {

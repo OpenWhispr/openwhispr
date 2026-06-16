@@ -797,7 +797,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         }
       } else {
-        throw new Error(`Local Whisper failed: ${error.message}`);
+        const err = new Error(`Local Whisper failed: ${error.message}`);
+        // whisper.cpp crashes with an illegal-instruction fault on CPUs without
+        // AVX (Windows exit code 3221225501 / 0xC000001D, SIGILL on Unix).
+        if (/exit code: 3221225501|SIGILL/.test(error.message)) {
+          err.code = "CPU_UNSUPPORTED";
+          err.messageKey = "hooks.audioRecording.errorDescriptions.cpuUnsupported";
+        }
+        throw err;
       }
     }
   }

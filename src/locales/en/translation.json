@@ -450,7 +450,8 @@
       "errorTitles": {
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",
-        "dailyLimitReached": "Daily Limit Reached"
+        "dailyLimitReached": "Daily Limit Reached",
+        "cpuUnsupported": "Local Whisper not supported"
       },
       "fallback": {
         "title": "Fallback Mode",
@@ -463,7 +464,8 @@
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
         "offline": "You're offline. Cloud transcription requires an internet connection.",
-        "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan."
+        "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
+        "cpuUnsupported": "Your computer's processor can't run local Whisper. Use a cloud provider or NVIDIA Parakeet instead."
       }
     },
     "clipboard": {

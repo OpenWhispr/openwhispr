@@ -450,7 +450,8 @@
       "errorTitles": {
         "sessionExpired": "セッション期限切れ",
         "offline": "オフラインです",
-        "dailyLimitReached": "1 日の上限に達しました"
+        "dailyLimitReached": "1 日の上限に達しました",
+        "cpuUnsupported": "ローカル Whisper は非対応です"
       },
       "fallback": {
         "title": "フォールバックモード",
@@ -463,7 +464,8 @@
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
-        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。"
+        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
+        "cpuUnsupported": "お使いのコンピューターのプロセッサーではローカル Whisper を実行できません。代わりにクラウドプロバイダーまたは NVIDIA Parakeet をご利用ください。"
       }
     },
     "clipboard": {
