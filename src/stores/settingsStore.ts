@@ -481,6 +481,7 @@ export interface SettingsState
   setCleanupCloudMode: (value: string) => void;
   setCleanupCloudBaseUrl: (value: string) => void;
   setCustomDictionary: (words: string[]) => void;
+  applyCustomDictionaryFromExternal: (words: string[]) => void;
   setSnippets: (snippets: Snippet[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
@@ -1107,13 +1108,26 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCustomDictionary: (words: string[]) => {
     if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
     set({ customDictionary: words });
-    window.electronAPI?.setDictionary(words).catch((err) => {
-      logger.warn(
-        "Failed to sync dictionary to SQLite",
-        { error: (err as Error).message },
-        "settings"
-      );
-    });
+    window.electronAPI
+      ?.setDictionary(words)
+      .then(() => {
+        void import("../services/SyncService.js").then(({ syncService }) => {
+          if (syncService.canSync()) void syncService.syncDictionaryNow();
+        });
+      })
+      .catch((err) => {
+        logger.warn(
+          "Failed to sync dictionary to SQLite",
+          { error: (err as Error).message },
+          "settings"
+        );
+      });
+  },
+
+  // For broadcasts from main process — DB is already authoritative, only update UI.
+  applyCustomDictionaryFromExternal: (words: string[]) => {
+    if (isBrowser) localStorage.setItem("customDictionary", JSON.stringify(words));
+    set({ customDictionary: words });
   },
 
   setSnippets: (snippets: Snippet[]) => {

@@ -649,14 +649,16 @@ class IPCHandlers {
 
       if (corrections.length > 0) {
         const updatedDict = [...currentDict, ...corrections];
-        const saveResult = this.databaseManager.setDictionary(updatedDict);
+        const saveResult = this.databaseManager.setDictionary(updatedDict, "learned");
 
         if (saveResult?.success === false) {
           debugLogger.debug("[AutoLearn] Failed to save dictionary", { error: saveResult.error });
           return;
         }
 
-        this.broadcastToWindows("dictionary-updated", updatedDict);
+        // Broadcast the post-save normalized list, not the raw input (which
+        // still has case-variant dupes), so renderers don't flash ghost rows.
+        this.broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
 
         // Show the overlay so the toast is visible (it may have been hidden after dictation)
         this.windowManager.showDictationPanel();
@@ -921,6 +923,42 @@ class IPCHandlers {
       return this.databaseManager.setDictionary(words);
     });
 
+    ipcMain.handle("db-get-pending-dictionary", async () => {
+      return this.databaseManager.getPendingDictionary();
+    });
+
+    ipcMain.handle("db-get-pending-dictionary-deletes", async () => {
+      return this.databaseManager.getPendingDictionaryDeletes();
+    });
+
+    ipcMain.handle("db-get-dictionary-by-client-id", async (_event, clientDictId) => {
+      return this.databaseManager.getDictionaryEntryByClientId(clientDictId);
+    });
+
+    ipcMain.handle("db-upsert-dictionary-from-cloud", async (_event, cloudEntry) => {
+      return this.databaseManager.upsertDictionaryFromCloud(cloudEntry);
+    });
+
+    ipcMain.handle("db-mark-dictionary-synced", async (_event, id, cloudId) => {
+      return this.databaseManager.markDictionaryEntrySynced(id, cloudId);
+    });
+
+    ipcMain.handle("db-hard-delete-dictionary", async (_event, id) => {
+      return this.databaseManager.hardDeleteDictionaryEntry(id);
+    });
+
+    ipcMain.handle("db-clear-dictionary-cloud-id", async (_event, id) => {
+      return this.databaseManager.clearDictionaryCloudId(id);
+    });
+
+    ipcMain.handle("db-broadcast-dictionary-updated", async () => {
+      // Emit the normalized list straight from SQLite so renderers see the
+      // post-dedupe truth, never a caller-supplied payload.
+      const words = this.databaseManager.getDictionary();
+      this.broadcastToWindows("dictionary-updated", words);
+      return { success: true };
+    });
+
     ipcMain.handle("undo-learned-corrections", async (_event, words) => {
       try {
         if (!Array.isArray(words) || words.length === 0) {
@@ -940,7 +978,7 @@ class IPCHandlers {
           });
           return { success: false };
         }
-        this.broadcastToWindows("dictionary-updated", updatedDict);
+        this.broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
         debugLogger.debug("[AutoLearn] Undo: removed words", { words: validWords });
         return { success: true };
       } catch (err) {
@@ -6256,17 +6294,27 @@ class IPCHandlers {
         const response = await proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
 
         if (response.status === 401) {
-          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          return {
+            success: false,
+            error: "Session expired",
+            code: "AUTH_EXPIRED",
+            status: 401,
+          };
         }
         if (response.status === 503) {
-          return { success: false, error: "Service temporarily unavailable", code: "SERVER_ERROR" };
+          return {
+            success: false,
+            error: "Service temporarily unavailable",
+            code: "SERVER_ERROR",
+            status: 503,
+          };
         }
 
         const data = await response.json().catch(() => null);
 
         if (!response.ok) {
           const message = data?.error?.message || data?.error || `API error: ${response.status}`;
-          return { success: false, error: message };
+          return { success: false, error: message, status: response.status };
         }
 
         return { success: true, data };
