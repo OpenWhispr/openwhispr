@@ -341,10 +341,10 @@ class HyprlandShortcutManager {
       try {
         fs.accessSync(mainConfig, fs.constants.W_OK);
         status.canWrite = true;
-      } catch (err) {
+      } catch {
         debugLogger.log("[HyprlandShortcut] Hyprland config is not writable:", mainConfig);
       }
-    } catch (err) {
+    } catch {
       debugLogger.log("[HyprlandShortcut] Hyprland config not found:", mainConfig);
     }
 
