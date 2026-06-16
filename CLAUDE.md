@@ -62,6 +62,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **dragManager.js**: Window dragging functionality
 - **environment.js**: Environment variable and OpenAI API management
 - **hotkeyManager.js**: Global hotkey registration and management
+  - Named hotkey slots: `dictation`, `agent` (chat agent overlay), `voiceAgent` (dictation routed straight to the dictation agent), `meeting`
   - Handles platform-specific defaults (GLOBE on macOS, backtick on Windows/Linux)
   - Auto-fallback to F8/F9 if default hotkey is unavailable
   - Notifies renderer via IPC when hotkey registration fails
@@ -526,6 +527,27 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 - 10s socket timeout on all Google Calendar API requests
 - Exponential backoff on consecutive failures: 2min → 4min → 8min → cap 30min
 - Reset to normal 2min interval on any successful sync
+
+### 17. Voice Agent Hotkey
+
+A dedicated global hotkey that starts a dictation whose transcript is sent straight to the dictation agent as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Separate from the chat agent hotkey (`CHAT_AGENT_KEY`), which toggles the agent overlay window.
+
+**Flow**:
+1. Hotkey pressed → `voiceAgent` slot callback in `main.js` → `windowManager.sendToggleVoiceAgent()` → `toggle-voice-agent` IPC to the main window
+2. `useAudioRecording.js` starts a recording with `audioManager.setVoiceAgentRequested(true)` (any other start resets it to `false`)
+3. On transcription, `resolveReasoningRoute` consults `resolveDictationRouteKind()` (`src/helpers/dictationRouting.js`): a voice agent recording always takes the agent route; if the dictation agent is disabled or has no model, the raw transcript is returned — it never falls back to cleanup
+
+**Storage & IPC**:
+- Env var: `VOICE_AGENT_KEY` (persisted via `environment.js`), store key: `voiceAgentKey` (no default — user opt-in)
+- IPC handlers: `update-voice-agent-hotkey`, `get-voice-agent-key`
+- Hotkey slot: `voiceAgent` (tap-to-toggle; GNOME-native slot via `ToggleVoiceAgent` D-Bus method, KDE via KGlobalAccel, otherwise `globalShortcut`)
+
+**UI**:
+- Settings → Hotkeys → "Voice Agent Hotkey" (with cross-slot conflict validation)
+- Onboarding: optional step right after the dictation hotkey (activation) step
+- Requires the dictation agent to be enabled (Settings → AI Models) for the agent route to apply
+
+**Tests**: `test/helpers/dictationRouting.test.js` (run with `node --test`)
 
 ## Development Guidelines
 

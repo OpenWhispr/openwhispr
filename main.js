@@ -182,6 +182,26 @@ function restoreHtmlHandlerIfChanged(original) {
   }
 }
 
+// True source of truth for whether openwhispr:// resolves on Linux — the same
+// MIME database xdg-open consults. Returns true for deb/rpm/flatpak/AUR installs
+// (scheme registered via the packaged .desktop MimeType) and false for AppImage/
+// tar.gz runs where it genuinely isn't registered, so we never enable a dead-end
+// OAuth flow. Used to recover from setAsDefaultProtocolClient's KDE false negative.
+function isOAuthSchemeRegistered() {
+  if (process.platform !== "linux") return false;
+  try {
+    const { execFileSync } = require("child_process");
+    const handler = execFileSync(
+      "xdg-mime",
+      ["query", "default", `x-scheme-handler/${OAUTH_PROTOCOL}`],
+      { encoding: "utf8", timeout: 3000 }
+    ).trim();
+    return handler.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 // Register custom protocol for OAuth callbacks.
 // In development, always include the app path argument so macOS/Windows/Linux
 // can launch the project app instead of opening bare Electron.
@@ -204,7 +224,11 @@ function registerOpenWhisprProtocol() {
   return result;
 }
 
-const protocolRegistered = registerOpenWhisprProtocol();
+// setAsDefaultProtocolClient returns a false negative on KDE/Wayland, so on Linux
+// fall back to probing the system MIME database for an actual handler. This keeps
+// OAuth enabled where the callback can resolve (deb/rpm/flatpak/AUR) and correctly
+// gated where it can't (AppImage/tar.gz with no scheme registration).
+const protocolRegistered = registerOpenWhisprProtocol() || isOAuthSchemeRegistered();
 if (!protocolRegistered) {
   console.warn(`[Auth] Failed to register ${OAUTH_PROTOCOL}:// protocol handler`);
 }
@@ -333,6 +357,17 @@ function setupProductionPath() {
 }
 
 // Phase 1: Initialize managers + IPC handlers before window content loads
+// Best-effort cleanup of the orphaned portal restore-token file older builds wrote. See PR #904.
+const LINUX_RESTORE_TOKEN_FILENAME = ".linux-system-audio-restore-token.json";
+
+function cleanupOrphanedLinuxRestoreToken() {
+  if (process.platform !== "linux") return;
+  try {
+    const fs = require("fs");
+    fs.unlinkSync(path.join(app.getPath("userData"), LINUX_RESTORE_TOKEN_FILENAME));
+  } catch {}
+}
+
 function initializeCoreManagers() {
   setupProductionPath();
 
@@ -371,6 +406,7 @@ function initializeCoreManagers() {
   textEditMonitor = new TextEditMonitor();
   audioTapManager = new AudioTapManager();
   linuxPortalAudioManager = new LinuxPortalAudioManager();
+  cleanupOrphanedLinuxRestoreToken();
   meetingAecManager = new MeetingAecManager();
   windowManager.textEditMonitor = textEditMonitor;
 
@@ -821,6 +857,29 @@ async function startApp() {
     }
   }
 
+  // Set up voice agent hotkey (dictation routed straight to the dictation
+  // agent, bypassing cleanup)
+  const voiceAgentHotkeyCallback = () => {
+    windowManager.sendToggleVoiceAgent();
+  };
+  windowManager._voiceAgentHotkeyCallback = voiceAgentHotkeyCallback;
+
+  const savedVoiceAgentKey = environmentManager.getVoiceAgentKey?.() || "";
+  if (savedVoiceAgentKey) {
+    const result = await hotkeyManager.registerSlot(
+      "voiceAgent",
+      savedVoiceAgentKey,
+      voiceAgentHotkeyCallback
+    );
+    if (!result.success) {
+      debugLogger.warn(
+        "Failed to restore voice agent hotkey",
+        { hotkey: savedVoiceAgentKey },
+        "hotkey"
+      );
+    }
+  }
+
   // Set up meeting mode hotkey
   const meetingHotkeyCallback = () => {
     if (hotkeyManager.isInListeningMode()) return;
@@ -1017,11 +1076,18 @@ async function startApp() {
         }
       }
 
-      // Check agent slot for Globe/Fn key
+      // Check agent and voice agent slots for Globe/Fn key
       const agentHotkey = hotkeyManager.getSlotHotkey("agent");
-      if (agentHotkey && isGlobeLikeHotkey(agentHotkey)) {
+      const voiceAgentHotkey = hotkeyManager.getSlotHotkey("voiceAgent");
+      const agentUsesGlobe = !!agentHotkey && isGlobeLikeHotkey(agentHotkey);
+      const voiceAgentUsesGlobe = !!voiceAgentHotkey && isGlobeLikeHotkey(voiceAgentHotkey);
+      if (agentUsesGlobe) {
         windowManager.toggleAgentOverlay();
-      } else if (!isGlobeLikeHotkey(currentHotkey)) {
+      }
+      if (voiceAgentUsesGlobe) {
+        windowManager.sendToggleVoiceAgent();
+      }
+      if (!agentUsesGlobe && !voiceAgentUsesGlobe && !isGlobeLikeHotkey(currentHotkey)) {
         debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE", { currentHotkey });
       }
     });
@@ -1065,10 +1131,12 @@ async function startApp() {
     globeKeyManager.on("right-modifier-down", async (modifier) => {
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
 
-      // Check agent slot for right-modifier
-      const agentHotkey = hotkeyManager.getSlotHotkey("agent");
-      if (agentHotkey === modifier) {
+      // Check agent and voice agent slots for right-modifier
+      if (hotkeyManager.getSlotHotkey("agent") === modifier) {
         windowManager.toggleAgentOverlay();
+      }
+      if (hotkeyManager.getSlotHotkey("voiceAgent") === modifier) {
+        windowManager.sendToggleVoiceAgent();
       }
 
       if (currentHotkey !== modifier) return;
@@ -1130,8 +1198,10 @@ async function startApp() {
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
       if (isMouseButtonHotkey(currentHotkey)) buttons.push(currentHotkey);
 
-      const agentHotkey = hotkeyManager.getSlotHotkey("agent");
-      if (isMouseButtonHotkey(agentHotkey)) buttons.push(agentHotkey);
+      for (const slotName of ["agent", "voiceAgent"]) {
+        const slotHotkey = hotkeyManager.getSlotHotkey(slotName);
+        if (isMouseButtonHotkey(slotHotkey)) buttons.push(slotHotkey);
+      }
 
       globeKeyManager.setSuppressedMouseButtons(buttons);
     };
@@ -1146,10 +1216,12 @@ async function startApp() {
       if (!isMouseButtonHotkey(button)) return;
 
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
-      const agentHotkey = hotkeyManager.getSlotHotkey("agent");
 
-      if (agentHotkey === button) {
+      if (hotkeyManager.getSlotHotkey("agent") === button) {
         windowManager.toggleAgentOverlay();
+      }
+      if (hotkeyManager.getSlotHotkey("voiceAgent") === button) {
+        windowManager.sendToggleVoiceAgent();
       }
 
       if (currentHotkey !== button) return;

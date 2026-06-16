@@ -172,7 +172,8 @@
       "welcome": "歡迎",
       "setup": "設定",
       "permissions": "權限",
-      "activation": "啟用"
+      "activation": "啟用",
+      "voiceAgent": "語音助手"
     },
     "hotkey": {
       "couldNotRegisterTitle": "無法註冊該快捷鍵",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} 開始/停止",
       "holdHotkey": "按住 {{hotkey}}",
       "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入..."
+    },
+    "voiceAgent": {
+      "title": "語音助手快捷鍵",
+      "description": "一鍵喚起你的 AI 助手",
+      "hotkey": "快捷鍵",
+      "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。{{agentName}} 會把結果輸入到游標所在的位置。無需先說「Hey {{agentName}}」。",
+      "optionalNote": "選用——你可以隨時在設定中新增或修改。"
     },
     "connectivity": {
       "title": "無法從此網路連線到 OpenWhispr Cloud",
@@ -429,14 +437,21 @@
       "whisperModelDescription": "模型",
       "parakeetModelDescription": "NVIDIA Parakeet 模型"
     },
-    "whisperModels": "Whisper 模型"
+    "whisperModels": "Whisper 模型",
+    "corti": {
+      "clientId": "用戶端 ID",
+      "clientSecret": "用戶端密鑰",
+      "environment": "資料區域",
+      "tenant": "租戶"
+    }
   },
   "hooks": {
     "audioRecording": {
       "errorTitles": {
         "sessionExpired": "工作階段已過期",
         "offline": "你目前離線",
-        "dailyLimitReached": "已達每日上限"
+        "dailyLimitReached": "已達每日上限",
+        "providerRateLimited": "服務商速率限制"
       },
       "fallback": {
         "title": "備援模式",
@@ -449,7 +464,8 @@
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
-        "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。"
+        "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。",
+        "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。"
       }
     },
     "clipboard": {
@@ -803,7 +819,8 @@
     "pressAnyKeyMac": "按下任意按鍵或 ⌘⇧K",
     "recording": "記錄中",
     "tryShortcut": "試試 Ctrl+Shift+K",
-    "tryShortcutMac": "試試 ⌘⇧K"
+    "tryShortcutMac": "試試 ⌘⇧K",
+    "remove": "移除快捷鍵"
   },
   "languageSelector": {
     "noLanguagesFound": "找不到語言",
@@ -1283,10 +1300,13 @@
       "meetingHotkey": {
         "title": "會議模式快捷鍵",
         "description": "啟動會議模式並將面板固定到螢幕側邊",
-        "clear": "移除快捷鍵",
         "layoutLabel": "透過快捷鍵觸發時,開啟方式:",
         "layoutFullWidth": "全寬",
         "layoutSidePanel": "側邊欄"
+      },
+      "voiceAgentHotkey": {
+        "title": "語音助手快捷鍵",
+        "description": "說出你的需求，AI 助手會輸入結果，而不是你說的原話"
       },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",
@@ -1385,7 +1405,16 @@
             "step1Title": "安裝 xclip"
           }
         },
-        "xclipDesc": "KDE Wayland 貼上用的剪貼簿工具（xclip 或 xsel）"
+        "xclipDesc": "KDE Wayland 貼上用的剪貼簿工具（xclip 或 xsel）",
+        "nixos": {
+          "intro": "你正在使用 NixOS。自動貼上需要 ydotool 及 /dev/uinput 存取權限，NixOS 以宣告式方式授予這些權限。",
+          "detected": "已偵測",
+          "manualTitle": "將以下內容加入你的設定",
+          "manualDesc": "自行設定後重新建置。",
+          "flakeTitle": "透過我們的 flake 安裝？",
+          "flakeDesc": "若你從 flake 安裝 OpenWhispr，programs.openwhispr.enable 會自動啟用 ydotool、uinput 模組及所需的群組成員資格。",
+          "rebuildNote": "執行 sudo nixos-rebuild switch，然後登出並重新登入，使群組變更與 /dev/uinput 規則生效。將 <you> 替換為你的使用者名稱。"
+        }
       },
       "updates": {
         "badges": {
@@ -1733,7 +1762,9 @@
         "openai_whisper_1": "原始 Whisper 模型",
         "groq_whisper_large_v3_turbo": "216 倍即時速度",
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
-        "mistral_voxtral_mini_latest": "快速多語言轉錄"
+        "mistral_voxtral_mini_latest": "快速多語言轉錄",
+        "corti_transcribe": "臨床級醫療轉錄",
+        "xai_grok_stt": "xAI 高精度語音辨識"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",
@@ -1742,11 +1773,15 @@
         "openai_gpt_4_1": "穩健基礎，1M 上下文",
         "openai_gpt_4_1_mini": "較小的 GPT-4.1 模型",
         "openai_gpt_4_1_nano": "最低延遲的 GPT-4.1",
-        "anthropic_claude_sonnet_4_5": "均衡表現",
+        "anthropic_claude_sonnet_4_6": "均衡表現",
+        "anthropic_claude_sonnet_4_5": "上一代 Sonnet 模型",
         "anthropic_claude_haiku_4_5": "快速且接近頂尖智慧",
-        "gemini_gemini_3_pro_preview": "新一代旗艦模型，擅長複雜推理",
+        "gemini_gemini_3_5_flash": "最新、快速且高性能的 Gemini 模型",
+        "gemini_gemini_3_1_pro_preview": "新一代旗艦模型，擅長複雜推理",
         "gemini_gemini_3_flash_preview": "超快速、高性能的新一代模型",
         "gemini_gemini_2_5_flash_lite": "最低延遲和成本",
+        "gemini_gemma_4_31b_it": "Google 最大的 Gemma 4，31B 稠密，256K 上下文",
+        "gemini_gemma_4_26b_a4b_it": "Google Gemma 4 MoE，4B 活躍參數，256K 上下文",
         "groq_qwen_qwen3_32b": "強大推理模型，131K 上下文",
         "groq_openai_gpt_oss_120b": "OpenAI 開源旗艦，500 T/sec",
         "groq_openai_gpt_oss_20b": "快速開源模型，1000 T/sec",
@@ -1757,9 +1792,10 @@
         "groq_compound_mini": "快速 Compound 系統，3x 更低延遲",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文",
         "openai_gpt_5_5": "複雜推理前沿模型",
-        "anthropic_claude_opus_4_7": "最強大的 Claude 模型",
-        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_8": "最強大的 Claude 模型",
+        "anthropic_claude_opus_4_7": "強大的 Opus 模型",
+        "anthropic_claude_opus_4_6": "上一代 Opus 模型，1M 上下文",
+        "anthropic_claude_opus_4_5": "較早的 Opus 模型"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",
@@ -2122,15 +2158,56 @@
     "addWord": "新增詞語",
     "removeWord": "移除 {{word}}",
     "clearAll": "全部清除",
-    "howItWorks": "運作方式",
-    "howItWorksDetail": "你新增的詞彙會包含在 AI 提示詞中，讓模型在轉錄整理時能辨識並保留這些詞彙。",
-    "autoManaged": "助理名稱（自動管理）",
-    "inputHint": "按 Enter 新增",
-    "title": "自訂字典",
-    "description": "教 AI 學習你的詞彙 — 名字、專業術語和它可能遺漏的表達",
     "clearTitle": "清空字典？",
     "clearDescription": "這將移除自訂字典中的所有詞彙。此操作無法復原。",
-    "addPlaceholder": "新增詞語或片語..."
+    "addPlaceholder": "用逗號分隔新增多個詞——OpenWhispr、Supabase、ARR",
+    "add": "新增",
+    "importWords": "匯入詞語",
+    "importPlaceholder": "貼上以逗號分隔的詞語...",
+    "separateWithCommas": "用逗號分隔",
+    "wordsReady_other": "{{count}} 個詞語就緒",
+    "import": "匯入",
+    "yourDictionary": "你的詞典",
+    "exportDictionary": "匯出詞典",
+    "exportFailed": "匯出失敗",
+    "editWord": "編輯 {{word}}",
+    "wordsReady_one": "{{count}} 個詞語就緒",
+    "noMatches": "無相符項目 — 按 Enter 新增「{{word}}」",
+    "tabDictionary": "字典",
+    "tabSnippets": "片段",
+    "snippets": {
+      "title": "片段",
+      "edit": "編輯 {{trigger}}",
+      "remove": "刪除 {{trigger}}",
+      "editTitle": "編輯片段",
+      "dialogDescription": "當你說出觸發詞時，它會被替換為你儲存的文字。",
+      "triggerLabel": "觸發詞",
+      "triggerPlaceholder": "例如：我的行事曆連結",
+      "replacementLabel": "替換文字",
+      "replacementPlaceholder": "說出觸發詞時插入的文字…",
+      "create": "建立片段",
+      "duplicate": "已存在使用此觸發詞的片段",
+      "emptyTitle": "同樣的話，只說",
+      "emptyTitleAccent": "一遍",
+      "emptyDescription": "說出觸發詞，OpenWhispr 會把它替換為你儲存的內容：連結、開場白、簽名、提示詞。",
+      "new": "建立片段",
+      "examples": {
+        "linkedinTrigger": "我的 LinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "改寫提示詞",
+        "rewriteText": "把這段話改寫得更簡潔、更專業",
+        "introTrigger": "開場郵件",
+        "introText": "你好，希望本週能找個時間聊聊…",
+        "signoffTrigger": "簽名",
+        "signoffText": "祝好，Alex · alex@example.com"
+      },
+      "addPlaceholder": "新增觸發詞——「我的行事曆連結」「簽名」"
+    },
+    "emptyTitle": "你的字典是空的",
+    "emptyDescription": "新增希望{{agentName}}始終辨識正確的詞：名字、工具、縮寫。",
+    "addFirstWord": "新增第一個詞",
+    "importList": "匯入清單",
+    "agentDefault": "預設加入"
   },
   "sidebar": {
     "home": "首頁",
@@ -2264,30 +2341,29 @@
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabled": "啟用語音代理",
+    "enabledDescription": "向你的代理口述指令。說出 \"{{agentName}}\" 即可啟用。可於下方設定。",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "openwhisprDesc": "使用 OpenWhispr 託管的代理，無需 API Key。",
+      "providers": "使用你自己的 API Key",
+      "providersDesc": "用你自己的 API Key 連接 OpenAI、Anthropic、Gemini 或 Groq。",
+      "local": "本機",
+      "localDesc": "在你的裝置上執行本機 LLM，完全私密。",
+      "selfHosted": "自架主機",
+      "selfHostedDesc": "指向自架的 OpenAI 相容端點。",
+      "enterprise": "企業級",
+      "enterpriseDesc": "使用 AWS Bedrock、Azure OpenAI 或 Google Vertex。"
     },
     "prompt": {
-      "title": "Agent prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "title": "代理提示詞",
+      "description": "偵測到喚醒詞時使用的系統提示詞。若未設定則使用內建預設值。"
     }
   },
   "agentMode": {
     "settings": {
-      "hotkey": "助手熱鍵",
-      "hotkeyDescription": "切換助手覆蓋層的熱鍵",
-      "clearHotkey": "移除快捷鍵",
+      "hotkey": "聊天助手快捷鍵",
+      "hotkeyDescription": "開啟或關閉聊天助手視窗",
       "model": "助手模型",
       "modelDescription": "用於助手對話的AI模型",
       "systemPrompt": "系統提示詞",

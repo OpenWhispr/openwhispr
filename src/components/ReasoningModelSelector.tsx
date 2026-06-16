@@ -512,6 +512,7 @@ export default function ReasoningModelSelector({
             selectedId={selectedCloudProvider}
             onSelect={handleCloudProviderChange}
             colorScheme="purple"
+            wrap
           />
 
           <div>

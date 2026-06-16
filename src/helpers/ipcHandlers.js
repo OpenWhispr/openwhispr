@@ -11,10 +11,13 @@ const HyprlandShortcutManager = require("./hyprlandShortcut");
 const AssemblyAiStreaming = require("./assemblyAiStreaming");
 const { i18nMain, changeLanguage } = require("./i18nMain");
 const DeepgramStreaming = require("./deepgramStreaming");
+const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
+const { getCortiToken } = require("./cortiAuth");
 const AudioStorageManager = require("./audioStorage");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
+const { applySmartSpacing } = require("./smartSpacing");
 const {
   transcriptsOverlap,
   transcriptsLooselyOverlap,
@@ -42,12 +45,14 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "openai-realtime": OpenAIRealtimeStreaming,
   "assemblyai-realtime": AssemblyAiStreaming,
   "deepgram-realtime": DeepgramStreaming,
+  "corti-realtime": CortiStreaming,
 };
 const ALLOWED_MEETING_PROVIDERS = new Set([
   "local",
   "openai-realtime",
   "assemblyai-realtime",
   "deepgram-realtime",
+  "corti-realtime",
 ]);
 
 function parseAttendees(raw) {
@@ -62,6 +67,37 @@ function parseAttendees(raw) {
 }
 
 const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
+
+const XAI_STT_URL = "https://api.x.ai/v1/stt";
+
+// xAI STT supports 25 languages; language must be in this set to enable ITN via format=true
+const XAI_STT_LANGUAGES = new Set([
+  "ar",
+  "cs",
+  "da",
+  "de",
+  "en",
+  "es",
+  "fa",
+  "fil",
+  "fr",
+  "hi",
+  "id",
+  "it",
+  "ja",
+  "ko",
+  "mk",
+  "ms",
+  "nl",
+  "pl",
+  "pt",
+  "ro",
+  "ru",
+  "sv",
+  "th",
+  "tr",
+  "vi",
+]);
 
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
@@ -292,6 +328,7 @@ class IPCHandlers {
     this.sessionId = crypto.randomUUID();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
+    this.cortiStreaming = null;
     this._dictationStreaming = null;
     this._dictationConnectPromise = null;
     this._dictationIdleTimer = null;
@@ -499,6 +536,7 @@ class IPCHandlers {
       if (provider === "mistral" && isMistral) return trimmed;
     }
     if (provider === "groq") return "whisper-large-v3-turbo";
+    if (provider === "xai") return "grok-stt";
     if (provider === "mistral") return "voxtral-mini-latest";
     return "gpt-4o-mini-transcribe";
   }
@@ -653,6 +691,22 @@ class IPCHandlers {
       });
       this.environmentManager.saveAllKeysToEnvFile().catch(() => {});
     }
+  }
+
+  // Mints a Corti access token from stored BYOK credentials. Shared by the
+  // dictation streaming handlers and the meeting realtime-token resolver.
+  async _mintStoredCortiToken(options = {}) {
+    const clientId = this.environmentManager.getCortiClientId();
+    const clientSecret = this.environmentManager.getCortiClientSecret();
+    if (!clientId || !clientSecret) {
+      const err = new Error("No Corti credentials configured. Add them in Settings.");
+      err.code = "NO_API";
+      throw err;
+    }
+    const environment = options.environment || "us";
+    const tenant = (options.tenant || "").trim() || "base";
+    const token = await getCortiToken({ environment, tenant, clientId, clientSecret });
+    return { token, environment, tenant };
   }
 
   setupHandlers() {
@@ -1435,6 +1489,26 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("export-dictionary", async (event, words) => {
+      try {
+        const { dialog } = require("electron");
+        const fs = require("fs");
+
+        const result = await dialog.showSaveDialog({
+          defaultPath: "dictionary.txt",
+          filters: [{ name: "Text", extensions: ["txt"] }],
+        });
+
+        if (result.canceled || !result.filePath) return { success: false };
+
+        fs.writeFileSync(result.filePath, words.join("\n"), "utf-8");
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Error exporting dictionary", { error: error.message }, "dictionary");
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("select-audio-file", async () => {
       const { dialog } = require("electron");
       const result = await dialog.showOpenDialog({
@@ -1503,7 +1577,26 @@ class IPCHandlers {
           await new Promise((resolve) => setTimeout(resolve, 80));
         }
       }
-      const result = await this.clipboardManager.pasteText(text, {
+
+      // Smart spacing (#856): macOS reads the preceding char via Accessibility
+      // and prepends a space when needed; Windows/Linux (and macOS when the
+      // read fails) append a trailing space instead — the next paste then
+      // sees a leading space and self-corrects.
+      let mode = "append";
+      let precedingChar;
+      if (process.platform === "darwin" && activated && this.textEditMonitor) {
+        const ax = await this.textEditMonitor.getPrecedingChar(targetPid);
+        if (ax.state === "ok") {
+          mode = "prepend";
+          precedingChar = ax.char;
+        } else if (ax.state === "start") {
+          mode = "prepend";
+          precedingChar = "";
+        }
+      }
+      const textToPaste = applySmartSpacing({ text, mode, precedingChar });
+
+      const result = await this.clipboardManager.pasteText(textToPaste, {
         ...options,
         webContents: event.sender,
       });
@@ -2327,6 +2420,11 @@ class IPCHandlers {
       };
     });
 
+    ipcMain.handle("get-hyprland-config-status", async () => {
+      if (!this.windowManager.isUsingHyprlandHotkeys()) return null;
+      return this.windowManager.getHyprlandConfigStatus();
+    });
+
     ipcMain.handle("register-cancel-hotkey", async (event, key) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
       const mainWindow = this.windowManager.mainWindow;
@@ -2504,6 +2602,50 @@ class IPCHandlers {
       return this.environmentManager.saveGroqKey(key);
     });
 
+    ipcMain.handle("get-xai-key", async () => {
+      return this.environmentManager.getXaiKey();
+    });
+
+    ipcMain.handle("save-xai-key", async (event, key) => {
+      return this.environmentManager.saveXaiKey(key);
+    });
+
+    ipcMain.handle(
+      "proxy-xai-transcription",
+      async (event, { audioBuffer, language, keyterms }) => {
+        const apiKey = this.environmentManager.getXaiKey();
+        if (!apiKey) {
+          throw new Error("xAI API key not configured");
+        }
+
+        const formData = new FormData();
+        const audioBlob = new Blob([Buffer.from(audioBuffer)], { type: "audio/webm" });
+        formData.append("file", audioBlob, "audio.webm");
+        if (language && language !== "auto" && XAI_STT_LANGUAGES.has(language)) {
+          formData.append("language", language);
+          formData.append("format", "true");
+        }
+        if (keyterms && keyterms.length > 0) {
+          for (const term of keyterms) {
+            formData.append("keyterm", term);
+          }
+        }
+
+        const response = await proxyFetch(XAI_STT_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}` },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`xAI API Error: ${response.status} ${errorText}`);
+        }
+
+        return await response.json();
+      }
+    );
+
     ipcMain.handle("get-mistral-key", async () => {
       return this.environmentManager.getMistralKey();
     });
@@ -2547,6 +2689,43 @@ class IPCHandlers {
         }
 
         return await response.json();
+      }
+    );
+
+    ipcMain.handle("get-corti-client-id", async () => {
+      return this.environmentManager.getCortiClientId();
+    });
+
+    ipcMain.handle("save-corti-client-id", async (event, key) => {
+      return this.environmentManager.saveCortiClientId(key);
+    });
+
+    ipcMain.handle("get-corti-client-secret", async () => {
+      return this.environmentManager.getCortiClientSecret();
+    });
+
+    ipcMain.handle("save-corti-client-secret", async (event, key) => {
+      return this.environmentManager.saveCortiClientSecret(key);
+    });
+
+    ipcMain.handle(
+      "proxy-corti-transcription",
+      async (event, { audioBuffer, language, environment, tenant }) => {
+        const clientId = this.environmentManager.getCortiClientId();
+        const clientSecret = this.environmentManager.getCortiClientSecret();
+        if (!clientId || !clientSecret) {
+          throw new Error("Corti credentials not configured");
+        }
+
+        const { transcribeAudio } = require("./cortiTranscription");
+        return transcribeAudio({
+          environment,
+          tenant,
+          clientId,
+          clientSecret,
+          audioBuffer,
+          language,
+        });
       }
     );
 
@@ -3243,15 +3422,15 @@ class IPCHandlers {
         available: false,
         supportsPersistentGrant: false,
         supportsPersistentPortalGrant: false,
+        supportsSystemAudio: false,
         supportsNativeCapture: false,
         portalVersion: null,
         error: error.message,
       }));
-      const supportsPersistentGrant = !!capability?.supportsPersistentGrant;
-      const supportsPersistentPortalGrant = !!capability?.supportsPersistentPortalGrant;
+      const available = !!capability?.available;
+      const supportsSystemAudio = !!capability?.supportsSystemAudio;
       const supportsNativeCapture = !!capability?.supportsNativeCapture;
-      const restoreTokenAvailable =
-        supportsPersistentGrant && !!this.linuxPortalAudioManager?.hasStoredRestoreToken();
+      const granted = available && supportsSystemAudio && supportsNativeCapture;
       const helperError =
         typeof capability?.error === "string" &&
         !capability.error.includes("helper binary not found")
@@ -3259,20 +3438,11 @@ class IPCHandlers {
           : undefined;
 
       return buildSystemAudioAccess({
-        granted: restoreTokenAvailable,
-        status: supportsPersistentGrant
-          ? restoreTokenAvailable
-            ? "granted"
-            : "not-determined"
-          : "unknown",
-        mode: "portal",
-        supportsPersistentGrant,
-        supportsPersistentPortalGrant,
+        granted,
+        status: granted ? "granted" : "unknown",
+        mode: granted ? "loopback" : "unsupported",
         supportsNativeCapture,
-        supportsOnboardingGrant: supportsPersistentGrant,
-        requiresRuntimeSharePrompt: !supportsPersistentGrant || !restoreTokenAvailable,
-        strategy: supportsPersistentGrant ? "portal-helper" : "browser-portal",
-        restoreTokenAvailable,
+        strategy: granted ? "pipewire-loopback" : "unsupported",
         portalVersion: capability?.portalVersion ?? null,
         error: helperError,
       });
@@ -3318,21 +3488,6 @@ class IPCHandlers {
       }
 
       if (process.platform === "linux") {
-        const currentAccess = await getLinuxSystemAudioAccess();
-        if (!currentAccess.supportsOnboardingGrant) {
-          return currentAccess;
-        }
-
-        try {
-          await this.linuxPortalAudioManager?.requestAccess();
-        } catch (error) {
-          debugLogger.warn(
-            "Linux system audio persistent grant failed",
-            { error: error.message },
-            "meeting"
-          );
-        }
-
         return getLinuxSystemAudioAccess();
       }
 
@@ -3676,6 +3831,9 @@ class IPCHandlers {
           if (provider === "groq") {
             apiKey = this.environmentManager.getGroqKey();
             endpoint = "https://api.groq.com/openai/v1/audio/transcriptions";
+          } else if (provider === "xai") {
+            apiKey = this.environmentManager.getXaiKey();
+            endpoint = XAI_STT_URL;
           } else if (provider === "mistral") {
             apiKey = this.environmentManager.getMistralKey();
             endpoint = MISTRAL_TRANSCRIPTION_URL;
@@ -3697,8 +3855,16 @@ class IPCHandlers {
 
           const formData = new FormData();
           formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
-          formData.append("model", model);
-          if (language) formData.append("language", language);
+          if (provider === "xai") {
+            // xAI STT does not accept a model field; language only when in supported set
+            if (language && XAI_STT_LANGUAGES.has(language)) {
+              formData.append("language", language);
+              formData.append("format", "true");
+            }
+          } else {
+            formData.append("model", model);
+            if (language) formData.append("language", language);
+          }
           const headers = {};
           if (provider === "mistral") {
             headers["x-api-key"] = apiKey;
@@ -4231,6 +4397,12 @@ class IPCHandlers {
         });
       }
 
+      if (options.provider === "corti-realtime") {
+        // One token covers both meeting streams; it's only used at the WSS handshake.
+        const { token } = await this._mintStoredCortiToken(options);
+        return streams === 2 ? [token, token] : token;
+      }
+
       if (options.mode === "byok") {
         const apiKey = this.environmentManager.getOpenAIKey();
         if (!apiKey) throw new Error("No OpenAI API key configured. Add your key in Settings.");
@@ -4255,7 +4427,7 @@ class IPCHandlers {
     const getMeetingSystemAudioCapabilityMode = () => {
       if (this.audioTapManager?.isSupported()) return "native";
       if (process.platform === "win32") return "loopback";
-      if (process.platform === "linux") return "portal";
+      if (process.platform === "linux") return "loopback";
       return "unsupported";
     };
 
@@ -4271,15 +4443,17 @@ class IPCHandlers {
         return { mode, strategy: "native" };
       }
 
+      if (process.platform === "linux") {
+        const linuxAccess = await getLinuxSystemAudioAccess();
+        return {
+          mode: linuxAccess.mode,
+          strategy: linuxAccess.strategy || "unsupported",
+        };
+      }
+
       if (mode === "loopback") {
         return { mode, strategy: "loopback" };
       }
-
-      const linuxAccess = await getLinuxSystemAudioAccess();
-      return {
-        mode,
-        strategy: linuxAccess.strategy === "portal-helper" ? "portal-helper" : "browser-portal",
-      };
     };
 
     const hasNativeMeetingSystemAudio = () => getMeetingSystemAudioMode() === "native";
@@ -4303,6 +4477,9 @@ class IPCHandlers {
         model: options.model,
         language: options.language,
         preconfigured: options.mode !== "byok",
+        environment: options.environment,
+        tenant: options.tenant,
+        keyterms: options.keyterms,
       };
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
       let pairs;
@@ -5401,12 +5578,26 @@ class IPCHandlers {
         },
         onWarning: (warning) => {
           debugLogger.warn(
-            "Linux portal system audio warning",
+            "Linux PipeWire system audio warning",
             { code: warning.code, message: warning.message },
             "meeting"
           );
         },
       });
+    };
+
+    const fallBackToMicOnly = async (context) => {
+      if (this._meetingSystemStreaming?.isConnected) {
+        await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
+          debugLogger.debug(
+            `System streaming disconnect during ${context} fallback failed`,
+            { error: disconnectError.message },
+            "meeting"
+          );
+        });
+      }
+      this._meetingSystemStreaming = null;
+      await stopLiveSpeakerIdentification().catch(() => {});
     };
 
     const startMeetingSystemAudio = async (
@@ -5425,22 +5616,12 @@ class IPCHandlers {
             { error: error.message },
             "meeting"
           );
-          if (this._meetingSystemStreaming?.isConnected) {
-            await this._meetingSystemStreaming.disconnect().catch((disconnectError) => {
-              debugLogger.debug(
-                "System streaming disconnect during native fallback failed",
-                { error: disconnectError.message },
-                "meeting"
-              );
-            });
-          }
-          this._meetingSystemStreaming = null;
-          await stopLiveSpeakerIdentification().catch(() => {});
+          await fallBackToMicOnly("native");
           return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
         }
       }
 
-      if (systemAudioStrategy !== "portal-helper") {
+      if (systemAudioStrategy !== "pipewire-loopback") {
         return { systemAudioMode, systemAudioStrategy };
       }
 
@@ -5449,11 +5630,12 @@ class IPCHandlers {
         return { systemAudioMode, systemAudioStrategy };
       } catch (error) {
         debugLogger.warn(
-          `Linux portal helper failed ${context}, falling back to browser portal`,
+          `Linux PipeWire helper failed ${context}, falling back to mic-only`,
           { error: error.message },
           "meeting"
         );
-        return { systemAudioMode, systemAudioStrategy: "browser-portal" };
+        await fallBackToMicOnly("PipeWire");
+        return { systemAudioMode: "unsupported", systemAudioStrategy: "unsupported" };
       }
     };
 
@@ -6262,13 +6444,13 @@ class IPCHandlers {
 
     ipcMain.handle(
       "transcribe-audio-file-byok",
-      async (event, { filePath, apiKey, baseUrl, model }) => {
+      async (
+        event,
+        { filePath, apiKey, baseUrl, model, provider, language, environment, tenant }
+      ) => {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
-          if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
-          if (!baseUrl) throw new Error("No transcription endpoint configured.");
-
           const fileSize = fs.statSync(filePath).size;
           if (fileSize > BYOK_FILE_SIZE_LIMIT) {
             return {
@@ -6277,19 +6459,57 @@ class IPCHandlers {
             };
           }
 
+          if (provider === "corti") {
+            const clientId = this.environmentManager.getCortiClientId();
+            const clientSecret = this.environmentManager.getCortiClientSecret();
+            if (!clientId || !clientSecret) {
+              throw new Error("Corti credentials not configured. Add them in Settings.");
+            }
+            const { transcribeAudio } = require("./cortiTranscription");
+            const { text } = await transcribeAudio({
+              environment,
+              tenant,
+              clientId,
+              clientSecret,
+              audioBuffer: fs.readFileSync(filePath),
+              language: language || "en",
+            });
+            return { success: true, text };
+          }
+
+          if (!apiKey) throw new Error("No API key configured. Add your key in Settings.");
+          if (!baseUrl && provider !== "xai") {
+            throw new Error("No transcription endpoint configured.");
+          }
+
           const audioBuffer = fs.readFileSync(filePath);
           const ext = path.extname(filePath).toLowerCase().replace(".", "");
           const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
           const fileName = path.basename(filePath);
 
-          let transcriptionUrl = baseUrl.replace(/\/+$/, "");
-          if (!transcriptionUrl.endsWith("/audio/transcriptions")) {
-            transcriptionUrl += "/audio/transcriptions";
+          let transcriptionUrl;
+          const multipartFields = {};
+          if (provider === "xai") {
+            // xAI STT has a fixed endpoint and accepts no model field. See #910.
+            transcriptionUrl = XAI_STT_URL;
+            if (language && XAI_STT_LANGUAGES.has(language)) {
+              multipartFields.language = language;
+              multipartFields.format = "true";
+            }
+          } else {
+            transcriptionUrl = baseUrl.replace(/\/+$/, "");
+            if (!transcriptionUrl.endsWith("/audio/transcriptions")) {
+              transcriptionUrl += "/audio/transcriptions";
+            }
+            multipartFields.model = model || "whisper-1";
           }
 
-          const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, {
-            model: model || "whisper-1",
-          });
+          const { body, boundary } = buildMultipartBody(
+            audioBuffer,
+            fileName,
+            contentType,
+            multipartFields
+          );
 
           const url = new URL(transcriptionUrl);
           const data = await postMultipart(url, body, boundary, {
@@ -7061,6 +7281,84 @@ class IPCHandlers {
       return this.deepgramStreaming.getStatus();
     });
 
+    ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {
+      try {
+        await this._mintStoredCortiToken(options);
+        return { success: true };
+      } catch (error) {
+        return { success: false, error: error.message, code: error.code };
+      }
+    });
+
+    ipcMain.handle("corti-streaming-start", async (event, options = {}) => {
+      try {
+        if (!this.cortiStreaming) {
+          this.cortiStreaming = new CortiStreaming();
+        }
+        if (this.cortiStreaming.isConnected) {
+          await this.cortiStreaming.disconnect(false);
+        }
+
+        const { token, environment, tenant } = await this._mintStoredCortiToken(options);
+        const win = BrowserWindow.fromWebContents(event.sender);
+
+        this.cortiStreaming.onPartialTranscript = (text) => {
+          if (win && !win.isDestroyed()) win.webContents.send("corti-partial-transcript", text);
+        };
+        this.cortiStreaming.onFinalTranscript = (text) => {
+          if (win && !win.isDestroyed()) win.webContents.send("corti-final-transcript", text);
+        };
+        this.cortiStreaming.onError = (error) => {
+          if (win && !win.isDestroyed()) win.webContents.send("corti-error", error.message);
+        };
+        this.cortiStreaming.onSessionEnd = (data) => {
+          if (win && !win.isDestroyed()) win.webContents.send("corti-session-end", data);
+        };
+
+        await this.cortiStreaming.connect({
+          token,
+          environment,
+          tenant,
+          language: options.language,
+          keyterms: options.keyterms,
+        });
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Corti streaming start error", { error: error.message }, "streaming");
+        return { success: false, error: error.message, code: error.code };
+      }
+    });
+
+    ipcMain.on("corti-streaming-send", (_event, audioBuffer) => {
+      this.cortiStreaming?.sendAudio(Buffer.from(audioBuffer));
+    });
+
+    ipcMain.on("corti-streaming-finalize", () => {
+      this.cortiStreaming?.finalize();
+    });
+
+    ipcMain.handle("corti-streaming-stop", async () => {
+      try {
+        const model = this.cortiStreaming?.currentModel || "corti-transcribe";
+        const audioBytesSent = this.cortiStreaming?.audioBytesSent || 0;
+        let result = { text: "" };
+        if (this.cortiStreaming) {
+          result = await this.cortiStreaming.disconnect(true);
+        }
+        return { success: true, text: result?.text || "", model, audioBytesSent };
+      } catch (error) {
+        debugLogger.error("Corti streaming stop error", { error: error.message }, "streaming");
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("corti-streaming-status", async () => {
+      if (!this.cortiStreaming) {
+        return { isConnected: false, sessionId: null };
+      }
+      return this.cortiStreaming.getStatus();
+    });
+
     // Agent mode handlers
     ipcMain.handle("update-agent-hotkey", async (_event, hotkey) => {
       const hotkeyManager = this.windowManager.hotkeyManager;
@@ -7085,6 +7383,35 @@ class IPCHandlers {
         success: false,
         message: result.error || `Failed to update agent hotkey to: ${hotkey}`,
       };
+    });
+
+    ipcMain.handle("update-voice-agent-hotkey", async (_event, hotkey) => {
+      const hotkeyManager = this.windowManager.hotkeyManager;
+      const voiceAgentCallback = this.windowManager._voiceAgentHotkeyCallback;
+      if (!voiceAgentCallback) {
+        return { success: false, message: "Voice agent hotkey callback not initialized" };
+      }
+
+      if (!hotkey) {
+        hotkeyManager.unregisterSlot("voiceAgent");
+        this.environmentManager.saveVoiceAgentKey?.("");
+        return { success: true, message: "Voice agent hotkey cleared" };
+      }
+
+      const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback);
+      if (result.success) {
+        this.environmentManager.saveVoiceAgentKey?.(hotkey);
+        return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
+      }
+
+      return {
+        success: false,
+        message: result.error || `Failed to update voice agent hotkey to: ${hotkey}`,
+      };
+    });
+
+    ipcMain.handle("get-voice-agent-key", async () => {
+      return this.environmentManager.getVoiceAgentKey?.() || "";
     });
 
     ipcMain.handle("get-agent-key", async () => {

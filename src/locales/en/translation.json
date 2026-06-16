@@ -172,7 +172,8 @@
       "welcome": "Welcome",
       "setup": "Setup",
       "permissions": "Permissions",
-      "activation": "Activation"
+      "activation": "Activation",
+      "voiceAgent": "Voice Agent"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Couldn't register that hotkey",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} to start/stop",
       "holdHotkey": "Hold {{hotkey}}",
       "textareaPlaceholder": "Click here and use your hotkey to dictate..."
+    },
+    "voiceAgent": {
+      "title": "Voice Agent Hotkey",
+      "description": "Talk to your AI agent with a single keypress",
+      "hotkey": "Hotkey",
+      "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. {{agentName}} types the result wherever your cursor is. No need to say “Hey {{agentName}}” first.",
+      "optionalNote": "Optional — you can set or change it anytime in Settings."
     },
     "connectivity": {
       "title": "We can't reach OpenWhispr Cloud from this network",
@@ -429,14 +437,21 @@
       "whisperModelDescription": "Model",
       "parakeetModelDescription": "NVIDIA Parakeet Model"
     },
-    "whisperModels": "Whisper Models"
+    "whisperModels": "Whisper Models",
+    "corti": {
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "environment": "Data Region",
+      "tenant": "Tenant"
+    }
   },
   "hooks": {
     "audioRecording": {
       "errorTitles": {
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",
-        "dailyLimitReached": "Daily Limit Reached"
+        "dailyLimitReached": "Daily Limit Reached",
+        "providerRateLimited": "Provider Rate Limited"
       },
       "fallback": {
         "title": "Fallback Mode",
@@ -449,7 +464,8 @@
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
         "offline": "You're offline. Cloud transcription requires an internet connection.",
-        "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan."
+        "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
+        "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again."
       }
     },
     "clipboard": {
@@ -899,7 +915,8 @@
     "pressAnyKeyMac": "Press any key or ⌘⇧K",
     "recording": "Recording",
     "tryShortcut": "Try Ctrl+Shift+K",
-    "tryShortcutMac": "Try ⌘⇧K"
+    "tryShortcutMac": "Try ⌘⇧K",
+    "remove": "Remove hotkey"
   },
   "languageSelector": {
     "noLanguagesFound": "No languages found",
@@ -1464,15 +1481,21 @@
         "linuxPttPermissionDescription": "Run this command and log out/in: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Hold to Speak needs setup",
         "linuxPttSetupDescription": "Your user needs access to keyboard input devices.",
-        "linuxPttSetupNote": "After running the command, log out and log back in."
+        "linuxPttSetupNote": "After running the command, log out and log back in.",
+        "hyprlandConfigWriteWarningTitle": "Hyprland keybinds will not persist",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr cannot write to {{path}}, so keybinds will not survive a Hyprland config reload. Make sure the file exists and is writable.",
+        "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut."
       },
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",
         "description": "Start meeting mode and snap the panel to the side of the screen",
-        "clear": "Remove hotkey",
         "layoutLabel": "When triggered by hotkey, open in:",
         "layoutFullWidth": "Full width",
         "layoutSidePanel": "Side panel"
+      },
+      "voiceAgentHotkey": {
+        "title": "Voice Agent Hotkey",
+        "description": "Speak a request — your AI agent types the result, not your words"
       },
       "microphone": {
         "description": "Select which input device to use for dictation",
@@ -1571,7 +1594,16 @@
             "step1Title": "Install xclip"
           }
         },
-        "xclipDesc": "Clipboard tool for KDE Wayland paste (xclip or xsel)"
+        "xclipDesc": "Clipboard tool for KDE Wayland paste (xclip or xsel)",
+        "nixos": {
+          "intro": "You're on NixOS. Auto-paste needs ydotool and /dev/uinput access, which NixOS grants declaratively.",
+          "detected": "Detected",
+          "manualTitle": "Add this to your configuration",
+          "manualDesc": "Configure it yourself, then rebuild.",
+          "flakeTitle": "Installing via our flake?",
+          "flakeDesc": "If you install OpenWhispr from the flake, programs.openwhispr.enable turns on ydotool, the uinput module and the group memberships for you.",
+          "rebuildNote": "Run sudo nixos-rebuild switch, then log out and back in so the group change and the /dev/uinput rule take effect. Replace <you> with your username."
+        }
       },
       "updates": {
         "badges": {
@@ -1838,7 +1870,9 @@
         "openai_whisper_1": "Original Whisper model",
         "groq_whisper_large_v3": "High accuracy speech recognition",
         "groq_whisper_large_v3_turbo": "216x real-time speed",
-        "mistral_voxtral_mini_latest": "Fast multilingual transcription"
+        "mistral_voxtral_mini_latest": "Fast multilingual transcription",
+        "corti_transcribe": "Clinical-grade medical transcription",
+        "xai_grok_stt": "High-accuracy speech recognition by xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -1847,11 +1881,15 @@
         "openai_gpt_4_1": "Strong baseline, 1M context",
         "openai_gpt_4_1_mini": "Smaller GPT-4.1 model",
         "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
-        "anthropic_claude_sonnet_4_5": "Balanced performance",
+        "anthropic_claude_sonnet_4_6": "Balanced performance",
+        "anthropic_claude_sonnet_4_5": "Previous Sonnet generation",
         "anthropic_claude_haiku_4_5": "Fast with near-frontier intelligence",
-        "gemini_gemini_3_pro_preview": "Next-gen flagship model for complex reasoning",
+        "gemini_gemini_3_5_flash": "Latest fast, high-capability Gemini model",
+        "gemini_gemini_3_1_pro_preview": "Next-gen flagship model for complex reasoning",
         "gemini_gemini_3_flash_preview": "Ultra-fast, high-capability next-gen model",
         "gemini_gemini_2_5_flash_lite": "Lowest latency and cost",
+        "gemini_gemma_4_31b_it": "Google's largest Gemma 4, 31B dense, 256K context",
+        "gemini_gemma_4_26b_a4b_it": "Google's Gemma 4 MoE, 4B active params, 256K context",
         "groq_qwen_qwen3_32b": "Powerful reasoning model, 131K context",
         "groq_openai_gpt_oss_120b": "OpenAI's open-source flagship, 500 T/sec",
         "groq_openai_gpt_oss_20b": "Fast open-source model, 1000 T/sec",
@@ -1862,7 +1900,8 @@
         "groq_compound_mini": "Fast compound system, 3x lower latency",
         "groq_kimi_k2_0905": "Moonshot AI's 1T MoE, 256K context",
         "openai_gpt_5_5": "Frontier model for complex reasoning",
-        "anthropic_claude_opus_4_7": "Most capable Claude model",
+        "anthropic_claude_opus_4_8": "Most capable Claude model",
+        "anthropic_claude_opus_4_7": "Powerful Opus model",
         "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
         "anthropic_claude_opus_4_5": "Earlier Opus model"
       },
@@ -2331,18 +2370,59 @@
     }
   },
   "dictionary": {
-    "title": "Custom Dictionary",
-    "description": "Teach the AI your vocabulary — names, jargon, and terms it might otherwise miss",
     "clearTitle": "Clear dictionary?",
     "clearDescription": "This will remove all words from your custom dictionary. This action cannot be undone.",
     "addWord": "Add word",
-    "addPlaceholder": "Add a word or phrase...",
+    "addPlaceholder": "Add words separated by commas — OpenWhispr, Supabase, John Snow, ARR",
     "removeWord": "Remove {{word}}",
     "clearAll": "Clear all",
-    "howItWorks": "How it works",
-    "howItWorksDetail": "Words are fed as context hints to the speech model, helping it recognize uncommon terms. For difficult words, try adding context like \"The word is Synty\" alongside the word itself.",
-    "autoManaged": "Auto-managed — synced from agent name",
-    "inputHint": "Separate multiple words with commas. Add context phrases like \"The word is Synty\" for better recognition."
+    "add": "Add",
+    "importWords": "Import words",
+    "importPlaceholder": "Paste words separated by commas...",
+    "separateWithCommas": "Separate with commas",
+    "wordsReady_one": "{{count}} word ready",
+    "wordsReady_other": "{{count}} words ready",
+    "import": "Import",
+    "yourDictionary": "Your dictionary",
+    "exportDictionary": "Export dictionary",
+    "exportFailed": "Export failed",
+    "editWord": "Edit {{word}}",
+    "noMatches": "No matches — press Enter to add \"{{word}}\"",
+    "tabDictionary": "Dictionary",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "edit": "Edit {{trigger}}",
+      "remove": "Remove {{trigger}}",
+      "editTitle": "Edit snippet",
+      "dialogDescription": "When you speak the trigger, it's replaced with your saved text.",
+      "triggerLabel": "Trigger",
+      "triggerPlaceholder": "e.g. cal link",
+      "replacementLabel": "Replacement",
+      "replacementPlaceholder": "Text to insert when you say the trigger…",
+      "create": "Create snippet",
+      "duplicate": "A snippet with this trigger already exists",
+      "emptyTitle": "The stuff you shouldn't have to say",
+      "emptyTitleAccent": "twice",
+      "emptyDescription": "Speak a trigger word and OpenWhispr replaces it with whatever you saved — URLs, intros, sign-offs, prompts.",
+      "new": "New snippet",
+      "examples": {
+        "linkedinTrigger": "My LinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "Rewrite prompt",
+        "rewriteText": "Rewrite this to be more concise and professional",
+        "introTrigger": "Intro email",
+        "introText": "Hey, would love to find some time to chat later this week…",
+        "signoffTrigger": "Sign off",
+        "signoffText": "Best, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Add a trigger phrase — \"investor ask\", \"cal link\""
+    },
+    "emptyTitle": "Your dictionary is empty",
+    "emptyDescription": "Add words {{agentName}} should always get right: names, tools, acronyms.",
+    "addFirstWord": "Add your first word",
+    "importList": "Import a list",
+    "agentDefault": "Added by default"
   },
   "support": {
     "documentation": "Documentation",
@@ -2434,9 +2514,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Agent Hotkey",
-      "hotkeyDescription": "Hotkey to toggle the agent overlay",
-      "clearHotkey": "Remove hotkey",
+      "hotkey": "Chat Agent Hotkey",
+      "hotkeyDescription": "Open and close the chat agent overlay",
       "model": "Agent Model",
       "modelDescription": "AI model used for agent conversations",
       "systemPrompt": "System Prompt",

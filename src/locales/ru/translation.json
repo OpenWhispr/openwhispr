@@ -172,7 +172,8 @@
       "welcome": "Приветствие",
       "setup": "Настройка",
       "permissions": "Разрешения",
-      "activation": "Активация"
+      "activation": "Активация",
+      "voiceAgent": "Голосовой агент"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Не удалось зарегистрировать горячую клавишу",
@@ -217,6 +218,13 @@
       "hotkeyToStartStop": "{{hotkey}} для старта/остановки",
       "holdHotkey": "Удерживайте {{hotkey}}",
       "textareaPlaceholder": "Нажмите сюда и используйте горячую клавишу для диктовки..."
+    },
+    "voiceAgent": {
+      "title": "Горячая клавиша голосового агента",
+      "description": "Обращайтесь к ИИ-агенту одним нажатием",
+      "hotkey": "Горячая клавиша",
+      "howItWorks": "Нажмите клавишу и скажите, что вам нужно — например, «напиши короткую благодарственную записку». {{agentName}} напечатает результат там, где находится курсор. Говорить «Hey {{agentName}}» не нужно.",
+      "optionalNote": "Необязательно — вы можете настроить или изменить её в любое время в настройках."
     },
     "connectivity": {
       "title": "Не удаётся подключиться к OpenWhispr Cloud из этой сети",
@@ -429,14 +437,21 @@
       "whisperModelDescription": "Модель",
       "parakeetModelDescription": "Модель NVIDIA Parakeet"
     },
-    "whisperModels": "Модели Whisper"
+    "whisperModels": "Модели Whisper",
+    "corti": {
+      "clientId": "ID клиента",
+      "clientSecret": "Секрет клиента",
+      "environment": "Регион данных",
+      "tenant": "Тенант"
+    }
   },
   "hooks": {
     "audioRecording": {
       "errorTitles": {
         "sessionExpired": "Сессия истекла",
         "offline": "Нет подключения к интернету",
-        "dailyLimitReached": "Дневной лимит достигнут"
+        "dailyLimitReached": "Дневной лимит достигнут",
+        "providerRateLimited": "Ограничение провайдера"
       },
       "fallback": {
         "title": "Резервный режим",
@@ -449,7 +464,8 @@
       "errorDescriptions": {
         "sessionExpired": "Сессия OpenWhispr Cloud недоступна. Войдите снова из Настроек.",
         "offline": "Вы офлайн. Облачная транскрипция требует подключения к интернету.",
-        "dailyLimitReached": "Достигнут дневной лимит транскрипций. Попробуйте завтра или обновите тариф."
+        "dailyLimitReached": "Достигнут дневной лимит транскрипций. Попробуйте завтра или обновите тариф.",
+        "providerRateLimited": "Ваш провайдер транскрипции ограничил запрос. Подождите немного и попробуйте снова."
       }
     },
     "clipboard": {
@@ -803,7 +819,8 @@
     "pressAnyKeyMac": "Нажмите любую клавишу или ⌘⇧K",
     "recording": "Запись",
     "tryShortcut": "Попробуйте Ctrl+Shift+K",
-    "tryShortcutMac": "Попробуйте ⌘⇧K"
+    "tryShortcutMac": "Попробуйте ⌘⇧K",
+    "remove": "Удалить горячую клавишу"
   },
   "languageSelector": {
     "noLanguagesFound": "Языки не найдены",
@@ -1288,10 +1305,13 @@
       "meetingHotkey": {
         "title": "Горячая клавиша режима встречи",
         "description": "Запустить режим встречи и закрепить панель сбоку экрана",
-        "clear": "Удалить горячую клавишу",
         "layoutLabel": "При запуске горячей клавишей открывать в:",
         "layoutFullWidth": "Полная ширина",
         "layoutSidePanel": "Боковая панель"
+      },
+      "voiceAgentHotkey": {
+        "title": "Горячая клавиша голосового агента",
+        "description": "Скажите, что нужно — ИИ-агент напечатает результат, а не ваши слова"
       },
       "microphone": {
         "description": "Выберите устройство ввода для диктовки",
@@ -1390,7 +1410,16 @@
             "step1Title": "Установить xclip"
           }
         },
-        "xclipDesc": "Инструмент буфера обмена для вставки в KDE Wayland (xclip или xsel)"
+        "xclipDesc": "Инструмент буфера обмена для вставки в KDE Wayland (xclip или xsel)",
+        "nixos": {
+          "intro": "Вы используете NixOS. Для автоматической вставки требуются ydotool и доступ к /dev/uinput — NixOS предоставляет это декларативно.",
+          "detected": "Обнаружено",
+          "manualTitle": "Добавьте это в свою конфигурацию",
+          "manualDesc": "Настройте вручную, затем выполните пересборку.",
+          "flakeTitle": "Устанавливаете через наш flake?",
+          "flakeDesc": "Если вы устанавливаете OpenWhispr из flake, programs.openwhispr.enable автоматически включает ydotool, модуль uinput и нужные группы пользователей.",
+          "rebuildNote": "Выполните sudo nixos-rebuild switch, затем выйдите из системы и войдите снова, чтобы изменение группы и правило /dev/uinput вступили в силу. Замените <you> на ваше имя пользователя."
+        }
       },
       "updates": {
         "badges": {
@@ -1738,7 +1767,9 @@
         "openai_whisper_1": "Оригинальная модель Whisper",
         "groq_whisper_large_v3_turbo": "Скорость в 216 раз быстрее реального времени",
         "groq_whisper_large_v3": "Модель Large v3, быстрая и точная",
-        "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция"
+        "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция",
+        "corti_transcribe": "Медицинская транскрипция клинического уровня",
+        "xai_grok_stt": "Высокоточное распознавание речи от xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Сильная модель рассуждения",
@@ -1747,11 +1778,15 @@
         "openai_gpt_4_1": "Надёжная базовая модель, контекст 1M",
         "openai_gpt_4_1_mini": "Компактная версия GPT-4.1",
         "openai_gpt_4_1_nano": "Минимальная задержка GPT-4.1",
-        "anthropic_claude_sonnet_4_5": "Сбалансированная производительность",
+        "anthropic_claude_sonnet_4_6": "Сбалансированная производительность",
+        "anthropic_claude_sonnet_4_5": "Предыдущее поколение Sonnet",
         "anthropic_claude_haiku_4_5": "Быстрая с почти передовым интеллектом",
-        "gemini_gemini_3_pro_preview": "Флагманская модель нового поколения для сложных рассуждений",
+        "gemini_gemini_3_5_flash": "Новейшая быстрая высокопроизводительная модель Gemini",
+        "gemini_gemini_3_1_pro_preview": "Флагманская модель нового поколения для сложных рассуждений",
         "gemini_gemini_3_flash_preview": "Сверхбыстрая высокопроизводительная модель нового поколения",
         "gemini_gemini_2_5_flash_lite": "Минимальная задержка и стоимость",
+        "gemini_gemma_4_31b_it": "Крупнейшая Gemma 4 от Google, 31B плотная, контекст 256K",
+        "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE от Google, 4B активных параметров, контекст 256K",
         "groq_qwen_qwen3_32b": "Мощная модель с рассуждением, контекст 131K",
         "groq_openai_gpt_oss_120b": "Открытая флагманская модель OpenAI, 500 т/с",
         "groq_openai_gpt_oss_20b": "Быстрая открытая модель, 1000 т/с",
@@ -1762,9 +1797,10 @@
         "groq_compound_mini": "Быстрая система Compound, 3x ниже задержка",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, контекст 256K",
         "openai_gpt_5_5": "Фронтирная модель для сложного рассуждения",
-        "anthropic_claude_opus_4_7": "Самая мощная модель Claude",
-        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_8": "Самая мощная модель Claude",
+        "anthropic_claude_opus_4_7": "Мощная модель Opus",
+        "anthropic_claude_opus_4_6": "Предыдущее поколение Opus, контекст 1M",
+        "anthropic_claude_opus_4_5": "Более ранняя модель Opus"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Быстрая и дешёвая. Отлично подходит для очистки текста.",
@@ -2129,15 +2165,58 @@
     "addWord": "Добавить слово",
     "removeWord": "Удалить {{word}}",
     "clearAll": "Очистить все",
-    "howItWorks": "Как это работает",
-    "howItWorksDetail": "Добавленные слова включаются в промпт ИИ, чтобы модель распознавала и сохраняла эти термины при очистке транскрипции.",
-    "autoManaged": "Имя агента (управляется автоматически)",
-    "inputHint": "Нажмите Enter для добавления",
-    "addPlaceholder": "Добавить слово или фразу...",
-    "title": "Словарь",
-    "description": "Добавьте слова для улучшения транскрипции",
+    "addPlaceholder": "Добавьте слова через запятую — OpenWhispr, Supabase, John Snow, ARR",
     "clearTitle": "Очистить словарь?",
-    "clearDescription": "Все слова будут удалены без возможности восстановления."
+    "clearDescription": "Все слова будут удалены без возможности восстановления.",
+    "add": "Добавить",
+    "importWords": "Импортировать слова",
+    "importPlaceholder": "Вставьте слова, разделённые запятыми...",
+    "separateWithCommas": "Разделяйте запятыми",
+    "wordsReady_one": "{{count}} слово готово",
+    "wordsReady_few": "{{count}} слова готовы",
+    "wordsReady_many": "{{count}} слов готово",
+    "wordsReady_other": "{{count}} слова готово",
+    "import": "Импортировать",
+    "yourDictionary": "Ваш словарь",
+    "exportDictionary": "Экспортировать словарь",
+    "exportFailed": "Не удалось экспортировать",
+    "editWord": "Изменить {{word}}",
+    "noMatches": "Совпадений нет — нажмите Enter, чтобы добавить «{{word}}»",
+    "tabDictionary": "Словарь",
+    "tabSnippets": "Сниппеты",
+    "snippets": {
+      "title": "Сниппеты",
+      "edit": "Изменить {{trigger}}",
+      "remove": "Удалить {{trigger}}",
+      "editTitle": "Изменить сниппет",
+      "dialogDescription": "Когда вы произносите триггер, он заменяется сохранённым текстом.",
+      "triggerLabel": "Триггер",
+      "triggerPlaceholder": "например, мой календарь",
+      "replacementLabel": "Замена",
+      "replacementPlaceholder": "Текст, который будет вставлен при произнесении триггера…",
+      "create": "Создать сниппет",
+      "duplicate": "Сниппет с таким триггером уже существует",
+      "emptyTitle": "То, что не нужно повторять",
+      "emptyTitleAccent": "дважды",
+      "emptyDescription": "Произнесите слово-триггер, и OpenWhispr заменит его сохранённым текстом: ссылки, приветствия, подписи, промпты.",
+      "new": "Новый сниппет",
+      "examples": {
+        "linkedinTrigger": "Мой LinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "Промпт для переписывания",
+        "rewriteText": "Перепиши это более кратко и профессионально",
+        "introTrigger": "Вступительное письмо",
+        "introText": "Привет, буду рад найти время пообщаться на этой неделе…",
+        "signoffTrigger": "Подпись",
+        "signoffText": "С уважением, Алекс · alex@example.com"
+      },
+      "addPlaceholder": "Добавьте фразу-триггер — «мой календарь», «мой LinkedIn»"
+    },
+    "emptyTitle": "Ваш словарь пуст",
+    "emptyDescription": "Добавьте слова, которые {{agentName}} всегда должен распознавать: имена, инструменты, аббревиатуры.",
+    "addFirstWord": "Добавьте первое слово",
+    "importList": "Импортировать список",
+    "agentDefault": "Добавлено по умолчанию"
   },
   "sidebar": {
     "home": "Главная",
@@ -2271,30 +2350,29 @@
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabled": "Включить голосового агента",
+    "enabledDescription": "Диктуйте инструкции своему агенту. Активируется словом \"{{agentName}}\". Настраивается ниже.",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "openwhisprDesc": "Используйте агента под управлением OpenWhispr, без API-ключа.",
+      "providers": "Свой ключ",
+      "providersDesc": "Подключитесь к OpenAI, Anthropic, Gemini или Groq со своим API-ключом.",
+      "local": "Локально",
+      "localDesc": "Запускайте локальную LLM на своём устройстве. Полная приватность.",
+      "selfHosted": "Свой сервер",
+      "selfHostedDesc": "Укажите свой OpenAI-совместимый эндпоинт.",
+      "enterprise": "Корпоративный",
+      "enterpriseDesc": "Используйте AWS Bedrock, Azure OpenAI или Google Vertex."
     },
     "prompt": {
-      "title": "Agent prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "title": "Подсказка агента",
+      "description": "Системная подсказка, используемая при обнаружении слова активации. По умолчанию применяется встроенная."
     }
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Горячая клавиша агента",
-      "hotkeyDescription": "Горячая клавиша для переключения наложения агента",
-      "clearHotkey": "Удалить горячую клавишу",
+      "hotkey": "Горячая клавиша чат-агента",
+      "hotkeyDescription": "Открывает и закрывает окно чат-агента",
       "model": "Модель агента",
       "modelDescription": "Модель ИИ для разговоров с агентом",
       "systemPrompt": "Системный промпт",
