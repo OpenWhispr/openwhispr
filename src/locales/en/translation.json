@@ -320,7 +320,15 @@
       "clearAllDescription": "All transcriptions and audio files will be permanently removed.",
       "clearAllSuccess": "History cleared",
       "clearAllErrorTitle": "Couldn't clear history",
-      "clearAllErrorDescription": "Something went wrong. Please try again."
+      "clearAllErrorDescription": "Something went wrong. Please try again.",
+      "discarded": {
+        "show": "Show discarded",
+        "hide": "Hide discarded",
+        "badge": "Discarded",
+        "recording": "Discarded recording",
+        "recordingWithDuration": "Discarded recording · {{duration}}",
+        "recover": "Recover"
+      }
     },
     "cloudMigration": {
       "title": "Welcome to OpenWhispr Cloud",
@@ -1708,7 +1716,9 @@
       "hoursAgo": "{{count}}h ago",
       "justNow": "just now",
       "lastSynced": "Last synced {{time}}",
-      "minutesAgo": "{{count}}m ago"
+      "minutesAgo": "{{count}}m ago",
+      "saveDiscarded": "Save discarded dictations",
+      "saveDiscardedDescription": "When you cancel a dictation with Escape, keep its audio in history so you can recover it. Requires data and audio retention to be on."
     },
     "prompts": {
       "description": "View, customize, and test the unified system prompt that powers text cleanup and instruction detection",

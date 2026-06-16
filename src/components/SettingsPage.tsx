@@ -751,6 +751,8 @@ export default function SettingsPage({
     setAudioRetentionDays,
     dataRetentionEnabled,
     setDataRetentionEnabled,
+    saveDiscardedTranscriptions,
+    setSaveDiscardedTranscriptions,
     customDictionary,
     setCustomDictionary,
     noteFilesEnabled,
@@ -3530,6 +3532,18 @@ EOF`,
                     description={t("settingsPage.privacy.dataRetentionDescription")}
                   >
                     <Toggle checked={dataRetentionEnabled} onChange={setDataRetentionEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.saveDiscarded")}
+                    description={t("settingsPage.privacy.saveDiscardedDescription")}
+                  >
+                    <Toggle
+                      checked={saveDiscardedTranscriptions}
+                      disabled={!dataRetentionEnabled || audioRetentionDays === 0}
+                      onChange={setSaveDiscardedTranscriptions}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>

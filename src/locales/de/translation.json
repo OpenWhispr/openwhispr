@@ -320,7 +320,15 @@
       "retryError": "Erneute Transkription fehlgeschlagen",
       "audioNotFound": "Audiodatei nicht gefunden oder abgelaufen",
       "noAiProcessing": "Auf diese Transkription wurde keine KI-Verarbeitung angewendet",
-      "rawTranscript": "Rohtranskript"
+      "rawTranscript": "Rohtranskript",
+      "discarded": {
+        "show": "Verworfene anzeigen",
+        "hide": "Verworfene ausblenden",
+        "badge": "Verworfen",
+        "recording": "Verworfene Aufnahme",
+        "recordingWithDuration": "Verworfene Aufnahme · {{duration}}",
+        "recover": "Wiederherstellen"
+      }
     },
     "cloudMigration": {
       "title": "Willkommen bei OpenWhispr Cloud",
@@ -1524,7 +1532,9 @@
       "audioStorageFiles": "{{count}} Dateien, {{size}}",
       "audioStorageEmpty": "Keine Audiodateien gespeichert",
       "clearAllAudio": "Alle Audiodateien löschen",
-      "clearAllAudioConfirm": "Alle gespeicherten Audiodateien löschen? Dies kann nicht rückgängig gemacht werden."
+      "clearAllAudioConfirm": "Alle gespeicherten Audiodateien löschen? Dies kann nicht rückgängig gemacht werden.",
+      "saveDiscarded": "Verworfene Diktate speichern",
+      "saveDiscardedDescription": "Wenn Sie ein Diktat mit Escape abbrechen, bleibt das Audio im Verlauf, damit Sie es wiederherstellen können. Erfordert aktive Daten- und Audio-Aufbewahrung."
     },
     "prompts": {
       "description": "Den einheitlichen System-Prompt anzeigen, anpassen und testen, der Textbereinigung und Anweisungserkennung steuert",

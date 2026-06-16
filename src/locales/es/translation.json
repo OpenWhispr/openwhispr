@@ -279,6 +279,14 @@
     "history": {
       "couldNotLoadTitle": "No se pudo cargar tu historial",
       "couldNotLoadDescription": "Ocurrió un problema al cargar tus transcripciones. Cierra y abre la app de nuevo.",
+      "discarded": {
+        "show": "Mostrar descartadas",
+        "hide": "Ocultar descartadas",
+        "badge": "Descartada",
+        "recording": "Grabación descartada",
+        "recordingWithDuration": "Grabación descartada · {{duration}}",
+        "recover": "Recuperar"
+      },
       "copiedTitle": "¡Copiado!",
       "copiedDescription": "Texto copiado al portapapeles",
       "couldNotCopyTitle": "No se pudo copiar",
@@ -1565,6 +1573,8 @@
       "minutesAgo": "hace {{count}}m",
       "audioRetention": "Retención de audio",
       "audioRetentionDescription": "Almacena grabaciones de audio localmente para volver a transcribir y descargar. Los archivos se eliminan automáticamente tras el periodo de retención.",
+      "saveDiscarded": "Guardar dictados descartados",
+      "saveDiscardedDescription": "Cuando cancelas un dictado con Escape, conserva su audio en el historial para poder recuperarlo. Requiere tener activadas la retención de datos y de audio.",
       "audioRetentionDisabled": "Desactivado",
       "audioRetentionDays": "{{count}} días",
       "audioStorageUsage": "Uso de almacenamiento",

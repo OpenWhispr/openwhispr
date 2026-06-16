@@ -12,6 +12,7 @@ const useTranscriptionStore = create<TranscriptionState>()(() => ({
 let hasBoundIpcListeners = false;
 const DEFAULT_LIMIT = 50;
 let currentLimit = DEFAULT_LIMIT;
+let currentIncludeDiscarded = false;
 
 function ensureIpcListeners() {
   if (hasBoundIpcListeners || typeof window === "undefined") {
@@ -67,16 +68,18 @@ function ensureIpcListeners() {
   });
 }
 
-export async function initializeTranscriptions(limit = DEFAULT_LIMIT) {
+export async function initializeTranscriptions(limit = DEFAULT_LIMIT, includeDiscarded = false) {
   currentLimit = limit;
+  currentIncludeDiscarded = includeDiscarded;
   ensureIpcListeners();
-  const items = await window.electronAPI.getTranscriptions(limit);
+  const items = await window.electronAPI.getTranscriptions(limit, { includeDiscarded });
   useTranscriptionStore.setState({ transcriptions: items });
   return items;
 }
 
 export function addTranscription(item: TranscriptionItem) {
   if (!item) return;
+  if (item.status === "discarded" && !currentIncludeDiscarded) return;
   const { transcriptions } = useTranscriptionStore.getState();
   const withoutDuplicate = transcriptions.filter((existing) => existing.id !== item.id);
   useTranscriptionStore.setState({

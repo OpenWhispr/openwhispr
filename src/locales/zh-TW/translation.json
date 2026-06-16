@@ -320,7 +320,15 @@
       "retryError": "重新轉錄失敗",
       "audioNotFound": "找不到音訊檔案或檔案已過期",
       "noAiProcessing": "此轉錄未套用 AI 處理",
-      "rawTranscript": "原始轉錄"
+      "rawTranscript": "原始轉錄",
+      "discarded": {
+        "show": "顯示已捨棄",
+        "hide": "隱藏已捨棄",
+        "badge": "已捨棄",
+        "recording": "已捨棄的錄音",
+        "recordingWithDuration": "已捨棄的錄音 · {{duration}}",
+        "recover": "復原"
+      }
     },
     "cloudMigration": {
       "title": "歡迎使用 OpenWhispr Cloud",
@@ -1519,7 +1527,9 @@
       "audioStorageFiles": "{{count}} 個檔案，{{size}}",
       "audioStorageEmpty": "沒有已儲存的音訊檔案",
       "clearAllAudio": "清除所有音訊",
-      "clearAllAudioConfirm": "刪除所有已儲存的音訊檔案？此操作無法復原。"
+      "clearAllAudioConfirm": "刪除所有已儲存的音訊檔案？此操作無法復原。",
+      "saveDiscarded": "儲存已捨棄的聽寫",
+      "saveDiscardedDescription": "當你以 Escape 取消聽寫時，將其音訊保留在歷史記錄中以便復原。需要開啟資料與音訊保留。"
     },
     "prompts": {
       "description": "檢視、自訂和測試用於文字整理和指令偵測的統一系統提示詞",

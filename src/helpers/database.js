@@ -599,14 +599,15 @@ class DatabaseManager {
     }
   }
 
-  getTranscriptions(limit = 50) {
+  getTranscriptions(limit = 50, { includeDiscarded = false } = {}) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const stmt = this.db.prepare(
-        "SELECT * FROM transcriptions WHERE deleted_at IS NULL ORDER BY timestamp DESC LIMIT ?"
-      );
+      const sql = includeDiscarded
+        ? "SELECT * FROM transcriptions WHERE deleted_at IS NULL ORDER BY timestamp DESC LIMIT ?"
+        : "SELECT * FROM transcriptions WHERE deleted_at IS NULL AND status != 'discarded' ORDER BY timestamp DESC LIMIT ?";
+      const stmt = this.db.prepare(sql);
       const transcriptions = stmt.all(limit);
       return transcriptions;
     } catch (error) {

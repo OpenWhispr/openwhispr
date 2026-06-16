@@ -11,6 +11,7 @@ import {
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
+import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../stores/settingsStore";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import { detectAgentName } from "../config/agentDetection";
@@ -543,12 +544,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   cancelRecording() {
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
       this.mediaRecorder.onstop = () => {
+        const durationSeconds = this.recordingStartTime
+          ? (Date.now() - this.recordingStartTime) / 1000
+          : null;
+        const shouldSave =
+          shouldSaveDiscardedRecording(getSettings(), durationSeconds) &&
+          this.audioChunks.length > 0;
+        const blob = shouldSave
+          ? new Blob(this.audioChunks, { type: this.recordingMimeType })
+          : null;
+
         this.cleanupPreview({ dismiss: true });
         this.isRecording = false;
         this.isProcessing = false;
         this.audioChunks = [];
         this.recordingStartTime = null;
         this.onStateChange?.({ isRecording: false, isProcessing: false });
+
+        if (blob) {
+          this.saveDiscardedTranscription(blob, durationSeconds).catch((err) => {
+            logger.warn("Failed to save discarded transcription", { error: err.message }, "audio");
+          });
+        }
       };
 
       this.mediaRecorder.stop();
@@ -2206,6 +2223,32 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         {
           error: error.message,
         },
+        "audio"
+      );
+    }
+  }
+
+  async saveDiscardedTranscription(blob, durationSeconds) {
+    try {
+      const result = await window.electronAPI.saveTranscription("", null, {
+        status: "discarded",
+      });
+      if (!result?.id) return;
+      syncService.debouncedPush("transcription", result.id);
+
+      if (blob) {
+        const durationMs = durationSeconds ? Math.round(durationSeconds * 1000) : null;
+        const arrayBuffer = await blob.arrayBuffer();
+        await window.electronAPI.saveTranscriptionAudio(result.id, arrayBuffer, {
+          durationMs,
+          provider: null,
+          model: null,
+        });
+      }
+    } catch (error) {
+      logger.error(
+        "Failed to save discarded transcription record",
+        { error: error.message },
         "audio"
       );
     }

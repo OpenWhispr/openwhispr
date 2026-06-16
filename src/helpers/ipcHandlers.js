@@ -802,8 +802,8 @@ class IPCHandlers {
       return result;
     });
 
-    ipcMain.handle("db-get-transcriptions", async (event, limit = 50) => {
-      return this.databaseManager.getTranscriptions(limit);
+    ipcMain.handle("db-get-transcriptions", async (event, limit = 50, options = {}) => {
+      return this.databaseManager.getTranscriptions(limit, options);
     });
 
     ipcMain.handle("db-clear-transcriptions", async (event) => {
@@ -3853,9 +3853,10 @@ class IPCHandlers {
         this.databaseManager.updateTranscriptionStatus(id, "completed");
         const providerName = result.source || "local";
         const modelName = result.model || null;
+        const existingRow = this.databaseManager.getTranscriptionById(id);
         this.databaseManager.updateTranscriptionAudio(id, {
           hasAudio: 1,
-          audioDurationMs: null,
+          audioDurationMs: existingRow?.audio_duration_ms ?? null,
           provider: providerName,
           model: modelName,
         });

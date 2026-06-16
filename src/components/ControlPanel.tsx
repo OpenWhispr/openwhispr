@@ -75,6 +75,7 @@ export default function ControlPanel() {
   const [showReferrals, setShowReferrals] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const [showDiscarded, setShowDiscarded] = useState(false);
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
   const isMeetingMode = useIsMeetingMode();
@@ -553,6 +554,22 @@ export default function ControlPanel() {
     [toast, t, useCleanupModel]
   );
 
+  const toggleShowDiscarded = useCallback(async () => {
+    const next = !showDiscarded;
+    setShowDiscarded(next);
+    try {
+      setIsLoading(true);
+      await initializeTranscriptions(50, next);
+    } catch {
+      showAlertDialog({
+        title: t("controlPanel.history.couldNotLoadTitle"),
+        description: t("controlPanel.history.couldNotLoadDescription"),
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [showDiscarded, showAlertDialog, t]);
+
   const handleUpdateClick = async () => {
     if (updateStatus.updateDownloaded) {
       showConfirmDialog({
@@ -875,6 +892,8 @@ export default function ControlPanel() {
                 clearAllTranscriptions={clearAllTranscriptions}
                 onShowAudioInFolder={showAudioInFolder}
                 onRetryTranscription={retryTranscription}
+                showDiscarded={showDiscarded}
+                onToggleDiscarded={toggleShowDiscarded}
                 onOpenSettings={(section) => {
                   setSettingsSection(section);
                   setShowSettings(true);

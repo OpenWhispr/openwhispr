@@ -320,7 +320,15 @@
       "retryError": "再文字起こしに失敗しました",
       "audioNotFound": "音声ファイルが見つからないか有効期限切れです",
       "noAiProcessing": "この文字起こしにはAI処理が適用されていません",
-      "rawTranscript": "生の文字起こし"
+      "rawTranscript": "生の文字起こし",
+      "discarded": {
+        "show": "破棄したものを表示",
+        "hide": "破棄したものを非表示",
+        "badge": "破棄済み",
+        "recording": "破棄した録音",
+        "recordingWithDuration": "破棄した録音 · {{duration}}",
+        "recover": "復元"
+      }
     },
     "cloudMigration": {
       "title": "OpenWhispr Cloud へようこそ",
@@ -1524,7 +1532,9 @@
       "audioStorageFiles": "{{count}}ファイル、{{size}}",
       "audioStorageEmpty": "保存された音声ファイルはありません",
       "clearAllAudio": "すべての音声を削除",
-      "clearAllAudioConfirm": "保存されたすべての音声ファイルを削除しますか？この操作は元に戻せません。"
+      "clearAllAudioConfirm": "保存されたすべての音声ファイルを削除しますか？この操作は元に戻せません。",
+      "saveDiscarded": "破棄したディクテーションを保存",
+      "saveDiscardedDescription": "Escape でディクテーションをキャンセルしたとき、音声を履歴に残して後で復元できるようにします。データと音声の保持を有効にする必要があります。"
     },
     "prompts": {
       "description": "テキスト補正と指示検出を行う統合システムプロンプトの表示、カスタマイズ、テスト",

@@ -2,7 +2,16 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./button";
 import { Tooltip } from "./tooltip";
-import { Copy, Trash2, FileText, FolderOpen, RotateCcw, Loader2, AlertCircle } from "lucide-react";
+import {
+  Copy,
+  Trash2,
+  FileText,
+  FolderOpen,
+  RotateCcw,
+  Loader2,
+  AlertCircle,
+  ArchiveRestore,
+} from "lucide-react";
 import type {
   TranscriptionItem as TranscriptionItemType,
   TranscriptionErrorCode,
@@ -60,6 +69,15 @@ export default function TranscriptionItem({
   };
 
   const isFailed = item.status === "failed";
+  const isDiscarded = item.status === "discarded";
+  const discardedDuration = (() => {
+    const ms = item.audio_duration_ms;
+    if (!ms || ms <= 0) return null;
+    const totalSeconds = Math.round(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${String(s).padStart(2, "0")}`;
+  })();
   const hasRawText = item.raw_text !== null;
   const hasAudio = item.has_audio === 1;
   const showUtilityGroup = hasRawText || hasAudio;
@@ -78,7 +96,9 @@ export default function TranscriptionItem({
         "group rounded-md border px-3 py-2.5 transition-colors duration-150",
         isFailed
           ? "border-destructive/30 bg-destructive/5 hover:bg-destructive/10"
-          : "border-border/40 dark:border-border-subtle/60 bg-card/50 dark:bg-surface-2/60 hover:bg-muted/30 dark:hover:bg-surface-2/80"
+          : isDiscarded
+            ? "border-border/30 bg-muted/20 hover:bg-muted/30 opacity-80"
+            : "border-border/40 dark:border-border-subtle/60 bg-card/50 dark:bg-surface-2/60 hover:bg-muted/30 dark:hover:bg-surface-2/80"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -136,6 +156,19 @@ export default function TranscriptionItem({
               )}
             </div>
           </div>
+        ) : isDiscarded ? (
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {t("controlPanel.history.discarded.badge")}
+            </span>
+            <span className="text-sm text-muted-foreground truncate">
+              {discardedDuration
+                ? t("controlPanel.history.discarded.recordingWithDuration", {
+                    duration: discardedDuration,
+                  })
+                : t("controlPanel.history.discarded.recording")}
+            </span>
+          </div>
         ) : (
           <p className="flex-1 min-w-0 text-foreground text-sm leading-[1.5] break-words">
             {item.text}
@@ -145,9 +178,26 @@ export default function TranscriptionItem({
         <div
           className={cn(
             "flex items-center gap-0.5 shrink-0 transition-opacity duration-150",
-            isFailed ? "opacity-100" : isHovered ? "opacity-100" : "opacity-0"
+            isFailed || isDiscarded ? "opacity-100" : isHovered ? "opacity-100" : "opacity-0"
           )}
         >
+          {isDiscarded && hasAudio && (
+            <Tooltip content={t("controlPanel.history.discarded.recover")}>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleRetry}
+                disabled={isRetrying}
+                className="h-6 w-6 rounded-sm text-muted-foreground hover:text-primary hover:bg-primary/10"
+              >
+                {isRetrying ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <ArchiveRestore size={12} />
+                )}
+              </Button>
+            </Tooltip>
+          )}
           {isFailed && hasAudio && (
             <Tooltip content={t("controlPanel.history.retryTranscription")}>
               <Button
@@ -165,7 +215,7 @@ export default function TranscriptionItem({
               </Button>
             </Tooltip>
           )}
-          {!isFailed && hasRawText && (
+          {!isFailed && !isDiscarded && hasRawText && (
             <Tooltip content={t("controlPanel.history.viewRawTranscript")}>
               <Button
                 size="icon"
@@ -192,7 +242,7 @@ export default function TranscriptionItem({
               </Button>
             </Tooltip>
           )}
-          {!isFailed && hasAudio && (
+          {!isFailed && !isDiscarded && hasAudio && (
             <Tooltip content={t("controlPanel.history.retryTranscription")}>
               <Button
                 size="icon"
@@ -210,7 +260,7 @@ export default function TranscriptionItem({
             </Tooltip>
           )}
           {showUtilityGroup && <div className="w-px h-3 bg-border/30" />}
-          {!isFailed && (
+          {!isFailed && !isDiscarded && (
             <Tooltip content={t("controlPanel.history.copyText")}>
               <Button
                 size="icon"
@@ -235,7 +285,7 @@ export default function TranscriptionItem({
         </div>
       </div>
 
-      {!isFailed && (
+      {!isFailed && !isDiscarded && (
         <div
           className={cn(
             "overflow-hidden transition-all duration-200",
