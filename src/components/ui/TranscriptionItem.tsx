@@ -18,6 +18,7 @@ import type {
 } from "../../types/electron";
 import { cn } from "../lib/utils";
 import { getCachedPlatform } from "../../utils/platform";
+import { formatMmSs } from "../../utils/formatDuration";
 
 const platform = getCachedPlatform();
 
@@ -70,14 +71,10 @@ export default function TranscriptionItem({
 
   const isFailed = item.status === "failed";
   const isDiscarded = item.status === "discarded";
-  const discardedDuration = (() => {
-    const ms = item.audio_duration_ms;
-    if (!ms || ms <= 0) return null;
-    const totalSeconds = Math.round(ms / 1000);
-    const m = Math.floor(totalSeconds / 60);
-    const s = totalSeconds % 60;
-    return `${m}:${String(s).padStart(2, "0")}`;
-  })();
+  const discardedDuration =
+    item.audio_duration_ms && item.audio_duration_ms > 0
+      ? formatMmSs(Math.round(item.audio_duration_ms / 1000))
+      : null;
   const hasRawText = item.raw_text !== null;
   const hasAudio = item.has_audio === 1;
   const showUtilityGroup = hasRawText || hasAudio;

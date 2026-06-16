@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Mic, ArrowUp, Square, Loader2 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { formatMmSs } from "../../utils/formatDuration";
 
 const BAR_COUNT = 5;
 
@@ -47,8 +48,7 @@ export default function NoteBottomBar({
     return () => clearInterval(id);
   }, [isRecording]);
 
-  const minutes = String(Math.floor(elapsed / 60)).padStart(2, "0");
-  const seconds = String(elapsed % 60).padStart(2, "0");
+  const elapsedLabel = formatMmSs(elapsed);
 
   const hasText = inputText.trim().length > 0;
 
@@ -129,7 +129,7 @@ export default function NoteBottomBar({
                 ))}
               </div>
               <span className="text-[11px] font-medium tabular-nums text-primary/60 dark:text-primary/70">
-                {minutes}:{seconds}
+                {elapsedLabel}
               </span>
               <Square size={9} fill="currentColor" className="text-primary/50" />
             </button>
