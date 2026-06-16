@@ -182,6 +182,26 @@ function restoreHtmlHandlerIfChanged(original) {
   }
 }
 
+// True source of truth for whether openwhispr:// resolves on Linux — the same
+// MIME database xdg-open consults. Returns true for deb/rpm/flatpak/AUR installs
+// (scheme registered via the packaged .desktop MimeType) and false for AppImage/
+// tar.gz runs where it genuinely isn't registered, so we never enable a dead-end
+// OAuth flow. Used to recover from setAsDefaultProtocolClient's KDE false negative.
+function isOAuthSchemeRegistered() {
+  if (process.platform !== "linux") return false;
+  try {
+    const { execFileSync } = require("child_process");
+    const handler = execFileSync(
+      "xdg-mime",
+      ["query", "default", `x-scheme-handler/${OAUTH_PROTOCOL}`],
+      { encoding: "utf8", timeout: 3000 }
+    ).trim();
+    return handler.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 // Register custom protocol for OAuth callbacks.
 // In development, always include the app path argument so macOS/Windows/Linux
 // can launch the project app instead of opening bare Electron.
@@ -204,7 +224,11 @@ function registerOpenWhisprProtocol() {
   return result;
 }
 
-const protocolRegistered = registerOpenWhisprProtocol();
+// setAsDefaultProtocolClient returns a false negative on KDE/Wayland, so on Linux
+// fall back to probing the system MIME database for an actual handler. This keeps
+// OAuth enabled where the callback can resolve (deb/rpm/flatpak/AUR) and correctly
+// gated where it can't (AppImage/tar.gz with no scheme registration).
+const protocolRegistered = registerOpenWhisprProtocol() || isOAuthSchemeRegistered();
 if (!protocolRegistered) {
   console.warn(`[Auth] Failed to register ${OAUTH_PROTOCOL}:// protocol handler`);
 }
