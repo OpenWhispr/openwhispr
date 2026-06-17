@@ -11,6 +11,7 @@ import {
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
+import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../stores/settingsStore";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import { detectAgentName } from "../config/agentDetection";
@@ -543,12 +544,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   cancelRecording() {
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
       this.mediaRecorder.onstop = () => {
+        const durationSeconds = this.recordingStartTime
+          ? (Date.now() - this.recordingStartTime) / 1000
+          : null;
+        const shouldSave =
+          shouldSaveDiscardedRecording(getSettings(), durationSeconds) &&
+          this.audioChunks.length > 0;
+        const blob = shouldSave
+          ? new Blob(this.audioChunks, { type: this.recordingMimeType })
+          : null;
+
         this.cleanupPreview({ dismiss: true });
         this.isRecording = false;
         this.isProcessing = false;
         this.audioChunks = [];
         this.recordingStartTime = null;
         this.onStateChange?.({ isRecording: false, isProcessing: false });
+
+        if (blob) {
+          this.saveDiscardedTranscription(blob, durationSeconds).catch((err) => {
+            logger.warn("Failed to save discarded transcription", { error: err.message }, "audio");
+          });
+        }
       };
 
       this.mediaRecorder.stop();
@@ -2208,6 +2225,48 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         },
         "audio"
       );
+    }
+  }
+
+  async saveDiscardedTranscription(blob, durationSeconds) {
+    let savedId = null;
+    try {
+      const result = await window.electronAPI.saveTranscription("", null, {
+        status: "discarded",
+      });
+      if (!result?.id) return;
+      savedId = result.id;
+
+      if (blob) {
+        const durationMs = durationSeconds ? Math.round(durationSeconds * 1000) : null;
+        const arrayBuffer = await blob.arrayBuffer();
+        await window.electronAPI.saveTranscriptionAudio(savedId, arrayBuffer, {
+          durationMs,
+          provider: null,
+          model: null,
+        });
+      }
+
+      syncService.debouncedPush("transcription", savedId);
+    } catch (error) {
+      logger.error(
+        "Failed to save discarded transcription record",
+        { error: error.message },
+        "audio"
+      );
+      // A discarded row is only recoverable through its audio; if the audio save
+      // failed, drop the dead row instead of leaving an empty unrecoverable entry. See #907.
+      if (savedId != null) {
+        try {
+          await window.electronAPI.deleteTranscription(savedId);
+        } catch (cleanupError) {
+          logger.warn(
+            "Failed to clean up discarded row after audio save failure",
+            { error: cleanupError.message },
+            "audio"
+          );
+        }
+      }
     }
   }
 

@@ -1021,11 +1021,7 @@ class WindowManager {
   showDictationPanel(options = {}) {
     const { focus = false } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      const wasHidden = !this.mainWindow.isVisible() || this.mainWindow.isMinimized();
-
-      if (wasHidden) {
-        this._repositionToCursorDisplay();
-      }
+      this._repositionToCursorDisplay();
 
       if (this.mainWindow.isMinimized()) {
         this.mainWindow.restore();

@@ -3,6 +3,18 @@ interface CloudApiResponse<T = unknown> {
   data?: T;
   error?: string;
   code?: string;
+  status?: number;
+}
+
+export class CloudApiError extends Error {
+  status: number;
+  code?: string;
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "CloudApiError";
+    this.status = status;
+    this.code = code;
+  }
 }
 
 async function cloudRequest<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
@@ -13,7 +25,11 @@ async function cloudRequest<T = unknown>(method: string, path: string, body?: un
   })) as CloudApiResponse<T> | undefined;
 
   if (!result?.success) {
-    throw new Error(result?.error ?? "Cloud API request failed");
+    throw new CloudApiError(
+      result?.error ?? "Cloud API request failed",
+      result?.status ?? 0,
+      result?.code
+    );
   }
 
   return result.data as T;

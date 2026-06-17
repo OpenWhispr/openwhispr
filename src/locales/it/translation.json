@@ -377,7 +377,16 @@
       "retryError": "Ritrascrizione non riuscita",
       "audioNotFound": "File audio non trovato o scaduto",
       "noAiProcessing": "Nessuna elaborazione IA applicata a questa trascrizione",
-      "rawTranscript": "Trascrizione grezza"
+      "rawTranscript": "Trascrizione grezza",
+      "discarded": {
+        "show": "Mostra scartate",
+        "hide": "Nascondi scartate",
+        "badge": "Scartata",
+        "recording": "Registrazione scartata",
+        "recordingWithDuration": "Registrazione scartata · {{duration}}",
+        "recover": "Recupera",
+        "recovered": "Recuperata"
+      }
     },
     "cloudMigration": {
       "title": "Benvenuto in OpenWhispr Cloud",
@@ -1582,7 +1591,9 @@
       "audioStorageFiles": "{{count}} file, {{size}}",
       "audioStorageEmpty": "Nessun file audio salvato",
       "clearAllAudio": "Elimina tutti i file audio",
-      "clearAllAudioConfirm": "Eliminare tutti i file audio salvati? Questa azione è irreversibile."
+      "clearAllAudioConfirm": "Eliminare tutti i file audio salvati? Questa azione è irreversibile.",
+      "saveDiscarded": "Salva le dettature scartate",
+      "saveDiscardedDescription": "Quando annulli una dettatura con Escape, conserva l'audio nella cronologia per poterla recuperare. Richiede la conservazione di dati e audio attiva."
     },
     "prompts": {
       "description": "Visualizza, personalizza e testa il prompt di sistema unificato che gestisce la correzione del testo e il rilevamento delle istruzioni",

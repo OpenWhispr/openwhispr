@@ -4,7 +4,7 @@ export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted"
 
 export type SelfHostedType = "openai-compatible" | "lan";
 
-export type TranscriptionStatus = "completed" | "failed" | "pending";
+export type TranscriptionStatus = "completed" | "failed" | "pending" | "discarded";
 
 export type TranscriptionErrorCode =
   | "TIMEOUT"
@@ -98,6 +98,18 @@ export interface FolderItem {
   deleted_at: string | null;
   workspace_id?: string | null;
   team_id?: string | null;
+}
+
+export interface DictionaryEntryItem {
+  id: number;
+  word: string;
+  source: "manual" | "learned";
+  created_at: string;
+  updated_at: string;
+  client_dict_id: string;
+  cloud_id: string | null;
+  sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
 }
 
 export type WorkspaceRole = "owner" | "admin" | "member";
@@ -506,7 +518,10 @@ declare global {
           clientTranscriptionId?: string;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
-      getTranscriptions: (limit?: number) => Promise<TranscriptionItem[]>;
+      getTranscriptions: (
+        limit?: number,
+        options?: { includeDiscarded?: boolean }
+      ) => Promise<TranscriptionItem[]>;
       clearTranscriptions: () => Promise<{ cleared: number; success: boolean }>;
       deleteTranscription: (id: number) => Promise<{ success: boolean }>;
       getTranscriptionById: (id: number) => Promise<TranscriptionItem | null>;
@@ -1878,6 +1893,20 @@ declare global {
       markTranscriptionSynced?: (id: number, cloudId: string) => Promise<void>;
       getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
       hardDeleteTranscription?: (id: number) => Promise<{ success: boolean; id: number }>;
+
+      getPendingDictionary?: () => Promise<DictionaryEntryItem[]>;
+      getPendingDictionaryDeletes?: () => Promise<DictionaryEntryItem[]>;
+      getDictionaryByClientId?: (clientDictId: string) => Promise<DictionaryEntryItem | null>;
+      upsertDictionaryFromCloud?: (
+        cloudEntry: Record<string, unknown>
+      ) => Promise<DictionaryEntryItem | null>;
+      markDictionarySynced?: (
+        id: number,
+        cloudId: string
+      ) => Promise<{ success: boolean; changes: number }>;
+      hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
+      clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
+      broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
     };
 
     api?: {

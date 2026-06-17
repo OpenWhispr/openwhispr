@@ -8,13 +8,32 @@ import { NotesService } from "./NotesService.js";
 import { ConversationsService } from "./ConversationsService.js";
 import { FoldersService } from "./FoldersService.js";
 import { TranscriptionsService } from "./TranscriptionsService.js";
+import { DictionaryService } from "./DictionaryService.js";
+import { CloudApiError } from "./cloudApi.js";
+
+function isHttpStatus(err: unknown, status: number): boolean {
+  return err instanceof CloudApiError && err.status === status;
+}
 
 const PUSH_DEBOUNCE_MS = 2000;
 const BATCH_SIZE = 50;
 const TRANSCRIPTION_BATCH_SIZE = 100;
+const DICTIONARY_BATCH_SIZE = 200;
+
+// SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
+// the cloud sends ISO 8601 "YYYY-MM-DDTHH:MM:SS.sssZ". Normalize both to
+// millis-precision ISO so the pull loop's lexical greater-than compares
+// correctly — without the ".000" pad a whole-second local value sorts after a
+// sub-second cloud value at the same instant ('Z' > '.').
+function normalizeTimestamp(value: string | null | undefined): string {
+  if (!value) return "";
+  const iso = value.replace(" ", "T").replace(/Z$/, "");
+  return (/\.\d+$/.test(iso) ? iso : `${iso}.000`) + "Z";
+}
 
 class SyncService {
   private syncing = false;
+  private dictionaryDirty = false;
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   canSync(): boolean {
@@ -33,9 +52,36 @@ class SyncService {
       await this.syncNotes();
       await this.syncConversations();
       await this.syncTranscriptions();
+      // Edits during the awaits above set dictionaryDirty (syncing is already
+      // true), so re-run until clean rather than stalling until the next trigger.
+      do {
+        this.dictionaryDirty = false;
+        await this.syncDictionary();
+      } while (this.dictionaryDirty);
       localStorage.setItem("lastSyncedAt", new Date().toISOString());
     } catch (err) {
       console.error("Sync failed:", err);
+    } finally {
+      this.syncing = false;
+    }
+  }
+
+  async syncDictionaryNow(): Promise<void> {
+    if (!this.canSync()) return;
+    // A sync already running will drain dictionaryDirty before it finishes, so
+    // flag a re-run instead of dropping this request.
+    if (this.syncing) {
+      this.dictionaryDirty = true;
+      return;
+    }
+    this.syncing = true;
+    try {
+      do {
+        this.dictionaryDirty = false;
+        await this.syncDictionary();
+      } while (this.dictionaryDirty);
+    } catch (err) {
+      console.error("Dictionary sync failed:", err);
     } finally {
       this.syncing = false;
     }
@@ -583,6 +629,184 @@ class SyncService {
       localStorage.setItem("lastSyncedAt.transcriptions", syncStartedAt);
     } catch (err) {
       console.error("Transcription pull failed:", err);
+    }
+  }
+
+  private async syncDictionary(): Promise<void> {
+    // Fail loud on preload skew: a missing binding silently optional-chained to
+    // a no-op would lose user data, so assert the whole surface up front.
+    const api = window.electronAPI;
+    const required = [
+      "getPendingDictionary",
+      "getPendingDictionaryDeletes",
+      "getDictionaryByClientId",
+      "upsertDictionaryFromCloud",
+      "markDictionarySynced",
+      "hardDeleteDictionary",
+      "clearDictionaryCloudId",
+      "broadcastDictionaryUpdated",
+    ] as const;
+    const missing = required.filter((name) => typeof api[name] !== "function");
+    if (missing.length > 0) {
+      throw new Error(
+        `Dictionary IPC bindings missing — preload out of date: ${missing.join(", ")}`
+      );
+    }
+
+    await this.pushPendingDictionary();
+    await this.pushDictionaryDeletes();
+    await this.pullDictionary();
+  }
+
+  private async pushPendingDictionary(): Promise<void> {
+    const pending = (await window.electronAPI.getPendingDictionary?.()) ?? [];
+    if (pending.length === 0) return;
+
+    const updates = pending.filter((e) => e.cloud_id);
+    const creates = pending.filter((e) => !e.cloud_id);
+
+    for (const entry of updates) {
+      try {
+        await DictionaryService.update(entry.cloud_id!, {
+          word: entry.word,
+          source: entry.source,
+        });
+        await window.electronAPI.markDictionarySynced?.(entry.id, entry.cloud_id!);
+      } catch (err) {
+        // 404: another device purged the cloud row. Clear the stale cloud_id so
+        // the next push re-creates it via batchCreate instead of retrying PATCH.
+        if (isHttpStatus(err, 404)) {
+          await window.electronAPI.clearDictionaryCloudId?.(entry.id);
+        } else {
+          console.error("Dictionary update sync failed:", err);
+        }
+      }
+    }
+
+    for (let i = 0; i < creates.length; i += DICTIONARY_BATCH_SIZE) {
+      const chunk = creates.slice(i, i + DICTIONARY_BATCH_SIZE);
+      try {
+        const { created } = await DictionaryService.batchCreate(
+          chunk.map((e) => ({
+            client_dict_id: e.client_dict_id,
+            word: e.word,
+            source: e.source,
+            created_at: e.created_at,
+            updated_at: e.updated_at,
+          }))
+        );
+        const byClientId = new Map(created.map((c) => [c.client_dict_id, c]));
+        let unmatched = 0;
+        for (const local of chunk) {
+          const server = byClientId.get(local.client_dict_id);
+          if (!server) {
+            unmatched += 1;
+            continue;
+          }
+          // 0 changes means the local row was deleted between snapshot and ack —
+          // delete the freshly-created server row so we don't orphan it.
+          const result = await window.electronAPI.markDictionarySynced?.(local.id, server.id);
+          if (result && result.changes === 0) {
+            try {
+              await DictionaryService.delete(server.id);
+            } catch (deleteErr) {
+              console.error("Dictionary orphan cleanup failed:", deleteErr);
+            }
+          }
+        }
+        if (unmatched > 0) {
+          console.warn(
+            `Dictionary batch-create: ${unmatched}/${chunk.length} rows had no matching server response`
+          );
+        }
+      } catch (err) {
+        console.error("Dictionary batch create failed:", err);
+      }
+    }
+  }
+
+  private async pushDictionaryDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingDictionaryDeletes?.()) ?? [];
+    for (const entry of deletes) {
+      if (!entry.cloud_id) continue;
+      try {
+        await DictionaryService.delete(entry.cloud_id);
+        await window.electronAPI.hardDeleteDictionary?.(entry.id);
+      } catch (err) {
+        // 404 means the row is already gone server-side — treat as success.
+        if (isHttpStatus(err, 404)) {
+          await window.electronAPI.hardDeleteDictionary?.(entry.id);
+        } else {
+          console.error("Dictionary delete sync failed:", err);
+        }
+      }
+    }
+  }
+
+  private async pullDictionary(): Promise<void> {
+    try {
+      const since = localStorage.getItem("lastSyncedAt.dictionary") ?? undefined;
+      const sinceId = localStorage.getItem("lastSyncedAt.dictionary.id") ?? undefined;
+      let changed = false;
+
+      let cursor: string | undefined = since;
+      let cursorId: string | undefined = sinceId;
+      let maxUpdatedAt = normalizeTimestamp(since);
+      let maxId = sinceId ?? "";
+
+      while (true) {
+        const { entries, hasMore } = await DictionaryService.list(
+          cursor,
+          DICTIONARY_BATCH_SIZE,
+          cursorId
+        );
+        if (entries.length === 0) break;
+
+        for (const cloudEntry of entries) {
+          const local = await window.electronAPI.getDictionaryByClientId?.(
+            cloudEntry.client_dict_id ?? ""
+          );
+
+          if (cloudEntry.deleted_at) {
+            if (local) {
+              await window.electronAPI.hardDeleteDictionary?.(local.id);
+              changed = true;
+            }
+            continue;
+          }
+
+          // Last-writer-wins on normalized timestamps (see normalizeTimestamp).
+          const cloudTs = normalizeTimestamp(cloudEntry.updated_at);
+          const localTs = local ? normalizeTimestamp(local.updated_at) : "";
+          if (!local || cloudTs > localTs) {
+            await window.electronAPI.upsertDictionaryFromCloud?.(
+              cloudEntry as unknown as Record<string, unknown>
+            );
+            changed = true;
+          }
+
+          if (cloudTs > maxUpdatedAt) {
+            maxUpdatedAt = cloudTs;
+            maxId = cloudEntry.id;
+          } else if (cloudTs === maxUpdatedAt && cloudEntry.id > maxId) {
+            maxId = cloudEntry.id;
+          }
+        }
+
+        if (!hasMore) break;
+        const last = entries[entries.length - 1];
+        // Stall guard: if the (updated_at, id) cursor didn't advance after a
+        // full page, bail rather than loop forever.
+        if (last.updated_at === cursor && last.id === cursorId) break;
+        cursor = last.updated_at;
+        cursorId = last.id;
+      }
+
+      if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.dictionary", maxUpdatedAt);
+      if (maxId) localStorage.setItem("lastSyncedAt.dictionary.id", maxId);
+      if (changed) await window.electronAPI.broadcastDictionaryUpdated?.();
+    } catch (err) {
+      console.error("Dictionary pull failed:", err);
     }
   }
 

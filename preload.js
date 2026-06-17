@@ -34,7 +34,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Database functions
   saveTranscription: (text, rawText, options) =>
     ipcRenderer.invoke("db-save-transcription", text, rawText, options),
-  getTranscriptions: (limit) => ipcRenderer.invoke("db-get-transcriptions", limit),
+  getTranscriptions: (limit, options) =>
+    ipcRenderer.invoke("db-get-transcriptions", limit, options),
   clearTranscriptions: () => ipcRenderer.invoke("db-clear-transcriptions"),
   deleteTranscription: (id) => ipcRenderer.invoke("db-delete-transcription", id),
 
@@ -838,6 +839,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-mark-transcription-synced", id, cloudId),
   getPendingTranscriptionDeletes: () => ipcRenderer.invoke("db-get-pending-transcription-deletes"),
   hardDeleteTranscription: (id) => ipcRenderer.invoke("db-hard-delete-transcription", id),
+
+  getPendingDictionary: () => ipcRenderer.invoke("db-get-pending-dictionary"),
+  getPendingDictionaryDeletes: () => ipcRenderer.invoke("db-get-pending-dictionary-deletes"),
+  getDictionaryByClientId: (clientDictId) =>
+    ipcRenderer.invoke("db-get-dictionary-by-client-id", clientDictId),
+  upsertDictionaryFromCloud: (cloudEntry) =>
+    ipcRenderer.invoke("db-upsert-dictionary-from-cloud", cloudEntry),
+  markDictionarySynced: (id, cloudId) =>
+    ipcRenderer.invoke("db-mark-dictionary-synced", id, cloudId),
+  hardDeleteDictionary: (id) => ipcRenderer.invoke("db-hard-delete-dictionary", id),
+  clearDictionaryCloudId: (id) => ipcRenderer.invoke("db-clear-dictionary-cloud-id", id),
+  broadcastDictionaryUpdated: () => ipcRenderer.invoke("db-broadcast-dictionary-updated"),
 
   // Google Calendar
   gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),

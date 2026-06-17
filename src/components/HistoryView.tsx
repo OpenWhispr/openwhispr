@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { Loader2, Sparkles, Cloud, X, Mic, Trash2 } from "lucide-react";
+import { Loader2, Sparkles, Cloud, X, Mic, Trash2, Archive } from "lucide-react";
 import TranscriptionItem from "./ui/TranscriptionItem";
 import type { TranscriptionItem as TranscriptionItemType } from "../types/electron";
 import { formatHotkeyLabel } from "../utils/hotkeys";
@@ -25,7 +25,9 @@ interface HistoryViewProps {
   clearAllTranscriptions: () => void;
   onOpenSettings: (section?: string) => void;
   onShowAudioInFolder: (id: number) => void;
-  onRetryTranscription: (id: number) => Promise<void>;
+  onRetryTranscription: (id: number, options?: { isRecover?: boolean }) => Promise<void>;
+  showDiscarded: boolean;
+  onToggleDiscarded: () => void;
 }
 
 export default function HistoryView({
@@ -43,6 +45,8 @@ export default function HistoryView({
   onOpenSettings,
   onShowAudioInFolder,
   onRetryTranscription,
+  showDiscarded,
+  onToggleDiscarded,
 }: HistoryViewProps) {
   const { t } = useTranslation();
   const dataRetentionEnabled = useSettingsStore((s) => s.dataRetentionEnabled);
@@ -71,6 +75,19 @@ export default function HistoryView({
   return (
     <div className="px-4 pt-4 pb-6">
       <div className={cn("mx-auto", isConnected ? "max-w-5xl" : "max-w-3xl")}>
+        <div className="mb-2 flex justify-end">
+          <button
+            onClick={onToggleDiscarded}
+            className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Archive size={12} />
+            <span>
+              {showDiscarded
+                ? t("controlPanel.history.discarded.hide")
+                : t("controlPanel.history.discarded.show")}
+            </span>
+          </button>
+        </div>
         {showCloudMigrationBanner && (
           <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
             <button
