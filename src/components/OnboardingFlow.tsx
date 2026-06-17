@@ -188,7 +188,10 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       list.push({ id: "permissions", title: t("onboarding.steps.permissions"), icon: Shield });
     }
     list.push({ id: "activation", title: t("onboarding.steps.activation"), icon: Command });
-    list.push({ id: "voiceAgent", title: t("onboarding.steps.voiceAgent"), icon: Sparkles });
+    // Hidden for continue-without-account users: they have no LLM, so the agent can't run.
+    if (isSignedIn && !skipAuth) {
+      list.push({ id: "voiceAgent", title: t("onboarding.steps.voiceAgent"), icon: Sparkles });
+    }
     if (showMeetingStep) {
       list.push({ id: "meeting", title: t("onboarding.steps.meeting"), icon: Users });
     }
