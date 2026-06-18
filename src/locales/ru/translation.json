@@ -655,6 +655,11 @@
       "welcomeBack": "С возвращением",
       "welcomeBackName": "С возвращением, {{name}}"
     },
+    "sso": {
+      "continueWithSSO": "Войти через SSO",
+      "emailRequired": "Введите рабочий адрес электронной почты для использования SSO.",
+      "failed": "Не удалось выполнить единый вход. Повторите попытку."
+    },
     "social": {
       "completeInBrowser": "Завершите вход в браузере",
       "continueWithApple": "Продолжить с Apple",

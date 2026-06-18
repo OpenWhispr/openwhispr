@@ -655,6 +655,11 @@
       "welcomeBack": "Welcome back",
       "welcomeBackName": "Welcome back, {{name}}"
     },
+    "sso": {
+      "continueWithSSO": "Sign in with SSO",
+      "emailRequired": "Enter your work email to use SSO.",
+      "failed": "Single sign-on failed. Please try again."
+    },
     "social": {
       "completeInBrowser": "Complete sign-in in your browser",
       "continueWithApple": "Continue with Apple",

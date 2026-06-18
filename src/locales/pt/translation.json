@@ -628,6 +628,11 @@
       "welcomeBack": "Que bom ter você de volta",
       "welcomeBackName": "Que bom ter você de volta, {{name}}"
     },
+    "sso": {
+      "continueWithSSO": "Entrar com SSO",
+      "emailRequired": "Insira seu e-mail corporativo para usar o SSO.",
+      "failed": "Falha no logon único. Tente novamente."
+    },
     "social": {
       "completeInBrowser": "Conclua o login no navegador",
       "continueWithApple": "Continuar com a Apple",

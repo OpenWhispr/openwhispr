@@ -656,6 +656,11 @@
       "welcomeBack": "おかえりなさい",
       "welcomeBackName": "おかえりなさい、{{name}} さん"
     },
+    "sso": {
+      "continueWithSSO": "SSO でサインイン",
+      "emailRequired": "SSO を使用するには勤務先のメールアドレスを入力してください。",
+      "failed": "シングルサインオンに失敗しました。もう一度お試しください。"
+    },
     "social": {
       "completeInBrowser": "ブラウザでサインインを完了してください",
       "continueWithApple": "Apple で続ける",

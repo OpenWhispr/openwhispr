@@ -655,6 +655,11 @@
       "welcomeBack": "Bon retour",
       "welcomeBackName": "Bon retour, {{name}}"
     },
+    "sso": {
+      "continueWithSSO": "Se connecter avec le SSO",
+      "emailRequired": "Saisissez votre e-mail professionnel pour utiliser le SSO.",
+      "failed": "Échec de l’authentification unique. Veuillez réessayer."
+    },
     "social": {
       "completeInBrowser": "Terminez la connexion dans votre navigateur",
       "continueWithApple": "Continuer avec Apple",

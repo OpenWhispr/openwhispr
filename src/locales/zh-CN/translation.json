@@ -655,6 +655,11 @@
       "welcomeBack": "欢迎回来",
       "welcomeBackName": "欢迎回来，{{name}}"
     },
+    "sso": {
+      "continueWithSSO": "使用 SSO 登录",
+      "emailRequired": "输入您的工作邮箱以使用 SSO。",
+      "failed": "单点登录失败，请重试。"
+    },
     "social": {
       "completeInBrowser": "在浏览器中完成登录",
       "continueWithApple": "使用 Apple 继续",

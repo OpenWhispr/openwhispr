@@ -655,6 +655,11 @@
       "welcomeBack": "Bienvenido de nuevo",
       "welcomeBackName": "Bienvenido de nuevo, {{name}}"
     },
+    "sso": {
+      "continueWithSSO": "Iniciar sesión con SSO",
+      "emailRequired": "Introduce tu correo del trabajo para usar SSO.",
+      "failed": "Error al iniciar sesión con SSO. Inténtalo de nuevo."
+    },
     "social": {
       "completeInBrowser": "Completa el inicio de sesión en tu navegador",
       "continueWithApple": "Continuar con Apple",

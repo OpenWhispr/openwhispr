@@ -656,6 +656,11 @@
       "welcomeBack": "Bentornato",
       "welcomeBackName": "Bentornato, {{name}}"
     },
+    "sso": {
+      "continueWithSSO": "Accedi con SSO",
+      "emailRequired": "Inserisci la tua email di lavoro per usare l’SSO.",
+      "failed": "Accesso SSO non riuscito. Riprova."
+    },
     "social": {
       "completeInBrowser": "Completa l'accesso nel browser",
       "continueWithApple": "Continua con Apple",
