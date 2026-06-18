@@ -11,6 +11,7 @@ import {
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
+import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../stores/settingsStore";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
@@ -292,7 +293,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.sttConfig?.streamingProvider || defaultProvider;
   }
 
-  async getAudioConstraints() {
+  async getAudioConstraints(forceDefaultMic = false) {
     const { preferBuiltInMic: preferBuiltIn, selectedMicDeviceId: selectedDeviceId } =
       getSettings();
 
@@ -306,6 +307,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       autoGainControl: false,
       channelCount: 2,
     };
+
+    // Pinned device was unavailable (Chromium rotates IDs / device unplugged); fall back to the
+    // system default for this capture without discarding the saved preference. See #900.
+    if (forceDefaultMic) {
+      logger.debug("Using default microphone (pinned device unavailable)", {}, "audio");
+      return { audio: noProcessing };
+    }
 
     if (preferBuiltIn) {
       if (this.cachedMicDeviceId) {
@@ -367,13 +375,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async startRecording() {
+  async startRecording(forceDefaultMic = false) {
     try {
       if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") {
         return false;
       }
 
-      const constraints = await this.getAudioConstraints();
+      const constraints = await this.getAudioConstraints(forceDefaultMic);
       const micStream = await reacquireIfDead(
         await navigator.mediaDevices.getUserMedia(constraints),
         () => {
@@ -509,6 +517,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       return true;
     } catch (error) {
+      if (isStaleDeviceError(error) && !forceDefaultMic) {
+        // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
+        logger.warn("Pinned microphone unavailable, retrying on default mic", {}, "audio");
+        this.cachedMicDeviceId = null;
+        return this.startRecording(true);
+      }
+
       let errorTitle = "Recording Error";
       let errorDescription = `Failed to access microphone: ${error.message}`;
 
@@ -2416,7 +2431,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.persistentAudioContext;
   }
 
-  async startStreamingRecording() {
+  async startStreamingRecording(forceDefaultMic = false) {
     try {
       if (this.streamingStartInProgress) {
         return false;
@@ -2431,7 +2446,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.stopRequestedDuringStreamingStart = false;
 
       const t0 = performance.now();
-      const constraints = await this.getAudioConstraints();
+      const constraints = await this.getAudioConstraints(forceDefaultMic);
       const tConstraints = performance.now();
 
       // 1. Get mic stream (can take 10-15s on cold macOS mic driver)
@@ -2637,8 +2652,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       return true;
     } catch (error) {
+      const stopRequested = this.stopRequestedDuringStreamingStart;
       this.streamingStartInProgress = false;
       this.stopRequestedDuringStreamingStart = false;
+
+      if (isStaleDeviceError(error) && !forceDefaultMic && !stopRequested) {
+        // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
+        logger.warn("Pinned microphone unavailable, retrying streaming on default mic", {}, "streaming");
+        this.cachedMicDeviceId = null;
+        await this.cleanupStreaming();
+        this.isRecording = false;
+        this.recordingStartTime = null;
+        this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
+        return this.startStreamingRecording(true);
+      }
+
       logger.error("Failed to start streaming recording", { error: error.message }, "streaming");
 
       let errorTitle = "Streaming Error";
