@@ -206,6 +206,19 @@
       ]
     },
     {
+      "id": "smallest",
+      "name": "Smallest AI",
+      "baseUrl": "https://api.smallest.ai/waves/v1",
+      "models": [
+        {
+          "id": "pulse",
+          "name": "Pulse",
+          "description": "Fast and accurate speech-to-text",
+          "descriptionKey": "models.descriptions.transcription.smallest_pulse"
+        }
+      ]
+    },
+    {
       "id": "corti",
       "name": "Corti",
       "baseUrl": "https://api.us.corti.app/v2",
