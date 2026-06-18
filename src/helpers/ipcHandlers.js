@@ -1,4 +1,13 @@
-const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
+const {
+  ipcMain,
+  app,
+  shell,
+  BrowserWindow,
+  systemPreferences,
+  net,
+  screen,
+  session,
+} = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -1197,6 +1206,23 @@ class IPCHandlers {
 
     ipcMain.handle("resize-main-window", (event, sizeKey) => {
       return this.windowManager.resizeMainWindow(sizeKey);
+    });
+
+    ipcMain.handle("get-displays", () => {
+      const primaryId = screen.getPrimaryDisplay().id;
+      return screen
+        .getAllDisplays()
+        .slice()
+        .sort((a, b) => a.bounds.x - b.bounds.x || a.bounds.y - b.bounds.y)
+        .map((display, i) => ({
+          id: display.id,
+          label: typeof display.label === "string" ? display.label : "",
+          bounds: { ...display.bounds },
+          workArea: { ...display.workArea },
+          internal: Boolean(display.internal),
+          primary: display.id === primaryId,
+          index: i + 1,
+        }));
     });
 
     for (const k of BYOK_API_KEYS) {
