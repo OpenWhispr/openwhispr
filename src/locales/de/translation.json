@@ -1862,7 +1862,8 @@
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
-        "xai_grok_stt": "Hochpräzise Spracherkennung von xAI"
+        "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
+        "tinfoil_voxtral_mini_realtime": "Nachweisbar private Streaming-Transkription"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",

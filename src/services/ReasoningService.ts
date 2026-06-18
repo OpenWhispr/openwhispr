@@ -880,7 +880,7 @@ class ReasoningService extends BaseReasoningService {
   }
 
   clearApiKeyCache(
-    provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom"
+    provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "tinfoil" | "custom"
   ): void {
     if (provider) {
       if (provider !== "custom") {

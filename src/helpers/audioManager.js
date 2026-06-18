@@ -23,6 +23,7 @@ import {
   isCloudCleanupMode,
   isCloudDictationAgentMode,
 } from "../stores/settingsStore";
+import { getTranscriptionProvider } from "../models/ModelRegistry";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import { detectAgentName } from "../config/agentDetection";
 import { resolveDictationRouteKind, resolveDictationAgentReachability } from "./dictationRouting";
@@ -160,6 +161,26 @@ const STREAMING_PROVIDERS = {
     onFinal: (cb) => window.electronAPI.onCortiFinalTranscript(cb),
     onError: (cb) => window.electronAPI.onCortiError(cb),
     onSessionEnd: (cb) => window.electronAPI.onCortiSessionEnd(cb),
+  },
+  "tinfoil-realtime": {
+    warmup: (opts) =>
+      window.electronAPI.dictationRealtimeWarmup({
+        ...opts,
+        provider: "tinfoil-realtime",
+        preview: getSettings().showTranscriptionPreview,
+      }),
+    start: (opts) =>
+      window.electronAPI.dictationRealtimeStart({
+        ...opts,
+        provider: "tinfoil-realtime",
+        preview: getSettings().showTranscriptionPreview,
+      }),
+    send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
+    stop: () => window.electronAPI.dictationRealtimeStop(),
+    onPartial: (cb) => window.electronAPI.onDictationRealtimePartial(cb),
+    onFinal: (cb) => window.electronAPI.onDictationRealtimeFinal(cb),
+    onError: (cb) => window.electronAPI.onDictationRealtimeError(cb),
+    onSessionEnd: (cb) => window.electronAPI.onDictationRealtimeSessionEnd(cb),
   },
 };
 
@@ -312,6 +333,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   getStreamingProviderName() {
     const s = getSettings();
+    if (s.cloudTranscriptionProvider === "tinfoil") {
+      return "tinfoil-realtime";
+    }
     if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
       return "corti";
     }
@@ -1060,6 +1084,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         throw err;
       }
       apiKey = null;
+    } else if (provider === "tinfoil") {
+      // Prefer store value (user-entered via UI) over main process (.env)
+      apiKey = s.tinfoilApiKey;
+      if (!apiKey?.trim()) {
+        apiKey = await window.electronAPI.getTinfoilKey?.();
+      }
+      if (!apiKey?.trim()) {
+        const err = new Error(
+          "Tinfoil API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
     } else if (provider === "groq") {
       // Prefer store value (user-entered via UI) over main process (.env)
       apiKey = s.groqApiKey;
@@ -2404,6 +2441,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Corti (BYOK) streams over its own WSS — independent of OpenWhispr Cloud.
     if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
       return !!(s.cortiClientId && s.cortiClientSecret);
+    }
+
+    // Tinfoil realtime streams without an OpenWhispr account.
+    if (s.cloudTranscriptionProvider === "tinfoil") {
+      const provider = getTranscriptionProvider("tinfoil");
+      const model = provider?.models.find((m) => m.id === s.cloudTranscriptionModel);
+      return !!model?.streaming && !!s.tinfoilApiKey;
     }
 
     // For dictation/agent: respect sttConfig mode from the API — this allows

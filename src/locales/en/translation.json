@@ -1954,7 +1954,8 @@
         "groq_whisper_large_v3_turbo": "216x real-time speed",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
         "corti_transcribe": "Clinical-grade medical transcription",
-        "xai_grok_stt": "High-accuracy speech recognition by xAI"
+        "xai_grok_stt": "High-accuracy speech recognition by xAI",
+        "tinfoil_voxtral_mini_realtime": "Verifiably private streaming transcription"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
