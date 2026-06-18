@@ -992,6 +992,9 @@ declare global {
         environment: string;
         tenant: string;
       }) => Promise<{ text: string }>;
+      // Tinfoil API key management
+      getTinfoilKey?: () => Promise<string | null>;
+      saveTinfoilKey?: (key: string) => Promise<void>;
 
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
