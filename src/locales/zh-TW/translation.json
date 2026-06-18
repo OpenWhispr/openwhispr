@@ -1291,6 +1291,12 @@
         "title": "浮動圖示",
         "startPosition": "起始位置",
         "startPositionDescription": "語音錄製面板在螢幕上的顯示位置",
+        "display": "顯示器",
+        "displayDescription": "選擇語音輸入控制項顯示在哪個顯示器上。",
+        "displayAuto": "自動（跟隨游標）",
+        "displayLabel": "顯示器 {{number}} — {{width}}×{{height}}",
+        "displayPrimary": "主顯示器",
+        "displayDisconnected": "（已中斷連線）",
         "bottomRight": "右下角",
         "center": "底部置中",
         "bottomLeft": "左下角"

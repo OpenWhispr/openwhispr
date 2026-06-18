@@ -710,6 +710,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   notifyPanelStartPositionChanged: (position) =>
     ipcRenderer.send("panel-start-position-changed", position),
 
+  // Panel display (monitor pinning for the dictation widget)
+  getDisplays: () => ipcRenderer.invoke("get-displays"),
+  notifyPanelDisplayChanged: (value) => ipcRenderer.send("panel-display-changed", value),
+
   // Start minimized
   notifyStartMinimizedChanged: (enabled) => ipcRenderer.send("start-minimized-changed", enabled),
 

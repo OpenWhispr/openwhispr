@@ -1344,6 +1344,12 @@
         "title": "Icône flottante",
         "startPosition": "Position de départ",
         "startPositionDescription": "Emplacement du panneau d'enregistrement vocal à l'écran",
+        "display": "Moniteur",
+        "displayDescription": "Choisissez sur quel moniteur le widget de dictée apparaît.",
+        "displayAuto": "Automatique (suivre le curseur)",
+        "displayLabel": "Écran {{number}} — {{width}}×{{height}}",
+        "displayPrimary": "principal",
+        "displayDisconnected": "(déconnecté)",
         "bottomRight": "En bas à droite",
         "center": "En bas au centre",
         "bottomLeft": "En bas à gauche"

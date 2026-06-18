@@ -1291,6 +1291,12 @@
         "title": "悬浮图标",
         "startPosition": "起始位置",
         "startPositionDescription": "语音录制面板在屏幕上的显示位置",
+        "display": "显示器",
+        "displayDescription": "选择听写控件显示在哪个显示器上。",
+        "displayAuto": "自动（跟随光标）",
+        "displayLabel": "显示器 {{number}} — {{width}}×{{height}}",
+        "displayPrimary": "主显示器",
+        "displayDisconnected": "（已断开）",
         "bottomRight": "右下角",
         "center": "底部居中",
         "bottomLeft": "左下角"
