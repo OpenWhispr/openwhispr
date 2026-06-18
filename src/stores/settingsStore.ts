@@ -115,6 +115,7 @@ const BOOLEAN_SETTINGS = new Set([
   "telemetryEnabled",
   "audioCuesEnabled",
   "pauseMediaOnDictation",
+  "muteSystemOnDictation",
   "floatingIconAutoHide",
   "startMinimized",
   "meetingProcessDetection",
@@ -357,6 +358,7 @@ export interface SettingsState
   isSignedIn: boolean;
   audioCuesEnabled: boolean;
   pauseMediaOnDictation: boolean;
+  muteSystemOnDictation: boolean;
   floatingIconAutoHide: boolean;
   startMinimized: boolean;
   gcalAccounts: GoogleCalendarAccount[];
@@ -556,6 +558,7 @@ export interface SettingsState
   setSaveDiscardedTranscriptions: (value: boolean) => void;
   setAudioCuesEnabled: (value: boolean) => void;
   setPauseMediaOnDictation: (value: boolean) => void;
+  setMuteSystemOnDictation: (value: boolean) => void;
   setFloatingIconAutoHide: (enabled: boolean) => void;
   setStartMinimized: (enabled: boolean) => void;
   setGcalAccounts: (accounts: GoogleCalendarAccount[]) => void;
@@ -859,6 +862,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   saveDiscardedTranscriptions: readBoolean("saveDiscardedTranscriptions", false),
   audioCuesEnabled: readBoolean("audioCuesEnabled", true),
   pauseMediaOnDictation: readBoolean("pauseMediaOnDictation", false),
+  muteSystemOnDictation: readBoolean("muteSystemOnDictation", false),
   floatingIconAutoHide: readBoolean("floatingIconAutoHide", false),
   startMinimized: readBoolean("startMinimized", false),
   notificationsEnabled: readBoolean("notificationsEnabled", true),
@@ -1343,6 +1347,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setSaveDiscardedTranscriptions: createBooleanSetter("saveDiscardedTranscriptions"),
   setAudioCuesEnabled: createBooleanSetter("audioCuesEnabled"),
   setPauseMediaOnDictation: createBooleanSetter("pauseMediaOnDictation"),
+  setMuteSystemOnDictation: createBooleanSetter("muteSystemOnDictation"),
 
   setFloatingIconAutoHide: (enabled: boolean) => {
     if (get().floatingIconAutoHide === enabled) return;

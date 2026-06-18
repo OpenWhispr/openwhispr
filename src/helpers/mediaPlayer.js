@@ -14,6 +14,8 @@ class MediaPlayer {
     this._pausedPlayers = []; // MPRIS players we paused (Linux)
     this._didPause = false; // Whether we sent a pause via toggle fallback
     this._pausedWinApps = []; // GSMTC app IDs we paused (Windows)
+    this._didMute = false; // Whether we muted system output (all platforms)
+    this._wasMutedBefore = false; // Prior mute state captured on macOS/Linux
   }
 
   _resolveLinuxFastPaste() {
@@ -589,6 +591,158 @@ try {
   _toggleWindows() {
     if (this._sendWindowsMediaKey()) {
       debugLogger.debug("Media toggled via Windows media key", {}, "media");
+      return true;
+    }
+    return false;
+  }
+
+  // --- System output mute / unmute ---
+
+  muteSystem() {
+    if (this._didMute) return true;
+    let ok = false;
+    if (process.platform === "darwin") ok = this._muteMacOS();
+    else if (process.platform === "win32") ok = this._muteWindows();
+    else ok = this._muteLinux();
+    if (ok) this._didMute = true;
+    return ok;
+  }
+
+  unmuteSystem() {
+    if (!this._didMute) return false;
+    this._didMute = false;
+    if (process.platform === "darwin") return this._unmuteMacOS();
+    if (process.platform === "win32") return this._unmuteWindows();
+    return this._unmuteLinux();
+  }
+
+  _muteMacOS() {
+    const query = spawnSync(
+      "osascript",
+      ["-e", "output muted of (get volume settings)"],
+      { stdio: "pipe", timeout: 3000 }
+    );
+    this._wasMutedBefore =
+      query.status === 0 && (query.stdout?.toString() || "").trim() === "true";
+
+    if (this._wasMutedBefore) {
+      debugLogger.debug("System already muted; skipping mute", {}, "media");
+      return true;
+    }
+
+    const result = spawnSync(
+      "osascript",
+      ["-e", "set volume output muted true"],
+      { stdio: "pipe", timeout: 3000 }
+    );
+    if (result.status === 0) {
+      debugLogger.debug("System muted via osascript", {}, "media");
+      return true;
+    }
+    debugLogger.warn("Failed to mute system on macOS", {}, "media");
+    return false;
+  }
+
+  _unmuteMacOS() {
+    if (this._wasMutedBefore) {
+      this._wasMutedBefore = false;
+      return true;
+    }
+    const result = spawnSync(
+      "osascript",
+      ["-e", "set volume output muted false"],
+      { stdio: "pipe", timeout: 3000 }
+    );
+    if (result.status === 0) {
+      debugLogger.debug("System unmuted via osascript", {}, "media");
+      return true;
+    }
+    return false;
+  }
+
+  _muteWindows() {
+    const nircmd = this._resolveNircmd();
+    if (!nircmd) {
+      debugLogger.warn("nircmd unavailable; cannot mute system on Windows", {}, "media");
+      return false;
+    }
+    const result = spawnSync(nircmd, ["mutesysvolume", "1"], {
+      stdio: "pipe",
+      timeout: 3000,
+    });
+    if (result.status === 0) {
+      debugLogger.debug("System muted via nircmd", {}, "media");
+      return true;
+    }
+    return false;
+  }
+
+  _unmuteWindows() {
+    const nircmd = this._resolveNircmd();
+    if (!nircmd) return false;
+    const result = spawnSync(nircmd, ["mutesysvolume", "0"], {
+      stdio: "pipe",
+      timeout: 3000,
+    });
+    if (result.status === 0) {
+      debugLogger.debug("System unmuted via nircmd", {}, "media");
+      return true;
+    }
+    return false;
+  }
+
+  _muteLinux() {
+    const query = spawnSync("pactl", ["get-sink-mute", "@DEFAULT_SINK@"], {
+      stdio: "pipe",
+      timeout: 2000,
+    });
+    if (query.status === 0) {
+      this._wasMutedBefore = (query.stdout?.toString() || "").includes("yes");
+      if (this._wasMutedBefore) return true;
+      const result = spawnSync(
+        "pactl",
+        ["set-sink-mute", "@DEFAULT_SINK@", "1"],
+        { stdio: "pipe", timeout: 2000 }
+      );
+      if (result.status === 0) {
+        debugLogger.debug("System muted via pactl", {}, "media");
+        return true;
+      }
+    }
+
+    this._wasMutedBefore = false;
+    const amixer = spawnSync("amixer", ["-D", "pulse", "sset", "Master", "mute"], {
+      stdio: "pipe",
+      timeout: 2000,
+    });
+    if (amixer.status === 0) {
+      debugLogger.debug("System muted via amixer", {}, "media");
+      return true;
+    }
+    debugLogger.warn("Failed to mute system on Linux (no pactl/amixer)", {}, "media");
+    return false;
+  }
+
+  _unmuteLinux() {
+    if (this._wasMutedBefore) {
+      this._wasMutedBefore = false;
+      return true;
+    }
+    const result = spawnSync(
+      "pactl",
+      ["set-sink-mute", "@DEFAULT_SINK@", "0"],
+      { stdio: "pipe", timeout: 2000 }
+    );
+    if (result.status === 0) {
+      debugLogger.debug("System unmuted via pactl", {}, "media");
+      return true;
+    }
+    const amixer = spawnSync("amixer", ["-D", "pulse", "sset", "Master", "unmute"], {
+      stdio: "pipe",
+      timeout: 2000,
+    });
+    if (amixer.status === 0) {
+      debugLogger.debug("System unmuted via amixer", {}, "media");
       return true;
     }
     return false;
