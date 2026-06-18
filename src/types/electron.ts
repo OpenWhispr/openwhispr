@@ -56,6 +56,17 @@ export type NoteRecordingConfigFailure = { success: false } & PolicyFailureMetad
 export type NoteRecordingConfigResult =
   { success: true; providers: NoteRecordingProvider[] } | NoteRecordingConfigFailure;
 
+// Shape returned by the "get-displays" IPC handler (see displaySelection contract).
+export interface DisplayInfo {
+  id: number;
+  label: string;
+  bounds: { x: number; y: number; width: number; height: number };
+  workArea: { x: number; y: number; width: number; height: number };
+  internal: boolean;
+  primary: boolean;
+  index: number;
+}
+
 export type TranscriptionErrorCode =
   | "TIMEOUT"
   | "NETWORK"
@@ -1813,6 +1824,8 @@ declare global {
       onFloatingIconAutoHideChanged?: (callback: (enabled: boolean) => void) => () => void;
       notifyStartMinimizedChanged?: (enabled: boolean) => void;
       notifyPanelStartPositionChanged?: (position: string) => void;
+      getDisplays?: () => Promise<DisplayInfo[]>;
+      notifyPanelDisplayChanged?: (value: string) => void;
 
       // Auto-start at login. requiresApproval is macOS-only: SMAppService can
       // register the login item and still leave it awaiting approval in System
