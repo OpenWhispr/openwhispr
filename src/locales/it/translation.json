@@ -1415,6 +1415,12 @@
         "title": "Icona flottante",
         "startPosition": "Posizione iniziale",
         "startPositionDescription": "Dove appare il pannello di registrazione vocale sullo schermo",
+        "display": "Monitor",
+        "displayDescription": "Scegli su quale monitor appare il widget di dettatura.",
+        "displayAuto": "Automatico (segui il cursore)",
+        "displayLabel": "Schermo {{number}} — {{width}}×{{height}}",
+        "displayPrimary": "principale",
+        "displayDisconnected": "(disconnesso)",
         "bottomRight": "In basso a destra",
         "center": "In basso al centro",
         "bottomLeft": "In basso a sinistra"

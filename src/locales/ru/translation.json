@@ -1415,6 +1415,12 @@
         "title": "Плавающий значок",
         "startPosition": "Начальная позиция",
         "startPositionDescription": "Где на экране появляется панель записи голоса",
+        "display": "Монитор",
+        "displayDescription": "Выберите, на каком мониторе появляется виджет диктовки.",
+        "displayAuto": "Автоматически (следовать за курсором)",
+        "displayLabel": "Дисплей {{number}} — {{width}}×{{height}}",
+        "displayPrimary": "основной",
+        "displayDisconnected": "(отключён)",
         "bottomRight": "Внизу справа",
         "center": "Внизу по центру",
         "bottomLeft": "Внизу слева"
