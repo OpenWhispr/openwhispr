@@ -90,6 +90,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    tinfoilApiKey,
     dictationKey,
     voiceAgentKey,
     setVoiceAgentKey,
@@ -767,6 +768,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             return xaiApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "mistral") {
             return mistralApiKey.trim().length > 0;
+          } else if (cloudTranscriptionProvider === "tinfoil") {
+            return tinfoilApiKey.trim().length > 0;
           } else if (cloudTranscriptionProvider === "custom") {
             // Custom can work without API key for local endpoints
             return true;

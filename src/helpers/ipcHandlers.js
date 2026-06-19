@@ -14,6 +14,14 @@ const DeepgramStreaming = require("./deepgramStreaming");
 const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
+const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
+
+// Tinfoil serves an OpenAI Realtime-compatible transcription endpoint inside a
+// confidential enclave. Same client as OpenAI; the socket is dialed through
+// the tinfoil SDK so the enclave is attested and the TLS connection pinned,
+// and the declared capture rate is the worklet's true 16kHz (no server-side
+// resample of a 24kHz declaration).
+const TINFOIL_REALTIME_MODEL = "voxtral-mini-4b-realtime";
 const AudioStorageManager = require("./audioStorage");
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
@@ -2729,6 +2737,14 @@ class IPCHandlers {
       }
     );
 
+    ipcMain.handle("get-tinfoil-key", async () => {
+      return this.environmentManager.getTinfoilKey();
+    });
+
+    ipcMain.handle("save-tinfoil-key", async (event, key) => {
+      return this.environmentManager.saveTinfoilKey(key);
+    });
+
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -4403,6 +4419,15 @@ class IPCHandlers {
         const { token } = await this._mintStoredCortiToken(options);
         return streams === 2 ? [token, token] : token;
       }
+      if (options.provider === "tinfoil-realtime") {
+        const apiKey = this.environmentManager.getTinfoilKey();
+        if (!apiKey) {
+          const err = new Error("No Tinfoil API key configured. Add your key in Settings.");
+          err.code = "NO_API";
+          throw err;
+        }
+        return streams === 2 ? [apiKey, apiKey] : apiKey;
+      }
 
       if (options.mode === "byok") {
         const apiKey = this.environmentManager.getOpenAIKey();
@@ -5261,13 +5286,17 @@ class IPCHandlers {
       await disconnectMeetingStreaming().catch(() => {});
     };
 
-    const setupDictationCallbacks = (streaming, event) => {
-      streaming.onPartialTranscript = (text) =>
+    const setupDictationCallbacks = (streaming, event, { preview = false } = {}) => {
+      streaming.onPartialTranscript = (text) => {
         event.sender.send("dictation-realtime-partial", text);
+        if (preview && text) this.windowManager.showTranscriptionPreview(text);
+      };
       streaming.onFinalTranscript = (text) => event.sender.send("dictation-realtime-final", text);
       streaming.onError = (err) => event.sender.send("dictation-realtime-error", err.message);
-      streaming.onSessionEnd = (data) =>
+      streaming.onSessionEnd = (data) => {
         event.sender.send("dictation-realtime-session-end", data || {});
+        if (preview) this.windowManager.hideTranscriptionPreview();
+      };
     };
 
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
@@ -5304,14 +5333,25 @@ class IPCHandlers {
 
       const connectInner = async () => {
         const isCloud = options.mode !== "byok";
-        const apiKey = await fetchRealtimeToken(event, { mode: options.mode });
-        const streaming = new OpenAIRealtimeStreaming();
-        setupDictationCallbacks(streaming, event);
-        await streaming.connect({
-          apiKey,
-          model: options.model || "gpt-4o-mini-transcribe",
-          preconfigured: isCloud,
+        const isTinfoil = options.provider === "tinfoil-realtime";
+        const apiKey = await fetchRealtimeToken(event, {
+          mode: options.mode,
+          provider: options.provider,
         });
+        const streaming = new OpenAIRealtimeStreaming();
+        streaming._previewEnabled = !!options.preview;
+        setupDictationCallbacks(streaming, event, { preview: streaming._previewEnabled });
+        await streaming.connect(
+          isTinfoil
+            ? {
+                apiKey,
+                model: TINFOIL_REALTIME_MODEL,
+                inputRate: 16000,
+                createSocket: () =>
+                  createTinfoilRealtimeSocket({ model: TINFOIL_REALTIME_MODEL, apiKey }),
+              }
+            : { apiKey, model: options.model || "gpt-4o-mini-transcribe", preconfigured: isCloud }
+        );
         this._dictationStreaming = streaming;
       };
 
@@ -5769,8 +5809,10 @@ class IPCHandlers {
       if (!this._dictationStreaming) {
         return { success: true, text: "" };
       }
+      const previewEnabled = this._dictationStreaming._previewEnabled;
       const result = await this._dictationStreaming.disconnect().catch(() => ({ text: "" }));
       this._dictationStreaming = null;
+      if (previewEnabled) this.windowManager.hideTranscriptionPreview();
       return { success: true, text: result.text || "" };
     });
 
