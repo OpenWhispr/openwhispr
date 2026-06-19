@@ -18,6 +18,7 @@
     "node_modules/**/*",
     "src/dist/**/*",
     "src/helpers/**/*",
+    "src/workers/**/*",
     "src/config/**/*",
     "src/constants/**/*",
     "src/locales/**/*",
@@ -88,7 +89,8 @@
     "**/node_modules/ffmpeg-static/**/*",
     "**/node_modules/better-sqlite3/**/*",
     "**/node_modules/onnxruntime-node/**/*",
-    "**/node_modules/@napi-rs/keyring/**/*"
+    "**/node_modules/@napi-rs/keyring/**/*",
+    "src/workers/**/*"
   ],
   "extraResources": [
     ".env",
