@@ -23,9 +23,23 @@ function getSecureClient() {
 async function createTinfoilRealtimeSocket({ model, apiKey }) {
   const client = await getSecureClient();
   const path = `/v1/realtime?model=${encodeURIComponent(model)}&intent=transcription`;
-  return client.createWebSocket(path, {
+  const socket = await client.createWebSocket(path, {
     wsOptions: { headers: { Authorization: `Bearer ${apiKey}` } },
   });
+
+  // The SDK pins the WebSocket to the TLS key attested when the client was first
+  // built and never re-attests on the WS path, so when the enclave rotates its
+  // cert the pin goes stale. Drop the cached client on a pinning failure so the
+  // next attempt re-attests.
+  // TODO: tinfoil-js should recover WS pin failures itself: remove this when
+  // a newer tinfoil release ships that fix.
+  socket.once("error", (err) => {
+    if (String(err?.message).includes("TLS pinning failed")) {
+      clientPromise = null;
+    }
+  });
+
+  return socket;
 }
 
 module.exports = { createTinfoilRealtimeSocket };
