@@ -60,6 +60,7 @@ export interface ApiKeySettings {
   groqApiKey: string;
   xaiApiKey: string;
   mistralApiKey: string;
+  elevenlabsApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
   customTranscriptionApiKey: string;
@@ -227,6 +228,7 @@ function useSettingsInternal() {
     groqApiKey: store.groqApiKey,
     xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
+    elevenlabsApiKey: store.elevenlabsApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,

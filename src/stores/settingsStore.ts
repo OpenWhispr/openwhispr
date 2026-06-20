@@ -498,6 +498,7 @@ export interface SettingsState
   setGroqApiKey: (key: string) => void;
   setXaiApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
+  setElevenlabsApiKey: (key: string) => void;
   setCortiClientId: (key: string) => void;
   setCortiClientSecret: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
@@ -687,6 +688,7 @@ const SECRET_IPC_SAVERS = {
   groq: "saveGroqKey",
   xai: "saveXaiKey",
   mistral: "saveMistralKey",
+  elevenlabs: "saveElevenLabsKey",
   cortiClientId: "saveCortiClientId",
   cortiClientSecret: "saveCortiClientSecret",
   customTranscription: "saveCustomTranscriptionKey",
@@ -727,6 +729,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "groqApiKey",
   "xaiApiKey",
   "mistralApiKey",
+  "elevenlabsApiKey",
   "cortiClientId",
   "cortiClientSecret",
   "customTranscriptionApiKey",
@@ -807,6 +810,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   groqApiKey: "",
   xaiApiKey: "",
   mistralApiKey: "",
+  elevenlabsApiKey: "",
   cortiClientId: "",
   cortiClientSecret: "",
   customTranscriptionApiKey: "",
@@ -1184,6 +1188,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     debouncedSaveSecret("mistral", key);
     invalidateApiKeyCaches("mistral");
   },
+  setElevenlabsApiKey: (key: string) => {
+    set({ elevenlabsApiKey: key });
+    debouncedSaveSecret("elevenlabs", key);
+    invalidateApiKeyCaches();
+  },
   setCortiClientId: (key: string) => {
     set({ cortiClientId: key });
     debouncedSaveSecret("cortiClientId", key);
@@ -1543,6 +1552,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
     if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
+    if (keys.elevenlabsApiKey !== undefined) s.setElevenlabsApiKey(keys.elevenlabsApiKey);
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
     if (keys.customTranscriptionApiKey !== undefined)
@@ -1752,6 +1762,7 @@ export async function initializeSettings(): Promise<void> {
         groq,
         xai,
         mistral,
+        elevenlabs,
         cortiClientId,
         cortiClientSecret,
         customTx,
@@ -1768,6 +1779,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getGroqKey?.(),
         window.electronAPI.getXaiKey?.(),
         window.electronAPI.getMistralKey?.(),
+        window.electronAPI.getElevenLabsKey?.(),
         window.electronAPI.getCortiClientId?.(),
         window.electronAPI.getCortiClientSecret?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
@@ -1786,6 +1798,7 @@ export async function initializeSettings(): Promise<void> {
         groqApiKey: groq || "",
         xaiApiKey: xai || "",
         mistralApiKey: mistral || "",
+        elevenlabsApiKey: elevenlabs || "",
         cortiClientId: cortiClientId || "",
         cortiClientSecret: cortiClientSecret || "",
         customTranscriptionApiKey: customTx || "",

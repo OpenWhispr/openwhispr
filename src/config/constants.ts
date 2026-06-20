@@ -17,6 +17,8 @@ export const normalizeBaseUrl = (value?: string | null): string => {
     [/\/audio\/transcriptions$/i, ""],
     [/\/v1\/audio\/translations$/i, "/v1"],
     [/\/audio\/translations$/i, ""],
+    [/\/v1\/speech-to-text$/i, "/v1"],
+    [/\/speech-to-text$/i, ""],
   ];
 
   for (const [pattern, replacement] of suffixReplacements) {
@@ -77,6 +79,7 @@ export const API_ENDPOINTS = {
   GROQ_BASE: "https://api.groq.com/openai/v1",
   XAI_BASE: "https://api.x.ai/v1",
   MISTRAL_BASE: "https://api.mistral.ai/v1",
+  ELEVENLABS_BASE: "https://api.elevenlabs.io/v1",
   TRANSCRIPTION_BASE: DEFAULT_TRANSCRIPTION_BASE,
   TRANSCRIPTION: buildApiUrl(DEFAULT_TRANSCRIPTION_BASE, "/audio/transcriptions"),
 } as const;

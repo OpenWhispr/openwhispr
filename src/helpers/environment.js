@@ -13,6 +13,7 @@ const SECRET_KEYS = [
   "GROQ_API_KEY",
   "XAI_API_KEY",
   "MISTRAL_API_KEY",
+  "ELEVENLABS_API_KEY",
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "CORTI_CLIENT_ID",
@@ -310,6 +311,14 @@ class EnvironmentManager {
 
   saveMistralKey(key) {
     return this._saveKey("MISTRAL_API_KEY", key);
+  }
+
+  getElevenLabsKey() {
+    return this._getKey("ELEVENLABS_API_KEY");
+  }
+
+  saveElevenLabsKey(key) {
+    return this._saveKey("ELEVENLABS_API_KEY", key);
   }
 
   getAssemblyAIKey() {

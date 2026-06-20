@@ -204,6 +204,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "groq", name: "Groq" },
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
+  { id: "elevenlabs", name: "ElevenLabs" },
   { id: "corti", name: "Corti" },
   { id: "custom", name: "Custom" },
 ];
@@ -214,6 +215,7 @@ interface ProviderCredentialField {
     | "groqApiKey"
     | "xaiApiKey"
     | "mistralApiKey"
+    | "elevenlabsApiKey"
     | "cortiClientId"
     | "cortiClientSecret"
     | "cortiEnvironment"
@@ -243,6 +245,10 @@ const PROVIDER_CREDENTIALS: Record<
   mistral: {
     consoleUrl: "https://console.mistral.ai/api-keys",
     fields: [{ key: "mistralApiKey", input: "secret" }],
+  },
+  elevenlabs: {
+    consoleUrl: "https://elevenlabs.io/app/settings/api-keys",
+    fields: [{ key: "elevenlabsApiKey", input: "secret" }],
   },
   corti: {
     consoleUrl: "https://console.corti.app",
@@ -338,6 +344,8 @@ export default function TranscriptionModelPicker({
   const setXaiApiKey = useSettingsStore((s) => s.setXaiApiKey);
   const mistralApiKey = useSettingsStore((s) => s.mistralApiKey);
   const setMistralApiKey = useSettingsStore((s) => s.setMistralApiKey);
+  const elevenlabsApiKey = useSettingsStore((s) => s.elevenlabsApiKey);
+  const setElevenlabsApiKey = useSettingsStore((s) => s.setElevenlabsApiKey);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
@@ -710,6 +718,7 @@ export default function TranscriptionModelPicker({
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    elevenlabsApiKey,
     cortiClientId,
     cortiClientSecret,
     cortiEnvironment,
@@ -720,6 +729,7 @@ export default function TranscriptionModelPicker({
     groqApiKey: setGroqApiKey,
     xaiApiKey: setXaiApiKey,
     mistralApiKey: setMistralApiKey,
+    elevenlabsApiKey: setElevenlabsApiKey,
     cortiClientId: setCortiClientId,
     cortiClientSecret: setCortiClientSecret,
     cortiEnvironment: setCortiEnvironment,

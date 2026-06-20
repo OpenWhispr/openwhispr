@@ -367,6 +367,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
 
+  // ElevenLabs API
+  getElevenLabsKey: () => ipcRenderer.invoke("get-elevenlabs-key"),
+  saveElevenLabsKey: (key) => ipcRenderer.invoke("save-elevenlabs-key", key),
+  proxyElevenLabsTranscription: (data) =>
+    ipcRenderer.invoke("proxy-elevenlabs-transcription", data),
+
   // Corti API
   getCortiClientId: () => ipcRenderer.invoke("get-corti-client-id"),
   saveCortiClientId: (key) => ipcRenderer.invoke("save-corti-client-id", key),

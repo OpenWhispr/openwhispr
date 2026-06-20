@@ -206,6 +206,20 @@
       ]
     },
     {
+      "id": "elevenlabs",
+      "name": "ElevenLabs",
+      "baseUrl": "https://api.elevenlabs.io/v1",
+      "apiType": "elevenlabs",
+      "models": [
+        {
+          "id": "scribe_v2",
+          "name": "Scribe v2",
+          "description": "Accurate multilingual transcription with keyterm prompting",
+          "descriptionKey": "models.descriptions.transcription.elevenlabs_scribe_v2"
+        }
+      ]
+    },
+    {
       "id": "corti",
       "name": "Corti",
       "baseUrl": "https://api.us.corti.app/v2",

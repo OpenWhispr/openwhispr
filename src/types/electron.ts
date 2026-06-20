@@ -999,6 +999,17 @@ declare global {
         contextBias?: string[];
       }) => Promise<{ text: string }>;
 
+      // ElevenLabs API key management
+      getElevenLabsKey?: () => Promise<string | null>;
+      saveElevenLabsKey?: (key: string) => Promise<void>;
+      proxyElevenLabsTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        apiKey?: string | null;
+        model?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ text: string; language?: string | null }>;
+
       // Corti credential management
       getCortiClientId?: () => Promise<string | null>;
       saveCortiClientId?: (key: string) => Promise<void>;
@@ -1260,6 +1271,7 @@ declare global {
         model: string;
         provider?: string;
         language?: string;
+        keyterms?: string[];
         environment?: string;
         tenant?: string;
       }) => Promise<{
