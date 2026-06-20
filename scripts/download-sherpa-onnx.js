@@ -14,6 +14,8 @@ const BINARIES = {
     archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-darwin-arm64",
+    onlineBinaryPath: "sherpa-onnx-online-websocket-server",
+    onlineOutputName: "sherpa-onnx-online-ws-darwin-arm64",
     diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization",
     diarizeOutputName: "sherpa-onnx-diarize-darwin-arm64",
     libPattern: "*.dylib",
@@ -22,6 +24,8 @@ const BINARIES = {
     archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-osx-universal2-shared.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-darwin-x64",
+    onlineBinaryPath: "sherpa-onnx-online-websocket-server",
+    onlineOutputName: "sherpa-onnx-online-ws-darwin-x64",
     diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization",
     diarizeOutputName: "sherpa-onnx-diarize-darwin-x64",
     libPattern: "*.dylib",
@@ -30,6 +34,8 @@ const BINARIES = {
     archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server.exe",
     outputName: "sherpa-onnx-ws-win32-x64.exe",
+    onlineBinaryPath: "sherpa-onnx-online-websocket-server.exe",
+    onlineOutputName: "sherpa-onnx-online-ws-win32-x64.exe",
     diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization.exe",
     diarizeOutputName: "sherpa-onnx-diarize-win32-x64.exe",
     libPattern: "*.dll",
@@ -38,6 +44,8 @@ const BINARIES = {
     archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-linux-x64-shared.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server",
     outputName: "sherpa-onnx-ws-linux-x64",
+    onlineBinaryPath: "sherpa-onnx-online-websocket-server",
+    onlineOutputName: "sherpa-onnx-online-ws-linux-x64",
     diarizeBinaryPath: "sherpa-onnx-offline-speaker-diarization",
     diarizeOutputName: "sherpa-onnx-diarize-linux-x64",
     libPattern: "*.so*",
@@ -95,6 +103,36 @@ function matchesPattern(filename, pattern) {
   return false;
 }
 
+function copyBinary(extractDir, binaryPath, outputPath, label, platformArch) {
+  const binaryName = path.basename(binaryPath);
+  const foundPath = findBinaryInDir(extractDir, binaryName);
+
+  if (!foundPath || !fs.existsSync(foundPath)) {
+    console.error(`  ${platformArch}: ${label} binary '${binaryName}' not found in archive`);
+    return false;
+  }
+
+  fs.copyFileSync(foundPath, outputPath);
+  setExecutable(outputPath);
+  console.log(`  ${platformArch}: Extracted to ${path.basename(outputPath)}`);
+  return true;
+}
+
+function isCompleteInstall(markerPath, binaryPaths) {
+  if (binaryPaths.some((binaryPath) => !fs.existsSync(binaryPath))) return false;
+
+  try {
+    const marker = JSON.parse(fs.readFileSync(markerPath, "utf8"));
+    return (
+      marker.version === SHERPA_ONNX_VERSION &&
+      Array.isArray(marker.libraries) &&
+      marker.libraries.every((lib) => fs.existsSync(path.join(BIN_DIR, lib)))
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function downloadBinary(platformArch, config, isForce = false) {
   if (!config) {
     console.log(`  ${platformArch}: Not supported`);
@@ -102,54 +140,38 @@ async function downloadBinary(platformArch, config, isForce = false) {
   }
 
   const outputPath = path.join(BIN_DIR, config.outputName);
+  const onlineOutputPath = path.join(BIN_DIR, config.onlineOutputName);
   const diarizeOutputPath = path.join(BIN_DIR, config.diarizeOutputName);
+  const installMarkerPath = path.join(BIN_DIR, `.sherpa-onnx-${platformArch}.json`);
 
-  if (fs.existsSync(outputPath) && fs.existsSync(diarizeOutputPath) && !isForce) {
+  if (!isForce && isCompleteInstall(installMarkerPath, [outputPath, onlineOutputPath, diarizeOutputPath])) {
     console.log(`  ${platformArch}: Already exists (use --force to re-download)`);
     return true;
   }
+  if (isForce && fs.existsSync(installMarkerPath)) fs.unlinkSync(installMarkerPath);
 
   const url = getDownloadUrl(config.archiveName);
   console.log(`  ${platformArch}: Downloading from ${url}`);
 
   const archivePath = path.join(BIN_DIR, config.archiveName);
+  const extractDir = path.join(BIN_DIR, `temp-sherpa-${platformArch}`);
 
   try {
     await downloadFile(url, archivePath);
 
-    const extractDir = path.join(BIN_DIR, `temp-sherpa-${platformArch}`);
     fs.mkdirSync(extractDir, { recursive: true });
     extractTarBz2(archivePath, extractDir);
 
-    // Find the WebSocket server binary (may be in a subdirectory)
-    const binaryName = path.basename(config.binaryPath);
-    let binaryPath = findBinaryInDir(extractDir, binaryName);
-
-    if (binaryPath && fs.existsSync(binaryPath)) {
-      fs.copyFileSync(binaryPath, outputPath);
-      setExecutable(outputPath);
-      console.log(`  ${platformArch}: Extracted to ${config.outputName}`);
-    } else {
-      console.error(`  ${platformArch}: Binary '${binaryName}' not found in archive`);
-      return false;
-    }
-
-    // Find the diarization binary from the same archive
-    const diarizeBinaryName = path.basename(config.diarizeBinaryPath);
-    let diarizeBinaryPath = findBinaryInDir(extractDir, diarizeBinaryName);
-
-    if (diarizeBinaryPath && fs.existsSync(diarizeBinaryPath)) {
-      fs.copyFileSync(diarizeBinaryPath, diarizeOutputPath);
-      setExecutable(diarizeOutputPath);
-      console.log(`  ${platformArch}: Extracted to ${config.diarizeOutputName}`);
-    } else {
-      console.error(
-        `  ${platformArch}: Diarization binary '${diarizeBinaryName}' not found in archive`
-      );
-      return false;
+    for (const [binaryPath, destPath, label] of [
+      [config.binaryPath, outputPath, "Offline WebSocket"],
+      [config.onlineBinaryPath, onlineOutputPath, "Online WebSocket"],
+      [config.diarizeBinaryPath, diarizeOutputPath, "Diarization"],
+    ]) {
+      if (!copyBinary(extractDir, binaryPath, destPath, label, platformArch)) return false;
     }
 
     // Copy shared libraries
+    const copiedLibraries = [];
     if (config.libPattern) {
       const libraries = findLibrariesInDir(extractDir, config.libPattern);
 
@@ -170,6 +192,7 @@ async function downloadBinary(platformArch, config, isForce = false) {
 
         fs.copyFileSync(libPath, destPath);
         setExecutable(destPath);
+        copiedLibraries.push(libName);
         console.log(`  ${platformArch}: Copied library ${libName}`);
       }
 
@@ -191,14 +214,17 @@ async function downloadBinary(platformArch, config, isForce = false) {
       }
     }
 
-    // Cleanup
-    fs.rmSync(extractDir, { recursive: true, force: true });
-    if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
+    fs.writeFileSync(
+      installMarkerPath,
+      JSON.stringify({ version: SHERPA_ONNX_VERSION, libraries: copiedLibraries })
+    );
     return true;
   } catch (error) {
     console.error(`  ${platformArch}: Failed - ${error.message}`);
-    if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
     return false;
+  } finally {
+    fs.rmSync(extractDir, { recursive: true, force: true });
+    if (fs.existsSync(archivePath)) fs.unlinkSync(archivePath);
   }
 }
 
@@ -216,8 +242,9 @@ async function main() {
       return;
     }
 
+    const config = BINARIES[args.platformArch];
     console.log(`Downloading for target platform (${args.platformArch}):`);
-    const ok = await downloadBinary(args.platformArch, BINARIES[args.platformArch], args.isForce);
+    const ok = await downloadBinary(args.platformArch, config, args.isForce);
     if (!ok) {
       console.error(`Failed to download binaries for ${args.platformArch}`);
       process.exitCode = 1;
@@ -236,13 +263,19 @@ async function main() {
 
     if (args.shouldCleanup) {
       const wsPrefix = `sherpa-onnx-ws-${args.platformArch}`;
+      const onlineWsPrefix = `sherpa-onnx-online-ws-${args.platformArch}`;
       const diarizePrefix = `sherpa-onnx-diarize-${args.platformArch}`;
       const files = fs.readdirSync(BIN_DIR).filter((f) => f.startsWith("sherpa-onnx"));
       files.forEach((file) => {
-        if (!file.startsWith(wsPrefix) && !file.startsWith(diarizePrefix)) {
-          const filePath = path.join(BIN_DIR, file);
+        const isLibrary = config.libPattern && matchesPattern(file, config.libPattern);
+        if (
+          !file.startsWith(wsPrefix) &&
+          !file.startsWith(onlineWsPrefix) &&
+          !file.startsWith(diarizePrefix) &&
+          !isLibrary
+        ) {
           console.log(`Removing old binary: ${file}`);
-          fs.unlinkSync(filePath);
+          fs.unlinkSync(path.join(BIN_DIR, file));
         }
       });
     }

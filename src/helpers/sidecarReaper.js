@@ -3,7 +3,7 @@ const debugLogger = require("./debugLogger");
 const sidecarPidFile = require("./sidecarPidFile");
 
 const EXPECTED_BINARY_FRAGMENTS = {
-  parakeet: "sherpa-onnx-ws",
+  parakeet: "sherpa-onnx-",
   whisper: "whisper-server",
   llama: "llama-server",
   qdrant: "qdrant",

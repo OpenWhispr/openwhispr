@@ -23,12 +23,12 @@ class ParakeetServerManager {
     this.wsServer = new ParakeetWsServer();
   }
 
-  getBinaryPath() {
-    return this.wsServer.getWsBinaryPath();
+  getBinaryPath(modelName) {
+    return this.wsServer.getWsBinaryPath(modelName);
   }
 
-  isAvailable() {
-    return this.wsServer.isAvailable();
+  isAvailable(modelName) {
+    return this.wsServer.isAvailable(modelName);
   }
 
   getModelsDir() {
@@ -168,7 +168,7 @@ class ParakeetServerManager {
   }
 
   async startServer(modelName) {
-    if (!this.wsServer.isAvailable()) {
+    if (!this.wsServer.isAvailable(modelName)) {
       return { success: false, reason: "parakeet WS server binary not found" };
     }
 
@@ -192,14 +192,6 @@ class ParakeetServerManager {
 
   getServerStatus() {
     return this.wsServer.getStatus();
-  }
-
-  getStatus() {
-    return {
-      available: this.isAvailable(),
-      binaryPath: this.getBinaryPath(),
-      modelsDir: this.getModelsDir(),
-    };
   }
 }
 

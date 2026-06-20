@@ -14,6 +14,12 @@ const ParakeetServerManager = require("./parakeetServer");
 const { getModelsDirForService } = require("./modelDirUtils");
 
 const modelRegistryData = require("../models/modelRegistryData.json");
+const REQUIRED_MODEL_FILES = [
+  "encoder.int8.onnx",
+  "decoder.int8.onnx",
+  "joiner.int8.onnx",
+  "tokens.txt",
+];
 
 function getParakeetModelConfig(modelName) {
   const modelInfo = modelRegistryData.parakeetModels[modelName];
@@ -72,7 +78,7 @@ class ParakeetManager {
       if (
         localTranscriptionProvider === "nvidia" &&
         parakeetModel &&
-        this.serverManager.isAvailable()
+        this.serverManager.isAvailable(parakeetModel)
       ) {
         if (this.serverManager.isModelDownloaded(parakeetModel)) {
           debugLogger.info("Pre-warming parakeet server", { model: parakeetModel });
@@ -155,13 +161,13 @@ class ParakeetManager {
 
   async checkInstallation() {
     const binaryPath = this.serverManager.getBinaryPath();
-    if (!binaryPath) {
+    if (!binaryPath && !this.serverManager.getBinaryPath("online")) {
       return { installed: false, working: false };
     }
 
     return {
       installed: true,
-      working: this.serverManager.isAvailable(),
+      working: this.serverManager.isAvailable() || this.serverManager.isAvailable("online"),
       path: binaryPath,
     };
   }
@@ -180,20 +186,20 @@ class ParakeetManager {
   }
 
   async transcribeLocalParakeet(audioBlob, options = {}) {
+    const model = options.model || "parakeet-tdt-0.6b-v3";
+
     debugLogger.logSTTPipeline("transcribeLocalParakeet - start", {
       options,
       audioBlobType: audioBlob?.constructor?.name,
       audioBlobSize: audioBlob?.byteLength || audioBlob?.size || 0,
-      serverAvailable: this.serverManager.isAvailable(),
+      serverAvailable: this.serverManager.isAvailable(model),
     });
 
-    if (!this.serverManager.isAvailable()) {
+    if (!this.serverManager.isAvailable(model)) {
       throw new Error(
         "sherpa-onnx binary not found. Please ensure the app is installed correctly."
       );
     }
-
-    const model = options.model || "parakeet-tdt-0.6b-v3";
 
     if (!this.serverManager.isModelDownloaded(model)) {
       throw new Error(
@@ -341,7 +347,7 @@ class ParakeetManager {
         progressCallback({ type: "complete", model: modelName, percentage: 100 });
       }
 
-      if (this.serverManager.isAvailable()) {
+      if (this.serverManager.isAvailable(modelName)) {
         this.serverManager.startServer(modelName).catch((err) => {
           debugLogger.warn("Post-download server pre-warm failed (non-fatal)", {
             error: err.message,
@@ -392,7 +398,10 @@ class ParakeetManager {
         for (const entry of entries) {
           const entryPath = path.join(extractDir, entry);
           const stat = await fsPromises.stat(entryPath);
-          if (stat.isDirectory() && entry.includes("parakeet")) {
+          if (
+            stat.isDirectory() &&
+            REQUIRED_MODEL_FILES.every((file) => fs.existsSync(path.join(entryPath, file)))
+          ) {
             modelDir = entry;
             break;
           }
@@ -411,13 +420,7 @@ class ParakeetManager {
         }
       }
 
-      const requiredFiles = [
-        "encoder.int8.onnx",
-        "decoder.int8.onnx",
-        "joiner.int8.onnx",
-        "tokens.txt",
-      ];
-      const missing = requiredFiles.filter((f) => !fs.existsSync(path.join(targetDir, f)));
+      const missing = REQUIRED_MODEL_FILES.filter((f) => !fs.existsSync(path.join(targetDir, f)));
       if (missing.length > 0) {
         throw new Error(`Extracted model is missing required files: ${missing.join(", ")}`);
       }
@@ -600,10 +603,12 @@ class ParakeetManager {
       modelsDir: this.getModelsDir(),
       models: [],
     };
-
     const binaryPath = this.serverManager.getBinaryPath();
-    if (binaryPath) {
-      diagnostics.sherpaOnnx = { available: true, path: binaryPath };
+    if (binaryPath || this.serverManager.getBinaryPath("online")) {
+      diagnostics.sherpaOnnx = {
+        available: true,
+        path: binaryPath,
+      };
     }
 
     try {
