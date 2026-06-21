@@ -84,6 +84,7 @@ class WhisperServerManager extends EventEmitter {
     this.cachedFFmpegPath = null;
     this.canConvert = false;
     this.useCuda = false;
+    this.useVulkan = false;
     this.vadSignature = "vad:off";
   }
 
@@ -183,6 +184,13 @@ class WhisperServerManager extends EventEmitter {
       const cudaBinary = `whisper-server-${process.platform}-${process.arch}-cuda${ext}`;
       const cudaPath = path.join(app.getPath("userData"), "bin", cudaBinary);
       if (fs.existsSync(cudaPath)) return cudaPath;
+    }
+
+    if (options.preferVulkan) {
+      const ext = process.platform === "win32" ? ".exe" : "";
+      const vulkanBinary = `whisper-server-${process.platform}-${process.arch}-vulkan${ext}`;
+      const vulkanPath = path.join(app.getPath("userData"), "bin", vulkanBinary);
+      if (fs.existsSync(vulkanPath)) return vulkanPath;
     }
 
     if (this.cachedServerBinaryPath) return this.cachedServerBinaryPath;
@@ -308,13 +316,17 @@ class WhisperServerManager extends EventEmitter {
 
   async _doStart(modelPath, options = {}) {
     const usingCuda = options.useCuda || false;
-    const serverBinary = this.getServerBinaryPath(usingCuda ? { preferCuda: true } : {});
+    const usingVulkan = options.useVulkan || false;
+    const serverBinary = this.getServerBinaryPath(
+      usingCuda ? { preferCuda: true } : usingVulkan ? { preferVulkan: true } : {}
+    );
     if (!serverBinary) throw new Error("whisper-server binary not found");
     if (!fs.existsSync(modelPath)) throw new Error(`Model file not found: ${modelPath}`);
 
     this.port = await this.findAvailablePort();
     this.modelPath = modelPath;
     this.useCuda = usingCuda;
+    this.useVulkan = usingVulkan;
 
     // Check for FFmpeg first - only use --convert flag if FFmpeg is available
     const ffmpegPath = this.getFFmpegPath();
@@ -360,6 +372,7 @@ class WhisperServerManager extends EventEmitter {
       args,
       cwd: serverBinaryDir,
       cuda: usingCuda,
+      vulkan: usingVulkan,
     });
 
     const startTime = Date.now();
@@ -412,6 +425,14 @@ class WhisperServerManager extends EventEmitter {
         this.emit("cuda-fallback");
         return this._doStart(modelPath, { ...options, useCuda: false });
       }
+      if (usingVulkan && earlyExit) {
+        debugLogger.warn("Vulkan whisper-server failed, falling back to CPU", {
+          exitCode,
+          stderr: stderrBuffer.slice(0, 200),
+        });
+        this.emit("vulkan-fallback");
+        return this._doStart(modelPath, { ...options, useVulkan: false });
+      }
       throw err;
     }
 
@@ -421,6 +442,7 @@ class WhisperServerManager extends EventEmitter {
       port: this.port,
       model: path.basename(modelPath),
       cuda: this.useCuda,
+      vulkan: this.useVulkan,
     });
   }
 

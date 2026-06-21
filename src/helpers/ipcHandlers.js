@@ -318,6 +318,7 @@ class IPCHandlers {
     this.textEditMonitor = managers.textEditMonitor;
     this.getTrayManager = managers.getTrayManager;
     this.whisperCudaManager = managers.whisperCudaManager;
+    this.whisperVulkanManager = managers.whisperVulkanManager;
     this.googleCalendarManager = managers.googleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
     this.audioTapManager = managers.audioTapManager;
@@ -360,6 +361,9 @@ class IPCHandlers {
     if (this.whisperManager?.serverManager) {
       this.whisperManager.serverManager.on("cuda-fallback", () => {
         this.broadcastToWindows("cuda-fallback-notification", {});
+      });
+      this.whisperManager.serverManager.on("vulkan-fallback", () => {
+        this.broadcastToWindows("vulkan-fallback-notification", {});
       });
     }
   }
@@ -554,7 +558,7 @@ class IPCHandlers {
   }
 
   async _logDetectedGpus() {
-    const { listNvidiaGpus } = require("../utils/gpuDetection");
+    const { listNvidiaGpus, detectAmdGpu, detectIntelGpu } = require("../utils/gpuDetection");
     const gpus = await listNvidiaGpus();
     if (gpus.length > 0) {
       debugLogger.info(
@@ -564,6 +568,24 @@ class IPCHandlers {
       );
     } else {
       debugLogger.debug("No NVIDIA GPUs detected", {}, "gpu");
+    }
+
+    const amdInfo = await detectAmdGpu();
+    if (amdInfo.hasAmdGpu) {
+      debugLogger.info("AMD GPU detected", { name: amdInfo.gpuName, vramMb: amdInfo.vramMb }, "gpu");
+    } else {
+      debugLogger.debug("No AMD GPUs detected", {}, "gpu");
+    }
+
+    const intelInfo = await detectIntelGpu();
+    if (intelInfo.hasIntelGpu) {
+      debugLogger.info(
+        "Intel GPU detected",
+        { name: intelInfo.gpuName, vramMb: intelInfo.vramMb },
+        "gpu"
+      );
+    } else {
+      debugLogger.debug("No Intel GPUs detected", {}, "gpu");
     }
   }
 
@@ -1780,7 +1802,11 @@ class IPCHandlers {
     ipcMain.handle("whisper-server-start", async (event, modelName) => {
       const useCuda =
         process.env.WHISPER_CUDA_ENABLED === "true" && this.whisperCudaManager?.isDownloaded();
-      return this.whisperManager.startServer(modelName, { useCuda });
+      const useVulkan =
+        !useCuda &&
+        process.env.WHISPER_VULKAN_ENABLED === "true" &&
+        this.whisperVulkanManager?.isDownloaded();
+      return this.whisperManager.startServer(modelName, { useCuda, useVulkan });
     });
 
     ipcMain.handle("whisper-server-stop", async () => {
@@ -1828,8 +1854,11 @@ class IPCHandlers {
             const modelName = this.whisperManager.currentServerModel;
             await this.whisperManager.stopServer();
             if (modelName) {
+              const cuda = process.env.WHISPER_CUDA_ENABLED === "true" && this.whisperCudaManager?.isDownloaded();
+              const vulkan = !cuda && process.env.WHISPER_VULKAN_ENABLED === "true" && this.whisperVulkanManager?.isDownloaded();
               await this.whisperManager.startServer(modelName, {
-                useCuda: !!process.env.WHISPER_CUDA_ENABLED,
+                useCuda: cuda,
+                useVulkan: vulkan,
               });
             }
           }
@@ -1919,6 +1948,63 @@ class IPCHandlers {
       const result = await this.whisperCudaManager.delete();
       if (result.success) {
         this._syncStartupEnv({}, ["WHISPER_CUDA_ENABLED"]);
+        // Restart whisper-server so it falls back to CPU binary
+        await this.whisperManager.stopServer().catch(() => {});
+      }
+      return result;
+    });
+
+    ipcMain.handle("get-vulkan-whisper-status", async () => {
+      const { detectVulkanCapableGpu } = require("../utils/gpuDetection");
+      const gpuInfo = await detectVulkanCapableGpu();
+      if (!this.whisperVulkanManager) {
+        return { downloaded: false, downloading: false, path: null, gpuInfo };
+      }
+      return {
+        downloaded: this.whisperVulkanManager.isDownloaded(),
+        downloading: this.whisperVulkanManager.isDownloading(),
+        path: this.whisperVulkanManager.getVulkanBinaryPath(),
+        gpuInfo,
+      };
+    });
+
+    ipcMain.handle("download-vulkan-whisper-binary", async (event) => {
+      if (!this.whisperVulkanManager) {
+        return { success: false, error: "Vulkan not supported on this platform" };
+      }
+      try {
+        await this.whisperVulkanManager.download((progress) => {
+          if (progress.type === "progress" && !event.sender.isDestroyed()) {
+            event.sender.send("vulkan-whisper-download-progress", {
+              downloadedBytes: progress.downloaded_bytes,
+              totalBytes: progress.total_bytes,
+              percentage: progress.percentage,
+            });
+          }
+        });
+        this._syncStartupEnv({ WHISPER_VULKAN_ENABLED: "true" });
+        // Restart whisper-server so it picks up the Vulkan binary
+        await this.whisperManager.stopServer().catch(() => {});
+        return { success: true };
+      } catch (error) {
+        debugLogger.error("Vulkan whisper binary download failed", {
+          error: error.message,
+          stack: error.stack,
+        });
+        return { success: false, error: error.message };
+      }
+    });
+
+    ipcMain.handle("cancel-vulkan-whisper-download", async () => {
+      if (!this.whisperVulkanManager) return { success: false };
+      return this.whisperVulkanManager.cancelDownload();
+    });
+
+    ipcMain.handle("delete-vulkan-whisper-binary", async () => {
+      if (!this.whisperVulkanManager) return { success: false };
+      const result = await this.whisperVulkanManager.delete();
+      if (result.success) {
+        this._syncStartupEnv({}, ["WHISPER_VULKAN_ENABLED"]);
         // Restart whisper-server so it falls back to CPU binary
         await this.whisperManager.stopServer().catch(() => {});
       }

@@ -279,6 +279,7 @@ const WindowsKeyManager = require("./src/helpers/windowsKeyManager");
 const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
+const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
 const GoogleCalendarManager = require("./src/helpers/googleCalendarManager");
 const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
@@ -308,6 +309,7 @@ let windowsKeyManager = null;
 let linuxKeyManager = null;
 let textEditMonitor = null;
 let whisperCudaManager = null;
+let whisperVulkanManager = null;
 let googleCalendarManager = null;
 let meetingDetectionEngine = null;
 let audioTapManager = null;
@@ -387,6 +389,7 @@ function initializeCoreManagers() {
   whisperManager = new WhisperManager();
   if (process.platform !== "darwin") {
     whisperCudaManager = new WhisperCudaManager();
+    whisperVulkanManager = new WhisperVulkanManager();
   }
   parakeetManager = new ParakeetManager();
   diarizationManager = new DiarizationManager();
@@ -424,6 +427,7 @@ function initializeCoreManagers() {
     linuxKeyManager,
     textEditMonitor,
     whisperCudaManager,
+    whisperVulkanManager,
     googleCalendarManager,
     meetingDetectionEngine,
     audioTapManager,
@@ -931,10 +935,12 @@ async function startApp() {
   });
 
   // Non-blocking server pre-warming
+  const useCuda = process.env.WHISPER_CUDA_ENABLED === "true" && whisperCudaManager?.isDownloaded();
   const whisperSettings = {
     localTranscriptionProvider: process.env.LOCAL_TRANSCRIPTION_PROVIDER || "",
     whisperModel: process.env.LOCAL_WHISPER_MODEL,
-    useCuda: process.env.WHISPER_CUDA_ENABLED === "true" && whisperCudaManager?.isDownloaded(),
+    useCuda,
+    useVulkan: !useCuda && process.env.WHISPER_VULKAN_ENABLED === "true" && whisperVulkanManager?.isDownloaded(),
   };
   whisperManager.initializeAtStartup(whisperSettings).catch((err) => {
     debugLogger.debug("Whisper startup init error (non-fatal)", { error: err.message });

@@ -235,6 +235,20 @@ export interface CudaWhisperStatus {
   gpuInfo: GpuInfo;
 }
 
+export interface VulkanCapableGpuInfo {
+  hasVulkanGpu: boolean;
+  vendor?: "amd" | "intel";
+  gpuName?: string;
+  vramMb?: number;
+}
+
+export interface VulkanWhisperStatus {
+  downloaded: boolean;
+  downloading: boolean;
+  path: string | null;
+  gpuInfo: VulkanCapableGpuInfo;
+}
+
 export interface WhisperCheckResult {
   installed: boolean;
   working: boolean;
