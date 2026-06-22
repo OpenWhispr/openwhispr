@@ -1346,7 +1346,10 @@
         "linuxPttPermissionDescription": "Execute este comando e faça logout: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Manter pressionado para falar requer configuração",
         "linuxPttSetupDescription": "O seu utilizador precisa de acesso aos dispositivos de entrada do teclado.",
-        "linuxPttSetupNote": "Depois de executar o comando, termine e reinicie a sessão."
+        "linuxPttSetupNote": "Depois de executar o comando, termine e reinicie a sessão.",
+        "hyprlandConfigWriteWarningTitle": "Os atalhos do Hyprland não serão mantidos",
+        "hyprlandConfigWriteWarningDescription": "O OpenWhispr não consegue escrever em {{path}}, por isso os atalhos não sobreviverão a um recarregamento da configuração do Hyprland. Certifique-se de que o ficheiro existe e pode ser escrito.",
+        "hyprlandUnbindDescription": "No Hyprland, o OpenWhispr reserva o atalho selecionado. Qualquer associação existente do Hyprland que use a mesma combinação de teclas será removida quando o OpenWhispr registar o seu atalho."
       },
       "meetingHotkey": {
         "title": "Atalho modo reunião",

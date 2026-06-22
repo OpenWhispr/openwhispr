@@ -1362,7 +1362,10 @@
         "linuxPttPermissionDescription": "執行此指令並重新登入：sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "按住說話需要設定",
         "linuxPttSetupDescription": "您的使用者需要存取鍵盤輸入裝置的權限。",
-        "linuxPttSetupNote": "執行指令後，請登出並重新登入。"
+        "linuxPttSetupNote": "執行指令後，請登出並重新登入。",
+        "hyprlandConfigWriteWarningTitle": "Hyprland 鍵綁定不會持久保存",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr 無法寫入 {{path}}，因此鍵綁定不會在 Hyprland 設定重新載入後保留。請確認該檔案存在且可寫入。",
+        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 會占用所選快捷鍵。OpenWhispr 註冊快捷鍵時，任何使用相同組合鍵的既有 Hyprland 綁定都會被解除。"
       },
       "meetingHotkey": {
         "title": "會議模式快捷鍵",

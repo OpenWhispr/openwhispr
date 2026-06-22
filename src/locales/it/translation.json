@@ -1367,7 +1367,10 @@
         "linuxPttPermissionDescription": "Esegui questo comando e riavvia la sessione: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Tieni premuto per parlare richiede configurazione",
         "linuxPttSetupDescription": "Il tuo utente ha bisogno di accesso ai dispositivi di input della tastiera.",
-        "linuxPttSetupNote": "Dopo aver eseguito il comando, esci e riaccedi."
+        "linuxPttSetupNote": "Dopo aver eseguito il comando, esci e riaccedi.",
+        "hyprlandConfigWriteWarningTitle": "Le scorciatoie di Hyprland non saranno persistenti",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr non può scrivere in {{path}}, quindi le scorciatoie non sopravvivranno a un ricaricamento della configurazione di Hyprland. Assicurati che il file esista e sia scrivibile.",
+        "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia."
       },
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",

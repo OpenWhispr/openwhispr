@@ -1415,7 +1415,10 @@
         "linuxPttPermissionDescription": "Ejecuta este comando y cierra sesión: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Mantener para hablar requiere configuración",
         "linuxPttSetupDescription": "Tu usuario necesita acceso a los dispositivos de entrada del teclado.",
-        "linuxPttSetupNote": "Después de ejecutar el comando, cierra sesión y vuelve a iniciarla."
+        "linuxPttSetupNote": "Después de ejecutar el comando, cierra sesión y vuelve a iniciarla.",
+        "hyprlandConfigWriteWarningTitle": "Los atajos de Hyprland no se conservarán",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr no puede escribir en {{path}}, así que los atajos no sobrevivirán a una recarga de la configuración de Hyprland. Asegúrate de que el archivo exista y se pueda escribir.",
+        "hyprlandUnbindDescription": "En Hyprland, OpenWhispr reclama el atajo seleccionado. Cualquier atajo existente de Hyprland que use la misma combinación de teclas se desvinculará cuando OpenWhispr registre su atajo."
       },
       "meetingHotkey": {
         "title": "Atajo modo reunión",
