@@ -266,6 +266,11 @@
       "title": "Notes de réunion",
       "description": "Capturez et résumez vos réunions",
       "autoDetect": "OpenWhispr détecte automatiquement quand vous êtes en réunion et vous propose de démarrer des notes — rien n'est enregistré sans vous.",
+      "notification": {
+        "title": "Réunion détectée",
+        "body": "On dirait que vous êtes en réunion. Vous voulez prendre des notes ?",
+        "cta": "Démarrer l'enregistrement"
+      },
       "hotkeyLabel": "Raccourci réunion",
       "hotkeyHint": "Facultatif — appuyez dessus pendant une réunion pour démarrer une note instantanément."
     },

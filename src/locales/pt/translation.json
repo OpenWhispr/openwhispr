@@ -245,6 +245,11 @@
       "title": "Notas de reunião",
       "description": "Capture e resuma suas reuniões",
       "autoDetect": "O OpenWhispr detecta automaticamente quando você está em uma reunião e oferece iniciar notas — nada é gravado sem você.",
+      "notification": {
+        "title": "Reunião detectada",
+        "body": "Parece que você está em uma reunião. Quer fazer anotações?",
+        "cta": "Começar a gravar"
+      },
       "hotkeyLabel": "Atalho de reunião",
       "hotkeyHint": "Opcional — pressione-o em qualquer reunião para iniciar uma nota na hora."
     },

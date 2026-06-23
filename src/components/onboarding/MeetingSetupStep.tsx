@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { BellRing } from "lucide-react";
+import { MeetingNotificationCard } from "../MeetingNotificationCard";
 import { HotkeyInput } from "../ui/HotkeyInput";
 import { useHotkeyRegistration } from "../../hooks/useHotkeyRegistration";
 import { validateHotkeyForSlot } from "../../utils/hotkeyValidation";
@@ -47,11 +47,19 @@ export default function MeetingSetupStep({
         <p className="text-xs text-muted-foreground">{t("onboarding.meeting.description")}</p>
       </div>
 
-      <div className="flex items-center gap-3 rounded-md border border-border bg-surface-1 p-3">
-        <div className="w-8 h-8 rounded-md bg-primary/10 dark:bg-primary/15 flex items-center justify-center shrink-0">
-          <BellRing className="w-4 h-4 text-primary" />
+      <div className="space-y-2">
+        {/* A faithful preview of the real notification, framed like a desktop corner */}
+        <div className="relative overflow-hidden rounded-lg border border-border-subtle bg-gradient-to-br from-surface-2/50 via-surface-1 to-primary/5 px-4 pt-4 pb-9">
+          <div className="pointer-events-none select-none">
+            <MeetingNotificationCard
+              title={t("onboarding.meeting.notification.title")}
+              body={t("onboarding.meeting.notification.body")}
+              startLabel={t("onboarding.meeting.notification.cta")}
+              className="ml-auto w-full max-w-[300px] shadow-xl"
+            />
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground leading-snug">
+        <p className="px-2 text-center text-xs text-muted-foreground/80 leading-snug">
           {t("onboarding.meeting.autoDetect")}
         </p>
       </div>

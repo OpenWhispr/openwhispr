@@ -266,6 +266,11 @@
       "title": "Meeting notes",
       "description": "Capture and summarize your meetings",
       "autoDetect": "OpenWhispr automatically detects when you're in a meeting and offers to start notes — nothing is recorded without you.",
+      "notification": {
+        "title": "Meeting detected",
+        "body": "It sounds like you're in a meeting. Want to take notes?",
+        "cta": "Start Recording"
+      },
       "hotkeyLabel": "Meeting hotkey",
       "hotkeyHint": "Optional — press it in any meeting to start a note instantly."
     },

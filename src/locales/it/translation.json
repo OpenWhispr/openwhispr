@@ -266,6 +266,11 @@
       "title": "Note delle riunioni",
       "description": "Cattura e riassumi le tue riunioni",
       "autoDetect": "OpenWhispr rileva automaticamente quando sei in riunione e ti propone di avviare le note — nulla viene registrato senza di te.",
+      "notification": {
+        "title": "Riunione rilevata",
+        "body": "Sembra che tu sia in riunione. Vuoi prendere appunti?",
+        "cta": "Avvia registrazione"
+      },
       "hotkeyLabel": "Scorciatoia riunione",
       "hotkeyHint": "Facoltativa — premila in qualsiasi riunione per avviare subito una nota."
     },

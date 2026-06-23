@@ -266,6 +266,11 @@
       "title": "Meeting-Notizen",
       "description": "Erfasse und fasse deine Meetings zusammen",
       "autoDetect": "OpenWhispr erkennt automatisch, wenn du in einem Meeting bist, und bietet an, Notizen zu starten — ohne dich wird nichts aufgenommen.",
+      "notification": {
+        "title": "Meeting erkannt",
+        "body": "Es klingt, als wärst du in einem Meeting. Notizen aufnehmen?",
+        "cta": "Aufnahme starten"
+      },
       "hotkeyLabel": "Meeting-Hotkey",
       "hotkeyHint": "Optional — drücke ihn in jedem Meeting, um sofort eine Notiz zu starten."
     },

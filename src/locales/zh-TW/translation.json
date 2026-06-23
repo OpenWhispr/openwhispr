@@ -266,6 +266,11 @@
       "title": "會議筆記",
       "description": "擷取並總結你的會議",
       "autoDetect": "OpenWhispr 會自動偵測你是否正在開會，並提議開始記錄 — 未經你確認不會錄製任何內容。",
+      "notification": {
+        "title": "偵測到會議",
+        "body": "你似乎正在開會。要開始記錄嗎？",
+        "cta": "開始錄製"
+      },
       "hotkeyLabel": "會議快捷鍵",
       "hotkeyHint": "選填 — 在任何會議中按下即可立即開始記錄。"
     },
