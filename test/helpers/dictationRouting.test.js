@@ -102,3 +102,73 @@ test("skips reasoning when nothing is reachable", async () => {
     "skip"
   );
 });
+
+test("agent is reachable in cloud mode without an explicit model", async () => {
+  const { resolveDictationAgentReachability } = await load();
+
+  assert.equal(
+    resolveDictationAgentReachability({
+      useDictationAgent: true,
+      dictationAgentModel: "",
+      isCloudAgent: true,
+      isSelfHostedAgent: false,
+    }),
+    true
+  );
+});
+
+test("agent is reachable in self-hosted mode without an explicit model", async () => {
+  const { resolveDictationAgentReachability } = await load();
+
+  assert.equal(
+    resolveDictationAgentReachability({
+      useDictationAgent: true,
+      dictationAgentModel: "",
+      isCloudAgent: false,
+      isSelfHostedAgent: true,
+    }),
+    true
+  );
+});
+
+test("agent is unreachable with an empty model on a model-required provider", async () => {
+  const { resolveDictationAgentReachability } = await load();
+
+  assert.equal(
+    resolveDictationAgentReachability({
+      useDictationAgent: true,
+      dictationAgentModel: "   ",
+      isCloudAgent: false,
+      isSelfHostedAgent: false,
+    }),
+    false
+  );
+});
+
+test("agent is reachable with an explicit model (BYOK/local/enterprise)", async () => {
+  const { resolveDictationAgentReachability } = await load();
+
+  assert.equal(
+    resolveDictationAgentReachability({
+      useDictationAgent: true,
+      dictationAgentModel: "gpt-5.5",
+      isCloudAgent: false,
+      isSelfHostedAgent: false,
+    }),
+    true
+  );
+});
+
+test("disabling the dictation agent overrides cloud reachability", async () => {
+  const { resolveDictationAgentReachability } = await load();
+
+  assert.equal(
+    resolveDictationAgentReachability({
+      useDictationAgent: false,
+      dictationAgentModel: "",
+      isCloudAgent: true,
+      isSelfHostedAgent: true,
+    }),
+    false
+  );
+});

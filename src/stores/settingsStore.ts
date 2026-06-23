@@ -1587,6 +1587,11 @@ export const selectIsCloudChatAgentMode = (state: SettingsState) =>
   state.chatAgentMode === "openwhispr" &&
   state.chatAgentCloudMode === "openwhispr";
 
+export const selectIsCloudDictationAgentMode = (state: SettingsState) =>
+  state.isSignedIn &&
+  state.dictationAgentMode === "openwhispr" &&
+  state.dictationAgentCloudMode === "openwhispr";
+
 export const selectIsCloudNoteFormattingMode = (state: SettingsState) => {
   const cfg = selectResolvedNoteFormatting(state);
   return state.isSignedIn && cfg.mode === "openwhispr" && cfg.cloudMode === "openwhispr";
@@ -1742,6 +1747,10 @@ export function getEffectiveCleanupModel() {
 
 export function isCloudCleanupMode() {
   return selectIsCloudCleanupMode(useSettingsStore.getState());
+}
+
+export function isCloudDictationAgentMode() {
+  return selectIsCloudDictationAgentMode(useSettingsStore.getState());
 }
 
 // --- Initialization ---
