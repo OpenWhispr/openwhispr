@@ -14,20 +14,12 @@ function usesOllamaDialect(providerKey: string): boolean {
   return window.localStorage?.getItem("remoteReasoningType") !== "openai-compatible";
 }
 
-// `chat_template_kwargs` is only understood by local inference servers
-// (llama.cpp, vLLM, SGLang, LM Studio). Cloud OpenAI-compatible APIs such as
-// Groq and Cerebras do strict request validation and reject it with
-// "property 'chat_template_kwargs' is unsupported".
-function isLocalServer(providerKey: string): boolean {
-  return providerKey === "local" || providerKey === "lan";
-}
-
-// `reasoning_effort: "none"` is not universally supported. Groq and Cerebras
-// only accept "low" | "medium" | "high" and return a 400 for "none". Use "low"
-// as the safe minimum, except for providers verified to accept "none" (xAI).
-function minimalReasoningEffort(providerKey: string): string {
-  return providerKey === "xai" ? "none" : "low";
-}
+// Groq and custom OpenAI-compatible endpoints (e.g. Cerebras) do strict request
+// validation: both reject `chat_template_kwargs`, and only accept reasoning_effort
+// `low` | `medium` | `high` (not `none`). Verified against the live Groq and
+// Cerebras `gpt-oss-120b` APIs. For these providers send the lowest accepted
+// effort and omit `chat_template_kwargs`. Every other provider is left unchanged.
+const STRICT_REASONING_PROVIDERS = new Set(["groq", "custom"]);
 
 function suppressThinking(requestBody: Record<string, unknown>, providerKey: string): void {
   if (providerKey === "gemini") {
@@ -35,15 +27,17 @@ function suppressThinking(requestBody: Record<string, unknown>, providerKey: str
     return;
   }
 
+  if (STRICT_REASONING_PROVIDERS.has(providerKey)) {
+    requestBody.reasoning_effort = "low";
+    return;
+  }
+
   if (usesOllamaDialect(providerKey)) {
     requestBody.think = false;
   } else {
-    requestBody.reasoning_effort = minimalReasoningEffort(providerKey);
+    requestBody.reasoning_effort = "none";
   }
-
-  if (isLocalServer(providerKey)) {
-    requestBody.chat_template_kwargs = { enable_thinking: false };
-  }
+  requestBody.chat_template_kwargs = { enable_thinking: false };
 }
 
 export function applyThinkingSuppression(
