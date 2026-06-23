@@ -14,20 +14,36 @@ function usesOllamaDialect(providerKey: string): boolean {
   return window.localStorage?.getItem("remoteReasoningType") !== "openai-compatible";
 }
 
-// Groq and custom OpenAI-compatible endpoints (e.g. Cerebras) do strict request
-// validation: both reject `chat_template_kwargs`, and only accept reasoning_effort
-// `low` | `medium` | `high` (not `none`). Verified against the live Groq and
-// Cerebras `gpt-oss-120b` APIs. For these providers send the lowest accepted
-// effort and omit `chat_template_kwargs`. Every other provider is left unchanged.
-const STRICT_REASONING_PROVIDERS = new Set(["groq", "custom"]);
+// Endpoints with strict OpenAI-compatible validation that reject BOTH
+// `chat_template_kwargs` and `reasoning_effort: "none"` — they only accept
+// `low` | `medium` | `high`. Verified against the live Groq and Cerebras
+// `gpt-oss-120b` APIs.
+//
+// `groq` is a first-class provider. Cerebras is configured as a custom
+// OpenAI-compatible endpoint, so it is matched by URL only — other custom
+// endpoints (e.g. self-hosted vLLM / SGLang, which DO accept
+// `chat_template_kwargs`) must keep their existing behaviour.
+function isStrictReasoningEndpoint(providerKey: string, config: ReasoningConfig): boolean {
+  if (providerKey === "groq") return true;
+  if (providerKey === "custom") {
+    return (config.baseUrl ?? "").toLowerCase().includes("cerebras.ai");
+  }
+  return false;
+}
 
-function suppressThinking(requestBody: Record<string, unknown>, providerKey: string): void {
+function suppressThinking(
+  requestBody: Record<string, unknown>,
+  providerKey: string,
+  strict: boolean
+): void {
   if (providerKey === "gemini") {
     requestBody.reasoning_effort = "minimal";
     return;
   }
 
-  if (STRICT_REASONING_PROVIDERS.has(providerKey)) {
+  if (strict) {
+    // Groq / Cerebras: send the lowest accepted effort and omit
+    // `chat_template_kwargs` (both rejected by these endpoints).
     requestBody.reasoning_effort = "low";
     return;
   }
@@ -47,10 +63,11 @@ export function applyThinkingSuppression(
   config: ReasoningConfig
 ): void {
   const providerKey = provider.toLowerCase();
+  const strict = isStrictReasoningEndpoint(providerKey, config);
   const cloudModel = getCloudModel(model);
 
   if (cloudModel?.disableThinking && providerKey === "groq") {
-    suppressThinking(requestBody, providerKey);
+    suppressThinking(requestBody, providerKey, strict);
     return;
   }
 
@@ -60,5 +77,5 @@ export function applyThinkingSuppression(
   const knownModel = cloudModel || localModel;
   if (knownModel && !knownModel.supportsThinking) return;
 
-  suppressThinking(requestBody, providerKey);
+  suppressThinking(requestBody, providerKey, strict);
 }
