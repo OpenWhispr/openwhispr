@@ -174,9 +174,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     setAccessibilitySkipped,
   ]);
 
-  // Dynamic flow: signed-in users get permissions folded into "setup"; the
-  // meeting step only appears when it's relevant to the user.
-  const showMeetingStep = systemAudio.granted || onboardingUseCases.includes(USE_CASE_IDS.meetings);
+  // Dynamic flow: signed-in users get permissions folded into "setup".
+  // The meeting step is temporarily hidden for all users while it gets more
+  // design polish — the step's render code and MeetingSetupStep stay in place.
+  // Restore by reinstating the relevance check:
+  //   systemAudio.granted || onboardingUseCases.includes(USE_CASE_IDS.meetings)
+  const showMeetingStep = false;
 
   const steps = useMemo(() => {
     const list = [
