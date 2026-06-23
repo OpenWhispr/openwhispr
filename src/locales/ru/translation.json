@@ -1314,7 +1314,10 @@
         "linuxPttPermissionDescription": "Выполните команду и перезайдите: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Для режима «Удерживать для речи» нужна настройка",
         "linuxPttSetupDescription": "Вашему пользователю нужен доступ к устройствам ввода с клавиатуры.",
-        "linuxPttSetupNote": "После выполнения команды выйдите из системы и войдите снова."
+        "linuxPttSetupNote": "После выполнения команды выйдите из системы и войдите снова.",
+        "hyprlandConfigWriteWarningTitle": "Привязки клавиш Hyprland не будут сохраняться",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr не может записывать в {{path}}, поэтому привязки клавиш не сохранятся после перезагрузки конфигурации Hyprland. Убедитесь, что файл существует и доступен для записи.",
+        "hyprlandUnbindDescription": "В Hyprland OpenWhispr резервирует выбранное сочетание клавиш. Любая существующая привязка Hyprland, использующая ту же комбинацию, будет удалена, когда OpenWhispr зарегистрирует своё сочетание."
       },
       "meetingHotkey": {
         "title": "Горячая клавиша режима встречи",
