@@ -1140,7 +1140,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   chatAgentCustomApiKey: readString("chatAgentCustomApiKey", ""),
 
   dictationAgentMode: (() => {
-    const v = readString("dictationAgentMode", "");
+    const v = readString("dictationAgentMode", "openwhispr");
     if (
       v === "openwhispr" ||
       v === "providers" ||
@@ -1149,11 +1149,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       v === "enterprise"
     )
       return v;
-    return "providers" as InferenceMode;
+    return "openwhispr" as InferenceMode;
   })(),
   dictationAgentProvider: readString("dictationAgentProvider", ""),
   dictationAgentModel: readString("dictationAgentModel", ""),
-  dictationAgentCloudMode: readString("dictationAgentCloudMode", ""),
+  dictationAgentCloudMode: readString("dictationAgentCloudMode", "openwhispr"),
   dictationAgentCloudBaseUrl: readString("dictationAgentCloudBaseUrl", ""),
   dictationAgentRemoteUrl: readString("dictationAgentRemoteUrl", ""),
   dictationAgentCustomApiKey: readString("dictationAgentCustomApiKey", ""),
