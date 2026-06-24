@@ -166,7 +166,7 @@
       "welcome": "Benvenuto",
       "setup": "Configurazione",
       "permissions": "Permessi",
-      "activation": "Attivazione",
+      "activation": "Dettatura",
       "useCase": "Su di te",
       "meeting": "Riunioni",
       "finish": "Fine",
@@ -205,7 +205,7 @@
       "preferredLanguage": "Lingua preferita"
     },
     "activation": {
-      "title": "Configurazione attivazione",
+      "title": "Configurazione dettatura",
       "description": "Configura come avviare la dettatura",
       "hotkey": "Scorciatoia",
       "mode": "Modalità",
@@ -217,10 +217,19 @@
       "textareaPlaceholder": "Clicca qui e usa la scorciatoia per dettare..."
     },
     "voiceAgent": {
-      "title": "Scorciatoia dell'agente vocale",
+      "title": "Configurazione dell'agente vocale",
       "description": "Parla con il tuo agente IA con un solo tasto",
       "hotkey": "Scorciatoia",
       "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. {{agentName}} scrive il risultato dove si trova il cursore. Non serve dire prima “Hey {{agentName}}”.",
+      "test": "Provalo",
+      "testInstruction": "Fai clic qui sotto, premi {{hotkey}} e pronuncia un comando",
+      "testSetHotkey": "Imposta una scorciatoia sopra per provarlo",
+      "testPlaceholder": "Fai clic qui, premi la tua scorciatoia e pronuncia uno degli esempi...",
+      "examples": [
+        "Traduci in italiano: «Parlo più velocemente di quanto scrivo»",
+        "Scrivi una breve email al mio capo dicendogli che voglio una promozione, si chiama Mark",
+        "Quanto fa 5 × 5?"
+      ],
       "optionalNote": "Facoltativo — puoi impostarla o modificarla in qualsiasi momento nelle impostazioni."
     },
     "connectivity": {

@@ -145,7 +145,7 @@
       "welcome": "Boas-vindas",
       "setup": "Configuração",
       "permissions": "Permissões",
-      "activation": "Ativação",
+      "activation": "Ditado",
       "useCase": "Sobre você",
       "meeting": "Reuniões",
       "finish": "Concluir",
@@ -184,7 +184,7 @@
       "preferredLanguage": "Idioma preferido"
     },
     "activation": {
-      "title": "Configuração de ativação",
+      "title": "Configuração de ditado",
       "description": "Configure como acionar o ditado",
       "hotkey": "Atalho",
       "mode": "Modo",
@@ -196,10 +196,19 @@
       "textareaPlaceholder": "Clique aqui e use seu atalho para ditar..."
     },
     "voiceAgent": {
-      "title": "Atalho do agente de voz",
+      "title": "Configuração do agente de voz",
       "description": "Fale com seu agente de IA com um único atalho",
       "hotkey": "Atalho",
       "howItWorks": "Pressione a tecla e diga o que quer — por exemplo, “escreva uma breve nota de agradecimento”. {{agentName}} escreve o resultado onde estiver o cursor. Não precisa dizer “Hey {{agentName}}” antes.",
+      "test": "Experimente",
+      "testInstruction": "Clique abaixo, pressione {{hotkey}} e diga um comando",
+      "testSetHotkey": "Defina um atalho acima para experimentar",
+      "testPlaceholder": "Clique aqui, pressione seu atalho e diga um dos exemplos...",
+      "examples": [
+        "Traduza para o italiano: «Falo mais rápido do que escrevo»",
+        "Escreva um e-mail curto para o meu chefe dizendo que quero uma promoção, ele se chama Mark",
+        "Quanto é 5 × 5?"
+      ],
       "optionalNote": "Opcional — você pode definir ou alterar a qualquer momento nas configurações."
     },
     "connectivity": {

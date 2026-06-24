@@ -166,7 +166,7 @@
       "welcome": "歡迎",
       "setup": "設定",
       "permissions": "權限",
-      "activation": "啟用",
+      "activation": "聽寫",
       "useCase": "關於你",
       "meeting": "會議",
       "finish": "完成",
@@ -205,7 +205,7 @@
       "preferredLanguage": "偏好語言"
     },
     "activation": {
-      "title": "啟用設定",
+      "title": "聽寫設定",
       "description": "設定觸發語音輸入的方式",
       "hotkey": "快捷鍵",
       "mode": "模式",
@@ -217,10 +217,19 @@
       "textareaPlaceholder": "點擊這裡，然後使用快捷鍵開始語音輸入..."
     },
     "voiceAgent": {
-      "title": "語音助手快捷鍵",
+      "title": "語音助手設定",
       "description": "一鍵喚起你的 AI 助手",
       "hotkey": "快捷鍵",
       "howItWorks": "按下快捷鍵，說出你想要的內容，例如「寫一段簡短的感謝語」。{{agentName}} 會把結果輸入到游標所在的位置。無需先說「Hey {{agentName}}」。",
+      "test": "試試看",
+      "testInstruction": "點擊下方，按下 {{hotkey}} 並說出指令",
+      "testSetHotkey": "在上方設定快捷鍵即可試用",
+      "testPlaceholder": "點擊這裡，按下快捷鍵並說出其中一個範例...",
+      "examples": [
+        "翻譯成義大利文:「我說話比打字快」",
+        "給我的老闆寫一封簡短的郵件,告訴他我想要升職,他叫 Mark",
+        "5 × 5 等於多少?"
+      ],
       "optionalNote": "選用——你可以隨時在設定中新增或修改。"
     },
     "connectivity": {

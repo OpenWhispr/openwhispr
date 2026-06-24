@@ -166,7 +166,7 @@
       "welcome": "ようこそ",
       "setup": "セットアップ",
       "permissions": "権限",
-      "activation": "アクティベーション",
+      "activation": "ディクテーション",
       "useCase": "あなたについて",
       "meeting": "会議",
       "finish": "完了",
@@ -205,7 +205,7 @@
       "preferredLanguage": "優先言語"
     },
     "activation": {
-      "title": "アクティベーション設定",
+      "title": "ディクテーション設定",
       "description": "ディクテーションの起動方法を設定",
       "hotkey": "ホットキー",
       "mode": "モード",
@@ -217,10 +217,19 @@
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
     },
     "voiceAgent": {
-      "title": "ボイスエージェントホットキー",
+      "title": "ボイスエージェント設定",
       "description": "ワンキーでAIエージェントに話しかけられます",
       "hotkey": "ホットキー",
       "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えば、{{agentName}}がカーソル位置に結果を入力します。「Hey {{agentName}}」と言う必要はありません。",
+      "test": "試す",
+      "testInstruction": "下をクリックし、{{hotkey}} を押してコマンドを話してください",
+      "testSetHotkey": "上でホットキーを設定すると試せます",
+      "testPlaceholder": "ここをクリックし、ホットキーを押して例の一つを話してください...",
+      "examples": [
+        "イタリア語に翻訳して:「私はタイプするより話す方が速い」",
+        "上司に昇進したいと伝える短いメールを書いて、彼の名前はマークです",
+        "5 × 5 はいくつ?"
+      ],
       "optionalNote": "任意です。設定からいつでも追加・変更できます。"
     },
     "connectivity": {

@@ -166,7 +166,7 @@
       "welcome": "欢迎",
       "setup": "设置",
       "permissions": "权限",
-      "activation": "激活",
+      "activation": "听写",
       "useCase": "关于你",
       "meeting": "会议",
       "finish": "完成",
@@ -205,7 +205,7 @@
       "preferredLanguage": "首选语言"
     },
     "activation": {
-      "title": "激活设置",
+      "title": "听写设置",
       "description": "配置触发听写的方式",
       "hotkey": "快捷键",
       "mode": "模式",
@@ -217,10 +217,19 @@
       "textareaPlaceholder": "点击此处，然后使用快捷键进行听写..."
     },
     "voiceAgent": {
-      "title": "语音助手快捷键",
+      "title": "语音助手设置",
       "description": "一键唤起你的 AI 助手",
       "hotkey": "快捷键",
       "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。{{agentName}} 会把结果输入到光标所在的位置。无需先说“Hey {{agentName}}”。",
+      "test": "试一试",
+      "testInstruction": "点击下方，按下 {{hotkey}} 并说出指令",
+      "testSetHotkey": "在上方设置快捷键即可试用",
+      "testPlaceholder": "点击这里，按下快捷键并说出其中一个示例...",
+      "examples": [
+        "翻译成意大利语:“我说话比打字快”",
+        "给我的老板写一封简短的邮件,告诉他我想要升职,他叫 Mark",
+        "5 × 5 等于多少?"
+      ],
       "optionalNote": "可选——你可以随时在设置中添加或修改。"
     },
     "connectivity": {

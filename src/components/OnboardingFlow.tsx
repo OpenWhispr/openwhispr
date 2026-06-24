@@ -129,6 +129,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
     useHotkeyModeInfo("onboarding");
   const readableHotkey = formatHotkeyLabel(hotkey);
+  const readableVoiceAgentKey = formatHotkeyLabel(voiceAgentKey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
     useDialogs();
   const [connectivityDialog, setConnectivityDialog] = useState<{
@@ -825,6 +826,37 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             {t("onboarding.voiceAgent.howItWorks", { agentName })}
           </p>
         </div>
+      </div>
+
+      {/* Test area - minimal chrome */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            {t("onboarding.voiceAgent.test")}
+          </span>
+          <span className="text-xs text-muted-foreground/60">
+            {voiceAgentKey
+              ? t("onboarding.voiceAgent.testInstruction", { hotkey: readableVoiceAgentKey })
+              : t("onboarding.voiceAgent.testSetHotkey")}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {(t("onboarding.voiceAgent.examples", { returnObjects: true }) as string[]).map(
+            (example) => (
+              <span
+                key={example}
+                className="rounded-full border border-border-subtle bg-muted px-2.5 py-1 text-xs text-muted-foreground"
+              >
+                {example}
+              </span>
+            )
+          )}
+        </div>
+        <Textarea
+          rows={2}
+          placeholder={t("onboarding.voiceAgent.testPlaceholder")}
+          className="text-sm resize-none"
+        />
       </div>
 
       <p className="text-xs text-muted-foreground/60 text-center">

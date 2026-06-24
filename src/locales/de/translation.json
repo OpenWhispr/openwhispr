@@ -166,7 +166,7 @@
       "welcome": "Willkommen",
       "setup": "Einrichtung",
       "permissions": "Berechtigungen",
-      "activation": "Aktivierung",
+      "activation": "Diktat",
       "useCase": "Über dich",
       "meeting": "Meetings",
       "finish": "Fertig",
@@ -205,7 +205,7 @@
       "preferredLanguage": "Bevorzugte Sprache"
     },
     "activation": {
-      "title": "Aktivierungs-Einrichtung",
+      "title": "Diktat-Einrichtung",
       "description": "Legen Sie fest, wie Sie das Diktat auslösen",
       "hotkey": "Hotkey",
       "mode": "Modus",
@@ -217,10 +217,19 @@
       "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden..."
     },
     "voiceAgent": {
-      "title": "Sprachagent-Hotkey",
+      "title": "Sprachagent-Einrichtung",
       "description": "Sprechen Sie mit Ihrem KI-Agenten per Tastendruck",
       "hotkey": "Hotkey",
       "howItWorks": "Drücken Sie die Taste und sagen Sie, was Sie möchten — zum Beispiel „schreibe eine kurze Dankesnachricht“. {{agentName}} schreibt das Ergebnis direkt an Ihren Cursor. Sie müssen nicht zuerst „Hey {{agentName}}“ sagen.",
+      "test": "Ausprobieren",
+      "testInstruction": "Klicke unten, drücke {{hotkey}} und sprich einen Befehl",
+      "testSetHotkey": "Lege oben einen Hotkey fest, um es auszuprobieren",
+      "testPlaceholder": "Klicke hier, drücke deinen Hotkey und sprich eines der Beispiele...",
+      "examples": [
+        "Übersetze ins Italienische: „Ich spreche schneller, als ich tippe“",
+        "Schreibe eine kurze E-Mail an meinen Chef, dass ich eine Beförderung möchte, sein Name ist Mark",
+        "Was ist 5 × 5?"
+      ],
       "optionalNote": "Optional — Sie können ihn jederzeit in den Einstellungen festlegen oder ändern."
     },
     "connectivity": {
