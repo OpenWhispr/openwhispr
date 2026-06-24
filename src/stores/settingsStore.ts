@@ -31,6 +31,11 @@ let _ReasoningService: typeof import("../services/ReasoningService").default | n
 
 const isBrowser = typeof window !== "undefined";
 
+const notifyPanelDisplayChanged = (value: string): void => {
+  if (!isBrowser) return;
+  window.electronAPI?.notifyPanelDisplayChanged?.(value);
+};
+
 function readString(key: string, fallback: string): string {
   if (!isBrowser) return fallback;
   return localStorage.getItem(key) ?? fallback;
@@ -428,6 +433,7 @@ export interface SettingsState
   whisperVadSpeechPadMs: number;
   whisperVadSamplesOverlap: number;
   panelStartPosition: "bottom-right" | "center" | "bottom-left";
+  panelDisplay: string;
   showTranscriptionPreview: boolean;
   autoPasteEnabled: boolean;
   keepTranscriptionInClipboard: boolean;
@@ -646,6 +652,7 @@ export interface SettingsState
   setWhisperVadSpeechPadMs: (value: number) => void;
   setWhisperVadSamplesOverlap: (value: number) => void;
   setPanelStartPosition: (position: "bottom-right" | "center" | "bottom-left") => void;
+  setPanelDisplay: (value: string) => void;
   setShowTranscriptionPreview: (value: boolean) => void;
   setAutoPasteEnabled: (value: boolean) => void;
   setKeepTranscriptionInClipboard: (value: boolean) => void;
@@ -979,6 +986,35 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const v = readString("panelStartPosition", "bottom-right");
     if (v === "bottom-right" || v === "center" || v === "bottom-left") return v;
     return "bottom-right" as const;
+  })(),
+  panelDisplay: (() => {
+    const v = readString("panelDisplay", "auto");
+    if (v === "auto") return "auto";
+    // Accept only a JSON string describing { id, label, bounds }; anything else -> "auto".
+    try {
+      const parsed: unknown = JSON.parse(v);
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        typeof (parsed as { id?: unknown }).id === "number" &&
+        typeof (parsed as { label?: unknown }).label === "string"
+      ) {
+        const b = (parsed as { bounds?: unknown }).bounds;
+        if (
+          typeof b === "object" &&
+          b !== null &&
+          typeof (b as { x?: unknown }).x === "number" &&
+          typeof (b as { y?: unknown }).y === "number" &&
+          typeof (b as { width?: unknown }).width === "number" &&
+          typeof (b as { height?: unknown }).height === "number"
+        ) {
+          return v;
+        }
+      }
+    } catch {
+      // Malformed JSON falls through to the "auto" default.
+    }
+    return "auto";
   })(),
   showTranscriptionPreview: readBoolean("showTranscriptionPreview", false),
   autoPasteEnabled: readBoolean("autoPasteEnabled", true),
@@ -1573,6 +1609,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) {
       window.electronAPI?.notifyPanelStartPositionChanged?.(position);
     }
+  },
+  setPanelDisplay: (value: string) => {
+    if (get().panelDisplay === value) return;
+    if (isBrowser) localStorage.setItem("panelDisplay", value);
+    set({ panelDisplay: value });
+    notifyPanelDisplayChanged(value);
   },
 
   setShowTranscriptionPreview: createBooleanSetter("showTranscriptionPreview"),

@@ -5,6 +5,7 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
+const { AUTO_DISPLAY, sanitizePanelDisplayValue } = require("./displaySelection");
 
 const SECRET_KEYS = [
   "OPENAI_API_KEY",
@@ -46,6 +47,7 @@ const PERSISTED_KEYS = [
   "ACTIVATION_MODE",
   "FLOATING_ICON_AUTO_HIDE",
   "PANEL_START_POSITION",
+  "PANEL_DISPLAY",
   "START_MINIMIZED",
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
@@ -523,6 +525,29 @@ class EnvironmentManager {
 
   savePanelStartPosition(position) {
     const result = this._saveKey("PANEL_START_POSITION", position);
+    this.saveAllKeysToEnvFile().catch(() => {});
+    return result;
+  }
+
+  // Stored base64-encoded: the value is a JSON string whose '#'/'='/quotes
+  // would be mangled by the unquoted KEY=value .env writer. See PANEL_DISPLAY contract.
+  getPanelDisplay() {
+    const stored = this._getKey("PANEL_DISPLAY");
+    if (!stored) return AUTO_DISPLAY;
+    let decoded;
+    try {
+      decoded = Buffer.from(stored, "base64").toString("utf8");
+    } catch {
+      return AUTO_DISPLAY;
+    }
+    return sanitizePanelDisplayValue(decoded);
+  }
+
+  savePanelDisplay(value) {
+    const sanitized = sanitizePanelDisplayValue(value);
+    const encoded =
+      sanitized === AUTO_DISPLAY ? "" : Buffer.from(sanitized, "utf8").toString("base64");
+    const result = this._saveKey("PANEL_DISPLAY", encoded);
     this.saveAllKeysToEnvFile().catch(() => {});
     return result;
   }

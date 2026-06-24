@@ -1347,6 +1347,12 @@
         "title": "Ícone flutuante",
         "startPosition": "Posição inicial",
         "startPositionDescription": "Onde o painel de gravação de voz aparece na tela",
+        "display": "Monitor",
+        "displayDescription": "Escolha em qual monitor o widget de ditado aparece.",
+        "displayAuto": "Automático (seguir o cursor)",
+        "displayLabel": "Tela {{number}} — {{width}}×{{height}}",
+        "displayPrimary": "principal",
+        "displayDisconnected": "(desconectado)",
         "bottomRight": "Inferior direito",
         "center": "Inferior central",
         "bottomLeft": "Inferior esquerdo"

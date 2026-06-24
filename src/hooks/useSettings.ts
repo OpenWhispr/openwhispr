@@ -300,6 +300,8 @@ function useSettingsInternal() {
     setStartMinimized: store.setStartMinimized,
     panelStartPosition: store.panelStartPosition,
     setPanelStartPosition: store.setPanelStartPosition,
+    panelDisplay: store.panelDisplay,
+    setPanelDisplay: store.setPanelDisplay,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
     setPreferBuiltInMic: store.setPreferBuiltInMic,

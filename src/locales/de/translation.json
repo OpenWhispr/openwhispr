@@ -1368,6 +1368,12 @@
         "title": "Schwebendes Symbol",
         "startPosition": "Startposition",
         "startPositionDescription": "Wo das Sprachrekorder-Panel auf dem Bildschirm erscheint",
+        "display": "Monitor",
+        "displayDescription": "Wählen Sie aus, auf welchem Monitor das Diktat-Widget erscheint.",
+        "displayAuto": "Automatisch (Cursor folgen)",
+        "displayLabel": "Bildschirm {{number}} — {{width}}×{{height}}",
+        "displayPrimary": "primär",
+        "displayDisconnected": "(getrennt)",
         "bottomRight": "Unten rechts",
         "center": "Unten Mitte",
         "bottomLeft": "Unten links"
