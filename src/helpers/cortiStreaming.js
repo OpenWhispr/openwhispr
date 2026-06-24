@@ -25,7 +25,7 @@ class CortiStreaming {
     this.connectionTimeout = null;
     this.accumulatedText = "";
     this.completedSegments = [];
-    this.closeResolve = null;
+    this.pendingAck = null;
     this.isDisconnecting = false;
     this.configAccepted = false;
     this.preConfigBuffer = [];
@@ -121,9 +121,7 @@ class CortiStreaming {
           this.pendingReject = null;
           this.pendingResolve = null;
         }
-        if (this.closeResolve) {
-          this.closeResolve({ text: this.accumulatedText });
-        }
+        this.resolvePendingAck();
         this.cleanup();
         if (wasActive && !this.isDisconnecting) {
           this.onError?.(new Error(`Connection lost (code: ${code})`));
@@ -176,11 +174,15 @@ class CortiStreaming {
         break;
       }
 
-      case "delta_usage":
-        if (this.closeResolve) {
-          this.closeResolve({ text: this.accumulatedText });
-          this.closeResolve = null;
+      case "flushed":
+      case "ended":
+        if (this.pendingAck?.type === message.type) {
+          this.resolvePendingAck();
         }
+        break;
+
+      case "delta_usage":
+      case "usage":
         break;
 
       case "error":
@@ -235,34 +237,41 @@ class CortiStreaming {
     return true;
   }
 
+  // Resolves a single in-flight waitForAck (server ack or socket close).
+  resolvePendingAck() {
+    if (!this.pendingAck) return;
+    clearTimeout(this.pendingAck.timer);
+    this.pendingAck.resolve();
+    this.pendingAck = null;
+  }
+
+  waitForAck(type) {
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingAck = null;
+        resolve();
+      }, TERMINATION_TIMEOUT_MS);
+      this.pendingAck = { type, resolve, timer };
+    });
+  }
+
   async disconnect(closeStream = true) {
     if (!this.ws) return { text: this.accumulatedText };
 
     this.isDisconnecting = true;
 
     if (closeStream && this.ws.readyState === WebSocket.OPEN) {
-      // Flush buffered audio, wait for the trailing finals, then end the session.
+      // Corti's close handshake: flush buffered audio, wait for the trailing
+      // finals (`flushed`), then signal `end` and close cleanly.
       this.ws.send(JSON.stringify({ type: "flush" }));
-
-      let timeoutId;
-      const result = await Promise.race([
-        new Promise((resolve) => {
-          this.closeResolve = resolve;
-        }),
-        new Promise((resolve) => {
-          timeoutId = setTimeout(() => {
-            debugLogger.debug("Corti close timeout, using accumulated text");
-            resolve({ text: this.accumulatedText });
-          }, TERMINATION_TIMEOUT_MS);
-        }),
-      ]);
-      clearTimeout(timeoutId);
+      await this.waitForAck("flushed");
 
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send(JSON.stringify({ type: "end" }));
       }
-      this.closeResolve = null;
-      this.onSessionEnd?.({ text: result.text });
+
+      const result = { text: this.accumulatedText };
+      this.onSessionEnd?.(result);
       this.cleanup();
       this.isDisconnecting = false;
       return result;
@@ -282,7 +291,7 @@ class CortiStreaming {
 
     if (this.ws) {
       try {
-        this.ws.close();
+        this.ws.close(1000);
       } catch (err) {
         // Ignore close errors
       }
@@ -292,7 +301,7 @@ class CortiStreaming {
     this.isConnected = false;
     this.configAccepted = false;
     this.sessionId = null;
-    this.closeResolve = null;
+    this.resolvePendingAck();
   }
 
   getStatus() {
