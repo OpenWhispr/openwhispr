@@ -7294,7 +7294,20 @@ class IPCHandlers {
 
     ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {
       try {
-        await this._mintStoredCortiToken(options);
+        if (!this.cortiStreaming) {
+          this.cortiStreaming = new CortiStreaming();
+        }
+        if (this.cortiStreaming.hasWarmConnection() || this.cortiStreaming.isConnected) {
+          return { success: true, alreadyWarm: true };
+        }
+        const { token, environment, tenant } = await this._mintStoredCortiToken(options);
+        await this.cortiStreaming.warmup({
+          token,
+          environment,
+          tenant,
+          language: options.language,
+          keyterms: options.keyterms,
+        });
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message, code: error.code };
