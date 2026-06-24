@@ -70,6 +70,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     chunksCompleted: number;
   } | null>(null);
   const progressCleanupRef = useRef<(() => void) | null>(null);
+  const runIdRef = useRef(0);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string>("");
@@ -308,8 +309,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (personal) setSelectedFolderId(String(personal.id));
   };
 
+  const cancelTranscription = () => {
+    runIdRef.current++;
+    reset();
+  };
+
   const handleTranscribe = async () => {
     if (!file) return;
+    const runId = ++runIdRef.current;
     setState("transcribing");
     setError(null);
     setProgress(0);
@@ -371,6 +378,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         });
       }
 
+      if (runId !== runIdRef.current) return;
+
       if (progressRef.current) clearInterval(progressRef.current);
       if (progressCleanupRef.current) progressCleanupRef.current();
       progressCleanupRef.current = null;
@@ -385,6 +394,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             ? textFallback + (res.text.trim().split(/\s+/).length > 6 ? "..." : "")
             : file.name.replace(/\.[^.]+$/, "");
         const aiTitle = await generateTitle(res.text);
+        if (runId !== runIdRef.current) return;
         const title = aiTitle || fallbackTitle;
 
         const folderId = selectedFolderId ? Number(selectedFolderId) : null;
@@ -408,6 +418,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setState("error");
       }
     } catch (err) {
+      if (runId !== runIdRef.current) return;
       if (progressRef.current) clearInterval(progressRef.current);
       if (progressCleanupRef.current) progressCleanupRef.current();
       progressCleanupRef.current = null;
@@ -507,6 +518,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               getTranscribingLabel={getTranscribingLabel}
               file={file}
               chunkProgress={chunkProgress}
+              onCancel={cancelTranscription}
             />
           )}
 
@@ -894,6 +906,7 @@ interface TranscribingViewProps {
   getTranscribingLabel: () => string;
   file: { name: string; path: string; size: string; sizeBytes: number } | null;
   chunkProgress: { chunksTotal: number; chunksCompleted: number } | null;
+  onCancel: () => void;
 }
 
 function TranscribingView({
@@ -902,6 +915,7 @@ function TranscribingView({
   getTranscribingLabel,
   file,
   chunkProgress,
+  onCancel,
 }: TranscribingViewProps) {
   const hasChunkInfo = chunkProgress !== null && chunkProgress.chunksTotal > 0;
 
@@ -940,6 +954,14 @@ function TranscribingView({
       {!hasChunkInfo && file ? (
         <p className="text-xs text-foreground/20 mt-1 truncate max-w-50">{file.name}</p>
       ) : null}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onCancel}
+        className="h-7 text-xs text-foreground/30 mt-4"
+      >
+        {t("notes.upload.cancelTranscription")}
+      </Button>
     </div>
   );
 }

@@ -2067,6 +2067,7 @@
       "transcribingCloud": "Transcrevendo pela nuvem...",
       "transcribingLocal": "Transcrevendo localmente...",
       "transcribingProvider": "Transcrevendo via {{provider}}...",
+      "cancelTranscription": "Cancelar transcrição",
       "transcriptionComplete": "Transcrição concluída",
       "openNote": "Abrir nota",
       "uploadAnother": "Enviar outro",

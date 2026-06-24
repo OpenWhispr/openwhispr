@@ -2062,6 +2062,7 @@
       "transcribingCloud": "正在通过云端转录...",
       "transcribingLocal": "正在本地转录...",
       "transcribingProvider": "正在通过 {{provider}} 转录...",
+      "cancelTranscription": "取消转录",
       "transcriptionComplete": "转录完成",
       "openNote": "打开笔记",
       "uploadAnother": "上传另一个",

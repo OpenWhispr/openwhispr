@@ -2067,6 +2067,7 @@
       "transcribingCloud": "Wird über die Cloud transkribiert...",
       "transcribingLocal": "Wird lokal transkribiert...",
       "transcribingProvider": "Wird über {{provider}} transkribiert...",
+      "cancelTranscription": "Transkription abbrechen",
       "transcriptionComplete": "Transkription abgeschlossen",
       "openNote": "Notiz öffnen",
       "uploadAnother": "Weitere hochladen",

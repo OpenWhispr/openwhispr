@@ -2115,6 +2115,7 @@
       "transcribingCloud": "Transcribiendo en la nube...",
       "transcribingLocal": "Transcribiendo localmente...",
       "transcribingProvider": "Transcribiendo con {{provider}}...",
+      "cancelTranscription": "Cancelar transcripción",
       "transcriptionComplete": "Transcripción completada",
       "openNote": "Abrir nota",
       "uploadAnother": "Subir otro",

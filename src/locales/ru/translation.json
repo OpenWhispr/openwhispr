@@ -2067,6 +2067,7 @@
       "transcribingCloud": "Транскрибирование через облако...",
       "transcribingLocal": "Локальное транскрибирование...",
       "transcribingProvider": "Транскрибирование через {{provider}}...",
+      "cancelTranscription": "Отменить транскрибирование",
       "transcriptionComplete": "Транскрибирование завершено",
       "openNote": "Открыть заметку",
       "uploadAnother": "Загрузить ещё",

@@ -2050,6 +2050,7 @@
       "transcribingCloud": "クラウドで文字起こし中...",
       "transcribingLocal": "ローカルで文字起こし中...",
       "transcribingProvider": "{{provider}} で文字起こし中...",
+      "cancelTranscription": "文字起こしをキャンセル",
       "transcriptionComplete": "文字起こし完了",
       "openNote": "ノートを開く",
       "uploadAnother": "別のファイルをアップロード",

@@ -2062,6 +2062,7 @@
       "transcribingCloud": "透過雲端轉錄中...",
       "transcribingLocal": "本機轉錄中...",
       "transcribingProvider": "透過 {{provider}} 轉錄中...",
+      "cancelTranscription": "取消轉錄",
       "transcriptionComplete": "轉錄完成",
       "openNote": "開啟筆記",
       "uploadAnother": "上傳另一個",
