@@ -840,6 +840,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
     });
     const systemAudioHandledInMain =
       systemAudioMode !== "unsupported" && !isRendererSystemAudioStrategy(systemAudioStrategy);
+    if (systemAudioHandledInMain && systemCaptureResult.stream) {
+      stopMediaStream(systemCaptureResult.stream);
+      systemCaptureResult = { stream: null, error: null };
+    }
     const systemCaptureError = systemAudioHandledInMain ? null : systemCaptureResult.error;
 
     if (!micResult && (systemAudioHandledInMain || systemCaptureResult.stream)) {
@@ -1116,6 +1120,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
           { error: systemCaptureError.message },
           "meeting"
         );
+        if (micResult) {
+          useMeetingRecordingStore.setState({
+            error: "System audio capture failed. Continuing with microphone only.",
+          });
+        }
       }
     }
 

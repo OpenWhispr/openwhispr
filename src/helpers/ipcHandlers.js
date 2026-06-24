@@ -322,6 +322,7 @@ class IPCHandlers {
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
     this.audioTapManager = managers.audioTapManager;
     this.linuxPortalAudioManager = managers.linuxPortalAudioManager;
+    this.windowsLoopbackAudioManager = managers.windowsLoopbackAudioManager;
     this.meetingAecManager = managers.meetingAecManager;
     this.oauthProtocolRegistered = managers.oauthProtocolRegistered === true;
     this.oauthProtocol = managers.oauthProtocol || "openwhispr";
@@ -3448,14 +3449,27 @@ class IPCHandlers {
       });
     };
 
+    // System audio is always capturable on Windows: via the native WASAPI
+    // process-loopback helper when available (hears every output device),
+    // otherwise via Chromium's default-device loopback in the renderer.
+    const getWindowsSystemAudioAccess = async () => {
+      const capability = await this.windowsLoopbackAudioManager?.getCapability().catch(() => ({
+        available: false,
+      }));
+      const helperAvailable = !!capability?.available;
+
+      return buildSystemAudioAccess({
+        granted: true,
+        status: "granted",
+        mode: "loopback",
+        supportsNativeCapture: helperAvailable,
+        strategy: helperAvailable ? "wasapi-loopback" : "loopback",
+      });
+    };
+
     const getSystemAudioAccess = async () => {
       if (process.platform === "win32") {
-        return buildSystemAudioAccess({
-          granted: true,
-          status: "granted",
-          mode: "loopback",
-          strategy: "loopback",
-        });
+        return getWindowsSystemAudioAccess();
       }
 
       if (process.platform === "linux") {
@@ -3479,12 +3493,7 @@ class IPCHandlers {
 
     ipcMain.handle("request-system-audio-access", async () => {
       if (process.platform === "win32") {
-        return buildSystemAudioAccess({
-          granted: true,
-          status: "granted",
-          mode: "loopback",
-          strategy: "loopback",
-        });
+        return getWindowsSystemAudioAccess();
       }
 
       if (process.platform === "linux") {
@@ -4452,6 +4461,11 @@ class IPCHandlers {
         };
       }
 
+      if (process.platform === "win32") {
+        const windowsAccess = await getWindowsSystemAudioAccess();
+        return { mode: windowsAccess.mode, strategy: windowsAccess.strategy };
+      }
+
       if (mode === "loopback") {
         return { mode, strategy: "loopback" };
       }
@@ -5255,6 +5269,9 @@ class IPCHandlers {
       if (this.linuxPortalAudioManager) {
         await this.linuxPortalAudioManager.stop().catch(() => {});
       }
+      if (this.windowsLoopbackAudioManager) {
+        await this.windowsLoopbackAudioManager.stop().catch(() => {});
+      }
       await stopMeetingAec();
       await stopLiveSpeakerIdentification().catch(() => {});
       resetMeetingLocalState();
@@ -5552,23 +5569,9 @@ class IPCHandlers {
       }
     };
 
-    const startNativeMeetingSystemAudio = async (event) => {
+    const startManagedMeetingSystemAudio = (event, manager, warningLabel) => {
       const win = BrowserWindow.fromWebContents(event.sender);
-      await this.audioTapManager.start({
-        onChunk: (chunk) => {
-          sendMeetingAudio(chunk, "system");
-        },
-        onError: (error) => {
-          if (win && !win.isDestroyed()) {
-            win.webContents.send("meeting-transcription-error", error.message);
-          }
-        },
-      });
-    };
-
-    const startLinuxMeetingSystemAudio = async (event) => {
-      const win = BrowserWindow.fromWebContents(event.sender);
-      await this.linuxPortalAudioManager.start({
+      return manager.start({
         onChunk: (chunk) => {
           sendMeetingAudio(chunk, "system");
         },
@@ -5579,7 +5582,7 @@ class IPCHandlers {
         },
         onWarning: (warning) => {
           debugLogger.warn(
-            "Linux PipeWire system audio warning",
+            warningLabel,
             { code: warning.code, message: warning.message },
             "meeting"
           );
@@ -5609,7 +5612,11 @@ class IPCHandlers {
     ) => {
       if (systemAudioMode === "native") {
         try {
-          await startNativeMeetingSystemAudio(event);
+          await startManagedMeetingSystemAudio(
+            event,
+            this.audioTapManager,
+            "macOS system audio tap warning"
+          );
           return { systemAudioMode, systemAudioStrategy };
         } catch (error) {
           debugLogger.warn(
@@ -5622,12 +5629,36 @@ class IPCHandlers {
         }
       }
 
+      if (systemAudioStrategy === "wasapi-loopback") {
+        try {
+          await startManagedMeetingSystemAudio(
+            event,
+            this.windowsLoopbackAudioManager,
+            "Windows system audio warning"
+          );
+          return { systemAudioMode, systemAudioStrategy };
+        } catch (error) {
+          debugLogger.warn(
+            `Windows system audio helper failed ${context}, falling back to renderer loopback`,
+            { error: error.message },
+            "meeting"
+          );
+          // The renderer captures via Chromium's display-media loopback when
+          // it sees the downgraded strategy in the start result.
+          return { systemAudioMode, systemAudioStrategy: "loopback" };
+        }
+      }
+
       if (systemAudioStrategy !== "pipewire-loopback") {
         return { systemAudioMode, systemAudioStrategy };
       }
 
       try {
-        await startLinuxMeetingSystemAudio(event);
+        await startManagedMeetingSystemAudio(
+          event,
+          this.linuxPortalAudioManager,
+          "Linux PipeWire system audio warning"
+        );
         return { systemAudioMode, systemAudioStrategy };
       } catch (error) {
         debugLogger.warn(
@@ -5652,6 +5683,9 @@ class IPCHandlers {
         }
         if (this.linuxPortalAudioManager) {
           await this.linuxPortalAudioManager.stop().catch(() => {});
+        }
+        if (this.windowsLoopbackAudioManager) {
+          await this.windowsLoopbackAudioManager.stop().catch(() => {});
         }
 
         flushPendingMeetingMicChunks(true);

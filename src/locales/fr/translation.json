@@ -1357,7 +1357,10 @@
         "linuxPttPermissionDescription": "Exécutez cette commande et déconnectez-vous : sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Maintenir pour parler nécessite une configuration",
         "linuxPttSetupDescription": "Votre utilisateur a besoin d'accéder aux périphériques de saisie clavier.",
-        "linuxPttSetupNote": "Après avoir exécuté la commande, déconnectez-vous et reconnectez-vous."
+        "linuxPttSetupNote": "Après avoir exécuté la commande, déconnectez-vous et reconnectez-vous.",
+        "hyprlandConfigWriteWarningTitle": "Les raccourcis Hyprland ne seront pas conservés",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr ne peut pas écrire dans {{path}}, les raccourcis ne survivront donc pas à un rechargement de la configuration Hyprland. Assurez-vous que le fichier existe et qu'il est accessible en écriture.",
+        "hyprlandUnbindDescription": "Sous Hyprland, OpenWhispr revendique le raccourci sélectionné. Toute association Hyprland existante utilisant la même combinaison de touches sera supprimée lorsque OpenWhispr enregistrera son raccourci."
       },
       "meetingHotkey": {
         "title": "Raccourci mode réunion",

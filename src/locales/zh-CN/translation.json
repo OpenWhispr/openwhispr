@@ -1304,7 +1304,10 @@
         "linuxPttPermissionDescription": "运行此命令并重新登录：sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "按住说话需要设置",
         "linuxPttSetupDescription": "您的用户需要访问键盘输入设备的权限。",
-        "linuxPttSetupNote": "运行命令后，请注销并重新登录。"
+        "linuxPttSetupNote": "运行命令后，请注销并重新登录。",
+        "hyprlandConfigWriteWarningTitle": "Hyprland 快捷键将不会保留",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr 无法写入 {{path}}，因此快捷键在 Hyprland 配置重新加载后将无法保留。请确保该文件存在且可写入。",
+        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 会占用所选的快捷键。当 OpenWhispr 注册其快捷键时，任何使用相同按键组合的现有 Hyprland 绑定都将被解除。"
       },
       "meetingHotkey": {
         "title": "会议模式快捷键",

@@ -1309,7 +1309,10 @@
         "linuxPttPermissionDescription": "Führen Sie diesen Befehl aus und melden Sie sich ab/an: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Gedrückt halten zum Sprechen erfordert Einrichtung",
         "linuxPttSetupDescription": "Ihr Benutzer benötigt Zugriff auf die Tastatureingabegeräte.",
-        "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls ab und wieder an."
+        "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls ab und wieder an.",
+        "hyprlandConfigWriteWarningTitle": "Hyprland-Tastenkürzel bleiben nicht erhalten",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr kann nicht in {{path}} schreiben, daher überstehen die Tastenkürzel kein erneutes Laden der Hyprland-Konfiguration. Stelle sicher, dass die Datei existiert und beschreibbar ist.",
+        "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr das ausgewählte Tastenkürzel. Jede vorhandene Hyprland-Bindung mit derselben Tastenkombination wird aufgehoben, sobald OpenWhispr sein Tastenkürzel registriert."
       },
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",

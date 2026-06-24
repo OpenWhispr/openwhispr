@@ -1309,7 +1309,10 @@
         "linuxPttPermissionDescription": "次のコマンドを実行してログアウト/ログインしてください：sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "長押しして話すには設定が必要です",
         "linuxPttSetupDescription": "キーボード入力デバイスへのアクセス権が必要です。",
-        "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。"
+        "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。",
+        "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは保持されません",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr が {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは失われます。ファイルが存在し、書き込み可能であることを確認してください。",
+        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを占有します。同じキーの組み合わせを使用している既存の Hyprland バインドは、OpenWhispr がショートカットを登録するときに解除されます。"
       },
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",

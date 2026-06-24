@@ -117,6 +117,7 @@
         "meeting-aec-helper-*",
         "windows-key-listener*",
         "windows-mic-listener*",
+        "windows-system-audio-helper*",
         "windows-text-monitor*",
         "windows-fast-paste*",
         "all-MiniLM-L6-v2/**/*",
