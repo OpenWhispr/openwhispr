@@ -186,6 +186,21 @@ function migratePreferredLanguage() {
 
 migratePreferredLanguage();
 
+// Map the underlying transcription fields to the InferenceMode the Settings
+// tabs select on. Single source of truth shared by the provider-settings
+// migration and the onboarding "use this provider everywhere" action.
+function deriveTranscriptionMode(
+  useLocalWhisper: boolean,
+  cloudTranscriptionMode: string | null,
+  cloudTranscriptionProvider: string | null
+): InferenceMode {
+  if (useLocalWhisper) return "local";
+  if (cloudTranscriptionMode === "byok") {
+    return cloudTranscriptionProvider === "custom" ? "self-hosted" : "providers";
+  }
+  return "openwhispr";
+}
+
 function migrateProviderSettings() {
   if (!isBrowser) return;
   if (localStorage.getItem("_providerSettingsMigrated") === "1") return;
@@ -194,12 +209,7 @@ function migrateProviderSettings() {
   const useLocal = localStorage.getItem("useLocalWhisper") === "true";
   const provider = localStorage.getItem("cloudTranscriptionProvider");
 
-  let transcriptionMode: InferenceMode = "openwhispr";
-  if (useLocal) {
-    transcriptionMode = "local";
-  } else if (cloudMode === "byok") {
-    transcriptionMode = provider === "custom" ? "self-hosted" : "providers";
-  }
+  const transcriptionMode = deriveTranscriptionMode(useLocal, cloudMode, provider);
   localStorage.setItem("transcriptionMode", transcriptionMode);
 
   if (provider === "custom" && cloudMode === "byok") {
@@ -653,6 +663,7 @@ export interface SettingsState
   setChatAgentCustomApiKey: (key: string) => void;
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
+  setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => void;
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => void;
   updateApiKeys: (keys: Partial<ApiKeySettings>) => void;
   updateChatAgentSettings: (settings: Partial<ChatAgentSettings>) => void;
@@ -1619,6 +1630,39 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setAssemblyAiStreaming(settings.assemblyAiStreaming);
     if (settings.showTranscriptionPreview !== undefined)
       s.setShowTranscriptionPreview(settings.showTranscriptionPreview);
+  },
+
+  // Apply a transcription config to dictation, then mirror its cloud routing to
+  // note recording and audio upload — used when onboarding picks one provider
+  // for everything (e.g. Corti for medical providers).
+  setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => {
+    const s = useSettingsStore.getState();
+    s.updateTranscriptionSettings(settings);
+    const {
+      useLocalWhisper,
+      cloudTranscriptionMode,
+      cloudTranscriptionProvider,
+      cloudTranscriptionModel,
+    } = useSettingsStore.getState();
+    // Each Settings tab selects on its InferenceMode field, so set it for every
+    // scope — otherwise the UI keeps showing the previous mode (e.g. OpenWhispr
+    // Cloud) even though the cloud routing now points at the new provider.
+    const mode = deriveTranscriptionMode(
+      useLocalWhisper,
+      cloudTranscriptionMode,
+      cloudTranscriptionProvider
+    );
+    s.setTranscriptionMode(mode);
+    s.setMeetingTranscriptionMode(mode);
+    s.setUploadTranscriptionMode(mode);
+    s.setMeetingUseLocalWhisper(useLocalWhisper);
+    s.setMeetingCloudTranscriptionMode(cloudTranscriptionMode);
+    s.setMeetingCloudTranscriptionProvider(cloudTranscriptionProvider);
+    s.setMeetingCloudTranscriptionModel(cloudTranscriptionModel);
+    s.setUploadUseLocalWhisper(useLocalWhisper);
+    s.setUploadCloudTranscriptionMode(cloudTranscriptionMode);
+    s.setUploadCloudTranscriptionProvider(cloudTranscriptionProvider);
+    s.setUploadCloudTranscriptionModel(cloudTranscriptionModel);
   },
 
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => {

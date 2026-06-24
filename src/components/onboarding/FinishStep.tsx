@@ -5,7 +5,6 @@ import { Button } from "../ui/button";
 import ApiKeyInput from "../ui/ApiKeyInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { getTranscriptionProviders } from "../../models/ModelRegistry";
-import { useSettings } from "../../hooks/useSettings";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { USE_CASE_IDS } from "./useCases";
 
@@ -26,7 +25,9 @@ export default function FinishStep({
   isFinishing,
 }: FinishStepProps) {
   const { t } = useTranslation();
-  const { updateTranscriptionSettings } = useSettings();
+  const setCloudTranscriptionForAllScopes = useSettingsStore(
+    (s) => s.setCloudTranscriptionForAllScopes
+  );
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
@@ -44,7 +45,7 @@ export default function FinishStep({
     cortiClientId.trim().length > 0 && cortiClientSecret.trim().length > 0;
 
   const startWithCorti = () => {
-    updateTranscriptionSettings({
+    setCloudTranscriptionForAllScopes({
       useLocalWhisper: false,
       cloudTranscriptionMode: "byok",
       cloudTranscriptionProvider: "corti",
