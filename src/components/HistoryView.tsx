@@ -72,22 +72,24 @@ export default function HistoryView({
     return groups;
   }, [history, t]);
 
+  const discardedToggle = (
+    <button
+      onClick={onToggleDiscarded}
+      className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/60 hover:!text-foreground hover:!bg-black/5 dark:hover:!bg-white/5 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
+    >
+      <Archive size={11} />
+      <span>
+        {showDiscarded
+          ? t("controlPanel.history.discarded.hide")
+          : t("controlPanel.history.discarded.show")}
+      </span>
+    </button>
+  );
+
   return (
     <div className="px-4 pt-4 pb-6">
       <div className={cn("mx-auto", isConnected ? "max-w-5xl" : "max-w-3xl")}>
-        <div className="mb-2 flex justify-end">
-          <button
-            onClick={onToggleDiscarded}
-            className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Archive size={12} />
-            <span>
-              {showDiscarded
-                ? t("controlPanel.history.discarded.hide")
-                : t("controlPanel.history.discarded.show")}
-            </span>
-          </button>
-        </div>
+        {history.length === 0 && <div className="mb-2 flex justify-end">{discardedToggle}</div>}
         {showCloudMigrationBanner && (
           <div className="mb-3 relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
             <button
@@ -182,7 +184,7 @@ export default function HistoryView({
                 </p>
               </div>
             )}
-            {isLoading ? (
+            {isLoading && history.length === 0 ? (
               <div className="rounded-lg border border-border bg-card/50 dark:bg-card/60 backdrop-blur-sm">
                 <div className="flex items-center justify-center gap-2 py-8">
                   <Loader2 size={14} className="animate-spin text-primary" />
@@ -297,13 +299,16 @@ export default function HistoryView({
                         {group.label}
                       </span>
                       {index === 0 && (
-                        <button
-                          onClick={clearAllTranscriptions}
-                          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 hover:!text-destructive hover:!bg-destructive/8 dark:hover:!bg-destructive/10 active:scale-[0.98] focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
-                        >
-                          <Trash2 size={11} />
-                          <span>{t("controlPanel.history.clearAll")}</span>
-                        </button>
+                        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-200">
+                          {discardedToggle}
+                          <button
+                            onClick={clearAllTranscriptions}
+                            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground/60 hover:!text-destructive hover:!bg-destructive/8 dark:hover:!bg-destructive/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/30 transition-all duration-200"
+                          >
+                            <Trash2 size={11} />
+                            <span>{t("controlPanel.history.clearAll")}</span>
+                          </button>
+                        </div>
                       )}
                     </div>
                     <div className="space-y-1.5 relative z-0">
