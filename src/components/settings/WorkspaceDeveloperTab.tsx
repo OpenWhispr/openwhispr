@@ -6,6 +6,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { useToast } from "../ui/useToast";
 import {
+  ConfirmDialog,
   Dialog,
   DialogContent,
   DialogHeader,
@@ -13,6 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "../ui/dialog";
+import { useDialogs } from "../../hooks/useDialogs";
 import { WorkspaceApiKeysService } from "../../services/WorkspaceApiKeysService";
 import type { Workspace, WorkspaceApiKey, NewWorkspaceApiKey } from "../../types/electron";
 import { cn } from "../lib/utils";
@@ -21,45 +23,46 @@ interface Props {
   workspace: Workspace;
 }
 
-const SCOPE_GROUPS: { title: string; scopes: { id: string; label: string }[] }[] = [
+const SCOPE_GROUPS_DEF: { groupKey: string; scopes: { id: string; labelKey: string }[] }[] = [
   {
-    title: "Notes",
+    groupKey: "notes",
     scopes: [
-      { id: "workspace:notes:read", label: "Read notes" },
-      { id: "workspace:notes:write", label: "Write notes" },
+      { id: "workspace:notes:read", labelKey: "read" },
+      { id: "workspace:notes:write", labelKey: "write" },
     ],
   },
   {
-    title: "Folders",
+    groupKey: "folders",
     scopes: [
-      { id: "workspace:folders:read", label: "Read folders" },
-      { id: "workspace:folders:write", label: "Write folders" },
+      { id: "workspace:folders:read", labelKey: "read" },
+      { id: "workspace:folders:write", labelKey: "write" },
     ],
   },
   {
-    title: "Transcriptions",
-    scopes: [{ id: "workspace:transcriptions:read", label: "Read transcriptions" }],
+    groupKey: "transcriptions",
+    scopes: [{ id: "workspace:transcriptions:read", labelKey: "read" }],
   },
   {
-    title: "Members",
+    groupKey: "members",
     scopes: [
-      { id: "workspace:members:read", label: "Read members" },
-      { id: "workspace:members:write", label: "Manage members" },
+      { id: "workspace:members:read", labelKey: "read" },
+      { id: "workspace:members:write", labelKey: "write" },
     ],
   },
   {
-    title: "Billing",
-    scopes: [{ id: "workspace:billing:read", label: "Read billing" }],
+    groupKey: "billing",
+    scopes: [{ id: "workspace:billing:read", labelKey: "read" }],
   },
   {
-    title: "Full access",
-    scopes: [{ id: "workspace:*", label: "Workspace admin" }],
+    groupKey: "full",
+    scopes: [{ id: "workspace:*", labelKey: "admin" }],
   },
 ];
 
 export default function WorkspaceDeveloperTab({ workspace }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const [keys, setKeys] = useState<WorkspaceApiKey[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [newKey, setNewKey] = useState<NewWorkspaceApiKey | null>(null);
@@ -116,17 +119,27 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
     }
   }
 
-  async function handleRevoke(keyId: string) {
-    try {
-      await WorkspaceApiKeysService.revoke(workspace.id, keyId);
-      await refresh();
-    } catch (error) {
-      toast({
-        title: t("common.error"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
-      });
-    }
+  function confirmRevoke(key: WorkspaceApiKey) {
+    showConfirmDialog({
+      title: t("settingsPage.workspace.developer.revokeConfirm.title"),
+      description: t("settingsPage.workspace.developer.revokeConfirm.description", {
+        name: key.name,
+      }),
+      confirmText: t("settingsPage.workspace.developer.revoke"),
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await WorkspaceApiKeysService.revoke(workspace.id, key.id);
+          await refresh();
+        } catch (error) {
+          toast({
+            title: t("common.error"),
+            description: error instanceof Error ? error.message : t("common.unknownError"),
+            variant: "destructive",
+          });
+        }
+      },
+    });
   }
 
   async function handleCopy() {
@@ -182,7 +195,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
             {canManage && (
               <button
                 type="button"
-                onClick={() => handleRevoke(k.id)}
+                onClick={() => confirmRevoke(k)}
                 aria-label={t("settingsPage.workspace.developer.revoke")}
                 className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
               >
@@ -216,10 +229,10 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
               />
             </div>
             <div className="space-y-2 max-h-72 overflow-y-auto">
-              {SCOPE_GROUPS.map((group) => (
-                <div key={group.title} className="space-y-1.5">
+              {SCOPE_GROUPS_DEF.map((group) => (
+                <div key={group.groupKey} className="space-y-1.5">
                   <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">
-                    {group.title}
+                    {t(`settingsPage.workspace.developer.scopes.${group.groupKey}.title`)}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {group.scopes.map((s) => {
@@ -237,7 +250,9 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                               : "border-border/60 text-muted-foreground hover:bg-foreground/4 hover:text-foreground"
                           )}
                         >
-                          {s.label}
+                          {t(
+                            `settingsPage.workspace.developer.scopes.${group.groupKey}.${s.labelKey}`
+                          )}
                         </button>
                       );
                     })}
@@ -264,6 +279,17 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => !open && hideConfirmDialog()}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        onConfirm={confirmDialog.onConfirm}
+        variant={confirmDialog.variant}
+      />
 
       <Dialog open={!!newKey} onOpenChange={(open) => !open && setNewKey(null)}>
         <DialogContent className="max-w-lg">

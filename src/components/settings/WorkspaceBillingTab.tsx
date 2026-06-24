@@ -11,12 +11,6 @@ interface Props {
   workspace: Workspace;
 }
 
-const PLAN_LABELS: Record<string, string> = {
-  business: "Business",
-  pro: "Pro",
-  free: "Free",
-};
-
 export default function WorkspaceBillingTab({ workspace }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -78,7 +72,9 @@ export default function WorkspaceBillingTab({ workspace }: Props) {
               {t("settingsPage.workspace.billing.plan")}
             </p>
             <p className="text-base font-semibold text-foreground">
-              {PLAN_LABELS[workspace.plan] || workspace.plan}
+              {t(`settingsPage.workspace.billing.planLabel.${workspace.plan}`, {
+                defaultValue: workspace.plan,
+              })}
             </p>
           </div>
           <span
@@ -91,7 +87,9 @@ export default function WorkspaceBillingTab({ workspace }: Props) {
                   : "bg-foreground/8 text-foreground/65")
             }
           >
-            {workspace.status}
+            {t(`settingsPage.workspace.billing.status.${workspace.status}`, {
+              defaultValue: workspace.status,
+            })}
           </span>
         </div>
 

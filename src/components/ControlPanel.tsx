@@ -47,7 +47,6 @@ import AcceptInvitationModal, {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
 } from "./AcceptInvitationModal";
-import { WORKSPACES_ENABLED } from "../lib/features";
 
 const platform = getCachedPlatform();
 
@@ -252,7 +251,6 @@ export default function ControlPanel() {
   }, [usage?.isPastDue, usage?.hasLoaded, toast, t]);
 
   useEffect(() => {
-    if (!WORKSPACES_ENABLED) return;
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
       setInvitationToken(token);
     });
@@ -260,7 +258,7 @@ export default function ControlPanel() {
   }, []);
 
   useEffect(() => {
-    if (!WORKSPACES_ENABLED || !authLoaded || !isSignedIn) return;
+    if (!authLoaded || !isSignedIn) return;
     const pending = consumePendingInvitationToken();
     if (pending) {
       setInvitationToken(pending);
@@ -697,16 +695,14 @@ export default function ControlPanel() {
         </Suspense>
       )}
 
-      {WORKSPACES_ENABLED && (
-        <AcceptInvitationModal
-          token={invitationToken}
-          onClose={() => setInvitationToken(null)}
-          isSignedIn={isSignedIn}
-          onSignIn={() => {
-            setInvitationToken(null);
-          }}
-        />
-      )}
+      <AcceptInvitationModal
+        token={invitationToken}
+        onClose={() => setInvitationToken(null)}
+        isSignedIn={isSignedIn}
+        onSignIn={() => {
+          setInvitationToken(null);
+        }}
+      />
 
       {showSearch && (
         <Suspense fallback={null}>

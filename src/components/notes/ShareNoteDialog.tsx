@@ -15,6 +15,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { NoteSharingService } from "../../services/NoteSharingService.js";
 import { setShareCache, updateShareCache, useShareCacheEntry } from "../../stores/noteStore";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { useToast } from "../ui/useToast";
 import { emailDomain, isPersonalEmailDomain } from "../../utils/personalEmailDomains";
 import type {
   NoteItem,
@@ -42,6 +43,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
   // server-side flag in the share settings response.
   const isOwner = Boolean(user);
   const { t } = useTranslation();
+  const { toast } = useToast();
   const cloudId = note.cloud_id;
   const cached = useShareCacheEntry(cloudId);
   const [defaultVisibility, setDefaultVisibility] = useLocalStorage<ShareVisibility>(
@@ -80,7 +82,13 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
         });
       })
       .catch((err) => {
-        if (!cancelled) console.error("Failed to load share settings:", err);
+        if (cancelled) return;
+        console.error("Failed to load share settings:", err);
+        toast({
+          title: t("noteEditor.share.dialog.error.loadFailed"),
+          description: err instanceof Error ? err.message : t("common.unknownError"),
+          variant: "destructive",
+        });
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -88,7 +96,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     return () => {
       cancelled = true;
     };
-  }, [open, cloudId]);
+  }, [open, cloudId, t, toast]);
 
   // Apply the user's last-used visibility on first open of a still-private note.
   useEffect(() => {

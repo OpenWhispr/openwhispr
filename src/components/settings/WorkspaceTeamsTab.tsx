@@ -3,11 +3,19 @@ import { useTranslation } from "react-i18next";
 import { Plus, Users, Trash2 } from "lucide-react";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { TeamsService } from "../../services/TeamsService";
+import { useDialogs } from "../../hooks/useDialogs";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { useToast } from "../ui/useToast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
+import {
+  ConfirmDialog,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "../ui/dialog";
 import type { Workspace, Team } from "../../types/electron";
 
 interface Props {
@@ -17,6 +25,7 @@ interface Props {
 export default function WorkspaceTeamsTab({ workspace }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const teams = useWorkspaceStore((s) => s.teams);
   const refreshTeams = useWorkspaceStore((s) => s.refreshTeams);
   const [createOpen, setCreateOpen] = useState(false);
@@ -54,17 +63,25 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
     }
   }
 
-  async function handleDelete(team: Team) {
-    try {
-      await TeamsService.remove(team.id);
-      await refreshTeams(workspace.id);
-    } catch (error) {
-      toast({
-        title: t("common.error"),
-        description: error instanceof Error ? error.message : t("common.unknownError"),
-        variant: "destructive",
-      });
-    }
+  function confirmDelete(team: Team) {
+    showConfirmDialog({
+      title: t("settingsPage.workspace.teams.deleteConfirm.title"),
+      description: t("settingsPage.workspace.teams.deleteConfirm.description", { name: team.name }),
+      confirmText: t("common.delete"),
+      variant: "destructive",
+      onConfirm: async () => {
+        try {
+          await TeamsService.remove(team.id);
+          await refreshTeams(workspace.id);
+        } catch (error) {
+          toast({
+            title: t("common.error"),
+            description: error instanceof Error ? error.message : t("common.unknownError"),
+            variant: "destructive",
+          });
+        }
+      },
+    });
   }
 
   return (
@@ -114,7 +131,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
             {canManage && (
               <button
                 type="button"
-                onClick={() => handleDelete(team)}
+                onClick={() => confirmDelete(team)}
                 aria-label={t("common.delete")}
                 className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
               >
@@ -124,6 +141,17 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
           </div>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => !open && hideConfirmDialog()}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        onConfirm={confirmDialog.onConfirm}
+        variant={confirmDialog.variant}
+      />
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-md">

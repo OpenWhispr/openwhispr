@@ -23,7 +23,6 @@ import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import InviteTeammateDialog from "./InviteTeammateDialog";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import { useWorkspace } from "../hooks/useWorkspace";
-import { WORKSPACES_ENABLED } from "../lib/features";
 
 const platform = getCachedPlatform();
 
@@ -106,7 +105,7 @@ export default function ControlPanelSidebar({
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
       />
 
-      {WORKSPACES_ENABLED && isSignedIn && (
+      {isSignedIn && (
         <div className="px-2 pt-1 pb-1">
           <WorkspaceSwitcher userName={userName} />
         </div>
@@ -254,7 +253,7 @@ export default function ControlPanelSidebar({
           </button>
         )}
 
-        {WORKSPACES_ENABLED && isSignedIn && (
+        {isSignedIn && (
           <button
             onClick={() => (activeWorkspace ? setInviteOpen(true) : setCreateWorkspaceOpen(true))}
             aria-label={
@@ -332,7 +331,7 @@ export default function ControlPanelSidebar({
         </div>
       </div>
 
-      {WORKSPACES_ENABLED && activeWorkspace && (
+      {activeWorkspace && (
         <InviteTeammateDialog
           open={inviteOpen}
           onOpenChange={setInviteOpen}
@@ -340,9 +339,7 @@ export default function ControlPanelSidebar({
           workspaceName={activeWorkspace.name}
         />
       )}
-      {WORKSPACES_ENABLED && (
-        <CreateWorkspaceDialog open={createWorkspaceOpen} onOpenChange={setCreateWorkspaceOpen} />
-      )}
+      <CreateWorkspaceDialog open={createWorkspaceOpen} onOpenChange={setCreateWorkspaceOpen} />
     </div>
   );
 }
