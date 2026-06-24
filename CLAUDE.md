@@ -64,7 +64,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **environment.js**: Environment variable and OpenAI API management
 - **hotkeyManager.js**: Global hotkey registration and management
   - Named hotkey slots: `dictation`, `agent` (chat agent overlay), `voiceAgent` (dictation routed straight to the dictation agent), `meeting`
-  - Handles platform-specific defaults (GLOBE on macOS, backtick on Windows/Linux)
+  - Handles platform-specific defaults (GLOBE on macOS, Control+Super on Windows/Linux)
   - Auto-fallback to F8/F9 if default hotkey is unavailable
   - Notifies renderer via IPC when hotkey registration fails
   - Integrates with GnomeShortcutManager for GNOME Wayland support
@@ -489,8 +489,8 @@ On GNOME Wayland, Electron's `globalShortcut` API doesn't work due to Wayland's 
 
 **Hotkey Format Conversion**:
 
-- Electron format: `Alt+R`, `CommandOrControl+Shift+Space`
-- GNOME format: `<Alt>r`, `<Control><Shift>space`
+- Electron format: `F8`, `CommandOrControl+Shift+Space`
+- GNOME format: `F8`, `<Control><Shift>space`
 - Backtick (`) → `grave` in GNOME keysym format
 
 ### 15. Hyprland Wayland Global Hotkeys
@@ -512,8 +512,8 @@ On Hyprland (wlroots Wayland compositor), Electron's `globalShortcut` API and th
 
 **Hotkey Format Conversion**:
 
-- Electron format: `Alt+R`, `CommandOrControl+Shift+Space`
-- Hyprland format: `ALT, R`, `CTRL SHIFT, space`
+- Electron format: `Control+Super`, `CommandOrControl+Shift+Space`
+- Hyprland format: `CTRL, Super_L`, `CTRL SHIFT, space`
 - Modifier-only combos (e.g., `Control+Super`) → `CTRL, Super_L`
 
 **Bind/Unbind Commands**:
@@ -745,7 +745,7 @@ const { t } = useTranslation();
 - **GNOME Wayland global hotkeys**:
   - Uses native GNOME shortcuts via D-Bus and gsettings (no special permissions needed)
   - Hotkeys visible in GNOME Settings → Keyboard → Shortcuts → Custom
-  - Default hotkey: `Alt+R` (backtick not supported)
+  - Default fallback: `F8` when `Control+Super` cannot be registered
   - Push-to-talk unavailable (GNOME shortcuts only fire single toggle event)
   - Falls back to X11/globalShortcut if GNOME integration fails
   - `dbus-next` npm package used for D-Bus communication
