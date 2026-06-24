@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.7.3] - 2026-06-15
+## [1.7.3] - 2026-06-23
 
-A big release: two new transcription providers (Corti for clinical-grade medical dictation and xAI), a reworked onboarding flow built around what you'll use OpenWhispr for, spoken Snippets, a dedicated Voice Agent hotkey, a redesigned dictionary, OS-level notification controls, Linux PipeWire system-audio capture, new AI models, and a stack of fixes across paste, audio, settings, and Linux window managers.
+A big release: two new transcription providers (Corti for clinical-grade medical dictation and xAI), a reworked onboarding flow built around what you'll use OpenWhispr for, spoken Snippets, a dedicated Voice Agent hotkey, a redesigned dictionary with cross-device sync, dedicated Audio Upload transcription settings, discarded-dictation history, OS-level notification controls, Linux PipeWire system-audio capture, new AI models, and a stack of fixes across paste, audio, settings, and Linux window managers.
 
 ### Transcription
 
@@ -17,6 +17,8 @@ A big release: two new transcription providers (Corti for clinical-grade medical
 - **xAI speech-to-text.** Added xAI as a cloud transcription provider. (#942)
 - **Corti onboarding polish.** Added the Corti provider icon, and the "Get a key" link plus the onboarding Corti links now point to the corti.ai homepage with referral UTM tracking instead of the bare console.
 - **Self-hosted servers skip the API-key check** so local / self-hosted transcription endpoints work without a key. (#835)
+- **Dedicated Audio Upload transcription settings.** Uploaded audio files now have their own Speech-to-Text context (Settings → Speech-to-Text → Audio Upload) with an independent provider and model, split out from dictation the same way Note Recording was. Existing users' dictation preference is migrated over; new users default to OpenWhispr Cloud.
+- **Cancel an in-progress audio-file transcription** from the upload screen — cancelling returns to the upload view and discards the result so nothing is saved.
 
 ### Reasoning & models
 
@@ -30,11 +32,12 @@ A big release: two new transcription providers (Corti for clinical-grade medical
 - **Smart spacing around dictated text** so inserted text spaces correctly against surrounding content. (#856, #868)
 - **Redesigned dictionary page** — list view with hover-revealed inline edit/remove, an agent header card, and bulk import/export. (#933)
 - **Dictionary prompt-echo fix** so dictionary terms no longer leak into transcripts. (#852)
+- **Cross-device custom dictionary sync.** Your custom dictionary now syncs across signed-in devices, with last-writer-wins conflict resolution so edits and deletions converge cleanly. (#966)
+- **Discarded dictations are preserved in history.** Cancelled, too-short, or failed dictations are now kept and surfaced behind a "Show Discarded" toggle in History instead of vanishing. (#964)
 
 ### Onboarding
 
 - **Intent capture up front.** A new "About you" step lets you multi-select what you'll use OpenWhispr for — dictation, meetings, healthcare, translation, AI commands, or uploading audio — and the rest of onboarding adapts to your choices.
-- **Dedicated meeting setup step** with an optional meeting hotkey and an explanation of automatic meeting detection (nothing is recorded without you).
 - **Inline Corti setup for healthcare.** Picking healthcare surfaces Corti on the finish step — enter Corti credentials right there or open Settings with the Corti provider preselected, with a "Skip for now" escape.
 - **Skippable optional steps**, onboarding progress moved into the macOS title bar, the quit button removed from the title bar, a back-to-sign-in escape on email verification, and ghost-variant styling for subtle auth actions.
 - **Provider chips styling fix** on the notes onboarding screen. (#916)
@@ -64,6 +67,11 @@ A big release: two new transcription providers (Corti for clinical-grade medical
 - **Serialize `.env` writes** to prevent an ENOENT rename race. (#940)
 - **Fall back to JS extraction** when system unzip is unavailable. (#775)
 - **Localized Language Models settings** across all locales (#887); fixed zh-CN note-files description mojibake (#848).
+- **Local semantic search restored in packaged builds.** A regression that broke on-device semantic note search in packaged (production) builds is fixed. (#981)
+- **Faster local transcription:** the bundled Whisper server now auto-tunes its thread count to the machine. (#994)
+- **Accurate live speaker counts in note recordings** — per-segment "Speaker N" labels no longer climb past the expected speaker count, and the recorder panel now follows the cursor to the active monitor. (#967)
+- **Cloud users no longer need to manually pick a model** for the Voice Agent hotkey or note formatting — both now reach the OpenWhispr cloud agent without an explicitly selected model.
+- **No stale clipboard restores during paste**, and cloud requests that hit a stale auth token now recover via the session cookie (fixes onboarding intent silently failing to save after email/password sign-in).
 
 ## [1.7.2] - 2026-05-20
 
