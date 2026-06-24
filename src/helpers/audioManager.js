@@ -2,7 +2,11 @@ import ReasoningService from "../services/ReasoningService";
 import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
 import logger from "../utils/logger";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
-import { isSecureEndpoint } from "../utils/urlUtils";
+import {
+  isSecureEndpoint,
+  isAzureOpenAIEndpoint,
+  buildAzureTranscriptionUrl,
+} from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import {
@@ -1606,7 +1610,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("language", language);
       }
 
-      const endpoint = this.getTranscriptionEndpoint();
+      const endpoint = this.getTranscriptionEndpoint(model);
 
       // Groq rejects prompts > 896 chars (incl. when reached via "custom" provider).
       // 890 leaves margin for UTF-16 vs codepoint counting drift.
@@ -1762,7 +1766,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Build headers - only include Authorization if we have an API key
       const headers = {};
       if (apiKey) {
-        headers.Authorization = `Bearer ${apiKey}`;
+        // Azure OpenAI authenticates API keys via the `api-key` header, not a
+        // Bearer token (which it reserves for Entra ID access tokens).
+        if (isAzureOpenAIEndpoint(endpoint)) {
+          headers["api-key"] = apiKey;
+        } else {
+          headers.Authorization = `Bearer ${apiKey}`;
+        }
       }
 
       logger.debug(
@@ -2005,12 +2015,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  getTranscriptionEndpoint() {
+  getTranscriptionEndpoint(deploymentName = "") {
     const s = getSettings();
     const currentProvider = s.cloudTranscriptionProvider || "openai";
     const currentBaseUrl = s.cloudTranscriptionBaseUrl || "";
     const transcriptionMode = s.transcriptionMode || "";
     const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
+    const deployment = (deploymentName || "").trim();
 
     const isSelfHosted = transcriptionMode === "self-hosted" && remoteUrl.length > 0;
     const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
@@ -2018,6 +2029,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (
       this.cachedTranscriptionEndpoint &&
       (this.cachedEndpointProvider !== currentProvider ||
+        this.cachedEndpointDeployment !== deployment ||
         this.cachedEndpointBaseUrl !== currentBaseUrl ||
         this.cachedEndpointMode !== transcriptionMode ||
         this.cachedEndpointRemoteUrl !== remoteUrl)
@@ -2083,6 +2095,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.cachedEndpointBaseUrl = currentBaseUrl;
         this.cachedEndpointMode = transcriptionMode;
         this.cachedEndpointRemoteUrl = remoteUrl;
+        this.cachedEndpointDeployment = deployment;
 
         logger.debug(
           "STT endpoint resolved",
@@ -2118,7 +2131,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       let endpoint;
-      if (/\/audio\/(transcriptions|translations)$/i.test(normalizedBase)) {
+      if (isCustomEndpoint && isAzureOpenAIEndpoint(normalizedBase)) {
+        // Azure OpenAI routes by deployment in the URL path and requires an
+        // api-version query string — the plain {base}/audio/transcriptions
+        // shape returns DeploymentNotFound. Build the deployment-style URL.
+        // The api-version defaults to a transcribe-capable preview; a user can
+        // override it by appending ?api-version=... to their endpoint URL.
+        const azureUrl = buildAzureTranscriptionUrl(normalizedBase, deployment);
+        if (azureUrl) {
+          endpoint = azureUrl;
+          logger.debug(
+            "STT endpoint: built Azure deployment URL",
+            { base: normalizedBase, deployment, endpoint },
+            "transcription"
+          );
+        } else {
+          endpoint = buildApiUrl(normalizedBase, "/audio/transcriptions");
+          logger.warn(
+            "STT endpoint: Azure host detected but no deployment name; falling back to default path",
+            { base: normalizedBase, endpoint },
+            "transcription"
+          );
+        }
+      } else if (/\/audio\/(transcriptions|translations)$/i.test(normalizedBase)) {
         endpoint = normalizedBase;
         logger.debug("STT endpoint: using full path from config", { endpoint }, "transcription");
       } else {

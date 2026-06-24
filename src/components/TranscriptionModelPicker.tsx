@@ -952,6 +952,10 @@ export default function TranscriptionModelPicker({
                     className="h-8 text-sm"
                   />
                 </div>
+
+                {/azure\.com/i.test(cloudTranscriptionBaseUrl || "") && (
+                  <p className="text-xs text-muted-foreground">{t("transcription.azureHint")}</p>
+                )}
               </div>
             ) : (
               <div className="space-y-2">

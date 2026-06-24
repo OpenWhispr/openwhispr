@@ -512,6 +512,7 @@
     "apiKeyOptional": "Chiave API (opzionale)",
     "getKey": "Ottieni chiave ->",
     "endpointUrl": "URL endpoint",
+    "azureHint": "Azure AI Foundry: inserisci l'endpoint della tua risorsa (es. https://your-resource.cognitiveservices.azure.com) e imposta Modello con il nome esatto della tua distribuzione.",
     "customProvider": "Personalizzato",
     "fallback": {
       "whisperModelDescription": "Modello",

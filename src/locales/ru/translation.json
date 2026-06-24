@@ -512,6 +512,7 @@
     "apiKeyOptional": "API-ключ (необязательно)",
     "getKey": "Получить ключ ->",
     "endpointUrl": "URL конечной точки",
+    "azureHint": "Azure AI Foundry: укажите endpoint вашего ресурса (например, https://your-resource.cognitiveservices.azure.com) и задайте в поле «Model» точное имя вашего развёртывания.",
     "customProvider": "Пользовательский",
     "fallback": {
       "whisperModelDescription": "Модель",

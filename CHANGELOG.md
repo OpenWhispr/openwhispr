@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Transcription
+
+- **Azure AI Foundry / Azure OpenAI speech-to-text.** The custom transcription provider now recognizes Azure endpoints (`*.cognitiveservices.azure.com`, `*.openai.azure.com`, `*.services.ai.azure.com`) and builds the deployment-style URL Azure requires (`/openai/deployments/{model}/audio/transcriptions?api-version=...`) instead of the plain OpenAI `{base}/audio/transcriptions` shape, which returned `404 DeploymentNotFound`. Auth now uses Azure's `api-key` header on Azure hosts. Enter your resource endpoint as the URL and your exact deployment name in the Model field; `api-version` defaults to a transcribe-capable preview and can be overridden by appending `?api-version=...` to the endpoint.
+
 ## [1.7.3] - 2026-06-23
 
 A big release: two new transcription providers (Corti for clinical-grade medical dictation and xAI), a reworked onboarding flow built around what you'll use OpenWhispr for, spoken Snippets, a dedicated Voice Agent hotkey, a redesigned dictionary with cross-device sync, dedicated Audio Upload transcription settings, discarded-dictation history, OS-level notification controls, Linux PipeWire system-audio capture, new AI models, and a stack of fixes across paste, audio, settings, and Linux window managers.
