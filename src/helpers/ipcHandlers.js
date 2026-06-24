@@ -55,6 +55,10 @@ const ALLOWED_MEETING_PROVIDERS = new Set([
   "corti-realtime",
 ]);
 
+// Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
+// streaming providers must be told the true PCM rate or they misread the audio.
+const MEETING_STREAM_SAMPLE_RATE = 24000;
+
 function parseAttendees(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -4477,6 +4481,7 @@ class IPCHandlers {
         environment: options.environment,
         tenant: options.tenant,
         keyterms: options.keyterms,
+        sampleRate: MEETING_STREAM_SAMPLE_RATE,
       };
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
       let pairs;

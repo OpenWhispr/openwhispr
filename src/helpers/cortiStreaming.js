@@ -4,10 +4,6 @@ const debugLogger = require("./debugLogger");
 const SAMPLE_RATE = 16000;
 const WEBSOCKET_TIMEOUT_MS = 30000;
 const TERMINATION_TIMEOUT_MS = 5000;
-// Corti rejects audio sent before it acknowledges the config message, so buffer
-// any frames that arrive during the brief connect handshake.
-const PRECONFIG_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
-const AUDIO_FORMAT = `audio/pcm; rate=${SAMPLE_RATE}; channels=1; bits=16`;
 
 // Corti's WSS transport: OAuth token in the query, a JSON config message after
 // open, then raw PCM frames. Mirrors the AssemblyAI/Deepgram streaming classes.
@@ -33,6 +29,7 @@ class CortiStreaming {
     this.sessionStartedAt = null;
     this.audioBytesSent = 0;
     this.currentModel = "corti-transcribe";
+    this.sampleRate = SAMPLE_RATE;
   }
 
   buildWebSocketUrl(options) {
@@ -48,7 +45,7 @@ class CortiStreaming {
       primaryLanguage: options.language && options.language !== "auto" ? options.language : "en",
       interimResults: true,
       automaticPunctuation: true,
-      audioFormat: AUDIO_FORMAT,
+      audioFormat: `audio/pcm; rate=${this.sampleRate}; channels=1; bits=16`,
     };
     if (options.keyterms && options.keyterms.length > 0) {
       configuration.keyterms = { terms: options.keyterms.map((term) => ({ term })) };
@@ -73,6 +70,7 @@ class CortiStreaming {
     this.preConfigBuffer = [];
     this.preConfigBufferSize = 0;
     this.audioBytesSent = 0;
+    this.sampleRate = options.sampleRate || SAMPLE_RATE;
 
     const url = this.buildWebSocketUrl(options);
     const configuration = this.buildConfiguration(options);
@@ -215,7 +213,8 @@ class CortiStreaming {
     }
 
     if (!this.configAccepted) {
-      if (this.preConfigBufferSize < PRECONFIG_BUFFER_MAX) {
+      // Corti rejects audio sent before it acks config; cap the handshake buffer at ~3s.
+      if (this.preConfigBufferSize < 3 * this.sampleRate * 2) {
         const copy = Buffer.from(pcmBuffer);
         this.preConfigBuffer.push(copy);
         this.preConfigBufferSize += copy.length;
