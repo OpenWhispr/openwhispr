@@ -1,5 +1,6 @@
 import type { ReasoningConfig } from "../BaseReasoningService";
 import { getCloudModel, getLocalModel } from "../../models/ModelRegistry";
+import { getConfiguredOpenAIBase } from "./openaiBase";
 
 // Strict OpenAI-compatible servers (Groq, LM Studio, vLLM, LocalAI) reject
 // unknown fields like `think` with "property 'think' is unsupported". Only
@@ -31,23 +32,30 @@ function usesOllamaDialect(providerKey: string): boolean {
 function isCerebrasEndpoint(baseUrl: string | undefined): boolean {
   const raw = (baseUrl ?? "").trim();
   if (!raw) return false;
+  // Ensure an absolute URL with an authority component so a scheme-less value
+  // (e.g. "api.cerebras.ai/v1" or "cerebras.ai:443/v1") parses to a hostname
+  // instead of being misread as a "<scheme>:" URI with an empty host.
+  const absolute = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
   let host: string;
   try {
-    host = new URL(raw).hostname.toLowerCase();
+    host = new URL(absolute).hostname.toLowerCase();
   } catch {
-    try {
-      // Tolerate scheme-less values like "api.cerebras.ai/v1".
-      host = new URL(`https://${raw}`).hostname.toLowerCase();
-    } catch {
-      return false;
-    }
+    return false;
   }
   return host === "cerebras.ai" || host.endsWith(".cerebras.ai");
 }
 
 function isStrictReasoningEndpoint(providerKey: string, config: ReasoningConfig): boolean {
   if (providerKey === "groq") return true;
-  if (providerKey === "custom") return isCerebrasEndpoint(config.baseUrl);
+  if (providerKey === "custom") {
+    // Cerebras is reached as a custom OpenAI-compatible endpoint. The cleanup
+    // path omits `baseUrl` from config and relies on the configured fallback
+    // (getConfiguredOpenAIBase reads `cleanupCloudBaseUrl`), so mirror the exact
+    // resolution the request uses — see openai.ts and ReasoningService.ts:
+    // `config.baseUrl?.trim() || getConfiguredOpenAIBase()`.
+    const effectiveBase = config.baseUrl?.trim() || getConfiguredOpenAIBase();
+    return isCerebrasEndpoint(effectiveBase);
+  }
   return false;
 }
 
