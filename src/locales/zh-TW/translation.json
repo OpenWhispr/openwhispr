@@ -1607,7 +1607,8 @@
       "description": "為聽寫和筆記錄音選擇一個引擎",
       "tabs": {
         "dictation": "聽寫",
-        "noteRecording": "筆記錄音"
+        "noteRecording": "筆記錄音",
+        "upload": "上傳音訊"
       },
       "selfHostedStreamingNote": "需要支援串流轉錄的伺服器。"
     },
@@ -2066,13 +2067,9 @@
       "uploadAnother": "上傳另一個",
       "retry": "重試",
       "startOver": "重新開始",
-      "transcriptionSettings": "轉錄設定",
       "newFolder": "新增資料夾",
       "folderName": "資料夾名稱",
       "create": "建立",
-      "setupTitle": "設定轉錄",
-      "setupDescription": "選擇音訊轉錄方式。此設定同樣適用於即時聽寫。",
-      "continue": "繼續",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "自訂",
       "selectFolder": "選擇資料夾",

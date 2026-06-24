@@ -1591,7 +1591,8 @@
       "description": "Escolha um motor para ditado e gravação de notas",
       "tabs": {
         "dictation": "Ditado",
-        "noteRecording": "Gravação de notas"
+        "noteRecording": "Gravação de notas",
+        "upload": "Enviar áudio"
       },
       "selfHostedStreamingNote": "Requer um servidor que suporte transcrição em streaming."
     },
@@ -2071,13 +2072,9 @@
       "uploadAnother": "Enviar outro",
       "retry": "Tentar novamente",
       "startOver": "Recomeçar",
-      "transcriptionSettings": "Configurações de transcrição",
       "newFolder": "Nova pasta",
       "folderName": "Nome da pasta",
       "create": "Criar",
-      "setupTitle": "Configurar transcrição",
-      "setupDescription": "Escolha como transcrever seu áudio. Isso também se aplica à ditação ao vivo.",
-      "continue": "Continuar",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Personalizado",
       "selectFolder": "Selecionar pasta",

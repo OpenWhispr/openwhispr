@@ -1612,7 +1612,8 @@
       "description": "Scegli un motore per dettatura e registrazione di note",
       "tabs": {
         "dictation": "Dettatura",
-        "noteRecording": "Registrazione note"
+        "noteRecording": "Registrazione note",
+        "upload": "Carica audio"
       },
       "selfHostedStreamingNote": "Richiede un server che supporti la trascrizione in streaming."
     },
@@ -2071,13 +2072,9 @@
       "uploadAnother": "Carica un altro",
       "retry": "Riprova",
       "startOver": "Ricomincia",
-      "transcriptionSettings": "Impostazioni di trascrizione",
       "newFolder": "Nuova cartella",
       "folderName": "Nome cartella",
       "create": "Crea",
-      "setupTitle": "Configura la trascrizione",
-      "setupDescription": "Scegli come trascrivere il tuo audio. Questo si applica anche alla dettatura dal vivo.",
-      "continue": "Continua",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Personalizzato",
       "selectFolder": "Seleziona cartella",

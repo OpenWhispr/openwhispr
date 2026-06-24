@@ -1607,7 +1607,8 @@
       "description": "为听写和笔记录音选择一个引擎",
       "tabs": {
         "dictation": "听写",
-        "noteRecording": "笔记录音"
+        "noteRecording": "笔记录音",
+        "upload": "上传音频"
       },
       "selfHostedStreamingNote": "需要支持流式转录的服务器。"
     },
@@ -2066,13 +2067,9 @@
       "uploadAnother": "上传另一个",
       "retry": "重试",
       "startOver": "重新开始",
-      "transcriptionSettings": "转录设置",
       "newFolder": "新建文件夹",
       "folderName": "文件夹名称",
       "create": "创建",
-      "setupTitle": "设置转录",
-      "setupDescription": "选择转录音频的方式。此设置也适用于实时听写。",
-      "continue": "继续",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "自定义",
       "selectFolder": "选择文件夹",

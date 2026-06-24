@@ -1612,7 +1612,8 @@
       "description": "Выберите движок для диктовки и записи заметок",
       "tabs": {
         "dictation": "Диктовка",
-        "noteRecording": "Запись заметок"
+        "noteRecording": "Запись заметок",
+        "upload": "Загрузка аудио"
       },
       "selfHostedStreamingNote": "Требуется сервер с поддержкой потоковой транскрипции."
     },
@@ -2071,13 +2072,9 @@
       "uploadAnother": "Загрузить ещё",
       "retry": "Повторить",
       "startOver": "Начать сначала",
-      "transcriptionSettings": "Настройки транскрибирования",
       "newFolder": "Новая папка",
       "folderName": "Название папки",
       "create": "Создать",
-      "setupTitle": "Настройте транскрибирование",
-      "setupDescription": "Выберите способ транскрибирования аудио. Это также применяется к живой диктовке.",
-      "continue": "Продолжить",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Другой",
       "selectFolder": "Выбрать папку",

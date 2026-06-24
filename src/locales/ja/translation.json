@@ -1612,7 +1612,8 @@
       "description": "ディクテーションとノート録音用のエンジンを選択",
       "tabs": {
         "dictation": "ディクテーション",
-        "noteRecording": "ノート録音"
+        "noteRecording": "ノート録音",
+        "upload": "音声のアップロード"
       },
       "selfHostedStreamingNote": "ストリーミング文字起こしに対応したサーバーが必要です。"
     },
@@ -2054,13 +2055,9 @@
       "uploadAnother": "別のファイルをアップロード",
       "retry": "再試行",
       "startOver": "やり直す",
-      "transcriptionSettings": "文字起こし設定",
       "newFolder": "新しいフォルダ",
       "folderName": "フォルダ名",
       "create": "作成",
-      "setupTitle": "文字起こしを設定",
-      "setupDescription": "音声の文字起こし方法を選択してください。ライブディクテーションにも適用されます。",
-      "continue": "続ける",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "カスタム",
       "selectFolder": "フォルダを選択",

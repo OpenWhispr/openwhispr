@@ -1660,7 +1660,8 @@
       "description": "Choisissez un moteur pour la dictée et l'enregistrement de notes",
       "tabs": {
         "dictation": "Dictée",
-        "noteRecording": "Enregistrement de notes"
+        "noteRecording": "Enregistrement de notes",
+        "upload": "Importer un audio"
       },
       "selfHostedStreamingNote": "Nécessite un serveur qui prend en charge la transcription en streaming."
     },
@@ -2182,13 +2183,9 @@
       "uploadAnother": "Téléverser un autre fichier",
       "retry": "Réessayer",
       "startOver": "Recommencer",
-      "transcriptionSettings": "Paramètres de transcription",
       "newFolder": "Nouveau dossier",
       "folderName": "Nom du dossier",
       "create": "Créer",
-      "setupTitle": "Configurer la transcription",
-      "setupDescription": "Choisissez comment transcrire votre audio. Cela s'applique également à la dictée en direct.",
-      "continue": "Continuer",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Personnalisé",
       "selectFolder": "Sélectionner un dossier",

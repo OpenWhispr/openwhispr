@@ -33,6 +33,7 @@ import {
   MessageSquare,
   FileAudio,
   Wand2,
+  Upload,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
@@ -80,6 +81,7 @@ import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
+import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
@@ -462,10 +464,10 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
   );
 }
 
-type SpeechTab = "dictation" | "noteRecording";
+type SpeechTab = "dictation" | "noteRecording" | "upload";
 type LlmTab = "dictationCleanup" | "dictationAgent" | "noteFormatting" | "chatIntelligence";
 
-const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording"];
+const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording", "upload"];
 const LLM_TABS: LlmTab[] = [
   "dictationCleanup",
   "dictationAgent",
@@ -513,10 +515,12 @@ function SpeechToTextTabs({
   initialTab,
   renderDictation,
   renderNoteRecording,
+  renderUpload,
 }: {
   initialTab?: SpeechTab;
   renderDictation: () => React.ReactNode;
   renderNoteRecording: () => React.ReactNode;
+  renderUpload: () => React.ReactNode;
 }) {
   const { t } = useTranslation();
   const [tab, setTab] = useSubTab<SpeechTab>("settings.speechToTextTab", SPEECH_TABS, initialTab);
@@ -524,6 +528,7 @@ function SpeechToTextTabs({
   const subTabs = [
     { id: "dictation", name: t("settingsPage.speechToText.tabs.dictation") },
     { id: "noteRecording", name: t("settingsPage.speechToText.tabs.noteRecording") },
+    { id: "upload", name: t("settingsPage.speechToText.tabs.upload") },
   ];
 
   return (
@@ -539,6 +544,8 @@ function SpeechToTextTabs({
         renderIcon={(id) =>
           id === "dictation" ? (
             <Mic className="w-3.5 h-3.5" />
+          ) : id === "upload" ? (
+            <Upload className="w-3.5 h-3.5" />
           ) : (
             <FileAudio className="w-3.5 h-3.5" />
           )
@@ -546,6 +553,7 @@ function SpeechToTextTabs({
       />
       <TabPanel active={tab === "dictation"}>{renderDictation()}</TabPanel>
       <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
+      <TabPanel active={tab === "upload"}>{renderUpload()}</TabPanel>
     </div>
   );
 }
@@ -3962,6 +3970,11 @@ EOF`,
                 {transcriptionMode === "local" &&
                   localTranscriptionProvider !== "nvidia" &&
                   renderWhisperVadSettings()}
+              </div>
+            )}
+            renderUpload={() => (
+              <div className="space-y-6">
+                <UploadTranscriptionPanel />
               </div>
             )}
           />

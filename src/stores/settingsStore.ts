@@ -105,6 +105,8 @@ migrateMeetingFollowFlags();
 
 const BOOLEAN_SETTINGS = new Set([
   "useLocalWhisper",
+  "meetingUseLocalWhisper",
+  "uploadUseLocalWhisper",
   "allowOpenAIFallback",
   "allowLocalFallback",
   "assemblyAiStreaming",
@@ -243,6 +245,37 @@ function migrateProviderSettings() {
 }
 
 migrateProviderSettings();
+
+// One-time seed of the dedicated audio-upload transcription settings. Runs
+// after migrateProviderSettings() so the `transcriptionMode` it derives and
+// persists is available to copy. Before this context existed the upload page
+// used the base dictation settings, so copy each value the user actually set
+// into the matching `upload*` key. Fresh installs have no base keys persisted,
+// so nothing is copied and the upload context falls through to its OpenWhispr
+// Cloud defaults.
+const UPLOAD_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
+  ["useLocalWhisper", "uploadUseLocalWhisper"],
+  ["whisperModel", "uploadWhisperModel"],
+  ["localTranscriptionProvider", "uploadLocalTranscriptionProvider"],
+  ["parakeetModel", "uploadParakeetModel"],
+  ["cloudTranscriptionProvider", "uploadCloudTranscriptionProvider"],
+  ["cloudTranscriptionModel", "uploadCloudTranscriptionModel"],
+  ["cloudTranscriptionBaseUrl", "uploadCloudTranscriptionBaseUrl"],
+  ["cloudTranscriptionMode", "uploadCloudTranscriptionMode"],
+  ["transcriptionMode", "uploadTranscriptionMode"],
+];
+
+function migrateUploadTranscription() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("uploadTranscriptionMigrated") === "true") return;
+  for (const [src, dst] of UPLOAD_TRANSCRIPTION_PAIRS) {
+    const v = localStorage.getItem(src);
+    if (v !== null) localStorage.setItem(dst, v);
+  }
+  localStorage.setItem("uploadTranscriptionMigrated", "true");
+}
+
+migrateUploadTranscription();
 
 function migrateAgentMode() {
   if (!isBrowser) return;
@@ -409,6 +442,16 @@ export interface SettingsState
   meetingRemoteTranscriptionType: SelfHostedType;
   meetingRemoteTranscriptionUrl: string;
 
+  uploadTranscriptionMode: InferenceMode;
+  uploadUseLocalWhisper: boolean;
+  uploadWhisperModel: string;
+  uploadLocalTranscriptionProvider: LocalTranscriptionProvider;
+  uploadParakeetModel: string;
+  uploadCloudTranscriptionProvider: string;
+  uploadCloudTranscriptionModel: string;
+  uploadCloudTranscriptionBaseUrl: string;
+  uploadCloudTranscriptionMode: string;
+
   noteFormattingMode: InferenceMode;
   noteFormattingProvider: string;
   noteFormattingModel: string;
@@ -458,6 +501,16 @@ export interface SettingsState
   setMeetingCloudTranscriptionMode: (value: string) => void;
   setMeetingRemoteTranscriptionType: (type: SelfHostedType) => void;
   setMeetingRemoteTranscriptionUrl: (url: string) => void;
+
+  setUploadTranscriptionMode: (mode: InferenceMode) => void;
+  setUploadUseLocalWhisper: (value: boolean) => void;
+  setUploadWhisperModel: (value: string) => void;
+  setUploadLocalTranscriptionProvider: (value: LocalTranscriptionProvider) => void;
+  setUploadParakeetModel: (value: string) => void;
+  setUploadCloudTranscriptionProvider: (value: string) => void;
+  setUploadCloudTranscriptionModel: (value: string) => void;
+  setUploadCloudTranscriptionBaseUrl: (value: string) => void;
+  setUploadCloudTranscriptionMode: (value: string) => void;
 
   setNoteFormattingMode: (mode: InferenceMode) => void;
   setNoteFormattingProvider: (value: string) => void;
@@ -969,6 +1022,23 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   meetingRemoteTranscriptionUrl: readString("meetingRemoteTranscriptionUrl", ""),
 
+  uploadTranscriptionMode: (() => {
+    const v = readString("uploadTranscriptionMode", "openwhispr");
+    if (v === "openwhispr" || v === "providers" || v === "local" || v === "self-hosted") return v;
+    return "openwhispr" as InferenceMode;
+  })(),
+  uploadUseLocalWhisper: readBoolean("uploadUseLocalWhisper", false),
+  uploadWhisperModel: readString("uploadWhisperModel", ""),
+  uploadLocalTranscriptionProvider: (readString("uploadLocalTranscriptionProvider", "whisper") ===
+  "nvidia"
+    ? "nvidia"
+    : "whisper") as LocalTranscriptionProvider,
+  uploadParakeetModel: readString("uploadParakeetModel", ""),
+  uploadCloudTranscriptionProvider: readString("uploadCloudTranscriptionProvider", ""),
+  uploadCloudTranscriptionModel: readString("uploadCloudTranscriptionModel", ""),
+  uploadCloudTranscriptionBaseUrl: readString("uploadCloudTranscriptionBaseUrl", ""),
+  uploadCloudTranscriptionMode: readString("uploadCloudTranscriptionMode", ""),
+
   noteFormattingMode: (() => {
     const v = readString("noteFormattingMode", "openwhispr");
     if (
@@ -1014,6 +1084,21 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     type: SelfHostedType
   ) => void,
   setMeetingRemoteTranscriptionUrl: createStringSetter("meetingRemoteTranscriptionUrl"),
+
+  setUploadTranscriptionMode: createStringSetter("uploadTranscriptionMode") as (
+    mode: InferenceMode
+  ) => void,
+  setUploadUseLocalWhisper: createBooleanSetter("uploadUseLocalWhisper"),
+  setUploadWhisperModel: createStringSetter("uploadWhisperModel"),
+  setUploadLocalTranscriptionProvider: (value: LocalTranscriptionProvider) => {
+    if (isBrowser) localStorage.setItem("uploadLocalTranscriptionProvider", value);
+    useSettingsStore.setState({ uploadLocalTranscriptionProvider: value });
+  },
+  setUploadParakeetModel: createStringSetter("uploadParakeetModel"),
+  setUploadCloudTranscriptionProvider: createStringSetter("uploadCloudTranscriptionProvider"),
+  setUploadCloudTranscriptionModel: createStringSetter("uploadCloudTranscriptionModel"),
+  setUploadCloudTranscriptionBaseUrl: createStringSetter("uploadCloudTranscriptionBaseUrl"),
+  setUploadCloudTranscriptionMode: createStringSetter("uploadCloudTranscriptionMode"),
 
   setNoteFormattingMode: createStringSetter("noteFormattingMode") as (mode: InferenceMode) => void,
   setNoteFormattingProvider: createStringSetter("noteFormattingProvider"),
@@ -1634,6 +1719,36 @@ export const selectResolvedMeetingTranscription = (
     remoteTranscriptionUrl: state.meetingRemoteTranscriptionUrl || state.remoteTranscriptionUrl,
   };
 };
+
+export interface ResolvedUploadTranscription {
+  useLocalWhisper: boolean;
+  whisperModel: string;
+  localTranscriptionProvider: LocalTranscriptionProvider;
+  parakeetModel: string;
+  cloudTranscriptionProvider: string;
+  cloudTranscriptionModel: string;
+  cloudTranscriptionBaseUrl: string;
+  cloudTranscriptionMode: string;
+  transcriptionMode: InferenceMode;
+}
+
+// Audio upload is batch (not streaming), so unset values fall back to the base
+// dictation settings — matching the behavior before upload had its own context.
+export const selectResolvedUploadTranscription = (
+  state: SettingsState
+): ResolvedUploadTranscription => ({
+  useLocalWhisper: state.uploadUseLocalWhisper,
+  whisperModel: state.uploadWhisperModel || state.whisperModel,
+  localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
+  parakeetModel: state.uploadParakeetModel || state.parakeetModel,
+  cloudTranscriptionProvider:
+    state.uploadCloudTranscriptionProvider || state.cloudTranscriptionProvider,
+  cloudTranscriptionModel: state.uploadCloudTranscriptionModel || state.cloudTranscriptionModel,
+  cloudTranscriptionBaseUrl:
+    state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
+  cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
+  transcriptionMode: state.uploadTranscriptionMode,
+});
 
 export interface ResolvedNoteFormatting {
   provider: string;

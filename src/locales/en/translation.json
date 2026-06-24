@@ -1785,7 +1785,8 @@
       "description": "Pick an engine for dictation and note recording",
       "tabs": {
         "dictation": "Dictation",
-        "noteRecording": "Note Recording"
+        "noteRecording": "Note Recording",
+        "upload": "Audio Upload"
       },
       "selfHostedStreamingNote": "Requires a server that supports streaming transcription."
     },
@@ -2270,13 +2271,9 @@
       "uploadAnother": "Upload Another",
       "retry": "Retry",
       "startOver": "Start Over",
-      "transcriptionSettings": "Transcription Settings",
       "newFolder": "New Folder",
       "folderName": "Folder name",
       "create": "Create",
-      "setupTitle": "Set up transcription",
-      "setupDescription": "Choose how to transcribe your audio. This also applies to live dictation.",
-      "continue": "Continue",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Custom",
       "selectFolder": "Select folder",

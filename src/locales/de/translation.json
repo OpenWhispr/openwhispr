@@ -1612,7 +1612,8 @@
       "description": "Wählen Sie eine Engine für Diktat und Notizaufnahme",
       "tabs": {
         "dictation": "Diktat",
-        "noteRecording": "Notizaufnahme"
+        "noteRecording": "Notizaufnahme",
+        "upload": "Audio-Upload"
       },
       "selfHostedStreamingNote": "Erfordert einen Server, der Streaming-Transkription unterstützt."
     },
@@ -2071,13 +2072,9 @@
       "uploadAnother": "Weitere hochladen",
       "retry": "Erneut versuchen",
       "startOver": "Neu beginnen",
-      "transcriptionSettings": "Transkriptionseinstellungen",
       "newFolder": "Neuer Ordner",
       "folderName": "Ordnername",
       "create": "Erstellen",
-      "setupTitle": "Transkription einrichten",
-      "setupDescription": "Wähle, wie dein Audio transkribiert werden soll. Dies gilt auch für die Live-Diktierfunktion.",
-      "continue": "Weiter",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Benutzerdefiniert",
       "selectFolder": "Ordner auswählen",

@@ -1,17 +1,7 @@
-import React, { useState, useRef, useEffect, Suspense } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Upload,
-  FileAudio,
-  X,
-  AlertCircle,
-  Cloud,
-  ChevronRight,
-  Key,
-  FolderOpen,
-  Plus,
-  Settings,
-} from "lucide-react";
+import { Upload, FileAudio, X, AlertCircle, FolderOpen, Plus, Settings } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "../ui/button";
 import { cn } from "../lib/utils";
 import {
@@ -29,17 +19,17 @@ import { findDefaultFolder, MEETINGS_FOLDER_NAME } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
 import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
+import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 import { withSessionRefresh } from "../../lib/auth";
 import { getAllReasoningModels } from "../../models/ModelRegistry";
 import {
   useSettingsStore,
   selectIsCloudCleanupMode,
+  selectResolvedUploadTranscription,
   getSettings,
 } from "../../stores/settingsStore";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
-
-const TranscriptionModelPicker = React.lazy(() => import("../TranscriptionModelPicker"));
 
 type UploadState = "idle" | "selected" | "transcribing" | "complete" | "error";
 
@@ -86,42 +76,31 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const [showNewFolderDialog, setShowNewFolderDialog] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
 
-  const [setupDismissed, setSetupDismissed] = useState(
-    () =>
-      localStorage.getItem("uploadSetupComplete") === "true" ||
-      localStorage.getItem("notesOnboardingComplete") === "true"
-  );
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [providerReady, setProviderReady] = useState<boolean | null>(null);
 
   const { isSignedIn } = useAuth();
   const usage = useUsage();
   const isProUser = usage?.isSubscribed || usage?.isTrial;
 
+  const { openaiApiKey, groqApiKey, xaiApiKey, mistralApiKey, customTranscriptionApiKey } =
+    useSettings();
+
   const {
     useLocalWhisper,
-    setUseLocalWhisper,
     whisperModel,
-    setWhisperModel,
     localTranscriptionProvider,
-    setLocalTranscriptionProvider,
     parakeetModel,
-    setParakeetModel,
     cloudTranscriptionProvider,
-    setCloudTranscriptionProvider,
     cloudTranscriptionModel,
-    setCloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
-    setCloudTranscriptionBaseUrl,
     cloudTranscriptionMode,
-    setCloudTranscriptionMode,
-    openaiApiKey,
-    groqApiKey,
-    xaiApiKey,
-    mistralApiKey,
-    customTranscriptionApiKey,
-    updateTranscriptionSettings,
-  } = useSettings();
+  } = useSettingsStore(useShallow(selectResolvedUploadTranscription));
+
+  const setUploadTranscriptionMode = useSettingsStore((s) => s.setUploadTranscriptionMode);
+  const setUploadCloudTranscriptionMode = useSettingsStore(
+    (s) => s.setUploadCloudTranscriptionMode
+  );
+  const setUploadUseLocalWhisper = useSettingsStore((s) => s.setUploadUseLocalWhisper);
 
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
@@ -136,10 +115,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   const isOpenWhisprCloud =
     isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
-  const usageLoaded = usage?.hasLoaded ?? false;
-  const showSetup = usageLoaded && !isProUser && !setupDismissed && state === "idle";
-  const showModelPicker = !isSignedIn || cloudTranscriptionMode === "byok" || useLocalWhisper;
-  const shouldCenter = !showSetup && !advancedOpen;
 
   // Mode detection
   const isByok = !useLocalWhisper && !isOpenWhisprCloud;
@@ -442,11 +417,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
   };
 
-  const dismissSetup = () => {
-    localStorage.setItem("uploadSetupComplete", "true");
-    setSetupDismissed(true);
-  };
-
   const handleCreateFolder = async () => {
     const trimmed = newFolderName.trim();
     if (!trimmed) return;
@@ -474,17 +444,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     }
   };
 
-  const handleCreateAccount = () => {
-    localStorage.setItem("pendingCloudMigration", "true");
-    localStorage.setItem("onboardingCurrentStep", "0");
-    localStorage.removeItem("onboardingCompleted");
-    window.location.reload();
-  };
+  const handleCreateAccount = useStartOnboarding();
 
   const switchToCloud = () => {
-    setCloudTranscriptionMode("openwhispr");
-    setUseLocalWhisper(false);
-    updateTranscriptionSettings({ useLocalWhisper: false });
+    setUploadTranscriptionMode("openwhispr");
+    setUploadCloudTranscriptionMode("openwhispr");
+    setUploadUseLocalWhisper(false);
   };
 
   const getTranscribingLabel = (): string => {
@@ -493,110 +458,15 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     return t("notes.upload.transcribingProvider", { provider: cloudTranscriptionProvider });
   };
 
-  const modeSelector = isSignedIn ? (
-    <div className="flex items-center rounded-md border border-foreground/6 dark:border-white/6 bg-surface-1/30 dark:bg-white/[0.02] p-0.5 mb-3">
-      <button
-        onClick={() => {
-          setCloudTranscriptionMode("openwhispr");
-          setUseLocalWhisper(false);
-          updateTranscriptionSettings({ useLocalWhisper: false });
-        }}
-        className={cn(
-          "flex-1 flex items-center justify-center gap-1.5 h-7 rounded text-xs font-medium transition-colors duration-150",
-          isOpenWhisprCloud
-            ? "bg-foreground/[0.06] dark:bg-white/8 text-foreground/70"
-            : "text-foreground/30 hover:text-foreground/50"
-        )}
-      >
-        <Cloud size={11} />
-        {t("notes.upload.openwhisprCloud")}
-      </button>
-      <button
-        onClick={() => setCloudTranscriptionMode("byok")}
-        className={cn(
-          "flex-1 flex items-center justify-center gap-1.5 h-7 rounded text-xs font-medium transition-colors duration-150",
-          !isOpenWhisprCloud
-            ? "bg-foreground/[0.06] dark:bg-white/8 text-foreground/70"
-            : "text-foreground/30 hover:text-foreground/50"
-        )}
-      >
-        <Key size={11} />
-        {t("notes.upload.custom")}
-      </button>
-    </div>
-  ) : null;
-
-  const modelPicker = showModelPicker ? (
-    <Suspense fallback={null}>
-      <TranscriptionModelPicker
-        selectedCloudProvider={cloudTranscriptionProvider}
-        onCloudProviderSelect={setCloudTranscriptionProvider}
-        selectedCloudModel={cloudTranscriptionModel}
-        onCloudModelSelect={setCloudTranscriptionModel}
-        selectedLocalModel={localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel}
-        onLocalModelSelect={(modelId) => {
-          if (localTranscriptionProvider === "nvidia") {
-            setParakeetModel(modelId);
-          } else {
-            setWhisperModel(modelId);
-          }
-        }}
-        selectedLocalProvider={localTranscriptionProvider}
-        onLocalProviderSelect={(id) => setLocalTranscriptionProvider(id as "whisper" | "nvidia")}
-        useLocalWhisper={useLocalWhisper}
-        onModeChange={(isLocal) => {
-          setUseLocalWhisper(isLocal);
-          updateTranscriptionSettings({ useLocalWhisper: isLocal });
-          if (isLocal) setCloudTranscriptionMode("byok");
-        }}
-        cloudTranscriptionBaseUrl={cloudTranscriptionBaseUrl}
-        setCloudTranscriptionBaseUrl={setCloudTranscriptionBaseUrl}
-        variant="settings"
-      />
-    </Suspense>
-  ) : null;
-
   return (
     <div className="flex flex-col items-center h-full overflow-y-auto px-6">
       <div
-        className={cn("w-full max-w-md shrink-0", shouldCenter ? "my-auto" : "pt-4 pb-8")}
+        className="w-full max-w-md shrink-0 my-auto"
         style={{ animation: "float-up 0.4s ease-out" }}
       >
-        {showSetup && (
-          <div className="mb-6" style={{ animation: "float-up 0.3s ease-out" }}>
-            <div className="flex flex-col items-center mb-5">
-              <div className="w-10 h-10 rounded-[10px] bg-linear-to-b from-primary/10 to-primary/[0.03] dark:from-primary/15 dark:to-primary/5 border border-primary/15 dark:border-primary/20 flex items-center justify-center mb-3">
-                <Upload size={17} strokeWidth={1.5} className="text-primary/50" />
-              </div>
-              <h2 className="text-xs font-semibold text-foreground mb-1">
-                {t("notes.upload.setupTitle")}
-              </h2>
-              <p className="text-xs text-foreground/30 text-center leading-relaxed max-w-[280px]">
-                {t("notes.upload.setupDescription")}
-              </p>
-            </div>
-
-            {modeSelector}
-            {modelPicker}
-
-            <div className="flex justify-center mt-4">
-              <Button
-                variant="default"
-                size="sm"
-                onClick={dismissSetup}
-                className="h-8 text-xs px-6"
-              >
-                {t("notes.upload.continue")}
-              </Button>
-            </div>
-
-            <div className="h-px bg-foreground/5 dark:bg-white/5 my-5" />
-          </div>
-        )}
-
         <div className="max-w-[320px] mx-auto">
           {state === "idle" && providerReady === false && (
-            <NoProviderView t={t} onOpenSettings={() => onOpenSettings?.("transcription")} />
+            <NoProviderView t={t} onOpenSettings={() => onOpenSettings?.("uploadTranscription")} />
           )}
 
           {state === "idle" && providerReady !== false && (
@@ -657,28 +527,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             <ErrorView t={t} error={error} reset={reset} handleTranscribe={handleTranscribe} />
           )}
         </div>
-
-        {!showSetup && (state === "idle" || state === "selected") && (
-          <div className="mx-auto mt-5" style={{ maxWidth: advancedOpen ? "448px" : "320px" }}>
-            <button
-              onClick={() => setAdvancedOpen(!advancedOpen)}
-              className="flex items-center gap-1.5 text-xs text-foreground/25 hover:text-foreground/40 transition-colors mx-auto"
-            >
-              <ChevronRight
-                size={10}
-                className={cn("transition-transform duration-200", advancedOpen && "rotate-90")}
-              />
-              {t("notes.upload.transcriptionSettings")}
-            </button>
-
-            {advancedOpen && (
-              <div className="mt-3" style={{ animation: "float-up 0.2s ease-out" }}>
-                {modeSelector}
-                {modelPicker}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       <Dialog open={showNewFolderDialog} onOpenChange={setShowNewFolderDialog}>
