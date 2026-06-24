@@ -457,6 +457,10 @@ class WindowManager {
   }
 
   sendToggleVoiceAgent() {
+    // The voice-agent hotkeys, unlike the dictation paths, don't capture the
+    // target PID at their call sites, so capture here or the paste can't
+    // refocus the target (#668).
+    if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
     this._sendDictationToggle("toggle-voice-agent");
   }
 
