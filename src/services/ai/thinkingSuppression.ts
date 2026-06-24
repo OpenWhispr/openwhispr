@@ -20,14 +20,34 @@ function usesOllamaDialect(providerKey: string): boolean {
 // `gpt-oss-120b` APIs.
 //
 // `groq` is a first-class provider. Cerebras is configured as a custom
-// OpenAI-compatible endpoint, so it is matched by URL only — other custom
+// OpenAI-compatible endpoint, so it is matched by hostname only — other custom
 // endpoints (e.g. self-hosted vLLM / SGLang, which DO accept
 // `chat_template_kwargs`) must keep their existing behaviour.
+
+// Match Cerebras by parsed hostname rather than a substring test, so a
+// look-alike host or a URL that merely contains "cerebras.ai" in its path
+// (e.g. "https://evil.example/cerebras.ai" or "https://cerebras.ai.attacker.com")
+// is not mistaken for the real endpoint.
+function isCerebrasEndpoint(baseUrl: string | undefined): boolean {
+  const raw = (baseUrl ?? "").trim();
+  if (!raw) return false;
+  let host: string;
+  try {
+    host = new URL(raw).hostname.toLowerCase();
+  } catch {
+    try {
+      // Tolerate scheme-less values like "api.cerebras.ai/v1".
+      host = new URL(`https://${raw}`).hostname.toLowerCase();
+    } catch {
+      return false;
+    }
+  }
+  return host === "cerebras.ai" || host.endsWith(".cerebras.ai");
+}
+
 function isStrictReasoningEndpoint(providerKey: string, config: ReasoningConfig): boolean {
   if (providerKey === "groq") return true;
-  if (providerKey === "custom") {
-    return (config.baseUrl ?? "").toLowerCase().includes("cerebras.ai");
-  }
+  if (providerKey === "custom") return isCerebrasEndpoint(config.baseUrl);
   return false;
 }
 
