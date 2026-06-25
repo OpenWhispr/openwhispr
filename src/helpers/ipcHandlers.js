@@ -1578,23 +1578,11 @@ class IPCHandlers {
         }
       }
 
-      // Smart spacing (#856): macOS reads the preceding char via Accessibility
-      // and prepends a space when needed; Windows/Linux (and macOS when the
-      // read fails) append a trailing space instead — the next paste then
-      // sees a leading space and self-corrects.
-      let mode = "append";
-      let precedingChar;
-      if (process.platform === "darwin" && activated && this.textEditMonitor) {
-        const ax = await this.textEditMonitor.getPrecedingChar(targetPid);
-        if (ax.state === "ok") {
-          mode = "prepend";
-          precedingChar = ax.char;
-        } else if (ax.state === "start") {
-          mode = "prepend";
-          precedingChar = "";
-        }
-      }
-      const textToPaste = applySmartSpacing({ text, mode, precedingChar });
+      // Smart spacing (#856): append a trailing space so the next paste's leading
+      // space self-corrects the gap. macOS prepend-mode (getPrecedingChar) is
+      // intentionally skipped here — its Accessibility read costs hundreds of ms,
+      // too slow for the paste hot path.
+      const textToPaste = applySmartSpacing({ text, mode: "append" });
 
       const result = await this.clipboardManager.pasteText(textToPaste, {
         ...options,
