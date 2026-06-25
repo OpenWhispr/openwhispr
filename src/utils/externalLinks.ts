@@ -13,9 +13,8 @@ export function createExternalLinkHandler(url: string) {
   };
 }
 
-// Tags an outbound link with OpenWhispr UTM attribution so partner sites can
-// attribute the traffic. Non-http(s) URLs and already-attributed links pass
-// through unchanged so existing links can't break.
+// Tags an outbound link with OpenWhispr UTM attribution. Non-http(s) and
+// already-attributed URLs pass through unchanged so existing links can't break.
 export function withUtm(url: string, campaign = "app"): string {
   try {
     const u = new URL(url);

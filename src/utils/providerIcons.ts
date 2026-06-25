@@ -61,9 +61,7 @@ const REMOTE_PROVIDER_ALIASES: Record<string, string> = {
   "x-ai": "xai",
 };
 
-// Resolves the icon for a remotely-fetched provider prefix (e.g. "openai" from
-// "openai/gpt-4"). Returns no icon when we don't have one, so callers fall back
-// to the generic globe.
+// Resolves the icon for a remote provider prefix (e.g. "openai" from "openai/gpt-4").
 export function getRemoteProviderIcon(prefix: string): {
   icon: string | undefined;
   invertInDark: boolean;
