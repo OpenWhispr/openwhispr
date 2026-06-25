@@ -523,6 +523,12 @@
       "clientSecret": "客户端密钥",
       "environment": "数据区域",
       "tenant": "租户"
+    },
+    "azure": {
+      "endpoint": "终结点 URL",
+      "deployment": "部署名称",
+      "deploymentHelp": "请输入你的 Azure OpenAI 转录部署的确切名称（例如 gpt-4o-transcribe、gpt-4o-mini-transcribe 或 whisper）。不支持非 OpenAI 的 Foundry 模型。",
+      "apiVersion": "API 版本"
     }
   },
   "hooks": {

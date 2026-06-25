@@ -218,6 +218,27 @@
           "streaming": true
         }
       ]
+    },
+    {
+      "id": "azure",
+      "name": "Azure OpenAI",
+      "baseUrl": "https://your-resource.openai.azure.com",
+      "models": [
+        {
+          "id": "gpt-4o-mini-transcribe",
+          "name": "GPT-4o Mini Transcribe",
+          "description": "Fast and accurate transcription",
+          "descriptionKey": "models.descriptions.transcription.openai_gpt_4o_mini_transcribe",
+          "streaming": true
+        },
+        {
+          "id": "gpt-4o-transcribe",
+          "name": "GPT-4o Transcribe",
+          "description": "Most accurate transcription",
+          "descriptionKey": "models.descriptions.transcription.openai_gpt_4o_transcribe",
+          "streaming": true
+        }
+      ]
     }
   ],
   "cloudProviders": [

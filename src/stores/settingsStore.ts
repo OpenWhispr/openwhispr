@@ -577,6 +577,16 @@ export interface SettingsState
   setCortiEnvironment: (value: string) => void;
   setCortiTenant: (value: string) => void;
 
+  // Azure OpenAI streaming transcription (BYOK)
+  azureTranscriptionEndpoint: string;
+  azureTranscriptionDeployment: string;
+  azureTranscriptionApiVersion: string;
+  azureTranscriptionApiKey: string;
+  setAzureTranscriptionEndpoint: (value: string) => void;
+  setAzureTranscriptionDeployment: (value: string) => void;
+  setAzureTranscriptionApiVersion: (value: string) => void;
+  setAzureTranscriptionApiKey: (key: string) => void;
+
   // Enterprise providers
   bedrockAuthMode: string;
   bedrockRegion: string;
@@ -765,6 +775,7 @@ const SECRET_IPC_SAVERS = {
   bedrockSecretAccessKey: "saveBedrockSecretAccessKey",
   bedrockSessionToken: "saveBedrockSessionToken",
   azureApiKey: "saveAzureApiKey",
+  azureTranscriptionApiKey: "saveAzureTranscribeKey",
   vertexApiKey: "saveVertexApiKey",
 } as const;
 
@@ -806,6 +817,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "bedrockSecretAccessKey",
   "bedrockSessionToken",
   "azureApiKey",
+  "azureTranscriptionApiKey",
   "vertexApiKey",
 ] as const;
 
@@ -853,6 +865,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   cortiEnvironment: readString("cortiEnvironment", "us"),
   cortiTenant: readString("cortiTenant", "base"),
+  azureTranscriptionEndpoint: readString("azureTranscriptionEndpoint", ""),
+  azureTranscriptionDeployment: readString("azureTranscriptionDeployment", ""),
+  azureTranscriptionApiVersion: readString("azureTranscriptionApiVersion", "2025-04-01-preview"),
   customDictionary: readStringArray("customDictionary", []),
   snippets: (() => {
     try {
@@ -879,6 +894,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   mistralApiKey: "",
   cortiClientId: "",
   cortiClientSecret: "",
+  azureTranscriptionApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
 
@@ -1299,6 +1315,28 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
+  setAzureTranscriptionEndpoint: (value: string) => {
+    if (isBrowser) localStorage.setItem("azureTranscriptionEndpoint", value);
+    set({ azureTranscriptionEndpoint: value });
+    window.electronAPI?.saveAzureTranscribeEndpoint?.(value);
+    debouncedPersistToEnv();
+  },
+  setAzureTranscriptionDeployment: (value: string) => {
+    if (isBrowser) localStorage.setItem("azureTranscriptionDeployment", value);
+    set({ azureTranscriptionDeployment: value });
+    window.electronAPI?.saveAzureTranscribeDeployment?.(value);
+    debouncedPersistToEnv();
+  },
+  setAzureTranscriptionApiVersion: (value: string) => {
+    if (isBrowser) localStorage.setItem("azureTranscriptionApiVersion", value);
+    set({ azureTranscriptionApiVersion: value });
+    window.electronAPI?.saveAzureTranscribeApiVersion?.(value);
+    debouncedPersistToEnv();
+  },
+  setAzureTranscriptionApiKey: (key: string) => {
+    set({ azureTranscriptionApiKey: key });
+    debouncedSaveSecret("azureTranscriptionApiKey", key);
+  },
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -1941,6 +1979,7 @@ export async function initializeSettings(): Promise<void> {
         bedrockSecretAccessKey,
         bedrockSessionToken,
         azureApiKey,
+        azureTranscriptionApiKey,
         vertexApiKey,
       ] = await Promise.all([
         window.electronAPI.getOpenAIKey?.(),
@@ -1957,6 +1996,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getBedrockSecretAccessKey?.(),
         window.electronAPI.getBedrockSessionToken?.(),
         window.electronAPI.getAzureApiKey?.(),
+        window.electronAPI.getAzureTranscribeKey?.(),
         window.electronAPI.getVertexApiKey?.(),
       ]);
 
@@ -1975,6 +2015,7 @@ export async function initializeSettings(): Promise<void> {
         bedrockSecretAccessKey: bedrockSecretAccessKey || "",
         bedrockSessionToken: bedrockSessionToken || "",
         azureApiKey: azureApiKey || "",
+        azureTranscriptionApiKey: azureTranscriptionApiKey || "",
         vertexApiKey: vertexApiKey || "",
       });
 

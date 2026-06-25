@@ -523,6 +523,12 @@
       "clientSecret": "クライアントシークレット",
       "environment": "データリージョン",
       "tenant": "テナント"
+    },
+    "azure": {
+      "endpoint": "エンドポイント URL",
+      "deployment": "デプロイ名",
+      "deploymentHelp": "Azure OpenAI 文字起こしデプロイの正確な名前（例: gpt-4o-transcribe、gpt-4o-mini-transcribe、whisper）を入力してください。OpenAI 以外の Foundry モデルはサポートされていません。",
+      "apiVersion": "API バージョン"
     }
   },
   "hooks": {
