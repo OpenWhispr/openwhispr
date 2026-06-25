@@ -2297,40 +2297,9 @@ class IPCHandlers {
           }
         }
 
-        if (process.platform === "win32" && this.windowsKeyManager) {
-          const activationMode = this.windowManager.getActivationMode();
-          debugLogger.log(
-            `[IPC] Exiting hotkey capture mode, activationMode="${activationMode}", hotkey="${effectiveHotkey}"`
-          );
-          const needsListener =
-            effectiveHotkey &&
-            !isGlobeLikeHotkey(effectiveHotkey) &&
-            (activationMode === "push" ||
-              isModifierOnlyHotkey(effectiveHotkey) ||
-              isRightSideModifier(effectiveHotkey));
-          if (needsListener) {
-            debugLogger.log(`[IPC] Restarting Windows key listener for hotkey: ${effectiveHotkey}`);
-            this.windowsKeyManager.start(effectiveHotkey);
-          } else {
-            this.windowsKeyManager.stop();
-          }
-        }
-
-        if (process.platform === "linux" && this.linuxKeyManager) {
-          const activationMode = this.windowManager.getActivationMode();
-          const needsListener =
-            effectiveHotkey &&
-            !isGlobeLikeHotkey(effectiveHotkey) &&
-            (activationMode === "push" ||
-              isModifierOnlyHotkey(effectiveHotkey) ||
-              isRightSideModifier(effectiveHotkey));
-          if (needsListener) {
-            debugLogger.log(`[IPC] Restarting Linux key listener for hotkey: ${effectiveHotkey}`);
-            this.linuxKeyManager.start(effectiveHotkey);
-          } else {
-            this.linuxKeyManager.stop();
-          }
-        }
+        // Re-sync native key listeners (Windows/Linux) across all hotkey slots now
+        // that capture is done. Idempotent — reads the current slot hotkeys.
+        this.windowManager.reconcileNativeKeyListeners();
 
         // On GNOME, re-register the keybinding with the effective hotkey
         if (hotkeyManager.isUsingGnome() && hotkeyManager.gnomeManager && effectiveHotkey) {
@@ -7382,10 +7351,12 @@ class IPCHandlers {
       if (!hotkey) {
         hotkeyManager.unregisterSlot("agent");
         this.environmentManager.saveAgentKey?.("");
+        this.windowManager.reconcileNativeKeyListeners();
         return { success: true, message: "Agent hotkey cleared" };
       }
 
       const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback);
+      this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveAgentKey?.(hotkey);
         return { success: true, message: `Agent hotkey updated to: ${hotkey}` };
@@ -7407,10 +7378,12 @@ class IPCHandlers {
       if (!hotkey) {
         hotkeyManager.unregisterSlot("voiceAgent");
         this.environmentManager.saveVoiceAgentKey?.("");
+        this.windowManager.reconcileNativeKeyListeners();
         return { success: true, message: "Voice agent hotkey cleared" };
       }
 
       const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback);
+      this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveVoiceAgentKey?.(hotkey);
         return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };

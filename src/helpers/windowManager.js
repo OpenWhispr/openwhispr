@@ -494,6 +494,22 @@ class WindowManager {
     this._cachedActivationMode = mode === "push" ? "push" : "tap";
   }
 
+  /**
+   * Sync the native low-level key listeners (Windows/Linux) so every hotkey slot
+   * that needs one is watched. Call after any change to a slot hotkey or the
+   * activation mode. No-op during hotkey capture (listeners are stopped then).
+   */
+  reconcileNativeKeyListeners() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    if (this.hotkeyManager.isInListeningMode()) return;
+    const keys = this.hotkeyManager.getNativeListenerKeys(this.getActivationMode());
+    if (process.platform === "win32" && this.windowsKeyManager) {
+      this.windowsKeyManager.setKeys(keys);
+    } else if (process.platform === "linux" && this.linuxKeyManager) {
+      this.linuxKeyManager.setKeys(keys);
+    }
+  }
+
   setFloatingIconAutoHide(enabled) {
     this._floatingIconAutoHide = Boolean(enabled);
   }
