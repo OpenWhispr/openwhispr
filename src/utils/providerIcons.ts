@@ -12,6 +12,7 @@ import bedrockIcon from "@/assets/icons/providers/bedrock.svg";
 import azureIcon from "@/assets/icons/providers/azure.svg";
 import vertexIcon from "@/assets/icons/providers/vertex.svg";
 import xaiIcon from "@/assets/icons/providers/xai.svg";
+import cortiIcon from "@/assets/icons/providers/corti.svg";
 
 export const PROVIDER_ICONS: Record<string, string> = {
   openai: openaiIcon,
@@ -29,6 +30,7 @@ export const PROVIDER_ICONS: Record<string, string> = {
   azure: azureIcon,
   vertex: vertexIcon,
   xai: xaiIcon,
+  corti: cortiIcon,
 };
 
 export function getProviderIcon(provider: string): string | undefined {
@@ -41,6 +43,7 @@ export const MONOCHROME_PROVIDERS = [
   "anthropic",
   "openai-oss",
   "xai",
+  "corti",
 ] as const;
 
 export function isMonochromeProvider(provider: string): boolean {

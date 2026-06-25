@@ -12,10 +12,15 @@ import {
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
-import { getSettings, getEffectiveCleanupModel, isCloudCleanupMode } from "../stores/settingsStore";
+import {
+  getSettings,
+  getEffectiveCleanupModel,
+  isCloudCleanupMode,
+  isCloudDictationAgentMode,
+} from "../stores/settingsStore";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import { detectAgentName } from "../config/agentDetection";
-import { resolveDictationRouteKind } from "./dictationRouting";
+import { resolveDictationRouteKind, resolveDictationAgentReachability } from "./dictationRouting";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
@@ -24,11 +29,29 @@ import { getDictionaryHintWords } from "../utils/snippets";
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
+function dictationAgentReachable(settings) {
+  return resolveDictationAgentReachability({
+    useDictationAgent: settings.useDictationAgent,
+    dictationAgentModel: settings.dictationAgentModel,
+    isCloudAgent: isCloudDictationAgentMode(),
+    isSelfHostedAgent:
+      settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim(),
+  });
+}
+
 function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
   const cleanupReachable =
     !!settings.useCleanupModel && (!!settings.cleanupModel?.trim() || isCloudCleanupMode());
   const agentModel = settings.dictationAgentModel?.trim() || "";
-  const agentReachable = !!settings.useDictationAgent && agentModel.length > 0;
+  const isCloudAgent = isCloudDictationAgentMode();
+  const isSelfHostedAgent =
+    settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl?.trim();
+  const agentReachable = resolveDictationAgentReachability({
+    useDictationAgent: settings.useDictationAgent,
+    dictationAgentModel: agentModel,
+    isCloudAgent,
+    isSelfHostedAgent,
+  });
 
   const kind = resolveDictationRouteKind({
     cleanupReachable,
@@ -37,9 +60,9 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
     voiceAgentRequested,
   });
   if (kind === "agent") {
-    const provider = settings.dictationAgentProvider?.trim() || undefined;
-    const isSelfHostedAgent =
-      settings.dictationAgentMode === "self-hosted" && !!settings.dictationAgentRemoteUrl;
+    const provider = isCloudAgent
+      ? "openwhispr"
+      : settings.dictationAgentProvider?.trim() || undefined;
     const isCustomAgent = settings.dictationAgentMode === "providers" && provider === "custom";
     return {
       kind: "agent",
@@ -1061,8 +1084,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     const s = getSettings();
-    const useReasoning =
-      !!s.useCleanupModel || (!!s.useDictationAgent && !!s.dictationAgentModel?.trim());
+    const useReasoning = !!s.useCleanupModel || dictationAgentReachable(s);
     const now = Date.now();
     const cacheValid =
       this.reasoningAvailabilityCache &&
@@ -1156,9 +1178,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const isCloud = isCloudCleanupMode();
     const settings = getSettings();
     const cleanupProvider = settings.cleanupProvider || "auto";
-    const hasAgentModel = !!settings.dictationAgentModel?.trim();
     const cleanupReachable = !!settings.useCleanupModel && (!!cleanupModel || isCloud);
-    const agentReachable = !!settings.useDictationAgent && hasAgentModel;
+    const agentReachable = dictationAgentReachable(settings);
     const agentName =
       typeof window !== "undefined" && window.localStorage
         ? localStorage.getItem("agentName") || null
@@ -2797,7 +2818,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (finalText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
-      const route = resolveReasoningRoute(finalText, stSettings, agentName);
+      const route = resolveReasoningRoute(
+        finalText,
+        stSettings,
+        agentName,
+        this.voiceAgentRequested
+      );
       const cleanupCloudMode = stSettings.cleanupCloudMode || "openwhispr";
 
       try {

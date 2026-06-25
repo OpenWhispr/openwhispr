@@ -2,9 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 test("returns true for self-hosted mode with configured URL", async () => {
-  const { shouldSkipTranscriptionApiKey } = await import(
-    "../../src/helpers/transcriptionAuth.js"
-  );
+  const { shouldSkipTranscriptionApiKey } = await import("../../src/helpers/transcriptionAuth.js");
   assert.equal(
     shouldSkipTranscriptionApiKey({
       transcriptionMode: "self-hosted",
@@ -15,9 +13,7 @@ test("returns true for self-hosted mode with configured URL", async () => {
 });
 
 test("returns false for self-hosted mode without URL", async () => {
-  const { shouldSkipTranscriptionApiKey } = await import(
-    "../../src/helpers/transcriptionAuth.js"
-  );
+  const { shouldSkipTranscriptionApiKey } = await import("../../src/helpers/transcriptionAuth.js");
   assert.equal(
     shouldSkipTranscriptionApiKey({
       transcriptionMode: "self-hosted",
@@ -28,9 +24,7 @@ test("returns false for self-hosted mode without URL", async () => {
 });
 
 test("returns false for self-hosted mode with whitespace-only URL", async () => {
-  const { shouldSkipTranscriptionApiKey } = await import(
-    "../../src/helpers/transcriptionAuth.js"
-  );
+  const { shouldSkipTranscriptionApiKey } = await import("../../src/helpers/transcriptionAuth.js");
   assert.equal(
     shouldSkipTranscriptionApiKey({
       transcriptionMode: "self-hosted",
@@ -41,9 +35,7 @@ test("returns false for self-hosted mode with whitespace-only URL", async () => 
 });
 
 test("returns false for openai cloud provider mode", async () => {
-  const { shouldSkipTranscriptionApiKey } = await import(
-    "../../src/helpers/transcriptionAuth.js"
-  );
+  const { shouldSkipTranscriptionApiKey } = await import("../../src/helpers/transcriptionAuth.js");
   assert.equal(
     shouldSkipTranscriptionApiKey({
       transcriptionMode: "",
@@ -55,16 +47,12 @@ test("returns false for openai cloud provider mode", async () => {
 });
 
 test("returns false when transcriptionMode is missing from settings", async () => {
-  const { shouldSkipTranscriptionApiKey } = await import(
-    "../../src/helpers/transcriptionAuth.js"
-  );
+  const { shouldSkipTranscriptionApiKey } = await import("../../src/helpers/transcriptionAuth.js");
   assert.equal(shouldSkipTranscriptionApiKey({}), false);
 });
 
 test("returns false for non-self-hosted mode even with URL configured", async () => {
-  const { shouldSkipTranscriptionApiKey } = await import(
-    "../../src/helpers/transcriptionAuth.js"
-  );
+  const { shouldSkipTranscriptionApiKey } = await import("../../src/helpers/transcriptionAuth.js");
   assert.equal(
     shouldSkipTranscriptionApiKey({
       transcriptionMode: "cloud",

@@ -21,12 +21,12 @@ Generate keys from the OpenWhispr desktop app under **Settings > API Keys**. Key
 
 Each key has scoped permissions. The API rejects requests missing the required scope with `403 Forbidden`.
 
-| Scope | Grants |
-|-------|--------|
-| `notes:read` | List, get, and search notes. List folders. |
-| `notes:write` | Create, update, and delete notes. Create folders. |
-| `transcriptions:read` | List and get transcriptions. |
-| `usage:read` | Read usage statistics. |
+| Scope                 | Grants                                            |
+| --------------------- | ------------------------------------------------- |
+| `notes:read`          | List, get, and search notes. List folders.        |
+| `notes:write`         | Create, update, and delete notes. Create folders. |
+| `transcriptions:read` | List and get transcriptions.                      |
+| `usage:read`          | Read usage statistics.                            |
 
 ## Base URL
 
@@ -39,11 +39,13 @@ https://api.openwhispr.com/api/v1
 Wrap all responses in a consistent envelope.
 
 **Single resource:**
+
 ```json
 { "data": { "id": "uuid", "title": "My note", ... } }
 ```
 
 **Paginated list:**
+
 ```json
 {
   "data": [{ ... }, { ... }],
@@ -53,41 +55,42 @@ Wrap all responses in a consistent envelope.
 ```
 
 **Error:**
+
 ```json
 { "error": { "code": "not_found", "message": "Note not found" } }
 ```
 
 ### Error Codes
 
-| HTTP Status | Code | Meaning |
-|-------------|------|---------|
-| 400 | `validation_error` | Invalid request body or query params |
-| 401 | `invalid_api_key` | Missing, malformed, expired, or revoked key |
-| 403 | `forbidden` | Key lacks required scope |
-| 404 | `not_found` | Resource does not exist or belongs to another user |
-| 405 | `method_not_allowed` | Wrong HTTP method |
-| 409 | `conflict` | Duplicate resource (e.g. folder name) |
-| 429 | `rate_limited` | Rate limit exceeded — check `Retry-After` header |
-| 500 | `internal_error` | Server error |
+| HTTP Status | Code                 | Meaning                                            |
+| ----------- | -------------------- | -------------------------------------------------- |
+| 400         | `validation_error`   | Invalid request body or query params               |
+| 401         | `invalid_api_key`    | Missing, malformed, expired, or revoked key        |
+| 403         | `forbidden`          | Key lacks required scope                           |
+| 404         | `not_found`          | Resource does not exist or belongs to another user |
+| 405         | `method_not_allowed` | Wrong HTTP method                                  |
+| 409         | `conflict`           | Duplicate resource (e.g. folder name)              |
+| 429         | `rate_limited`       | Rate limit exceeded — check `Retry-After` header   |
+| 500         | `internal_error`     | Server error                                       |
 
 ## Rate Limits
 
 Enforced per API key with minute and daily windows. Search requests cost 5x against the rate limit.
 
-| Plan | Per Minute | Per Day |
-|------|-----------|---------|
-| Free | 30 | 1,000 |
-| Pro | 120 | 10,000 |
-| Business | 300 | 50,000 |
+| Plan     | Per Minute | Per Day |
+| -------- | ---------- | ------- |
+| Free     | 30         | 1,000   |
+| Pro      | 120        | 10,000  |
+| Business | 300        | 50,000  |
 
 Response headers on every request:
 
-| Header | Description |
-|--------|-------------|
-| `X-RateLimit-Limit` | Max requests per minute |
-| `X-RateLimit-Remaining` | Remaining in current window |
-| `X-RateLimit-Reset` | Unix timestamp when window resets |
-| `Retry-After` | Seconds to wait (only on 429) |
+| Header                  | Description                       |
+| ----------------------- | --------------------------------- |
+| `X-RateLimit-Limit`     | Max requests per minute           |
+| `X-RateLimit-Remaining` | Remaining in current window       |
+| `X-RateLimit-Reset`     | Unix timestamp when window resets |
+| `Retry-After`           | Seconds to wait (only on 429)     |
 
 ## Pagination
 
@@ -169,6 +172,7 @@ Scope: `transcriptions:read`.
 
 **Get Usage** — `GET /usage`
 Scope: `usage:read`. Returns:
+
 - `words_used` — Words consumed this period
 - `words_remaining` — Words left in quota
 - `limit` — Total word quota
@@ -188,12 +192,14 @@ https://mcp.openwhispr.com/mcp
 Pass the API key via `Authorization: Bearer` header. All V1 endpoints are available as MCP tools. The server uses Streamable HTTP transport (stateless, no sessions).
 
 ### Claude Code
+
 ```bash
 claude mcp add openwhispr --transport http https://mcp.openwhispr.com/mcp \
   --header "Authorization: Bearer owk_live_YOUR_KEY"
 ```
 
 ### Cursor / VS Code
+
 ```json
 {
   "mcpServers": {
@@ -208,12 +214,14 @@ claude mcp add openwhispr --transport http https://mcp.openwhispr.com/mcp \
 ## Examples
 
 ### List recent notes
+
 ```bash
 curl -H "Authorization: Bearer owk_live_YOUR_KEY" \
   "https://api.openwhispr.com/api/v1/notes/list?limit=10"
 ```
 
 ### Create a note in a folder
+
 ```bash
 curl -X POST \
   -H "Authorization: Bearer owk_live_YOUR_KEY" \
@@ -223,6 +231,7 @@ curl -X POST \
 ```
 
 ### Search notes
+
 ```bash
 curl -X POST \
   -H "Authorization: Bearer owk_live_YOUR_KEY" \
@@ -232,6 +241,7 @@ curl -X POST \
 ```
 
 ### Paginate through all notes
+
 ```bash
 cursor=""
 while true; do
@@ -245,6 +255,7 @@ done
 ```
 
 ### Check usage
+
 ```bash
 curl -H "Authorization: Bearer owk_live_YOUR_KEY" \
   https://api.openwhispr.com/api/v1/usage

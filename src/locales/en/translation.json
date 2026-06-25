@@ -101,13 +101,6 @@
     "accessibility": "Accessibility settings are not available on this platform.",
     "systemAudio": "System audio settings are not available on this platform."
   },
-  "titleBar": {
-    "quitTitle": "Quit OpenWhispr",
-    "quitConfirmTitle": "Quit OpenWhispr?",
-    "quitConfirmDescription": "This will close OpenWhispr and stop background processes.",
-    "quit": "Quit",
-    "cancel": "Cancel"
-  },
   "upgradePrompt": {
     "paymentFailed": "We couldn't process your payment",
     "weeklyLimit": "You've reached your weekly limit",
@@ -165,14 +158,18 @@
     "unknownError": "An unknown error occurred",
     "copy": "Copy",
     "copied": "Copied",
-    "done": "Done"
+    "done": "Done",
+    "skip": "Skip"
   },
   "onboarding": {
     "steps": {
       "welcome": "Welcome",
       "setup": "Setup",
       "permissions": "Permissions",
-      "activation": "Activation",
+      "activation": "Dictation",
+      "useCase": "About you",
+      "meeting": "Meetings",
+      "finish": "Finish",
       "voiceAgent": "Voice Agent"
     },
     "hotkey": {
@@ -187,17 +184,17 @@
     "permissions": {
       "title": "Permissions",
       "microphoneTitle": "Microphone",
-      "microphoneDescription": "Captures your voice for transcription",
+      "microphoneDescription": "Turns your speech into text. Nothing is recorded until you press your hotkey.",
       "grant": "Grant",
       "grantAccess": "Grant Access",
       "accessibilityTitle": "Accessibility",
-      "accessibilityDescription": "Allows auto-pasting transcribed text into any app",
+      "accessibilityDescription": "Types the finished text straight into whatever app you're in — docs, email, chat.",
       "testAndGrant": "Test & Grant",
       "requiredForApp": "Required for OpenWhispr to work",
       "microphoneRequired": "Microphone access required",
       "openSystemSettings": "Open System Settings",
       "systemAudioTitle": "System Audio",
-      "systemAudioDescription": "Transcribe meetings, calls, lectures, podcasts, and other system audio.",
+      "systemAudioDescription": "Lets the meeting recorder hear the other side of your calls — meetings, lectures, podcasts. You can turn this on later in Settings.",
       "optional": "Optional",
       "recommended": "Recommended",
       "accessibilityTroubleshooting": "In System Settings → Accessibility, switch OpenWhispr's toggle off and back on. If that doesn't work, remove OpenWhispr from the list and add it back. Still stuck? Email support@openwhispr.com."
@@ -208,7 +205,7 @@
       "preferredLanguage": "Preferred Language"
     },
     "activation": {
-      "title": "Activation Setup",
+      "title": "Dictation Setup",
       "description": "Configure how you trigger dictation",
       "hotkey": "Hotkey",
       "mode": "Mode",
@@ -220,10 +217,19 @@
       "textareaPlaceholder": "Click here and use your hotkey to dictate..."
     },
     "voiceAgent": {
-      "title": "Voice Agent Hotkey",
+      "title": "Voice Agent Setup",
       "description": "Talk to your AI agent with a single keypress",
       "hotkey": "Hotkey",
       "howItWorks": "Press the key and say what you want — for example “write a short thank-you note”. {{agentName}} types the result wherever your cursor is. No need to say “Hey {{agentName}}” first.",
+      "test": "Try it",
+      "testInstruction": "Click below, press {{hotkey}} and say a command",
+      "testSetHotkey": "Set a hotkey above to try it",
+      "testPlaceholder": "Click here, press your hotkey and say one of the examples...",
+      "examples": [
+        "Translate to Italian: “I talk faster than I type”",
+        "Write a short email to my boss telling him I want a promotion, his name is Mark",
+        "What is 5 × 5?"
+      ],
       "optionalNote": "Optional — you can set or change it anytime in Settings."
     },
     "connectivity": {
@@ -231,6 +237,71 @@
       "body": "{{cause}} You can switch to the local engine, or continue and try again later.",
       "useLocal": "Use local engine",
       "continue": "Continue anyway"
+    },
+    "useCase": {
+      "title": "Why are you here?",
+      "description": "We're a small team shipping every week. What you pick sets up the app for you — and tells us what to build next.",
+      "noteLabel": "Anything else you'd like us to know?",
+      "notePlaceholder": "Optional",
+      "options": {
+        "dictation": {
+          "title": "Writing faster",
+          "description": "Dictate into any app instead of typing"
+        },
+        "meetings": {
+          "title": "Meeting notes & summaries",
+          "description": "Record, transcribe and summarize meetings"
+        },
+        "healthcare": {
+          "title": "Medical, clinical & therapy transcription",
+          "description": "Dictate patient notes, session notes and reports"
+        },
+        "translation": {
+          "title": "Translating languages",
+          "description": "Speak one language, type another"
+        },
+        "ai": {
+          "title": "Talking to my AI",
+          "description": "Voice-drive ChatGPT, Claude and other agents"
+        },
+        "upload": {
+          "title": "Uploading audio files",
+          "description": "Upload and transcribe MP3, OGG and more"
+        }
+      },
+      "selectHint": "Select all that apply"
+    },
+    "meeting": {
+      "title": "Meeting notes",
+      "description": "Capture and summarize your meetings",
+      "autoDetect": "OpenWhispr automatically detects when you're in a meeting and offers to start notes — nothing is recorded without you.",
+      "notification": {
+        "title": "Meeting detected",
+        "body": "It sounds like you're in a meeting. Want to take notes?",
+        "cta": "Start Recording"
+      },
+      "hotkeyLabel": "Meeting hotkey",
+      "hotkeyHint": "Optional — press it in any meeting to start a note instantly."
+    },
+    "finish": {
+      "title": "You're all set",
+      "cloudDescription": "You're on OpenWhispr Cloud — fast, accurate, zero data retention, 2,000 words free every week. Prefer everything on-device? Switch to local processing in Settings.",
+      "localDescription": "You're set up with local processing or your own key. Adjust how your audio is processed anytime in Settings.",
+      "cleanupNote": "AI text cleanup runs with sensible defaults. You can adjust it anytime in Settings.",
+      "openSettings": "Open Settings",
+      "skipForNow": "Skip for now",
+      "corti": {
+        "title": "You told us you're here for clinical transcription",
+        "description": "We've partnered with Corti — clinical-grade speech-to-text with the highest accuracy, and it's HIPAA compliant.",
+        "createAccount": "Create your Corti account",
+        "creditBadge": "$50 free credit",
+        "regionHint": "Choose where your audio is processed — US or EU.",
+        "useCorti": "Use Corti",
+        "skip": "Not now",
+        "step1": "Sign up on corti.ai",
+        "step2": "Open the Corti console and create API credentials",
+        "step3": "Paste your Client ID and Secret below"
+      }
     }
   },
   "streaming": {
@@ -692,15 +763,7 @@
     "noUpcoming": "No upcoming events",
     "meetingStarting": "Meeting starting now",
     "today": "Today",
-    "tomorrow": "Tomorrow",
-    "detection": {
-      "title": "Meeting Detection",
-      "description": "Automatically detect when you're in a meeting",
-      "processDetection": "App Detection",
-      "processDescription": "Identify which app you're using when a meeting is detected",
-      "audioDetection": "Audio Detection",
-      "audioDescription": "Prompt when sustained microphone activity is detected"
-    }
+    "tomorrow": "Tomorrow"
   },
   "upcoming": {
     "title": "Upcoming Meetings",
@@ -845,7 +908,8 @@
     "resendIn": "Resend in {{seconds}}s",
     "verifiedDescription": "Your account is all set.",
     "verifiedTitle": "Email verified",
-    "waiting": "Waiting for verification..."
+    "waiting": "Waiting for verification...",
+    "backToSignIn": "Back to sign in"
   },
   "errorBoundary": {
     "description": "An unexpected error occurred. Please reload to try again.",
@@ -1735,7 +1799,8 @@
       "description": "Pick an engine for dictation and note recording",
       "tabs": {
         "dictation": "Dictation",
-        "noteRecording": "Note Recording"
+        "noteRecording": "Note Recording",
+        "upload": "Audio Upload"
       },
       "selfHostedStreamingNote": "Requires a server that supports streaming transcription."
     },
@@ -2215,18 +2280,15 @@
       "transcribingCloud": "Transcribing via cloud...",
       "transcribingLocal": "Transcribing locally...",
       "transcribingProvider": "Transcribing via {{provider}}...",
+      "cancelTranscription": "Cancel transcription",
       "transcriptionComplete": "Transcription complete",
       "openNote": "Open Note",
       "uploadAnother": "Upload Another",
       "retry": "Retry",
       "startOver": "Start Over",
-      "transcriptionSettings": "Transcription Settings",
       "newFolder": "New Folder",
       "folderName": "Folder name",
       "create": "Create",
-      "setupTitle": "Set up transcription",
-      "setupDescription": "Choose how to transcribe your audio. This also applies to live dictation.",
-      "continue": "Continue",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Custom",
       "selectFolder": "Select folder",

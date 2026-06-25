@@ -55,6 +55,10 @@ const ALLOWED_MEETING_PROVIDERS = new Set([
   "corti-realtime",
 ]);
 
+// Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
+// streaming providers must be told the true PCM rate or they misread the audio.
+const MEETING_STREAM_SAMPLE_RATE = 24000;
+
 function parseAttendees(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -746,10 +750,6 @@ class IPCHandlers {
     ipcMain.handle("restore-from-meeting-mode", () => {
       this.windowManager.restoreControlPanelFromMeetingMode();
       this.meetingDetectionEngine?.setMeetingModeActive(false);
-    });
-
-    ipcMain.handle("app-quit", () => {
-      app.quit();
     });
 
     ipcMain.handle("hide-window", () => {
@@ -4481,6 +4481,7 @@ class IPCHandlers {
         environment: options.environment,
         tenant: options.tenant,
         keyterms: options.keyterms,
+        sampleRate: MEETING_STREAM_SAMPLE_RATE,
       };
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
       let pairs;
@@ -6284,15 +6285,24 @@ class IPCHandlers {
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const method = (opts.method || "GET").toUpperCase();
-        const headers = { ...authHeader };
-        const fetchOpts = { method, headers };
+        const sendWith = (header) => {
+          const headers = { ...header };
+          const fetchOpts = { method, headers };
+          if (opts.body !== undefined) {
+            headers["Content-Type"] = "application/json";
+            fetchOpts.body = JSON.stringify(opts.body);
+          }
+          return proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
+        };
 
-        if (opts.body !== undefined) {
-          headers["Content-Type"] = "application/json";
-          fetchOpts.body = JSON.stringify(opts.body);
+        let response = await sendWith(authHeader);
+
+        // A stale bearer is rejected even when the window still holds a valid session
+        // cookie; retry with the cookie alone (a tagging-along bearer overrides it).
+        if (response.status === 401 && authHeader.Authorization) {
+          const cookieHeader = await getSessionCookies(event);
+          if (cookieHeader) response = await sendWith({ Cookie: cookieHeader });
         }
-
-        const response = await proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
 
         if (response.status === 401) {
           return {
@@ -7284,7 +7294,20 @@ class IPCHandlers {
 
     ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {
       try {
-        await this._mintStoredCortiToken(options);
+        if (!this.cortiStreaming) {
+          this.cortiStreaming = new CortiStreaming();
+        }
+        if (this.cortiStreaming.hasWarmConnection() || this.cortiStreaming.isConnected) {
+          return { success: true, alreadyWarm: true };
+        }
+        const { token, environment, tenant } = await this._mintStoredCortiToken(options);
+        await this.cortiStreaming.warmup({
+          token,
+          environment,
+          tenant,
+          language: options.language,
+          keyterms: options.keyterms,
+        });
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message, code: error.code };
@@ -7605,6 +7628,12 @@ class IPCHandlers {
             this.windowManager.notificationPrefs[k] = !!v;
           }
         }
+        // Detection only serves the notification, so the toggle also gates the detector.
+        const { notificationsEnabled, notifyMeetingDetection } =
+          this.windowManager.notificationPrefs;
+        this.meetingDetectionEngine?.setPreferences({
+          audioDetection: notificationsEnabled && notifyMeetingDetection,
+        });
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };

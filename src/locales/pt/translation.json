@@ -137,14 +137,18 @@
     "unknownError": "Ocurrió un error desconocido",
     "copy": "Copiar",
     "copied": "Copiado",
-    "done": "Listo"
+    "done": "Listo",
+    "skip": "Pular"
   },
   "onboarding": {
     "steps": {
       "welcome": "Boas-vindas",
       "setup": "Configuração",
       "permissions": "Permissões",
-      "activation": "Ativação",
+      "activation": "Ditado",
+      "useCase": "Sobre você",
+      "meeting": "Reuniões",
+      "finish": "Concluir",
       "voiceAgent": "Agente de voz"
     },
     "hotkey": {
@@ -159,17 +163,17 @@
     "permissions": {
       "title": "Permissões",
       "microphoneTitle": "Microfone",
-      "microphoneDescription": "Captura a sua voz para transcrição",
+      "microphoneDescription": "Transforma sua fala em texto. Nada é gravado até você pressionar seu atalho.",
       "grant": "Conceder",
       "grantAccess": "Conceder acesso",
       "accessibilityTitle": "Acessibilidade",
-      "accessibilityDescription": "Permite colar automaticamente o texto transcrito em qualquer aplicativo",
+      "accessibilityDescription": "Digita o texto final diretamente no aplicativo em que você estiver — documentos, e-mail, chat.",
       "testAndGrant": "Testar e conceder",
       "requiredForApp": "Necessário para o OpenWhispr funcionar",
       "microphoneRequired": "Acesso ao microfone necessário",
       "openSystemSettings": "Abrir Configurações do Sistema",
       "systemAudioTitle": "Áudio do Sistema",
-      "systemAudioDescription": "Transcreva reuniões, chamadas, palestras, podcasts e outros áudios do sistema.",
+      "systemAudioDescription": "Permite que o gravador de reuniões ouça o outro lado das suas chamadas — reuniões, aulas, podcasts. Você pode ativar depois nas Configurações.",
       "optional": "Opcional",
       "recommended": "Recomendado",
       "accessibilityTroubleshooting": "Em Configurações do Sistema → Acessibilidade, desative o interruptor do OpenWhispr e ative-o novamente. Se isso não funcionar, remova o OpenWhispr da lista e adicione-o de volta. Ainda com problemas? Envie um e-mail para support@openwhispr.com."
@@ -180,7 +184,7 @@
       "preferredLanguage": "Idioma preferido"
     },
     "activation": {
-      "title": "Configuração de ativação",
+      "title": "Configuração de ditado",
       "description": "Configure como acionar o ditado",
       "hotkey": "Atalho",
       "mode": "Modo",
@@ -192,10 +196,19 @@
       "textareaPlaceholder": "Clique aqui e use seu atalho para ditar..."
     },
     "voiceAgent": {
-      "title": "Atalho do agente de voz",
+      "title": "Configuração do agente de voz",
       "description": "Fale com seu agente de IA com um único atalho",
       "hotkey": "Atalho",
       "howItWorks": "Pressione a tecla e diga o que quer — por exemplo, “escreva uma breve nota de agradecimento”. {{agentName}} escreve o resultado onde estiver o cursor. Não precisa dizer “Hey {{agentName}}” antes.",
+      "test": "Experimente",
+      "testInstruction": "Clique abaixo, pressione {{hotkey}} e diga um comando",
+      "testSetHotkey": "Defina um atalho acima para experimentar",
+      "testPlaceholder": "Clique aqui, pressione seu atalho e diga um dos exemplos...",
+      "examples": [
+        "Traduza para o italiano: «Falo mais rápido do que escrevo»",
+        "Escreva um e-mail curto para o meu chefe dizendo que quero uma promoção, ele se chama Mark",
+        "Quanto é 5 × 5?"
+      ],
       "optionalNote": "Opcional — você pode definir ou alterar a qualquer momento nas configurações."
     },
     "connectivity": {
@@ -203,6 +216,71 @@
       "body": "{{cause}} Você pode mudar para o motor local ou continuar e tentar de novo depois.",
       "useLocal": "Usar motor local",
       "continue": "Continuar mesmo assim"
+    },
+    "useCase": {
+      "title": "O que traz você aqui?",
+      "description": "Somos uma equipe pequena lançando melhorias toda semana. O que você escolher configura o app para você — e nos diz o que construir em seguida.",
+      "noteLabel": "Algo mais que gostaria de nos contar?",
+      "notePlaceholder": "Opcional",
+      "options": {
+        "dictation": {
+          "title": "Escrever mais rápido",
+          "description": "Dite em qualquer aplicativo em vez de digitar"
+        },
+        "meetings": {
+          "title": "Notas e resumos de reuniões",
+          "description": "Grave, transcreva e resuma suas reuniões"
+        },
+        "healthcare": {
+          "title": "Transcrição médica, clínica e terapêutica",
+          "description": "Dite notas de pacientes, notas de sessão e relatórios"
+        },
+        "translation": {
+          "title": "Traduzir idiomas",
+          "description": "Fale um idioma, escreva em outro"
+        },
+        "ai": {
+          "title": "Falar com minha IA",
+          "description": "Controle por voz o ChatGPT, o Claude e outros agentes"
+        },
+        "upload": {
+          "title": "Enviar arquivos de áudio",
+          "description": "Envie e transcreva MP3, OGG e mais"
+        }
+      },
+      "selectHint": "Selecione todas as opções aplicáveis"
+    },
+    "meeting": {
+      "title": "Notas de reunião",
+      "description": "Capture e resuma suas reuniões",
+      "autoDetect": "O OpenWhispr detecta automaticamente quando você está em uma reunião e oferece iniciar notas — nada é gravado sem você.",
+      "notification": {
+        "title": "Reunião detectada",
+        "body": "Parece que você está em uma reunião. Quer fazer anotações?",
+        "cta": "Começar a gravar"
+      },
+      "hotkeyLabel": "Atalho de reunião",
+      "hotkeyHint": "Opcional — pressione-o em qualquer reunião para iniciar uma nota na hora."
+    },
+    "finish": {
+      "title": "Tudo pronto",
+      "cloudDescription": "Você está no OpenWhispr Cloud — rápido, preciso, zero retenção de dados e 2.000 palavras grátis por semana. Prefere tudo no seu dispositivo? Mude para o processamento local nas Configurações.",
+      "localDescription": "Você está configurado com processamento local ou sua própria chave. Ajuste como seu áudio é processado a qualquer momento nas Configurações.",
+      "cleanupNote": "A limpeza de texto por IA usa padrões sensatos. Você pode ajustá-la a qualquer momento nas Configurações.",
+      "openSettings": "Abrir Configurações",
+      "skipForNow": "Pular por enquanto",
+      "corti": {
+        "title": "Você nos disse que está aqui pela transcrição clínica",
+        "description": "Firmamos parceria com a Corti — voz para texto de nível clínico com a maior precisão e em conformidade com a HIPAA.",
+        "createAccount": "Crie sua conta Corti",
+        "creditBadge": "US$ 50 de crédito grátis",
+        "regionHint": "Escolha onde seu áudio é processado — EUA ou UE.",
+        "useCorti": "Usar Corti",
+        "skip": "Agora não",
+        "step1": "Cadastre-se em corti.ai",
+        "step2": "Abra o console da Corti e crie credenciais de API",
+        "step3": "Cole seu Client ID e Secret abaixo"
+      }
     }
   },
   "streaming": {
@@ -721,7 +799,8 @@
     "resendIn": "Reenviar em {{seconds}}s",
     "verifiedDescription": "Sua conta está pronta.",
     "verifiedTitle": "E-mail verificado",
-    "waiting": "Aguardando verificação..."
+    "waiting": "Aguardando verificação...",
+    "backToSignIn": "Voltar para o login"
   },
   "errorBoundary": {
     "description": "Ocorreu um erro inesperado. Recarregue para tentar novamente.",
@@ -1526,7 +1605,8 @@
       "description": "Escolha um motor para ditado e gravação de notas",
       "tabs": {
         "dictation": "Ditado",
-        "noteRecording": "Gravação de notas"
+        "noteRecording": "Gravação de notas",
+        "upload": "Enviar áudio"
       },
       "selfHostedStreamingNote": "Requer um servidor que suporte transcrição em streaming."
     },
@@ -1835,13 +1915,6 @@
       }
     }
   },
-  "titleBar": {
-    "quitTitle": "Sair do OpenWhispr",
-    "quitConfirmTitle": "Sair do OpenWhispr?",
-    "quitConfirmDescription": "Isso fechará o OpenWhispr e encerrará os processos em segundo plano.",
-    "quit": "Sair",
-    "cancel": "Cancelar"
-  },
   "upgradePrompt": {
     "paymentFailed": "Não foi possível processar seu pagamento",
     "weeklyLimit": "Você atingiu seu limite semanal",
@@ -2008,18 +2081,15 @@
       "transcribingCloud": "Transcrevendo pela nuvem...",
       "transcribingLocal": "Transcrevendo localmente...",
       "transcribingProvider": "Transcrevendo via {{provider}}...",
+      "cancelTranscription": "Cancelar transcrição",
       "transcriptionComplete": "Transcrição concluída",
       "openNote": "Abrir nota",
       "uploadAnother": "Enviar outro",
       "retry": "Tentar novamente",
       "startOver": "Recomeçar",
-      "transcriptionSettings": "Configurações de transcrição",
       "newFolder": "Nova pasta",
       "folderName": "Nome da pasta",
       "create": "Criar",
-      "setupTitle": "Configurar transcrição",
-      "setupDescription": "Escolha como transcrever seu áudio. Isso também se aplica à ditação ao vivo.",
-      "continue": "Continuar",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Personalizado",
       "selectFolder": "Selecionar pasta",
@@ -2559,15 +2629,7 @@
     "noUpcoming": "Nenhum evento próximo",
     "meetingStarting": "A reunião começa agora",
     "today": "Hoje",
-    "tomorrow": "Amanhã",
-    "detection": {
-      "title": "Detecção de Reuniões",
-      "description": "Detectar automaticamente quando você está em uma reunião",
-      "processDetection": "Detecção de Aplicativos",
-      "processDescription": "Identificar qual aplicativo você está usando quando uma reunião é detectada",
-      "audioDetection": "Detecção de Áudio",
-      "audioDescription": "Notificar quando atividade prolongada do microfone for detectada"
-    }
+    "tomorrow": "Amanhã"
   },
   "upcoming": {
     "title": "Próximas reuniões",

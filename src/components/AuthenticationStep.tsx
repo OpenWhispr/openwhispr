@@ -502,7 +502,9 @@ export default function AuthenticationStep({
           type="button"
           variant="social"
           onClick={() => handleSocialSignIn("apple")}
-          disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered}
+          disabled={
+            isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
+          }
           title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
           className="w-full h-9"
         >
@@ -526,7 +528,9 @@ export default function AuthenticationStep({
         type="button"
         variant="social"
         onClick={() => handleSocialSignIn("google")}
-        disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered}
+        disabled={
+          isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
+        }
         title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
         className="w-full h-9"
       >
@@ -549,7 +553,9 @@ export default function AuthenticationStep({
         type="button"
         variant="social"
         onClick={() => handleSocialSignIn("microsoft")}
-        disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered}
+        disabled={
+          isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
+        }
         title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
         className="w-full h-9"
       >
@@ -618,7 +624,9 @@ export default function AuthenticationStep({
       <button
         type="button"
         onClick={handleSSOSignIn}
-        disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered}
+        disabled={
+          isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
+        }
         className="w-full text-center text-xs text-muted-foreground/85 hover:text-foreground transition-colors py-1.5 rounded hover:bg-muted/30 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-1.5"
       >
         {isSSOLoading ? (
@@ -639,14 +647,16 @@ export default function AuthenticationStep({
       )}
 
       <div className="pt-1">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={onContinueWithoutAccount}
-          className="w-full text-center text-xs text-muted-foreground/85 hover:text-foreground transition-colors py-1.5 rounded hover:bg-muted/30"
+          className="w-full font-normal text-muted-foreground/85 hover:text-foreground hover:bg-muted/30"
           disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
         >
           {t("auth.emailStep.continueWithoutAccount")}
-        </button>
+        </Button>
       </div>
 
       <p className="text-xs text-muted-foreground/80 leading-tight text-center">

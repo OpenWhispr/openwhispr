@@ -18,6 +18,7 @@ import type {
   TranscriptionSettings,
   CleanupSettings,
   HotkeySettings,
+  OnboardingSettings,
   MicrophoneSettings,
   ApiKeySettings,
   PrivacySettings,
@@ -104,6 +105,8 @@ migrateMeetingFollowFlags();
 
 const BOOLEAN_SETTINGS = new Set([
   "useLocalWhisper",
+  "meetingUseLocalWhisper",
+  "uploadUseLocalWhisper",
   "allowOpenAIFallback",
   "allowLocalFallback",
   "assemblyAiStreaming",
@@ -118,7 +121,6 @@ const BOOLEAN_SETTINGS = new Set([
   "floatingIconAutoHide",
   "startMinimized",
   "meetingProcessDetection",
-  "meetingAudioDetection",
   "speakerDiarizationEnabled",
   "dictationSileroEnabled",
   "noteRecordingSileroEnabled",
@@ -141,7 +143,12 @@ const BOOLEAN_SETTINGS = new Set([
   "gcalPrimaryOnly",
 ]);
 
-const ARRAY_SETTINGS = new Set(["customDictionary", "snippets", "gcalAccounts"]);
+const ARRAY_SETTINGS = new Set([
+  "customDictionary",
+  "snippets",
+  "gcalAccounts",
+  "onboardingUseCases",
+]);
 
 const NUMERIC_SETTINGS = new Set([
   "audioRetentionDays",
@@ -179,6 +186,21 @@ function migratePreferredLanguage() {
 
 migratePreferredLanguage();
 
+// Map the underlying transcription fields to the InferenceMode the Settings
+// tabs select on. Single source of truth shared by the provider-settings
+// migration and the onboarding "use this provider everywhere" action.
+function deriveTranscriptionMode(
+  useLocalWhisper: boolean,
+  cloudTranscriptionMode: string | null,
+  cloudTranscriptionProvider: string | null
+): InferenceMode {
+  if (useLocalWhisper) return "local";
+  if (cloudTranscriptionMode === "byok") {
+    return cloudTranscriptionProvider === "custom" ? "self-hosted" : "providers";
+  }
+  return "openwhispr";
+}
+
 function migrateProviderSettings() {
   if (!isBrowser) return;
   if (localStorage.getItem("_providerSettingsMigrated") === "1") return;
@@ -187,12 +209,7 @@ function migrateProviderSettings() {
   const useLocal = localStorage.getItem("useLocalWhisper") === "true";
   const provider = localStorage.getItem("cloudTranscriptionProvider");
 
-  let transcriptionMode: InferenceMode = "openwhispr";
-  if (useLocal) {
-    transcriptionMode = "local";
-  } else if (cloudMode === "byok") {
-    transcriptionMode = provider === "custom" ? "self-hosted" : "providers";
-  }
+  const transcriptionMode = deriveTranscriptionMode(useLocal, cloudMode, provider);
   localStorage.setItem("transcriptionMode", transcriptionMode);
 
   if (provider === "custom" && cloudMode === "byok") {
@@ -238,6 +255,37 @@ function migrateProviderSettings() {
 }
 
 migrateProviderSettings();
+
+// One-time seed of the dedicated audio-upload transcription settings. Runs
+// after migrateProviderSettings() so the `transcriptionMode` it derives and
+// persists is available to copy. Before this context existed the upload page
+// used the base dictation settings, so copy each value the user actually set
+// into the matching `upload*` key. Fresh installs have no base keys persisted,
+// so nothing is copied and the upload context falls through to its OpenWhispr
+// Cloud defaults.
+const UPLOAD_TRANSCRIPTION_PAIRS: ReadonlyArray<[string, string]> = [
+  ["useLocalWhisper", "uploadUseLocalWhisper"],
+  ["whisperModel", "uploadWhisperModel"],
+  ["localTranscriptionProvider", "uploadLocalTranscriptionProvider"],
+  ["parakeetModel", "uploadParakeetModel"],
+  ["cloudTranscriptionProvider", "uploadCloudTranscriptionProvider"],
+  ["cloudTranscriptionModel", "uploadCloudTranscriptionModel"],
+  ["cloudTranscriptionBaseUrl", "uploadCloudTranscriptionBaseUrl"],
+  ["cloudTranscriptionMode", "uploadCloudTranscriptionMode"],
+  ["transcriptionMode", "uploadTranscriptionMode"],
+];
+
+function migrateUploadTranscription() {
+  if (!isBrowser) return;
+  if (localStorage.getItem("uploadTranscriptionMigrated") === "true") return;
+  for (const [src, dst] of UPLOAD_TRANSCRIPTION_PAIRS) {
+    const v = localStorage.getItem(src);
+    if (v !== null) localStorage.setItem(dst, v);
+  }
+  localStorage.setItem("uploadTranscriptionMigrated", "true");
+}
+
+migrateUploadTranscription();
 
 function migrateAgentMode() {
   if (!isBrowser) return;
@@ -349,6 +397,7 @@ export interface SettingsState
     TranscriptionSettings,
     CleanupSettings,
     HotkeySettings,
+    OnboardingSettings,
     MicrophoneSettings,
     ApiKeySettings,
     PrivacySettings,
@@ -368,7 +417,6 @@ export interface SettingsState
   notifyUpdates: boolean;
   gcalPrimaryOnly: boolean;
   meetingProcessDetection: boolean;
-  meetingAudioDetection: boolean;
   speakerDiarizationEnabled: boolean;
   dictationSileroEnabled: boolean;
   noteRecordingSileroEnabled: boolean;
@@ -403,6 +451,16 @@ export interface SettingsState
   meetingCloudTranscriptionMode: string;
   meetingRemoteTranscriptionType: SelfHostedType;
   meetingRemoteTranscriptionUrl: string;
+
+  uploadTranscriptionMode: InferenceMode;
+  uploadUseLocalWhisper: boolean;
+  uploadWhisperModel: string;
+  uploadLocalTranscriptionProvider: LocalTranscriptionProvider;
+  uploadParakeetModel: string;
+  uploadCloudTranscriptionProvider: string;
+  uploadCloudTranscriptionModel: string;
+  uploadCloudTranscriptionBaseUrl: string;
+  uploadCloudTranscriptionMode: string;
 
   noteFormattingMode: InferenceMode;
   noteFormattingProvider: string;
@@ -453,6 +511,16 @@ export interface SettingsState
   setMeetingCloudTranscriptionMode: (value: string) => void;
   setMeetingRemoteTranscriptionType: (type: SelfHostedType) => void;
   setMeetingRemoteTranscriptionUrl: (url: string) => void;
+
+  setUploadTranscriptionMode: (mode: InferenceMode) => void;
+  setUploadUseLocalWhisper: (value: boolean) => void;
+  setUploadWhisperModel: (value: string) => void;
+  setUploadLocalTranscriptionProvider: (value: LocalTranscriptionProvider) => void;
+  setUploadParakeetModel: (value: string) => void;
+  setUploadCloudTranscriptionProvider: (value: string) => void;
+  setUploadCloudTranscriptionModel: (value: string) => void;
+  setUploadCloudTranscriptionBaseUrl: (value: string) => void;
+  setUploadCloudTranscriptionMode: (value: string) => void;
 
   setNoteFormattingMode: (mode: InferenceMode) => void;
   setNoteFormattingProvider: (value: string) => void;
@@ -543,6 +611,8 @@ export interface SettingsState
   setMeetingKey: (key: string) => void;
   setVoiceAgentKey: (key: string) => void;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
+  setOnboardingUseCases: (useCases: string[]) => void;
+  setOnboardingUseCaseNote: (note: string) => void;
   setActivationMode: (mode: "tap" | "push") => void;
 
   setPreferBuiltInMic: (value: boolean) => void;
@@ -565,7 +635,6 @@ export interface SettingsState
   setNotifyUpdates: (value: boolean) => void;
   setGcalPrimaryOnly: (value: boolean) => void;
   setMeetingProcessDetection: (value: boolean) => void;
-  setMeetingAudioDetection: (value: boolean) => void;
   setSpeakerDiarizationEnabled: (value: boolean) => void;
   setDictationSileroEnabled: (value: boolean) => void;
   setNoteRecordingSileroEnabled: (value: boolean) => void;
@@ -594,6 +663,7 @@ export interface SettingsState
   setChatAgentCustomApiKey: (key: string) => void;
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
+  setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => void;
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => void;
   updateApiKeys: (keys: Partial<ApiKeySettings>) => void;
   updateChatAgentSettings: (settings: Partial<ChatAgentSettings>) => void;
@@ -831,6 +901,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   dictationKey: readString("dictationKey", ""),
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
+  onboardingUseCases: readStringArray("onboardingUseCases", []),
+  onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
@@ -881,7 +953,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   gcalPrimaryOnly: readBoolean("gcalPrimaryOnly", true),
   meetingProcessDetection: readBoolean("meetingProcessDetection", true),
-  meetingAudioDetection: readBoolean("meetingAudioDetection", true),
   speakerDiarizationEnabled: readBoolean("speakerDiarizationEnabled", true),
   dictationSileroEnabled: readBoolean("dictationSileroEnabled", true),
   noteRecordingSileroEnabled: readBoolean("noteRecordingSileroEnabled", true),
@@ -962,6 +1033,23 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   meetingRemoteTranscriptionUrl: readString("meetingRemoteTranscriptionUrl", ""),
 
+  uploadTranscriptionMode: (() => {
+    const v = readString("uploadTranscriptionMode", "openwhispr");
+    if (v === "openwhispr" || v === "providers" || v === "local" || v === "self-hosted") return v;
+    return "openwhispr" as InferenceMode;
+  })(),
+  uploadUseLocalWhisper: readBoolean("uploadUseLocalWhisper", false),
+  uploadWhisperModel: readString("uploadWhisperModel", ""),
+  uploadLocalTranscriptionProvider: (readString("uploadLocalTranscriptionProvider", "whisper") ===
+  "nvidia"
+    ? "nvidia"
+    : "whisper") as LocalTranscriptionProvider,
+  uploadParakeetModel: readString("uploadParakeetModel", ""),
+  uploadCloudTranscriptionProvider: readString("uploadCloudTranscriptionProvider", ""),
+  uploadCloudTranscriptionModel: readString("uploadCloudTranscriptionModel", ""),
+  uploadCloudTranscriptionBaseUrl: readString("uploadCloudTranscriptionBaseUrl", ""),
+  uploadCloudTranscriptionMode: readString("uploadCloudTranscriptionMode", ""),
+
   noteFormattingMode: (() => {
     const v = readString("noteFormattingMode", "openwhispr");
     if (
@@ -1008,6 +1096,21 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   ) => void,
   setMeetingRemoteTranscriptionUrl: createStringSetter("meetingRemoteTranscriptionUrl"),
 
+  setUploadTranscriptionMode: createStringSetter("uploadTranscriptionMode") as (
+    mode: InferenceMode
+  ) => void,
+  setUploadUseLocalWhisper: createBooleanSetter("uploadUseLocalWhisper"),
+  setUploadWhisperModel: createStringSetter("uploadWhisperModel"),
+  setUploadLocalTranscriptionProvider: (value: LocalTranscriptionProvider) => {
+    if (isBrowser) localStorage.setItem("uploadLocalTranscriptionProvider", value);
+    useSettingsStore.setState({ uploadLocalTranscriptionProvider: value });
+  },
+  setUploadParakeetModel: createStringSetter("uploadParakeetModel"),
+  setUploadCloudTranscriptionProvider: createStringSetter("uploadCloudTranscriptionProvider"),
+  setUploadCloudTranscriptionModel: createStringSetter("uploadCloudTranscriptionModel"),
+  setUploadCloudTranscriptionBaseUrl: createStringSetter("uploadCloudTranscriptionBaseUrl"),
+  setUploadCloudTranscriptionMode: createStringSetter("uploadCloudTranscriptionMode"),
+
   setNoteFormattingMode: createStringSetter("noteFormattingMode") as (mode: InferenceMode) => void,
   setNoteFormattingProvider: createStringSetter("noteFormattingProvider"),
   setNoteFormattingModel: createStringSetter("noteFormattingModel"),
@@ -1037,7 +1140,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   chatAgentCustomApiKey: readString("chatAgentCustomApiKey", ""),
 
   dictationAgentMode: (() => {
-    const v = readString("dictationAgentMode", "");
+    const v = readString("dictationAgentMode", "openwhispr");
     if (
       v === "openwhispr" ||
       v === "providers" ||
@@ -1046,11 +1149,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       v === "enterprise"
     )
       return v;
-    return "providers" as InferenceMode;
+    return "openwhispr" as InferenceMode;
   })(),
   dictationAgentProvider: readString("dictationAgentProvider", ""),
   dictationAgentModel: readString("dictationAgentModel", ""),
-  dictationAgentCloudMode: readString("dictationAgentCloudMode", ""),
+  dictationAgentCloudMode: readString("dictationAgentCloudMode", "openwhispr"),
   dictationAgentCloudBaseUrl: readString("dictationAgentCloudBaseUrl", ""),
   dictationAgentRemoteUrl: readString("dictationAgentRemoteUrl", ""),
   dictationAgentCustomApiKey: readString("dictationAgentCustomApiKey", ""),
@@ -1307,6 +1410,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     set({ meetingHotkeyLayoutMode: mode });
   },
 
+  setOnboardingUseCases: (useCases: string[]) => {
+    if (isBrowser) localStorage.setItem("onboardingUseCases", JSON.stringify(useCases));
+    set({ onboardingUseCases: useCases });
+  },
+
+  setOnboardingUseCaseNote: createStringSetter("onboardingUseCaseNote"),
+
   setActivationMode: (mode: "tap" | "push") => {
     if (isBrowser) localStorage.setItem("activationMode", mode);
     set({ activationMode: mode });
@@ -1380,7 +1490,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (isBrowser) window.electronAPI?.gcalSetPrimaryOnly?.(value);
   },
   setMeetingProcessDetection: createBooleanSetter("meetingProcessDetection"),
-  setMeetingAudioDetection: createBooleanSetter("meetingAudioDetection"),
   setSpeakerDiarizationEnabled: (value: boolean) => {
     if (isBrowser) localStorage.setItem("speakerDiarizationEnabled", String(value));
     useSettingsStore.setState({ speakerDiarizationEnabled: value });
@@ -1523,6 +1632,39 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       s.setShowTranscriptionPreview(settings.showTranscriptionPreview);
   },
 
+  // Apply a transcription config to dictation, then mirror its cloud routing to
+  // note recording and audio upload — used when onboarding picks one provider
+  // for everything (e.g. Corti for medical providers).
+  setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => {
+    const s = useSettingsStore.getState();
+    s.updateTranscriptionSettings(settings);
+    const {
+      useLocalWhisper,
+      cloudTranscriptionMode,
+      cloudTranscriptionProvider,
+      cloudTranscriptionModel,
+    } = useSettingsStore.getState();
+    // Each Settings tab selects on its InferenceMode field, so set it for every
+    // scope — otherwise the UI keeps showing the previous mode (e.g. OpenWhispr
+    // Cloud) even though the cloud routing now points at the new provider.
+    const mode = deriveTranscriptionMode(
+      useLocalWhisper,
+      cloudTranscriptionMode,
+      cloudTranscriptionProvider
+    );
+    s.setTranscriptionMode(mode);
+    s.setMeetingTranscriptionMode(mode);
+    s.setUploadTranscriptionMode(mode);
+    s.setMeetingUseLocalWhisper(useLocalWhisper);
+    s.setMeetingCloudTranscriptionMode(cloudTranscriptionMode);
+    s.setMeetingCloudTranscriptionProvider(cloudTranscriptionProvider);
+    s.setMeetingCloudTranscriptionModel(cloudTranscriptionModel);
+    s.setUploadUseLocalWhisper(useLocalWhisper);
+    s.setUploadCloudTranscriptionMode(cloudTranscriptionMode);
+    s.setUploadCloudTranscriptionProvider(cloudTranscriptionProvider);
+    s.setUploadCloudTranscriptionModel(cloudTranscriptionModel);
+  },
+
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => {
     const s = useSettingsStore.getState();
     if (settings.useCleanupModel !== undefined) s.setUseCleanupModel(settings.useCleanupModel);
@@ -1574,6 +1716,11 @@ export const selectIsCloudChatAgentMode = (state: SettingsState) =>
   state.chatAgentMode === "openwhispr" &&
   state.chatAgentCloudMode === "openwhispr";
 
+export const selectIsCloudDictationAgentMode = (state: SettingsState) =>
+  state.isSignedIn &&
+  state.dictationAgentMode === "openwhispr" &&
+  state.dictationAgentCloudMode === "openwhispr";
+
 export const selectIsCloudNoteFormattingMode = (state: SettingsState) => {
   const cfg = selectResolvedNoteFormatting(state);
   return state.isSignedIn && cfg.mode === "openwhispr" && cfg.cloudMode === "openwhispr";
@@ -1616,6 +1763,36 @@ export const selectResolvedMeetingTranscription = (
     remoteTranscriptionUrl: state.meetingRemoteTranscriptionUrl || state.remoteTranscriptionUrl,
   };
 };
+
+export interface ResolvedUploadTranscription {
+  useLocalWhisper: boolean;
+  whisperModel: string;
+  localTranscriptionProvider: LocalTranscriptionProvider;
+  parakeetModel: string;
+  cloudTranscriptionProvider: string;
+  cloudTranscriptionModel: string;
+  cloudTranscriptionBaseUrl: string;
+  cloudTranscriptionMode: string;
+  transcriptionMode: InferenceMode;
+}
+
+// Audio upload is batch (not streaming), so unset values fall back to the base
+// dictation settings — matching the behavior before upload had its own context.
+export const selectResolvedUploadTranscription = (
+  state: SettingsState
+): ResolvedUploadTranscription => ({
+  useLocalWhisper: state.uploadUseLocalWhisper,
+  whisperModel: state.uploadWhisperModel || state.whisperModel,
+  localTranscriptionProvider: state.uploadLocalTranscriptionProvider,
+  parakeetModel: state.uploadParakeetModel || state.parakeetModel,
+  cloudTranscriptionProvider:
+    state.uploadCloudTranscriptionProvider || state.cloudTranscriptionProvider,
+  cloudTranscriptionModel: state.uploadCloudTranscriptionModel || state.cloudTranscriptionModel,
+  cloudTranscriptionBaseUrl:
+    state.uploadCloudTranscriptionBaseUrl || state.cloudTranscriptionBaseUrl || "",
+  cloudTranscriptionMode: state.uploadCloudTranscriptionMode || state.cloudTranscriptionMode,
+  transcriptionMode: state.uploadTranscriptionMode,
+});
 
 export interface ResolvedNoteFormatting {
   provider: string;
@@ -1729,6 +1906,10 @@ export function getEffectiveCleanupModel() {
 
 export function isCloudCleanupMode() {
   return selectIsCloudCleanupMode(useSettingsStore.getState());
+}
+
+export function isCloudDictationAgentMode() {
+  return selectIsCloudDictationAgentMode(useSettingsStore.getState());
 }
 
 // --- Initialization ---
@@ -1926,12 +2107,12 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Sync meeting detection preferences to main process
+    // Audio detection is derived from the meeting-notification toggle in
+    // sync-notification-preferences, so only process detection is sent here.
     try {
       const currentState = useSettingsStore.getState();
       await window.electronAPI.meetingDetectionSetPreferences?.({
         processDetection: currentState.meetingProcessDetection,
-        audioDetection: currentState.meetingAudioDetection,
       });
     } catch (err) {
       logger.warn(

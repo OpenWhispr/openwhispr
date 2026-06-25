@@ -245,7 +245,7 @@ const PROVIDER_CREDENTIALS: Record<
     fields: [{ key: "mistralApiKey", input: "secret" }],
   },
   corti: {
-    consoleUrl: "https://console.corti.app",
+    consoleUrl: "https://www.corti.ai/?utm_source=referral&utm_content=&utm_campaign=openwhispr",
     fields: [
       { key: "cortiClientId", input: "secret", labelKey: "transcription.corti.clientId" },
       { key: "cortiClientSecret", input: "secret", labelKey: "transcription.corti.clientSecret" },

@@ -9,9 +9,14 @@ import logoIcon from "../assets/icon.png";
 interface EmailVerificationStepProps {
   email: string;
   onVerified: () => void;
+  onBack: () => void;
 }
 
-export default function EmailVerificationStep({ email, onVerified }: EmailVerificationStepProps) {
+export default function EmailVerificationStep({
+  email,
+  onVerified,
+  onBack,
+}: EmailVerificationStepProps) {
   const { t } = useTranslation();
   const [resendCooldown, setResendCooldown] = useState(60);
   const [isResending, setIsResending] = useState(false);
@@ -145,6 +150,16 @@ export default function EmailVerificationStep({ email, onVerified }: EmailVerifi
             <span className="text-sm font-medium">{t("emailVerification.resendButton")}</span>
           </>
         )}
+      </Button>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={onBack}
+        className="w-full font-normal text-muted-foreground/85 hover:text-foreground hover:bg-muted/30"
+      >
+        {t("emailVerification.backToSignIn")}
       </Button>
     </div>
   );
