@@ -101,13 +101,6 @@
     "accessibility": "Le impostazioni di accessibilità non sono disponibili su questa piattaforma.",
     "systemAudio": "Le impostazioni audio di sistema non sono disponibili su questa piattaforma."
   },
-  "titleBar": {
-    "quitTitle": "Esci da OpenWhispr",
-    "quitConfirmTitle": "Uscire da OpenWhispr?",
-    "quitConfirmDescription": "Questa operazione chiuderà OpenWhispr e interromperà i processi in background.",
-    "quit": "Esci",
-    "cancel": "Annulla"
-  },
   "upgradePrompt": {
     "paymentFailed": "Non siamo riusciti a elaborare il pagamento",
     "weeklyLimit": "Hai raggiunto il limite settimanale",
@@ -165,14 +158,19 @@
     "unknownError": "Une erreur inconnue s'est produite",
     "copy": "Copier",
     "copied": "Copié",
-    "done": "Terminé"
+    "done": "Terminé",
+    "skip": "Salta"
   },
   "onboarding": {
     "steps": {
       "welcome": "Benvenuto",
       "setup": "Configurazione",
       "permissions": "Permessi",
-      "activation": "Attivazione"
+      "activation": "Dettatura",
+      "useCase": "Su di te",
+      "meeting": "Riunioni",
+      "finish": "Fine",
+      "voiceAgent": "Agente vocale"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Impossibile registrare questa scorciatoia",
@@ -186,17 +184,17 @@
     "permissions": {
       "title": "Permessi",
       "microphoneTitle": "Microfono",
-      "microphoneDescription": "Cattura la tua voce per la trascrizione",
+      "microphoneDescription": "Trasforma la tua voce in testo. Non viene registrato nulla finché non premi la scorciatoia.",
       "grant": "Concedi",
       "grantAccess": "Concedi accesso",
       "accessibilityTitle": "Accessibilità",
-      "accessibilityDescription": "Permette di incollare automaticamente il testo trascritto in qualsiasi app",
+      "accessibilityDescription": "Digita il testo finale direttamente nell'app in cui ti trovi — documenti, email, chat.",
       "testAndGrant": "Testa e concedi",
       "requiredForApp": "Necessario per usare OpenWhispr",
       "microphoneRequired": "Accesso al microfono richiesto",
       "openSystemSettings": "Apri Impostazioni di Sistema",
       "systemAudioTitle": "Audio di Sistema",
-      "systemAudioDescription": "Trascrivi riunioni, chiamate, lezioni, podcast e altri audio di sistema.",
+      "systemAudioDescription": "Permette al registratore delle riunioni di sentire l'altro lato delle tue chiamate — riunioni, lezioni, podcast. Puoi attivarlo più tardi nelle Impostazioni.",
       "optional": "Facoltativo",
       "recommended": "Consigliato",
       "accessibilityTroubleshooting": "In Impostazioni di Sistema → Accessibilità, disattiva l'interruttore di OpenWhispr e riattivalo. Se non funziona, rimuovi OpenWhispr dall'elenco e aggiungilo di nuovo. Ancora problemi? Scrivi a support@openwhispr.com."
@@ -207,7 +205,7 @@
       "preferredLanguage": "Lingua preferita"
     },
     "activation": {
-      "title": "Configurazione attivazione",
+      "title": "Configurazione dettatura",
       "description": "Configura come avviare la dettatura",
       "hotkey": "Scorciatoia",
       "mode": "Modalità",
@@ -218,11 +216,92 @@
       "holdHotkey": "Tieni premuto {{hotkey}}",
       "textareaPlaceholder": "Clicca qui e usa la scorciatoia per dettare..."
     },
+    "voiceAgent": {
+      "title": "Configurazione dell'agente vocale",
+      "description": "Parla con il tuo agente IA con un solo tasto",
+      "hotkey": "Scorciatoia",
+      "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. {{agentName}} scrive il risultato dove si trova il cursore. Non serve dire prima “Hey {{agentName}}”.",
+      "test": "Provalo",
+      "testInstruction": "Fai clic qui sotto, premi {{hotkey}} e pronuncia un comando",
+      "testSetHotkey": "Imposta una scorciatoia sopra per provarlo",
+      "testPlaceholder": "Fai clic qui, premi la tua scorciatoia e pronuncia uno degli esempi...",
+      "examples": [
+        "Traduci in italiano: «Parlo più velocemente di quanto scrivo»",
+        "Scrivi una breve email al mio capo dicendogli che voglio una promozione, si chiama Mark",
+        "Quanto fa 5 × 5?"
+      ],
+      "optionalNote": "Facoltativo — puoi impostarla o modificarla in qualsiasi momento nelle impostazioni."
+    },
     "connectivity": {
       "title": "Non riusciamo a raggiungere OpenWhispr Cloud da questa rete",
       "body": "{{cause}} Puoi passare al motore locale o continuare e riprovare più tardi.",
       "useLocal": "Usa motore locale",
       "continue": "Continua comunque"
+    },
+    "useCase": {
+      "title": "Cosa ti porta qui?",
+      "description": "Siamo un piccolo team e pubblichiamo ogni settimana. Ciò che scegli configura l'app per te — e ci dice cosa costruire dopo.",
+      "noteLabel": "C'è altro che vorresti farci sapere?",
+      "notePlaceholder": "Facoltativo",
+      "options": {
+        "dictation": {
+          "title": "Scrivere più velocemente",
+          "description": "Detta in qualsiasi app invece di digitare"
+        },
+        "meetings": {
+          "title": "Note e riepiloghi delle riunioni",
+          "description": "Registra, trascrivi e riassumi le riunioni"
+        },
+        "healthcare": {
+          "title": "Trascrizione medica, clinica e terapeutica",
+          "description": "Detta note dei pazienti, note di seduta e referti"
+        },
+        "translation": {
+          "title": "Tradurre lingue",
+          "description": "Parla una lingua, scrivi in un'altra"
+        },
+        "ai": {
+          "title": "Parlare con la mia IA",
+          "description": "Guida con la voce ChatGPT, Claude e altri agenti"
+        },
+        "upload": {
+          "title": "Caricare file audio",
+          "description": "Carica e trascrivi MP3, OGG e altro"
+        }
+      },
+      "selectHint": "Seleziona tutte le opzioni pertinenti"
+    },
+    "meeting": {
+      "title": "Note delle riunioni",
+      "description": "Cattura e riassumi le tue riunioni",
+      "autoDetect": "OpenWhispr rileva automaticamente quando sei in riunione e ti propone di avviare le note — nulla viene registrato senza di te.",
+      "notification": {
+        "title": "Riunione rilevata",
+        "body": "Sembra che tu sia in riunione. Vuoi prendere appunti?",
+        "cta": "Avvia registrazione"
+      },
+      "hotkeyLabel": "Scorciatoia riunione",
+      "hotkeyHint": "Facoltativa — premila in qualsiasi riunione per avviare subito una nota."
+    },
+    "finish": {
+      "title": "Tutto pronto",
+      "cloudDescription": "Sei su OpenWhispr Cloud: veloce, preciso, zero conservazione dei dati e 2.000 parole gratis a settimana. Preferisci tutto sul tuo dispositivo? Passa all'elaborazione locale nelle Impostazioni.",
+      "localDescription": "Sei configurato con l'elaborazione locale o con la tua chiave. Regola come viene elaborato il tuo audio in qualsiasi momento nelle Impostazioni.",
+      "cleanupNote": "La pulizia del testo con IA usa impostazioni predefinite sensate. Puoi regolarla in qualsiasi momento nelle Impostazioni.",
+      "openSettings": "Apri Impostazioni",
+      "skipForNow": "Salta per ora",
+      "corti": {
+        "title": "Ci hai detto che sei qui per la trascrizione clinica",
+        "description": "Siamo partner di Corti — riconoscimento vocale di livello clinico con la massima accuratezza, conforme alla HIPAA.",
+        "createAccount": "Crea il tuo account Corti",
+        "creditBadge": "50 $ di credito gratuito",
+        "regionHint": "Scegli dove elaborare il tuo audio — USA o UE.",
+        "useCorti": "Usa Corti",
+        "skip": "Non ora",
+        "step1": "Registrati su corti.ai",
+        "step2": "Apri la console Corti e crea le credenziali API",
+        "step3": "Incolla qui sotto Client ID e Secret"
+      }
     }
   },
   "streaming": {
@@ -312,7 +391,16 @@
       "retryError": "Ritrascrizione non riuscita",
       "audioNotFound": "File audio non trovato o scaduto",
       "noAiProcessing": "Nessuna elaborazione IA applicata a questa trascrizione",
-      "rawTranscript": "Trascrizione grezza"
+      "rawTranscript": "Trascrizione grezza",
+      "discarded": {
+        "show": "Mostra scartate",
+        "hide": "Nascondi scartate",
+        "badge": "Scartata",
+        "recording": "Registrazione scartata",
+        "recordingWithDuration": "Registrazione scartata · {{duration}}",
+        "recover": "Recupera",
+        "recovered": "Recuperata"
+      }
     },
     "cloudMigration": {
       "title": "Benvenuto in OpenWhispr Cloud",
@@ -424,19 +512,27 @@
     "apiKeyOptional": "Chiave API (opzionale)",
     "getKey": "Ottieni chiave ->",
     "endpointUrl": "URL endpoint",
+    "azureHint": "Azure AI Foundry: inserisci l'endpoint della tua risorsa (es. https://your-resource.cognitiveservices.azure.com) e imposta Modello con il nome esatto della tua distribuzione.",
     "customProvider": "Personalizzato",
     "fallback": {
       "whisperModelDescription": "Modello",
       "parakeetModelDescription": "Modello NVIDIA Parakeet"
     },
-    "whisperModels": "Modelli Whisper"
+    "whisperModels": "Modelli Whisper",
+    "corti": {
+      "clientId": "ID client",
+      "clientSecret": "Client secret",
+      "environment": "Regione dei dati",
+      "tenant": "Tenant"
+    }
   },
   "hooks": {
     "audioRecording": {
       "errorTitles": {
         "sessionExpired": "Sessione scaduta",
         "offline": "Sei offline",
-        "dailyLimitReached": "Limite giornaliero raggiunto"
+        "dailyLimitReached": "Limite giornaliero raggiunto",
+        "providerRateLimited": "Limite di velocità del provider"
       },
       "fallback": {
         "title": "Modalità fallback",
@@ -449,7 +545,8 @@
       "errorDescriptions": {
         "sessionExpired": "La tua sessione OpenWhispr Cloud non è disponibile. Effettua di nuovo l'accesso dalle Impostazioni.",
         "offline": "Sei offline. La trascrizione cloud richiede una connessione Internet.",
-        "dailyLimitReached": "Hai raggiunto il limite di trascrizioni di oggi. Riprova domani o aggiorna il tuo piano."
+        "dailyLimitReached": "Hai raggiunto il limite di trascrizioni di oggi. Riprova domani o aggiorna il tuo piano.",
+        "providerRateLimited": "Il tuo provider di trascrizione ha limitato la richiesta. Attendi un momento e riprova."
       }
     },
     "clipboard": {
@@ -719,7 +816,8 @@
     "resendIn": "Reinvia tra {{seconds}}s",
     "verifiedDescription": "Il tuo account è pronto.",
     "verifiedTitle": "E-mail verificata",
-    "waiting": "In attesa della verifica..."
+    "waiting": "In attesa della verifica...",
+    "backToSignIn": "Torna all'accesso"
   },
   "errorBoundary": {
     "description": "Si è verificato un errore imprevisto. Ricarica per riprovare.",
@@ -803,7 +901,8 @@
     "pressAnyKeyMac": "Premi un tasto qualsiasi o ⌘⇧K",
     "recording": "Registrazione",
     "tryShortcut": "Prova Ctrl+Shift+K",
-    "tryShortcutMac": "Prova ⌘⇧K"
+    "tryShortcutMac": "Prova ⌘⇧K",
+    "remove": "Rimuovi scorciatoia"
   },
   "languageSelector": {
     "noLanguagesFound": "Nessuna lingua trovata",
@@ -1283,15 +1382,21 @@
         "linuxPttPermissionDescription": "Esegui questo comando e riavvia la sessione: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Tieni premuto per parlare richiede configurazione",
         "linuxPttSetupDescription": "Il tuo utente ha bisogno di accesso ai dispositivi di input della tastiera.",
-        "linuxPttSetupNote": "Dopo aver eseguito il comando, esci e riaccedi."
+        "linuxPttSetupNote": "Dopo aver eseguito il comando, esci e riaccedi.",
+        "hyprlandConfigWriteWarningTitle": "Le scorciatoie di Hyprland non saranno persistenti",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr non può scrivere in {{path}}, quindi le scorciatoie non sopravvivranno a un ricaricamento della configurazione di Hyprland. Assicurati che il file esista e sia scrivibile.",
+        "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia."
       },
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",
         "description": "Avvia la modalità meeting e posiziona il pannello a lato dello schermo",
-        "clear": "Rimuovi scorciatoia",
         "layoutLabel": "Quando attivata da scorciatoia, apri in:",
         "layoutFullWidth": "Larghezza completa",
         "layoutSidePanel": "Pannello laterale"
+      },
+      "voiceAgentHotkey": {
+        "title": "Scorciatoia dell'agente vocale",
+        "description": "Di' cosa ti serve — il tuo agente IA scrive il risultato, non le tue parole"
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",
@@ -1390,7 +1495,16 @@
             "step1Title": "Installa xclip"
           }
         },
-        "xclipDesc": "Strumento appunti per incollare in KDE Wayland (xclip o xsel)"
+        "xclipDesc": "Strumento appunti per incollare in KDE Wayland (xclip o xsel)",
+        "nixos": {
+          "intro": "Stai usando NixOS. L'incolla automatico richiede ydotool e l'accesso a /dev/uinput, che NixOS gestisce in modo dichiarativo.",
+          "detected": "Rilevato",
+          "manualTitle": "Aggiungi questo alla tua configurazione",
+          "manualDesc": "Configuralo tu stesso, poi ricostruisci.",
+          "flakeTitle": "Stai installando tramite il nostro flake?",
+          "flakeDesc": "Se installi OpenWhispr dal flake, programs.openwhispr.enable attiva ydotool, il modulo uinput e le appartenenze ai gruppi per te.",
+          "rebuildNote": "Esegui sudo nixos-rebuild switch, poi disconnettiti e riconnettiti affinché la modifica al gruppo e la regola /dev/uinput abbiano effetto. Sostituisci <you> con il tuo nome utente."
+        }
       },
       "updates": {
         "badges": {
@@ -1495,7 +1609,9 @@
       "audioStorageFiles": "{{count}} file, {{size}}",
       "audioStorageEmpty": "Nessun file audio salvato",
       "clearAllAudio": "Elimina tutti i file audio",
-      "clearAllAudioConfirm": "Eliminare tutti i file audio salvati? Questa azione è irreversibile."
+      "clearAllAudioConfirm": "Eliminare tutti i file audio salvati? Questa azione è irreversibile.",
+      "saveDiscarded": "Salva le dettature scartate",
+      "saveDiscardedDescription": "Quando annulli una dettatura con Escape, conserva l'audio nella cronologia per poterla recuperare. Richiede la conservazione di dati e audio attiva."
     },
     "prompts": {
       "description": "Visualizza, personalizza e testa il prompt di sistema unificato che gestisce la correzione del testo e il rilevamento delle istruzioni",
@@ -1506,7 +1622,8 @@
       "description": "Scegli un motore per dettatura e registrazione di note",
       "tabs": {
         "dictation": "Dettatura",
-        "noteRecording": "Registrazione note"
+        "noteRecording": "Registrazione note",
+        "upload": "Carica audio"
       },
       "selfHostedStreamingNote": "Richiede un server che supporti la trascrizione in streaming."
     },
@@ -1738,7 +1855,9 @@
         "openai_whisper_1": "Modello Whisper originale",
         "groq_whisper_large_v3_turbo": "Velocità 216x in tempo reale",
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
-        "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce"
+        "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
+        "corti_transcribe": "Trascrizione medica di livello clinico",
+        "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",
@@ -1750,9 +1869,12 @@
         "anthropic_claude_sonnet_4_6": "Prestazioni bilanciate",
         "anthropic_claude_sonnet_4_5": "Generazione Sonnet precedente",
         "anthropic_claude_haiku_4_5": "Veloce con intelligenza quasi da frontiera",
+        "gemini_gemini_3_5_flash": "Ultimo modello Gemini veloce e ad alta capacità",
         "gemini_gemini_3_1_pro_preview": "Modello di punta di nuova generazione per ragionamento complesso",
         "gemini_gemini_3_flash_preview": "Modello di nuova generazione ultra-veloce e ad alta capacità",
         "gemini_gemini_2_5_flash_lite": "Latenza e costo minimi",
+        "gemini_gemma_4_31b_it": "Il più grande Gemma 4 di Google, 31B denso, contesto 256K",
+        "gemini_gemma_4_26b_a4b_it": "Gemma 4 MoE di Google, 4B parametri attivi, contesto 256K",
         "groq_qwen_qwen3_32b": "Potente modello di ragionamento, contesto 131K",
         "groq_openai_gpt_oss_120b": "Ammiraglia open source di OpenAI, 500 T/sec",
         "groq_openai_gpt_oss_20b": "Modello open source veloce, 1000 T/sec",
@@ -1955,18 +2077,15 @@
       "transcribingCloud": "Trascrizione nel cloud...",
       "transcribingLocal": "Trascrizione locale...",
       "transcribingProvider": "Trascrizione tramite {{provider}}...",
+      "cancelTranscription": "Annulla trascrizione",
       "transcriptionComplete": "Trascrizione completata",
       "openNote": "Apri nota",
       "uploadAnother": "Carica un altro",
       "retry": "Riprova",
       "startOver": "Ricomincia",
-      "transcriptionSettings": "Impostazioni di trascrizione",
       "newFolder": "Nuova cartella",
       "folderName": "Nome cartella",
       "create": "Crea",
-      "setupTitle": "Configura la trascrizione",
-      "setupDescription": "Scegli come trascrivere il tuo audio. Questo si applica anche alla dettatura dal vivo.",
-      "continue": "Continua",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Personalizzato",
       "selectFolder": "Seleziona cartella",
@@ -2129,15 +2248,56 @@
     "addWord": "Aggiungi parola",
     "removeWord": "Rimuovi {{word}}",
     "clearAll": "Cancella tutto",
-    "howItWorks": "Come funziona",
-    "howItWorksDetail": "Le parole aggiunte vengono incluse nel prompt dell'IA, in modo che il modello sappia cercare e preservare questi termini durante la correzione della trascrizione.",
-    "autoManaged": "Gestito automaticamente",
-    "inputHint": "Premi Invio per aggiungere",
-    "title": "Dizionario personalizzato",
-    "description": "Insegna all'IA il tuo vocabolario — nomi, gergo e termini che potrebbe altrimenti non riconoscere",
     "clearTitle": "Svuotare il dizionario?",
     "clearDescription": "Verranno rimossi tutti i termini dal tuo dizionario personalizzato. Questa azione non può essere annullata.",
-    "addPlaceholder": "Aggiungi una parola o una frase..."
+    "addPlaceholder": "Aggiungi parole separate da virgole: OpenWhispr, Supabase, John Snow, ARR",
+    "add": "Aggiungi",
+    "importWords": "Importa parole",
+    "importPlaceholder": "Incolla parole separate da virgole...",
+    "separateWithCommas": "Separa con virgole",
+    "wordsReady_one": "{{count}} parola pronta",
+    "wordsReady_other": "{{count}} parole pronte",
+    "import": "Importa",
+    "yourDictionary": "Il tuo dizionario",
+    "exportDictionary": "Esporta dizionario",
+    "exportFailed": "Esportazione non riuscita",
+    "editWord": "Modifica {{word}}",
+    "noMatches": "Nessuna corrispondenza — premi Invio per aggiungere \"{{word}}\"",
+    "tabDictionary": "Dizionario",
+    "tabSnippets": "Snippet",
+    "snippets": {
+      "title": "Snippet",
+      "edit": "Modifica {{trigger}}",
+      "remove": "Rimuovi {{trigger}}",
+      "editTitle": "Modifica snippet",
+      "dialogDescription": "Quando pronunci il trigger, viene sostituito con il tuo testo salvato.",
+      "triggerLabel": "Trigger",
+      "triggerPlaceholder": "es. mio calendario",
+      "replacementLabel": "Sostituzione",
+      "replacementPlaceholder": "Testo da inserire quando pronunci il trigger…",
+      "create": "Crea snippet",
+      "duplicate": "Esiste già uno snippet con questo trigger",
+      "emptyTitle": "Quello che non dovresti dover dire",
+      "emptyTitleAccent": "due volte",
+      "emptyDescription": "Pronuncia un trigger e OpenWhispr lo sostituisce con ciò che hai salvato: URL, presentazioni, firme, prompt.",
+      "new": "Nuovo snippet",
+      "examples": {
+        "linkedinTrigger": "Il mio LinkedIn",
+        "linkedinText": "linkedin.com/in/tu",
+        "rewriteTrigger": "Prompt di riscrittura",
+        "rewriteText": "Riscrivi questo testo in modo più conciso e professionale",
+        "introTrigger": "Email di presentazione",
+        "introText": "Ciao, mi piacerebbe trovare un momento per parlare questa settimana…",
+        "signoffTrigger": "Firma",
+        "signoffText": "Saluti, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Aggiungi una frase trigger: \"mio calendario\", \"il mio LinkedIn\""
+    },
+    "emptyTitle": "Il tuo dizionario è vuoto",
+    "emptyDescription": "Aggiungi le parole che {{agentName}} deve sempre riconoscere: nomi, strumenti, acronimi.",
+    "addFirstWord": "Aggiungi la tua prima parola",
+    "importList": "Importa un elenco",
+    "agentDefault": "Aggiunto di default"
   },
   "sidebar": {
     "home": "Home",
@@ -2292,9 +2452,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Tasto Agente",
-      "hotkeyDescription": "Tasto di scelta rapida per alternare l'overlay agente",
-      "clearHotkey": "Rimuovi scorciatoia",
+      "hotkey": "Scorciatoia dell'agente chat",
+      "hotkeyDescription": "Apre e chiude l'overlay dell'agente chat",
       "model": "Modello Agente",
       "modelDescription": "Modello IA utilizzato per le conversazioni agente",
       "systemPrompt": "Prompt di Sistema",
@@ -2466,15 +2625,7 @@
     "noUpcoming": "Nessun evento in programma",
     "meetingStarting": "La riunione inizia ora",
     "today": "Oggi",
-    "tomorrow": "Domani",
-    "detection": {
-      "title": "Rilevamento Riunioni",
-      "description": "Rileva automaticamente quando sei in una riunione",
-      "processDetection": "Rilevamento Applicazioni",
-      "processDescription": "Identifica quale app stai usando quando viene rilevata una riunione",
-      "audioDetection": "Rilevamento Audio",
-      "audioDescription": "Notifica quando viene rilevata un'attività microfono prolungata"
-    }
+    "tomorrow": "Domani"
   },
   "upcoming": {
     "title": "Riunioni in programma",

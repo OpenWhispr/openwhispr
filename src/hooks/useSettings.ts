@@ -3,6 +3,7 @@ import { useSettingsStore, initializeSettings } from "../stores/settingsStore";
 import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
+import type { Snippet } from "../utils/snippets";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -22,6 +23,7 @@ export interface TranscriptionSettings {
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
   customDictionary: string[];
+  snippets: Snippet[];
   assemblyAiStreaming: boolean;
   showTranscriptionPreview: boolean;
 }
@@ -41,8 +43,14 @@ export interface CleanupSettings {
 export interface HotkeySettings {
   dictationKey: string;
   meetingKey: string;
+  voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
   activationMode: "tap" | "push";
+}
+
+export interface OnboardingSettings {
+  onboardingUseCases: string[];
+  onboardingUseCaseNote: string;
 }
 
 export interface MicrophoneSettings {
@@ -55,7 +63,10 @@ export interface ApiKeySettings {
   anthropicApiKey: string;
   geminiApiKey: string;
   groqApiKey: string;
+  xaiApiKey: string;
   mistralApiKey: string;
+  cortiClientId: string;
+  cortiClientSecret: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
 }
@@ -65,6 +76,7 @@ export interface PrivacySettings {
   telemetryEnabled: boolean;
   audioRetentionDays: number;
   dataRetentionEnabled: boolean;
+  saveDiscardedTranscriptions: boolean;
 }
 
 export interface ThemeSettings {
@@ -84,7 +96,7 @@ export interface ChatAgentSettings {
 
 function useSettingsInternal() {
   const store = useSettingsStore();
-  const { setCustomDictionary } = store;
+  const { setCustomDictionary, applyCustomDictionaryFromExternal } = store;
 
   // One-time initialization: sync API keys, dictation key, activation mode,
   // UI language, and dictionary from the main process / SQLite.
@@ -101,16 +113,18 @@ function useSettingsInternal() {
     });
   }, []);
 
-  // Listen for dictionary updates from main process (auto-learn corrections)
+  // Refresh the in-memory store from main-process broadcasts (auto-learn, sync
+  // pulls) without re-triggering a sync — that would loop, since pulls emit the
+  // broadcast. Writes that must sync go through setCustomDictionary instead.
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.onDictionaryUpdated) return;
     const unsubscribe = window.electronAPI.onDictionaryUpdated((words: string[]) => {
       if (Array.isArray(words)) {
-        setCustomDictionary(words);
+        applyCustomDictionaryFromExternal(words);
       }
     });
     return unsubscribe;
-  }, [setCustomDictionary]);
+  }, [applyCustomDictionaryFromExternal]);
 
   // Auto-learn corrections from user edits in external apps
   const [autoLearnCorrections, setAutoLearnCorrectionsRaw] = useLocalStorage(
@@ -202,6 +216,8 @@ function useSettingsInternal() {
     cleanupMode: store.cleanupMode,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
     customDictionary: store.customDictionary,
+    snippets: store.snippets,
+    setSnippets: store.setSnippets,
     assemblyAiStreaming: store.assemblyAiStreaming,
     setAssemblyAiStreaming: store.setAssemblyAiStreaming,
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
@@ -214,9 +230,11 @@ function useSettingsInternal() {
     anthropicApiKey: store.anthropicApiKey,
     geminiApiKey: store.geminiApiKey,
     groqApiKey: store.groqApiKey,
+    xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
+    voiceAgentKey: store.voiceAgentKey,
     meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
     setMeetingHotkeyLayoutMode: store.setMeetingHotkeyLayoutMode,
     theme: store.theme,
@@ -256,6 +274,11 @@ function useSettingsInternal() {
     setCleanupCustomApiKey: store.setCleanupCustomApiKey,
     setDictationKey: store.setDictationKey,
     setMeetingKey: store.setMeetingKey,
+    setVoiceAgentKey: store.setVoiceAgentKey,
+    onboardingUseCases: store.onboardingUseCases,
+    setOnboardingUseCases: store.setOnboardingUseCases,
+    onboardingUseCaseNote: store.onboardingUseCaseNote,
+    setOnboardingUseCaseNote: store.setOnboardingUseCaseNote,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
@@ -319,6 +342,8 @@ function useSettingsInternal() {
     setAudioRetentionDays: store.setAudioRetentionDays,
     dataRetentionEnabled: store.dataRetentionEnabled,
     setDataRetentionEnabled: store.setDataRetentionEnabled,
+    saveDiscardedTranscriptions: store.saveDiscardedTranscriptions,
+    setSaveDiscardedTranscriptions: store.setSaveDiscardedTranscriptions,
     updateTranscriptionSettings: store.updateTranscriptionSettings,
     updateCleanupSettings: store.updateCleanupSettings,
     updateApiKeys: store.updateApiKeys,

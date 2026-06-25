@@ -4,7 +4,7 @@ export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted"
 
 export type SelfHostedType = "openai-compatible" | "lan";
 
-export type TranscriptionStatus = "completed" | "failed" | "pending";
+export type TranscriptionStatus = "completed" | "failed" | "pending" | "discarded";
 
 export type TranscriptionErrorCode =
   | "TIMEOUT"
@@ -14,6 +14,7 @@ export type TranscriptionErrorCode =
   | "AUTH_EXPIRED"
   | "AUTH_REQUIRED"
   | "LIMIT_REACHED"
+  | "PROVIDER_RATE_LIMITED"
   | "API_KEY_MISSING"
   | "INVALID_KEY"
   | "MODEL_NOT_AVAILABLE"
@@ -97,6 +98,18 @@ export interface FolderItem {
   deleted_at: string | null;
   workspace_id?: string | null;
   team_id?: string | null;
+}
+
+export interface DictionaryEntryItem {
+  id: number;
+  word: string;
+  source: "manual" | "learned";
+  created_at: string;
+  updated_at: string;
+  client_dict_id: string;
+  cloud_id: string | null;
+  sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
 }
 
 export type WorkspaceRole = "owner" | "admin" | "member";
@@ -270,12 +283,7 @@ export interface AudioDiagnosticsResult {
 }
 
 export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
-export type SystemAudioStrategy =
-  | "native"
-  | "loopback"
-  | "browser-portal"
-  | "portal-helper"
-  | "unsupported";
+export type SystemAudioStrategy = "native" | "loopback" | "pipewire-loopback" | "unsupported";
 
 export interface SystemAudioAccessResult {
   granted: boolean;
@@ -478,6 +486,7 @@ declare global {
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       onToggleDictation: (callback: () => void) => () => void;
+      onToggleVoiceAgent?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
 
@@ -509,7 +518,10 @@ declare global {
           clientTranscriptionId?: string;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
-      getTranscriptions: (limit?: number) => Promise<TranscriptionItem[]>;
+      getTranscriptions: (
+        limit?: number,
+        options?: { includeDiscarded?: boolean }
+      ) => Promise<TranscriptionItem[]>;
       clearTranscriptions: () => Promise<{ cleared: number; success: boolean }>;
       deleteTranscription: (id: number) => Promise<{ success: boolean }>;
       getTranscriptionById: (id: number) => Promise<TranscriptionItem | null>;
@@ -602,6 +614,7 @@ declare global {
         noteId: number,
         format: "txt" | "srt" | "json" | "md"
       ) => Promise<{ success: boolean; error?: string }>;
+      exportDictionary: (words: string[]) => Promise<{ success: boolean; error?: string }>;
       searchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
       semanticSearchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
       semanticReindexAll: () => Promise<{ success: boolean; indexed?: number; error?: string }>;
@@ -883,7 +896,6 @@ declare global {
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
 
       // App management
-      appQuit: () => Promise<void>;
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
 
       // Update operations
@@ -920,6 +932,7 @@ declare global {
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
       }>;
+      getHyprlandConfigStatus?: () => Promise<{ canWrite: boolean; path: string } | null>;
 
       // Wayland paste diagnostics
       getYdotoolStatus?: () => Promise<{
@@ -932,6 +945,7 @@ declare global {
         hasUinput: boolean;
         hasUdevRule: boolean;
         hasGroup: boolean;
+        isNixOS: boolean;
         allGood: boolean;
       }>;
 
@@ -965,6 +979,15 @@ declare global {
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;
 
+      // xAI API key management
+      getXaiKey?: () => Promise<string | null>;
+      saveXaiKey?: (key: string) => Promise<void>;
+      proxyXaiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ text: string }>;
+
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;
@@ -973,6 +996,18 @@ declare global {
         model?: string;
         language?: string;
         contextBias?: string[];
+      }) => Promise<{ text: string }>;
+
+      // Corti credential management
+      getCortiClientId?: () => Promise<string | null>;
+      saveCortiClientId?: (key: string) => Promise<void>;
+      getCortiClientSecret?: () => Promise<string | null>;
+      saveCortiClientSecret?: (key: string) => Promise<void>;
+      proxyCortiTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        language: string;
+        environment: string;
+        tenant: string;
       }) => Promise<{ text: string }>;
 
       // Custom endpoint API keys
@@ -1222,6 +1257,10 @@ declare global {
         apiKey: string;
         baseUrl: string;
         model: string;
+        provider?: string;
+        language?: string;
+        environment?: string;
+        tenant?: string;
       }) => Promise<{
         success: boolean;
         text?: string;
@@ -1313,6 +1352,8 @@ declare global {
 
       // Agent Mode
       updateAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      getVoiceAgentKey?: () => Promise<string>;
       getAgentKey?: () => Promise<string>;
       saveAgentKey?: (key: string) => Promise<void>;
       createAgentConversation?: (
@@ -1440,6 +1481,34 @@ declare global {
       onDeepgramSessionEnd?: (
         callback: (data: { audioDuration?: number; text?: string }) => void
       ) => () => void;
+
+      // Corti streaming (BYOK)
+      cortiStreamingWarmup?: (options?: {
+        environment?: string;
+        tenant?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      cortiStreamingStart?: (options?: {
+        environment?: string;
+        tenant?: string;
+        language?: string;
+        keyterms?: string[];
+      }) => Promise<{ success: boolean; error?: string; code?: string }>;
+      cortiStreamingSend?: (audioBuffer: ArrayBuffer) => void;
+      cortiStreamingFinalize?: () => void;
+      cortiStreamingStop?: () => Promise<{
+        success: boolean;
+        text?: string;
+        model?: string;
+        audioBytesSent?: number;
+        error?: string;
+      }>;
+      cortiStreamingStatus?: () => Promise<{ isConnected: boolean; sessionId: string | null }>;
+      onCortiPartialTranscript?: (callback: (text: string) => void) => () => void;
+      onCortiFinalTranscript?: (callback: (text: string) => void) => () => void;
+      onCortiError?: (callback: (error: string) => void) => () => void;
+      onCortiSessionEnd?: (callback: (data: { text?: string }) => void) => () => void;
 
       // Agent overlay
       resizeAgentWindow?: (width: number, height: number) => Promise<void>;
@@ -1824,6 +1893,20 @@ declare global {
       markTranscriptionSynced?: (id: number, cloudId: string) => Promise<void>;
       getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
       hardDeleteTranscription?: (id: number) => Promise<{ success: boolean; id: number }>;
+
+      getPendingDictionary?: () => Promise<DictionaryEntryItem[]>;
+      getPendingDictionaryDeletes?: () => Promise<DictionaryEntryItem[]>;
+      getDictionaryByClientId?: (clientDictId: string) => Promise<DictionaryEntryItem | null>;
+      upsertDictionaryFromCloud?: (
+        cloudEntry: Record<string, unknown>
+      ) => Promise<DictionaryEntryItem | null>;
+      markDictionarySynced?: (
+        id: number,
+        cloudId: string
+      ) => Promise<{ success: boolean; changes: number }>;
+      hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
+      clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
+      broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
     };
 
     api?: {

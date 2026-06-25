@@ -114,7 +114,9 @@ export default function UsageDisplay() {
             variant="outline"
             size="sm"
             onClick={() => {
-              useSettingsStore.getState().setCloudTranscriptionMode("byok");
+              const s = useSettingsStore.getState();
+              s.setTranscriptionMode("providers");
+              s.setCloudTranscriptionMode("byok");
               window.location.reload();
             }}
           >
