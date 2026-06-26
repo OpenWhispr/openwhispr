@@ -2322,7 +2322,9 @@
     "notSignedIn": "Не авторизован",
     "chat": "Чат",
     "inviteTeammate": "Teammitglied einladen",
-    "createWorkspace": "Workspace erstellen"
+    "createWorkspace": "Workspace erstellen",
+    "collapse": "Свернуть боковую панель",
+    "expand": "Развернуть боковую панель"
   },
   "chat": {
     "newChat": "Новый чат",

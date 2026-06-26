@@ -1,7 +1,15 @@
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
-import { Download, RefreshCw, Loader2, AlertTriangle, Zap, ChevronLeft } from "lucide-react";
+import {
+  Download,
+  RefreshCw,
+  Loader2,
+  AlertTriangle,
+  Zap,
+  ChevronLeft,
+  PanelLeftOpen,
+} from "lucide-react";
 import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
@@ -87,6 +95,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const showDiscarded = useShowDiscarded();
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("sidebarCollapsed") === "true"
+  );
   const isMeetingMode = useIsMeetingMode();
   const isNarrowWindow = useIsNarrowWindow();
   const activeNoteId = useActiveNoteId();
@@ -389,6 +400,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   const handleExitMeetingMode = useCallback(() => {
     window.electronAPI?.restoreFromMeetingMode?.();
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("sidebarCollapsed", String(next));
+      return next;
+    });
   }, []);
 
   const copyToClipboard = useCallback(
@@ -742,6 +761,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           <ControlPanelSidebar
             activeView={activeView}
             onViewChange={setActiveView}
+            onToggleCollapse={toggleSidebar}
+            collapsed={sidebarCollapsed}
             onOpenSearch={() => setShowSearch(true)}
             onOpenSettings={() => {
               setSettingsSection(undefined);
@@ -786,7 +807,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           >
             {isSidePanelLayout && (
               <div
-                className={platform === "darwin" ? "ml-[84px] mt-[16px]" : "ml-2"}
+                className={platform === "darwin" ? "ml-21 mt-4" : "ml-2"}
                 style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
               >
                 <Button
@@ -798,6 +819,23 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   <ChevronLeft size={14} strokeWidth={1.8} />
                   {t("controlPanel.backToNotes")}
                 </Button>
+              </div>
+            )}
+            {sidebarCollapsed && !isSidePanelLayout && platform === "darwin" && (
+              <div
+                className="ml-5 mt-4"
+                style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+              >
+                <button
+                  onClick={toggleSidebar}
+                  aria-label={t("sidebar.expand")}
+                  className="group flex items-center justify-center h-7 w-7 rounded-md outline-none hover:bg-foreground/5 dark:hover:bg-white/5 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+                >
+                  <PanelLeftOpen
+                    size={15}
+                    className="text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
+                  />
+                </button>
               </div>
             )}
             <div className="flex-1" />

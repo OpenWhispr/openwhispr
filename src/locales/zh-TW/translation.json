@@ -2313,7 +2313,9 @@
     "notSignedIn": "尚未登入",
     "chat": "聊天",
     "inviteTeammate": "Invitar compañero",
-    "createWorkspace": "Crear espacio de trabajo"
+    "createWorkspace": "Crear espacio de trabajo",
+    "collapse": "收合側邊欄",
+    "expand": "展開側邊欄"
   },
   "chat": {
     "newChat": "新對話",

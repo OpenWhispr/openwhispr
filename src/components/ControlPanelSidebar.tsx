@@ -13,6 +13,8 @@ import {
   UserPlus,
   X,
   Search,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
@@ -26,6 +28,17 @@ import { useWorkspace } from "../hooks/useWorkspace";
 import { WORKSPACES_ENABLED } from "../lib/features";
 
 const platform = getCachedPlatform();
+
+const rowIconClass =
+  "shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150";
+const rowLabelClass =
+  "text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150";
+const rowButtonClass =
+  "group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
+const railButtonClass =
+  "group flex items-center justify-center w-full h-8 rounded-lg outline-none hover:bg-foreground/5 dark:hover:bg-white/5 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150";
+const islandClass =
+  "ml-2 w-12 flex flex-col gap-0.5 rounded-2xl border border-border/60 dark:border-white/10 bg-surface-2 dark:bg-surface-2 p-1.5 shadow-[var(--shadow-card-hover-subtle)]";
 
 export type ControlPanelView =
   | "home"
@@ -51,6 +64,8 @@ interface ControlPanelSidebarProps {
   isProUser?: boolean;
   usageLoaded?: boolean;
   updateAction?: React.ReactNode;
+  onToggleCollapse?: () => void;
+  collapsed?: boolean;
 }
 
 export default function ControlPanelSidebar({
@@ -69,6 +84,8 @@ export default function ControlPanelSidebar({
   isProUser,
   usageLoaded,
   updateAction,
+  onToggleCollapse,
+  collapsed,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
   const [upgradeDismissed, setUpgradeDismissed] = useState(
@@ -100,84 +117,127 @@ export default function ControlPanelSidebar({
   ];
 
   return (
-    <div className="w-48 h-full shrink-0 border-r border-border/15 dark:border-white/6 flex flex-col bg-surface-1/60 dark:bg-surface-1">
+    <div
+      className={cn(
+        "h-full shrink-0 flex flex-col transition-all duration-300 ease-out",
+        collapsed
+          ? "w-16"
+          : "w-48 overflow-hidden border-r border-border/15 dark:border-white/6 bg-surface-1/60 dark:bg-surface-1"
+      )}
+    >
       <div
-        className="w-full h-10 shrink-0"
+        className="w-full h-10 shrink-0 flex items-center"
         style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
-      />
+      >
+        {onToggleCollapse && (!collapsed || platform !== "darwin") && (
+          <div
+            className={platform === "darwin" ? "ml-21 mt-4" : "ml-2"}
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          >
+            <button
+              onClick={onToggleCollapse}
+              aria-label={collapsed ? t("sidebar.expand") : t("sidebar.collapse")}
+              className="group flex items-center justify-center h-7 w-7 rounded-md outline-none hover:bg-foreground/5 dark:hover:bg-white/5 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+            >
+              {collapsed ? (
+                <PanelLeftOpen size={15} className={rowIconClass} />
+              ) : (
+                <PanelLeftClose size={15} className={rowIconClass} />
+              )}
+            </button>
+          </div>
+        )}
+      </div>
 
-      {WORKSPACES_ENABLED && isSignedIn && (
+      {WORKSPACES_ENABLED && isSignedIn && !collapsed && (
         <div className="px-2 pt-1 pb-1">
           <WorkspaceSwitcher userName={userName} />
         </div>
       )}
 
-      {onOpenSearch && (
-        <div className="px-2 pt-2 pb-1">
-          <button
-            onClick={onOpenSearch}
-            className="group flex items-center w-full h-7 px-2.5 rounded-md border border-border/70 dark:border-white/25 bg-transparent hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors gap-2 outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
-          >
-            <Search size={11} className="text-muted-foreground/50 shrink-0" />
-            <span className="flex-1 text-[11px] text-left text-muted-foreground/50">
-              {t("commandSearch.shortPlaceholder")}
-            </span>
-            <div className="flex items-center gap-0.5 shrink-0">
-              <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
-                {platform === "darwin" ? "⌘" : "Ctrl"}
-              </kbd>
-              <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
-                K
-              </kbd>
-            </div>
-          </button>
-        </div>
-      )}
-
-      <nav className="flex flex-col gap-0.5 px-2 pt-2 pb-2">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeView === item.id;
-
-          return (
+      <div className={collapsed ? cn(islandClass, "mt-1") : undefined}>
+        {onOpenSearch &&
+          (collapsed ? (
             <button
-              key={item.id}
-              onClick={() => onViewChange(item.id)}
-              className={cn(
-                "group relative flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md outline-none transition-colors duration-150 text-left",
-                "focus-visible:ring-1 focus-visible:ring-primary/30",
-                isActive
-                  ? "bg-primary/8 dark:bg-primary/10"
-                  : "hover:bg-foreground/4 dark:hover:bg-white/4 active:bg-foreground/6"
-              )}
+              onClick={onOpenSearch}
+              aria-label={t("commandSearch.shortPlaceholder")}
+              title={t("commandSearch.shortPlaceholder")}
+              className={railButtonClass}
             >
-              <Icon
-                size={15}
+              <Search size={15} className={rowIconClass} />
+            </button>
+          ) : (
+            <div className="px-2 pt-2 pb-1">
+              <button
+                onClick={onOpenSearch}
+                className="group flex items-center w-full h-7 px-2.5 rounded-md border border-border/70 dark:border-white/25 bg-transparent hover:bg-foreground/5 dark:hover:bg-white/5 transition-colors gap-2 outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+              >
+                <Search size={11} className="text-muted-foreground/50 shrink-0" />
+                <span className="flex-1 text-[11px] text-left text-muted-foreground/50">
+                  {t("commandSearch.shortPlaceholder")}
+                </span>
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
+                    {platform === "darwin" ? "⌘" : "Ctrl"}
+                  </kbd>
+                  <kbd className="text-[10px] px-1 py-px rounded border border-border/30 dark:border-white/8 bg-muted/40 text-muted-foreground/40 font-mono leading-tight">
+                    K
+                  </kbd>
+                </div>
+              </button>
+            </div>
+          ))}
+
+        <nav className={cn("flex flex-col gap-0.5", !collapsed && "px-2 pt-2 pb-2")}>
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeView === item.id;
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => onViewChange(item.id)}
+                title={collapsed ? item.label : undefined}
                 className={cn(
-                  "shrink-0 transition-colors duration-150",
+                  "group relative flex items-center w-full h-8 outline-none transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-primary/30",
+                  collapsed ? "justify-center rounded-lg" : "gap-2.5 px-2.5 rounded-md text-left",
                   isActive
-                    ? "text-primary"
-                    : "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/55 dark:group-hover:text-foreground/70"
-                )}
-              />
-              <span
-                className={cn(
-                  "text-xs transition-colors duration-150",
-                  isActive
-                    ? "text-foreground font-medium"
-                    : "text-foreground/80 group-hover:text-foreground dark:text-foreground/75 dark:group-hover:text-foreground/90"
+                    ? "bg-primary/8 dark:bg-primary/10"
+                    : collapsed
+                      ? "hover:bg-foreground/5 dark:hover:bg-white/5"
+                      : "hover:bg-foreground/4 dark:hover:bg-white/4 active:bg-foreground/6"
                 )}
               >
-                {item.label}
-              </span>
-            </button>
-          );
-        })}
-      </nav>
+                <Icon
+                  size={15}
+                  className={cn(
+                    "shrink-0 transition-colors duration-150",
+                    isActive
+                      ? "text-primary"
+                      : "text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/55 dark:group-hover:text-foreground/70"
+                  )}
+                />
+                {!collapsed && (
+                  <span
+                    className={cn(
+                      "text-xs transition-colors duration-150",
+                      isActive
+                        ? "text-foreground font-medium"
+                        : "text-foreground/80 group-hover:text-foreground dark:text-foreground/75 dark:group-hover:text-foreground/90"
+                    )}
+                  >
+                    {item.label}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
       <div className="flex-1" />
 
-      {showLimitBanner && (
+      {showLimitBanner && !collapsed && (
         <div className="px-2 pb-2">
           <div className="rounded-lg border border-destructive/25 bg-destructive/5 dark:bg-destructive/10 p-3">
             <div className="flex flex-col items-center text-center">
@@ -199,7 +259,7 @@ export default function ControlPanelSidebar({
         </div>
       )}
 
-      {showUpgradeBanner && (
+      {showUpgradeBanner && !collapsed && (
         <div className="px-2 pb-2">
           <div className="relative rounded-lg border border-primary/20 bg-primary/5 dark:bg-primary/10 p-3">
             <button
@@ -231,8 +291,8 @@ export default function ControlPanelSidebar({
         </div>
       )}
 
-      <div className="px-2 pb-2 space-y-0.5">
-        {updateAction && (
+      <div className={collapsed ? cn(islandClass, "mb-2") : "px-2 pb-2 space-y-0.5"}>
+        {updateAction && !collapsed && (
           <div className="px-1 pb-1" style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
             {updateAction}
           </div>
@@ -242,15 +302,11 @@ export default function ControlPanelSidebar({
           <button
             onClick={onOpenReferrals}
             aria-label={t("sidebar.referral")}
-            className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+            title={collapsed ? t("sidebar.referral") : undefined}
+            className={collapsed ? railButtonClass : rowButtonClass}
           >
-            <Gift
-              size={15}
-              className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-            />
-            <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-              {t("sidebar.referral")}
-            </span>
+            <Gift size={15} className={rowIconClass} />
+            {!collapsed && <span className={rowLabelClass}>{t("sidebar.referral")}</span>}
           </button>
         )}
 
@@ -260,75 +316,80 @@ export default function ControlPanelSidebar({
             aria-label={
               activeWorkspace ? t("sidebar.inviteTeammate") : t("sidebar.createWorkspace")
             }
-            className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+            title={
+              collapsed
+                ? activeWorkspace
+                  ? t("sidebar.inviteTeammate")
+                  : t("sidebar.createWorkspace")
+                : undefined
+            }
+            className={collapsed ? railButtonClass : rowButtonClass}
           >
-            <UserPlus
-              size={15}
-              className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-            />
-            <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-              {activeWorkspace ? t("sidebar.inviteTeammate") : t("sidebar.createWorkspace")}
-            </span>
+            <UserPlus size={15} className={rowIconClass} />
+            {!collapsed && (
+              <span className={rowLabelClass}>
+                {activeWorkspace ? t("sidebar.inviteTeammate") : t("sidebar.createWorkspace")}
+              </span>
+            )}
           </button>
         )}
 
         <button
           onClick={onOpenSettings}
           aria-label={t("sidebar.settings")}
-          className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+          title={collapsed ? t("sidebar.settings") : undefined}
+          className={collapsed ? railButtonClass : rowButtonClass}
         >
-          <Settings
-            size={15}
-            className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-          />
-          <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-            {t("sidebar.settings")}
-          </span>
+          <Settings size={15} className={rowIconClass} />
+          {!collapsed && <span className={rowLabelClass}>{t("sidebar.settings")}</span>}
         </button>
 
         <SupportDropdown
           trigger={
             <button
               aria-label={t("sidebar.support")}
-              className="group flex items-center gap-2.5 w-full h-8 px-2.5 rounded-md text-left outline-none hover:bg-foreground/4 dark:hover:bg-white/4 focus-visible:ring-1 focus-visible:ring-primary/30 transition-colors duration-150"
+              title={collapsed ? t("sidebar.support") : undefined}
+              className={collapsed ? railButtonClass : rowButtonClass}
             >
-              <HelpCircle
-                size={15}
-                className="shrink-0 text-foreground/60 group-hover:text-foreground/75 dark:text-foreground/50 dark:group-hover:text-foreground/65 transition-colors duration-150"
-              />
-              <span className="text-xs text-foreground/80 group-hover:text-foreground dark:text-foreground/70 dark:group-hover:text-foreground/85 transition-colors duration-150">
-                {t("sidebar.support")}
-              </span>
+              <HelpCircle size={15} className={rowIconClass} />
+              {!collapsed && <span className={rowLabelClass}>{t("sidebar.support")}</span>}
             </button>
           }
         />
 
-        <div className="mx-1 h-px bg-border/10 dark:bg-white/6 my-1.5!" />
+        {!collapsed && <div className="mx-1 h-px bg-border/10 dark:bg-white/6 my-1.5!" />}
 
-        <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md">
+        <div
+          className={cn(
+            "flex items-center rounded-md",
+            collapsed ? "justify-center py-1" : "gap-2.5 px-2.5 py-1.5"
+          )}
+        >
           {userImage ? (
             <img src={userImage} alt="" className="w-6 h-6 rounded-full shrink-0 object-cover" />
           ) : (
             <UserCircle size={18} className="shrink-0 text-foreground/50 dark:text-foreground/45" />
           )}
-          <div className="flex-1 min-w-0">
-            {isSignedIn && (userName || userEmail) ? (
-              <>
-                <p className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight">
-                  {userName || t("sidebar.defaultUser")}
-                </p>
-                {userEmail && (
-                  <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
-                    {userEmail}
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              {isSignedIn && (userName || userEmail) ? (
+                <>
+                  <p className="text-xs text-foreground/80 dark:text-foreground/80 truncate leading-tight">
+                    {userName || t("sidebar.defaultUser")}
                   </p>
-                )}
-              </>
-            ) : authLoaded && !isSignedIn ? (
-              <p className="text-xs text-foreground/45 dark:text-foreground/55">
-                {t("sidebar.notSignedIn")}
-              </p>
-            ) : null}
-          </div>
+                  {userEmail && (
+                    <p className="text-xs text-foreground/55 dark:text-foreground/55 truncate leading-tight">
+                      {userEmail}
+                    </p>
+                  )}
+                </>
+              ) : authLoaded && !isSignedIn ? (
+                <p className="text-xs text-foreground/45 dark:text-foreground/55">
+                  {t("sidebar.notSignedIn")}
+                </p>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
 

@@ -1999,7 +1999,9 @@
     "notSignedIn": "Non connecté",
     "chat": "Chat",
     "inviteTeammate": "Inviter un coéquipier",
-    "createWorkspace": "Créer un espace de travail"
+    "createWorkspace": "Créer un espace de travail",
+    "collapse": "Réduire la barre latérale",
+    "expand": "Développer la barre latérale"
   },
   "chat": {
     "newChat": "Nouveau chat",

@@ -2318,7 +2318,9 @@
     "notSignedIn": "Não conectado",
     "chat": "Chat",
     "inviteTeammate": "Invitar compañero",
-    "createWorkspace": "Crear espacio de trabajo"
+    "createWorkspace": "Crear espacio de trabajo",
+    "collapse": "Recolher barra lateral",
+    "expand": "Expandir barra lateral"
   },
   "chat": {
     "newChat": "Novo chat",

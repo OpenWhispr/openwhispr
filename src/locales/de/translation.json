@@ -2318,7 +2318,9 @@
     "notSignedIn": "Nicht angemeldet",
     "chat": "Chat",
     "inviteTeammate": "Teammitglied einladen",
-    "createWorkspace": "Workspace erstellen"
+    "createWorkspace": "Workspace erstellen",
+    "collapse": "Seitenleiste einklappen",
+    "expand": "Seitenleiste ausklappen"
   },
   "chat": {
     "newChat": "Neuer Chat",

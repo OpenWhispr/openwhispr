@@ -2039,7 +2039,9 @@
     "notSignedIn": "Not signed in",
     "chat": "Chat",
     "inviteTeammate": "Invite teammate",
-    "createWorkspace": "Create workspace"
+    "createWorkspace": "Create workspace",
+    "collapse": "Collapse sidebar",
+    "expand": "Expand sidebar"
   },
   "workspaces": {
     "switcher": {
