@@ -1,7 +1,9 @@
-import { it, expect } from "vitest";
-import WhisperServerManager from "../../src/helpers/whisperServer";
+const test = require("node:test");
+const assert = require("node:assert/strict");
 
-it("buildWhisperServerArgs includes VAD flags when enabled and model path provided", () => {
+const WhisperServerManager = require("../../src/helpers/whisperServer");
+
+test("buildWhisperServerArgs includes VAD flags when enabled and model path provided", () => {
   const args = WhisperServerManager.buildWhisperServerArgs({
     modelPath: "/tmp/model.bin",
     port: 8180,
@@ -18,7 +20,7 @@ it("buildWhisperServerArgs includes VAD flags when enabled and model path provid
     },
   });
 
-  expect(args).toEqual([
+  assert.deepEqual(args, [
     "--model",
     "/tmp/model.bin",
     "--host",
@@ -45,7 +47,7 @@ it("buildWhisperServerArgs includes VAD flags when enabled and model path provid
   ]);
 });
 
-it("buildWhisperServerArgs omits VAD flags when vadModelPath is missing", () => {
+test("buildWhisperServerArgs omits VAD flags when vadModelPath is missing", () => {
   const args = WhisperServerManager.buildWhisperServerArgs({
     modelPath: "/tmp/model.bin",
     port: 8180,
@@ -54,11 +56,87 @@ it("buildWhisperServerArgs omits VAD flags when vadModelPath is missing", () => 
     vadModelPath: null,
   });
 
-  expect(args.includes("--vad")).toBe(false);
-  expect(args.includes("--vad-model")).toBe(false);
+  assert.equal(args.includes("--vad"), false);
+  assert.equal(args.includes("--vad-model"), false);
 });
 
-it("getVadSignature changes when VAD settings or model path change", () => {
+test("buildWhisperServerArgs includes thread count when provided", () => {
+  const args = WhisperServerManager.buildWhisperServerArgs({
+    modelPath: "/tmp/model.bin",
+    port: 8180,
+    language: "auto",
+    threads: 10,
+  });
+
+  assert.deepEqual(args.slice(0, 8), [
+    "--model",
+    "/tmp/model.bin",
+    "--host",
+    "127.0.0.1",
+    "--port",
+    "8180",
+    "--threads",
+    "10",
+  ]);
+});
+
+test("resolveWhisperThreads keeps whisper.cpp default on small machines", () => {
+  const result = WhisperServerManager.resolveWhisperThreads(
+    {},
+    { availableParallelism: 4, env: {} }
+  );
+
+  assert.equal(result.threads, null);
+  assert.equal(result.source, "default");
+  assert.equal(result.availableParallelism, 4);
+});
+
+test("resolveWhisperThreads auto-selects a conservative count", () => {
+  const result = WhisperServerManager.resolveWhisperThreads(
+    {},
+    { availableParallelism: 14, env: {} }
+  );
+
+  assert.equal(result.threads, 10);
+  assert.equal(result.source, "auto");
+  assert.equal(result.availableParallelism, 14);
+});
+
+test("resolveWhisperThreads caps automatic and manual thread counts", () => {
+  const auto = WhisperServerManager.resolveWhisperThreads(
+    {},
+    { availableParallelism: 64, env: {} }
+  );
+  const manual = WhisperServerManager.resolveWhisperThreads(
+    {},
+    { availableParallelism: 64, env: { WHISPER_THREADS: "128" } }
+  );
+
+  assert.equal(auto.threads, 12);
+  assert.equal(manual.threads, 64);
+});
+
+test("resolveWhisperThreads lets explicit options override env and auto", () => {
+  const result = WhisperServerManager.resolveWhisperThreads(
+    { threads: "8" },
+    { availableParallelism: 14, env: { WHISPER_THREADS: "6" } }
+  );
+
+  assert.equal(result.threads, 8);
+  assert.equal(result.source, "options");
+});
+
+test("resolveWhisperThreads falls back safely when env override is invalid", () => {
+  const result = WhisperServerManager.resolveWhisperThreads(
+    {},
+    { availableParallelism: 14, env: { WHISPER_THREADS: "fast" } }
+  );
+
+  assert.equal(result.threads, 10);
+  assert.equal(result.source, "invalid-env-auto");
+});
+
+test("getVadSignature changes when VAD settings or model path change", () => {
   const a = WhisperServerManager.getVadSignature({
     vadEnabled: true,
     vadModelPath: "/m.bin",
@@ -80,7 +158,7 @@ it("getVadSignature changes when VAD settings or model path change", () => {
     vadConfig: { threshold: 0.5 },
   });
 
-  expect(a).not.toBe(b);
-  expect(b).not.toBe(c);
-  expect(c).toBe(d);
+  assert.notEqual(a, b);
+  assert.notEqual(b, c);
+  assert.equal(c, d);
 });

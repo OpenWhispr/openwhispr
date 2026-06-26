@@ -1,7 +1,10 @@
-import { it, expect } from "vitest";
-import { DEFAULT_WHISPER_VAD_CONFIG, sanitizeWhisperVadConfig, resolveContextSileroEnabled } from "../../src/helpers/whisperVadConfig.js";
+const test = require("node:test");
+const assert = require("node:assert/strict");
 
-it("sanitizeWhisperVadConfig applies defaults and clamps invalid values", () => {
+test("sanitizeWhisperVadConfig applies defaults and clamps invalid values", async () => {
+  const { DEFAULT_WHISPER_VAD_CONFIG, sanitizeWhisperVadConfig } =
+    await import("../../src/helpers/whisperVadConfig.js");
+
   const cfg = sanitizeWhisperVadConfig({
     threshold: 99,
     minSpeechDurationMs: -20,
@@ -11,7 +14,7 @@ it("sanitizeWhisperVadConfig applies defaults and clamps invalid values", () => 
     samplesOverlap: -1,
   });
 
-  expect(cfg).toEqual({
+  assert.deepEqual(cfg, {
     threshold: 0.95,
     minSpeechDurationMs: 50,
     minSilenceDurationMs: DEFAULT_WHISPER_VAD_CONFIG.minSilenceDurationMs,
@@ -21,8 +24,13 @@ it("sanitizeWhisperVadConfig applies defaults and clamps invalid values", () => 
   });
 });
 
-it("resolveContextSileroEnabled prefers context value then falls back to true", () => {
-  expect(resolveContextSileroEnabled({ dictationSileroEnabled: false }, "dictation")).toBe(false);
-  expect(resolveContextSileroEnabled({ noteRecordingSileroEnabled: true }, "noteRecording")).toBe(true);
-  expect(resolveContextSileroEnabled({}, "meeting")).toBe(true);
+test("resolveContextSileroEnabled prefers context value then falls back to true", async () => {
+  const { resolveContextSileroEnabled } = await import("../../src/helpers/whisperVadConfig.js");
+
+  assert.equal(resolveContextSileroEnabled({ dictationSileroEnabled: false }, "dictation"), false);
+  assert.equal(
+    resolveContextSileroEnabled({ noteRecordingSileroEnabled: true }, "noteRecording"),
+    true
+  );
+  assert.equal(resolveContextSileroEnabled({}, "meeting"), true);
 });

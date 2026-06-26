@@ -15,6 +15,11 @@ function usesOllamaDialect(providerKey: string): boolean {
 }
 
 function suppressThinking(requestBody: Record<string, unknown>, providerKey: string): void {
+  if (providerKey === "gemini") {
+    requestBody.reasoning_effort = "minimal";
+    return;
+  }
+
   if (usesOllamaDialect(providerKey)) {
     requestBody.think = false;
   } else {

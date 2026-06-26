@@ -11,11 +11,37 @@ const path = require("path");
 // Remove ELECTRON_RUN_AS_NODE from environment
 delete process.env.ELECTRON_RUN_AS_NODE;
 
-// Get the electron path
-const electronPath = require("electron");
-
 // Get the app directory (parent of scripts directory)
 const appDir = path.resolve(__dirname, "..");
+
+function resolveElectronPath() {
+  try {
+    return require("electron");
+  } catch (err) {
+    console.error(
+      "[run-electron] Electron is installed as an npm package, but its platform binary is missing."
+    );
+    console.error(
+      "[run-electron] This usually means npm lifecycle scripts were skipped or the Electron download failed."
+    );
+    if (process.env.ELECTRON_SKIP_BINARY_DOWNLOAD) {
+      console.error(
+        "[run-electron] ELECTRON_SKIP_BINARY_DOWNLOAD is set; unset it before reinstalling Electron."
+      );
+    }
+    console.error(
+      "[run-electron] Try: npm config set ignore-scripts false && npm rebuild electron"
+    );
+    console.error(
+      "[run-electron] If that still fails, remove node_modules and run npm install again."
+    );
+    console.error(err && err.stack ? err.stack : err);
+    process.exit(1);
+  }
+}
+
+// Get the electron path
+const electronPath = resolveElectronPath();
 
 // Pass through any command line arguments
 const args = process.argv.slice(2);

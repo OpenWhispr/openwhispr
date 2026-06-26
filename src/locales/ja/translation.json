@@ -101,13 +101,6 @@
     "accessibility": "このプラットフォームではアクセシビリティ設定を利用できません。",
     "systemAudio": "システムオーディオの設定はこのプラットフォームでは利用できません。"
   },
-  "titleBar": {
-    "quitTitle": "OpenWhispr を終了",
-    "quitConfirmTitle": "OpenWhispr を終了しますか？",
-    "quitConfirmDescription": "OpenWhispr を終了し、バックグラウンドプロセスを停止します。",
-    "quit": "終了",
-    "cancel": "キャンセル"
-  },
   "upgradePrompt": {
     "paymentFailed": "お支払いを処理できませんでした",
     "weeklyLimit": "週間の利用上限に達しました",
@@ -165,14 +158,19 @@
     "unknownError": "Ocurrió un error desconocido",
     "copy": "Copiar",
     "copied": "Copiado",
-    "done": "Listo"
+    "done": "Listo",
+    "skip": "スキップ"
   },
   "onboarding": {
     "steps": {
       "welcome": "ようこそ",
       "setup": "セットアップ",
       "permissions": "権限",
-      "activation": "アクティベーション"
+      "activation": "ディクテーション",
+      "useCase": "あなたについて",
+      "meeting": "会議",
+      "finish": "完了",
+      "voiceAgent": "ボイスエージェント"
     },
     "hotkey": {
       "couldNotRegisterTitle": "ホットキーを登録できませんでした",
@@ -186,17 +184,17 @@
     "permissions": {
       "title": "権限",
       "microphoneTitle": "マイク",
-      "microphoneDescription": "文字起こしのためにあなたの声を録音します",
+      "microphoneDescription": "あなたの声をテキストに変換します。ホットキーを押すまで何も録音されません。",
       "grant": "許可",
       "grantAccess": "アクセスを許可",
       "accessibilityTitle": "アクセシビリティ",
-      "accessibilityDescription": "文字起こしテキストを任意のアプリに自動貼り付けします",
+      "accessibilityDescription": "完成したテキストを、今使っているアプリ（ドキュメント、メール、チャット）に直接入力します。",
       "testAndGrant": "テストして許可",
       "requiredForApp": "OpenWhispr の動作に必要です",
       "microphoneRequired": "マイクへのアクセスが必要です",
       "openSystemSettings": "システム設定を開く",
       "systemAudioTitle": "システムオーディオ",
-      "systemAudioDescription": "会議、通話、講義、ポッドキャストなど、システム音声を文字起こしします。",
+      "systemAudioDescription": "会議レコーダーが通話の相手側の音声（会議、講義、ポッドキャストなど）を聴けるようにします。後から設定で有効にできます。",
       "optional": "任意",
       "recommended": "推奨",
       "accessibilityTroubleshooting": "システム設定 → アクセシビリティで、OpenWhisprのスイッチをオフにしてから再度オンにしてください。それでもうまくいかない場合は、リストからOpenWhisprを削除して再度追加してみてください。それでも解決しませんか？support@openwhispr.com までメールでお問い合わせください。"
@@ -207,7 +205,7 @@
       "preferredLanguage": "優先言語"
     },
     "activation": {
-      "title": "アクティベーション設定",
+      "title": "ディクテーション設定",
       "description": "ディクテーションの起動方法を設定",
       "hotkey": "ホットキー",
       "mode": "モード",
@@ -218,11 +216,92 @@
       "holdHotkey": "{{hotkey}} を押し続ける",
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
     },
+    "voiceAgent": {
+      "title": "ボイスエージェント設定",
+      "description": "ワンキーでAIエージェントに話しかけられます",
+      "hotkey": "ホットキー",
+      "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えば、{{agentName}}がカーソル位置に結果を入力します。「Hey {{agentName}}」と言う必要はありません。",
+      "test": "試す",
+      "testInstruction": "下をクリックし、{{hotkey}} を押してコマンドを話してください",
+      "testSetHotkey": "上でホットキーを設定すると試せます",
+      "testPlaceholder": "ここをクリックし、ホットキーを押して例の一つを話してください...",
+      "examples": [
+        "イタリア語に翻訳して:「私はタイプするより話す方が速い」",
+        "上司に昇進したいと伝える短いメールを書いて、彼の名前はマークです",
+        "5 × 5 はいくつ?"
+      ],
+      "optionalNote": "任意です。設定からいつでも追加・変更できます。"
+    },
     "connectivity": {
       "title": "このネットワークから OpenWhispr Cloud に接続できません",
       "body": "{{cause}} ローカルエンジンに切り替えるか、続行して後でもう一度お試しください。",
       "useLocal": "ローカルエンジンを使う",
       "continue": "そのまま続行"
+    },
+    "useCase": {
+      "title": "どんな目的でお使いですか？",
+      "description": "私たちは小さなチームで、毎週リリースしています。選んだ内容に合わせてアプリを設定し、次に何を作るかの参考にします。",
+      "noteLabel": "他に伝えておきたいことはありますか？",
+      "notePlaceholder": "任意",
+      "options": {
+        "dictation": {
+          "title": "より速く書く",
+          "description": "タイピングの代わりにどのアプリでも音声入力"
+        },
+        "meetings": {
+          "title": "会議のメモと要約",
+          "description": "会議を録音・文字起こし・要約"
+        },
+        "healthcare": {
+          "title": "医療・臨床・セラピーの文字起こし",
+          "description": "患者メモ、セッション記録、レポートを音声入力"
+        },
+        "translation": {
+          "title": "言語の翻訳",
+          "description": "話す言語とは別の言語で入力"
+        },
+        "ai": {
+          "title": "AI との対話",
+          "description": "ChatGPT、Claude などのエージェントを声で操作"
+        },
+        "upload": {
+          "title": "音声ファイルのアップロード",
+          "description": "MP3、OGG などをアップロードして文字起こし"
+        }
+      },
+      "selectHint": "当てはまるものをすべて選択してください"
+    },
+    "meeting": {
+      "title": "会議メモ",
+      "description": "会議を記録して要約します",
+      "autoDetect": "OpenWhispr は会議中であることを自動的に検出し、メモの開始を提案します。あなたの操作なしに録音されることはありません。",
+      "notification": {
+        "title": "会議を検出しました",
+        "body": "会議中のようです。メモを取りますか？",
+        "cta": "録音を開始"
+      },
+      "hotkeyLabel": "会議ホットキー",
+      "hotkeyHint": "任意 — 会議中に押すとすぐにメモを開始できます。"
+    },
+    "finish": {
+      "title": "準備完了",
+      "cloudDescription": "OpenWhispr Cloud をご利用中です — 高速・高精度、データ保持なし、毎週 2,000 ワード無料。すべてを端末内で処理したい場合は、設定からローカル処理に切り替えられます。",
+      "localDescription": "ローカル処理またはご自身の API キーで設定済みです。音声の処理方法はいつでも設定から変更できます。",
+      "cleanupNote": "AI によるテキスト整形は適切な初期設定で動作します。設定からいつでも調整できます。",
+      "openSettings": "設定を開く",
+      "skipForNow": "今はスキップ",
+      "corti": {
+        "title": "臨床文字起こしが目的とのことですね",
+        "description": "私たちは Corti と提携しています — 最高精度の臨床グレード音声認識で、HIPAA に準拠しています。",
+        "createAccount": "Corti アカウントを作成",
+        "creditBadge": "50ドルの無料クレジット",
+        "regionHint": "音声の処理場所を選べます — 米国または EU。",
+        "useCorti": "Corti を使う",
+        "skip": "後で",
+        "step1": "corti.ai でアカウントを作成",
+        "step2": "Corti コンソールで API 認証情報を作成",
+        "step3": "Client ID と Secret を下に貼り付け"
+      }
     }
   },
   "streaming": {
@@ -312,7 +391,16 @@
       "retryError": "再文字起こしに失敗しました",
       "audioNotFound": "音声ファイルが見つからないか有効期限切れです",
       "noAiProcessing": "この文字起こしにはAI処理が適用されていません",
-      "rawTranscript": "生の文字起こし"
+      "rawTranscript": "生の文字起こし",
+      "discarded": {
+        "show": "破棄したものを表示",
+        "hide": "破棄したものを非表示",
+        "badge": "破棄済み",
+        "recording": "破棄した録音",
+        "recordingWithDuration": "破棄した録音 · {{duration}}",
+        "recover": "復元",
+        "recovered": "復元しました"
+      }
     },
     "cloudMigration": {
       "title": "OpenWhispr Cloud へようこそ",
@@ -424,19 +512,27 @@
     "apiKeyOptional": "API キー（任意）",
     "getKey": "キーを取得 ->",
     "endpointUrl": "エンドポイント URL",
+    "azureHint": "Azure AI Foundry: リソースのエンドポイント（例: https://your-resource.cognitiveservices.azure.com）を入力し、モデルにデプロイの正確な名前を設定してください。",
     "customProvider": "カスタム",
     "fallback": {
       "whisperModelDescription": "モデル",
       "parakeetModelDescription": "NVIDIA Parakeet モデル"
     },
-    "whisperModels": "Whisper モデル"
+    "whisperModels": "Whisper モデル",
+    "corti": {
+      "clientId": "クライアントID",
+      "clientSecret": "クライアントシークレット",
+      "environment": "データリージョン",
+      "tenant": "テナント"
+    }
   },
   "hooks": {
     "audioRecording": {
       "errorTitles": {
         "sessionExpired": "セッション期限切れ",
         "offline": "オフラインです",
-        "dailyLimitReached": "1 日の上限に達しました"
+        "dailyLimitReached": "1 日の上限に達しました",
+        "providerRateLimited": "プロバイダーのレート制限"
       },
       "fallback": {
         "title": "フォールバックモード",
@@ -449,7 +545,8 @@
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
-        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。"
+        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
+        "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。"
       }
     },
     "clipboard": {
@@ -719,7 +816,8 @@
     "resendIn": "{{seconds}} 秒後に再送信可能",
     "verifiedDescription": "アカウントの設定が完了しました。",
     "verifiedTitle": "メール確認完了",
-    "waiting": "確認を待っています..."
+    "waiting": "確認を待っています...",
+    "backToSignIn": "サインインに戻る"
   },
   "errorBoundary": {
     "description": "予期しないエラーが発生しました。再読み込みしてもう一度お試しください。",
@@ -803,7 +901,8 @@
     "pressAnyKeyMac": "任意のキーまたは ⌘⇧K を押してください",
     "recording": "記録中",
     "tryShortcut": "Ctrl+Shift+K をお試しください",
-    "tryShortcutMac": "⌘⇧K をお試しください"
+    "tryShortcutMac": "⌘⇧K をお試しください",
+    "remove": "ホットキーを削除"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
@@ -1283,15 +1382,21 @@
         "linuxPttPermissionDescription": "次のコマンドを実行してログアウト/ログインしてください：sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "長押しして話すには設定が必要です",
         "linuxPttSetupDescription": "キーボード入力デバイスへのアクセス権が必要です。",
-        "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。"
+        "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。",
+        "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは永続化されません",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr は {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは維持されません。ファイルが存在し、書き込み可能であることを確認してください。",
+        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。"
       },
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",
         "description": "ミーティングモードを開始し、パネルを画面の横に配置する",
-        "clear": "ホットキーを削除",
         "layoutLabel": "ホットキーで起動したときに開く:",
         "layoutFullWidth": "全幅",
         "layoutSidePanel": "サイドパネル"
+      },
+      "voiceAgentHotkey": {
+        "title": "ボイスエージェントホットキー",
+        "description": "話しかけるだけで、AIエージェントが言葉そのままではなく結果を入力します"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",
@@ -1390,7 +1495,16 @@
             "step1Title": "xclipをインストール"
           }
         },
-        "xclipDesc": "KDE Waylandの貼り付け用クリップボードツール（xclipまたはxsel）"
+        "xclipDesc": "KDE Waylandの貼り付け用クリップボードツール（xclipまたはxsel）",
+        "nixos": {
+          "intro": "NixOSをお使いです。自動貼り付けにはydotoolと/dev/uinputへのアクセスが必要で、NixOSでは宣言的に設定できます。",
+          "detected": "検出済み",
+          "manualTitle": "設定に以下を追加してください",
+          "manualDesc": "ご自身で設定してからリビルドしてください。",
+          "flakeTitle": "flakeからインストールする場合",
+          "flakeDesc": "flakeからOpenWhisprをインストールする場合、programs.openwhispr.enableを有効にするとydotool、uinputモジュール、グループのメンバーシップが自動で設定されます。",
+          "rebuildNote": "sudo nixos-rebuild switchを実行し、グループの変更と/dev/uinputのルールを反映させるためにログアウト後に再ログインしてください。<you>はあなたのユーザー名に置き換えてください。"
+        }
       },
       "updates": {
         "badges": {
@@ -1495,7 +1609,9 @@
       "audioStorageFiles": "{{count}}ファイル、{{size}}",
       "audioStorageEmpty": "保存された音声ファイルはありません",
       "clearAllAudio": "すべての音声を削除",
-      "clearAllAudioConfirm": "保存されたすべての音声ファイルを削除しますか？この操作は元に戻せません。"
+      "clearAllAudioConfirm": "保存されたすべての音声ファイルを削除しますか？この操作は元に戻せません。",
+      "saveDiscarded": "破棄したディクテーションを保存",
+      "saveDiscardedDescription": "Escape でディクテーションをキャンセルしたとき、音声を履歴に残して後で復元できるようにします。データと音声の保持を有効にする必要があります。"
     },
     "prompts": {
       "description": "テキスト補正と指示検出を行う統合システムプロンプトの表示、カスタマイズ、テスト",
@@ -1506,7 +1622,8 @@
       "description": "ディクテーションとノート録音用のエンジンを選択",
       "tabs": {
         "dictation": "ディクテーション",
-        "noteRecording": "ノート録音"
+        "noteRecording": "ノート録音",
+        "upload": "音声のアップロード"
       },
       "selfHostedStreamingNote": "ストリーミング文字起こしに対応したサーバーが必要です。"
     },
@@ -1738,7 +1855,9 @@
         "openai_whisper_1": "オリジナル Whisper モデル",
         "groq_whisper_large_v3_turbo": "リアルタイムの 216 倍速",
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
-        "mistral_voxtral_mini_latest": "高速多言語文字起こし"
+        "mistral_voxtral_mini_latest": "高速多言語文字起こし",
+        "corti_transcribe": "臨床グレードの医療文字起こし",
+        "xai_grok_stt": "xAIによる高精度音声認識"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -1747,11 +1866,15 @@
         "openai_gpt_4_1": "強力なベースライン、100 万トークンコンテキスト",
         "openai_gpt_4_1_mini": "小型 GPT-4.1 モデル",
         "openai_gpt_4_1_nano": "最低レイテンシーの GPT-4.1",
-        "anthropic_claude_sonnet_4_5": "バランスの取れた性能",
+        "anthropic_claude_sonnet_4_6": "バランスの取れた性能",
+        "anthropic_claude_sonnet_4_5": "前世代の Sonnet モデル",
         "anthropic_claude_haiku_4_5": "高速でフロンティアに近い知能",
-        "gemini_gemini_3_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
+        "gemini_gemini_3_5_flash": "最新の高速で高性能な Gemini モデル",
+        "gemini_gemini_3_1_pro_preview": "複雑な推論向けの次世代フラッグシップモデル",
         "gemini_gemini_3_flash_preview": "超高速・高性能の次世代モデル",
         "gemini_gemini_2_5_flash_lite": "最低レイテンシーとコスト",
+        "gemini_gemma_4_31b_it": "Google 最大の Gemma 4、31B デンス、256K コンテキスト",
+        "gemini_gemma_4_26b_a4b_it": "Google の Gemma 4 MoE、4B アクティブパラメータ、256K コンテキスト",
         "groq_qwen_qwen3_32b": "強力な推論モデル、131K コンテキスト",
         "groq_openai_gpt_oss_120b": "OpenAI のオープンソースフラッグシップ、500 T/秒",
         "groq_openai_gpt_oss_20b": "高速オープンソースモデル、1000 T/秒",
@@ -1762,9 +1885,10 @@
         "groq_compound_mini": "高速 Compound システム、3x 低レイテンシー",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE、256K コンテキスト",
         "openai_gpt_5_5": "複雑な推論のためのフロンティアモデル",
-        "anthropic_claude_opus_4_7": "最も高性能な Claude モデル",
-        "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_8": "最も高性能な Claude モデル",
+        "anthropic_claude_opus_4_7": "高性能な Opus モデル",
+        "anthropic_claude_opus_4_6": "前世代の Opus、100 万トークンコンテキスト",
+        "anthropic_claude_opus_4_5": "旧世代の Opus モデル"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
@@ -1936,18 +2060,15 @@
       "transcribingCloud": "クラウドで文字起こし中...",
       "transcribingLocal": "ローカルで文字起こし中...",
       "transcribingProvider": "{{provider}} で文字起こし中...",
+      "cancelTranscription": "文字起こしをキャンセル",
       "transcriptionComplete": "文字起こし完了",
       "openNote": "ノートを開く",
       "uploadAnother": "別のファイルをアップロード",
       "retry": "再試行",
       "startOver": "やり直す",
-      "transcriptionSettings": "文字起こし設定",
       "newFolder": "新しいフォルダ",
       "folderName": "フォルダ名",
       "create": "作成",
-      "setupTitle": "文字起こしを設定",
-      "setupDescription": "音声の文字起こし方法を選択してください。ライブディクテーションにも適用されます。",
-      "continue": "続ける",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "カスタム",
       "selectFolder": "フォルダを選択",
@@ -2084,15 +2205,56 @@
     "addWord": "単語を追加",
     "removeWord": "{{word}} を削除",
     "clearAll": "すべてクリア",
-    "howItWorks": "仕組み",
-    "howItWorksDetail": "追加した単語は AI プロンプトに含まれ、文字起こし時にこれらの用語を正確に認識・保持します。",
-    "autoManaged": "自動管理",
-    "inputHint": "Enter で追加",
-    "title": "カスタム辞書",
-    "description": "AIに語彙を学習させましょう — 名前、専門用語、見落とされがちな表現など",
     "clearTitle": "辞書をクリアしますか？",
     "clearDescription": "カスタム辞書のすべての単語が削除されます。この操作は元に戻せません。",
-    "addPlaceholder": "単語やフレーズを追加..."
+    "addPlaceholder": "カンマ区切りで単語を追加 — OpenWhispr、Supabase、ARR など",
+    "add": "追加",
+    "importWords": "単語をインポート",
+    "importPlaceholder": "カンマ区切りの単語を貼り付け...",
+    "separateWithCommas": "カンマで区切る",
+    "wordsReady_other": "{{count}} 個の単語が準備完了",
+    "import": "インポート",
+    "yourDictionary": "あなたの辞書",
+    "exportDictionary": "辞書をエクスポート",
+    "exportFailed": "エクスポートに失敗しました",
+    "editWord": "{{word}} を編集",
+    "wordsReady_one": "{{count}} 個の単語が準備完了",
+    "noMatches": "一致なし — Enter キーで「{{word}}」を追加",
+    "tabDictionary": "辞書",
+    "tabSnippets": "スニペット",
+    "snippets": {
+      "title": "スニペット",
+      "edit": "{{trigger}}を編集",
+      "remove": "{{trigger}}を削除",
+      "editTitle": "スニペットを編集",
+      "dialogDescription": "トリガーを話すと、保存したテキストに置き換わります。",
+      "triggerLabel": "トリガー",
+      "triggerPlaceholder": "例: カレンダーリンク",
+      "replacementLabel": "置換テキスト",
+      "replacementPlaceholder": "トリガーを話したときに挿入されるテキスト…",
+      "create": "スニペットを作成",
+      "duplicate": "このトリガーのスニペットは既に存在します",
+      "emptyTitle": "同じことを言うのは",
+      "emptyTitleAccent": "一度だけ",
+      "emptyDescription": "トリガーワードを話すと、OpenWhisprが保存した内容に置き換えます。URL、自己紹介、署名、プロンプトなど。",
+      "new": "新規スニペット",
+      "examples": {
+        "linkedinTrigger": "私のLinkedIn",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "書き直しプロンプト",
+        "rewriteText": "これをより簡潔でプロフェッショナルに書き直して",
+        "introTrigger": "挨拶メール",
+        "introText": "こんにちは、今週どこかでお話しできれば嬉しいです…",
+        "signoffTrigger": "署名",
+        "signoffText": "よろしくお願いします。Alex · alex@example.com"
+      },
+      "addPlaceholder": "トリガーフレーズを追加 — 「カレンダーリンク」「署名」など"
+    },
+    "emptyTitle": "辞書は空です",
+    "emptyDescription": "{{agentName}}に正しく認識してほしい言葉を追加しましょう。名前、ツール、略語など。",
+    "addFirstWord": "最初の単語を追加",
+    "importList": "リストをインポート",
+    "agentDefault": "デフォルトで追加済み"
   },
   "referral": {
     "title": "紹介して特典をゲット",
@@ -2298,30 +2460,29 @@
     }
   },
   "dictationAgent": {
-    "enabled": "Enable voice agent",
-    "enabledDescription": "Dictate instructions to your agent. Activate by saying \"{{agentName}}\". Configurable below.",
+    "enabled": "音声エージェントを有効にする",
+    "enabledDescription": "エージェントに指示を口述できます。「{{agentName}}」と話しかけて起動します。設定は以下で行えます。",
     "modes": {
       "openwhispr": "OpenWhispr Cloud",
-      "openwhisprDesc": "Use the OpenWhispr-managed agent — no API key needed.",
-      "providers": "Bring your own key",
-      "providersDesc": "Connect to OpenAI, Anthropic, Gemini, or Groq with your own API key.",
-      "local": "Local",
-      "localDesc": "Run a local LLM on your device — fully private.",
-      "selfHosted": "Self-hosted",
-      "selfHostedDesc": "Point at a self-hosted OpenAI-compatible endpoint.",
-      "enterprise": "Enterprise",
-      "enterpriseDesc": "Use AWS Bedrock, Azure OpenAI, or Google Vertex."
+      "openwhisprDesc": "OpenWhispr が管理するエージェントを使用。API キーは不要です。",
+      "providers": "自分の API キーを使用",
+      "providersDesc": "自分の API キーで OpenAI、Anthropic、Gemini、Groq に接続します。",
+      "local": "ローカル",
+      "localDesc": "端末上でローカル LLM を実行。完全プライベート。",
+      "selfHosted": "セルフホスト",
+      "selfHostedDesc": "セルフホストの OpenAI 互換エンドポイントを指定します。",
+      "enterprise": "エンタープライズ",
+      "enterpriseDesc": "AWS Bedrock、Azure OpenAI、Google Vertex を使用します。"
     },
     "prompt": {
-      "title": "Agent prompt",
-      "description": "The system prompt used when the wake word is detected. Falls back to the built-in default."
+      "title": "エージェントプロンプト",
+      "description": "ウェイクワードが検出されたときに使用するシステムプロンプト。未設定の場合は組み込みのデフォルトが使われます。"
     }
   },
   "agentMode": {
     "settings": {
-      "hotkey": "エージェントホットキー",
-      "hotkeyDescription": "エージェントオーバーレイを切り替えるホットキー",
-      "clearHotkey": "ホットキーを削除",
+      "hotkey": "チャットエージェントホットキー",
+      "hotkeyDescription": "チャットエージェントのオーバーレイを開閉します",
       "model": "エージェントモデル",
       "modelDescription": "エージェント会話に使用するAIモデル",
       "systemPrompt": "システムプロンプト",
@@ -2493,15 +2654,7 @@
     "noUpcoming": "今後の予定はありません",
     "meetingStarting": "ミーティングが開始されます",
     "today": "今日",
-    "tomorrow": "明日",
-    "detection": {
-      "title": "ミーティング検出",
-      "description": "ミーティング中であることを自動的に検出する",
-      "processDetection": "アプリ検出",
-      "processDescription": "ミーティングが検出されたときに使用中のアプリを特定する",
-      "audioDetection": "オーディオ検出",
-      "audioDescription": "持続的なマイク使用が検出されたときに通知する"
-    }
+    "tomorrow": "明日"
   },
   "upcoming": {
     "title": "今後の会議",

@@ -8,7 +8,7 @@ const { resolveBinaryPath, gracefulStopProcess } = require("../utils/serverUtils
 const { getModelsDirForService } = require("./modelDirUtils");
 const { convertToWav } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
-const { applyProvisionalSpeaker, applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
+const { applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
 const sidecarPidFile = require("./sidecarPidFile");
 const {
   transcriptsOverlap,
@@ -459,8 +459,6 @@ class DiarizationManager {
       return null;
     };
 
-    let fallbackSpeakerIndex = speakerSet.size;
-
     return deduped.map((seg, index) => {
       const enriched = { ...seg };
 
@@ -505,12 +503,6 @@ class DiarizationManager {
             speaker: speakerMap.get(bestSpeaker) || bestSpeaker,
             speakerIsPlaceholder: false,
           });
-        } else if (!enriched.speaker) {
-          applyProvisionalSpeaker(enriched, {
-            speaker: `speaker_${fallbackSpeakerIndex}`,
-            speakerIsPlaceholder: true,
-          });
-          fallbackSpeakerIndex += 1;
         }
       }
 

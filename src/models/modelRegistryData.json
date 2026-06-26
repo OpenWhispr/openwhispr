@@ -180,6 +180,19 @@
       ]
     },
     {
+      "id": "xai",
+      "name": "xAI",
+      "baseUrl": "https://api.x.ai/v1",
+      "models": [
+        {
+          "id": "grok-stt",
+          "name": "Grok STT",
+          "description": "High-accuracy speech recognition by xAI",
+          "descriptionKey": "models.descriptions.transcription.xai_grok_stt"
+        }
+      ]
+    },
+    {
       "id": "mistral",
       "name": "Mistral",
       "baseUrl": "https://api.mistral.ai/v1",
@@ -189,6 +202,20 @@
           "name": "Voxtral Mini",
           "description": "Fast multilingual transcription",
           "descriptionKey": "models.descriptions.transcription.mistral_voxtral_mini_latest"
+        }
+      ]
+    },
+    {
+      "id": "corti",
+      "name": "Corti",
+      "baseUrl": "https://api.us.corti.app/v2",
+      "models": [
+        {
+          "id": "corti-transcribe",
+          "name": "Corti Transcribe",
+          "description": "Clinical-grade medical transcription",
+          "descriptionKey": "models.descriptions.transcription.corti_transcribe",
+          "streaming": true
         }
       ]
     }
@@ -273,9 +300,15 @@
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5"
         },
         {
+          "id": "claude-opus-4-8",
+          "name": "Claude Opus 4.8",
+          "description": "Most capable Claude model, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8"
+        },
+        {
           "id": "claude-opus-4-7",
           "name": "Claude Opus 4.7",
-          "description": "Most capable Claude model, 1M context",
+          "description": "Powerful Opus model, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7"
         },
         {
@@ -303,6 +336,13 @@
       "name": "Google Gemini",
       "models": [
         {
+          "id": "gemini-3.5-flash",
+          "name": "Gemini 3.5 Flash",
+          "description": "Latest fast, high-capability Gemini model",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash",
+          "supportsThinking": true
+        },
+        {
           "id": "gemini-3.1-pro-preview",
           "name": "Gemini 3.1 Pro",
           "description": "Next-gen flagship model for complex reasoning",
@@ -319,6 +359,18 @@
           "name": "Gemini 2.5 Flash Lite",
           "description": "Lowest latency and cost",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_2_5_flash_lite"
+        },
+        {
+          "id": "gemma-4-31b-it",
+          "name": "Gemma 4 31B",
+          "description": "Google's largest Gemma 4, 31B dense, 256K context",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_31b_it"
+        },
+        {
+          "id": "gemma-4-26b-a4b-it",
+          "name": "Gemma 4 26B MoE",
+          "description": "Google's Gemma 4 MoE, 4B active params, 256K context",
+          "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_26b_a4b_it"
         }
       ]
     },

@@ -9,6 +9,7 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 ## Architecture Overview
 
 ### Core Technologies
+
 - **Frontend**: React 19, TypeScript, Tailwind CSS v4, Vite
 - **Desktop Framework**: Electron 41 with context isolation
 - **Database**: better-sqlite3 for local transcription history
@@ -62,7 +63,8 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **dragManager.js**: Window dragging functionality
 - **environment.js**: Environment variable and OpenAI API management
 - **hotkeyManager.js**: Global hotkey registration and management
-  - Handles platform-specific defaults (GLOBE on macOS, backtick on Windows/Linux)
+  - Named hotkey slots: `dictation`, `agent` (chat agent overlay), `voiceAgent` (dictation routed straight to the dictation agent), `meeting`
+  - Handles platform-specific defaults (GLOBE on macOS, Control+Super on Windows/Linux)
   - Auto-fallback to F8/F9 if default hotkey is unavailable
   - Notifies renderer via IPC when hotkey registration fails
   - Integrates with GnomeShortcutManager for GNOME Wayland support
@@ -174,12 +176,14 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 Always-on offline semantic search that finds notes by meaning, not just keywords. Used by the AI agent's `search_notes` tool. Qdrant starts automatically on app launch; embedding model auto-downloads on first run if missing.
 
 **Architecture**:
+
 - **Qdrant sidecar**: Rust binary spawned as child process (`qdrantManager.js`), port 6333–6350
 - **Embedding model**: `all-MiniLM-L6-v2` via ONNX Runtime (`localEmbeddings.js`), 384-dim vectors
 - **Vector index**: Qdrant collection management (`vectorIndex.js`), cosine distance
 - **Hybrid search**: FTS5 + Qdrant in parallel → Reciprocal Rank Fusion (K=60) with 0.3 cosine score threshold
 
 **Pipeline**:
+
 1. App launches → Qdrant binary starts → collection created. Embedding model auto-downloads if missing (~22MB)
 2. Note create/update/delete → SQLite write → background vector upsert/delete via `_asyncVectorUpsert()`/`_asyncVectorDelete()`
 3. Agent searches → `db-semantic-search-notes` IPC → parallel FTS5 + vector search → RRF merge → ranked results
@@ -187,6 +191,7 @@ Always-on offline semantic search that finds notes by meaning, not just keywords
 **Search fallback chain** (in `searchNotesTool.ts`): cloud search → local semantic → FTS5 keyword
 
 **Storage**:
+
 - Qdrant data: `~/.cache/openwhispr/qdrant-data/`
 - Qdrant binary: `resources/bin/qdrant-{platform}-{arch}` (bundled — downloaded during `prebuild` / `predev`)
 - Embedding model: `~/.cache/openwhispr/embedding-models/all-MiniLM-L6-v2/` (auto-downloaded on first launch)
@@ -221,6 +226,7 @@ Always-on offline semantic search that finds notes by meaning, not just keywords
 ### 1. FFmpeg Integration
 
 FFmpeg is bundled with the app and doesn't require system installation:
+
 ```javascript
 // FFmpeg is unpacked from ASAR to app.asar.unpacked/node_modules/ffmpeg-static/
 ```
@@ -239,6 +245,7 @@ FFmpeg is bundled with the app and doesn't require system installation:
 ### 3. Local Whisper Models (GGML format)
 
 Models stored in `~/.cache/openwhispr/whisper-models/`:
+
 - tiny: ~75MB (fastest, lowest quality)
 - base: ~142MB (recommended balance)
 - small: ~466MB (better quality)
@@ -264,6 +271,7 @@ CREATE TABLE transcriptions (
 ### 5. Settings Storage
 
 Settings stored in localStorage with these keys:
+
 - `whisperModel`: Selected Whisper model
 - `useLocalWhisper`: Boolean for local vs cloud
 - `language`: Selected language code
@@ -277,12 +285,14 @@ Settings stored in localStorage with these keys:
 Secret env vars (12 total: 7 BYOK API keys + 5 enterprise cloud creds — see `SECRET_KEYS` in `environment.js`) are encrypted at rest via Electron `safeStorage` and stored as per-key files under `userData/secure-keys/`. They are loaded into `process.env` at startup by `EnvironmentManager.init()`. Renderer reads them via IPC (`get-*-key`) and writes via debounced IPC (`save-*-key`). On Linux without a keyring, secrets fall back to plaintext.
 
 Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
+
 - `LOCAL_TRANSCRIPTION_PROVIDER`: Transcription engine (`nvidia` for Parakeet)
 - `PARAKEET_MODEL`: Selected Parakeet model name (e.g., `parakeet-tdt-0.6b-v3`)
 
 ### 6. Language Support
 
 58 languages supported (see src/utils/languages.ts):
+
 - Each language has a two-letter code and label
 - "auto" for automatic detection
 - Passed to whisper.cpp via -l parameter
@@ -316,6 +326,7 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 ### 8. Model Registry Architecture
 
 All AI model definitions are centralized in `src/models/modelRegistryData.json` as the single source of truth:
+
 ```json
 {
   "cloudProviders": [...],   // OpenAI, Anthropic, Gemini API models
@@ -324,6 +335,7 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 ```
 
 **Key files:**
+
 - `src/models/modelRegistryData.json` - Single source of truth for all models
 - `src/models/ModelRegistry.ts` - TypeScript wrapper with helper methods
 - `src/config/aiProvidersConfig.ts` - Derives AI_MODES from registry
@@ -331,6 +343,7 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 - `src/helpers/modelManagerBridge.js` - Handles local model downloads
 
 **Local model features:**
+
 - Each model has `hfRepo` for direct HuggingFace download URLs
 - `promptTemplate` defines the chat format (ChatML, Llama, Mistral)
 - Download URLs constructed as: `{baseUrl}/{hfRepo}/resolve/main/{fileName}`
@@ -338,6 +351,7 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 ### 9. API Integrations and Updates
 
 **OpenAI Responses API (September 2025)**:
+
 - Migrated from Chat Completions to new Responses API
 - Endpoint: `https://api.openai.com/v1/responses`
 - Simplified request format with `input` array instead of `messages`
@@ -346,17 +360,20 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 - No temperature parameter for newer models (GPT-5, o-series)
 
 **Anthropic Integration**:
+
 - Routes through IPC handler to avoid CORS issues in renderer process
 - Uses main process for API calls with proper error handling
 - Model IDs use alias format (e.g., `claude-sonnet-4-6` not date-suffixed versions)
 
 **Gemini Integration**:
+
 - Direct API calls from renderer process
 - Increased token limits for Gemini 3.1 Pro (2000 minimum)
 - Proper handling of thinking process in responses
 - Error handling for MAX_TOKENS finish reason
 
 **API Key Persistence**:
+
 - All API keys now properly persist to `.env` file
 - Keys stored in environment variables and reloaded on app start
 - Centralized `saveAllKeysToEnvFile()` method ensures consistency
@@ -366,6 +383,7 @@ All AI model definitions are centralized in `src/models/modelRegistryData.json` 
 The app can open OS-level settings for microphone permissions, sound input selection, and accessibility:
 
 **IPC Handlers** (in `ipcHandlers.js`):
+
 - `open-microphone-settings`: Opens microphone privacy settings
 - `open-sound-input-settings`: Opens sound/audio input device settings
 - `open-accessibility-settings`: Opens accessibility privacy settings (macOS only)
@@ -378,6 +396,7 @@ The app can open OS-level settings for microphone permissions, sound input selec
 | Linux | Manual (no URL scheme) | Manual (e.g., pavucontrol) | N/A |
 
 **UI Component** (`MicPermissionWarning.tsx`):
+
 - Shows platform-appropriate buttons and messages
 - Linux only shows "Open Sound Settings" (no separate privacy settings)
 - macOS/Windows show both sound and privacy buttons
@@ -385,6 +404,7 @@ The app can open OS-level settings for microphone permissions, sound input selec
 ### 11. Debug Mode
 
 Enable with `--log-level=debug` or `OPENWHISPR_LOG_LEVEL=debug` (can be set in `.env`):
+
 - Logs saved to platform-specific app data directory
 - Comprehensive logging of audio pipeline
 - FFmpeg path resolution details
@@ -396,22 +416,26 @@ Enable with `--log-level=debug` or `OPENWHISPR_LOG_LEVEL=debug` (can be set in `
 Native Windows support for true push-to-talk functionality using low-level keyboard hooks:
 
 **Architecture**:
+
 - `resources/windows-key-listener.c`: Native C program using Windows `SetWindowsHookEx` for keyboard hooks
 - `src/helpers/windowsKeyManager.js`: Node.js wrapper that spawns and manages the native binary
 - Binary outputs `KEY_DOWN` and `KEY_UP` to stdout when target key is pressed/released
 
 **Compound Hotkey Support**:
+
 - Parses hotkey strings like `CommandOrControl+Shift+F11`
 - Maps modifiers: `CommandOrControl`/`Ctrl` → VK_CONTROL, `Alt`/`Option` → VK_MENU, `Shift` → VK_SHIFT
 - Verifies all required modifiers are held before emitting key events
 
 **Binary Distribution**:
+
 - Prebuilt binary downloaded from GitHub releases (`windows-key-listener-v*` tags)
 - Download script: `scripts/download-windows-key-listener.js`
 - CI workflow: `.github/workflows/build-windows-key-listener.yml`
 - Fallback to tap mode if binary unavailable
 
 **IPC Events**:
+
 - `windows-key-listener:key-down`: Fired when hotkey pressed (start recording)
 - `windows-key-listener:key-up`: Fired when hotkey released (stop recording)
 
@@ -420,18 +444,21 @@ Native Windows support for true push-to-talk functionality using low-level keybo
 Improve transcription accuracy for specific words, names, or technical terms:
 
 **How it works**:
+
 - User adds words/phrases through Settings → Custom Dictionary
 - Words stored as JSON array in localStorage (`customDictionary` key)
 - On transcription, words are joined and passed as `prompt` parameter to Whisper
 - Works with both local whisper.cpp and cloud OpenAI Whisper API
 
 **Implementation**:
+
 - `src/hooks/useSettings.ts`: Manages `customDictionary` state
 - `src/components/SettingsPage.tsx`: UI for adding/removing dictionary words
 - `src/helpers/audioManager.js`: Reads dictionary and adds to transcription options
 - `src/helpers/whisperServer.js`: Includes dictionary as `prompt` in API request
 
 **Whisper Prompt Parameter**:
+
 - Whisper uses the prompt as context/hints for transcription
 - Words in the prompt are more likely to be recognized correctly
 - Useful for: uncommon names, technical jargon, brand names, domain-specific terms
@@ -441,6 +468,7 @@ Improve transcription accuracy for specific words, names, or technical terms:
 On GNOME Wayland, Electron's `globalShortcut` API doesn't work due to Wayland's security model. OpenWhispr uses native GNOME shortcuts:
 
 **Architecture**:
+
 1. `main.js` enables `GlobalShortcutsPortal` feature flag for Wayland
 2. `hotkeyManager.js` detects GNOME + Wayland and initializes `GnomeShortcutManager`
 3. `gnomeShortcut.js` creates D-Bus service at `com.openwhispr.App`
@@ -448,18 +476,21 @@ On GNOME Wayland, Electron's `globalShortcut` API doesn't work due to Wayland's 
 5. GNOME triggers `dbus-send` command which calls the D-Bus `Toggle()` method
 
 **Key Constants**:
+
 - D-Bus service: `com.openwhispr.App`
 - D-Bus path: `/com/openwhispr/App`
 - gsettings path: `/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/openwhispr/`
 
 **IPC Integration**:
+
 - `get-hotkey-mode-info`: Returns `{ isUsingGnome, isUsingHyprland, isUsingNativeShortcut }` to renderer
 - UI hides activation mode selector when `isUsingNativeShortcut` is true
 - Forces tap-to-talk mode (push-to-talk not supported)
 
 **Hotkey Format Conversion**:
-- Electron format: `Alt+R`, `CommandOrControl+Shift+Space`
-- GNOME format: `<Alt>r`, `<Control><Shift>space`
+
+- Electron format: `F8`, `CommandOrControl+Shift+Space`
+- GNOME format: `F8`, `<Control><Shift>space`
 - Backtick (`) → `grave` in GNOME keysym format
 
 ### 15. Hyprland Wayland Global Hotkeys
@@ -467,6 +498,7 @@ On GNOME Wayland, Electron's `globalShortcut` API doesn't work due to Wayland's 
 On Hyprland (wlroots Wayland compositor), Electron's `globalShortcut` API and the `GlobalShortcutsPortal` feature don't work reliably. OpenWhispr uses native Hyprland keybindings:
 
 **Architecture**:
+
 1. `main.js` enables `GlobalShortcutsPortal` feature flag for Wayland (fallback)
 2. `hotkeyManager.js` detects Hyprland + Wayland and initializes `HyprlandShortcutManager`
 3. `hyprlandShortcut.js` creates D-Bus service at `com.openwhispr.App` (same as GNOME)
@@ -474,20 +506,24 @@ On Hyprland (wlroots Wayland compositor), Electron's `globalShortcut` API and th
 5. Hyprland triggers `dbus-send` command which calls the D-Bus `Toggle()` method
 
 **Detection**:
+
 - Primary: `HYPRLAND_INSTANCE_SIGNATURE` environment variable (set by Hyprland)
 - Fallback: `XDG_CURRENT_DESKTOP` contains "hyprland"
 
 **Hotkey Format Conversion**:
-- Electron format: `Alt+R`, `CommandOrControl+Shift+Space`
-- Hyprland format: `ALT, R`, `CTRL SHIFT, space`
+
+- Electron format: `Control+Super`, `CommandOrControl+Shift+Space`
+- Hyprland format: `CTRL, Super_L`, `CTRL SHIFT, space`
 - Modifier-only combos (e.g., `Control+Super`) → `CTRL, Super_L`
 
 **Bind/Unbind Commands**:
+
 - Register: `hyprctl keyword bind "ALT, R, exec, dbus-send --session ..."`
 - Unregister: `hyprctl keyword unbind "ALT, R"`
 - Bindings are ephemeral (don't survive Hyprland restart) but re-registered on app startup
 
 **Limitations**:
+
 - Push-to-talk not supported (Hyprland `bind` fires a single exec, not key-down/key-up)
 - Requires `hyprctl` on PATH (ships with Hyprland)
 
@@ -496,21 +532,25 @@ On Hyprland (wlroots Wayland compositor), Electron's `globalShortcut` API and th
 Detects meetings via three independent sources, orchestrated by `MeetingDetectionEngine`:
 
 **Architecture**:
+
 - `MeetingDetectionEngine` listens to events from `MeetingProcessDetector` and `AudioActivityDetector`
 - `GoogleCalendarManager` provides calendar context (imminent events, active meetings)
 - All three sources feed into a unified notification pipeline
 
 **Process Detection** (known meeting apps — Zoom, Teams, Webex, FaceTime):
+
 - macOS: `systemPreferences.subscribeWorkspaceNotification` — zero CPU, instant detection
 - Windows/Linux: `processListCache` shared polling (30s interval, `ps-list` npm)
 
 **Microphone Detection** (unscheduled/browser meetings like Google Meet):
+
 - macOS: `macos-mic-listener` binary — CoreAudio `kAudioDevicePropertyDeviceIsRunningSomewhere` property listeners with hot-plug support
 - Windows: `windows-mic-listener.exe` — WASAPI `IAudioSessionManager2` session monitoring, `--exclude-pid` for self-mic exclusion
 - Linux: `pactl subscribe` — PulseAudio source-output events
 - All platforms: Graceful fallback to polling if native binary/command unavailable
 
 **UX Rules**:
+
 - During recording (tap-to-talk or push-to-talk): ALL notifications suppressed
 - After recording: 2.5s cooldown before showing queued notifications
 - Multiple signals coalesced: process > audio priority, one notification shown
@@ -518,14 +558,40 @@ Detects meetings via three independent sources, orchestrated by `MeetingDetectio
 - Active calendar meeting recording: all detections suppressed
 
 **Binary Distribution**:
+
 - macOS: Compiled from Swift source via `scripts/build-macos-mic-listener.js` during `compile:native`
 - Windows: Prebuilt binary downloaded via `scripts/download-windows-mic-listener.js` during `prebuild:win`
 - CI workflow: `.github/workflows/build-windows-mic-listener.yml` auto-builds on push to main
 
 **Calendar Sync Resilience**:
+
 - 10s socket timeout on all Google Calendar API requests
 - Exponential backoff on consecutive failures: 2min → 4min → 8min → cap 30min
 - Reset to normal 2min interval on any successful sync
+
+### 17. Voice Agent Hotkey
+
+A dedicated global hotkey that starts a dictation whose transcript is sent straight to the dictation agent as a command — no wake word ("Hey [AgentName]") needed — and that always bypasses the cleanup model. Separate from the chat agent hotkey (`CHAT_AGENT_KEY`), which toggles the agent overlay window.
+
+**Flow**:
+
+1. Hotkey pressed → `voiceAgent` slot callback in `main.js` → `windowManager.sendToggleVoiceAgent()` → `toggle-voice-agent` IPC to the main window
+2. `useAudioRecording.js` starts a recording with `audioManager.setVoiceAgentRequested(true)` (any other start resets it to `false`)
+3. On transcription, `resolveReasoningRoute` consults `resolveDictationRouteKind()` (`src/helpers/dictationRouting.js`): a voice agent recording always takes the agent route; if the dictation agent is disabled or has no model, the raw transcript is returned — it never falls back to cleanup
+
+**Storage & IPC**:
+
+- Env var: `VOICE_AGENT_KEY` (persisted via `environment.js`), store key: `voiceAgentKey` (no default — user opt-in)
+- IPC handlers: `update-voice-agent-hotkey`, `get-voice-agent-key`
+- Hotkey slot: `voiceAgent` (tap-to-toggle; GNOME-native slot via `ToggleVoiceAgent` D-Bus method, KDE via KGlobalAccel, otherwise `globalShortcut`)
+
+**UI**:
+
+- Settings → Hotkeys → "Voice Agent Hotkey" (with cross-slot conflict validation)
+- Onboarding: optional step right after the dictation hotkey (activation) step
+- Requires the dictation agent to be enabled (Settings → AI Models) for the agent route to apply
+
+**Tests**: `test/helpers/dictationRouting.test.js` (run with `node --test`)
 
 ## Development Guidelines
 
@@ -538,6 +604,7 @@ All user-facing strings **must** use the i18n system. Never hardcode UI text in 
 **Supported languages**: en, es, fr, de, pt, it, ru, zh-CN, zh-TW
 
 **How to use**:
+
 ```tsx
 import { useTranslation } from "react-i18next";
 
@@ -547,6 +614,7 @@ const { t } = useTranslation();
 ```
 
 **Rules**:
+
 1. Every new UI string must have a translation key in `en/translation.json` and all other language files
 2. Use `useTranslation()` hook in components and hooks
 3. Keep `{{variable}}` interpolation syntax for dynamic values
@@ -637,6 +705,7 @@ const { t } = useTranslation();
 ### Platform-Specific Notes
 
 **macOS**:
+
 - Requires accessibility permissions for clipboard (auto-paste)
 - Requires microphone permission (prompted by system)
 - Uses AppleScript for reliable pasting
@@ -646,6 +715,7 @@ const { t } = useTranslation();
 - System settings accessible via `x-apple.systempreferences:` URL scheme
 
 **Windows**:
+
 - No special accessibility permissions needed
 - Microphone privacy settings at `ms-settings:privacy-microphone`
 - Sound settings at `ms-settings:sound`
@@ -658,6 +728,7 @@ const { t } = useTranslation();
   - Falls back to tap mode if unavailable
 
 **Linux**:
+
 - Multiple package manager support
 - Standard XDG directories
 - AppImage for distribution
@@ -674,7 +745,7 @@ const { t } = useTranslation();
 - **GNOME Wayland global hotkeys**:
   - Uses native GNOME shortcuts via D-Bus and gsettings (no special permissions needed)
   - Hotkeys visible in GNOME Settings → Keyboard → Shortcuts → Custom
-  - Default hotkey: `Alt+R` (backtick not supported)
+  - Default fallback: `F8` when `Control+Super` cannot be registered
   - Push-to-talk unavailable (GNOME shortcuts only fire single toggle event)
   - Falls back to X11/globalShortcut if GNOME integration fails
   - `dbus-next` npm package used for D-Bus communication

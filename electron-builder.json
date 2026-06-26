@@ -18,6 +18,7 @@
     "node_modules/**/*",
     "src/dist/**/*",
     "src/helpers/**/*",
+    "src/workers/**/*",
     "src/config/**/*",
     "src/constants/**/*",
     "src/locales/**/*",
@@ -88,7 +89,8 @@
     "**/node_modules/ffmpeg-static/**/*",
     "**/node_modules/better-sqlite3/**/*",
     "**/node_modules/onnxruntime-node/**/*",
-    "**/node_modules/@napi-rs/keyring/**/*"
+    "**/node_modules/@napi-rs/keyring/**/*",
+    "src/workers/**/*"
   ],
   "extraResources": [
     ".env",
@@ -195,7 +197,7 @@
   "deb": {
     "afterInstall": "resources/linux/after-install.sh",
     "afterRemove": "resources/linux/after-remove.sh",
-    "depends": ["ydotool"],
+    "depends": ["ydotool", "libpipewire-0.3-0"],
     "fpm": [
       "--deb-recommends",
       "ydotoold",
@@ -219,6 +221,8 @@
       "_build_id_links none",
       "--rpm-tag",
       "Requires: ydotool",
+      "--rpm-tag",
+      "Requires: pipewire-libs",
       "--rpm-tag",
       "Suggests: xdotool",
       "--rpm-tag",

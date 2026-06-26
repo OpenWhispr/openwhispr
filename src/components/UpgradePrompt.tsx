@@ -72,7 +72,9 @@ export default function UpgradePrompt({
             title={t("upgradePrompt.useApiKey")}
             description={t("upgradePrompt.useApiKeyDescription")}
             onClick={() => {
-              useSettingsStore.getState().setCloudTranscriptionMode("byok");
+              const s = useSettingsStore.getState();
+              s.setTranscriptionMode("providers");
+              s.setCloudTranscriptionMode("byok");
               onOpenChange(false);
             }}
           />
@@ -80,7 +82,10 @@ export default function UpgradePrompt({
             title={t("upgradePrompt.switchToLocal")}
             description={t("upgradePrompt.switchToLocalDescription")}
             onClick={() => {
-              useSettingsStore.getState().setUseLocalWhisper(true);
+              const s = useSettingsStore.getState();
+              s.setTranscriptionMode("local");
+              s.setUseLocalWhisper(true);
+              s.setCloudTranscriptionMode("byok");
               onOpenChange(false);
             }}
           />
