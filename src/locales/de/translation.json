@@ -902,7 +902,10 @@
     "recording": "Aufnahme",
     "tryShortcut": "Versuchen Sie Ctrl+Shift+K",
     "tryShortcutMac": "Versuchen Sie ⌘⇧K",
-    "remove": "Hotkey entfernen"
+    "remove": "Hotkey entfernen",
+    "addAnother": "Weiteren Hotkey hinzufügen",
+    "duplicate": "Bereits hinzugefügt",
+    "add": "Hotkey hinzufügen"
   },
   "languageSelector": {
     "noLanguagesFound": "Keine Sprachen gefunden",

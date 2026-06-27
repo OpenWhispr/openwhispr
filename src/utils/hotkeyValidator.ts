@@ -519,6 +519,23 @@ export function validateHotkey(
     return { valid: false, error: "Please enter a valid shortcut." };
   }
 
+  // A slot may hold several hotkeys as a comma-separated list (#936) — validate
+  // each entry independently and return the first failure.
+  if (hotkey.includes(",")) {
+    const items = hotkey
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    if (items.length === 0) {
+      return { valid: false, error: "Please enter a valid shortcut." };
+    }
+    for (const item of items) {
+      const result = validateHotkey(item, platform, existingHotkeys);
+      if (!result.valid) return result;
+    }
+    return { valid: true };
+  }
+
   if (isGlobeLikeHotkey(hotkey)) {
     if (platform !== "darwin") {
       return {

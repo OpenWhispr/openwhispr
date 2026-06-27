@@ -65,7 +65,7 @@ import { useUpdater } from "../hooks/useUpdater";
 
 import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
-import { HotkeyInput } from "./ui/HotkeyInput";
+import { HotkeyListInput } from "./ui/HotkeyListInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -930,16 +930,15 @@ export default function SettingsPage({
     return result ?? { success: false, message: "Electron API unavailable" };
   }, []);
 
-  const { registerHotkey: registerMeetingHotkey, isRegistering: isMeetingHotkeyRegistering } =
-    useHotkeyRegistration({
-      onSuccess: (registeredHotkey) => {
-        setMeetingKey(registeredHotkey);
-      },
-      showSuccessToast: false,
-      showErrorToast: true,
-      showAlert: showAlertDialog,
-      registerFn: meetingRegisterFn,
-    });
+  const { registerHotkey: registerMeetingHotkey } = useHotkeyRegistration({
+    onSuccess: (registeredHotkey) => {
+      setMeetingKey(registeredHotkey);
+    },
+    showSuccessToast: false,
+    showErrorToast: true,
+    showAlert: showAlertDialog,
+    registerFn: meetingRegisterFn,
+  });
 
   const validateDictationHotkey = useCallback(
     (hotkey: string) =>
@@ -3206,27 +3205,27 @@ EOF`,
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={dictationKey}
-                    onChange={async (newHotkey) => {
-                      await registerHotkey(newHotkey);
-                    }}
-                    disabled={isHotkeyRegistering}
+                    onChange={(list) => registerHotkey(list)}
                     validate={validateDictationHotkey}
+                    required
+                    footerEnd={
+                      effectiveDefaultHotkey &&
+                      dictationKey &&
+                      dictationKey !== effectiveDefaultHotkey ? (
+                        <button
+                          onClick={() => registerHotkey(effectiveDefaultHotkey)}
+                          disabled={isHotkeyRegistering}
+                          className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
+                        >
+                          {t("settingsPage.general.hotkey.resetToDefault", {
+                            hotkey: formatHotkeyLabel(effectiveDefaultHotkey),
+                          })}
+                        </button>
+                      ) : null
+                    }
                   />
-                  {effectiveDefaultHotkey &&
-                    dictationKey &&
-                    dictationKey !== effectiveDefaultHotkey && (
-                      <button
-                        onClick={() => registerHotkey(effectiveDefaultHotkey)}
-                        disabled={isHotkeyRegistering}
-                        className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
-                      >
-                        {t("settingsPage.general.hotkey.resetToDefault", {
-                          hotkey: formatHotkeyLabel(effectiveDefaultHotkey),
-                        })}
-                      </button>
-                    )}
                 </SettingsPanelRow>
 
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
@@ -3253,7 +3252,7 @@ EOF`,
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={voiceAgentKey}
                     onChange={setVoiceAgentKey}
                     onClear={() => setVoiceAgentKey("")}
@@ -3271,16 +3270,13 @@ EOF`,
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={meetingKey}
-                    onChange={async (newHotkey) => {
-                      await registerMeetingHotkey(newHotkey);
-                    }}
+                    onChange={(list) => registerMeetingHotkey(list)}
                     onClear={async () => {
                       await window.electronAPI?.registerMeetingHotkey?.("");
                       setMeetingKey("");
                     }}
-                    disabled={isMeetingHotkeyRegistering}
                     validate={validateMeetingHotkey}
                   />
                 </SettingsPanelRow>
@@ -3324,7 +3320,7 @@ EOF`,
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={chatAgentKey}
                     onChange={setChatAgentKey}
                     onClear={() => setChatAgentKey("")}

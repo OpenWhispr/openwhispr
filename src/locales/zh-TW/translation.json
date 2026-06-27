@@ -902,7 +902,10 @@
     "recording": "記錄中",
     "tryShortcut": "試試 Ctrl+Shift+K",
     "tryShortcutMac": "試試 ⌘⇧K",
-    "remove": "移除快捷鍵"
+    "remove": "移除快捷鍵",
+    "addAnother": "新增其他快捷鍵",
+    "duplicate": "已新增",
+    "add": "新增快捷鍵"
   },
   "languageSelector": {
     "noLanguagesFound": "找不到語言",

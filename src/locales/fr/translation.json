@@ -950,7 +950,10 @@
     "recording": "Enregistrement",
     "tryShortcut": "Essayez Ctrl+Shift+K",
     "tryShortcutMac": "Essayez ⌘⇧K",
-    "remove": "Supprimer le raccourci"
+    "remove": "Supprimer le raccourci",
+    "addAnother": "Ajouter un autre raccourci",
+    "duplicate": "Déjà ajouté",
+    "add": "Ajouter un raccourci"
   },
   "languageSelector": {
     "noLanguagesFound": "Aucune langue trouvée",

@@ -990,7 +990,10 @@
     "recording": "Recording",
     "tryShortcut": "Try Ctrl+Shift+K",
     "tryShortcutMac": "Try ⌘⇧K",
-    "remove": "Remove hotkey"
+    "remove": "Remove hotkey",
+    "addAnother": "Add another hotkey",
+    "duplicate": "Already added",
+    "add": "Add hotkey"
   },
   "languageSelector": {
     "noLanguagesFound": "No languages found",

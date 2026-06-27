@@ -902,7 +902,10 @@
     "recording": "記録中",
     "tryShortcut": "Ctrl+Shift+K をお試しください",
     "tryShortcutMac": "⌘⇧K をお試しください",
-    "remove": "ホットキーを削除"
+    "remove": "ホットキーを削除",
+    "addAnother": "ホットキーを追加",
+    "duplicate": "すでに追加されています",
+    "add": "ホットキーを追加"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
