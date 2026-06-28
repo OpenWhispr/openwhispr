@@ -609,17 +609,17 @@ function LlmsTabs({
 function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligence" }) {
   const { t } = useTranslation();
   const [gpus, setGpus] = useState<GpuDevice[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState("0");
+  const [selectedUuid, setSelectedUuid] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     Promise.all([
       window.electronAPI?.listGpus?.() ?? Promise.resolve([]),
-      window.electronAPI?.getGpuDeviceIndex?.(purpose) ?? Promise.resolve("0"),
+      window.electronAPI?.getGpuDeviceIndex?.(purpose) ?? Promise.resolve(""),
     ])
-      .then(([gpuList, idx]) => {
+      .then(([gpuList, savedUuid]) => {
         setGpus(gpuList);
-        setSelectedIndex(idx);
+        setSelectedUuid(savedUuid || gpuList[0]?.uuid || "");
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -637,16 +637,16 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
         <SettingsPanelRow>
           <div className="relative w-full">
             <select
-              value={selectedIndex}
+              value={selectedUuid}
               onChange={async (e) => {
-                const idx = e.target.value;
-                setSelectedIndex(idx);
-                await window.electronAPI?.setGpuDeviceIndex?.(purpose, Number(idx));
+                const uuid = e.target.value;
+                setSelectedUuid(uuid);
+                await window.electronAPI?.setGpuDeviceIndex?.(purpose, uuid);
               }}
               className="w-full appearance-none rounded-md border border-border bg-background px-3 pr-10 py-2 text-sm"
             >
               {gpus.map((gpu) => (
-                <option key={gpu.index} value={String(gpu.index)}>
+                <option key={gpu.uuid} value={gpu.uuid}>
                   GPU {gpu.index}: {gpu.name} ({Math.round(gpu.vramMb / 1024)}GB)
                 </option>
               ))}
