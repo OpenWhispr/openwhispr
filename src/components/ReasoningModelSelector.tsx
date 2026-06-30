@@ -33,7 +33,7 @@ type CloudModelOption = {
   invertInDark?: boolean;
 };
 
-const CLOUD_PROVIDER_IDS = ["openai", "anthropic", "gemini", "groq", "custom"];
+const CLOUD_PROVIDER_IDS = ["openai", "anthropic", "gemini", "groq", "custom", "litellm"];
 
 interface ReasoningModelSelectorProps {
   reasoningModel: string;
@@ -331,7 +331,9 @@ export default function ReasoningModelSelector({
     name:
       id === "custom"
         ? t("reasoning.custom.providerName")
-        : REASONING_PROVIDERS[id as keyof typeof REASONING_PROVIDERS]?.name || id,
+        : id === "litellm"
+          ? "LiteLLM"
+          : REASONING_PROVIDERS[id as keyof typeof REASONING_PROVIDERS]?.name || id,
   }));
 
   const localProviders = useMemo<LocalProvider[]>(() => {
@@ -365,7 +367,7 @@ export default function ReasoningModelSelector({
 
   const selectedCloudModels = useMemo<CloudModelOption[]>(() => {
     if (selectedCloudProvider === "openai") return openaiModelOptions;
-    if (selectedCloudProvider === "custom") return [];
+    if (selectedCloudProvider === "custom" || selectedCloudProvider === "litellm") return [];
 
     const provider = REASONING_PROVIDERS[selectedCloudProvider as keyof typeof REASONING_PROVIDERS];
     if (!provider?.models) return [];
@@ -425,7 +427,7 @@ export default function ReasoningModelSelector({
       window.electronAPI?.llamaServerStop?.();
       setLocalReasoningProvider(selectedCloudProvider);
 
-      if (selectedCloudProvider === "custom") return;
+      if (selectedCloudProvider === "custom" || selectedCloudProvider === "litellm") return;
 
       const provider =
         REASONING_PROVIDERS[selectedCloudProvider as keyof typeof REASONING_PROVIDERS];
@@ -452,7 +454,7 @@ export default function ReasoningModelSelector({
     setSelectedCloudProvider(provider);
     setLocalReasoningProvider(provider);
 
-    if (provider === "custom") return;
+    if (provider === "custom" || provider === "litellm") return;
 
     const providerData = REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS];
     if (providerData?.models?.length > 0) {
@@ -516,7 +518,7 @@ export default function ReasoningModelSelector({
           />
 
           <div>
-            {selectedCloudProvider === "custom" ? (
+            {selectedCloudProvider === "custom" || selectedCloudProvider === "litellm" ? (
               <OpenAICompatiblePanel
                 baseUrl={cloudReasoningBaseUrl}
                 setBaseUrl={setCloudReasoningBaseUrl}
@@ -524,7 +526,8 @@ export default function ReasoningModelSelector({
                 setApiKey={setCustomReasoningApiKey || (() => {})}
                 model={reasoningModel}
                 setModel={setReasoningModel}
-                defaultBaseUrl={API_ENDPOINTS.OPENAI_BASE}
+                defaultBaseUrl={selectedCloudProvider === "litellm" ? "http://localhost:4000/v1" : API_ENDPOINTS.OPENAI_BASE}
+                baseUrlPlaceholder={selectedCloudProvider === "litellm" ? "http://localhost:4000/v1" : undefined}
               />
             ) : (
               <>

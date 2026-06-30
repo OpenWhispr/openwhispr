@@ -7,6 +7,7 @@ import { enterpriseProvider } from "./enterprise";
 import { openwhisprProvider } from "./openwhispr";
 import { lanProvider } from "./lan";
 import { openaiProvider } from "./openai";
+import { litellmProvider } from "./litellm";
 
 export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Object.freeze({
   openai: openaiProvider,
@@ -20,6 +21,7 @@ export const PROVIDER_REGISTRY: Readonly<Record<string, InferenceProvider>> = Ob
   vertex: enterpriseProvider,
   openwhispr: openwhisprProvider,
   lan: lanProvider,
+  litellm: litellmProvider,
 });
 
 export type { InferenceProvider, ProviderContext, ProviderCallParams } from "./types";

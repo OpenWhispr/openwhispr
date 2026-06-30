@@ -62,9 +62,9 @@ class ReasoningService extends BaseReasoningService {
   }
 
   private async getApiKey(
-    provider: "openai" | "anthropic" | "gemini" | "groq" | "custom"
+    provider: "openai" | "anthropic" | "gemini" | "groq" | "custom" | "litellm"
   ): Promise<string> {
-    if (provider === "custom") {
+    if (provider === "custom" || provider === "litellm") {
       let customKey = "";
       try {
         customKey = (await window.electronAPI?.getCleanupCustomKey?.()) || "";
@@ -335,7 +335,7 @@ class ReasoningService extends BaseReasoningService {
     provider: string,
     config: ReasoningConfig & { systemPrompt: string }
   ): AsyncGenerator<string, void, unknown> {
-    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "custom"];
+    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "custom", "litellm"];
     const isLocalProvider = !cloudProviders.includes(provider);
 
     const settings = getSettings();
@@ -356,8 +356,8 @@ class ReasoningService extends BaseReasoningService {
       }
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
-      const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom";
-      const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
+      const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom" | "litellm";
+      const overrideKey = providerKey === "custom" || providerKey === "litellm" ? config.customApiKey?.trim() : "";
       apiKey = overrideKey || (await this.getApiKey(providerKey));
 
       switch (providerKey) {
@@ -369,6 +369,7 @@ class ReasoningService extends BaseReasoningService {
           break;
         case "openai":
         case "custom":
+        case "litellm":
           endpoint = buildApiUrl(
             config.baseUrl?.trim() || getConfiguredOpenAIBase(),
             "/chat/completions"
@@ -538,7 +539,7 @@ class ReasoningService extends BaseReasoningService {
       );
     }
 
-    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "custom"];
+    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "custom", "litellm"];
     const isLocalProvider = !cloudProviders.includes(provider);
 
     const settings = getSettings();
@@ -567,11 +568,11 @@ class ReasoningService extends BaseReasoningService {
       }
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
-      const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom";
-      const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
+      const providerKey = provider as "openai" | "groq" | "gemini" | "anthropic" | "custom" | "litellm";
+      const overrideKey = providerKey === "custom" || providerKey === "litellm" ? config.customApiKey?.trim() : "";
       apiKey = overrideKey || (await this.getApiKey(providerKey));
       baseURL =
-        provider === "custom" ? config.baseUrl?.trim() || getConfiguredOpenAIBase() : undefined;
+        provider === "custom" || provider === "litellm" ? config.baseUrl?.trim() || getConfiguredOpenAIBase() : undefined;
     }
     const apiConfig = getOpenAiApiConfig(model);
 
@@ -880,7 +881,7 @@ class ReasoningService extends BaseReasoningService {
   }
 
   clearApiKeyCache(
-    provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom"
+    provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom" | "litellm"
   ): void {
     if (provider) {
       if (provider !== "custom") {
