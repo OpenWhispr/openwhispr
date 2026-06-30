@@ -1903,6 +1903,12 @@
       },
       "transcriptionPreview": "Live Transcription Preview",
       "transcriptionPreviewDescription": "Show transcription in a floating window before cleanup",
+      "aec": {
+        "toggle": {
+          "title": "Echo cancellation for meetings",
+          "description": "Cancel meeting audio that leaks into your microphone. Leave this off when using headphones or earphones — there is no echo to cancel and it can suppress your voice entirely."
+        }
+      },
       "vad": {
         "title": "Voice Activity Detection",
         "description": "Configure how Silero VAD detects and segments speech for local Whisper transcription",

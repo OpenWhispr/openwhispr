@@ -763,6 +763,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
       window.electronAPI?.meetingTranscriptionStart?.({
         ...getMeetingTranscriptionOptions(),
         noteId: args.noteId ?? null,
+        aecEnabled: getSettings().meetingAecEnabled,
       }),
       getMeetingMicConstraints().then(async (constraints) => {
         try {

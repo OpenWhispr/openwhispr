@@ -781,6 +781,8 @@ export default function SettingsPage({
     setNoteRecordingSileroEnabled,
     meetingSileroEnabled,
     setMeetingSileroEnabled,
+    meetingAecEnabled,
+    setMeetingAecEnabled,
     whisperVadThreshold,
     setWhisperVadThreshold,
     whisperVadMinSpeechDurationMs,
@@ -1454,6 +1456,14 @@ export default function SettingsPage({
             description={t("settingsPage.transcription.vad.toggles.meeting.description")}
           >
             <Toggle checked={meetingSileroEnabled} onChange={setMeetingSileroEnabled} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.transcription.aec.toggle.title")}
+            description={t("settingsPage.transcription.aec.toggle.description")}
+          >
+            <Toggle checked={meetingAecEnabled} onChange={setMeetingAecEnabled} />
           </SettingsRow>
         </SettingsPanelRow>
         <SettingsPanelRow>

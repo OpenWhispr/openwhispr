@@ -344,6 +344,8 @@ function useSettingsInternal() {
     setNoteRecordingSileroEnabled: store.setNoteRecordingSileroEnabled,
     meetingSileroEnabled: store.meetingSileroEnabled,
     setMeetingSileroEnabled: store.setMeetingSileroEnabled,
+    meetingAecEnabled: store.meetingAecEnabled,
+    setMeetingAecEnabled: store.setMeetingAecEnabled,
     whisperVadThreshold: store.whisperVadThreshold,
     setWhisperVadThreshold: store.setWhisperVadThreshold,
     whisperVadMinSpeechDurationMs: store.whisperVadMinSpeechDurationMs,
