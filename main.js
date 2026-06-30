@@ -502,7 +502,8 @@ app.on("open-url", (event, url) => {
     return;
   }
 
-  if (url.includes("/invitations/")) {
+  const invitationPath = url.slice(`${OAUTH_PROTOCOL}://`.length);
+  if (invitationPath.startsWith("invitations/")) {
     handleInvitationDeepLink(url);
     return;
   }
@@ -1461,7 +1462,7 @@ if (gotSingleInstanceLock) {
     if (url) {
       if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
-      } else if (url.includes("/invitations/")) {
+      } else if (url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("invitations/")) {
         handleInvitationDeepLink(url);
       } else {
         void handleOAuthDeepLink(url);

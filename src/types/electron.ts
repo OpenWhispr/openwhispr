@@ -674,7 +674,11 @@ declare global {
       onActionDeleted?: (callback: (payload: { id: number }) => void) => () => void;
 
       // Audio file operations
-      selectAudioFile: () => Promise<{ canceled: boolean; filePath?: string }>;
+      selectAudioFile: (options?: { multiple?: boolean }) => Promise<{
+        canceled: boolean;
+        filePath?: string;
+        filePaths?: string[];
+      }>;
       getFileSize?: (filePath: string) => Promise<number>;
       transcribeAudioFile: (
         filePath: string,
@@ -686,6 +690,27 @@ declare global {
         }
       ) => Promise<{ success: boolean; text?: string; error?: string }>;
       getPathForFile: (file: File) => string;
+
+      // URL audio download
+      downloadUrlAudio: (url: string) => Promise<
+        | {
+            success: true;
+            tempPath: string;
+            title: string;
+            durationSeconds: number | null;
+            sizeBytes: number;
+          }
+        | { success: false; error: string; code?: string }
+      >;
+      cancelUrlDownload: () => Promise<{ success: boolean }>;
+      deleteTempFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
+      onUrlDownloadProgress?: (
+        callback: (data: {
+          stage: "resolving" | "downloading" | "converting" | "ready";
+          percent: number;
+          title?: string;
+        }) => void
+      ) => () => void;
 
       // Note event listeners
       onNoteAdded?: (callback: (note: NoteItem) => void) => () => void;
@@ -1258,6 +1283,7 @@ declare global {
         apiKey: string;
         baseUrl: string;
         model: string;
+        diarize?: boolean;
         provider?: string;
         language?: string;
         environment?: string;
@@ -1266,6 +1292,7 @@ declare global {
         success: boolean;
         text?: string;
         error?: string;
+        diarized?: boolean;
       }>;
 
       // Usage limit events
@@ -1672,6 +1699,19 @@ declare global {
       cancelDiarizationDownload?: () => Promise<{
         success: boolean;
         message?: string;
+        error?: string;
+      }>;
+      mergeSpeakerText?: (
+        segments: Array<{ start: number; end: number; speaker: string }>,
+        text: string,
+        duration: number
+      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      diarizeAudioFile?: (
+        filePath: string,
+        options?: { numSpeakers?: number; threshold?: number }
+      ) => Promise<{
+        success: boolean;
+        segments?: Array<{ start: number; end: number; speaker: string }>;
         error?: string;
       }>;
       onDiarizationDownloadProgress?: (callback: (data: any) => void) => () => void;

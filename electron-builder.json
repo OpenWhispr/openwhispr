@@ -103,6 +103,7 @@
         "whisper-server-*",
         "llama-server-*",
         "sherpa-onnx-*",
+        "yt-dlp-*",
         "qdrant-*",
         "macos-audio-tap",
         "macos-globe-listener",
