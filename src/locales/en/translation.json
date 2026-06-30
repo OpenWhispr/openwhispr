@@ -449,7 +449,11 @@
       "noModels": "No models returned. Check your endpoint URL.",
       "providerName": "Custom",
       "ownerLabel": "Owner: {{owner}}",
-      "unableToLoadModels": "Unable to load models from endpoint."
+      "unableToLoadModels": "Unable to load models from endpoint.",
+      "searchPlaceholder": "Search models…",
+      "selectedGroup": "Selected",
+      "otherGroup": "Other",
+      "noSearchResults": "No models match \"{{query}}\""
     },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",

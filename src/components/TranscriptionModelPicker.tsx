@@ -27,7 +27,7 @@ import {
 import { useSettingsStore } from "../stores/settingsStore";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
-import { createExternalLinkHandler } from "../utils/externalLinks";
+import { createExternalLinkHandler, withUtm } from "../utils/externalLinks";
 import { getCachedPlatform } from "../utils/platform";
 import type { CudaWhisperStatus } from "../types/electron";
 import logger from "../utils/logger";
@@ -968,7 +968,9 @@ export default function TranscriptionModelPicker({
                       {index === 0 && (
                         <button
                           type="button"
-                          onClick={createExternalLinkHandler(providerCredentials.consoleUrl)}
+                          onClick={createExternalLinkHandler(
+                            withUtm(providerCredentials.consoleUrl, "api_key")
+                          )}
                           className="text-xs text-primary/70 hover:text-primary transition-colors cursor-pointer"
                         >
                           {t("transcription.getKey")}

@@ -77,6 +77,7 @@ export const API_ENDPOINTS = {
   GROQ_BASE: "https://api.groq.com/openai/v1",
   XAI_BASE: "https://api.x.ai/v1",
   MISTRAL_BASE: "https://api.mistral.ai/v1",
+  OPENROUTER_BASE: "https://openrouter.ai/api/v1",
   TRANSCRIPTION_BASE: DEFAULT_TRANSCRIPTION_BASE,
   TRANSCRIPTION: buildApiUrl(DEFAULT_TRANSCRIPTION_BASE, "/audio/transcriptions"),
 } as const;

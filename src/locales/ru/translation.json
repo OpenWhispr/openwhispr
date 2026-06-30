@@ -449,7 +449,11 @@
       "noModels": "Модели не найдены. Проверьте URL конечной точки.",
       "providerName": "Пользовательский",
       "ownerLabel": "Автор: {{owner}}",
-      "unableToLoadModels": "Не удалось загрузить модели с конечной точки."
+      "unableToLoadModels": "Не удалось загрузить модели с конечной точки.",
+      "searchPlaceholder": "Поиск моделей…",
+      "selectedGroup": "Выбрано",
+      "otherGroup": "Другое",
+      "noSearchResults": "Нет моделей по запросу «{{query}}»"
     },
     "getApiKey": "Получить API-ключ ->",
     "selectModel": "Выберите модель",

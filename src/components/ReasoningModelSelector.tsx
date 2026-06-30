@@ -14,12 +14,12 @@ import ModelCardList from "./ui/ModelCardList";
 import LocalModelPicker, { type LocalProvider } from "./LocalModelPicker";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import OpenAICompatiblePanel from "./OpenAICompatiblePanel";
-import { API_ENDPOINTS } from "../config/constants";
+import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import logger from "../utils/logger";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { modelRegistry } from "../models/ModelRegistry";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
-import { createExternalLinkHandler } from "../utils/externalLinks";
+import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
 import { useSettingsStore } from "../stores/settingsStore";
 
@@ -33,7 +33,24 @@ type CloudModelOption = {
   invertInDark?: boolean;
 };
 
-const CLOUD_PROVIDER_IDS = ["openai", "anthropic", "gemini", "groq", "custom"];
+const OPENROUTER_TAB = "openrouter";
+const OPENROUTER_KEYS_URL = "https://openrouter.ai/keys";
+
+const CLOUD_PROVIDER_IDS = ["openai", "anthropic", "gemini", "groq", OPENROUTER_TAB, "custom"];
+
+// OpenRouter is the custom (OpenAI-compatible) provider pinned to its endpoint,
+// surfaced as its own tab. Map between the tab id and the persisted provider.
+function tabToStored(tab: string): { provider: string; baseUrl?: string } {
+  return tab === OPENROUTER_TAB
+    ? { provider: "custom", baseUrl: API_ENDPOINTS.OPENROUTER_BASE }
+    : { provider: tab };
+}
+function storedToTab(provider: string, baseUrl: string): string {
+  if (provider === "custom" && normalizeBaseUrl(baseUrl) === API_ENDPOINTS.OPENROUTER_BASE) {
+    return OPENROUTER_TAB;
+  }
+  return provider;
+}
 
 interface ReasoningModelSelectorProps {
   reasoningModel: string;
@@ -331,7 +348,9 @@ export default function ReasoningModelSelector({
     name:
       id === "custom"
         ? t("reasoning.custom.providerName")
-        : REASONING_PROVIDERS[id as keyof typeof REASONING_PROVIDERS]?.name || id,
+        : id === OPENROUTER_TAB
+          ? "OpenRouter"
+          : REASONING_PROVIDERS[id as keyof typeof REASONING_PROVIDERS]?.name || id,
   }));
 
   const localProviders = useMemo<LocalProvider[]>(() => {
@@ -365,7 +384,7 @@ export default function ReasoningModelSelector({
 
   const selectedCloudModels = useMemo<CloudModelOption[]>(() => {
     if (selectedCloudProvider === "openai") return openaiModelOptions;
-    if (selectedCloudProvider === "custom") return [];
+    if (selectedCloudProvider === "custom" || selectedCloudProvider === OPENROUTER_TAB) return [];
 
     const provider = REASONING_PROVIDERS[selectedCloudProvider as keyof typeof REASONING_PROVIDERS];
     if (!provider?.models) return [];
@@ -389,9 +408,9 @@ export default function ReasoningModelSelector({
       setSelectedLocalProvider(localReasoningProvider);
     } else if (CLOUD_PROVIDER_IDS.includes(localReasoningProvider)) {
       setSelectedMode("cloud");
-      setSelectedCloudProvider(localReasoningProvider);
+      setSelectedCloudProvider(storedToTab(localReasoningProvider, cloudReasoningBaseUrl));
     }
-  }, [localProviders, localReasoningProvider]);
+  }, [localProviders, localReasoningProvider, cloudReasoningBaseUrl]);
 
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
 
@@ -423,14 +442,15 @@ export default function ReasoningModelSelector({
 
     if (newMode === "cloud") {
       window.electronAPI?.llamaServerStop?.();
-      setLocalReasoningProvider(selectedCloudProvider);
+      const { provider, baseUrl } = tabToStored(selectedCloudProvider);
+      setLocalReasoningProvider(provider);
+      if (baseUrl !== undefined) setCloudReasoningBaseUrl(baseUrl);
 
-      if (selectedCloudProvider === "custom") return;
+      if (provider === "custom") return;
 
-      const provider =
-        REASONING_PROVIDERS[selectedCloudProvider as keyof typeof REASONING_PROVIDERS];
-      if (provider?.models?.length > 0) {
-        setReasoningModel(provider.models[0].value);
+      const providerData = REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS];
+      if (providerData?.models?.length > 0) {
+        setReasoningModel(providerData.models[0].value);
       }
     } else {
       setLocalReasoningProvider(selectedLocalProvider);
@@ -448,9 +468,20 @@ export default function ReasoningModelSelector({
     }
   };
 
-  const handleCloudProviderChange = (provider: string) => {
-    setSelectedCloudProvider(provider);
+  const handleCloudProviderChange = (tab: string) => {
+    setSelectedCloudProvider(tab);
+    const { provider, baseUrl } = tabToStored(tab);
     setLocalReasoningProvider(provider);
+
+    if (baseUrl !== undefined) {
+      setCloudReasoningBaseUrl(baseUrl);
+    } else if (
+      tab === "custom" &&
+      normalizeBaseUrl(cloudReasoningBaseUrl) === API_ENDPOINTS.OPENROUTER_BASE
+    ) {
+      // Leaving OpenRouter for a generic endpoint — clear the pinned URL.
+      setCloudReasoningBaseUrl(API_ENDPOINTS.OPENAI_BASE);
+    }
 
     if (provider === "custom") return;
 
@@ -516,7 +547,7 @@ export default function ReasoningModelSelector({
           />
 
           <div>
-            {selectedCloudProvider === "custom" ? (
+            {selectedCloudProvider === "custom" || selectedCloudProvider === OPENROUTER_TAB ? (
               <OpenAICompatiblePanel
                 baseUrl={cloudReasoningBaseUrl}
                 setBaseUrl={setCloudReasoningBaseUrl}
@@ -524,7 +555,9 @@ export default function ReasoningModelSelector({
                 setApiKey={setCustomReasoningApiKey || (() => {})}
                 model={reasoningModel}
                 setModel={setReasoningModel}
-                defaultBaseUrl={API_ENDPOINTS.OPENAI_BASE}
+                {...(selectedCloudProvider === OPENROUTER_TAB
+                  ? { lockedBaseUrl: true, getKeyUrl: OPENROUTER_KEYS_URL }
+                  : { defaultBaseUrl: API_ENDPOINTS.OPENAI_BASE })}
               />
             ) : (
               <>
@@ -532,15 +565,7 @@ export default function ReasoningModelSelector({
                   <div className="space-y-2">
                     <div className="flex items-baseline justify-between">
                       <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                      <a
-                        href="https://platform.openai.com/api-keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={createExternalLinkHandler("https://platform.openai.com/api-keys")}
-                        className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
-                      >
-                        {t("reasoning.getApiKey")}
-                      </a>
+                      <GetApiKeyLink url="https://platform.openai.com/api-keys" />
                     </div>
                     <ApiKeyInput
                       apiKey={openaiApiKey}
@@ -555,17 +580,7 @@ export default function ReasoningModelSelector({
                   <div className="space-y-2">
                     <div className="flex items-baseline justify-between">
                       <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                      <a
-                        href="https://console.anthropic.com/settings/keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={createExternalLinkHandler(
-                          "https://console.anthropic.com/settings/keys"
-                        )}
-                        className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
-                      >
-                        {t("reasoning.getApiKey")}
-                      </a>
+                      <GetApiKeyLink url="https://console.anthropic.com/settings/keys" />
                     </div>
                     <ApiKeyInput
                       apiKey={anthropicApiKey}
@@ -580,17 +595,7 @@ export default function ReasoningModelSelector({
                   <div className="space-y-2">
                     <div className="flex items-baseline justify-between">
                       <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                      <a
-                        href="https://aistudio.google.com/app/api-keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={createExternalLinkHandler(
-                          "https://aistudio.google.com/app/api-keys"
-                        )}
-                        className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
-                      >
-                        {t("reasoning.getApiKey")}
-                      </a>
+                      <GetApiKeyLink url="https://aistudio.google.com/app/api-keys" />
                     </div>
                     <ApiKeyInput
                       apiKey={geminiApiKey}
@@ -605,15 +610,7 @@ export default function ReasoningModelSelector({
                   <div className="space-y-2">
                     <div className="flex items-baseline justify-between">
                       <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
-                      <a
-                        href="https://console.groq.com/keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={createExternalLinkHandler("https://console.groq.com/keys")}
-                        className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
-                      >
-                        {t("reasoning.getApiKey")}
-                      </a>
+                      <GetApiKeyLink url="https://console.groq.com/keys" />
                     </div>
                     <ApiKeyInput
                       apiKey={groqApiKey}

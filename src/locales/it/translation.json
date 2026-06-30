@@ -449,7 +449,11 @@
       "noModels": "Nessun modello restituito. Controlla l'URL dell'endpoint.",
       "providerName": "Personalizzato",
       "ownerLabel": "Proprietario: {{owner}}",
-      "unableToLoadModels": "Impossibile caricare i modelli dall'endpoint."
+      "unableToLoadModels": "Impossibile caricare i modelli dall'endpoint.",
+      "searchPlaceholder": "Cerca modelli…",
+      "selectedGroup": "Selezionato",
+      "otherGroup": "Altro",
+      "noSearchResults": "Nessun modello corrisponde a \"{{query}}\""
     },
     "getApiKey": "Ottieni la chiave API ->",
     "selectModel": "Seleziona modello",

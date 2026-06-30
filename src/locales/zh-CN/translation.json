@@ -449,7 +449,11 @@
       "noModels": "未返回任何模型，请检查端点 URL。",
       "providerName": "自定义",
       "ownerLabel": "所有者：{{owner}}",
-      "unableToLoadModels": "无法从端点加载模型。"
+      "unableToLoadModels": "无法从端点加载模型。",
+      "searchPlaceholder": "搜索模型…",
+      "selectedGroup": "已选择",
+      "otherGroup": "其他",
+      "noSearchResults": "没有与“{{query}}”匹配的模型"
     },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
