@@ -1,9 +1,8 @@
 const { execFileSync } = require("child_process");
 const debugLogger = require("./debugLogger");
+const DBusToggleService = require("./dbusToggleService");
 
-const DBUS_SERVICE_NAME = "com.openwhispr.App";
-const DBUS_OBJECT_PATH = "/com/openwhispr/App";
-const DBUS_INTERFACE = "com.openwhispr.App";
+const { DBUS_SERVICE_NAME, DBUS_OBJECT_PATH, DBUS_INTERFACE } = DBusToggleService;
 
 // Per-slot gsettings paths and display names
 const SLOT_CONFIG = {
@@ -61,19 +60,6 @@ const ELECTRON_TO_GNOME_KEY_MAP = {
   right: "Right",
 };
 
-let dbus = null;
-
-function getDBus() {
-  if (dbus) return dbus;
-  try {
-    dbus = require("dbus-next");
-    return dbus;
-  } catch (err) {
-    debugLogger.log("[GnomeShortcut] Failed to load dbus-next:", err.message);
-    return null;
-  }
-}
-
 function getSlotConfig(slotName) {
   const config = SLOT_CONFIG[slotName];
   if (!config) {
@@ -84,7 +70,7 @@ function getSlotConfig(slotName) {
 
 class GnomeShortcutManager {
   constructor() {
-    this.bus = null;
+    this.dbusService = null;
     this.dictationCallback = null;
     this.agentCallback = null;
     this.meetingCallback = null;
@@ -113,108 +99,36 @@ class GnomeShortcutManager {
    */
   setAgentCallback(callback) {
     this.agentCallback = callback;
-    if (this._ifaceRef) {
-      this._ifaceRef._agentCallback = callback;
-    }
+    this.dbusService?.setAgentCallback(callback);
     debugLogger.log("[GnomeShortcut] Agent callback registered");
   }
 
   setMeetingCallback(callback) {
     this.meetingCallback = callback;
-    if (this._ifaceRef) {
-      this._ifaceRef._meetingCallback = callback;
-    }
+    this.dbusService?.setMeetingCallback(callback);
     debugLogger.log("[GnomeShortcut] Meeting callback registered");
   }
 
   setVoiceAgentCallback(callback) {
     this.voiceAgentCallback = callback;
-    if (this._ifaceRef) {
-      this._ifaceRef._voiceAgentCallback = callback;
-    }
+    this.dbusService?.setVoiceAgentCallback(callback);
     debugLogger.log("[GnomeShortcut] Voice agent callback registered");
   }
 
   async initDBusService(dictationCallback) {
     this.dictationCallback = dictationCallback;
 
-    const dbusModule = getDBus();
-    if (!dbusModule) {
-      return false;
-    }
-
-    try {
-      this.bus = dbusModule.sessionBus();
-      await this.bus.requestName(DBUS_SERVICE_NAME, 0);
-
-      const InterfaceClass = this._createInterfaceClass(dbusModule);
-      const iface = new InterfaceClass(
-        dictationCallback,
-        this.agentCallback,
-        this.meetingCallback,
-        this.voiceAgentCallback
-      );
-      // Keep a reference so setAgentCallback() can update it later
-      this._ifaceRef = iface;
-      this.bus.export(DBUS_OBJECT_PATH, iface);
-
-      debugLogger.log("[GnomeShortcut] D-Bus service initialized successfully");
-      return true;
-    } catch (err) {
-      debugLogger.log("[GnomeShortcut] Failed to initialize D-Bus service:", err.message);
-      if (this.bus) {
-        this.bus.disconnect();
-        this.bus = null;
-      }
-      return false;
-    }
-  }
-
-  _createInterfaceClass(dbusModule) {
-    class OpenWhisprInterface extends dbusModule.interface.Interface {
-      constructor(dictationCallback, agentCallback, meetingCallback, voiceAgentCallback) {
-        super(DBUS_INTERFACE);
-        this._dictationCallback = dictationCallback;
-        this._agentCallback = agentCallback || null;
-        this._meetingCallback = meetingCallback || null;
-        this._voiceAgentCallback = voiceAgentCallback || null;
-      }
-
-      Toggle() {
-        if (this._dictationCallback) {
-          this._dictationCallback();
-        }
-      }
-
-      ToggleAgent() {
-        if (this._agentCallback) {
-          this._agentCallback();
-        }
-      }
-
-      ToggleMeeting() {
-        if (this._meetingCallback) {
-          this._meetingCallback();
-        }
-      }
-
-      ToggleVoiceAgent() {
-        if (this._voiceAgentCallback) {
-          this._voiceAgentCallback();
-        }
-      }
-    }
-
-    OpenWhisprInterface.configureMembers({
-      methods: {
-        Toggle: { inSignature: "", outSignature: "" },
-        ToggleAgent: { inSignature: "", outSignature: "" },
-        ToggleMeeting: { inSignature: "", outSignature: "" },
-        ToggleVoiceAgent: { inSignature: "", outSignature: "" },
-      },
+    this.dbusService = new DBusToggleService();
+    const ok = await this.dbusService.start({
+      dictation: dictationCallback,
+      agent: this.agentCallback,
+      meeting: this.meetingCallback,
+      voiceAgent: this.voiceAgentCallback,
     });
-
-    return OpenWhisprInterface;
+    if (!ok) {
+      this.dbusService = null;
+    }
+    return ok;
   }
 
   static isValidShortcut(shortcut) {
@@ -503,9 +417,9 @@ class GnomeShortcutManager {
   }
 
   close() {
-    if (this.bus) {
-      this.bus.disconnect();
-      this.bus = null;
+    if (this.dbusService) {
+      this.dbusService.close();
+      this.dbusService = null;
     }
   }
 }

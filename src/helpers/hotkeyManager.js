@@ -4,6 +4,7 @@ const debugLogger = require("./debugLogger");
 const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const KDEShortcutManager = require("./kdeShortcut");
+const DBusToggleService = require("./dbusToggleService");
 const { i18nMain } = require("./i18nMain");
 
 // Delay to ensure localStorage is accessible after window load
@@ -15,9 +16,11 @@ const FALLBACK_HOTKEYS = ["F8", "F9", "Control+Shift+Space"];
 // Default hotkey for dictation if no saved value exists
 const DEFAULT_HOTKEY = "Control+Super";
 
-// Slots routed through GNOME native gsettings (not globalShortcut).
-// Temporary slots like "cancel" stay on globalShortcut.
-const GNOME_NATIVE_SLOTS = new Set(["agent", "meeting", "voiceAgent"]);
+// Secondary named slots (beyond dictation) that map to dedicated D-Bus methods:
+// ToggleAgent / ToggleMeeting / ToggleVoiceAgent. Routed via D-Bus (GNOME native
+// gsettings, or the com.openwhispr.App endpoint) rather than globalShortcut.
+// Transient slots like "cancel" stay on globalShortcut.
+const DBUS_TOGGLE_SLOTS = new Set(["agent", "meeting", "voiceAgent"]);
 
 // KDE registration failure reasons — reuse existing i18n keys
 const KDE_FAILURE_REASONS = {
@@ -93,6 +96,25 @@ class HotkeyManager extends EventEmitter {
     this.useHyprland = false;
     this.kdeManager = null;
     this.useKDE = false;
+    this.useDbus = false;
+    this.dbusToggleService = null;
+  }
+
+  // Auto-enable the D-Bus endpoint on Linux Wayland sessions that have no native
+  // global-shortcut integration — e.g. Sway, river, dwl — where Electron's
+  // globalShortcut can't register global hotkeys at all. GNOME, KDE, and Hyprland
+  // have their own native paths (Hyprland uses its own D-Bus service), so they're
+  // excluded and left to handle themselves. X11 is excluded because globalShortcut
+  // works there. The user binds keys to dbus-send the Toggle* methods.
+  static shouldAutoUseDbus() {
+    if (process.platform !== "linux" || !GnomeShortcutManager.isWayland()) {
+      return false;
+    }
+    return (
+      !GnomeShortcutManager.isGnome() &&
+      !KDEShortcutManager.isKDE() &&
+      !HyprlandShortcutManager.isHyprland()
+    );
   }
 
   // Backward-compatible property accessors
@@ -170,8 +192,32 @@ class HotkeyManager extends EventEmitter {
   async registerSlot(slotName, hotkey, callback) {
     this.unregisterSlot(slotName);
 
+    // D-Bus endpoint mode: wire the slot's callback to its D-Bus method only. No
+    // compositor keybinding — the user binds keys themselves (e.g. via swaymsg)
+    // to dbus-send the matching method.
+    if (this.useDbus && this.dbusToggleService && DBUS_TOGGLE_SLOTS.has(slotName)) {
+      if (slotName === "agent") {
+        this.dbusToggleService.setAgentCallback(callback);
+      } else if (slotName === "meeting") {
+        this.dbusToggleService.setMeetingCallback(callback);
+      } else if (slotName === "voiceAgent") {
+        this.dbusToggleService.setVoiceAgentCallback(callback);
+      }
+
+      const slot = this.slots.get(slotName) || { hotkey: null, callback: null, accelerator: null };
+      slot.hotkey = hotkey;
+      slot.callback = callback;
+      slot.accelerator = null;
+      this.slots.set(slotName, slot);
+
+      debugLogger.log(
+        `[HotkeyManager] D-Bus slot "${slotName}" callback wired (no compositor bind)`
+      );
+      return { success: true, hotkey };
+    }
+
     // On GNOME (X11 or Wayland), route named slots through native gsettings
-    if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+    if (this.useGnome && this.gnomeManager && DBUS_TOGGLE_SLOTS.has(slotName)) {
       const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
       if (!gnomeHotkey) {
         debugLogger.log(
@@ -271,7 +317,7 @@ class HotkeyManager extends EventEmitter {
     }
 
     // On GNOME, native slots are managed via gsettings, not globalShortcut
-    if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
+    if (this.useGnome && this.gnomeManager && DBUS_TOGGLE_SLOTS.has(slotName)) {
       this.gnomeManager.unregisterKeybinding(slotName).catch((err) => {
         debugLogger.warn(
           `[HotkeyManager] Error unregistering GNOME keybinding for slot "${slotName}":`,
@@ -530,6 +576,46 @@ class HotkeyManager extends EventEmitter {
     }
   }
 
+  // Stand up the com.openwhispr.App D-Bus endpoint, skipping all compositor key
+  // registration. Uses the compositor-agnostic DBusToggleService directly (no
+  // GNOME/gsettings machinery involved).
+  async initializeDbusEndpoint(callback) {
+    if (process.platform !== "linux") {
+      return false;
+    }
+
+    try {
+      this.dbusToggleService = new DBusToggleService();
+
+      const dbusOk = await this.dbusToggleService.start({ dictation: callback });
+      if (dbusOk) {
+        this.useDbus = true;
+        this.hotkeyCallback = callback;
+        debugLogger.log("[HotkeyManager] D-Bus endpoint active — skipping compositor keybinding");
+        return true;
+      }
+    } catch (err) {
+      debugLogger.log("[HotkeyManager] D-Bus endpoint init failed:", err.message);
+    }
+
+    this.dbusToggleService = null;
+    this.useDbus = false;
+    return false;
+  }
+
+  // In D-Bus endpoint mode, attach the agent/voiceAgent/meeting callbacks to the
+  // D-Bus interface directly, so all four methods work even when the user has no
+  // in-app hotkey configured for them (they bind keys externally). No-op unless
+  // the D-Bus endpoint is active.
+  setDbusToggleCallbacks({ agent, voiceAgent, meeting } = {}) {
+    if (!this.useDbus || !this.dbusToggleService) {
+      return;
+    }
+    if (agent) this.dbusToggleService.setAgentCallback(agent);
+    if (voiceAgent) this.dbusToggleService.setVoiceAgentCallback(voiceAgent);
+    if (meeting) this.dbusToggleService.setMeetingCallback(meeting);
+  }
+
   async initializeGnomeShortcuts(callback) {
     if (process.platform !== "linux" || !GnomeShortcutManager.isGnome()) {
       return false;
@@ -627,6 +713,22 @@ class HotkeyManager extends EventEmitter {
 
     this.mainWindow = mainWindow;
     this.hotkeyCallback = callback;
+
+    // Stand up the com.openwhispr.App D-Bus endpoint and skip compositor-specific
+    // key registration on Linux Wayland sessions with no native integration (e.g.
+    // Sway), where globalShortcut can't register hotkeys. The user binds keys to
+    // dbus-send the Toggle* methods. Takes precedence over the GNOME/KDE/Hyprland
+    // native paths below.
+    if (process.platform === "linux" && HotkeyManager.shouldAutoUseDbus()) {
+      const started = await this.initializeDbusEndpoint(callback);
+      if (started) {
+        this.isInitialized = true;
+        return;
+      }
+      debugLogger.log(
+        "[HotkeyManager] D-Bus endpoint requested but could not be claimed; continuing with normal detection"
+      );
+    }
 
     // Try GNOME native shortcuts on any GNOME session (X11 or Wayland).
     // On Wayland: required (globalShortcut/XGrabKey doesn't work globally).
@@ -1170,6 +1272,11 @@ class HotkeyManager extends EventEmitter {
       this.gnomeManager = null;
       this.useGnome = false;
     }
+    if (this.dbusToggleService) {
+      this.dbusToggleService.close();
+      this.dbusToggleService = null;
+      this.useDbus = false;
+    }
     if (this.kdeManager) {
       const kdeSlots = [...this.kdeManager.registeredSlots];
       for (const slotName of kdeSlots) {
@@ -1220,7 +1327,9 @@ class HotkeyManager extends EventEmitter {
   }
 
   isUsingNativeShortcut() {
-    return this.useGnome || this.useHyprland || this.useKDE;
+    // The D-Bus endpoint drives dictation via a single dbus-send Toggle (no
+    // key-up), so it must force tap-to-talk like the other native paths.
+    return this.useGnome || this.useHyprland || this.useKDE || this.useDbus;
   }
 
   isHotkeyRegistered(hotkey) {

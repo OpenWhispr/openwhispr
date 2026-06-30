@@ -69,6 +69,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Notifies renderer via IPC when hotkey registration fails
   - Integrates with GnomeShortcutManager for GNOME Wayland support
   - Integrates with HyprlandShortcutManager for Hyprland Wayland support
+- **dbusToggleService.js**: Compositor-agnostic owner of the `com.openwhispr.App`
+  session-bus service and its four no-arg methods (`Toggle`, `ToggleAgent`,
+  `ToggleMeeting`, `ToggleVoiceAgent`). Used by `gnomeShortcut.js` (composition)
+  and the D-Bus endpoint path in `hotkeyManager.js` (see section 15a). Single
+  source of truth for the D-Bus interface — no gsettings/compositor logic.
 - **gnomeShortcut.js**: GNOME Wayland global shortcut integration
   - Uses D-Bus service to receive hotkey toggle commands
   - Registers shortcuts via gsettings (visible in GNOME Settings → Keyboard → Shortcuts)
@@ -526,6 +531,48 @@ On Hyprland (wlroots Wayland compositor), Electron's `globalShortcut` API and th
 
 - Push-to-talk not supported (Hyprland `bind` fires a single exec, not key-down/key-up)
 - Requires `hyprctl` on PATH (ships with Hyprland)
+
+### 15a. D-Bus endpoint fallback (Sway / wlroots Wayland)
+
+On Wayland compositors with no native global-shortcut integration (e.g. Sway,
+river, dwl), Electron's `globalShortcut` can't register hotkeys at all. The app
+stands up the `com.openwhispr.App` D-Bus service **without** any compositor key
+registration (no gsettings/hyprctl/KGlobalAccel) and the user binds keys to
+`dbus-send` the methods.
+
+This is **enabled automatically** on those sessions — no configuration needed.
+
+**Behavior**:
+
+1. `hotkeyManager.initializeHotkey()` checks `shouldAutoUseDbus()` (Linux +
+   Wayland + not GNOME/KDE/Hyprland) first — it takes precedence over the
+   GNOME/KDE/Hyprland native paths.
+2. `initializeDbusEndpoint()` uses the compositor-agnostic `DBusToggleService`
+   (`src/helpers/dbusToggleService.js`) directly — the shared module that owns the
+   `com.openwhispr.App` service and its four `Toggle*` methods. No GNOME/gsettings
+   machinery is involved. (`GnomeShortcutManager` also composes this same service.)
+3. `main.js` calls `hotkeyManager.setDbusToggleCallbacks()` so `ToggleAgent`/
+   `ToggleVoiceAgent`/`ToggleMeeting` work even with no in-app hotkey configured.
+4. `registerSlot()` has a `useDbus` branch that wires slot callbacks without a
+   compositor bind.
+5. `isUsingNativeShortcut()` returns true (forces tap-to-talk; a single
+   `dbus-send` can't express push/release).
+
+GNOME, KDE, and Hyprland are excluded from auto-detection — they have their own
+native paths (Hyprland uses its own D-Bus service). X11 is excluded because
+`globalShortcut` works there.
+
+**D-Bus methods** (service `com.openwhispr.App`, path `/com/openwhispr/App`,
+interface `com.openwhispr.App`): `Toggle` (dictation), `ToggleAgent`,
+`ToggleMeeting`, `ToggleVoiceAgent`.
+
+**Example Sway binding**:
+
+```
+bindsym Super+r exec dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.Toggle
+```
+
+If the bus name can't be claimed, it logs and falls through to normal detection.
 
 ### 16. Meeting Detection (Event-Driven)
 

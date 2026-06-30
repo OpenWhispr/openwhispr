@@ -889,6 +889,15 @@ async function startApp() {
     meetingDetectionEngine?.startManualMeeting();
   };
 
+  // When the D-Bus endpoint is active, ensure every method (ToggleAgent/
+  // ToggleVoiceAgent/ToggleMeeting) is live even if the user configured no in-app
+  // hotkey for them. No-op when the D-Bus endpoint isn't in use.
+  hotkeyManager.setDbusToggleCallbacks({
+    agent: agentHotkeyCallback,
+    voiceAgent: voiceAgentHotkeyCallback,
+    meeting: meetingHotkeyCallback,
+  });
+
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
   if (savedMeetingKey) {
     const result = await hotkeyManager.registerSlot(
