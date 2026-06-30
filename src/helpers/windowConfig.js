@@ -10,13 +10,29 @@ const isKDEWayland =
   process.env.XDG_SESSION_TYPE === "wayland" &&
   /kde/i.test(process.env.XDG_CURRENT_DESKTOP || "");
 
+// wlroots compositors (Sway, Hyprland, river, …). Our overlays are created with
+// focusable:false, which makes Electron map them as override-redirect XWayland
+// windows. wlroots' XWayland focuses override-redirect windows on map *unless*
+// their _NET_WM_WINDOW_TYPE is in its no-focus set (notification, tooltip,
+// utility, splash, menus). TOOLBAR/NORMAL are NOT in that set, so the overlays
+// steal focus on wlroots — but not on GNOME/KDE, whose WMs honor focusable:false
+// directly. So on wlroots we map the non-interactive overlays as "notification".
+const isWlrootsWayland =
+  process.platform === "linux" &&
+  process.env.XDG_SESSION_TYPE === "wayland" &&
+  (/sway|hyprland|wayfire|river|dwl|labwc/i.test(process.env.XDG_CURRENT_DESKTOP || "") ||
+    !!process.env.SWAYSOCK ||
+    !!process.env.HYPRLAND_INSTANCE_SIGNATURE);
+
 const MAIN_OVERLAY_TYPE =
   process.platform === "darwin"
     ? "panel"
     : process.platform === "linux"
-      ? isGnomeWayland || isKDEWayland
-        ? "normal"
-        : "toolbar"
+      ? isWlrootsWayland
+        ? "notification"
+        : isGnomeWayland || isKDEWayland
+          ? "normal"
+          : "toolbar"
       : "normal";
 
 const FLOATING_OVERLAY_TYPE =
@@ -27,6 +43,13 @@ const FLOATING_OVERLAY_TYPE =
         ? "normal"
         : "toolbar"
       : "normal";
+
+// Type for non-interactive, never-focus overlays (transcription preview, meeting
+// notification). On wlroots, "notification" keeps the override-redirect window
+// from stealing focus (see isWlrootsWayland above); elsewhere it matches the
+// regular floating overlay type. NOT used for the agent overlay, which needs
+// keyboard focus for chat input.
+const NOFOCUS_OVERLAY_TYPE = isWlrootsWayland ? "notification" : FLOATING_OVERLAY_TYPE;
 
 const WINDOW_SIZES = {
   BASE: { width: 96, height: 96 },
@@ -117,7 +140,7 @@ const NOTIFICATION_WINDOW_CONFIG = {
     sandbox: true,
   },
   visibleOnAllWorkspaces: process.platform !== "win32",
-  type: FLOATING_OVERLAY_TYPE,
+  type: NOFOCUS_OVERLAY_TYPE,
 };
 
 const TRANSCRIPTION_PREVIEW_SIZE_LIMITS = {
@@ -148,7 +171,7 @@ const TRANSCRIPTION_PREVIEW_CONFIG = {
     sandbox: true,
   },
   visibleOnAllWorkspaces: process.platform !== "win32",
-  type: FLOATING_OVERLAY_TYPE,
+  type: NOFOCUS_OVERLAY_TYPE,
 };
 
 class WindowPositionUtil {
