@@ -1073,7 +1073,7 @@ async function startApp() {
               }
             }, MIN_HOLD_DURATION_MS);
           } else {
-            windowManager.sendToggleDictation();
+            globeKeyDownTime = Date.now();
           }
         } else {
           debugLogger?.debug("[Globe] Ignored — mainWindow not live");
@@ -1113,6 +1113,12 @@ async function startApp() {
             globeKeyIsRecording = false;
             debugLogger?.debug("[Globe] Stopping dictation (push release)");
             windowManager.sendStopDictation();
+          }
+        } else {
+          const heldMs = Date.now() - globeKeyDownTime;
+          globeKeyDownTime = 0;
+          if (heldMs <= MIN_HOLD_DURATION_MS) {
+            windowManager.sendToggleDictation();
           }
         }
       }
