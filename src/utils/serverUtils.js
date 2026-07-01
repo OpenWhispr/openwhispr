@@ -8,18 +8,22 @@ const GRACEFUL_STOP_TIMEOUT_MS = 5000;
 function tryBind(port, host) {
   return new Promise((resolve) => {
     const s = net.createServer();
-    s.once("error", () => resolve(false));
-    s.once("listening", () => s.close(() => resolve(true)));
+    s.once("error", (err) => resolve({ ok: false, code: err.code }));
+    s.once("listening", () => s.close(() => resolve({ ok: true })));
     s.listen(port, host);
   });
 }
 
 async function isPortAvailable(port) {
-  return (
-    (await tryBind(port, "0.0.0.0")) &&
-    (await tryBind(port, "::")) &&
-    (await tryBind(port, "127.0.0.1"))
-  );
+  const v4 = await tryBind(port, "0.0.0.0");
+  if (!v4.ok) return false;
+
+  const v6 = await tryBind(port, "::");
+  // EAFNOSUPPORT means IPv6 is disabled on this host — skip, don't fail
+  if (!v6.ok && v6.code !== "EAFNOSUPPORT") return false;
+
+  const lo = await tryBind(port, "127.0.0.1");
+  return lo.ok;
 }
 
 async function findAvailablePort(rangeStart, rangeEnd) {
