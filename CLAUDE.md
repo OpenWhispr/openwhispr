@@ -532,35 +532,41 @@ On Hyprland (wlroots Wayland compositor), Electron's `globalShortcut` API and th
 - Push-to-talk not supported (Hyprland `bind` fires a single exec, not key-down/key-up)
 - Requires `hyprctl` on PATH (ships with Hyprland)
 
-### 15a. D-Bus endpoint fallback (Sway / wlroots Wayland)
+### 15a. D-Bus endpoint (`com.openwhispr.App`) — universal on Linux
 
-On Wayland compositors with no native global-shortcut integration (e.g. Sway,
-river, dwl), Electron's `globalShortcut` can't register hotkeys at all. The app
-stands up the `com.openwhispr.App` D-Bus service **without** any compositor key
-registration (no gsettings/hyprctl/KGlobalAccel) and the user binds keys to
-`dbus-send` the methods.
+The `com.openwhispr.App` D-Bus service is **desktop-agnostic** and started **once on
+every Linux session** (X11 + all Wayland compositors), so `dbus-send` binds work
+everywhere. It's owned by a single shared `DBusToggleService`
+(`src/helpers/dbusToggleService.js`) held on `hotkeyManager.dbusToggleService`.
 
-This is **enabled automatically** on those sessions — no configuration needed.
+The bus is *just the endpoint* — it does not decide the shortcut mechanism. Each
+desktop layers its own **keybinding auto-registration** on top, all routing through
+this same service:
+
+| Desktop | Auto-registration | Uses the bus? |
+|---|---|---|
+| GNOME | gsettings custom-keybinding whose command is `dbus-send …Toggle*` | yes |
+| Hyprland | `hyprctl keyword bind … dbus-send` | yes |
+| wlroots (Sway/river/dwl) | none — user binds keys manually to `dbus-send` | yes (it's the only mechanism) |
+| KDE | KGlobalAccel (native `org.kde.kglobalaccel`) | no (bus also available for manual binds) |
+| X11 / other | Electron `globalShortcut` | no (bus also available for manual binds) |
 
 **Behavior**:
 
-1. `hotkeyManager.initializeHotkey()` checks `shouldAutoUseDbus()` (Linux +
-   Wayland + not GNOME/KDE/Hyprland) first — it takes precedence over the
-   GNOME/KDE/Hyprland native paths.
-2. `initializeDbusEndpoint()` uses the compositor-agnostic `DBusToggleService`
-   (`src/helpers/dbusToggleService.js`) directly — the shared module that owns the
-   `com.openwhispr.App` service and its four `Toggle*` methods. No GNOME/gsettings
-   machinery is involved. (`GnomeShortcutManager` also composes this same service.)
-3. `main.js` calls `hotkeyManager.setDbusToggleCallbacks()` so `ToggleAgent`/
-   `ToggleVoiceAgent`/`ToggleMeeting` work even with no in-app hotkey configured.
-4. `registerSlot()` has a `useDbus` branch that wires slot callbacks without a
-   compositor bind.
-5. `isUsingNativeShortcut()` returns true (forces tap-to-talk; a single
-   `dbus-send` can't express push/release).
-
-GNOME, KDE, and Hyprland are excluded from auto-detection — they have their own
-native paths (Hyprland uses its own D-Bus service). X11 is excluded because
-`globalShortcut` works there.
+1. `hotkeyManager.initializeHotkey()` calls `ensureDbusEndpoint()` first on any Linux
+   session — brings up the single shared service (wires the dictation callback).
+2. `GnomeShortcutManager` / `HyprlandShortcutManager` are now **keybinding registrars
+   only** (gsettings / hyprctl); they no longer own a bus. They require the shared
+   endpoint to be up (their commands `dbus-send` to it) — if it failed to start, they
+   fall back to `globalShortcut`.
+3. `main.js` calls `hotkeyManager.setDbusToggleCallbacks()`, which wires the
+   agent/voiceAgent/meeting + StartDictation/StopDictation callbacks whenever the
+   endpoint exists (any DE). `registerSlot()` also wires secondary-slot callbacks to
+   the shared endpoint, additively, before the DE-specific registration.
+4. `useDbus` means **"the D-Bus endpoint is the *primary* mechanism"** (wlroots only,
+   via `shouldAutoUseDbus()`). It is **not** set merely because the endpoint is up —
+   otherwise `isUsingNativeShortcut()` would force tap-to-talk on X11 and break
+   push-to-talk there. `isUsingNativeShortcut()` = `useGnome||useHyprland||useKDE||useDbus`.
 
 **D-Bus methods** (service `com.openwhispr.App`, path `/com/openwhispr/App`,
 interface `com.openwhispr.App`):

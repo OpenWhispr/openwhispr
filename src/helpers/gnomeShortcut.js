@@ -68,13 +68,12 @@ function getSlotConfig(slotName) {
   return config;
 }
 
+// Registers global shortcuts as GNOME gsettings custom-keybindings whose command
+// dbus-sends to the shared com.openwhispr.App endpoint (owned by hotkeyManager's
+// DBusToggleService). This class only does gsettings — callback wiring to the bus
+// lives in hotkeyManager.
 class GnomeShortcutManager {
   constructor() {
-    this.dbusService = null;
-    this.dictationCallback = null;
-    this.agentCallback = null;
-    this.meetingCallback = null;
-    this.voiceAgentCallback = null;
     // Track which slots have been registered in gsettings
     this.registeredSlots = new Set();
   }
@@ -90,45 +89,6 @@ class GnomeShortcutManager {
 
   static isWayland() {
     return process.env.XDG_SESSION_TYPE === "wayland";
-  }
-
-  /**
-   * Set or update the agent callback after initial D-Bus service initialisation.
-   * This supports the case where the dictation hotkey is set up first and the
-   * agent callback is only available later (after agent window creation).
-   */
-  setAgentCallback(callback) {
-    this.agentCallback = callback;
-    this.dbusService?.setAgentCallback(callback);
-    debugLogger.log("[GnomeShortcut] Agent callback registered");
-  }
-
-  setMeetingCallback(callback) {
-    this.meetingCallback = callback;
-    this.dbusService?.setMeetingCallback(callback);
-    debugLogger.log("[GnomeShortcut] Meeting callback registered");
-  }
-
-  setVoiceAgentCallback(callback) {
-    this.voiceAgentCallback = callback;
-    this.dbusService?.setVoiceAgentCallback(callback);
-    debugLogger.log("[GnomeShortcut] Voice agent callback registered");
-  }
-
-  async initDBusService(dictationCallback) {
-    this.dictationCallback = dictationCallback;
-
-    this.dbusService = new DBusToggleService();
-    const ok = await this.dbusService.start({
-      dictation: dictationCallback,
-      agent: this.agentCallback,
-      meeting: this.meetingCallback,
-      voiceAgent: this.voiceAgentCallback,
-    });
-    if (!ok) {
-      this.dbusService = null;
-    }
-    return ok;
   }
 
   static isValidShortcut(shortcut) {
@@ -416,12 +376,9 @@ class GnomeShortcutManager {
     return modifiers + gnomeKey;
   }
 
-  close() {
-    if (this.dbusService) {
-      this.dbusService.close();
-      this.dbusService = null;
-    }
-  }
+  // The shared D-Bus endpoint is owned/closed by hotkeyManager; nothing to tear
+  // down here beyond the gsettings keybindings (removed via unregisterKeybinding).
+  close() {}
 }
 
 module.exports = GnomeShortcutManager;

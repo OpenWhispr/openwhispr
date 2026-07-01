@@ -79,23 +79,11 @@ function getBindsFilePath() {
   return path.join(getHyprConfigDir(), BINDS_FILENAME);
 }
 
-let dbus = null;
-
-function getDBus() {
-  if (dbus) return dbus;
-  try {
-    dbus = require("dbus-next");
-    return dbus;
-  } catch (err) {
-    debugLogger.log("[HyprlandShortcut] Failed to load dbus-next:", err.message);
-    return null;
-  }
-}
-
+// Registers a global shortcut via `hyprctl keyword bind … dbus-send …` targeting
+// the shared com.openwhispr.App endpoint (owned by hotkeyManager's DBusToggleService).
+// This class only does hyprctl — it does not own a bus.
 class HyprlandShortcutManager {
   constructor() {
-    this.bus = null;
-    this.callback = null;
     this.isRegistered = false;
     this.currentBinding = null; // Store the current Hyprland bind string for unbinding
   }
@@ -127,61 +115,6 @@ class HyprlandShortcutManager {
     } catch {
       return false;
     }
-  }
-
-  /**
-   * Initialize a D-Bus service to receive Toggle() calls from Hyprland keybindings.
-   * Reuses the same D-Bus service name/path as the GNOME integration.
-   */
-  async initDBusService(callback) {
-    this.callback = callback;
-
-    const dbusModule = getDBus();
-    if (!dbusModule) {
-      return false;
-    }
-
-    try {
-      this.bus = dbusModule.sessionBus();
-      await this.bus.requestName(DBUS_SERVICE_NAME, 0);
-
-      const InterfaceClass = this._createInterfaceClass(dbusModule, callback);
-      const iface = new InterfaceClass();
-      this.bus.export(DBUS_OBJECT_PATH, iface);
-
-      debugLogger.log("[HyprlandShortcut] D-Bus service initialized successfully");
-      return true;
-    } catch (err) {
-      debugLogger.log("[HyprlandShortcut] Failed to initialize D-Bus service:", err.message);
-      if (this.bus) {
-        this.bus.disconnect();
-        this.bus = null;
-      }
-      return false;
-    }
-  }
-
-  _createInterfaceClass(dbusModule, callback) {
-    class OpenWhisprInterface extends dbusModule.interface.Interface {
-      constructor() {
-        super(DBUS_INTERFACE);
-        this._callback = callback;
-      }
-
-      Toggle() {
-        if (this._callback) {
-          this._callback();
-        }
-      }
-    }
-
-    OpenWhisprInterface.configureMembers({
-      methods: {
-        Toggle: { inSignature: "", outSignature: "" },
-      },
-    });
-
-    return OpenWhisprInterface;
   }
 
   static isValidHotkey(hotkey) {
@@ -466,15 +399,9 @@ class HyprlandShortcutManager {
     return true;
   }
 
-  /**
-   * Clean up D-Bus connection.
-   */
-  close() {
-    if (this.bus) {
-      this.bus.disconnect();
-      this.bus = null;
-    }
-  }
+  // The shared D-Bus endpoint is owned/closed by hotkeyManager; the hyprctl bind
+  // is removed via unregisterKeybinding(). Nothing to tear down here.
+  close() {}
 }
 
 module.exports = HyprlandShortcutManager;
