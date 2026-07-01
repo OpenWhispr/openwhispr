@@ -34,6 +34,8 @@ export interface CleanupSettings {
   useDictationAgent: boolean;
   cleanupModel: string;
   cleanupProvider: string;
+  cleanupPreloadOnStart: boolean;
+  cleanupIdleTimeoutMinutes: number;
   cleanupCloudBaseUrl?: string;
   cleanupCloudMode: string;
   cleanupMode: InferenceMode;
@@ -158,6 +160,8 @@ function useSettingsInternal() {
     parakeetModel,
     cleanupProvider,
     cleanupModel,
+    cleanupPreloadOnStart,
+    cleanupIdleTimeoutMinutes,
     dictationAgentProvider,
     dictationAgentModel,
   } = store;
@@ -173,6 +177,8 @@ function useSettingsInternal() {
         model: model || undefined,
         cleanupProvider,
         cleanupModel: cleanupProvider === "local" ? cleanupModel : undefined,
+        cleanupPreloadOnStart,
+        cleanupIdleTimeoutMinutes,
         dictationAgentProvider,
         dictationAgentModel: dictationAgentProvider === "local" ? dictationAgentModel : undefined,
       })
@@ -190,6 +196,8 @@ function useSettingsInternal() {
     parakeetModel,
     cleanupProvider,
     cleanupModel,
+    cleanupPreloadOnStart,
+    cleanupIdleTimeoutMinutes,
     dictationAgentProvider,
     dictationAgentModel,
   ]);

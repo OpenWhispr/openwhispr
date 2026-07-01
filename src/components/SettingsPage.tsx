@@ -430,6 +430,11 @@ function NoteFormattingSettings() {
 
 function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModelsSectionProps) {
   const { t } = useTranslation();
+  const cleanupProvider = useSettingsStore((s) => s.cleanupProvider);
+  const cleanupPreloadOnStart = useSettingsStore((s) => s.cleanupPreloadOnStart);
+  const cleanupIdleTimeoutMinutes = useSettingsStore((s) => s.cleanupIdleTimeoutMinutes);
+  const setCleanupPreloadOnStart = useSettingsStore((s) => s.setCleanupPreloadOnStart);
+  const setCleanupIdleTimeoutMinutes = useSettingsStore((s) => s.setCleanupIdleTimeoutMinutes);
 
   const handleCleanupModeChange = (mode: InferenceMode) => {
     const toastKey = CLEANUP_MODE_TOAST_KEY[mode];
@@ -458,6 +463,48 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
         <>
           <InferenceConfigEditor scope="dictationCleanup" onModeChange={handleCleanupModeChange} />
           <GpuDeviceSelector purpose="intelligence" />
+          {cleanupProvider === "local" && (
+            <SettingsPanel>
+              <SettingsPanelRow>
+                <SettingsRow
+                  label={t("settingsPage.aiModels.preloadOnStart")}
+                  description={t("settingsPage.aiModels.preloadOnStartDescription")}
+                >
+                  <Toggle checked={cleanupPreloadOnStart} onChange={setCleanupPreloadOnStart} />
+                </SettingsRow>
+              </SettingsPanelRow>
+              <SettingsPanelRow>
+                <SettingsRow
+                  label={t("settingsPage.aiModels.idleTimeout")}
+                  description={t("settingsPage.aiModels.idleTimeoutDescription")}
+                >
+                  <Select
+                    value={String(cleanupIdleTimeoutMinutes)}
+                    onValueChange={(v) => setCleanupIdleTimeoutMinutes(Number(v))}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">
+                        {t("settingsPage.aiModels.idleMinutes", { count: 5 })}
+                      </SelectItem>
+                      <SelectItem value="15">
+                        {t("settingsPage.aiModels.idleMinutes", { count: 15 })}
+                      </SelectItem>
+                      <SelectItem value="30">
+                        {t("settingsPage.aiModels.idleMinutes", { count: 30 })}
+                      </SelectItem>
+                      <SelectItem value="60">
+                        {t("settingsPage.aiModels.idleMinutes", { count: 60 })}
+                      </SelectItem>
+                      <SelectItem value="0">{t("settingsPage.aiModels.idleNever")}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </SettingsRow>
+              </SettingsPanelRow>
+            </SettingsPanel>
+          )}
         </>
       )}
     </div>

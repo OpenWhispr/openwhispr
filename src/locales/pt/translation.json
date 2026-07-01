@@ -1238,6 +1238,12 @@
       "description": "Limpe transcrições, processe comandos e corrija erros preservando seu tom de voz.",
       "enableTextCleanup": "Ativar limpeza de texto",
       "enableTextCleanupDescription": "A IA remove palavras de preenchimento, corrige gramática e pontuação",
+      "preloadOnStart": "Pré-carregar o modelo ao iniciar",
+      "preloadOnStartDescription": "Carrega o modelo de limpeza ao abrir o OpenWhispr para que o primeiro ditado seja rápido.",
+      "idleTimeout": "Descarregar quando ocioso",
+      "idleTimeoutDescription": "Libera memória da GPU após esse tempo de inatividade. Escolha Nunca para manter o modelo carregado enquanto o OpenWhispr estiver aberto.",
+      "idleNever": "Nunca",
+      "idleMinutes": "{{count}} minutos",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Provedores na nuvem",

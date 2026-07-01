@@ -8,6 +8,7 @@ const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
 const sidecarPidFile = require("./sidecarPidFile");
+const { resolveIdleTimeoutMs } = require("./idleTimeout");
 
 // Range kept clear of cliBridge (8200-8219) to avoid port-bind collisions.
 const PORT_RANGE_START = 8221;
@@ -18,7 +19,6 @@ const HEALTH_CHECK_INTERVAL_MS = 5000;
 const HEALTH_CHECK_TIMEOUT_MS = 2000;
 const STARTUP_POLL_INTERVAL_MS = 500;
 const HEALTH_CHECK_FAILURE_THRESHOLD = 3;
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 
 class LlamaServerManager {
   constructor() {
@@ -415,13 +415,18 @@ class LlamaServerManager {
 
   resetIdleTimer() {
     this.clearIdleTimer();
+    const timeoutMs = resolveIdleTimeoutMs();
+    if (timeoutMs <= 0) {
+      // Idle timeout disabled (Never): keep the model loaded while the app is open.
+      return;
+    }
     this.idleTimer = setTimeout(() => {
       debugLogger.info("llama-server idle timeout reached, stopping to free VRAM", {
-        timeoutMs: IDLE_TIMEOUT_MS,
+        timeoutMs,
         model: this.modelPath ? path.basename(this.modelPath) : null,
       });
       this.stop();
-    }, IDLE_TIMEOUT_MS);
+    }, timeoutMs);
   }
 
   clearIdleTimer() {

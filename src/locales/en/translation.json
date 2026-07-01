@@ -1432,6 +1432,12 @@
       "description": "Clean up transcriptions, handle commands, and fix errors while preserving your tone.",
       "enableTextCleanup": "Enable text cleanup",
       "enableTextCleanupDescription": "Use AI to remove filler words, fix grammar, and polish punctuation",
+      "preloadOnStart": "Preload model on startup",
+      "preloadOnStartDescription": "Load the cleanup model when OpenWhispr opens so the first dictation is fast.",
+      "idleTimeout": "Unload when idle",
+      "idleTimeoutDescription": "Free GPU memory after this much inactivity. Choose Never to keep the model loaded while OpenWhispr is open.",
+      "idleNever": "Never",
+      "idleMinutes": "{{count}} minutes",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud Providers",

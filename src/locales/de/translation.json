@@ -1259,6 +1259,12 @@
       "description": "Bereinigt Transkriptionen, verarbeitet Befehle und korrigiert Fehler unter Beibehaltung Ihres Stils.",
       "enableTextCleanup": "Textbereinigung aktivieren",
       "enableTextCleanupDescription": "KI entfernt Füllwörter, korrigiert Grammatik und Zeichensetzung",
+      "preloadOnStart": "Modell beim Start vorladen",
+      "preloadOnStartDescription": "Lädt das Bereinigungsmodell beim Öffnen von OpenWhispr, damit das erste Diktat schnell ist.",
+      "idleTimeout": "Bei Inaktivität entladen",
+      "idleTimeoutDescription": "Gibt GPU-Speicher nach dieser Inaktivität frei. Wähle Nie, um das Modell geladen zu lassen, solange OpenWhispr geöffnet ist.",
+      "idleNever": "Nie",
+      "idleMinutes": "{{count}} Minuten",
       "modes": {
         "openwhispr": "OpenWhispr Cloud",
         "providers": "Cloud-Anbieter",
