@@ -318,6 +318,8 @@ let ipcHandlers = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
+const WHISPER_WAKE_REWARM_DELAY_MS = 3000;
+let wakeRewarmTimer = null;
 
 function parseAuthBridgePort() {
   const raw = (process.env.OPENWHISPR_AUTH_BRIDGE_PORT || "").trim();
@@ -932,6 +934,14 @@ async function startApp() {
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
     }
+    // Sleep evicts the local GPU model from VRAM; reload it once the driver settles. See #766.
+    if (wakeRewarmTimer) clearTimeout(wakeRewarmTimer);
+    wakeRewarmTimer = setTimeout(() => {
+      wakeRewarmTimer = null;
+      whisperManager?.onWakeFromSleep().catch((err) => {
+        debugLogger.debug("whisper wake re-warm error (non-fatal)", { error: err.message });
+      });
+    }, WHISPER_WAKE_REWARM_DELAY_MS);
   });
 
   // Non-blocking server pre-warming
@@ -1561,6 +1571,10 @@ if (gotSingleInstanceLock) {
 }
 
 function performSyncTeardown() {
+  if (wakeRewarmTimer) {
+    clearTimeout(wakeRewarmTimer);
+    wakeRewarmTimer = null;
+  }
   if (authBridgeServer) {
     authBridgeServer.close();
     authBridgeServer = null;
