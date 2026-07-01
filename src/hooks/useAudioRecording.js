@@ -18,6 +18,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
+  const wasRecordingRef = useRef(false);
   const { onToggle } = options;
 
   const performStartRecording = useCallback(async ({ voiceAgentRequested = false } = {}) => {
@@ -90,7 +91,14 @@ export const useAudioRecording = (toast, options = {}) => {
 
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming }) => {
-        if (!isRecording) window.electronAPI?.unregisterCancelHotkey?.();
+        if (!isRecording) {
+          window.electronAPI?.unregisterCancelHotkey?.();
+          // Resume media the instant recording ends, not after transcription.
+          if (wasRecordingRef.current && getSettings().pauseMediaOnDictation) {
+            window.electronAPI?.resumeMediaPlayback?.();
+          }
+        }
+        wasRecordingRef.current = isRecording;
         setIsRecording(isRecording);
         setIsProcessing(isProcessing);
         setIsStreaming(isStreaming ?? false);
@@ -118,10 +126,6 @@ export const useAudioRecording = (toast, options = {}) => {
         setPartialTranscript(text);
       },
       onTranscriptionComplete: async (result) => {
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.resumeMediaPlayback?.();
-        }
-
         if (result.success) {
           const transcribedText = result.text?.trim();
 
