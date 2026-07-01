@@ -563,14 +563,27 @@ native paths (Hyprland uses its own D-Bus service). X11 is excluded because
 `globalShortcut` works there.
 
 **D-Bus methods** (service `com.openwhispr.App`, path `/com/openwhispr/App`,
-interface `com.openwhispr.App`): `Toggle` (dictation), `ToggleAgent`,
-`ToggleMeeting`, `ToggleVoiceAgent`.
+interface `com.openwhispr.App`):
 
-**Example Sway binding**:
+- Momentary (tap-to-toggle): `Toggle` (dictation), `ToggleAgent`,
+  `ToggleMeeting`, `ToggleVoiceAgent`.
+- Push-to-talk pair: `StartDictation` (key press) / `StopDictation` (key
+  release). Wired in `main.js` to `windowManager.startWindowsPushToTalk()` /
+  `handleWindowsPushKeyUp()` (the same primitives the native key listener uses).
+
+**Example Sway bindings**:
 
 ```
+# Tap-to-toggle dictation
 bindsym Super+r exec dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.Toggle
+
+# Push-to-talk: hold to talk, release to stop (needs both press and --release binds)
+bindsym Super+grave           exec dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.StartDictation
+bindsym --release Super+grave exec dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.StopDictation
 ```
+
+Push-to-talk needs a compositor that can bind key release (Sway `bindsym
+--release`, Hyprland `bindr`); GNOME/KDE native shortcuts are press-only.
 
 If the bus name can't be claimed, it logs and falls through to normal detection.
 

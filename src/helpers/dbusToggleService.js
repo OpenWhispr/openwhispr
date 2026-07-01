@@ -17,11 +17,14 @@ function getDBus() {
   }
 }
 
-// Owns the com.openwhispr.App session-bus service and its four no-arg methods
-// (Toggle/ToggleAgent/ToggleMeeting/ToggleVoiceAgent). Compositor-agnostic: the
-// GNOME integration, and the auto-enabled endpoint on wlroots Wayland (e.g.
-// Sway), both route key presses to these methods via dbus-send. Callbacks may be
-// supplied up front to start() or attached later via the setters.
+// Owns the com.openwhispr.App session-bus service and its no-arg methods.
+// Toggle/ToggleAgent/ToggleMeeting/ToggleVoiceAgent are momentary (tap-to-toggle)
+// for compositors that only fire on key press. StartDictation/StopDictation are a
+// press/release pair for push-to-talk: bind key-press → StartDictation and
+// key-release → StopDictation (e.g. Sway `bindsym` + `bindsym --release`).
+// Compositor-agnostic: the GNOME integration and the auto-enabled endpoint on
+// wlroots Wayland (e.g. Sway) both route key events to these via dbus-send.
+// Callbacks may be supplied up front to start() or attached later via the setters.
 class DBusToggleService {
   constructor() {
     this.bus = null;
@@ -67,6 +70,14 @@ class DBusToggleService {
     if (this._iface) this._iface._voiceAgentCallback = callback || null;
   }
 
+  setStartDictationCallback(callback) {
+    if (this._iface) this._iface._startDictationCallback = callback || null;
+  }
+
+  setStopDictationCallback(callback) {
+    if (this._iface) this._iface._stopDictationCallback = callback || null;
+  }
+
   _createInterfaceClass(dbusModule) {
     class OpenWhisprInterface extends dbusModule.interface.Interface {
       constructor(callbacks = {}) {
@@ -75,6 +86,8 @@ class DBusToggleService {
         this._agentCallback = callbacks.agent || null;
         this._meetingCallback = callbacks.meeting || null;
         this._voiceAgentCallback = callbacks.voiceAgent || null;
+        this._startDictationCallback = callbacks.startDictation || null;
+        this._stopDictationCallback = callbacks.stopDictation || null;
       }
 
       Toggle() {
@@ -92,6 +105,15 @@ class DBusToggleService {
       ToggleVoiceAgent() {
         if (this._voiceAgentCallback) this._voiceAgentCallback();
       }
+
+      // Push-to-talk: bind key-press → StartDictation, key-release → StopDictation.
+      StartDictation() {
+        if (this._startDictationCallback) this._startDictationCallback();
+      }
+
+      StopDictation() {
+        if (this._stopDictationCallback) this._stopDictationCallback();
+      }
     }
 
     OpenWhisprInterface.configureMembers({
@@ -100,6 +122,8 @@ class DBusToggleService {
         ToggleAgent: { inSignature: "", outSignature: "" },
         ToggleMeeting: { inSignature: "", outSignature: "" },
         ToggleVoiceAgent: { inSignature: "", outSignature: "" },
+        StartDictation: { inSignature: "", outSignature: "" },
+        StopDictation: { inSignature: "", outSignature: "" },
       },
     });
 

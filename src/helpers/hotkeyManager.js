@@ -603,17 +603,20 @@ class HotkeyManager extends EventEmitter {
     return false;
   }
 
-  // In D-Bus endpoint mode, attach the agent/voiceAgent/meeting callbacks to the
-  // D-Bus interface directly, so all four methods work even when the user has no
-  // in-app hotkey configured for them (they bind keys externally). No-op unless
-  // the D-Bus endpoint is active.
-  setDbusToggleCallbacks({ agent, voiceAgent, meeting } = {}) {
+  // In D-Bus endpoint mode, attach callbacks to the D-Bus interface directly, so
+  // the methods work even when the user has no in-app hotkey configured for them
+  // (they bind keys externally). agent/voiceAgent/meeting drive the momentary
+  // Toggle* methods; startDictation/stopDictation drive the push-to-talk pair
+  // (StartDictation/StopDictation). No-op unless the D-Bus endpoint is active.
+  setDbusToggleCallbacks({ agent, voiceAgent, meeting, startDictation, stopDictation } = {}) {
     if (!this.useDbus || !this.dbusToggleService) {
       return;
     }
     if (agent) this.dbusToggleService.setAgentCallback(agent);
     if (voiceAgent) this.dbusToggleService.setVoiceAgentCallback(voiceAgent);
     if (meeting) this.dbusToggleService.setMeetingCallback(meeting);
+    if (startDictation) this.dbusToggleService.setStartDictationCallback(startDictation);
+    if (stopDictation) this.dbusToggleService.setStopDictationCallback(stopDictation);
   }
 
   async initializeGnomeShortcuts(callback) {
