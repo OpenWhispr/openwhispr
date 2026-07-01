@@ -30,6 +30,13 @@ function getValidModelNames() {
   return Object.keys(modelRegistryData.whisperModels);
 }
 
+function shouldRewarmOnWake({ isRemote, useCuda, modelName, transcribing, rewarmInFlight }) {
+  // Only re-warm a running local CUDA whisper-server: sleep evicts its model from
+  // VRAM. Skip remote/CPU servers, and skip while a transcription (already warming
+  // the server) or another re-warm is in flight. See #766.
+  return !isRemote && !!useCuda && !!modelName && !transcribing && !rewarmInFlight;
+}
+
 class WhisperManager {
   constructor() {
     this.cachedFFmpegPath = null;
@@ -40,6 +47,8 @@ class WhisperManager {
     this.serverManager = new WhisperServerManager();
     this.currentServerModel = null;
     this.cachedVadModelPath = undefined;
+    this._transcribing = false;
+    this._rewarmInFlight = false;
   }
 
   getModelsDir() {
@@ -235,6 +244,40 @@ class WhisperManager {
     this.currentServerModel = null;
   }
 
+  async onWakeFromSleep() {
+    const sm = this.serverManager;
+    const modelName = this.currentServerModel;
+    if (
+      !shouldRewarmOnWake({
+        isRemote: sm.isRemote,
+        useCuda: sm.useCuda,
+        modelName,
+        transcribing: this._transcribing,
+        rewarmInFlight: this._rewarmInFlight,
+      })
+    ) {
+      return false;
+    }
+
+    // Replay the last start options (VAD, threads) so the reloaded server matches the
+    // signature the next dictation will use; a bare start would otherwise be rejected
+    // by start()'s no-op guard and reload the model on the first dictation. See #766.
+    const options = { ...sm.lastStartOptions, useCuda: true };
+    this._rewarmInFlight = true;
+    try {
+      debugLogger.info("Re-warming whisper-server after wake from sleep", { model: modelName });
+      await this.stopServer();
+      const result = await this.startServer(modelName, options);
+      if (!result?.success) {
+        debugLogger.warn("whisper-server wake re-warm failed", { reason: result?.reason });
+        return false;
+      }
+      return true;
+    } finally {
+      this._rewarmInFlight = false;
+    }
+  }
+
   getServerStatus() {
     return this.serverManager.getStatus();
   }
@@ -286,6 +329,16 @@ class WhisperManager {
   }
 
   async transcribeViaServer(audioBlob, model, language, initialPrompt = null, options = {}) {
+    // Mark the server busy so a wake re-warm doesn't kill an in-flight dictation. See #766.
+    this._transcribing = true;
+    try {
+      return await this._runServerTranscription(audioBlob, model, language, initialPrompt, options);
+    } finally {
+      this._transcribing = false;
+    }
+  }
+
+  async _runServerTranscription(audioBlob, model, language, initialPrompt = null, options = {}) {
     debugLogger.info("Transcription mode: SERVER", { model, language: language || "auto" });
     const modelPath = this.getModelPath(model);
 
@@ -770,3 +823,4 @@ class WhisperManager {
 }
 
 module.exports = WhisperManager;
+module.exports.shouldRewarmOnWake = shouldRewarmOnWake;
