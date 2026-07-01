@@ -12,6 +12,7 @@ const SECRET_KEYS = [
   "GEMINI_API_KEY",
   "GROQ_API_KEY",
   "XAI_API_KEY",
+  "SMALLEST_API_KEY",
   "MISTRAL_API_KEY",
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
@@ -303,6 +304,14 @@ class EnvironmentManager {
 
   saveXaiKey(key) {
     return this._saveKey("XAI_API_KEY", key);
+  }
+
+  getSmallestKey() {
+    return this._getKey("SMALLEST_API_KEY");
+  }
+
+  saveSmallestKey(key) {
+    return this._saveKey("SMALLEST_API_KEY", key);
   }
 
   getMistralKey() {

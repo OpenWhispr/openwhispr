@@ -1857,7 +1857,9 @@
         "groq_whisper_large_v3": "Модель Large v3, быстрая и точная",
         "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция",
         "corti_transcribe": "Медицинская транскрипция клинического уровня",
-        "xai_grok_stt": "Высокоточное распознавание речи от xAI"
+        "xai_grok_stt": "Высокоточное распознавание речи от xAI",
+        "smallest_pulse": "Многоязычная облачная транскрипция от Smallest AI",
+        "smallest_pulse_pro": "Только английский, максимальная точность от Smallest AI"
       },
       "cloud": {
         "openai_gpt_5_2": "Сильная модель рассуждения",

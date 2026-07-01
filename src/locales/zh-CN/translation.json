@@ -1852,7 +1852,9 @@
         "groq_whisper_large_v3": "Large v3 模型，快速且精准",
         "mistral_voxtral_mini_latest": "快速多语言转录",
         "corti_transcribe": "临床级医疗转录",
-        "xai_grok_stt": "xAI 高精度语音识别"
+        "xai_grok_stt": "xAI 高精度语音识别",
+        "smallest_pulse": "Smallest AI 多语言云端转录",
+        "smallest_pulse_pro": "Smallest AI 仅限英语、最高精度转录"
       },
       "cloud": {
         "openai_gpt_5_2": "强大的推理模型",

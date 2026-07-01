@@ -218,6 +218,25 @@
           "streaming": true
         }
       ]
+    },
+    {
+      "id": "smallest",
+      "name": "Smallest AI",
+      "baseUrl": "https://api.smallest.ai/waves/v1",
+      "models": [
+        {
+          "id": "pulse",
+          "name": "Pulse",
+          "description": "Multilingual speech recognition by Smallest AI",
+          "descriptionKey": "models.descriptions.transcription.smallest_pulse"
+        },
+        {
+          "id": "pulse-pro",
+          "name": "Pulse Pro",
+          "description": "High-accuracy English speech recognition by Smallest AI",
+          "descriptionKey": "models.descriptions.transcription.smallest_pulse_pro"
+        }
+      ]
     }
   ],
   "cloudProviders": [

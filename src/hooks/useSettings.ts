@@ -64,6 +64,7 @@ export interface ApiKeySettings {
   geminiApiKey: string;
   groqApiKey: string;
   xaiApiKey: string;
+  smallestApiKey: string;
   mistralApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
@@ -231,6 +232,7 @@ function useSettingsInternal() {
     geminiApiKey: store.geminiApiKey,
     groqApiKey: store.groqApiKey,
     xaiApiKey: store.xaiApiKey,
+    smallestApiKey: store.smallestApiKey,
     mistralApiKey: store.mistralApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
