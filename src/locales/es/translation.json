@@ -44,7 +44,10 @@
     "help": "Ayuda",
     "learnMore": "Más información",
     "file": "Archivo",
-    "closeWindow": "Cerrar ventana"
+    "closeWindow": "Cerrar ventana",
+    "zoomIn": "Acercar",
+    "zoomOut": "Alejar",
+    "actualSize": "Tamaño real"
   },
   "window": {
     "voiceRecorderTitle": "Grabadora de voz",

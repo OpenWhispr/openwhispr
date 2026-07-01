@@ -44,7 +44,10 @@
     "help": "說明",
     "learnMore": "瞭解更多",
     "file": "檔案",
-    "closeWindow": "關閉視窗"
+    "closeWindow": "關閉視窗",
+    "zoomIn": "放大",
+    "zoomOut": "縮小",
+    "actualSize": "實際大小"
   },
   "window": {
     "voiceRecorderTitle": "錄音器",

@@ -44,7 +44,10 @@
     "help": "Hilfe",
     "learnMore": "Mehr erfahren",
     "file": "Datei",
-    "closeWindow": "Fenster schließen"
+    "closeWindow": "Fenster schließen",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "actualSize": "Tatsächliche Größe"
   },
   "window": {
     "voiceRecorderTitle": "Sprachrekorder",

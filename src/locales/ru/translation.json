@@ -44,7 +44,10 @@
     "help": "Справка",
     "learnMore": "Узнать больше",
     "file": "Файл",
-    "closeWindow": "Закрыть окно"
+    "closeWindow": "Закрыть окно",
+    "zoomIn": "Увеличить",
+    "zoomOut": "Уменьшить",
+    "actualSize": "Реальный размер"
   },
   "window": {
     "voiceRecorderTitle": "Диктофон",

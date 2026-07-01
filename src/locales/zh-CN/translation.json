@@ -44,7 +44,10 @@
     "help": "帮助",
     "learnMore": "了解更多",
     "file": "文件",
-    "closeWindow": "关闭窗口"
+    "closeWindow": "关闭窗口",
+    "zoomIn": "放大",
+    "zoomOut": "缩小",
+    "actualSize": "实际大小"
   },
   "window": {
     "voiceRecorderTitle": "录音器",
