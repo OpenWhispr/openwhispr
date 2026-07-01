@@ -21,7 +21,10 @@ import { SHARING_ENABLED } from "../../lib/features";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
-import type { TranscriptSegment } from "../../stores/meetingRecordingStore";
+import {
+  useMeetingRecordingStore,
+  type TranscriptSegment,
+} from "../../stores/meetingRecordingStore";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -73,6 +76,97 @@ export interface Enhancement {
 
 type MeetingViewMode = "raw" | "transcript" | "enhanced";
 
+type SpeakerProfileOption = { id?: number; display_name: string; email: string | null };
+type MeetingParticipant = { email: string; displayName: string | null };
+
+interface LiveMeetingTranscriptChatProps {
+  speakerMappings: Record<string, string>;
+  speakerProfiles: SpeakerProfileOption[];
+  participants: MeetingParticipant[];
+  isDiarizing: boolean;
+  sessionDiarizationEnabled?: boolean;
+  sessionExpectedCount?: number;
+  userTouchedStepper?: boolean;
+  onSetSessionDiarizationEnabled?: (enabled: boolean) => void;
+  onSetSessionExpectedCount?: (count: number) => void;
+  onMapSpeaker?: (
+    speakerId: string,
+    displayName: string,
+    email?: string | null,
+    profileId?: number
+  ) => void;
+  onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
+  onDismissSuggestion?: (speakerId: string) => void;
+  onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
+}
+
+function LiveMeetingTranscriptChat({
+  speakerMappings,
+  speakerProfiles,
+  participants,
+  isDiarizing,
+  sessionDiarizationEnabled,
+  sessionExpectedCount,
+  userTouchedStepper,
+  onSetSessionDiarizationEnabled,
+  onSetSessionExpectedCount,
+  onMapSpeaker,
+  onConfirmSuggestion,
+  onDismissSuggestion,
+  onAttachSpeakerEmail,
+}: LiveMeetingTranscriptChatProps) {
+  const segments = useMeetingRecordingStore((s) => s.segments);
+  const micPartial = useMeetingRecordingStore((s) => s.micPartial);
+  const systemPartial = useMeetingRecordingStore((s) => s.systemPartial);
+  const systemPartialSpeakerId = useMeetingRecordingStore((s) => s.systemPartialSpeakerId);
+  const systemPartialSpeakerName = useMeetingRecordingStore((s) => s.systemPartialSpeakerName);
+
+  const knownSpeakers = useMemo<SpeakerProfileOption[]>(() => {
+    const seen = new Set<string>();
+    const list: SpeakerProfileOption[] = [];
+    for (const p of speakerProfiles) {
+      const key = p.display_name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push(p);
+    }
+    for (const segment of segments) {
+      if (!segment.speaker) continue;
+      const name = speakerMappings[segment.speaker] || segment.speakerName;
+      if (!name) continue;
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push({ display_name: name, email: null });
+    }
+    return list;
+  }, [segments, speakerMappings, speakerProfiles]);
+
+  return (
+    <MeetingTranscriptChat
+      segments={segments}
+      micPartial={micPartial}
+      systemPartial={systemPartial}
+      systemPartialSpeakerId={systemPartialSpeakerId}
+      systemPartialSpeakerName={systemPartialSpeakerName}
+      speakerMappings={speakerMappings}
+      speakerProfiles={knownSpeakers}
+      participants={participants}
+      isRecording
+      isDiarizing={isDiarizing}
+      sessionDiarizationEnabled={sessionDiarizationEnabled}
+      sessionExpectedCount={sessionExpectedCount}
+      userTouchedStepper={userTouchedStepper}
+      onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
+      onSetSessionExpectedCount={onSetSessionExpectedCount}
+      onMapSpeaker={onMapSpeaker}
+      onConfirmSuggestion={onConfirmSuggestion}
+      onDismissSuggestion={onDismissSuggestion}
+      onAttachSpeakerEmail={onAttachSpeakerEmail}
+    />
+  );
+}
+
 interface NoteEditorProps {
   note: NoteItem;
   onTitleChange: (title: string) => void;
@@ -89,14 +183,7 @@ interface NoteEditorProps {
   actionProcessingState?: ActionProcessingState;
   actionName?: string | null;
   diarizationSessionId?: string | null;
-  meetingTranscript?: string;
-  meetingSegments?: TranscriptSegment[];
-  meetingMicPartial?: string;
-  meetingSystemPartial?: string;
-  meetingSystemPartialSpeakerId?: string | null;
-  meetingSystemPartialSpeakerName?: string | null;
   onLiveSpeakerLock?: (speakerId: string, displayName: string) => void;
-  liveTranscript?: string;
   sessionDiarizationEnabled?: boolean;
   sessionExpectedCount?: number;
   userTouchedStepper?: boolean;
@@ -125,14 +212,7 @@ export default function NoteEditor({
   actionProcessingState,
   actionName,
   diarizationSessionId,
-  meetingTranscript,
-  meetingSegments,
-  meetingMicPartial,
-  meetingSystemPartial,
-  meetingSystemPartialSpeakerId,
-  meetingSystemPartialSpeakerName,
   onLiveSpeakerLock,
-  liveTranscript,
   sessionDiarizationEnabled,
   sessionExpectedCount,
   userTouchedStepper,
@@ -180,8 +260,8 @@ export default function NoteEditor({
     return () => window.cancelAnimationFrame(frameId);
   }, []);
 
-  const effectiveTranscript = liveTranscript || meetingTranscript || note.transcript || "";
-  const hasMeetingTranscript = !isRecording && !!effectiveTranscript;
+  const effectiveTranscript = note.transcript || "";
+  const hasMeetingTranscript = !!effectiveTranscript;
 
   const filteredFolders = useMemo(
     () =>
@@ -192,11 +272,9 @@ export default function NoteEditor({
   );
 
   const displaySegments = useMemo<TranscriptSegment[]>(() => {
-    if (isRecording) return meetingSegments ?? [];
     if (diarizedSegments && diarizedSegments.length > 0) return diarizedSegments;
-    if (meetingSegments && meetingSegments.length > 0) return meetingSegments;
     return parseTranscriptSegments(note.transcript || "");
-  }, [diarizedSegments, isRecording, meetingSegments, note.transcript]);
+  }, [diarizedSegments, note.transcript]);
 
   useEffect(() => {
     displaySegmentsRef.current = displaySegments;
@@ -350,10 +428,13 @@ export default function NoteEditor({
 
       if (!data?.segments?.length) return;
 
+      const liveSegments = useMeetingRecordingStore.getState().segments;
       const persisted = await window.electronAPI?.getNote?.(note.id);
       const existing = persisted?.transcript
         ? parseTranscriptSegments(persisted.transcript)
-        : displaySegmentsRef.current;
+        : liveSegments.length > 0
+          ? liveSegments
+          : displaySegmentsRef.current;
 
       const enriched = mergeTranscriptSegments(
         existing,
@@ -880,29 +961,42 @@ export default function NoteEditor({
         <div className="flex-1 relative min-h-0">
           <div className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
-              <MeetingTranscriptChat
-                segments={displaySegments}
-                micPartial={isRecording ? meetingMicPartial : undefined}
-                systemPartial={isRecording ? meetingSystemPartial : undefined}
-                systemPartialSpeakerId={isRecording ? meetingSystemPartialSpeakerId : undefined}
-                systemPartialSpeakerName={isRecording ? meetingSystemPartialSpeakerName : undefined}
-                speakerMappings={speakerMappings}
-                speakerProfiles={knownSpeakers}
-                participants={parsedParticipants}
-                isRecording={isRecording}
-                isDiarizing={isDiarizing}
-                sessionDiarizationEnabled={sessionDiarizationEnabled}
-                sessionExpectedCount={sessionExpectedCount}
-                userTouchedStepper={userTouchedStepper}
-                onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
-                onSetSessionExpectedCount={onSetSessionExpectedCount}
-                onMapSpeaker={handleMapSpeaker}
-                onConfirmSuggestion={handleConfirmSuggestion}
-                onDismissSuggestion={handleDismissSuggestion}
-                onAttachSpeakerEmail={handleAttachSpeakerEmail}
-                selectedSegmentIds={!isRecording ? selectedSegmentIds : undefined}
-                onToggleSelect={!isRecording ? handleToggleSelect : undefined}
-              />
+              isRecording ? (
+                <LiveMeetingTranscriptChat
+                  speakerMappings={speakerMappings}
+                  speakerProfiles={speakerProfiles}
+                  participants={parsedParticipants}
+                  isDiarizing={isDiarizing}
+                  sessionDiarizationEnabled={sessionDiarizationEnabled}
+                  sessionExpectedCount={sessionExpectedCount}
+                  userTouchedStepper={userTouchedStepper}
+                  onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
+                  onSetSessionExpectedCount={onSetSessionExpectedCount}
+                  onMapSpeaker={handleMapSpeaker}
+                  onConfirmSuggestion={handleConfirmSuggestion}
+                  onDismissSuggestion={handleDismissSuggestion}
+                  onAttachSpeakerEmail={handleAttachSpeakerEmail}
+                />
+              ) : (
+                <MeetingTranscriptChat
+                  segments={displaySegments}
+                  speakerMappings={speakerMappings}
+                  speakerProfiles={knownSpeakers}
+                  participants={parsedParticipants}
+                  isDiarizing={isDiarizing}
+                  sessionDiarizationEnabled={sessionDiarizationEnabled}
+                  sessionExpectedCount={sessionExpectedCount}
+                  userTouchedStepper={userTouchedStepper}
+                  onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
+                  onSetSessionExpectedCount={onSetSessionExpectedCount}
+                  onMapSpeaker={handleMapSpeaker}
+                  onConfirmSuggestion={handleConfirmSuggestion}
+                  onDismissSuggestion={handleDismissSuggestion}
+                  onAttachSpeakerEmail={handleAttachSpeakerEmail}
+                  selectedSegmentIds={selectedSegmentIds}
+                  onToggleSelect={handleToggleSelect}
+                />
+              )
             ) : viewMode === "transcript" && hasMeetingTranscript ? (
               <RichTextEditor value={effectiveTranscript} disabled />
             ) : viewMode === "enhanced" && enhancement ? (
