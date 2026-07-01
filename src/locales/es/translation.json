@@ -2217,7 +2217,9 @@
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
         "corti_transcribe": "Transcripción médica de nivel clínico",
         "xai_grok_stt": "Reconocimiento de voz de alta precisión por xAI",
-        "tinfoil_voxtral": "Transcripción verificablemente privada"
+        "tinfoil_voxtral": "Transcripción verificablemente privada",
+        "smallest_pulse": "Transcripción en la nube multilingüe de Smallest AI",
+        "smallest_pulse_pro": "Solo inglés, máxima precisión de Smallest AI"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",

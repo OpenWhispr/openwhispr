@@ -248,6 +248,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     xaiApiKey,
     mistralApiKey,
     tinfoilApiKey,
+    smallestApiKey,
     customTranscriptionApiKey,
   } = useSettings();
   const policyState = usePolicySnapshot();
@@ -404,7 +405,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                     ? mistralApiKey
                     : cloudTranscriptionProvider === "tinfoil"
                       ? tinfoilApiKey
-                      : customTranscriptionApiKey;
+                      : cloudTranscriptionProvider === "smallest"
+                        ? smallestApiKey
+                        : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -440,6 +443,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     xaiApiKey,
     mistralApiKey,
     tinfoilApiKey,
+    smallestApiKey,
     customTranscriptionApiKey,
     cortiClientId,
     cortiClientSecret,
@@ -476,6 +480,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return mistralApiKey;
       case "tinfoil":
         return tinfoilApiKey;
+      case "smallest":
+        return smallestApiKey;
       case "custom":
         return customTranscriptionApiKey || "";
       default:

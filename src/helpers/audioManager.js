@@ -250,6 +250,7 @@ const PLACEHOLDER_KEYS = {
   openai: "your_openai_api_key_here",
   groq: "your_groq_api_key_here",
   xai: "your_xai_api_key_here",
+  smallest: "your_smallest_api_key_here",
   mistral: "your_mistral_api_key_here",
 };
 
@@ -369,6 +370,16 @@ const PROXY_TRANSCRIPTION_PROVIDERS = {
       if (keyterms.length > 0) payload.keyterms = keyterms;
       return payload;
     },
+  },
+  // No dictionary payload: the Smallest AI STT API has no prompt/keyterm parameter.
+  smallest: {
+    displayName: "Smallest AI",
+    ipc: () => window.electronAPI?.proxySmallestTranscription,
+    buildPayload: ({ audioBuffer, model, language }) => ({
+      audioBuffer,
+      model,
+      language: language && language !== "auto" ? language : undefined,
+    }),
   },
   corti: {
     displayName: "Corti",
@@ -2161,6 +2172,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       if (!isValidApiKey(apiKey, "xai")) {
         const err = new Error(
           "xAI API key not found. Please set your API key in the Control Panel."
+        );
+        err.code = "API_KEY_MISSING";
+        throw err;
+      }
+    } else if (provider === "smallest") {
+      apiKey = s.smallestApiKey;
+      if (!isValidApiKey(apiKey, "smallest")) {
+        apiKey = await window.electronAPI.getSmallestKey?.();
+      }
+      if (!isValidApiKey(apiKey, "smallest")) {
+        const err = new Error(
+          "Smallest AI API key not found. Please set your API key in the Control Panel."
         );
         err.code = "API_KEY_MISSING";
         throw err;

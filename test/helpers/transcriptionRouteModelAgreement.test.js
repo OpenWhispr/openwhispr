@@ -11,7 +11,7 @@ const load = () => import("../../src/helpers/transcriptionRoute.ts");
 //
 // Tinfoil is excluded: its batch model comes from the registry directly
 // (getBatchTranscriptionModel) and the route sends none.
-const PREFIX_VALIDATED_PROVIDERS = ["openai", "groq", "xai", "mistral", "corti"];
+const PREFIX_VALIDATED_PROVIDERS = ["openai", "groq", "xai", "mistral", "corti", "smallest"];
 
 test("every shipping registry model survives resolveByokModel", async () => {
   const { resolveByokModel } = await load();

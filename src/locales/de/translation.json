@@ -2261,7 +2261,9 @@
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
-        "tinfoil_voxtral": "Nachweisbar private Transkription"
+        "tinfoil_voxtral": "Nachweisbar private Transkription",
+        "smallest_pulse": "Mehrsprachige Cloud-Transkription von Smallest AI",
+        "smallest_pulse_pro": "Nur Englisch, höchste Genauigkeit von Smallest AI"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",

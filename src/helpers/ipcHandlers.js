@@ -113,6 +113,96 @@ const MISTRAL_TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcription
 
 const XAI_STT_URL = "https://api.x.ai/v1/stt";
 
+// Smallest AI Pulse uses the unified STT endpoint with the model in the query string
+// and expects raw single-channel WAV bytes (app records stereo, so we downmix first).
+const SMALLEST_STT_URL = "https://api.smallest.ai/waves/v1/stt/";
+const SMALLEST_STT_MODELS = new Set(["pulse", "pulse-pro"]);
+const SMALLEST_MAX_AUDIO_BYTES = 25 * 1024 * 1024; // 25 MB, matches BYOK limit
+const SMALLEST_STT_TIMEOUT_MS = 120000; // 2 minute network timeout
+
+// Downmix to 16kHz mono WAV then POST raw bytes to the Smallest AI unified STT endpoint.
+// Shared by the proxy handler, retry-transcription, and BYOK file transcription.
+async function transcribeWithSmallest({ apiKey, audioBuffer, model, language }) {
+  if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+    throw new Error("Smallest AI API key not configured");
+  }
+  const buffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer || []);
+  if (buffer.length === 0) {
+    throw new Error("Cannot transcribe empty audio");
+  }
+  if (buffer.length > SMALLEST_MAX_AUDIO_BYTES) {
+    throw new Error("Audio too large for Smallest AI (max 25 MB)");
+  }
+  const resolvedModel = SMALLEST_STT_MODELS.has(model) ? model : "pulse";
+
+  const { convertToWav } = require("./ffmpegUtils");
+  const { getSafeTempDir } = require("./safeTempDir");
+  const tmpDir = getSafeTempDir();
+  const jobId = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const inputPath = path.join(tmpDir, `ow-smallest-${jobId}.webm`);
+  const wavPath = path.join(tmpDir, `ow-smallest-${jobId}.wav`);
+
+  try {
+    fs.writeFileSync(inputPath, buffer);
+    await convertToWav(inputPath, wavPath, { sampleRate: 16000, channels: 1 });
+    const wavBytes = fs.readFileSync(wavPath);
+    if (wavBytes.length === 0) {
+      throw new Error("Audio conversion produced no data");
+    }
+
+    const url = new URL(SMALLEST_STT_URL);
+    url.searchParams.set("model", resolvedModel);
+    if (language && language !== "auto") {
+      url.searchParams.set("language", language);
+    }
+
+    let response;
+    try {
+      response = await net.fetch(url.toString(), {
+        method: "POST",
+        useSessionCookies: false,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/octet-stream",
+        },
+        body: wavBytes,
+        signal: AbortSignal.timeout(SMALLEST_STT_TIMEOUT_MS),
+      });
+    } catch (err) {
+      if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+        throw new Error("Smallest AI request timed out");
+      }
+      throw err;
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      throw new Error(`Smallest AI API Error: ${response.status} ${errorText}`.trim());
+    }
+
+    const rawBody = await response.text();
+    let json;
+    try {
+      json = JSON.parse(rawBody);
+    } catch {
+      throw new Error("Smallest AI returned a malformed response");
+    }
+    if (json?.status && json.status !== "success") {
+      throw new Error(`Smallest AI transcription failed: ${json.status}`);
+    }
+    const text = typeof json?.transcription === "string" ? json.transcription : "";
+    return { text };
+  } finally {
+    for (const tmpPath of [inputPath, wavPath]) {
+      try {
+        fs.unlinkSync(tmpPath);
+      } catch {
+        // best-effort cleanup; missing file is fine
+      }
+    }
+  }
+}
+
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
 
@@ -3646,6 +3736,17 @@ class IPCHandlers {
     );
 
     ipcMain.handle(
+      "proxy-smallest-transcription",
+      serializeIpcError(async (event, { audioBuffer, model, language }) => {
+        const apiKey = this.environmentManager.getSmallestKey();
+        if (!apiKey) {
+          throw new Error("Smallest AI API key not configured");
+        }
+        return await transcribeWithSmallest({ apiKey, audioBuffer, model, language });
+      })
+    );
+
+    ipcMain.handle(
       "proxy-mistral-transcription",
       serializeIpcError(async (event, { audioBuffer, model, language, contextBias }) => {
         const apiKey = this.environmentManager.getMistralKey();
@@ -5268,6 +5369,16 @@ class IPCHandlers {
             apiKey: this.environmentManager.getTinfoilKey(),
           });
           if (text) result = { text, source: "tinfoil", model };
+        } else if (route.transport === "proxied" && route.provider === "smallest") {
+          // Smallest AI wants mono WAV on its own unified endpoint, so it can't
+          // use the generic fetch below.
+          const { text } = await transcribeWithSmallest({
+            apiKey: this.environmentManager.getSmallestKey(),
+            audioBuffer: buffer,
+            model: route.model,
+            language: route.language,
+          });
+          if (text) result = { text, source: "smallest", model: route.model };
         } else if (route.transport === "proxied" && route.provider === "corti") {
           // Corti uses OAuth + an interaction-based REST flow, so it can't use
           // the generic fetch below.
@@ -8385,6 +8496,16 @@ class IPCHandlers {
               contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
               language: route.language,
               apiKey: this.environmentManager.getTinfoilKey(),
+            });
+            return { success: true, text };
+          }
+
+          if (route.transport === "proxied" && route.provider === "smallest") {
+            const { text } = await transcribeWithSmallest({
+              apiKey: apiKey || this.environmentManager.getSmallestKey(),
+              audioBuffer: fs.readFileSync(realByok),
+              model: route.model,
+              language: route.language,
             });
             return { success: true, text };
           }

@@ -1583,6 +1583,15 @@ declare global {
         keyterms?: string[];
       }) => Promise<ProxyTranscriptionResult>;
 
+      // Smallest AI API key management
+      getSmallestKey?: () => Promise<string | null>;
+      saveSmallestKey?: (key: string) => Promise<void>;
+      proxySmallestTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        model?: string;
+        language?: string;
+      }) => Promise<ProxyTranscriptionResult>;
+
       // Mistral API key management
       getMistralKey: () => Promise<string | null>;
       saveMistralKey: (key: string) => Promise<void>;

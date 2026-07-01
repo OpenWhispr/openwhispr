@@ -65,7 +65,7 @@ export type TranscriptionRoute =
   | { transport: "local" }
   | {
       transport: "proxied";
-      provider: "tinfoil" | "mistral" | "xai" | "corti";
+      provider: "tinfoil" | "mistral" | "xai" | "corti" | "smallest";
       model: string | null;
       language?: string;
       sizeCapBytes: number;
@@ -124,11 +124,13 @@ export function resolveByokModel(provider: string, configuredModel?: string): st
       (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
       (provider === "openai" && (trimmed.startsWith("gpt-4o") || trimmed === "whisper-1")) ||
       (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
-      (provider === "corti" && trimmed.startsWith("corti-"));
+      (provider === "corti" && trimmed.startsWith("corti-")) ||
+      (provider === "smallest" && trimmed.startsWith("pulse"));
     if (matchesProvider) return trimmed;
   }
   if (provider === "groq") return "whisper-large-v3-turbo";
   if (provider === "xai") return "grok-stt";
+  if (provider === "smallest") return "pulse";
   if (provider === "mistral") return "voxtral-mini-latest";
   if (provider === "corti") return "corti-transcribe";
   return "gpt-4o-mini-transcribe";
@@ -231,12 +233,22 @@ export function resolveTranscriptionRoute({
   const provider = s.cloudTranscriptionProvider || "openai";
   const model = resolveByokModel(provider, request?.model ?? s.cloudTranscriptionModel);
 
-  if (provider === "tinfoil" || provider === "mistral" || provider === "xai") {
+  if (
+    provider === "tinfoil" ||
+    provider === "mistral" ||
+    provider === "xai" ||
+    provider === "smallest"
+  ) {
     return {
       transport: "proxied",
       provider,
       // Tinfoil's attested client resolves its own model; xAI's API takes none.
-      model: provider === "mistral" ? model : provider === "xai" ? "grok-stt" : null,
+      model:
+        provider === "mistral" || provider === "smallest"
+          ? model
+          : provider === "xai"
+            ? "grok-stt"
+            : null,
       language:
         provider === "xai" && language && !XAI_STT_LANGUAGES.has(language) ? undefined : language,
       sizeCapBytes: BYOK_FILE_SIZE_LIMIT,
