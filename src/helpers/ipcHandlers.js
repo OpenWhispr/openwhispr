@@ -2229,15 +2229,17 @@ class IPCHandlers {
         // Dictation is always active; meeting and agent may or may not be set.
         const allSlots = hotkeyManager.slots;
         for (const [slot, info] of allSlots) {
-          if (!info?.hotkey) continue;
-
-          if (!usesNativeListener(info.hotkey)) {
+          // A slot may bind several hotkeys (issue #936); unregister every
+          // globalShortcut accelerator it owns (native-listener entries have a
+          // null accelerator and are handled by stopping the key listeners below).
+          for (const accel of info?.accelerators || []) {
+            if (!accel) continue;
             debugLogger.log(
-              `[IPC] Unregistering globalShortcut "${info.hotkey}" (slot "${slot}") for capture mode`
+              `[IPC] Unregistering globalShortcut "${accel}" (slot "${slot}") for capture mode`
             );
             const { globalShortcut } = require("electron");
             try {
-              globalShortcut.unregister(info.hotkey);
+              globalShortcut.unregister(accel);
             } catch {}
           }
         }
@@ -2280,21 +2282,30 @@ class IPCHandlers {
           hotkeyManager.isUsingKDE() ||
           hotkeyManager.isUsingGnome() ||
           hotkeyManager.isUsingHyprland();
-        if (effectiveHotkey && !usesNativeListener(effectiveHotkey) && !usesNativePath) {
+        if (!usesNativePath) {
           const { globalShortcut } = require("electron");
-          const accelerator = effectiveHotkey.startsWith("Fn+")
-            ? effectiveHotkey.slice(3)
-            : effectiveHotkey;
-          if (!globalShortcut.isRegistered(accelerator)) {
-            debugLogger.log(
-              `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
-            );
-            const callback = this.windowManager.createHotkeyCallback();
-            const registered = globalShortcut.register(accelerator, callback);
-            if (!registered) {
-              debugLogger.warn(
-                `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
+          // Re-register every globalShortcut-backed dictation hotkey (the slot
+          // may hold several). Include a freshly captured hotkey that may not be
+          // in the slot yet, mirroring the previous effectiveHotkey behavior.
+          const dictationHotkeys = hotkeyManager.getSlotHotkeys("dictation");
+          const toRegister =
+            newHotkey && !dictationHotkeys.includes(newHotkey)
+              ? [...dictationHotkeys, newHotkey]
+              : dictationHotkeys;
+          for (const hk of toRegister) {
+            if (!hk || usesNativeListener(hk)) continue;
+            const accelerator = hk.startsWith("Fn+") ? hk.slice(3) : hk;
+            if (!globalShortcut.isRegistered(accelerator)) {
+              debugLogger.log(
+                `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
               );
+              const callback = this.windowManager.createHotkeyCallback();
+              const registered = globalShortcut.register(accelerator, callback);
+              if (!registered) {
+                debugLogger.warn(
+                  `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
+                );
+              }
             }
           }
         }
@@ -2349,12 +2360,13 @@ class IPCHandlers {
 
         // Re-register non-dictation slots (meeting, agent) that were unregistered on capture enter
         for (const [slot, info] of hotkeyManager.slots) {
-          if (slot === "dictation" || slot === "cancel" || !info?.hotkey || !info?.callback)
+          const hotkeys = info?.hotkeys || [];
+          if (slot === "dictation" || slot === "cancel" || hotkeys.length === 0 || !info?.callback)
             continue;
           debugLogger.log(
-            `[IPC] Re-registering slot "${slot}" ("${info.hotkey}") after capture mode`
+            `[IPC] Re-registering slot "${slot}" ("${hotkeys.join(", ")}") after capture mode`
           );
-          await hotkeyManager.registerSlot(slot, info.hotkey, info.callback).catch((err) => {
+          await hotkeyManager.registerSlot(slot, hotkeys, info.callback).catch((err) => {
             debugLogger.warn(`[IPC] Failed to re-register slot "${slot}":`, err.message);
           });
         }

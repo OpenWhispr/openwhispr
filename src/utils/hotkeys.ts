@@ -9,6 +9,30 @@ export function isGlobeLikeHotkey(hotkey: string): boolean {
   return hotkey === "GLOBE" || hotkey === "Fn";
 }
 
+/**
+ * A slot can be bound to several hotkeys (issue #936), stored as a
+ * comma-separated string. Hotkey accelerators never contain a comma, so this is
+ * unambiguous and backward compatible with single-value entries. Parses into a
+ * clean list: trimmed, de-duplicated, empties removed, order preserved.
+ */
+export function parseHotkeyList(value?: string | null): string[] {
+  if (!value) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const part of value.split(",")) {
+    const hotkey = part.trim();
+    if (!hotkey || seen.has(hotkey)) continue;
+    seen.add(hotkey);
+    result.push(hotkey);
+  }
+  return result;
+}
+
+/** Serialize a hotkey list back to the canonical comma-separated string. */
+export function serializeHotkeyList(list: string[]): string {
+  return parseHotkeyList(list.join(",")).join(",");
+}
+
 export function isMouseButtonHotkey(hotkey: string): boolean {
   return /^MouseButton[45]$/i.test(hotkey || "");
 }

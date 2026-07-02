@@ -886,7 +886,10 @@
     "recording": "Gravando",
     "tryShortcut": "Tente Ctrl+Shift+K",
     "tryShortcutMac": "Tente ⌘⇧K",
-    "remove": "Remover atalho"
+    "remove": "Remover atalho",
+    "addAnother": "Adicionar outro atalho",
+    "duplicate": "Já adicionado",
+    "add": "Adicionar atalho"
   },
   "languageSelector": {
     "noLanguagesFound": "Nenhum idioma encontrado",

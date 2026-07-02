@@ -955,7 +955,10 @@
     "recording": "Grabando",
     "tryShortcut": "Prueba Ctrl+Shift+K",
     "tryShortcutMac": "Prueba ⌘⇧K",
-    "remove": "Eliminar atajo"
+    "remove": "Eliminar atajo",
+    "addAnother": "Añadir otro atajo",
+    "duplicate": "Ya añadido",
+    "add": "Añadir atajo"
   },
   "languageSelector": {
     "noLanguagesFound": "No se encontraron idiomas",

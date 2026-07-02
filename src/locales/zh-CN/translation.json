@@ -907,7 +907,10 @@
     "recording": "录制中",
     "tryShortcut": "试试 Ctrl+Shift+K",
     "tryShortcutMac": "试试 ⌘⇧K",
-    "remove": "移除快捷键"
+    "remove": "移除快捷键",
+    "addAnother": "添加其他快捷键",
+    "duplicate": "已添加",
+    "add": "添加快捷键"
   },
   "languageSelector": {
     "noLanguagesFound": "未找到匹配的语言",

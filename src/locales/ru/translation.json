@@ -907,7 +907,10 @@
     "recording": "Запись",
     "tryShortcut": "Попробуйте Ctrl+Shift+K",
     "tryShortcutMac": "Попробуйте ⌘⇧K",
-    "remove": "Удалить горячую клавишу"
+    "remove": "Удалить горячую клавишу",
+    "addAnother": "Добавить ещё хоткей",
+    "duplicate": "Уже добавлен",
+    "add": "Добавить хоткей"
   },
   "languageSelector": {
     "noLanguagesFound": "Языки не найдены",

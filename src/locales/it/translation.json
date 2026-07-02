@@ -907,7 +907,10 @@
     "recording": "Registrazione",
     "tryShortcut": "Prova Ctrl+Shift+K",
     "tryShortcutMac": "Prova ⌘⇧K",
-    "remove": "Rimuovi scorciatoia"
+    "remove": "Rimuovi scorciatoia",
+    "addAnother": "Aggiungi un'altra scorciatoia",
+    "duplicate": "Già aggiunto",
+    "add": "Aggiungi scorciatoia"
   },
   "languageSelector": {
     "noLanguagesFound": "Nessuna lingua trovata",
