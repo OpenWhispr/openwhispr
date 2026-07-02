@@ -83,8 +83,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const usage = useUsage();
   const isProUser = usage?.isSubscribed || usage?.isTrial;
 
-  const { openaiApiKey, groqApiKey, xaiApiKey, mistralApiKey, customTranscriptionApiKey } =
-    useSettings();
+  const {
+    openaiApiKey,
+    groqApiKey,
+    xaiApiKey,
+    mistralApiKey,
+    smallestApiKey,
+    customTranscriptionApiKey,
+  } = useSettings();
 
   const {
     useLocalWhisper,
@@ -186,7 +192,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   ? xaiApiKey
                   : cloudTranscriptionProvider === "mistral"
                     ? mistralApiKey
-                    : customTranscriptionApiKey;
+                    : cloudTranscriptionProvider === "smallest"
+                      ? smallestApiKey
+                      : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -219,6 +227,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    smallestApiKey,
     customTranscriptionApiKey,
     cortiClientId,
     cortiClientSecret,
@@ -248,6 +257,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return xaiApiKey;
       case "mistral":
         return mistralApiKey;
+      case "smallest":
+        return smallestApiKey;
       case "custom":
         return customTranscriptionApiKey || "";
       default:

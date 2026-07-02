@@ -1841,7 +1841,9 @@
         "groq_whisper_large_v3": "Modelo Large v3, rápido e preciso",
         "mistral_voxtral_mini_latest": "Transcrição multilíngue rápida",
         "corti_transcribe": "Transcrição médica de nível clínico",
-        "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI"
+        "xai_grok_stt": "Reconhecimento de voz de alta precisão pela xAI",
+        "smallest_pulse": "Transcrição em nuvem multilíngue da Smallest AI",
+        "smallest_pulse_pro": "Somente inglês, maior precisão da Smallest AI"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo forte de raciocínio",

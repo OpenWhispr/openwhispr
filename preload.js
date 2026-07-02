@@ -361,6 +361,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveXaiKey: (key) => ipcRenderer.invoke("save-xai-key", key),
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
 
+  // Smallest AI API
+  getSmallestKey: () => ipcRenderer.invoke("get-smallest-key"),
+  saveSmallestKey: (key) => ipcRenderer.invoke("save-smallest-key", key),
+  proxySmallestTranscription: (data) => ipcRenderer.invoke("proxy-smallest-transcription", data),
+
   // Mistral API
   getMistralKey: () => ipcRenderer.invoke("get-mistral-key"),
   saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),

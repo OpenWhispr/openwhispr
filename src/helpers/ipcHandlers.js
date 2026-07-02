@@ -103,6 +103,96 @@ const XAI_STT_LANGUAGES = new Set([
   "vi",
 ]);
 
+// Smallest AI Pulse uses the unified STT endpoint with the model in the query string
+// and expects raw single-channel WAV bytes (app records stereo, so we downmix first).
+const SMALLEST_STT_URL = "https://api.smallest.ai/waves/v1/stt/";
+const SMALLEST_STT_MODELS = new Set(["pulse", "pulse-pro"]);
+const SMALLEST_MAX_AUDIO_BYTES = 25 * 1024 * 1024; // 25 MB, matches BYOK limit
+const SMALLEST_STT_TIMEOUT_MS = 120000; // 2 minute network timeout
+
+// Downmix to 16kHz mono WAV then POST raw bytes to the Smallest AI unified STT endpoint.
+// Shared by the proxy handler, retry-transcription, and BYOK file transcription.
+async function transcribeWithSmallest({ apiKey, audioBuffer, model, language }) {
+  if (!apiKey || typeof apiKey !== "string" || !apiKey.trim()) {
+    throw new Error("Smallest AI API key not configured");
+  }
+  const buffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer || []);
+  if (buffer.length === 0) {
+    throw new Error("Cannot transcribe empty audio");
+  }
+  if (buffer.length > SMALLEST_MAX_AUDIO_BYTES) {
+    throw new Error("Audio too large for Smallest AI (max 25 MB)");
+  }
+  const resolvedModel = SMALLEST_STT_MODELS.has(model) ? model : "pulse";
+
+  const { convertToWav } = require("./ffmpegUtils");
+  const { getSafeTempDir } = require("./safeTempDir");
+  const tmpDir = getSafeTempDir();
+  const jobId = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+  const inputPath = path.join(tmpDir, `ow-smallest-${jobId}.webm`);
+  const wavPath = path.join(tmpDir, `ow-smallest-${jobId}.wav`);
+
+  try {
+    fs.writeFileSync(inputPath, buffer);
+    await convertToWav(inputPath, wavPath, { sampleRate: 16000, channels: 1 });
+    const wavBytes = fs.readFileSync(wavPath);
+    if (wavBytes.length === 0) {
+      throw new Error("Audio conversion produced no data");
+    }
+
+    const url = new URL(SMALLEST_STT_URL);
+    url.searchParams.set("model", resolvedModel);
+    if (language && language !== "auto") {
+      url.searchParams.set("language", language);
+    }
+
+    let response;
+    try {
+      response = await net.fetch(url.toString(), {
+        method: "POST",
+        useSessionCookies: false,
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/octet-stream",
+        },
+        body: wavBytes,
+        signal: AbortSignal.timeout(SMALLEST_STT_TIMEOUT_MS),
+      });
+    } catch (err) {
+      if (err?.name === "TimeoutError" || err?.name === "AbortError") {
+        throw new Error("Smallest AI request timed out");
+      }
+      throw err;
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      throw new Error(`Smallest AI API Error: ${response.status} ${errorText}`.trim());
+    }
+
+    const rawBody = await response.text();
+    let json;
+    try {
+      json = JSON.parse(rawBody);
+    } catch {
+      throw new Error("Smallest AI returned a malformed response");
+    }
+    if (json?.status && json.status !== "success") {
+      throw new Error(`Smallest AI transcription failed: ${json.status}`);
+    }
+    const text = typeof json?.transcription === "string" ? json.transcription : "";
+    return { text };
+  } finally {
+    for (const tmpPath of [inputPath, wavPath]) {
+      try {
+        fs.unlinkSync(tmpPath);
+      } catch {
+        // best-effort cleanup; missing file is fine
+      }
+    }
+  }
+}
+
 // Debounce delay: wait for user to stop typing before processing corrections
 const AUTO_LEARN_DEBOUNCE_MS = 1500;
 
@@ -541,6 +631,7 @@ class IPCHandlers {
     }
     if (provider === "groq") return "whisper-large-v3-turbo";
     if (provider === "xai") return "grok-stt";
+    if (provider === "smallest") return trimmed === "pulse-pro" ? "pulse-pro" : "pulse";
     if (provider === "mistral") return "voxtral-mini-latest";
     return "gpt-4o-mini-transcribe";
   }
@@ -2605,6 +2696,25 @@ class IPCHandlers {
       }
     );
 
+    ipcMain.handle("get-smallest-key", async () => {
+      return this.environmentManager.getSmallestKey();
+    });
+
+    ipcMain.handle("save-smallest-key", async (event, key) => {
+      return this.environmentManager.saveSmallestKey(key);
+    });
+
+    ipcMain.handle(
+      "proxy-smallest-transcription",
+      async (event, { audioBuffer, model, language }) => {
+        const apiKey = this.environmentManager.getSmallestKey();
+        if (!apiKey) {
+          throw new Error("Smallest AI API key not configured");
+        }
+        return transcribeWithSmallest({ apiKey, audioBuffer, model, language });
+      }
+    );
+
     ipcMain.handle("get-mistral-key", async () => {
       return this.environmentManager.getMistralKey();
     });
@@ -3786,59 +3896,80 @@ class IPCHandlers {
           const provider = settings?.cloudTranscriptionProvider || "openai";
           const model = this._resolveByokModel(provider, settings?.cloudTranscriptionModel);
 
-          let apiKey, endpoint;
-          if (provider === "groq") {
-            apiKey = this.environmentManager.getGroqKey();
-            endpoint = "https://api.groq.com/openai/v1/audio/transcriptions";
-          } else if (provider === "xai") {
-            apiKey = this.environmentManager.getXaiKey();
-            endpoint = XAI_STT_URL;
-          } else if (provider === "mistral") {
-            apiKey = this.environmentManager.getMistralKey();
-            endpoint = MISTRAL_TRANSCRIPTION_URL;
-          } else if (provider === "custom") {
-            apiKey = this.environmentManager.getCustomTranscriptionKey();
-            const base = (settings?.cloudTranscriptionBaseUrl || "").trim();
-            endpoint = base
-              ? /\/audio\/(transcriptions|translations)$/i.test(base)
-                ? base
-                : `${base}/audio/transcriptions`
-              : "https://api.openai.com/v1/audio/transcriptions";
-          } else {
-            apiKey = this.environmentManager.getOpenAIKey();
-            endpoint = "https://api.openai.com/v1/audio/transcriptions";
-          }
-          if (!apiKey && provider !== "custom") {
-            throw new Error(`${provider} API key not configured`);
-          }
-
-          const formData = new FormData();
-          formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
-          if (provider === "xai") {
-            // xAI STT does not accept a model field; language only when in supported set
-            if (language && XAI_STT_LANGUAGES.has(language)) {
-              formData.append("language", language);
-              formData.append("format", "true");
+          if (provider === "smallest") {
+            // Smallest AI needs mono WAV + the unified endpoint; never fall through to openai.
+            const apiKey = this.environmentManager.getSmallestKey();
+            if (!apiKey) {
+              throw new Error("Smallest AI API key not configured");
+            }
+            const { text } = await transcribeWithSmallest({
+              apiKey,
+              audioBuffer: buffer,
+              model,
+              language,
+            });
+            if (text) {
+              result = { text, source: provider, model };
             }
           } else {
-            formData.append("model", model);
-            if (language) formData.append("language", language);
-          }
-          const headers = {};
-          if (provider === "mistral") {
-            headers["x-api-key"] = apiKey;
-          } else if (apiKey) {
-            headers.Authorization = `Bearer ${apiKey}`;
-          }
+            let apiKey, endpoint;
+            if (provider === "groq") {
+              apiKey = this.environmentManager.getGroqKey();
+              endpoint = "https://api.groq.com/openai/v1/audio/transcriptions";
+            } else if (provider === "xai") {
+              apiKey = this.environmentManager.getXaiKey();
+              endpoint = XAI_STT_URL;
+            } else if (provider === "mistral") {
+              apiKey = this.environmentManager.getMistralKey();
+              endpoint = MISTRAL_TRANSCRIPTION_URL;
+            } else if (provider === "custom") {
+              apiKey = this.environmentManager.getCustomTranscriptionKey();
+              const base = (settings?.cloudTranscriptionBaseUrl || "").trim();
+              endpoint = base
+                ? /\/audio\/(transcriptions|translations)$/i.test(base)
+                  ? base
+                  : `${base}/audio/transcriptions`
+                : "https://api.openai.com/v1/audio/transcriptions";
+            } else {
+              apiKey = this.environmentManager.getOpenAIKey();
+              endpoint = "https://api.openai.com/v1/audio/transcriptions";
+            }
+            if (!apiKey && provider !== "custom") {
+              throw new Error(`${provider} API key not configured`);
+            }
 
-          const response = await proxyFetch(endpoint, { method: "POST", headers, body: formData });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
-          }
-          const data = await response.json();
-          if (data?.text) {
-            result = { text: data.text, source: provider, model };
+            const formData = new FormData();
+            formData.append("file", new Blob([buffer], { type: "audio/webm" }), "audio.webm");
+            if (provider === "xai") {
+              // xAI STT does not accept a model field; language only when in supported set
+              if (language && XAI_STT_LANGUAGES.has(language)) {
+                formData.append("language", language);
+                formData.append("format", "true");
+              }
+            } else {
+              formData.append("model", model);
+              if (language) formData.append("language", language);
+            }
+            const headers = {};
+            if (provider === "mistral") {
+              headers["x-api-key"] = apiKey;
+            } else if (apiKey) {
+              headers.Authorization = `Bearer ${apiKey}`;
+            }
+
+            const response = await proxyFetch(endpoint, {
+              method: "POST",
+              headers,
+              body: formData,
+            });
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`${provider} API Error: ${response.status} ${errorText}`);
+            }
+            const data = await response.json();
+            if (data?.text) {
+              result = { text: data.text, source: provider, model };
+            }
           }
         }
 
@@ -6443,6 +6574,18 @@ class IPCHandlers {
               clientSecret,
               audioBuffer: fs.readFileSync(filePath),
               language: language || "en",
+            });
+            return { success: true, text };
+          }
+
+          if (provider === "smallest") {
+            // Smallest AI needs mono WAV + the unified endpoint; never fall through to openai.
+            const smallestKey = apiKey || this.environmentManager.getSmallestKey();
+            const { text } = await transcribeWithSmallest({
+              apiKey: smallestKey,
+              audioBuffer: fs.readFileSync(filePath),
+              model,
+              language,
             });
             return { success: true, text };
           }
