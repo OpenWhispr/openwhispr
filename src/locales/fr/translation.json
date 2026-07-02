@@ -33,6 +33,7 @@
       "hide": "Masquer le panneau de dictée"
     },
     "openControlPanel": "Ouvrir le panneau de contrôle",
+    "hideControlPanel": "Masquer le panneau de contrôle",
     "quit": "Quitter OpenWhispr",
     "tooltip": "OpenWhispr - Dictée vocale"
   },

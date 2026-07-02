@@ -33,6 +33,7 @@
       "hide": "隐藏听写面板"
     },
     "openControlPanel": "打开控制面板",
+    "hideControlPanel": "隐藏控制面板",
     "quit": "退出 OpenWhispr",
     "tooltip": "OpenWhispr - 语音听写"
   },

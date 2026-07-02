@@ -33,6 +33,7 @@
       "hide": "Hide Dictation Panel"
     },
     "openControlPanel": "Open Control Panel",
+    "hideControlPanel": "Hide Control Panel",
     "quit": "Quit OpenWhispr",
     "tooltip": "OpenWhispr - Voice Dictation"
   },

@@ -33,6 +33,7 @@
       "hide": "Скрыть панель диктовки"
     },
     "openControlPanel": "Открыть панель управления",
+    "hideControlPanel": "Скрыть панель управления",
     "quit": "Закрыть OpenWhispr",
     "tooltip": "OpenWhispr — голосовая диктовка"
   },

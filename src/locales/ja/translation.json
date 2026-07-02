@@ -33,6 +33,7 @@
       "hide": "ディクテーションパネルを非表示"
     },
     "openControlPanel": "コントロールパネルを開く",
+    "hideControlPanel": "コントロールパネルを非表示",
     "quit": "OpenWhispr を終了",
     "tooltip": "OpenWhispr - 音声ディクテーション"
   },

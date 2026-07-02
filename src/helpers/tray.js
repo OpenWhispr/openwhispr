@@ -54,18 +54,47 @@ class TrayManager {
       this.updateTrayMenu?.();
     });
 
+    window.on("minimize", () => {
+      this.updateTrayMenu?.();
+    });
+
+    window.on("restore", () => {
+      this.updateTrayMenu?.();
+    });
+
     window.on("destroyed", () => {
       this.controlPanelWindow = null;
       this.updateTrayMenu?.();
     });
   }
 
+  syncControlPanelWindow() {
+    if (this.windowManager) {
+      this.controlPanelWindow = this.windowManager.controlPanelWindow || this.controlPanelWindow;
+    }
+    this.attachControlPanelListeners(this.controlPanelWindow);
+    return this.controlPanelWindow;
+  }
+
+  isControlPanelVisible() {
+    const win = this.syncControlPanelWindow();
+    return !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized();
+  }
+
+  // On Linux a window parked on another workspace still reports as visible, so
+  // the first click hides it and the next re-shows it on the current workspace.
+  async toggleControlPanelFromTray() {
+    if (this.isControlPanelVisible()) {
+      this.windowManager?.hideControlPanelToTray();
+      return;
+    }
+
+    await this.showControlPanelFromTray();
+  }
+
   async showControlPanelFromTray() {
     try {
-      if (this.windowManager) {
-        this.controlPanelWindow = this.windowManager.controlPanelWindow || this.controlPanelWindow;
-      }
-      this.attachControlPanelListeners(this.controlPanelWindow);
+      this.syncControlPanelWindow();
 
       if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
         // Show dock icon on macOS when control panel opens
@@ -87,11 +116,7 @@ class TrayManager {
 
       if (this.createControlPanelCallback) {
         await this.createControlPanelCallback();
-        if (this.windowManager) {
-          this.controlPanelWindow =
-            this.windowManager.controlPanelWindow || this.controlPanelWindow;
-        }
-        this.attachControlPanelListeners(this.controlPanelWindow);
+        this.syncControlPanelWindow();
 
         if (this.controlPanelWindow && !this.controlPanelWindow.isDestroyed()) {
           this.controlPanelWindow.show();
@@ -246,9 +271,11 @@ class TrayManager {
         },
       },
       {
-        label: i18nMain.t("tray.openControlPanel"),
-        click: async () => {
-          await this.showControlPanelFromTray();
+        label: this.isControlPanelVisible()
+          ? i18nMain.t("tray.hideControlPanel")
+          : i18nMain.t("tray.openControlPanel"),
+        click: () => {
+          void this.toggleControlPanelFromTray();
         },
       },
       { type: "separator" },
@@ -277,7 +304,7 @@ class TrayManager {
 
     if (process.platform !== "darwin") {
       this.tray.on("click", () => {
-        void this.showControlPanelFromTray();
+        void this.toggleControlPanelFromTray();
       });
     }
 
