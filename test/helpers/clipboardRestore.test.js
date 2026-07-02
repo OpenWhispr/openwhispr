@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const { EventEmitter } = require("node:events");
+const childProcess = require("node:child_process");
 
 const fakeClipboard = {
   text: "",
@@ -28,21 +30,47 @@ const fakeClipboard = {
   writeImage() {},
 };
 
-const originalLoad = Module._load;
-Module._load = function loadWithElectronMock(request, parent, isMain) {
-  if (request === "electron") {
-    return {
-      clipboard: fakeClipboard,
-      systemPreferences: {
-        isTrustedAccessibilityClient: () => true,
-      },
-    };
-  }
-  return originalLoad.call(this, request, parent, isMain);
-};
+const clipboardModulePath = require.resolve("../../src/helpers/clipboard");
 
-const ClipboardManager = require("../../src/helpers/clipboard");
-Module._load = originalLoad;
+const originalLoad = Module._load;
+
+function loadClipboardManager({ spawn } = {}) {
+  delete require.cache[clipboardModulePath];
+
+  Module._load = function loadWithMocks(request, parent, isMain) {
+    if (request === "electron") {
+      return {
+        clipboard: fakeClipboard,
+        systemPreferences: {
+          isTrustedAccessibilityClient: () => true,
+        },
+      };
+    }
+    if (request === "child_process" && spawn) {
+      return { ...childProcess, spawn };
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+
+  try {
+    return require("../../src/helpers/clipboard");
+  } finally {
+    Module._load = originalLoad;
+  }
+}
+
+const ClipboardManager = loadClipboardManager();
+
+function createSuccessfulSpawn(calls) {
+  return function successfulSpawn(command, args = []) {
+    calls.push({ command, args });
+    const pasteProcess = new EventEmitter();
+    pasteProcess.stderr = new EventEmitter();
+    pasteProcess.stdout = new EventEmitter();
+    process.nextTick(() => pasteProcess.emit("close", 0));
+    return pasteProcess;
+  };
+}
 
 function resetClipboard() {
   fakeClipboard.text = "";
@@ -103,4 +131,66 @@ test("pasteText waits for prior clipboard restoration before starting the next p
   releaseFirstRestore();
   await secondPaste;
   assert.deepEqual(events, ["start:first", "end:first", "start:second", "end:second"]);
+});
+
+test("pasteMacOS restores clipboard after the short macOS delay on successful fast paste", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  const originalClipboard = { type: "text", data: "previous clipboard" };
+  let restoreCall;
+
+  manager.resolveFastPasteBinary = () => "/tmp/openwhispr-fast-paste";
+  manager._restoreClipboardAfterDelay = (original, options) => {
+    restoreCall = { original, options };
+    return Promise.resolve();
+  };
+
+  const result = await manager.pasteMacOS(originalClipboard, {
+    expectedClipboardText: "dictated text",
+    fromStreaming: true,
+  });
+  await result.restoreComplete;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].command, "/tmp/openwhispr-fast-paste");
+  assert.equal(restoreCall.original, originalClipboard);
+  assert.deepEqual(restoreCall.options, {
+    delayMs: 450,
+    expectedText: "dictated text",
+  });
+});
+
+test("pasteMacOSWithOsascript fallback uses the short macOS restore delay", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  const originalClipboard = { type: "text", data: "previous clipboard" };
+  let restoreCall;
+
+  manager._restoreClipboardAfterDelay = (original, options) => {
+    restoreCall = { original, options };
+    return Promise.resolve();
+  };
+
+  const result = await manager.pasteMacOSWithOsascript(originalClipboard, {
+    expectedClipboardText: "dictated text",
+  });
+  await result.restoreComplete;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].command, "osascript");
+  assert.deepEqual(spawnCalls[0].args, [
+    "-e",
+    'tell application "System Events" to key code 9 using command down',
+  ]);
+  assert.equal(restoreCall.original, originalClipboard);
+  assert.deepEqual(restoreCall.options, {
+    delayMs: 450,
+    expectedText: "dictated text",
+  });
 });

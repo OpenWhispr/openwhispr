@@ -54,7 +54,7 @@ const PASTE_DELAYS = {
 };
 
 const RESTORE_DELAYS = {
-  darwin: 2000,
+  darwin: 450,
   win32_nircmd: 500,
   win32_pwsh: 500,
   linux: 800,
