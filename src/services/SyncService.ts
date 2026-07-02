@@ -9,6 +9,7 @@ import { ConversationsService } from "./ConversationsService.js";
 import { FoldersService } from "./FoldersService.js";
 import { TranscriptionsService } from "./TranscriptionsService.js";
 import { DictionaryService } from "./DictionaryService.js";
+import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError } from "./cloudApi.js";
 
 function isHttpStatus(err: unknown, status: number): boolean {
@@ -19,6 +20,7 @@ const PUSH_DEBOUNCE_MS = 2000;
 const BATCH_SIZE = 50;
 const TRANSCRIPTION_BATCH_SIZE = 100;
 const DICTIONARY_BATCH_SIZE = 200;
+const SNIPPET_BATCH_SIZE = 200;
 
 // SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
 // the cloud sends ISO 8601 "YYYY-MM-DDTHH:MM:SS.sssZ". Normalize both to
@@ -34,6 +36,7 @@ function normalizeTimestamp(value: string | null | undefined): string {
 class SyncService {
   private syncing = false;
   private dictionaryDirty = false;
+  private snippetsDirty = false;
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   canSync(): boolean {
@@ -58,6 +61,10 @@ class SyncService {
         this.dictionaryDirty = false;
         await this.syncDictionary();
       } while (this.dictionaryDirty);
+      do {
+        this.snippetsDirty = false;
+        await this.syncSnippets();
+      } while (this.snippetsDirty);
       localStorage.setItem("lastSyncedAt", new Date().toISOString());
     } catch (err) {
       console.error("Sync failed:", err);
@@ -82,6 +89,25 @@ class SyncService {
       } while (this.dictionaryDirty);
     } catch (err) {
       console.error("Dictionary sync failed:", err);
+    } finally {
+      this.syncing = false;
+    }
+  }
+
+  async syncSnippetsNow(): Promise<void> {
+    if (!this.canSync()) return;
+    if (this.syncing) {
+      this.snippetsDirty = true;
+      return;
+    }
+    this.syncing = true;
+    try {
+      do {
+        this.snippetsDirty = false;
+        await this.syncSnippets();
+      } while (this.snippetsDirty);
+    } catch (err) {
+      console.error("Snippets sync failed:", err);
     } finally {
       this.syncing = false;
     }
@@ -807,6 +833,203 @@ class SyncService {
       if (changed) await window.electronAPI.broadcastDictionaryUpdated?.();
     } catch (err) {
       console.error("Dictionary pull failed:", err);
+    }
+  }
+
+  private async syncSnippets(): Promise<void> {
+    const api = window.electronAPI;
+    const required = [
+      "getPendingSnippets",
+      "getPendingSnippetDeletes",
+      "getSnippetForCloudMerge",
+      "upsertSnippetFromCloud",
+      "markSnippetSynced",
+      "hardDeleteSnippet",
+      "clearSnippetCloudId",
+      "broadcastSnippetsUpdated",
+    ] as const;
+    const missing = required.filter((name) => typeof api[name] !== "function");
+    if (missing.length > 0) {
+      throw new Error(`Snippet IPC bindings missing — preload out of date: ${missing.join(", ")}`);
+    }
+
+    await this.pushPendingSnippets();
+    await this.pushSnippetDeletes();
+    await this.pullSnippets();
+  }
+
+  private async pushPendingSnippets(): Promise<void> {
+    const pending = (await window.electronAPI.getPendingSnippets?.()) ?? [];
+    if (pending.length === 0) return;
+
+    const updates = pending.filter((e) => e.cloud_id);
+    const creates = pending.filter((e) => !e.cloud_id);
+
+    for (const entry of updates) {
+      try {
+        const server = await SnippetService.update(entry.cloud_id!, {
+          trigger: entry.trigger,
+          replacement: entry.replacement,
+        });
+        await window.electronAPI.markSnippetSynced?.(
+          entry.id,
+          server.id,
+          server.updated_at,
+          entry.trigger,
+          entry.replacement
+        );
+      } catch (err) {
+        if (isHttpStatus(err, 404)) {
+          // Cloud row purged elsewhere — drop the stale cloud_id so the next push
+          // re-creates it via batchCreate.
+          await window.electronAPI.clearSnippetCloudId?.(entry.id);
+        } else if (isHttpStatus(err, 409)) {
+          // Another snippet already holds this trigger, so the server keeps
+          // rejecting the rename. Mark synced to stop re-pushing the doomed PATCH.
+          await window.electronAPI.markSnippetSynced?.(
+            entry.id,
+            entry.cloud_id!,
+            undefined,
+            entry.trigger,
+            entry.replacement
+          );
+        } else {
+          console.error("Snippet update sync failed:", err);
+        }
+      }
+    }
+
+    for (let i = 0; i < creates.length; i += SNIPPET_BATCH_SIZE) {
+      const chunk = creates.slice(i, i + SNIPPET_BATCH_SIZE);
+      try {
+        const { created } = await SnippetService.batchCreate(
+          chunk.map((e) => ({
+            client_snippet_id: e.client_snippet_id,
+            trigger: e.trigger,
+            replacement: e.replacement,
+            created_at: e.created_at,
+            updated_at: e.updated_at,
+          }))
+        );
+        const byClientId = new Map(created.map((c) => [c.client_snippet_id, c]));
+        let unmatched = 0;
+        for (const local of chunk) {
+          const server = byClientId.get(local.client_snippet_id);
+          if (!server) {
+            unmatched += 1;
+            continue;
+          }
+          const result = await window.electronAPI.markSnippetSynced?.(
+            local.id,
+            server.id,
+            server.updated_at,
+            local.trigger,
+            local.replacement
+          );
+          if (result && result.changes === 0) {
+            try {
+              await SnippetService.delete(server.id);
+            } catch (deleteErr) {
+              console.error("Snippet orphan cleanup failed:", deleteErr);
+            }
+          }
+        }
+        if (unmatched > 0) {
+          console.warn(
+            `Snippet batch-create: ${unmatched}/${chunk.length} rows had no matching server response`
+          );
+        }
+      } catch (err) {
+        console.error("Snippet batch create failed:", err);
+      }
+    }
+  }
+
+  private async pushSnippetDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingSnippetDeletes?.()) ?? [];
+    for (const entry of deletes) {
+      if (!entry.cloud_id) continue;
+      try {
+        await SnippetService.delete(entry.cloud_id);
+        await window.electronAPI.hardDeleteSnippet?.(entry.id);
+      } catch (err) {
+        if (isHttpStatus(err, 404)) {
+          await window.electronAPI.hardDeleteSnippet?.(entry.id);
+        } else {
+          console.error("Snippet delete sync failed:", err);
+        }
+      }
+    }
+  }
+
+  private async pullSnippets(): Promise<void> {
+    try {
+      const since = localStorage.getItem("lastSyncedAt.snippets") ?? undefined;
+      const sinceId = localStorage.getItem("lastSyncedAt.snippets.id") ?? undefined;
+      let changed = false;
+
+      let cursor: string | undefined = since;
+      let cursorId: string | undefined = sinceId;
+      let maxUpdatedAt = normalizeTimestamp(since);
+      let maxId = sinceId ?? "";
+      const cursorField: keyof Pick<CloudSnippetEntry, "created_at" | "updated_at"> = since
+        ? "updated_at"
+        : "created_at";
+
+      while (true) {
+        const { entries, hasMore } = since
+          ? await SnippetService.listDelta(cursor, SNIPPET_BATCH_SIZE, cursorId)
+          : await SnippetService.listSnapshot(cursor, SNIPPET_BATCH_SIZE, cursorId);
+        if (entries.length === 0) break;
+
+        for (const cloudEntry of entries) {
+          const cloudTs = normalizeTimestamp(cloudEntry.updated_at);
+          const local = await window.electronAPI.getSnippetForCloudMerge?.(
+            cloudEntry as unknown as Record<string, unknown>
+          );
+
+          if (cloudTs > maxUpdatedAt) {
+            maxUpdatedAt = cloudTs;
+            maxId = cloudEntry.id;
+          } else if (cloudTs === maxUpdatedAt && cloudEntry.id > maxId) {
+            maxId = cloudEntry.id;
+          }
+
+          if (cloudEntry.deleted_at) {
+            if (local && !(local.sync_status === "pending" && !local.cloud_id)) {
+              await window.electronAPI.hardDeleteSnippet?.(local.id);
+              changed = true;
+            }
+            continue;
+          }
+
+          const localTs = local ? normalizeTimestamp(local.updated_at) : "";
+          const shouldApply =
+            !local ||
+            cloudTs > localTs ||
+            (local.sync_status !== "pending" &&
+              (!local.cloud_id || local.cloud_id !== cloudEntry.id));
+          if (shouldApply) {
+            await window.electronAPI.upsertSnippetFromCloud?.(
+              cloudEntry as unknown as Record<string, unknown>
+            );
+            changed = true;
+          }
+        }
+
+        if (!hasMore) break;
+        const last = entries[entries.length - 1];
+        const nextCursor = last[cursorField];
+        if (nextCursor === cursor && last.id === cursorId) break;
+        cursor = nextCursor;
+        cursorId = last.id;
+      }
+
+      if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.snippets", maxUpdatedAt);
+      if (maxId) localStorage.setItem("lastSyncedAt.snippets.id", maxId);
+      if (changed) await window.electronAPI.broadcastSnippetsUpdated?.();
+    } catch (err) {
+      console.error("Snippet pull failed:", err);
     }
   }
 
