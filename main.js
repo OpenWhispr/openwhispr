@@ -409,6 +409,8 @@ function initializeCoreManagers() {
   cleanupOrphanedLinuxRestoreToken();
   meetingAecManager = new MeetingAecManager();
   windowManager.textEditMonitor = textEditMonitor;
+  windowManager.windowsKeyManager = windowsKeyManager;
+  windowManager.linuxKeyManager = linuxKeyManager;
 
   // IPC handlers must be registered before window content loads
   ipcHandlers = new IPCHandlers({
@@ -904,6 +906,7 @@ async function startApp() {
   ipcMain.handle("register-meeting-hotkey", async (_event, hotkey) => {
     if (hotkey) {
       const result = await hotkeyManager.registerSlot("meeting", hotkey, meetingHotkeyCallback);
+      windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         environmentManager.saveMeetingKey(hotkey);
         return { success: true };
@@ -912,6 +915,7 @@ async function startApp() {
     } else {
       hotkeyManager.unregisterSlot("meeting");
       environmentManager.saveMeetingKey("");
+      windowManager.reconcileNativeKeyListeners();
       return { success: true };
     }
   });
@@ -1320,49 +1324,55 @@ async function startApp() {
     });
   }
 
-  if (process.platform === "win32") {
-    debugLogger.debug("[Push-to-Talk] Windows Push-to-Talk setup starting");
+  // Windows and Linux share the same native low-level key listener model: one hook
+  // process per watched key (Electron globalShortcut can't see modifier-only or
+  // right-side-modifier combos), routed to the owning slot here. macOS is handled
+  // separately above via globeKeyManager.
+  if (process.platform === "win32" || process.platform === "linux") {
+    const isWindows = process.platform === "win32";
+    const nativeKeyManager = isWindows ? windowsKeyManager : linuxKeyManager;
+    debugLogger.debug("[Push-to-Talk] Native key listener setup starting");
 
-    const {
-      isGlobeLikeHotkey: isGlobeLike,
-      isModifierOnlyHotkey,
-    } = require("./src/helpers/hotkeyManager");
-    const isValidHotkey = (hotkey) => hotkey && !isGlobeLike(hotkey);
-
-    const isRightSideMod = (hotkey) =>
-      /^Right(Control|Ctrl|Alt|Option|Shift|Super|Win|Meta|Command|Cmd)$/i.test(hotkey);
-
-    const needsNativeListener = (hotkey, mode) => {
-      if (!isValidHotkey(hotkey)) return false;
-      if (mode === "push") return true;
-      return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey);
+    // Dictation supports push-to-talk and needs the overlay window; agent/meeting
+    // drive other windows (matching their globalShortcut callbacks and macOS).
+    const dispatchNativeKeyDown = (key) => {
+      if (key === hotkeyManager.getCurrentHotkey()) {
+        if (!isLiveWindow(windowManager.mainWindow)) return;
+        if (windowManager.getActivationMode() === "push") {
+          windowManager.startWindowsPushToTalk();
+        } else {
+          windowManager.sendToggleDictation();
+        }
+        return;
+      }
+      if (key === hotkeyManager.getSlotHotkey("voiceAgent")) {
+        windowManager.sendToggleVoiceAgent();
+      } else if (key === hotkeyManager.getSlotHotkey("agent")) {
+        if (!hotkeyManager.isInListeningMode()) windowManager.toggleAgentOverlay();
+      } else if (key === hotkeyManager.getSlotHotkey("meeting")) {
+        if (!hotkeyManager.isInListeningMode()) meetingDetectionEngine?.startManualMeeting();
+      }
     };
 
-    windowsKeyManager.on("key-down", (_key) => {
-      if (!isLiveWindow(windowManager.mainWindow)) return;
-
-      const activationMode = windowManager.getActivationMode();
-      if (activationMode === "push") {
-        windowManager.startWindowsPushToTalk();
-      } else if (activationMode === "tap") {
-        windowManager.sendToggleDictation();
-      }
-    });
-
-    windowsKeyManager.on("key-up", () => {
+    // Only dictation drives push-to-talk, so only its key-up matters.
+    const dispatchNativeKeyUp = (key) => {
+      if (key !== hotkeyManager.getCurrentHotkey()) return;
       if (windowManager.winPushState?.active) {
         windowManager.handleWindowsPushKeyUp();
-      } else if (isLiveWindow(windowManager.mainWindow)) {
-        const activationMode = windowManager.getActivationMode();
-        if (activationMode === "push") {
-          windowManager.handleWindowsPushKeyUp();
-        }
+      } else if (
+        isLiveWindow(windowManager.mainWindow) &&
+        windowManager.getActivationMode() === "push"
+      ) {
+        windowManager.handleWindowsPushKeyUp();
       }
-    });
+    };
 
-    windowsKeyManager.on("error", (error) => {
-      debugLogger.warn("[Push-to-Talk] Windows key listener error", { error: error.message });
-      if (isLiveWindow(windowManager.mainWindow)) {
+    nativeKeyManager.on("key-down", dispatchNativeKeyDown);
+    nativeKeyManager.on("key-up", dispatchNativeKeyUp);
+
+    nativeKeyManager.on("error", (error) => {
+      debugLogger.warn("[Push-to-Talk] Native key listener error", { error: error.message });
+      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
         windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
           reason: "error",
           message: error.message,
@@ -1370,11 +1380,11 @@ async function startApp() {
       }
     });
 
-    windowsKeyManager.on("unavailable", () => {
+    nativeKeyManager.on("unavailable", () => {
       debugLogger.debug(
-        "[Push-to-Talk] Windows key listener not available - falling back to toggle mode"
+        "[Push-to-Talk] Native key listener unavailable - falling back to toggle mode"
       );
-      if (isLiveWindow(windowManager.mainWindow)) {
+      if (isWindows && isLiveWindow(windowManager.mainWindow)) {
         windowManager.mainWindow.webContents.send("windows-ptt-unavailable", {
           reason: "binary_not_found",
           message: i18nMain.t("windows.pttUnavailable"),
@@ -1382,136 +1392,32 @@ async function startApp() {
       }
     });
 
-    windowsKeyManager.on("ready", () => {
-      debugLogger.debug("[Push-to-Talk] WindowsKeyManager is ready and listening");
+    nativeKeyManager.on("ready", () => {
+      debugLogger.debug("[Push-to-Talk] Native key listener ready and listening");
     });
 
-    const startWindowsKeyListener = () => {
-      if (!isLiveWindow(windowManager.mainWindow)) return;
-      const activationMode = windowManager.getActivationMode();
-      const currentHotkey = hotkeyManager.getCurrentHotkey();
-
-      if (needsNativeListener(currentHotkey, activationMode)) {
-        windowsKeyManager.start(currentHotkey);
-      }
-    };
+    if (!isWindows) {
+      nativeKeyManager.on("permission-denied", () => {
+        debugLogger.warn(
+          "[Push-to-Talk] Linux key listener has no permission to access input devices"
+        );
+        if (isLiveWindow(windowManager.mainWindow)) {
+          windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
+        }
+      });
+    }
 
     const STARTUP_DELAY_MS = 3000;
-    setTimeout(startWindowsKeyListener, STARTUP_DELAY_MS);
+    setTimeout(() => windowManager.reconcileNativeKeyListeners(), STARTUP_DELAY_MS);
 
-    ipcMain.on("activation-mode-changed", (_event, mode) => {
+    ipcMain.on("activation-mode-changed", () => {
       windowManager.resetWindowsPushState();
-      const currentHotkey = hotkeyManager.getCurrentHotkey();
-      if (needsNativeListener(currentHotkey, mode)) {
-        windowsKeyManager.start(currentHotkey);
-      } else {
-        windowsKeyManager.stop();
-      }
+      windowManager.reconcileNativeKeyListeners();
     });
 
-    ipcMain.on("hotkey-changed", (_event, hotkey) => {
-      if (!isLiveWindow(windowManager.mainWindow)) return;
+    ipcMain.on("hotkey-changed", () => {
       windowManager.resetWindowsPushState();
-      const activationMode = windowManager.getActivationMode();
-      windowsKeyManager.stop();
-      if (needsNativeListener(hotkey, activationMode)) {
-        windowsKeyManager.start(hotkey);
-      }
-    });
-  }
-
-  if (process.platform === "linux") {
-    debugLogger.debug("[Push-to-Talk] Linux Push-to-Talk setup starting");
-
-    const {
-      isGlobeLikeHotkey: isGlobeLike,
-      isModifierOnlyHotkey,
-    } = require("./src/helpers/hotkeyManager");
-    const isValidHotkey = (hotkey) => hotkey && !isGlobeLike(hotkey);
-
-    const isRightSideMod = (hotkey) =>
-      /^Right(Control|Ctrl|Alt|Option|Shift|Super|Win|Meta|Command|Cmd)$/i.test(hotkey);
-
-    const needsNativeListener = (hotkey, mode) => {
-      if (!isValidHotkey(hotkey)) return false;
-      if (mode === "push") return true;
-      return isRightSideMod(hotkey) || isModifierOnlyHotkey(hotkey);
-    };
-
-    linuxKeyManager.on("key-down", (_key) => {
-      if (!isLiveWindow(windowManager.mainWindow)) return;
-
-      const activationMode = windowManager.getActivationMode();
-      if (activationMode === "push") {
-        windowManager.startWindowsPushToTalk();
-      } else if (activationMode === "tap") {
-        windowManager.sendToggleDictation();
-      }
-    });
-
-    linuxKeyManager.on("key-up", () => {
-      if (!isLiveWindow(windowManager.mainWindow)) return;
-
-      const activationMode = windowManager.getActivationMode();
-      if (activationMode === "push") {
-        windowManager.handleWindowsPushKeyUp();
-      }
-    });
-
-    linuxKeyManager.on("permission-denied", () => {
-      debugLogger.warn(
-        "[Push-to-Talk] Linux key listener has no permission to access input devices"
-      );
-      if (isLiveWindow(windowManager.mainWindow)) {
-        windowManager.mainWindow.webContents.send("linux-ptt-permission-denied");
-      }
-    });
-
-    linuxKeyManager.on("error", (error) => {
-      debugLogger.warn("[Push-to-Talk] Linux key listener error", { error: error.message });
-    });
-
-    linuxKeyManager.on("unavailable", () => {
-      debugLogger.debug(
-        "[Push-to-Talk] Linux key listener not available - falling back to toggle mode"
-      );
-    });
-
-    linuxKeyManager.on("ready", () => {
-      debugLogger.debug("[Push-to-Talk] LinuxKeyManager is ready and listening");
-    });
-
-    const startLinuxKeyListener = () => {
-      if (!isLiveWindow(windowManager.mainWindow)) return;
-      const activationMode = windowManager.getActivationMode();
-      const currentHotkey = hotkeyManager.getCurrentHotkey();
-
-      if (needsNativeListener(currentHotkey, activationMode)) {
-        linuxKeyManager.start(currentHotkey);
-      }
-    };
-
-    const STARTUP_DELAY_MS = 3000;
-    setTimeout(startLinuxKeyListener, STARTUP_DELAY_MS);
-
-    ipcMain.on("activation-mode-changed", (_event, mode) => {
-      windowManager.resetWindowsPushState();
-      const currentHotkey = hotkeyManager.getCurrentHotkey();
-      if (needsNativeListener(currentHotkey, mode)) {
-        linuxKeyManager.start(currentHotkey);
-      } else {
-        linuxKeyManager.stop();
-      }
-    });
-
-    ipcMain.on("hotkey-changed", (_event, hotkey) => {
-      if (!isLiveWindow(windowManager.mainWindow)) return;
-      windowManager.resetWindowsPushState();
-      const activationMode = windowManager.getActivationMode();
-      linuxKeyManager.stop();
-      if (needsNativeListener(hotkey, activationMode)) {
-        linuxKeyManager.start(hotkey);
-      }
+      windowManager.reconcileNativeKeyListeners();
     });
   }
 }

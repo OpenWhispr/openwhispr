@@ -427,8 +427,12 @@ class WhisperServerManager extends EventEmitter {
     const serverBinaryDir = path.dirname(serverBinary);
     spawnEnv.PATH = serverBinaryDir + pathSep + (process.env.PATH || "");
 
-    if (usingCuda && process.env.TRANSCRIPTION_GPU_INDEX) {
-      spawnEnv.CUDA_VISIBLE_DEVICES = process.env.TRANSCRIPTION_GPU_INDEX;
+    // Select GPU by UUID + PCI_BUS_ID order so the device is unambiguous. See #531.
+    if (usingCuda) {
+      spawnEnv.CUDA_DEVICE_ORDER = "PCI_BUS_ID";
+      if (process.env.TRANSCRIPTION_GPU_UUID) {
+        spawnEnv.CUDA_VISIBLE_DEVICES = process.env.TRANSCRIPTION_GPU_UUID;
+      }
     }
 
     const args = buildWhisperServerArgs({

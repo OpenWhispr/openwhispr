@@ -563,7 +563,10 @@ class IPCHandlers {
     if (gpus.length > 0) {
       debugLogger.info(
         "NVIDIA GPUs detected",
-        { count: gpus.length, devices: gpus.map((g) => `${g.name} (${g.vramMb}MB)`) },
+        {
+          count: gpus.length,
+          devices: gpus.map((g) => `[${g.index}] ${g.name} (${g.vramMb}MB) ${g.uuid}`),
+        },
         "gpu"
       );
     } else {
@@ -1578,23 +1581,11 @@ class IPCHandlers {
         }
       }
 
-      // Smart spacing (#856): macOS reads the preceding char via Accessibility
-      // and prepends a space when needed; Windows/Linux (and macOS when the
-      // read fails) append a trailing space instead — the next paste then
-      // sees a leading space and self-corrects.
-      let mode = "append";
-      let precedingChar;
-      if (process.platform === "darwin" && activated && this.textEditMonitor) {
-        const ax = await this.textEditMonitor.getPrecedingChar(targetPid);
-        if (ax.state === "ok") {
-          mode = "prepend";
-          precedingChar = ax.char;
-        } else if (ax.state === "start") {
-          mode = "prepend";
-          precedingChar = "";
-        }
-      }
-      const textToPaste = applySmartSpacing({ text, mode, precedingChar });
+      // Smart spacing (#856): append a trailing space so the next paste's leading
+      // space self-corrects the gap. macOS prepend-mode (getPrecedingChar) is
+      // intentionally skipped here — its Accessibility read costs hundreds of ms,
+      // too slow for the paste hot path.
+      const textToPaste = applySmartSpacing({ text, mode: "append" });
 
       const result = await this.clipboardManager.pasteText(textToPaste, {
         ...options,
@@ -1801,28 +1792,27 @@ class IPCHandlers {
       return listNvidiaGpus();
     });
 
-    ipcMain.handle("set-gpu-device-index", async (_event, purpose, index) => {
+    ipcMain.handle("set-gpu-device-index", async (_event, purpose, uuid) => {
       if (purpose !== "transcription" && purpose !== "intelligence") {
         return { success: false };
       }
-      const parsed = parseInt(index, 10);
-      if (isNaN(parsed) || parsed < 0) {
+      // Empty string clears the pinned GPU; otherwise require an nvidia-smi UUID. See #531.
+      if (typeof uuid !== "string" || (uuid !== "" && !uuid.startsWith("GPU-"))) {
         return { success: false };
       }
-      const idx = String(parsed);
-      const key = purpose === "intelligence" ? "INTELLIGENCE_GPU_INDEX" : "TRANSCRIPTION_GPU_INDEX";
-      const oldIdx = process.env[key] || "0";
-      process.env[key] = idx;
+      const key = purpose === "intelligence" ? "INTELLIGENCE_GPU_UUID" : "TRANSCRIPTION_GPU_UUID";
+      const oldUuid = process.env[key] || "";
+      process.env[key] = uuid;
       this.environmentManager.saveAllKeysToEnvFile().catch((err) => {
-        debugLogger.error("Failed to persist GPU index", { error: err.message }, "gpu");
+        debugLogger.error("Failed to persist GPU UUID", { error: err.message }, "gpu");
       });
 
-      if (oldIdx !== idx) {
+      if (oldUuid !== uuid) {
         try {
           if (purpose === "transcription" && this.whisperManager?.serverManager?.process) {
             debugLogger.info(
               "Restarting whisper-server for GPU change",
-              { from: oldIdx, to: idx },
+              { from: oldUuid, to: uuid },
               "gpu"
             );
             const modelName = this.whisperManager.currentServerModel;
@@ -1838,7 +1828,7 @@ class IPCHandlers {
             if (modelManager.serverManager?.process) {
               debugLogger.info(
                 "Restarting llama-server for GPU change",
-                { from: oldIdx, to: idx },
+                { from: oldUuid, to: uuid },
                 "gpu"
               );
               const modelPath = modelManager.serverManager.modelPath;
@@ -1862,10 +1852,10 @@ class IPCHandlers {
 
     ipcMain.handle("get-gpu-device-index", async (_event, purpose) => {
       if (purpose !== "transcription" && purpose !== "intelligence") {
-        return "0";
+        return "";
       }
-      const key = purpose === "intelligence" ? "INTELLIGENCE_GPU_INDEX" : "TRANSCRIPTION_GPU_INDEX";
-      return process.env[key] || "0";
+      const key = purpose === "intelligence" ? "INTELLIGENCE_GPU_UUID" : "TRANSCRIPTION_GPU_UUID";
+      return process.env[key] || "";
     });
 
     ipcMain.handle("get-cuda-whisper-status", async () => {
@@ -2309,40 +2299,9 @@ class IPCHandlers {
           }
         }
 
-        if (process.platform === "win32" && this.windowsKeyManager) {
-          const activationMode = this.windowManager.getActivationMode();
-          debugLogger.log(
-            `[IPC] Exiting hotkey capture mode, activationMode="${activationMode}", hotkey="${effectiveHotkey}"`
-          );
-          const needsListener =
-            effectiveHotkey &&
-            !isGlobeLikeHotkey(effectiveHotkey) &&
-            (activationMode === "push" ||
-              isModifierOnlyHotkey(effectiveHotkey) ||
-              isRightSideModifier(effectiveHotkey));
-          if (needsListener) {
-            debugLogger.log(`[IPC] Restarting Windows key listener for hotkey: ${effectiveHotkey}`);
-            this.windowsKeyManager.start(effectiveHotkey);
-          } else {
-            this.windowsKeyManager.stop();
-          }
-        }
-
-        if (process.platform === "linux" && this.linuxKeyManager) {
-          const activationMode = this.windowManager.getActivationMode();
-          const needsListener =
-            effectiveHotkey &&
-            !isGlobeLikeHotkey(effectiveHotkey) &&
-            (activationMode === "push" ||
-              isModifierOnlyHotkey(effectiveHotkey) ||
-              isRightSideModifier(effectiveHotkey));
-          if (needsListener) {
-            debugLogger.log(`[IPC] Restarting Linux key listener for hotkey: ${effectiveHotkey}`);
-            this.linuxKeyManager.start(effectiveHotkey);
-          } else {
-            this.linuxKeyManager.stop();
-          }
-        }
+        // Re-sync native key listeners (Windows/Linux) across all hotkey slots now
+        // that capture is done. Idempotent — reads the current slot hotkeys.
+        this.windowManager.reconcileNativeKeyListeners();
 
         // On GNOME, re-register the keybinding with the effective hotkey
         if (hotkeyManager.isUsingGnome() && hotkeyManager.gnomeManager && effectiveHotkey) {
@@ -7394,10 +7353,12 @@ class IPCHandlers {
       if (!hotkey) {
         hotkeyManager.unregisterSlot("agent");
         this.environmentManager.saveAgentKey?.("");
+        this.windowManager.reconcileNativeKeyListeners();
         return { success: true, message: "Agent hotkey cleared" };
       }
 
       const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback);
+      this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveAgentKey?.(hotkey);
         return { success: true, message: `Agent hotkey updated to: ${hotkey}` };
@@ -7419,10 +7380,12 @@ class IPCHandlers {
       if (!hotkey) {
         hotkeyManager.unregisterSlot("voiceAgent");
         this.environmentManager.saveVoiceAgentKey?.("");
+        this.windowManager.reconcileNativeKeyListeners();
         return { success: true, message: "Voice agent hotkey cleared" };
       }
 
       const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback);
+      this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveVoiceAgentKey?.(hotkey);
         return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };

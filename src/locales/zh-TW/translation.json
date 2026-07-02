@@ -512,6 +512,7 @@
     "apiKeyOptional": "API Key（選填）",
     "getKey": "取得金鑰 ->",
     "endpointUrl": "端點 URL",
+    "azureHint": "Azure AI Foundry：輸入你的資源端點（例如 https://your-resource.cognitiveservices.azure.com），並將「模型」設定為你的確切部署名稱。",
     "customProvider": "自訂",
     "fallback": {
       "whisperModelDescription": "模型",

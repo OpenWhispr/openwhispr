@@ -218,6 +218,7 @@ export interface ActionItem {
 
 export interface GpuDevice {
   index: number;
+  uuid: string;
   name: string;
   vramMb: number;
 }
@@ -753,7 +754,7 @@ declare global {
       listGpus?: () => Promise<GpuDevice[]>;
       setGpuDeviceIndex?: (
         purpose: "transcription" | "intelligence",
-        index: number
+        uuid: string
       ) => Promise<{ success: boolean }>;
       getGpuDeviceIndex?: (purpose: "transcription" | "intelligence") => Promise<string>;
       detectGpu: () => Promise<GpuInfo>;

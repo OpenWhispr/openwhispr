@@ -2,7 +2,11 @@ import ReasoningService from "../services/ReasoningService";
 import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
 import logger from "../utils/logger";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
-import { isSecureEndpoint } from "../utils/urlUtils";
+import {
+  isSecureEndpoint,
+  isAzureOpenAIEndpoint,
+  buildAzureTranscriptionUrl,
+} from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import {
@@ -11,6 +15,7 @@ import {
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
+import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import {
   getSettings,
@@ -23,10 +28,12 @@ import { detectAgentName } from "../config/agentDetection";
 import { resolveDictationRouteKind, resolveDictationAgentReachability } from "./dictationRouting";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
+import { evaluateFinishedRecording } from "./recordingValidation";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
+const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
 const REALTIME_MODELS = new Set(["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]);
 
 function dictationAgentReachable(settings) {
@@ -315,7 +322,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.sttConfig?.streamingProvider || defaultProvider;
   }
 
-  async getAudioConstraints() {
+  async getAudioConstraints(forceDefaultMic = false) {
     const { preferBuiltInMic: preferBuiltIn, selectedMicDeviceId: selectedDeviceId } =
       getSettings();
 
@@ -329,6 +336,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       autoGainControl: false,
       channelCount: 2,
     };
+
+    // Pinned device was unavailable (Chromium rotates IDs / device unplugged); fall back to the
+    // system default for this capture without discarding the saved preference. See #900.
+    if (forceDefaultMic) {
+      logger.debug("Using default microphone (pinned device unavailable)", {}, "audio");
+      return { audio: noProcessing };
+    }
 
     if (preferBuiltIn) {
       if (this.cachedMicDeviceId) {
@@ -390,13 +404,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async startRecording() {
+  // Briefly acquire and release the mic so the OS audio driver is warm before
+  // the first real recording, reducing cold-start empty captures. See #871.
+  async warmupMicDriver() {
+    if (this.micDriverWarmedUp) return;
+    // Skip while a recording is active so we don't double-acquire the mic. See #871.
+    if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") return;
+    try {
+      const constraints = await this.getAudioConstraints();
+      const tempStream = await navigator.mediaDevices.getUserMedia(constraints);
+      tempStream.getTracks().forEach((track) => track.stop());
+      this.micDriverWarmedUp = true;
+      logger.debug("Microphone driver pre-warmed", {}, "audio");
+    } catch (e) {
+      logger.debug("Mic driver warmup failed (non-critical)", { error: e.message }, "audio");
+    }
+  }
+
+  async startRecording(forceDefaultMic = false) {
     try {
       if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") {
         return false;
       }
 
-      const constraints = await this.getAudioConstraints();
+      const constraints = await this.getAudioConstraints(forceDefaultMic);
       const micStream = await reacquireIfDead(
         await navigator.mediaDevices.getUserMedia(constraints),
         () => {
@@ -451,11 +482,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       this.mediaRecorder = new MediaRecorder(micStream);
       this.audioChunks = [];
+      this._receivedAudioData = false;
       this.recordingStartTime = Date.now();
       this.recordingMimeType = this.mediaRecorder.mimeType || "audio/webm";
 
       this.mediaRecorder.ondataavailable = (event) => {
-        this.audioChunks.push(event.data);
+        if (event.data && event.data.size > 0) {
+          this._receivedAudioData = true;
+          this.audioChunks.push(event.data);
+        }
       };
 
       this.mediaRecorder.onstop = async () => {
@@ -490,12 +525,36 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           ? (Date.now() - this.recordingStartTime) / 1000
           : null;
         this.recordingStartTime = null;
+
+        // Drop header-only / no-frame recordings before they crash FFmpeg. See #871.
+        const recordingCheck = evaluateFinishedRecording({
+          blobSize: audioBlob.size,
+          receivedAudioData: this._receivedAudioData,
+        });
+        if (!recordingCheck.usable) {
+          logger.info(
+            "Dropping degenerate recording before transcription",
+            {
+              blobSize: audioBlob.size,
+              reason: recordingCheck.reason,
+              receivedAudioData: this._receivedAudioData,
+            },
+            "audio"
+          );
+          this.isProcessing = false;
+          this._localSpeechGateState = null;
+          this.onStateChange?.({ isRecording: false, isProcessing: false });
+          this.onTranscriptionComplete?.({ success: true, text: "" });
+          micStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
         await this.processAudio(audioBlob, { durationSeconds });
 
         micStream.getTracks().forEach((track) => track.stop());
       };
 
-      this.mediaRecorder.start();
+      this.mediaRecorder.start(RECORDING_TIMESLICE_MS);
       this.isRecording = true;
       this.onStateChange?.({ isRecording: true, isProcessing: false });
 
@@ -532,6 +591,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       return true;
     } catch (error) {
+      if (isStaleDeviceError(error) && !forceDefaultMic) {
+        // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
+        logger.warn("Pinned microphone unavailable, retrying on default mic", {}, "audio");
+        this.cachedMicDeviceId = null;
+        return this.startRecording(true);
+      }
+
       let errorTitle = "Recording Error";
       let errorDescription = `Failed to access microphone: ${error.message}`;
 
@@ -1606,7 +1672,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         formData.append("language", language);
       }
 
-      const endpoint = this.getTranscriptionEndpoint();
+      const endpoint = this.getTranscriptionEndpoint(model);
 
       // Groq rejects prompts > 896 chars (incl. when reached via "custom" provider).
       // 890 leaves margin for UTF-16 vs codepoint counting drift.
@@ -1762,7 +1828,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Build headers - only include Authorization if we have an API key
       const headers = {};
       if (apiKey) {
-        headers.Authorization = `Bearer ${apiKey}`;
+        // Azure OpenAI authenticates API keys via the `api-key` header, not a
+        // Bearer token (which it reserves for Entra ID access tokens).
+        if (isAzureOpenAIEndpoint(endpoint)) {
+          headers["api-key"] = apiKey;
+        } else {
+          headers.Authorization = `Bearer ${apiKey}`;
+        }
       }
 
       logger.debug(
@@ -2005,12 +2077,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  getTranscriptionEndpoint() {
+  getTranscriptionEndpoint(deploymentName = "") {
     const s = getSettings();
     const currentProvider = s.cloudTranscriptionProvider || "openai";
     const currentBaseUrl = s.cloudTranscriptionBaseUrl || "";
     const transcriptionMode = s.transcriptionMode || "";
     const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
+    const deployment = (deploymentName || "").trim();
 
     const isSelfHosted = transcriptionMode === "self-hosted" && remoteUrl.length > 0;
     const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
@@ -2018,6 +2091,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (
       this.cachedTranscriptionEndpoint &&
       (this.cachedEndpointProvider !== currentProvider ||
+        this.cachedEndpointDeployment !== deployment ||
         this.cachedEndpointBaseUrl !== currentBaseUrl ||
         this.cachedEndpointMode !== transcriptionMode ||
         this.cachedEndpointRemoteUrl !== remoteUrl)
@@ -2083,6 +2157,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.cachedEndpointBaseUrl = currentBaseUrl;
         this.cachedEndpointMode = transcriptionMode;
         this.cachedEndpointRemoteUrl = remoteUrl;
+        this.cachedEndpointDeployment = deployment;
 
         logger.debug(
           "STT endpoint resolved",
@@ -2118,7 +2193,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       let endpoint;
-      if (/\/audio\/(transcriptions|translations)$/i.test(normalizedBase)) {
+      if (isCustomEndpoint && isAzureOpenAIEndpoint(normalizedBase)) {
+        // Azure OpenAI routes by deployment in the URL path and requires an
+        // api-version query string — the plain {base}/audio/transcriptions
+        // shape returns DeploymentNotFound. Build the deployment-style URL.
+        // The api-version defaults to a transcribe-capable preview; a user can
+        // override it by appending ?api-version=... to their endpoint URL.
+        const azureUrl = buildAzureTranscriptionUrl(normalizedBase, deployment);
+        if (azureUrl) {
+          endpoint = azureUrl;
+          logger.debug(
+            "STT endpoint: built Azure deployment URL",
+            { base: normalizedBase, deployment, endpoint },
+            "transcription"
+          );
+        } else {
+          endpoint = buildApiUrl(normalizedBase, "/audio/transcriptions");
+          logger.warn(
+            "STT endpoint: Azure host detected but no deployment name; falling back to default path",
+            { base: normalizedBase, endpoint },
+            "transcription"
+          );
+        }
+      } else if (/\/audio\/(transcriptions|translations)$/i.test(normalizedBase)) {
         endpoint = normalizedBase;
         logger.debug("STT endpoint: using full path from config", { endpoint }, "transcription");
       } else {
@@ -2437,7 +2534,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.persistentAudioContext;
   }
 
-  async startStreamingRecording() {
+  async startStreamingRecording(forceDefaultMic = false) {
     try {
       if (this.streamingStartInProgress) {
         return false;
@@ -2452,7 +2549,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.stopRequestedDuringStreamingStart = false;
 
       const t0 = performance.now();
-      const constraints = await this.getAudioConstraints();
+      const constraints = await this.getAudioConstraints(forceDefaultMic);
       const tConstraints = performance.now();
 
       // 1. Get mic stream (can take 10-15s on cold macOS mic driver)
@@ -2658,8 +2755,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       return true;
     } catch (error) {
+      const stopRequested = this.stopRequestedDuringStreamingStart;
       this.streamingStartInProgress = false;
       this.stopRequestedDuringStreamingStart = false;
+
+      if (isStaleDeviceError(error) && !forceDefaultMic && !stopRequested) {
+        // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
+        logger.warn("Pinned microphone unavailable, retrying streaming on default mic", {}, "streaming");
+        this.cachedMicDeviceId = null;
+        await this.cleanupStreaming();
+        this.isRecording = false;
+        this.recordingStartTime = null;
+        this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
+        return this.startStreamingRecording(true);
+      }
+
       logger.error("Failed to start streaming recording", { error: error.message }, "streaming");
 
       let errorTitle = "Streaming Error";
