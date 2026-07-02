@@ -62,6 +62,20 @@ class ZoomManager {
     return this._level;
   }
 
+  // Electron/Chromium zoom factor for the current level (scale = 1.2 ^ level).
+  // Fixed-size windows must multiply their dimensions by this so zoomed content
+  // (which the renderer still measures in unzoomed CSS px) fits.
+  getFactor() {
+    this._load();
+    return Math.pow(1.2, this._level);
+  }
+
+  // Invoked after the shared level changes so the owner can resize any
+  // fixed-size windows that are currently open to match the new factor.
+  setOnChange(fn) {
+    this._onChange = fn;
+  }
+
   /**
    * Register a window's webContents so it always reflects the shared zoom
    * level. Idempotent: registering the same webContents twice is a no-op.
@@ -118,7 +132,14 @@ class ZoomManager {
       }
     }
 
-    if (changed) this._persist();
+    if (changed) {
+      this._persist();
+      try {
+        this._onChange?.();
+      } catch {
+        // Resize hook is best-effort; never let it break zoom propagation.
+      }
+    }
   }
 
   /**
