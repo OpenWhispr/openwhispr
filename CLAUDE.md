@@ -69,6 +69,11 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Notifies renderer via IPC when hotkey registration fails
   - Integrates with GnomeShortcutManager for GNOME Wayland support
   - Integrates with HyprlandShortcutManager for Hyprland Wayland support
+- **dbusToggleService.js**: Compositor-agnostic owner of the `com.openwhispr.App`
+  session-bus service and its four no-arg methods (`Toggle`, `ToggleAgent`,
+  `ToggleMeeting`, `ToggleVoiceAgent`). Used by `gnomeShortcut.js` (composition)
+  and the D-Bus endpoint path in `hotkeyManager.js` (see section 15a). Single
+  source of truth for the D-Bus interface — no gsettings/compositor logic.
 - **gnomeShortcut.js**: GNOME Wayland global shortcut integration
   - Uses D-Bus service to receive hotkey toggle commands
   - Registers shortcuts via gsettings (visible in GNOME Settings → Keyboard → Shortcuts)
@@ -526,6 +531,67 @@ On Hyprland (wlroots Wayland compositor), Electron's `globalShortcut` API and th
 
 - Push-to-talk not supported (Hyprland `bind` fires a single exec, not key-down/key-up)
 - Requires `hyprctl` on PATH (ships with Hyprland)
+
+### 15a. D-Bus endpoint (`com.openwhispr.App`) — universal on Linux
+
+The `com.openwhispr.App` D-Bus service is **desktop-agnostic** and started **once on
+every Linux session** (X11 + all Wayland compositors), so `dbus-send` binds work
+everywhere. It's owned by a single shared `DBusToggleService`
+(`src/helpers/dbusToggleService.js`) held on `hotkeyManager.dbusToggleService`.
+
+The bus is *just the endpoint* — it does not decide the shortcut mechanism. Each
+desktop layers its own **keybinding auto-registration** on top, all routing through
+this same service:
+
+| Desktop | Auto-registration | Uses the bus? |
+|---|---|---|
+| GNOME | gsettings custom-keybinding whose command is `dbus-send …Toggle*` | yes |
+| Hyprland | `hyprctl keyword bind … dbus-send` | yes |
+| wlroots (Sway/river/dwl) | none — user binds keys manually to `dbus-send` | yes (it's the only mechanism) |
+| KDE | KGlobalAccel (native `org.kde.kglobalaccel`) | no (bus also available for manual binds) |
+| X11 / other | Electron `globalShortcut` | no (bus also available for manual binds) |
+
+**Behavior**:
+
+1. `hotkeyManager.initializeHotkey()` calls `ensureDbusEndpoint()` first on any Linux
+   session — brings up the single shared service (wires the dictation callback).
+2. `GnomeShortcutManager` / `HyprlandShortcutManager` are now **keybinding registrars
+   only** (gsettings / hyprctl); they no longer own a bus. They require the shared
+   endpoint to be up (their commands `dbus-send` to it) — if it failed to start, they
+   fall back to `globalShortcut`.
+3. `main.js` calls `hotkeyManager.setDbusToggleCallbacks()`, which wires the
+   agent/voiceAgent/meeting + StartDictation/StopDictation callbacks whenever the
+   endpoint exists (any DE). `registerSlot()` also wires secondary-slot callbacks to
+   the shared endpoint, additively, before the DE-specific registration.
+4. `useDbus` means **"the D-Bus endpoint is the *primary* mechanism"** (wlroots only,
+   via `shouldAutoUseDbus()`). It is **not** set merely because the endpoint is up —
+   otherwise `isUsingNativeShortcut()` would force tap-to-talk on X11 and break
+   push-to-talk there. `isUsingNativeShortcut()` = `useGnome||useHyprland||useKDE||useDbus`.
+
+**D-Bus methods** (service `com.openwhispr.App`, path `/com/openwhispr/App`,
+interface `com.openwhispr.App`):
+
+- Momentary (tap-to-toggle): `Toggle` (dictation), `ToggleAgent`,
+  `ToggleMeeting`, `ToggleVoiceAgent`.
+- Push-to-talk pair: `StartDictation` (key press) / `StopDictation` (key
+  release). Wired in `main.js` to `windowManager.startWindowsPushToTalk()` /
+  `handleWindowsPushKeyUp()` (the same primitives the native key listener uses).
+
+**Example Sway bindings**:
+
+```
+# Tap-to-toggle dictation
+bindsym Super+r exec dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.Toggle
+
+# Push-to-talk: hold to talk, release to stop (needs both press and --release binds)
+bindsym Super+grave           exec dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.StartDictation
+bindsym --release Super+grave exec dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.StopDictation
+```
+
+Push-to-talk needs a compositor that can bind key release (Sway `bindsym
+--release`, Hyprland `bindr`); GNOME/KDE native shortcuts are press-only.
+
+If the bus name can't be claimed, it logs and falls through to normal detection.
 
 ### 16. Meeting Detection (Event-Driven)
 

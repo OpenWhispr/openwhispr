@@ -889,6 +889,31 @@ async function startApp() {
     meetingDetectionEngine?.startManualMeeting();
   };
 
+  // Push-to-talk over D-Bus: StartDictation on key press, StopDictation on key
+  // release (bind both in the compositor, e.g. Sway `bindsym` + `bindsym
+  // --release`). Reuses the native-listener PTT primitives, which show the panel,
+  // start after a short hold, and stop/hide on release.
+  const startDictationCallback = () => {
+    if (hotkeyManager.isInListeningMode()) return;
+    if (textEditMonitor) textEditMonitor.captureTargetPid();
+    windowManager.startWindowsPushToTalk();
+  };
+  const stopDictationCallback = () => {
+    windowManager.handleWindowsPushKeyUp();
+  };
+
+  // When the D-Bus endpoint is active, ensure every method (ToggleAgent/
+  // ToggleVoiceAgent/ToggleMeeting + the StartDictation/StopDictation PTT pair)
+  // is live even if the user configured no in-app hotkey for them. No-op when the
+  // D-Bus endpoint isn't in use.
+  hotkeyManager.setDbusToggleCallbacks({
+    agent: agentHotkeyCallback,
+    voiceAgent: voiceAgentHotkeyCallback,
+    meeting: meetingHotkeyCallback,
+    startDictation: startDictationCallback,
+    stopDictation: stopDictationCallback,
+  });
+
   const savedMeetingKey = environmentManager.getMeetingKey?.() || "";
   if (savedMeetingKey) {
     const result = await hotkeyManager.registerSlot(
