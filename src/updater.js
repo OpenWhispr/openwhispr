@@ -9,6 +9,7 @@ class UpdateManager {
     this.lastUpdateInfo = null;
     this.isInstalling = false;
     this.isDownloading = false;
+    this.isQuittingForUpdate = false;
     this.eventListeners = [];
     this.updateCheckInterval = null;
     this.windowManager = null;
@@ -136,6 +137,18 @@ class UpdateManager {
         }
         this.notifyRenderers("update-downloaded", info);
       },
+      "before-quit-for-update": () => {
+        this.isQuittingForUpdate = true;
+        if (this.windowManager) {
+          this.windowManager.isQuitting = true;
+          if (this.windowManager.hotkeyManager) {
+            this.windowManager.hotkeyManager.unregisterAll();
+          } else {
+            const { globalShortcut } = require("electron");
+            globalShortcut.unregisterAll();
+          }
+        }
+      },
     };
 
     Object.entries(handlers).forEach(([event, handler]) => {
@@ -253,15 +266,6 @@ class UpdateManager {
 
       this.isInstalling = true;
       console.log("🔄 Installing update and restarting...");
-
-      const { app, BrowserWindow } = require("electron");
-
-      // Set windowManager.isQuitting before removing close listeners
-      app.emit("before-quit");
-      app.removeAllListeners("window-all-closed");
-      BrowserWindow.getAllWindows().forEach((win) => {
-        win.removeAllListeners("close");
-      });
 
       const isSilent = process.platform === "win32";
       autoUpdater.quitAndInstall(isSilent, true);

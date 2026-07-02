@@ -1554,6 +1554,10 @@ if (gotSingleInstanceLock) {
   app.on("before-quit", (event) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
+    if (updateManager && updateManager.isQuittingForUpdate) {
+      performSyncTeardown();
+      return;
+    }
     event.preventDefault();
     performSyncTeardown();
     sidecarRegistry.shutdownAll().finally(() => app.exit(0));
