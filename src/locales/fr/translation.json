@@ -1778,6 +1778,12 @@
       },
       "transcriptionPreview": "Aperçu en direct",
       "transcriptionPreviewDescription": "Afficher la transcription dans une fenêtre flottante avant correction",
+      "aec": {
+        "toggle": {
+          "title": "Annulation d'écho pour les réunions",
+          "description": "Annule l'audio de la réunion qui s'infiltre dans votre microphone. Laissez cette option désactivée lorsque vous utilisez un casque ou des écouteurs — il n'y a aucun écho à annuler et cela peut supprimer entièrement votre voix."
+        }
+      },
       "vad": {
         "title": "Détection d'activité vocale",
         "description": "Configurez la manière dont Silero VAD détecte et segmente la parole pour la transcription locale Whisper",

@@ -1725,6 +1725,12 @@
       },
       "transcriptionPreview": "实时转录预览",
       "transcriptionPreviewDescription": "在浮动窗口中显示转录结果，然后再进行文本整理",
+      "aec": {
+        "toggle": {
+          "title": "会议回声消除",
+          "description": "消除泄漏到麦克风中的会议音频。使用耳机或耳塞时请关闭此功能——没有需要消除的回声，而且它可能会完全抑制您的声音。"
+        }
+      },
       "vad": {
         "title": "语音活动检测",
         "description": "配置 Silero VAD 如何为本地 Whisper 转录检测并切分语音",
