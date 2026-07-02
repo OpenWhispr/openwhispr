@@ -1932,7 +1932,8 @@
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)",
-        "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)"
+        "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
+        "nemotron_speech_streaming_en_0_6b": "English streaming ASR from NVIDIA Nemotron"
       },
       "diarization": {
         "segmentation": "Speech boundary detection for speaker diarization",

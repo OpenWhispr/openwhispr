@@ -11,12 +11,15 @@ const {
 } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const sidecarPidFile = require("./sidecarPidFile");
+const modelRegistry = require("../models/modelRegistryData.json");
+const { parseOfflineMessage, parseOnlineMessages } = require("./parakeetWsResult");
 
 const PORT_RANGE_START = 6006;
 const PORT_RANGE_END = 6029;
 const STARTUP_TIMEOUT_MS = 60000;
 const HEALTH_CHECK_INTERVAL_MS = 5000;
 const TRANSCRIPTION_TIMEOUT_MS = 300000;
+const ONLINE_CHUNK_BYTES = 8000 * 4;
 
 class ParakeetWsServer {
   constructor() {
@@ -25,27 +28,31 @@ class ParakeetWsServer {
     this.ready = false;
     this.modelName = null;
     this.modelDir = null;
+    this.modelRuntime = "offline";
     this.startupPromise = null;
     this.healthCheckInterval = null;
-    this.cachedWsBinaryPath = null;
   }
 
-  getWsBinaryPath() {
-    if (this.cachedWsBinaryPath) return this.cachedWsBinaryPath;
+  getModelRuntime(modelName) {
+    return modelRegistry.parakeetModels?.[modelName]?.runtime === "online" ? "online" : "offline";
+  }
+
+  getWsBinaryPath(modelNameOrRuntime = "offline") {
+    const runtime =
+      modelNameOrRuntime === "online" || modelNameOrRuntime === "offline"
+        ? modelNameOrRuntime
+        : this.getModelRuntime(modelNameOrRuntime);
 
     const platformArch = `${process.platform}-${process.arch}`;
+    const prefix = runtime === "online" ? "sherpa-onnx-online-ws" : "sherpa-onnx-ws";
     const binaryName =
-      process.platform === "win32"
-        ? `sherpa-onnx-ws-${platformArch}.exe`
-        : `sherpa-onnx-ws-${platformArch}`;
+      process.platform === "win32" ? `${prefix}-${platformArch}.exe` : `${prefix}-${platformArch}`;
 
-    const resolved = resolveBinaryPath(binaryName);
-    if (resolved) this.cachedWsBinaryPath = resolved;
-    return resolved;
+    return resolveBinaryPath(binaryName);
   }
 
-  isAvailable() {
-    return this.getWsBinaryPath() !== null;
+  isAvailable(modelNameOrRuntime = "offline") {
+    return this.getWsBinaryPath(modelNameOrRuntime) !== null;
   }
 
   async start(modelName, modelDir) {
@@ -62,24 +69,29 @@ class ParakeetWsServer {
   }
 
   async _doStart(modelName, modelDir) {
-    const wsBinary = this.getWsBinaryPath();
-    if (!wsBinary) throw new Error("sherpa-onnx WS server binary not found");
+    const runtime = this.getModelRuntime(modelName);
+    const wsBinary = this.getWsBinaryPath(runtime);
+    if (!wsBinary) throw new Error(`sherpa-onnx ${runtime} WS server binary not found`);
     if (!fs.existsSync(modelDir)) throw new Error(`Model directory not found: ${modelDir}`);
 
     this.port = await findAvailablePort(PORT_RANGE_START, PORT_RANGE_END);
     this.modelName = modelName;
     this.modelDir = modelDir;
+    this.modelRuntime = runtime;
 
+    const threads = Math.max(1, Math.min(4, Math.floor(os.cpus().length * 0.75)));
     const args = [
       `--tokens=${path.join(modelDir, "tokens.txt")}`,
       `--encoder=${path.join(modelDir, "encoder.int8.onnx")}`,
       `--decoder=${path.join(modelDir, "decoder.int8.onnx")}`,
       `--joiner=${path.join(modelDir, "joiner.int8.onnx")}`,
       `--port=${this.port}`,
-      `--num-threads=${Math.max(1, Math.min(4, Math.floor(os.cpus().length * 0.75)))}`,
+      ...(runtime === "online"
+        ? [`--num-work-threads=${threads}`, "--warm-up=0"]
+        : [`--num-threads=${threads}`]),
     ];
 
-    debugLogger.debug("Starting parakeet WS server", { port: this.port, modelName, args });
+    debugLogger.debug("Starting parakeet WS server", { port: this.port, modelName, runtime, args });
 
     this.process = spawn(wsBinary, args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -130,6 +142,7 @@ class ParakeetWsServer {
     debugLogger.info("parakeet-ws server started successfully", {
       port: this.port,
       model: modelName,
+      runtime,
     });
 
     await this._warmUp();
@@ -210,6 +223,14 @@ class ParakeetWsServer {
       throw new Error("parakeet-ws server is not running");
     }
 
+    if (this.modelRuntime === "online") {
+      return this._transcribeOnline(samplesBuffer, sampleRate);
+    }
+
+    return this._transcribeOffline(samplesBuffer, sampleRate);
+  }
+
+  _transcribeOffline(samplesBuffer, sampleRate) {
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
       let result = "";
@@ -259,12 +280,73 @@ class ParakeetWsServer {
           resultPreview: result.slice(0, 200),
         });
 
+        resolve({ text: parseOfflineMessage(result), elapsed });
+      });
+
+      ws.on("error", (error) => {
+        clearTimeout(timeout);
+        reject(new Error(`parakeet-ws transcription failed: ${error.message}`));
+      });
+    });
+  }
+
+  _transcribeOnline(samplesBuffer, sampleRate) {
+    return new Promise((resolve, reject) => {
+      const startTime = Date.now();
+      const messages = [];
+
+      const timeout = setTimeout(() => {
         try {
-          const parsed = JSON.parse(result);
-          resolve({ text: (parsed.text || "").trim(), elapsed });
-        } catch {
-          resolve({ text: result.trim(), elapsed });
+          ws.close();
+        } catch {}
+        reject(new Error("parakeet-ws transcription timed out"));
+      }, TRANSCRIPTION_TIMEOUT_MS);
+
+      const ws = new WebSocket(`ws://127.0.0.1:${this.port}`);
+
+      ws.on("open", () => {
+        debugLogger.debug("parakeet-ws sending streaming audio", {
+          samplesBytes: samplesBuffer.length,
+          sampleRate,
+        });
+
+        for (let offset = 0; offset < samplesBuffer.length; offset += ONLINE_CHUNK_BYTES) {
+          const chunk = samplesBuffer.subarray(
+            offset,
+            Math.min(offset + ONLINE_CHUNK_BYTES, samplesBuffer.length)
+          );
+          ws.send(chunk, (err) => {
+            if (err) {
+              debugLogger.error("parakeet-ws streaming send error", { error: err.message });
+            }
+          });
         }
+        ws.send("Done");
+      });
+
+      ws.on("message", (data) => {
+        const message = data.toString();
+        if (message === "Done!") {
+          ws.close();
+          return;
+        }
+        messages.push(message);
+      });
+
+      ws.on("close", (code) => {
+        clearTimeout(timeout);
+        const elapsed = Date.now() - startTime;
+
+        const result = parseOnlineMessages(messages);
+
+        debugLogger.debug("parakeet-ws streaming transcription completed", {
+          elapsed,
+          code,
+          resultLength: result.length,
+          resultPreview: result.slice(0, 200),
+        });
+
+        resolve({ text: result.trim(), elapsed });
       });
 
       ws.on("error", (error) => {
@@ -295,11 +377,12 @@ class ParakeetWsServer {
     this.port = null;
     this.modelName = null;
     this.modelDir = null;
+    this.modelRuntime = "offline";
   }
 
   getStatus() {
     return {
-      available: this.isAvailable(),
+      available: this.isAvailable("offline") || this.isAvailable("online"),
       running: this.ready && this.process !== null,
       port: this.port,
       modelName: this.modelName,
