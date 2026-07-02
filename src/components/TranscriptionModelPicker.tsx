@@ -205,6 +205,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
   { id: "corti", name: "Corti" },
+  { id: "azure", name: "Azure OpenAI" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -217,9 +218,14 @@ interface ProviderCredentialField {
     | "cortiClientId"
     | "cortiClientSecret"
     | "cortiEnvironment"
-    | "cortiTenant";
+    | "cortiTenant"
+    | "azureTranscriptionApiKey"
+    | "azureTranscriptionEndpoint"
+    | "azureTranscriptionDeployment"
+    | "azureTranscriptionApiVersion";
   input: "secret" | "text" | "select";
   labelKey?: string;
+  helpKey?: string;
   placeholder?: string;
   options?: Array<{ value: string; label: string }>;
 }
@@ -263,6 +269,31 @@ const PROVIDER_CREDENTIALS: Record<
         input: "text",
         labelKey: "transcription.corti.tenant",
         placeholder: "base",
+      },
+    ],
+  },
+  azure: {
+    consoleUrl: "https://oai.azure.com/",
+    fields: [
+      { key: "azureTranscriptionApiKey", input: "secret" },
+      {
+        key: "azureTranscriptionEndpoint",
+        input: "text",
+        labelKey: "transcription.azure.endpoint",
+        placeholder: "https://your-resource.openai.azure.com",
+      },
+      {
+        key: "azureTranscriptionDeployment",
+        input: "text",
+        labelKey: "transcription.azure.deployment",
+        helpKey: "transcription.azure.deploymentHelp",
+        placeholder: "gpt-4o-mini-transcribe",
+      },
+      {
+        key: "azureTranscriptionApiVersion",
+        input: "text",
+        labelKey: "transcription.azure.apiVersion",
+        placeholder: "2025-04-01-preview",
       },
     ],
   },
@@ -346,6 +377,18 @@ export default function TranscriptionModelPicker({
   const setCortiEnvironment = useSettingsStore((s) => s.setCortiEnvironment);
   const cortiTenant = useSettingsStore((s) => s.cortiTenant);
   const setCortiTenant = useSettingsStore((s) => s.setCortiTenant);
+  const azureTranscriptionApiKey = useSettingsStore((s) => s.azureTranscriptionApiKey);
+  const setAzureTranscriptionApiKey = useSettingsStore((s) => s.setAzureTranscriptionApiKey);
+  const azureTranscriptionEndpoint = useSettingsStore((s) => s.azureTranscriptionEndpoint);
+  const setAzureTranscriptionEndpoint = useSettingsStore((s) => s.setAzureTranscriptionEndpoint);
+  const azureTranscriptionDeployment = useSettingsStore((s) => s.azureTranscriptionDeployment);
+  const setAzureTranscriptionDeployment = useSettingsStore(
+    (s) => s.setAzureTranscriptionDeployment
+  );
+  const azureTranscriptionApiVersion = useSettingsStore((s) => s.azureTranscriptionApiVersion);
+  const setAzureTranscriptionApiVersion = useSettingsStore(
+    (s) => s.setAzureTranscriptionApiVersion
+  );
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
@@ -714,6 +757,10 @@ export default function TranscriptionModelPicker({
     cortiClientSecret,
     cortiEnvironment,
     cortiTenant,
+    azureTranscriptionApiKey,
+    azureTranscriptionEndpoint,
+    azureTranscriptionDeployment,
+    azureTranscriptionApiVersion,
   };
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
     openaiApiKey: setOpenaiApiKey,
@@ -724,6 +771,10 @@ export default function TranscriptionModelPicker({
     cortiClientSecret: setCortiClientSecret,
     cortiEnvironment: setCortiEnvironment,
     cortiTenant: setCortiTenant,
+    azureTranscriptionApiKey: setAzureTranscriptionApiKey,
+    azureTranscriptionEndpoint: setAzureTranscriptionEndpoint,
+    azureTranscriptionDeployment: setAzureTranscriptionDeployment,
+    azureTranscriptionApiVersion: setAzureTranscriptionApiVersion,
   };
 
   const cloudModelOptions = useMemo(() => {
@@ -1005,6 +1056,11 @@ export default function TranscriptionModelPicker({
                         placeholder={field.placeholder}
                         className="h-8 text-sm"
                       />
+                    )}
+                    {field.helpKey && (
+                      <p className="text-[11px] leading-snug text-muted-foreground">
+                        {t(field.helpKey)}
+                      </p>
                     )}
                   </div>
                 ))}

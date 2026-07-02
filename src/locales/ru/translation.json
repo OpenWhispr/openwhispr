@@ -524,6 +524,12 @@
       "clientSecret": "Секрет клиента",
       "environment": "Регион данных",
       "tenant": "Тенант"
+    },
+    "azure": {
+      "endpoint": "URL конечной точки",
+      "deployment": "Имя развёртывания",
+      "deploymentHelp": "Укажите точное имя развёртывания транскрипции Azure OpenAI (например, gpt-4o-transcribe, gpt-4o-mini-transcribe или whisper). Модели Foundry, отличные от OpenAI, не поддерживаются.",
+      "apiVersion": "Версия API"
     }
   },
   "hooks": {

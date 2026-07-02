@@ -1036,6 +1036,14 @@ declare global {
       saveAzureDeployment?: (value: string) => Promise<void>;
       getAzureApiVersion?: () => Promise<string | null>;
       saveAzureApiVersion?: (value: string) => Promise<void>;
+      getAzureTranscribeKey?: () => Promise<string | null>;
+      saveAzureTranscribeKey?: (key: string) => Promise<void>;
+      getAzureTranscribeEndpoint?: () => Promise<string | null>;
+      saveAzureTranscribeEndpoint?: (value: string) => Promise<void>;
+      getAzureTranscribeDeployment?: () => Promise<string | null>;
+      saveAzureTranscribeDeployment?: (value: string) => Promise<void>;
+      getAzureTranscribeApiVersion?: () => Promise<string | null>;
+      saveAzureTranscribeApiVersion?: (value: string) => Promise<void>;
       getVertexProject?: () => Promise<string | null>;
       saveVertexProject?: (value: string) => Promise<void>;
       getVertexLocation?: () => Promise<string | null>;

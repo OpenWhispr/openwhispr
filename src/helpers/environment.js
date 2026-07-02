@@ -23,6 +23,7 @@ const SECRET_KEYS = [
   "BEDROCK_SECRET_ACCESS_KEY",
   "BEDROCK_SESSION_TOKEN",
   "AZURE_OPENAI_API_KEY",
+  "AZURE_OPENAI_TRANSCRIBE_API_KEY",
   "VERTEX_API_KEY",
 ];
 
@@ -57,6 +58,9 @@ const PERSISTED_KEYS = [
   "AZURE_OPENAI_ENDPOINT",
   "AZURE_OPENAI_DEPLOYMENT",
   "AZURE_OPENAI_API_VERSION",
+  "AZURE_OPENAI_TRANSCRIBE_ENDPOINT",
+  "AZURE_OPENAI_TRANSCRIBE_DEPLOYMENT",
+  "AZURE_OPENAI_TRANSCRIBE_API_VERSION",
   "VERTEX_PROJECT",
   "VERTEX_LOCATION",
 ];
@@ -419,6 +423,33 @@ class EnvironmentManager {
   }
   saveAzureApiVersion(value) {
     return this._saveKey("AZURE_OPENAI_API_VERSION", value);
+  }
+
+  // Azure OpenAI — streaming transcription (BYOK). Distinct from the enterprise
+  // reasoning Azure keys above so the two deployments don't clobber each other.
+  getAzureTranscribeKey() {
+    return this._getKey("AZURE_OPENAI_TRANSCRIBE_API_KEY");
+  }
+  saveAzureTranscribeKey(key) {
+    return this._saveKey("AZURE_OPENAI_TRANSCRIBE_API_KEY", key);
+  }
+  getAzureTranscribeEndpoint() {
+    return this._getKey("AZURE_OPENAI_TRANSCRIBE_ENDPOINT");
+  }
+  saveAzureTranscribeEndpoint(value) {
+    return this._saveKey("AZURE_OPENAI_TRANSCRIBE_ENDPOINT", value);
+  }
+  getAzureTranscribeDeployment() {
+    return this._getKey("AZURE_OPENAI_TRANSCRIBE_DEPLOYMENT");
+  }
+  saveAzureTranscribeDeployment(value) {
+    return this._saveKey("AZURE_OPENAI_TRANSCRIBE_DEPLOYMENT", value);
+  }
+  getAzureTranscribeApiVersion() {
+    return this._getKey("AZURE_OPENAI_TRANSCRIBE_API_VERSION");
+  }
+  saveAzureTranscribeApiVersion(value) {
+    return this._saveKey("AZURE_OPENAI_TRANSCRIBE_API_VERSION", value);
   }
 
   // Enterprise providers — GCP Vertex AI

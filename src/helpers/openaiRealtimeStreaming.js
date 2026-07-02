@@ -23,6 +23,7 @@ class OpenAIRealtimeStreaming {
     this.isDisconnecting = false;
     this.audioBytesSent = 0;
     this.model = "gpt-4o-mini-transcribe";
+    this.sampleRate = SAMPLE_RATE;
     this.coldStartBuffer = [];
     this.coldStartBufferSize = 0;
     this.speechStartedAt = null;
@@ -33,7 +34,8 @@ class OpenAIRealtimeStreaming {
   }
 
   async connect(options = {}) {
-    const { apiKey, model, preconfigured } = options;
+    const { apiKey, model, preconfigured, endpoint, deployment, apiVersion, inputSampleRate } =
+      options;
     if (!apiKey) throw new Error("OpenAI API key is required");
 
     if (this.isConnected || this.isConnecting) {
@@ -44,6 +46,8 @@ class OpenAIRealtimeStreaming {
     this.isConnecting = true;
     this.model = model || "gpt-4o-mini-transcribe";
     this.preconfigured = !!preconfigured;
+    // Azure declares the deployment via URL; OpenAI declares the model in session config.
+    this.sampleRate = inputSampleRate || SAMPLE_RATE;
     this.completedSegments = [];
     this.currentPartial = "";
     this.audioBytesSent = 0;
@@ -51,8 +55,53 @@ class OpenAIRealtimeStreaming {
     this.coldStartBufferSize = 0;
     this.speechStartedAt = null;
 
-    const url = "wss://api.openai.com/v1/realtime?intent=transcription";
-    debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
+    // Azure AI Foundry / Azure OpenAI exposes the same realtime protocol as OpenAI,
+    // but at a resource-scoped URL with a `deployment` query param and `api-key` auth.
+    const isAzure = !!endpoint;
+    let url;
+    let headers;
+    if (isAzure) {
+      // Accept a full base URL (https://res.openai.azure.com/openai/v1 or
+      // https://res.cognitiveservices.azure.com/openai/v1), wss://…, or a bare
+      // host. Normalize whatever the user pasted to the realtime WS endpoint.
+      let base = endpoint.trim().replace(/\/+$/, "");
+      if (/^https?:\/\//i.test(base)) {
+        base = base.replace(/^http/i, "ws");
+      } else if (!/^wss?:\/\//i.test(base)) {
+        base = `wss://${base}`;
+      }
+      // Drop a trailing /realtime the user may have included.
+      base = base.replace(/\/realtime$/i, "");
+      const version = apiVersion || "2025-04-01-preview";
+      const params = new URLSearchParams({
+        "api-version": version,
+        intent: "transcription",
+      });
+      // The realtime path depends on how much of the base the user supplied:
+      //   …/openai/v1 → append /realtime            (v1 GA surface)
+      //   …/openai    → append /realtime + deployment (classic surface)
+      //   bare host   → append /openai/v1/realtime   (v1 GA surface)
+      let realtimePath;
+      if (/\/openai\/v1$/i.test(base)) {
+        realtimePath = "/realtime";
+      } else if (/\/openai$/i.test(base)) {
+        realtimePath = "/realtime";
+        params.set("deployment", deployment || this.model);
+      } else {
+        realtimePath = "/openai/v1/realtime";
+      }
+      url = `${base}${realtimePath}?${params.toString()}`;
+      headers = { "api-key": apiKey };
+    } else {
+      url = "wss://api.openai.com/v1/realtime?intent=transcription";
+      headers = { Authorization: `Bearer ${apiKey}` };
+    }
+    debugLogger.debug("OpenAI Realtime connecting", {
+      model: this.model,
+      isAzure,
+      sampleRate: this.sampleRate,
+      url,
+    });
 
     return new Promise((resolve, reject) => {
       this.pendingResolve = resolve;
@@ -64,11 +113,7 @@ class OpenAIRealtimeStreaming {
         reject(new Error("OpenAI Realtime connection timeout"));
       }, WEBSOCKET_TIMEOUT_MS);
 
-      this.ws = new WebSocket(url, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-      });
+      this.ws = new WebSocket(url, { headers });
 
       this.ws.on("open", () => {
         debugLogger.debug("OpenAI Realtime WebSocket opened");
@@ -143,7 +188,7 @@ class OpenAIRealtimeStreaming {
                   type: "transcription",
                   audio: {
                     input: {
-                      format: { type: "audio/pcm", rate: SAMPLE_RATE },
+                      format: { type: "audio/pcm", rate: this.sampleRate },
                       transcription: { model: this.model },
                       turn_detection: {
                         type: "server_vad",

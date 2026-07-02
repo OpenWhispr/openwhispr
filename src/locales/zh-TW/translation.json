@@ -524,6 +524,12 @@
       "clientSecret": "用戶端密鑰",
       "environment": "資料區域",
       "tenant": "租戶"
+    },
+    "azure": {
+      "endpoint": "端點 URL",
+      "deployment": "部署名稱",
+      "deploymentHelp": "請輸入你的 Azure OpenAI 轉錄部署的確切名稱（例如 gpt-4o-transcribe、gpt-4o-mini-transcribe 或 whisper）。不支援非 OpenAI 的 Foundry 模型。",
+      "apiVersion": "API 版本"
     }
   },
   "hooks": {

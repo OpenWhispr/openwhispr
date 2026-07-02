@@ -55,6 +55,25 @@ const ALLOWED_MEETING_PROVIDERS = new Set([
   "corti-realtime",
 ]);
 
+// Azure OpenAI / AI Foundry realtime transcription config. The values are saved
+// from the in-app settings UI via environmentManager, which writes the secret to
+// safeStorage and the rest to .env — both loaded into process.env. Reading from
+// process.env here works immediately after save and on subsequent launches.
+const getAzureTranscribeConfig = () => {
+  const endpoint = (process.env.AZURE_OPENAI_TRANSCRIBE_ENDPOINT || "").trim();
+  const deployment = (process.env.AZURE_OPENAI_TRANSCRIBE_DEPLOYMENT || "").trim();
+  const apiKey = (process.env.AZURE_OPENAI_TRANSCRIBE_API_KEY || "").trim();
+  const apiVersion =
+    (process.env.AZURE_OPENAI_TRANSCRIBE_API_VERSION || "").trim() || "2025-04-01-preview";
+  return {
+    configured: !!(endpoint && deployment && apiKey),
+    endpoint,
+    deployment,
+    apiKey,
+    apiVersion,
+  };
+};
+
 // Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
 // streaming providers must be told the true PCM rate or they misread the audio.
 const MEETING_STREAM_SAMPLE_RATE = 24000;
@@ -2759,6 +2778,30 @@ class IPCHandlers {
     ipcMain.handle("save-azure-api-version", async (event, value) => {
       return this.environmentManager.saveAzureApiVersion(value);
     });
+    ipcMain.handle("get-azure-transcribe-key", async () => {
+      return this.environmentManager.getAzureTranscribeKey();
+    });
+    ipcMain.handle("save-azure-transcribe-key", async (event, key) => {
+      return this.environmentManager.saveAzureTranscribeKey(key);
+    });
+    ipcMain.handle("get-azure-transcribe-endpoint", async () => {
+      return this.environmentManager.getAzureTranscribeEndpoint();
+    });
+    ipcMain.handle("save-azure-transcribe-endpoint", async (event, value) => {
+      return this.environmentManager.saveAzureTranscribeEndpoint(value);
+    });
+    ipcMain.handle("get-azure-transcribe-deployment", async () => {
+      return this.environmentManager.getAzureTranscribeDeployment();
+    });
+    ipcMain.handle("save-azure-transcribe-deployment", async (event, value) => {
+      return this.environmentManager.saveAzureTranscribeDeployment(value);
+    });
+    ipcMain.handle("get-azure-transcribe-api-version", async () => {
+      return this.environmentManager.getAzureTranscribeApiVersion();
+    });
+    ipcMain.handle("save-azure-transcribe-api-version", async (event, value) => {
+      return this.environmentManager.saveAzureTranscribeApiVersion(value);
+    });
     ipcMain.handle("get-vertex-project", async () => {
       return this.environmentManager.getVertexProject();
     });
@@ -5263,6 +5306,28 @@ class IPCHandlers {
       }
 
       const connectInner = async () => {
+        if (options.azure) {
+          const az = getAzureTranscribeConfig();
+          if (!az.configured) {
+            throw new Error(
+              "Azure transcription not configured. Add your endpoint, deployment and API key in Settings."
+            );
+          }
+          const streaming = new OpenAIRealtimeStreaming();
+          setupDictationCallbacks(streaming, event);
+          await streaming.connect({
+            apiKey: az.apiKey,
+            model: az.deployment,
+            endpoint: az.endpoint,
+            deployment: az.deployment,
+            apiVersion: az.apiVersion,
+            inputSampleRate: options.sampleRate || 24000,
+            preconfigured: false,
+          });
+          this._dictationStreaming = streaming;
+          return;
+        }
+
         const isCloud = options.mode !== "byok";
         const apiKey = await fetchRealtimeToken(event, { mode: options.mode });
         const streaming = new OpenAIRealtimeStreaming();

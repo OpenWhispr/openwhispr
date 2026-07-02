@@ -310,8 +310,30 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return STREAMING_PROVIDERS[this.getStreamingProviderName()] || STREAMING_PROVIDERS[fallback];
   }
 
+  // Azure OpenAI (BYOK) streams dictation over the realtime WS protocol. Gated on
+  // the cloud transcription provider selection + presence of the three credentials.
+  isAzureStreamingTranscription() {
+    if (this.context !== "dictation") return false;
+    const s = getSettings();
+    return (
+      s.cloudTranscriptionProvider === "azure" &&
+      !!s.azureTranscriptionApiKey &&
+      !!s.azureTranscriptionEndpoint &&
+      !!s.azureTranscriptionDeployment
+    );
+  }
+
+  // Azure realtime rejects input audio below 24 kHz; everything else streams at
+  // 16 kHz. The browser resamples the mic to whatever the AudioContext requests.
+  getStreamingSampleRate() {
+    return this.isAzureStreamingTranscription() ? 24000 : 16000;
+  }
+
   getStreamingProviderName() {
     const s = getSettings();
+    if (this.isAzureStreamingTranscription()) {
+      return "openai-realtime";
+    }
     if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
       return "corti";
     }
@@ -2401,6 +2423,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const s = getSettings();
     if (s.useLocalWhisper) return false;
 
+    // Azure OpenAI (BYOK) streams dictation over the realtime WS, independent of
+    // OpenWhispr Cloud sign-in / streaming mode.
+    if (this.isAzureStreamingTranscription()) {
+      return true;
+    }
+
     // Corti (BYOK) streams over its own WSS — independent of OpenWhispr Cloud.
     if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
       return !!(s.cortiClientId && s.cortiClientSecret);
@@ -2449,11 +2477,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             cortiTenant,
           } = getSettings();
           const res = await provider.warmup({
-            sampleRate: 16000,
+            sampleRate: this.getStreamingSampleRate(),
             language: warmupLang && warmupLang !== "auto" ? warmupLang : undefined,
             keyterms: this.getKeyterms(),
             model: cloudTranscriptionModel,
             mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
+            azure: this.isAzureStreamingTranscription() ? true : undefined,
             environment: cortiEnvironment,
             tenant: cortiTenant,
           });
@@ -2523,13 +2552,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async getOrCreateAudioContext() {
+    const desiredRate = this.getStreamingSampleRate();
     if (this.persistentAudioContext && this.persistentAudioContext.state !== "closed") {
-      if (this.persistentAudioContext.state === "suspended") {
-        await this.persistentAudioContext.resume();
+      if (this.persistentAudioContext.sampleRate === desiredRate) {
+        if (this.persistentAudioContext.state === "suspended") {
+          await this.persistentAudioContext.resume();
+        }
+        return this.persistentAudioContext;
       }
-      return this.persistentAudioContext;
+      // Provider changed the required rate (e.g. Azure needs 24 kHz) — rebuild.
+      try {
+        await this.persistentAudioContext.close();
+      } catch (e) {
+        /* ignore */
+      }
+      this.persistentAudioContext = null;
+      this.workletModuleLoaded = false;
     }
-    this.persistentAudioContext = new AudioContext({ sampleRate: 16000 });
+    this.persistentAudioContext = new AudioContext({ sampleRate: desiredRate });
     this.workletModuleLoaded = false;
     return this.persistentAudioContext;
   }
@@ -2686,11 +2726,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           useLocalWhisper,
         } = getSettings();
         const res = await provider.start({
-          sampleRate: 16000,
+          sampleRate: this.getStreamingSampleRate(),
           language: preferredLang && preferredLang !== "auto" ? preferredLang : undefined,
           keyterms: this.getKeyterms(),
           model: cloudTranscriptionModel,
           mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",
+          azure: this.isAzureStreamingTranscription() ? true : undefined,
           environment: cortiEnvironment,
           tenant: cortiTenant,
         });

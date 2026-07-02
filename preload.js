@@ -398,6 +398,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveAzureDeployment: (value) => ipcRenderer.invoke("save-azure-deployment", value),
   getAzureApiVersion: () => ipcRenderer.invoke("get-azure-api-version"),
   saveAzureApiVersion: (value) => ipcRenderer.invoke("save-azure-api-version", value),
+  getAzureTranscribeKey: () => ipcRenderer.invoke("get-azure-transcribe-key"),
+  saveAzureTranscribeKey: (key) => ipcRenderer.invoke("save-azure-transcribe-key", key),
+  getAzureTranscribeEndpoint: () => ipcRenderer.invoke("get-azure-transcribe-endpoint"),
+  saveAzureTranscribeEndpoint: (value) =>
+    ipcRenderer.invoke("save-azure-transcribe-endpoint", value),
+  getAzureTranscribeDeployment: () => ipcRenderer.invoke("get-azure-transcribe-deployment"),
+  saveAzureTranscribeDeployment: (value) =>
+    ipcRenderer.invoke("save-azure-transcribe-deployment", value),
+  getAzureTranscribeApiVersion: () => ipcRenderer.invoke("get-azure-transcribe-api-version"),
+  saveAzureTranscribeApiVersion: (value) =>
+    ipcRenderer.invoke("save-azure-transcribe-api-version", value),
   getVertexProject: () => ipcRenderer.invoke("get-vertex-project"),
   saveVertexProject: (value) => ipcRenderer.invoke("save-vertex-project", value),
   getVertexLocation: () => ipcRenderer.invoke("get-vertex-location"),

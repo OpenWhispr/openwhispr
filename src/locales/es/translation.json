@@ -524,6 +524,12 @@
       "clientSecret": "Secreto de cliente",
       "environment": "Región de datos",
       "tenant": "Tenant"
+    },
+    "azure": {
+      "endpoint": "URL del endpoint",
+      "deployment": "Nombre de implementación",
+      "deploymentHelp": "Usa el nombre exacto de tu implementación de transcripción de Azure OpenAI (p. ej. gpt-4o-transcribe, gpt-4o-mini-transcribe o whisper). No se admiten modelos de Foundry que no sean de OpenAI.",
+      "apiVersion": "Versión de API"
     }
   },
   "hooks": {
