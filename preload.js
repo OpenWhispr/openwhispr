@@ -61,6 +61,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("dictionary-updated", listener);
     return () => ipcRenderer.removeListener("dictionary-updated", listener);
   },
+  getSnippets: () => ipcRenderer.invoke("db-get-snippets"),
+  setSnippets: (snippets) => ipcRenderer.invoke("db-set-snippets", snippets),
+  onSnippetsUpdated: (callback) => {
+    const listener = (_event, snippets) => callback?.(snippets);
+    ipcRenderer.on("snippets-updated", listener);
+    return () => ipcRenderer.removeListener("snippets-updated", listener);
+  },
   setAutoLearnEnabled: (enabled) => ipcRenderer.send("auto-learn-changed", enabled),
   onCorrectionsLearned: (callback) => {
     const listener = (_event, words) => callback?.(words);
@@ -851,6 +858,25 @@ contextBridge.exposeInMainWorld("electronAPI", {
   hardDeleteDictionary: (id) => ipcRenderer.invoke("db-hard-delete-dictionary", id),
   clearDictionaryCloudId: (id) => ipcRenderer.invoke("db-clear-dictionary-cloud-id", id),
   broadcastDictionaryUpdated: () => ipcRenderer.invoke("db-broadcast-dictionary-updated"),
+
+  getPendingSnippets: () => ipcRenderer.invoke("db-get-pending-snippets"),
+  getPendingSnippetDeletes: () => ipcRenderer.invoke("db-get-pending-snippet-deletes"),
+  getSnippetForCloudMerge: (cloudEntry) =>
+    ipcRenderer.invoke("db-get-snippet-for-cloud-merge", cloudEntry),
+  upsertSnippetFromCloud: (cloudEntry) =>
+    ipcRenderer.invoke("db-upsert-snippet-from-cloud", cloudEntry),
+  markSnippetSynced: (id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement) =>
+    ipcRenderer.invoke(
+      "db-mark-snippet-synced",
+      id,
+      cloudId,
+      serverUpdatedAt,
+      expectedTrigger,
+      expectedReplacement
+    ),
+  hardDeleteSnippet: (id) => ipcRenderer.invoke("db-hard-delete-snippet", id),
+  clearSnippetCloudId: (id) => ipcRenderer.invoke("db-clear-snippet-cloud-id", id),
+  broadcastSnippetsUpdated: () => ipcRenderer.invoke("db-broadcast-snippets-updated"),
 
   // Google Calendar
   gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),

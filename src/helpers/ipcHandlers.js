@@ -962,6 +962,60 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("db-get-snippets", async () => {
+      return this.databaseManager.getSnippets();
+    });
+
+    ipcMain.handle("db-set-snippets", async (_event, snippets) => {
+      if (!Array.isArray(snippets)) {
+        throw new Error("snippets must be an array");
+      }
+      return this.databaseManager.setSnippets(snippets);
+    });
+
+    ipcMain.handle("db-get-pending-snippets", async () => {
+      return this.databaseManager.getPendingSnippets();
+    });
+
+    ipcMain.handle("db-get-pending-snippet-deletes", async () => {
+      return this.databaseManager.getPendingSnippetDeletes();
+    });
+
+    ipcMain.handle("db-get-snippet-for-cloud-merge", async (_event, cloudEntry) => {
+      return this.databaseManager.getSnippetForCloudMerge(cloudEntry);
+    });
+
+    ipcMain.handle("db-upsert-snippet-from-cloud", async (_event, cloudEntry) => {
+      return this.databaseManager.upsertSnippetFromCloud(cloudEntry);
+    });
+
+    ipcMain.handle(
+      "db-mark-snippet-synced",
+      async (_event, id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement) => {
+        return this.databaseManager.markSnippetSynced(
+          id,
+          cloudId,
+          serverUpdatedAt,
+          expectedTrigger,
+          expectedReplacement
+        );
+      }
+    );
+
+    ipcMain.handle("db-hard-delete-snippet", async (_event, id) => {
+      return this.databaseManager.hardDeleteSnippet(id);
+    });
+
+    ipcMain.handle("db-clear-snippet-cloud-id", async (_event, id) => {
+      return this.databaseManager.clearSnippetCloudId(id);
+    });
+
+    ipcMain.handle("db-broadcast-snippets-updated", async () => {
+      const snippets = this.databaseManager.getSnippets();
+      this.broadcastToWindows("snippets-updated", snippets);
+      return { success: true };
+    });
+
     ipcMain.handle("undo-learned-corrections", async (_event, words) => {
       try {
         if (!Array.isArray(words) || words.length === 0) {

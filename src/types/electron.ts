@@ -112,6 +112,18 @@ export interface DictionaryEntryItem {
   deleted_at: string | null;
 }
 
+export interface SnippetEntryItem {
+  id: number;
+  trigger: string;
+  replacement: string;
+  created_at: string;
+  updated_at: string;
+  client_snippet_id: string;
+  cloud_id: string | null;
+  sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
+}
+
 export type WorkspaceRole = "owner" | "admin" | "member";
 export type TeamRole = "admin" | "member";
 
@@ -571,6 +583,13 @@ declare global {
       getDictionary: () => Promise<string[]>;
       setDictionary: (words: string[]) => Promise<{ success: boolean }>;
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
+      getSnippets?: () => Promise<Array<{ trigger: string; replacement: string }>>;
+      setSnippets?: (
+        snippets: Array<{ trigger: string; replacement: string }>
+      ) => Promise<{ success: boolean }>;
+      onSnippetsUpdated?: (
+        callback: (snippets: Array<{ trigger: string; replacement: string }>) => void
+      ) => () => void;
       setAutoLearnEnabled?: (enabled: boolean) => void;
       onCorrectionsLearned?: (callback: (words: string[]) => void) => () => void;
       undoLearnedCorrections?: (words: string[]) => Promise<{ success: boolean }>;
@@ -1908,6 +1927,25 @@ declare global {
       hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
       clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
       broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
+
+      getPendingSnippets?: () => Promise<SnippetEntryItem[]>;
+      getPendingSnippetDeletes?: () => Promise<SnippetEntryItem[]>;
+      getSnippetForCloudMerge?: (
+        cloudEntry: Record<string, unknown>
+      ) => Promise<SnippetEntryItem | null>;
+      upsertSnippetFromCloud?: (
+        cloudEntry: Record<string, unknown>
+      ) => Promise<SnippetEntryItem | null>;
+      markSnippetSynced?: (
+        id: number,
+        cloudId: string,
+        serverUpdatedAt?: string,
+        expectedTrigger?: string,
+        expectedReplacement?: string
+      ) => Promise<{ success: boolean; changes: number }>;
+      hardDeleteSnippet?: (id: number) => Promise<{ success: boolean; id: number }>;
+      clearSnippetCloudId?: (id: number) => Promise<{ success: boolean }>;
+      broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
     };
 
     api?: {

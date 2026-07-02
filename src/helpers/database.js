@@ -5,6 +5,10 @@ const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
 const { app } = require("electron");
 
+// Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
+// trigger can't 400 the whole sync batch.
+const MAX_SNIPPET_TRIGGER_LENGTH = 100;
+
 class DatabaseManager {
   constructor() {
     this.db = null;
@@ -79,6 +83,20 @@ class DatabaseManager {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           word TEXT NOT NULL UNIQUE,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS snippets (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          trigger TEXT NOT NULL,
+          replacement TEXT NOT NULL,
+          client_snippet_id TEXT,
+          cloud_id TEXT,
+          sync_status TEXT DEFAULT 'pending',
+          deleted_at TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
 
@@ -572,6 +590,7 @@ class DatabaseManager {
         { table: "agent_conversations", col: "client_conversation_id" },
         { table: "transcriptions", col: "client_transcription_id" },
         { table: "custom_dictionary", col: "client_dict_id" },
+        { table: "snippets", col: "client_snippet_id" },
       ];
       for (const { table, col } of syncTables) {
         const rows = this.db.prepare(`SELECT id FROM ${table} WHERE ${col} IS NULL`).all();
@@ -595,6 +614,15 @@ class DatabaseManager {
       );
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_dictionary_client_id ON custom_dictionary(client_dict_id)"
+      );
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_snippets_client_id ON snippets(client_snippet_id) WHERE client_snippet_id IS NOT NULL"
+      );
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_snippets_trigger_lower_active ON snippets(lower(trigger)) WHERE deleted_at IS NULL"
+      );
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_snippets_pending_sync ON snippets(sync_status) WHERE sync_status = 'pending'"
       );
 
       return true;
@@ -1043,6 +1071,312 @@ class DatabaseManager {
       return { success: result.changes > 0 };
     } catch (error) {
       debugLogger.error("Error clearing dictionary cloud_id", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getSnippets() {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+      return this.db
+        .prepare(
+          "SELECT trigger, replacement FROM snippets WHERE deleted_at IS NULL ORDER BY id ASC"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error("Error getting snippets", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  setSnippets(snippets) {
+    try {
+      if (!this.db) {
+        throw new Error("Database not initialized");
+      }
+
+      const incomingByLower = new Map();
+      for (const raw of Array.isArray(snippets) ? snippets : []) {
+        if (!raw || typeof raw !== "object") continue;
+        const trigger = typeof raw.trigger === "string" ? raw.trigger.trim() : "";
+        const replacement = typeof raw.replacement === "string" ? raw.replacement.trim() : "";
+        if (!trigger || !replacement) continue;
+        if (trigger.length > MAX_SNIPPET_TRIGGER_LENGTH) continue;
+        const lower = trigger.toLowerCase();
+        if (!incomingByLower.has(lower)) incomingByLower.set(lower, { trigger, replacement });
+      }
+      const cleaned = Array.from(incomingByLower.values());
+      const incomingLower = new Set(incomingByLower.keys());
+
+      const existingRows = this.db.prepare("SELECT * FROM snippets").all();
+      const existingByLower = new Map();
+      for (const row of existingRows) {
+        const lower = row.trigger.toLowerCase();
+        const current = existingByLower.get(lower);
+        if (!current || (current.deleted_at && !row.deleted_at)) existingByLower.set(lower, row);
+      }
+
+      const tombstone = this.db.prepare(
+        "UPDATE snippets SET deleted_at = datetime('now'), updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND deleted_at IS NULL"
+      );
+      const hardDelete = this.db.prepare("DELETE FROM snippets WHERE id = ? AND cloud_id IS NULL");
+      const restore = this.db.prepare(
+        "UPDATE snippets SET deleted_at = NULL, trigger = ?, replacement = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ?"
+      );
+      const updateActive = this.db.prepare(
+        "UPDATE snippets SET trigger = ?, replacement = ?, updated_at = datetime('now'), sync_status = 'pending' WHERE id = ? AND (trigger != ? OR replacement != ?)"
+      );
+      const insert = this.db.prepare(
+        "INSERT OR IGNORE INTO snippets (trigger, replacement, client_snippet_id, sync_status, updated_at) VALUES (?, ?, ?, 'pending', datetime('now'))"
+      );
+
+      this.db.transaction(() => {
+        for (const existing of existingRows) {
+          if (incomingLower.has(existing.trigger.toLowerCase())) continue;
+          if (existing.deleted_at) continue;
+          const hardResult = hardDelete.run(existing.id);
+          if (hardResult.changes === 0) tombstone.run(existing.id);
+        }
+
+        for (const snippet of cleaned) {
+          const existing = existingByLower.get(snippet.trigger.toLowerCase());
+          if (existing) {
+            if (existing.deleted_at) {
+              restore.run(snippet.trigger, snippet.replacement, existing.id);
+            } else {
+              updateActive.run(
+                snippet.trigger,
+                snippet.replacement,
+                existing.id,
+                snippet.trigger,
+                snippet.replacement
+              );
+            }
+            continue;
+          }
+          insert.run(snippet.trigger, snippet.replacement, randomUUID());
+        }
+      })();
+
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error setting snippets", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getPendingSnippets() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare("SELECT * FROM snippets WHERE sync_status = 'pending' AND deleted_at IS NULL")
+        .all();
+    } catch (error) {
+      debugLogger.error("Error getting pending snippets", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getPendingSnippetDeletes() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM snippets WHERE deleted_at IS NOT NULL AND cloud_id IS NOT NULL AND sync_status = 'pending'"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error(
+        "Error getting pending snippet deletes",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  hardDeleteSnippet(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db.prepare("DELETE FROM snippets WHERE id = ?").run(id);
+      return { success: result.changes > 0, id };
+    } catch (error) {
+      debugLogger.error("Error hard deleting snippet", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  getSnippetForCloudMerge(cloudEntry) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!cloudEntry || typeof cloudEntry !== "object") return null;
+
+      const clientSnippetId =
+        typeof cloudEntry.client_snippet_id === "string" && cloudEntry.client_snippet_id
+          ? cloudEntry.client_snippet_id
+          : "";
+      if (clientSnippetId) {
+        const byClient = this.db
+          .prepare("SELECT * FROM snippets WHERE client_snippet_id = ? LIMIT 1")
+          .get(clientSnippetId);
+        if (byClient) return byClient;
+      }
+
+      if (typeof cloudEntry.id === "string" && cloudEntry.id) {
+        const byCloud = this.db
+          .prepare("SELECT * FROM snippets WHERE cloud_id = ? LIMIT 1")
+          .get(cloudEntry.id);
+        if (byCloud) return byCloud;
+      }
+
+      const trigger = typeof cloudEntry.trigger === "string" ? cloudEntry.trigger.trim() : "";
+      if (!trigger) return null;
+      const byActiveTrigger = this.db
+        .prepare(
+          "SELECT * FROM snippets WHERE lower(trigger) = lower(?) AND deleted_at IS NULL LIMIT 1"
+        )
+        .get(trigger);
+      if (byActiveTrigger) return byActiveTrigger;
+      return (
+        this.db
+          .prepare(
+            "SELECT * FROM snippets WHERE lower(trigger) = lower(?) AND deleted_at IS NOT NULL LIMIT 1"
+          )
+          .get(trigger) || null
+      );
+    } catch (error) {
+      debugLogger.error(
+        "Error getting snippet for cloud merge",
+        { error: error.message },
+        "database"
+      );
+      throw error;
+    }
+  }
+
+  upsertSnippetFromCloud(cloudEntry) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (!cloudEntry || typeof cloudEntry !== "object") return null;
+      if (typeof cloudEntry.id !== "string" || !cloudEntry.id) return null;
+
+      const trigger = typeof cloudEntry.trigger === "string" ? cloudEntry.trigger.trim() : "";
+      const replacement =
+        typeof cloudEntry.replacement === "string" ? cloudEntry.replacement.trim() : "";
+      if (!trigger || !replacement) return null;
+
+      const clientSnippetId =
+        typeof cloudEntry.client_snippet_id === "string" && cloudEntry.client_snippet_id
+          ? cloudEntry.client_snippet_id
+          : randomUUID();
+      const updatedAt =
+        typeof cloudEntry.updated_at === "string" && cloudEntry.updated_at
+          ? cloudEntry.updated_at
+          : typeof cloudEntry.created_at === "string" && cloudEntry.created_at
+            ? cloudEntry.created_at
+            : new Date().toISOString();
+      const createdAt =
+        typeof cloudEntry.created_at === "string" && cloudEntry.created_at
+          ? cloudEntry.created_at
+          : updatedAt;
+
+      const existing = this.getSnippetForCloudMerge({
+        ...cloudEntry,
+        client_snippet_id: clientSnippetId,
+        trigger,
+      });
+
+      if (existing) {
+        // A different active row may already hold this trigger (cross-device
+        // rename); it must yield first or the UPDATE trips the active-trigger
+        // unique index and aborts the pull.
+        const collidingActive = this.db
+          .prepare(
+            "SELECT * FROM snippets WHERE lower(trigger) = lower(?) AND deleted_at IS NULL AND id != ? LIMIT 1"
+          )
+          .get(trigger, existing.id);
+        // Tombstone existing → keep the active collider; else keep existing and
+        // drop the stale collider.
+        const target = existing.deleted_at && collidingActive ? collidingActive : existing;
+        const orphanId = target.id === existing.id ? collidingActive?.id : existing.id;
+        if (orphanId) {
+          this.db.prepare("DELETE FROM snippets WHERE id = ?").run(orphanId);
+        }
+        this.db
+          .prepare(
+            `UPDATE snippets
+             SET cloud_id = ?, client_snippet_id = ?, trigger = ?, replacement = ?,
+                 sync_status = 'synced', deleted_at = NULL, updated_at = ?
+             WHERE id = ?`
+          )
+          .run(cloudEntry.id, clientSnippetId, trigger, replacement, updatedAt, target.id);
+        return this.db.prepare("SELECT * FROM snippets WHERE id = ?").get(target.id);
+      }
+
+      this.db
+        .prepare(
+          `INSERT INTO snippets
+             (trigger, replacement, client_snippet_id, cloud_id, sync_status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'synced', ?, ?)`
+        )
+        .run(trigger, replacement, clientSnippetId, cloudEntry.id, createdAt, updatedAt);
+      return this.db
+        .prepare("SELECT * FROM snippets WHERE client_snippet_id = ?")
+        .get(clientSnippetId);
+    } catch (error) {
+      debugLogger.error("Error upserting snippet from cloud", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  markSnippetSynced(
+    id,
+    cloudId,
+    serverUpdatedAt = null,
+    expectedTrigger = null,
+    expectedReplacement = null
+  ) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      // If a user edit landed between push and ack, the row no longer matches
+      // what was pushed — leave it 'pending' so the next sync re-pushes it.
+      const result = this.db
+        .prepare(
+          `UPDATE snippets
+           SET sync_status = 'synced',
+               cloud_id = ?,
+               updated_at = COALESCE(?, updated_at)
+           WHERE id = ? AND deleted_at IS NULL
+             AND (? IS NULL OR trigger = ?)
+             AND (? IS NULL OR replacement = ?)`
+        )
+        .run(
+          cloudId,
+          serverUpdatedAt,
+          id,
+          expectedTrigger,
+          expectedTrigger,
+          expectedReplacement,
+          expectedReplacement
+        );
+      return { success: result.changes > 0, changes: result.changes };
+    } catch (error) {
+      debugLogger.error("Error marking snippet synced", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  clearSnippetCloudId(id) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const result = this.db
+        .prepare("UPDATE snippets SET cloud_id = NULL, sync_status = 'pending' WHERE id = ?")
+        .run(id);
+      return { success: result.changes > 0 };
+    } catch (error) {
+      debugLogger.error("Error clearing snippet cloud_id", { error: error.message }, "database");
       throw error;
     }
   }
