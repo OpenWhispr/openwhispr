@@ -1,0 +1,100 @@
+name: Build Windows artifacts
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+concurrency:
+  group: build-windows-artifacts-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    name: Build Windows portable and installer
+    runs-on: windows-latest
+    timeout-minutes: 120
+
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      CSC_FOR_PULL_REQUEST: "false"
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+      VITE_AUTH_URL: ${{ vars.VITE_AUTH_URL }}
+      VITE_OPENWHISPR_API_URL: ${{ vars.VITE_OPENWHISPR_API_URL }}
+      VITE_OPENWHISPR_OAUTH_CALLBACK_URL: ${{ vars.VITE_OPENWHISPR_OAUTH_CALLBACK_URL }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Windows native optional packages
+        run: npm install @rollup/rollup-win32-x64-msvc lightningcss-win32-x64-msvc @tailwindcss/oxide-win32-x64-msvc --save-optional
+
+      - name: Cache downloaded native binaries
+        uses: actions/cache@v4
+        with:
+          path: resources/bin
+          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js') }}
+          restore-keys: windows-x64-bin-
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/electron/Cache
+          key: windows-electron-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: windows-electron-
+
+      - name: Create unsigned electron-builder config
+        run: |
+          node -e "const fs=require('fs'); const cfg=JSON.parse(fs.readFileSync('electron-builder.json','utf8')); delete cfg.win.azureSignOptions; cfg.win.signAndEditExecutable=false; cfg.win.verifyUpdateCodeSignature=false; cfg.publish=null; fs.writeFileSync('electron-builder.unsigned.json', JSON.stringify(cfg, null, 2));"
+
+      - name: Create runtime env file
+        run: |
+          "GOOGLE_CALENDAR_CLIENT_ID=${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}" | Out-File -FilePath .env -Encoding utf8
+          "GOOGLE_CALENDAR_CLIENT_SECRET=${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}" | Out-File -FilePath .env -Encoding utf8 -Append
+
+      - name: Build portable executable and installer
+        run: |
+          npm run prebuild:win
+          npm run build:renderer
+          npx electron-builder --config electron-builder.unsigned.json --win nsis portable --x64 --publish never
+
+      - name: Show build output
+        if: always()
+        run: |
+          if (Test-Path dist) {
+            Get-ChildItem -Path dist -File | Sort-Object Name | Select-Object Name, Length, LastWriteTime
+          } else {
+            Write-Host "dist directory was not created."
+          }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwhispr-windows-${{ github.run_number }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest*.yml

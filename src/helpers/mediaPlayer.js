@@ -14,6 +14,8 @@ class MediaPlayer {
     this._pausedPlayers = []; // MPRIS players we paused (Linux)
     this._didPause = false; // Whether we sent a pause via toggle fallback
     this._pausedWinApps = []; // GSMTC app IDs we paused (Windows)
+    this._audioDuckActive = false;
+    this._audioDuckOriginalVolume = null;
   }
 
   _resolveLinuxFastPaste() {
@@ -92,7 +94,35 @@ class MediaPlayer {
     return null;
   }
 
+  _shouldDuckAudio() {
+    const mode = (process.env.OPENWHISPR_MEDIA_ON_DICTATION || "").trim().toLowerCase();
+    return mode === "duck" || process.env.OPENWHISPR_AUDIO_DUCKING_ENABLED === "true";
+  }
+
+  _getAudioDuckingTargetVolume() {
+    const raw =
+      process.env.OPENWHISPR_AUDIO_DUCKING_VOLUME ||
+      process.env.OPENWHISPR_DUCKING_VOLUME ||
+      process.env.OPENWHISPR_DUCK_VOLUME ||
+      "25";
+    return this._clampVolume(raw, 25);
+  }
+
+  _clampVolume(value, fallback = 25) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(0, Math.min(100, Math.round(parsed)));
+  }
+
+  _compactProcessOutput(output) {
+    return (output || "").toString().trim().replace(/\s+/g, " ").slice(0, 600) || undefined;
+  }
+
   pauseMedia() {
+    if (this._shouldDuckAudio()) {
+      return this.duckAudio();
+    }
+
     try {
       if (process.platform === "linux") {
         return this._pauseLinux();
@@ -108,6 +138,10 @@ class MediaPlayer {
   }
 
   resumeMedia() {
+    if (this._audioDuckActive) {
+      return this.restoreAudio();
+    }
+
     try {
       if (process.platform === "linux") {
         return this._resumeLinux();
@@ -135,6 +169,301 @@ class MediaPlayer {
       debugLogger.warn("Media toggle failed", { error: err.message }, "media");
     }
     return false;
+  }
+
+  duckAudio(targetVolumePercent = this._getAudioDuckingTargetVolume()) {
+    try {
+      const target = this._clampVolume(targetVolumePercent, this._getAudioDuckingTargetVolume());
+      const current = this._getSystemVolumePercent();
+
+      if (current === null) {
+        debugLogger.warn("Audio ducking unavailable: could not read system volume", {}, "media");
+        return false;
+      }
+
+      if (!this._audioDuckActive) {
+        this._audioDuckOriginalVolume = current;
+        this._audioDuckActive = true;
+      }
+
+      if (current > target) {
+        const changed = this._setSystemVolumePercent(target);
+        if (!changed) {
+          debugLogger.warn("Audio ducking failed: could not set system volume", { target }, "media");
+          return false;
+        }
+      }
+
+      debugLogger.debug(
+        "Audio ducked for dictation",
+        { originalVolume: this._audioDuckOriginalVolume, targetVolume: target },
+        "media"
+      );
+      return true;
+    } catch (err) {
+      debugLogger.warn("Audio ducking failed", { error: err.message }, "media");
+      return false;
+    }
+  }
+
+  restoreAudio() {
+    if (!this._audioDuckActive) return false;
+
+    const originalVolume = this._audioDuckOriginalVolume;
+    this._audioDuckActive = false;
+    this._audioDuckOriginalVolume = null;
+
+    if (originalVolume === null || originalVolume === undefined) return false;
+
+    try {
+      const restored = this._setSystemVolumePercent(originalVolume);
+      if (restored) {
+        debugLogger.debug("Audio ducking restored system volume", { originalVolume }, "media");
+      } else {
+        debugLogger.warn("Audio ducking restore failed", { originalVolume }, "media");
+      }
+      return restored;
+    } catch (err) {
+      debugLogger.warn("Audio ducking restore failed", { error: err.message }, "media");
+      return false;
+    }
+  }
+
+  _getSystemVolumePercent() {
+    if (process.platform === "win32") return this._getWindowsVolumePercent();
+    if (process.platform === "darwin") return this._getMacVolumePercent();
+    if (process.platform === "linux") return this._getLinuxVolumePercent();
+    return null;
+  }
+
+  _setSystemVolumePercent(percent) {
+    const safePercent = this._clampVolume(percent);
+    if (process.platform === "win32") return this._setWindowsVolumePercent(safePercent);
+    if (process.platform === "darwin") return this._setMacVolumePercent(safePercent);
+    if (process.platform === "linux") return this._setLinuxVolumePercent(safePercent);
+    return false;
+  }
+
+  _windowsVolumeScript() {
+    return `
+Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public enum EDataFlow {
+  eRender = 0,
+  eCapture = 1,
+  eAll = 2
+}
+
+public enum ERole {
+  eConsole = 0,
+  eMultimedia = 1,
+  eCommunications = 2
+}
+
+[Flags]
+public enum CLSCTX : uint {
+  INPROC_SERVER = 0x1,
+  INPROC_HANDLER = 0x2,
+  LOCAL_SERVER = 0x4,
+  REMOTE_SERVER = 0x10,
+  ALL = INPROC_SERVER | INPROC_HANDLER | LOCAL_SERVER | REMOTE_SERVER
+}
+
+[Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDeviceEnumerator {
+  [PreserveSig] int EnumAudioEndpoints(EDataFlow dataFlow, uint dwStateMask, IntPtr ppDevices);
+  [PreserveSig] int GetDefaultAudioEndpoint(EDataFlow dataFlow, ERole role, out IMMDevice ppDevice);
+  [PreserveSig] int GetDevice(string pwstrId, out IMMDevice ppDevice);
+  [PreserveSig] int RegisterEndpointNotificationCallback(IntPtr pClient);
+  [PreserveSig] int UnregisterEndpointNotificationCallback(IntPtr pClient);
+}
+
+[Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDevice {
+  [PreserveSig] int Activate(ref Guid iid, CLSCTX dwClsCtx, IntPtr pActivationParams, out IAudioEndpointVolume ppInterface);
+}
+
+[Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IAudioEndpointVolume {
+  [PreserveSig] int RegisterControlChangeNotify(IntPtr pNotify);
+  [PreserveSig] int UnregisterControlChangeNotify(IntPtr pNotify);
+  [PreserveSig] int GetChannelCount(out uint pnChannelCount);
+  [PreserveSig] int SetMasterVolumeLevel(float fLevelDB, Guid pguidEventContext);
+  [PreserveSig] int SetMasterVolumeLevelScalar(float fLevel, Guid pguidEventContext);
+  [PreserveSig] int GetMasterVolumeLevel(out float pfLevelDB);
+  [PreserveSig] int GetMasterVolumeLevelScalar(out float pfLevel);
+  [PreserveSig] int SetChannelVolumeLevel(uint nChannel, float fLevelDB, Guid pguidEventContext);
+  [PreserveSig] int SetChannelVolumeLevelScalar(uint nChannel, float fLevel, Guid pguidEventContext);
+  [PreserveSig] int GetChannelVolumeLevel(uint nChannel, out float pfLevelDB);
+  [PreserveSig] int GetChannelVolumeLevelScalar(uint nChannel, out float pfLevel);
+  [PreserveSig] int SetMute([MarshalAs(UnmanagedType.Bool)] bool bMute, Guid pguidEventContext);
+  [PreserveSig] int GetMute(out bool pbMute);
+  [PreserveSig] int GetVolumeStepInfo(out uint pnStep, out uint pnStepCount);
+  [PreserveSig] int VolumeStepUp(Guid pguidEventContext);
+  [PreserveSig] int VolumeStepDown(Guid pguidEventContext);
+  [PreserveSig] int QueryHardwareSupport(out uint pdwHardwareSupportMask);
+  [PreserveSig] int GetVolumeRange(out float pflVolumeMindB, out float pflVolumeMaxdB, out float pflVolumeIncrementdB);
+}
+
+[ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
+class MMDeviceEnumeratorComObject {}
+
+public class AudioEndpoint {
+  static IAudioEndpointVolume Endpoint() {
+    var enumerator = (IMMDeviceEnumerator)(new MMDeviceEnumeratorComObject());
+    IMMDevice device;
+    int hr = enumerator.GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eMultimedia, out device);
+    Marshal.ThrowExceptionForHR(hr);
+    Guid iid = typeof(IAudioEndpointVolume).GUID;
+    IAudioEndpointVolume endpoint;
+    hr = device.Activate(ref iid, CLSCTX.ALL, IntPtr.Zero, out endpoint);
+    Marshal.ThrowExceptionForHR(hr);
+    return endpoint;
+  }
+
+  public static float GetVolume() {
+    float value;
+    int hr = Endpoint().GetMasterVolumeLevelScalar(out value);
+    Marshal.ThrowExceptionForHR(hr);
+    return value * 100.0f;
+  }
+
+  public static void SetVolume(float percent) {
+    percent = Math.Max(0.0f, Math.Min(100.0f, percent));
+    Guid g = Guid.Empty;
+    int hr = Endpoint().SetMasterVolumeLevelScalar(percent / 100.0f, g);
+    Marshal.ThrowExceptionForHR(hr);
+  }
+}
+"@
+`;
+  }
+
+  _runWindowsVolumePowerShell(command) {
+    return spawnSync(
+      "powershell",
+      ["-Sta", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", command],
+      { stdio: "pipe", timeout: 7000, windowsHide: true }
+    );
+  }
+
+  _getWindowsVolumePercent() {
+    const result = this._runWindowsVolumePowerShell(
+      `${this._windowsVolumeScript()}\n[AudioEndpoint]::GetVolume()`
+    );
+    const stdout = (result.stdout?.toString() || "").trim();
+    const stderr = (result.stderr?.toString() || "").trim();
+
+    if (result.status !== 0) {
+      debugLogger.warn(
+        "Windows volume read failed",
+        {
+          status: result.status,
+          signal: result.signal,
+          stdout: this._compactProcessOutput(stdout),
+          stderr: this._compactProcessOutput(stderr),
+        },
+        "media"
+      );
+      return null;
+    }
+
+    const match = stdout.match(/-?\d+(?:\.\d+)?/);
+    const parsed = match ? Number(match[0]) : NaN;
+    if (!Number.isFinite(parsed)) {
+      debugLogger.warn(
+        "Windows volume read returned non-numeric output",
+        {
+          stdout: this._compactProcessOutput(stdout),
+          stderr: this._compactProcessOutput(stderr),
+        },
+        "media"
+      );
+      return null;
+    }
+
+    return this._clampVolume(parsed);
+  }
+
+  _setWindowsVolumePercent(percent) {
+    const target = this._clampVolume(percent);
+    const result = this._runWindowsVolumePowerShell(
+      `${this._windowsVolumeScript()}\n[AudioEndpoint]::SetVolume(${target})`
+    );
+    if (result.status !== 0) {
+      debugLogger.warn(
+        "Windows volume set failed",
+        {
+          target,
+          status: result.status,
+          signal: result.signal,
+          stdout: this._compactProcessOutput(result.stdout),
+          stderr: this._compactProcessOutput(result.stderr),
+        },
+        "media"
+      );
+      return false;
+    }
+    return true;
+  }
+
+  _getMacVolumePercent() {
+    const result = spawnSync("osascript", ["-e", "output volume of (get volume settings)"], {
+      stdio: "pipe",
+      timeout: 3000,
+    });
+    if (result.status !== 0) return null;
+    const parsed = Number((result.stdout?.toString() || "").trim());
+    return Number.isFinite(parsed) ? this._clampVolume(parsed) : null;
+  }
+
+  _setMacVolumePercent(percent) {
+    const result = spawnSync("osascript", ["-e", `set volume output volume ${this._clampVolume(percent)}`], {
+      stdio: "pipe",
+      timeout: 3000,
+    });
+    return result.status === 0;
+  }
+
+  _getLinuxVolumePercent() {
+    const pactl = spawnSync("pactl", ["get-sink-volume", "@DEFAULT_SINK@"], {
+      stdio: "pipe",
+      timeout: 3000,
+    });
+    if (pactl.status === 0) {
+      const output = pactl.stdout?.toString() || "";
+      const match = output.match(/(\d+)%/);
+      if (match) return this._clampVolume(match[1]);
+    }
+
+    const wpctl = spawnSync("wpctl", ["get-volume", "@DEFAULT_AUDIO_SINK@"], {
+      stdio: "pipe",
+      timeout: 3000,
+    });
+    if (wpctl.status === 0) {
+      const output = wpctl.stdout?.toString() || "";
+      const match = output.match(/Volume:\s*([0-9.]+)/);
+      if (match) return this._clampVolume(Number(match[1]) * 100);
+    }
+
+    return null;
+  }
+
+  _setLinuxVolumePercent(percent) {
+    const safePercent = this._clampVolume(percent);
+    const pactl = spawnSync("pactl", ["set-sink-volume", "@DEFAULT_SINK@", `${safePercent}%`], {
+      stdio: "pipe",
+      timeout: 3000,
+    });
+    if (pactl.status === 0) return true;
+
+    const wpctl = spawnSync("wpctl", ["set-volume", "@DEFAULT_AUDIO_SINK@", `${safePercent / 100}`], {
+      stdio: "pipe",
+      timeout: 3000,
+    });
+    return wpctl.status === 0;
   }
 
   // --- Linux: MPRIS-aware pause/resume ---
