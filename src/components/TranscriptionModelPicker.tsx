@@ -269,7 +269,7 @@ const PROVIDER_CREDENTIALS: Record<
     ],
   },
   tinfoil: {
-    consoleUrl: "https://tinfoil.sh/inference",
+    consoleUrl: "https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr",
     fields: [{ key: "tinfoilApiKey", input: "secret" }],
   },
 };
