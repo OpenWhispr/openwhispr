@@ -10,6 +10,7 @@ class UpdateManager {
     this.isInstalling = false;
     this.isDownloading = false;
     this.isQuittingForUpdate = false;
+    this.handleBeforeQuitForUpdate = null;
     this.eventListeners = [];
     this.updateCheckInterval = null;
     this.windowManager = null;
@@ -137,24 +138,23 @@ class UpdateManager {
         }
         this.notifyRenderers("update-downloaded", info);
       },
-      "before-quit-for-update": () => {
-        this.isQuittingForUpdate = true;
-        if (this.windowManager) {
-          this.windowManager.isQuitting = true;
-          if (this.windowManager.hotkeyManager) {
-            this.windowManager.hotkeyManager.unregisterAll();
-          } else {
-            const { globalShortcut } = require("electron");
-            globalShortcut.unregisterAll();
-          }
-        }
-      },
     };
 
     Object.entries(handlers).forEach(([event, handler]) => {
       autoUpdater.on(event, handler);
       this.eventListeners.push({ event, handler });
     });
+
+    // electron-updater and Squirrel.Mac emit this on Electron's native
+    // autoUpdater (before any windows close), not on the electron-updater instance.
+    this.handleBeforeQuitForUpdate = () => {
+      this.isQuittingForUpdate = true;
+      if (this.windowManager) {
+        this.windowManager.isQuitting = true;
+        this.windowManager.hotkeyManager.unregisterAll();
+      }
+    };
+    require("electron").autoUpdater.on("before-quit-for-update", this.handleBeforeQuitForUpdate);
   }
 
   notifyRenderers(channel, data) {
@@ -338,6 +338,13 @@ class UpdateManager {
       autoUpdater.removeListener(event, handler);
     });
     this.eventListeners = [];
+    if (this.handleBeforeQuitForUpdate) {
+      require("electron").autoUpdater.removeListener(
+        "before-quit-for-update",
+        this.handleBeforeQuitForUpdate
+      );
+      this.handleBeforeQuitForUpdate = null;
+    }
   }
 }
 
