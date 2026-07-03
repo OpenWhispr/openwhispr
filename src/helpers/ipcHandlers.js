@@ -5367,29 +5367,40 @@ class IPCHandlers {
 
       const connectInner = async () => {
         const isCloud = options.mode !== "byok";
-        const apiKey = await fetchRealtimeToken(event, {
-          mode: options.mode,
-          provider: options.provider,
-        });
         const streaming = new OpenAIRealtimeStreaming();
         setupDictationCallbacks(streaming, event);
-        if (options.provider === "tinfoil-realtime") {
-          const model = options.model || TINFOIL_REALTIME_MODEL;
-          await streaming.connect({
-            apiKey,
-            model,
-            // The capture worklet emits 16kHz PCM; declare the true rate.
-            inputRate: 16000,
-            createSocket: () => createTinfoilRealtimeSocket({ model, apiKey }),
-          });
-        } else {
-          await streaming.connect({
-            apiKey,
-            model: options.model || "gpt-4o-mini-transcribe",
-            preconfigured: isCloud,
-          });
-        }
+        // Assign before the token fetch (a real network round trip) so
+        // dictation-realtime-send has a live instance to buffer into instead
+        // of silently dropping the start of the recording.
+        streaming.beginConnecting();
         this._dictationStreaming = streaming;
+        try {
+          const apiKey = await fetchRealtimeToken(event, {
+            mode: options.mode,
+            provider: options.provider,
+          });
+          if (options.provider === "tinfoil-realtime") {
+            const model = options.model || TINFOIL_REALTIME_MODEL;
+            await streaming.connect({
+              apiKey,
+              model,
+              // The capture worklet emits 16kHz PCM; declare the true rate.
+              inputRate: 16000,
+              createSocket: () => createTinfoilRealtimeSocket({ model, apiKey }),
+            });
+          } else {
+            await streaming.connect({
+              apiKey,
+              model: options.model || "gpt-4o-mini-transcribe",
+              // The capture worklet emits 16kHz PCM; declare the true rate.
+              inputRate: 16000,
+              preconfigured: isCloud,
+            });
+          }
+        } catch (err) {
+          if (this._dictationStreaming === streaming) this._dictationStreaming = null;
+          throw err;
+        }
       };
 
       this._dictationConnectPromise = connectInner();

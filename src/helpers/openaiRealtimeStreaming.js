@@ -5,6 +5,7 @@ const WEBSOCKET_TIMEOUT_MS = 15000;
 const DISCONNECT_TIMEOUT_MS = 3000;
 const SAMPLE_RATE = 24000;
 const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
+const KEEPALIVE_INTERVAL_MS = 15000;
 
 // A socket factory does network work before the socket exists, so the dial
 // must be bounded; a socket resolving after the deadline is closed, not leaked.
@@ -44,6 +45,17 @@ class OpenAIRealtimeStreaming {
     this.coldStartBuffer = [];
     this.coldStartBufferSize = 0;
     this.speechStartedAt = null;
+    this.bufferingAudio = false;
+    this.keepAliveInterval = null;
+  }
+
+  // Starts buffering audio immediately, before the WebSocket even exists —
+  // covers the token-fetch + handshake window so sendAudio() doesn't drop
+  // frames while a connection is still being established.
+  beginConnecting() {
+    this.bufferingAudio = true;
+    this.coldStartBuffer = [];
+    this.coldStartBufferSize = 0;
   }
 
   getFullTranscript() {
@@ -59,6 +71,10 @@ class OpenAIRealtimeStreaming {
       return;
     }
 
+    // Callers may already be buffering (beginConnecting() called before the
+    // apiKey was fetched) — don't wipe audio collected during that window.
+    if (!this.bufferingAudio) this.beginConnecting();
+
     this.isConnecting = true;
     this.model = model || "gpt-4o-mini-transcribe";
     this.preconfigured = !!preconfigured;
@@ -66,8 +82,6 @@ class OpenAIRealtimeStreaming {
     this.completedSegments = [];
     this.currentPartial = "";
     this.audioBytesSent = 0;
-    this.coldStartBuffer = [];
-    this.coldStartBufferSize = 0;
     this.speechStartedAt = null;
 
     const url = "wss://api.openai.com/v1/realtime?intent=transcription";
@@ -150,14 +164,7 @@ class OpenAIRealtimeStreaming {
             debugLogger.debug("OpenAI Realtime session created (preconfigured)", {
               model: this.model,
             });
-            this.isConnected = true;
-            this.isConnecting = false;
-            clearTimeout(this.connectionTimeout);
-            if (this.pendingResolve) {
-              this.pendingResolve();
-              this.pendingResolve = null;
-              this.pendingReject = null;
-            }
+            this._markConnected();
           } else {
             debugLogger.debug("OpenAI Realtime session created, sending configuration", {
               model: this.model,
@@ -189,15 +196,10 @@ class OpenAIRealtimeStreaming {
 
         case "session.updated": {
           if (this.pendingResolve) {
-            this.isConnected = true;
-            this.isConnecting = false;
-            clearTimeout(this.connectionTimeout);
             debugLogger.debug("OpenAI Realtime session configured", {
               model: this.model,
             });
-            this.pendingResolve();
-            this.pendingResolve = null;
-            this.pendingReject = null;
+            this._markConnected();
           }
           break;
         }
@@ -267,14 +269,64 @@ class OpenAIRealtimeStreaming {
     }
   }
 
-  sendAudio(pcmBuffer) {
-    if (!this.ws) return false;
+  _markConnected() {
+    this.isConnected = true;
+    this.isConnecting = false;
+    clearTimeout(this.connectionTimeout);
+    this.startKeepAlive();
+    if (this.pendingResolve) {
+      this.pendingResolve();
+      this.pendingResolve = null;
+      this.pendingReject = null;
+    }
+  }
 
-    if (this.ws.readyState !== WebSocket.OPEN) {
-      if (
-        this.ws.readyState === WebSocket.CONNECTING &&
-        this.coldStartBufferSize < COLD_START_BUFFER_MAX
-      ) {
+  // A warm connection sits idle between dictations for up to 5 minutes and is
+  // reused with no other liveness check; a network path that dies silently
+  // (NAT/firewall drop, sleep/wake, VPN toggle) leaves isConnected stuck true
+  // and the next recording gets sent into a dead socket.
+  startKeepAlive() {
+    this.stopKeepAlive();
+    const socket = this.ws;
+    if (!socket) return;
+
+    socket.isAlive = true;
+    socket.on("pong", () => {
+      socket.isAlive = true;
+    });
+
+    this.keepAliveInterval = setInterval(() => {
+      if (socket !== this.ws || socket.readyState !== WebSocket.OPEN) {
+        this.stopKeepAlive();
+        return;
+      }
+      if (socket.isAlive === false) {
+        debugLogger.debug("OpenAI Realtime keep-alive missed pong, terminating stale connection");
+        socket.terminate();
+        return;
+      }
+      socket.isAlive = false;
+      try {
+        socket.ping();
+      } catch (err) {
+        debugLogger.debug("OpenAI Realtime keep-alive ping failed", { error: err.message });
+        socket.terminate();
+      }
+    }, KEEPALIVE_INTERVAL_MS);
+  }
+
+  stopKeepAlive() {
+    if (this.keepAliveInterval) {
+      clearInterval(this.keepAliveInterval);
+      this.keepAliveInterval = null;
+    }
+  }
+
+  sendAudio(pcmBuffer) {
+    const isOpen = this.ws?.readyState === WebSocket.OPEN;
+
+    if (!isOpen) {
+      if (this.bufferingAudio && this.coldStartBufferSize < COLD_START_BUFFER_MAX) {
         const copy = Buffer.from(pcmBuffer);
         this.coldStartBuffer.push(copy);
         this.coldStartBufferSize += copy.length;
@@ -375,6 +427,7 @@ class OpenAIRealtimeStreaming {
   cleanup() {
     clearTimeout(this.connectionTimeout);
     this.connectionTimeout = null;
+    this.stopKeepAlive();
 
     if (this.ws) {
       try {
@@ -385,6 +438,7 @@ class OpenAIRealtimeStreaming {
 
     this.isConnected = false;
     this.isConnecting = false;
+    this.bufferingAudio = false;
   }
 }
 
