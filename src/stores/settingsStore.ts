@@ -552,6 +552,7 @@ export interface SettingsState
   setCustomDictionary: (words: string[]) => void;
   applyCustomDictionaryFromExternal: (words: string[]) => void;
   setSnippets: (snippets: Snippet[]) => void;
+  applySnippetsFromExternal: (snippets: Snippet[]) => void;
   setAssemblyAiStreaming: (value: boolean) => void;
   setAutoGenerateNoteTitle: (value: boolean) => void;
   setUseCleanupModel: (value: boolean) => void;
@@ -1237,6 +1238,26 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   setSnippets: (snippets: Snippet[]) => {
+    if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
+    set({ snippets });
+    window.electronAPI
+      ?.setSnippets?.(snippets)
+      .then(() => {
+        void import("../services/SyncService.js").then(({ syncService }) => {
+          if (syncService.canSync()) void syncService.syncSnippetsNow();
+        });
+      })
+      .catch((err) => {
+        logger.warn(
+          "Failed to sync snippets to SQLite",
+          { error: (err as Error).message },
+          "settings"
+        );
+      });
+  },
+
+  // For broadcasts from main process — DB is already authoritative, only update UI.
+  applySnippetsFromExternal: (snippets: Snippet[]) => {
     if (isBrowser) localStorage.setItem("snippets", JSON.stringify(snippets));
     set({ snippets });
   },
@@ -2102,6 +2123,29 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync dictionary on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync snippets from SQLite <-> localStorage
+    try {
+      if (window.electronAPI.getSnippets) {
+        const currentSnippets = useSettingsStore.getState().snippets;
+        const dbSnippets = await window.electronAPI.getSnippets();
+        if (dbSnippets.length === 0 && currentSnippets.length > 0) {
+          await window.electronAPI.setSnippets?.(currentSnippets);
+          const normalizedSnippets = await window.electronAPI.getSnippets();
+          if (isBrowser) localStorage.setItem("snippets", JSON.stringify(normalizedSnippets));
+          useSettingsStore.setState({ snippets: normalizedSnippets });
+        } else if (dbSnippets.length > 0) {
+          if (isBrowser) localStorage.setItem("snippets", JSON.stringify(dbSnippets));
+          useSettingsStore.setState({ snippets: dbSnippets });
+        }
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync snippets on startup",
         { error: (err as Error).message },
         "settings"
       );

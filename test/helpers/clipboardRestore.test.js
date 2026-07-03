@@ -7,7 +7,10 @@ const childProcess = require("node:child_process");
 const fakeClipboard = {
   text: "",
   html: "",
+  rtf: "",
+  image: null,
   formats: ["text/plain"],
+  writes: [],
   availableFormats() {
     return this.formats;
   },
@@ -16,19 +19,45 @@ const fakeClipboard = {
   },
   writeText(text) {
     this.text = text;
+    this.html = "";
+    this.rtf = "";
+    this.image = null;
+    this.formats = ["text/plain"];
+    this.writes.push(["writeText", text]);
   },
   readHTML() {
     return this.html;
   },
+  readRTF() {
+    return this.rtf;
+  },
   write(payload) {
-    this.text = payload.text;
-    this.html = payload.html;
+    this.text = payload.text || "";
+    this.html = payload.html || "";
+    this.rtf = payload.rtf || "";
+    this.image = payload.image || null;
+    this.formats = [];
+    if (Object.hasOwn(payload, "text")) this.formats.push("text/plain");
+    if (Object.hasOwn(payload, "html")) this.formats.push("text/html");
+    if (Object.hasOwn(payload, "rtf")) this.formats.push("text/rtf");
+    if (Object.hasOwn(payload, "image")) this.formats.push("image/png");
+    this.writes.push(["write", payload]);
   },
   readImage() {
-    return { isEmpty: () => true };
+    return this.image || emptyImage;
   },
-  writeImage() {},
+  writeImage(image) {
+    this.text = "";
+    this.html = "";
+    this.rtf = "";
+    this.image = image;
+    this.formats = image && !image.isEmpty() ? ["image/png"] : [];
+    this.writes.push(["writeImage", image]);
+  },
 };
+
+const emptyImage = { isEmpty: () => true };
+const nonEmptyImage = { isEmpty: () => false };
 
 const clipboardModulePath = require.resolve("../../src/helpers/clipboard");
 
@@ -72,11 +101,47 @@ function createSuccessfulSpawn(calls) {
   };
 }
 
-function resetClipboard() {
-  fakeClipboard.text = "";
-  fakeClipboard.html = "";
-  fakeClipboard.formats = ["text/plain"];
+function resetClipboard({
+  text = "",
+  html = "",
+  rtf = "",
+  image = null,
+  formats = ["text/plain"],
+} = {}) {
+  fakeClipboard.text = text;
+  fakeClipboard.html = html;
+  fakeClipboard.rtf = rtf;
+  fakeClipboard.image = image;
+  fakeClipboard.formats = formats;
+  fakeClipboard.writes = [];
 }
+
+test("restore preserves rich clipboard formats atomically", () => {
+  resetClipboard({
+    formats: ["text/html", "text/rtf", "text/plain", "image/png"],
+    text: "plain before",
+    html: "<b>html before</b>",
+    rtf: "{\\rtf1 before}",
+    image: nonEmptyImage,
+  });
+  const manager = new ClipboardManager();
+
+  const snapshot = manager._saveClipboard();
+  fakeClipboard.writeText("dictated text");
+  manager._restoreClipboard(snapshot);
+
+  assert.deepEqual([...fakeClipboard.availableFormats()].sort(), [
+    "image/png",
+    "text/html",
+    "text/plain",
+    "text/rtf",
+  ]);
+  assert.equal(fakeClipboard.text, "plain before");
+  assert.equal(fakeClipboard.html, "<b>html before</b>");
+  assert.equal(fakeClipboard.rtf, "{\\rtf1 before}");
+  assert.equal(fakeClipboard.image, nonEmptyImage);
+  assert.equal(fakeClipboard.writes.at(-1)[0], "write");
+});
 
 test("restore runs when clipboard still contains the pasted text", async () => {
   resetClipboard();

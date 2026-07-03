@@ -1554,6 +1554,13 @@ if (gotSingleInstanceLock) {
   app.on("before-quit", (event) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
+    if (updateManager && updateManager.isQuittingForUpdate) {
+      // Quit must proceed for the installer to run, so no preventDefault;
+      // sidecar shutdown is best-effort (the reaper cleans up orphans on relaunch).
+      performSyncTeardown();
+      sidecarRegistry.shutdownAll().catch(() => {});
+      return;
+    }
     event.preventDefault();
     performSyncTeardown();
     sidecarRegistry.shutdownAll().finally(() => app.exit(0));
