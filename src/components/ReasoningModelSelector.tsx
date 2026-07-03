@@ -631,10 +631,12 @@ export default function ReasoningModelSelector({
                     <div className="flex items-baseline justify-between">
                       <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
                       <a
-                        href="https://dash.tinfoil.sh"
+                        href="https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr"
                         target="_blank"
                         rel="noopener noreferrer"
-                        onClick={createExternalLinkHandler("https://dash.tinfoil.sh")}
+                        onClick={createExternalLinkHandler(
+                          "https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr"
+                        )}
                         className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
                       >
                         {t("reasoning.getApiKey")}

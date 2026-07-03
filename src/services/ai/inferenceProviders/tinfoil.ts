@@ -6,25 +6,17 @@ import logger from "../../../utils/logger";
 import { applyThinkingSuppression } from "../thinkingSuppression";
 import { getTinfoilChatClient } from "../tinfoilClient";
 
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export const tinfoilProvider: InferenceProvider = {
   id: "tinfoil",
   async call({ text, model, agentName, config, ctx }) {
     logger.logReasoning("TINFOIL_START", { model, agentName });
 
     const apiKey = await ctx.getApiKey("tinfoil");
+    // The client verifies enclave attestation before every request and
+    // refuses to send anything over an unverified transport.
     const client = await getTinfoilChatClient(apiKey);
-
-    const verification = await client.getVerificationDocument();
-    if (!verification.securityVerified) {
-      throw new Error("Tinfoil enclave verification failed");
-    }
-
-    logger.logReasoning("TINFOIL_VERIFIED", {
-      model,
-      enclaveHost: verification.enclaveHost,
-      configRepo: verification.configRepo,
-      selectedRouterEndpoint: verification.selectedRouterEndpoint,
-    });
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const messages = [
@@ -57,8 +49,14 @@ export const tinfoilProvider: InferenceProvider = {
 
     applyThinkingSuppression(requestBody, model, "tinfoil", config);
 
+    // 30s per attempt like sibling providers; SDK-internal retries off so
+    // withRetry stays the single retry layer.
     const response = await withRetry(
-      () => client.chat.completions.create(requestBody as any),
+      () =>
+        client.chat.completions.create(requestBody as any, {
+          timeout: REQUEST_TIMEOUT_MS,
+          maxRetries: 0,
+        }),
       createApiRetryStrategy()
     );
 

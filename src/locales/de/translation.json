@@ -1894,7 +1894,13 @@
         "anthropic_claude_opus_4_8": "Leistungsstärkstes Claude-Modell",
         "anthropic_claude_opus_4_7": "Leistungsstarkes Opus-Modell",
         "anthropic_claude_opus_4_6": "Vorherige Opus-Generation, 1M Kontext",
-        "anthropic_claude_opus_4_5": "Früheres Opus-Modell"
+        "anthropic_claude_opus_4_5": "Früheres Opus-Modell",
+        "tinfoil_deepseek_v4_pro": "Privates Long-Context-Reasoning in sicheren Enklaven, 800K Kontext",
+        "tinfoil_glm_5_2": "Privates agentisches Engineering-Modell in sicheren Enklaven, 384K Kontext",
+        "tinfoil_kimi_k2_6": "Privates Modell für langfristiges Coding und Multimodalität, 256K Kontext",
+        "tinfoil_gemma4_31b": "Privates mehrsprachiges Reasoning-Modell mit Tool-Aufrufen, 256K Kontext",
+        "tinfoil_gpt_oss_120b": "Privates Open-Weight-Reasoning-Modell mit Tool-Nutzung, 131K Kontext",
+        "tinfoil_llama3_3_70b": "Privates Konversationsmodell mit Tool-Aufrufen, 128K Kontext"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",

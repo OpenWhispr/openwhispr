@@ -1894,7 +1894,13 @@
         "anthropic_claude_opus_4_8": "最も高性能な Claude モデル",
         "anthropic_claude_opus_4_7": "高性能な Opus モデル",
         "anthropic_claude_opus_4_6": "前世代の Opus、100 万トークンコンテキスト",
-        "anthropic_claude_opus_4_5": "旧世代の Opus モデル"
+        "anthropic_claude_opus_4_5": "旧世代の Opus モデル",
+        "tinfoil_deepseek_v4_pro": "セキュアエンクレーブ内のプライベート長文脈推論、800K コンテキスト",
+        "tinfoil_glm_5_2": "セキュアエンクレーブ内のプライベート・エージェント型エンジニアリングモデル、384K コンテキスト",
+        "tinfoil_kimi_k2_6": "プライベートな長期コーディング・マルチモーダルモデル、256K コンテキスト",
+        "tinfoil_gemma4_31b": "ツール呼び出し対応のプライベート多言語推論モデル、256K コンテキスト",
+        "tinfoil_gpt_oss_120b": "ツール使用対応のプライベート・オープンウェイト推論モデル、131K コンテキスト",
+        "tinfoil_llama3_3_70b": "ツール呼び出し対応のプライベート会話モデル、128K コンテキスト"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",

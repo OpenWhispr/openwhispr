@@ -1942,7 +1942,13 @@
         "anthropic_claude_opus_4_8": "Modèle Claude le plus performant",
         "anthropic_claude_opus_4_7": "Modèle Opus puissant",
         "anthropic_claude_opus_4_6": "Génération Opus précédente, contexte 1M",
-        "anthropic_claude_opus_4_5": "Modèle Opus antérieur"
+        "anthropic_claude_opus_4_5": "Modèle Opus antérieur",
+        "tinfoil_deepseek_v4_pro": "Raisonnement privé à long contexte dans des enclaves sécurisées, contexte 800K",
+        "tinfoil_glm_5_2": "Modèle privé d'ingénierie agentique dans des enclaves sécurisées, contexte 384K",
+        "tinfoil_kimi_k2_6": "Modèle privé de codage longue durée et multimodal, contexte 256K",
+        "tinfoil_gemma4_31b": "Modèle privé de raisonnement multilingue avec appel d'outils, contexte 256K",
+        "tinfoil_gpt_oss_120b": "Modèle privé de raisonnement à poids ouverts avec usage d'outils, contexte 131K",
+        "tinfoil_llama3_3_70b": "Modèle privé conversationnel avec appel d'outils, contexte 128K"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Rapide et économique. Parfait pour nettoyer le texte.",

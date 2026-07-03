@@ -11,7 +11,11 @@ const aiSdkProviderCache = new Map<string, Promise<TinfoilAISDKProvider>>();
 
 function loadTinfoil(): Promise<TinfoilModule> {
   if (!tinfoilModulePromise) {
-    tinfoilModulePromise = import("tinfoil");
+    // Don't cache a failed import — the next call should retry.
+    tinfoilModulePromise = import("tinfoil").catch((error) => {
+      tinfoilModulePromise = null;
+      throw error;
+    });
   }
   return tinfoilModulePromise;
 }
@@ -64,7 +68,7 @@ export async function getTinfoilLanguageModel(
   model: string
 ): Promise<LanguageModel> {
   const provider = await getTinfoilAISDKProvider(apiKey);
-  return provider(model) as LanguageModel;
+  return provider(model);
 }
 
 export function clearTinfoilClientCache(): void {

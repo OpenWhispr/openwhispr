@@ -1986,7 +1986,13 @@
         "anthropic_claude_opus_4_8": "Most capable Claude model",
         "anthropic_claude_opus_4_7": "Powerful Opus model",
         "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_5": "Earlier Opus model",
+        "tinfoil_deepseek_v4_pro": "Private long-context reasoning in secure enclaves, 800K context",
+        "tinfoil_glm_5_2": "Private agentic engineering model in secure enclaves, 384K context",
+        "tinfoil_kimi_k2_6": "Private long-horizon coding and multimodal model, 256K context",
+        "tinfoil_gemma4_31b": "Private multilingual reasoning model with tool calling, 256K context",
+        "tinfoil_gpt_oss_120b": "Private open-weight reasoning model with tool use, 131K context",
+        "tinfoil_llama3_3_70b": "Private conversational model with tool calling, 128K context"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
