@@ -4479,9 +4479,9 @@ class IPCHandlers {
         return { mode: windowsAccess.mode, strategy: windowsAccess.strategy };
       }
 
-      if (mode === "loopback") {
-        return { mode, strategy: "loopback" };
-      }
+      // Unreachable today (loopback implies win32 or linux, both handled
+      // above), but callers destructure the result, so never return undefined.
+      return { mode, strategy: "unsupported" };
     };
 
     const hasNativeMeetingSystemAudio = () => getMeetingSystemAudioMode() === "native";

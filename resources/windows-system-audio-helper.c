@@ -405,6 +405,7 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
         UINT32 packetFrames = 0;
         LARGE_INTEGER now;
         UINT64 targetFrames;
+        UINT64 drainedFrames = 0;
 
         WaitForSingleObject(samplesReadyEvent, CAPTURE_WAIT_TIMEOUT_MS);
 
@@ -455,6 +456,7 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
                     goto done;
                 }
                 emittedFrames += frames;
+                drainedFrames += frames;
             }
 
             hr = IAudioCaptureClient_ReleaseBuffer(captureClient, frames);
@@ -487,13 +489,22 @@ static int run_capture(DWORD excludePid, UINT32 sampleRate)
                 emit_event("warning", "timeline_rebased",
                            "Capture clock jumped; audio timeline rebased");
             } else if (gapFrames >= (UINT64)sampleRate * SILENCE_GAP_THRESHOLD_MS / 1000) {
-                if (!write_silence((size_t)gapFrames)) {
-                    emit_event("error", "stdout_write_failed",
-                               "Failed to write silence to stdout");
-                    exitCode = 2;
-                    goto done;
+                if (drainedFrames > 0) {
+                    /* Audio is flowing, so the deficit is drift between the
+                     * audio engine clock and QPC, not real silence. Rebase
+                     * instead of splicing silence into continuous audio. */
+                    captureStart.QuadPart =
+                        now.QuadPart -
+                        (LONGLONG)(emittedFrames * (UINT64)qpcFrequency.QuadPart / sampleRate);
+                } else {
+                    if (!write_silence((size_t)gapFrames)) {
+                        emit_event("error", "stdout_write_failed",
+                                   "Failed to write silence to stdout");
+                        exitCode = 2;
+                        goto done;
+                    }
+                    emittedFrames = targetFrames;
                 }
-                emittedFrames = targetFrames;
             }
         }
 

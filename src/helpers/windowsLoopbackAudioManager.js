@@ -6,6 +6,7 @@ const debugLogger = require("./debugLogger");
 const START_TIMEOUT_MS = 10000;
 const STOP_TIMEOUT_MS = 3000;
 const PROBE_TIMEOUT_MS = 5000;
+const TRANSIENT_CAPABILITY_TTL_MS = 30000;
 const SAMPLE_RATE = 24000;
 const BINARY_NAME = "windows-system-audio-helper.exe";
 
@@ -22,6 +23,7 @@ class WindowsLoopbackAudioManager {
     this.onWarning = null;
     this.isStopping = false;
     this.cachedCapability = null;
+    this.cachedCapabilityExpiresAt = 0;
     this.capabilityPromise = null;
   }
 
@@ -59,7 +61,7 @@ class WindowsLoopbackAudioManager {
       return { available: false, error: "Not running on Windows." };
     }
 
-    if (!force && this.cachedCapability) {
+    if (!force && this.cachedCapability && Date.now() < this.cachedCapabilityExpiresAt) {
       return this.cachedCapability;
     }
 
@@ -67,12 +69,14 @@ class WindowsLoopbackAudioManager {
       return this.capabilityPromise;
     }
 
+    // Definitive probe results are cached for the session. Transient failures
+    // (the helper's own activation timeout, a spawn failure, a probe that hung)
+    // are cached only briefly so a momentary audio-stack hiccup can't pin the
+    // native path "unavailable" until restart, while still bounding how often
+    // IPC capability checks can respawn the probe.
     const promise = this._probeCapability()
-      // Cache only definitive probe results. A thrown probe (timeout, spawn
-      // failure) is transient and falls through to the catch without caching,
-      // so it doesn't pin "unavailable" for the whole session.
       .then((capability) => {
-        this.cachedCapability = capability;
+        this._cacheCapability(capability, this._isTransientProbeFailure(capability));
         return capability;
       })
       .catch((error) => {
@@ -81,7 +85,9 @@ class WindowsLoopbackAudioManager {
           { error: error.message },
           "meeting"
         );
-        return { available: false, error: error.message };
+        const capability = { available: false, error: error.message };
+        this._cacheCapability(capability, true);
+        return capability;
       })
       .finally(() => {
         this.capabilityPromise = null;
@@ -89,6 +95,17 @@ class WindowsLoopbackAudioManager {
 
     this.capabilityPromise = promise;
     return promise;
+  }
+
+  _cacheCapability(capability, transient) {
+    this.cachedCapability = capability;
+    this.cachedCapabilityExpiresAt = transient
+      ? Date.now() + TRANSIENT_CAPABILITY_TTL_MS
+      : Infinity;
+  }
+
+  _isTransientProbeFailure(capability) {
+    return !capability.available && /activation_timeout/i.test(capability.error || "");
   }
 
   async start({ onChunk, onError, onWarning } = {}) {
@@ -128,6 +145,7 @@ class WindowsLoopbackAudioManager {
 
     await new Promise((resolve, reject) => {
       let settled = false;
+      let fatalErrorReported = false;
       const timeout = setTimeout(() => {
         finish(reject, new Error("Timed out starting Windows system audio capture."), true);
       }, START_TIMEOUT_MS);
@@ -164,6 +182,7 @@ class WindowsLoopbackAudioManager {
             if (!settled) {
               finish(reject, error, true);
             } else {
+              fatalErrorReported = true;
               this.onError?.(error);
             }
           }
@@ -193,7 +212,10 @@ class WindowsLoopbackAudioManager {
           return;
         }
 
-        if (!wasStopping) {
+        // Skip the synthetic exit error when the helper already delivered a
+        // specific JSON error event, so the informative message isn't
+        // clobbered by the generic one.
+        if (!wasStopping && !fatalErrorReported) {
           this.onError?.(
             new Error(
               `Windows system audio helper exited unexpectedly (code ${code ?? "null"}, signal ${signal ?? "null"}).`
@@ -212,12 +234,17 @@ class WindowsLoopbackAudioManager {
     const child = this.process;
     this.isStopping = true;
 
+    // Resolve only once the child has actually exited (kill on timeout, then
+    // keep waiting) so cleanup below can't reset isStopping while the child is
+    // still alive — a late exit would otherwise surface a spurious
+    // "exited unexpectedly" error into a subsequent capture session.
     await new Promise((resolve) => {
       const timeout = setTimeout(() => {
         try {
           child.kill();
-        } catch {}
-        resolve();
+        } catch {
+          resolve();
+        }
       }, STOP_TIMEOUT_MS);
 
       child.once("exit", () => {
@@ -229,11 +256,12 @@ class WindowsLoopbackAudioManager {
       try {
         child.stdin.end();
       } catch {
-        clearTimeout(timeout);
         try {
           child.kill();
-        } catch {}
-        resolve();
+        } catch {
+          clearTimeout(timeout);
+          resolve();
+        }
       }
     });
 
