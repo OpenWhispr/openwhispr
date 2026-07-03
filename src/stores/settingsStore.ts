@@ -811,7 +811,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
 ] as const;
 
 function invalidateApiKeyCaches(
-  provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom"
+  provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "custom" | "litellm"
 ) {
   if (provider) {
     if (_ReasoningService) {
