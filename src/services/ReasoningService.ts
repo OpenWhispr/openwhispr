@@ -596,8 +596,16 @@ class ReasoningService extends BaseReasoningService {
 
     const modelDef = getCloudModel(model);
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
-    const needsDisableThinking =
+    const needsGroqDisableThinking =
       provider === "groq" && (modelDef?.disableThinking || userSuppressesThinking);
+    const needsGeminiMinimalThinking = provider === "gemini" && userSuppressesThinking;
+    const providerOptions = {
+      ...(needsGroqDisableThinking ? { groq: { reasoningEffort: "none" } } : {}),
+      ...(needsGeminiMinimalThinking
+        ? { google: { thinkingConfig: { thinkingLevel: "minimal", includeThoughts: false } } }
+        : {}),
+    };
+    const hasProviderOptions = Object.keys(providerOptions).length > 0;
 
     logger.logReasoning("AGENT_AI_SDK_STREAM_REQUEST", {
       model,
@@ -619,7 +627,7 @@ class ReasoningService extends BaseReasoningService {
       stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
       ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
       maxOutputTokens: config.maxTokens || 4096,
-      ...(needsDisableThinking ? { providerOptions: { groq: { reasoningEffort: "none" } } } : {}),
+      ...(hasProviderOptions ? { providerOptions } : {}),
     });
 
     for await (const chunk of result.fullStream) {
@@ -890,7 +898,7 @@ class ReasoningService extends BaseReasoningService {
   }
 
   clearApiKeyCache(
-    provider?: "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "mistral" | "custom"
+    provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "tinfoil" | "custom"
   ): void {
     if (provider) {
       if (provider !== "custom") {

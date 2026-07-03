@@ -48,13 +48,11 @@ export default function NotesOnboarding({ onComplete }: NotesOnboardingProps) {
   const {
     granted: systemAudioGranted,
     mode: systemAudioMode,
-    supportsOnboardingGrant: systemAudioSupportsOnboardingGrant,
     request: requestSystemAudio,
   } = useSystemAudioPermission();
   const [isRequestingSystemAudio, setIsRequestingSystemAudio] = useState(false);
   const shouldShowSystemAudioPermission = canManageSystemAudioInApp({
     mode: systemAudioMode,
-    supportsOnboardingGrant: systemAudioSupportsOnboardingGrant,
   });
 
   const handleGrantSystemAudio = useCallback(async () => {

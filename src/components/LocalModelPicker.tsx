@@ -162,7 +162,7 @@ export default function LocalModelPicker({
         selectedId={selectedProvider}
         onSelect={onProviderSelect}
         colorScheme={colorScheme}
-        scrollable
+        wrap
       />
 
       {progressDisplay}

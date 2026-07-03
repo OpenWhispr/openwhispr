@@ -57,7 +57,7 @@ function listNvidiaGpus() {
   return new Promise((resolve) => {
     execFile(
       "nvidia-smi",
-      ["--query-gpu=index,name,memory.total", "--format=csv,noheader,nounits"],
+      ["--query-gpu=index,uuid,name,memory.total", "--format=csv,noheader,nounits"],
       { timeout: 5000 },
       (error, stdout) => {
         if (error || !stdout) {
@@ -73,8 +73,9 @@ function listNvidiaGpus() {
             const parts = line.split(",").map((s) => s.trim());
             return {
               index: parseInt(parts[0], 10),
-              name: parts[1] || "Unknown GPU",
-              vramMb: parseInt(parts[2], 10) || 0,
+              uuid: parts[1] || "",
+              name: parts[2] || "Unknown GPU",
+              vramMb: parseInt(parts[3], 10) || 0,
             };
           })
           .filter((g) => !isNaN(g.index));

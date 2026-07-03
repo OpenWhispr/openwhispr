@@ -1,4 +1,7 @@
 const { execFileSync } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 const debugLogger = require("./debugLogger");
 
 const DBUS_SERVICE_NAME = "com.openwhispr.App";
@@ -41,6 +44,40 @@ const ELECTRON_TO_HYPRLAND_KEY = {
 // Supports: standalone keys (F4, Space), modifier+key combos, and modifier-only combos (Control+Super)
 const VALID_HOTKEY_PATTERN =
   /^((CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd)(\+(CommandOrControl|CmdOrCtrl|Control|Ctrl|Alt|Option|Shift|Super|Meta|Win|Command|Cmd))*(\+)?)?(F([1-9]|1[0-9]|2[0-4])|[A-Za-z0-9]|Space|Escape|Tab|Backspace|Delete|Insert|Home|End|PageUp|PageDown|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Enter|PrintScreen|ScrollLock|Pause|Backquote|`)?$/i;
+
+const BINDS_FILENAME = "openwhispr-binds.conf";
+const MANAGED_HEADER_LINES = [
+  "# OpenWhispr keybinds (managed automatically)",
+  "# If you delete this file, also remove the matching source line from your Hyprland config.",
+];
+
+function isManagedHeaderLine(line) {
+  return MANAGED_HEADER_LINES.includes(line.trim());
+}
+
+function buildManagedBindsContent(lines = []) {
+  const body = lines.join("\n").trim();
+  return MANAGED_HEADER_LINES.join("\n") + "\n" + (body ? body + "\n" : "");
+}
+
+function getHyprConfigDir() {
+  if (process.env.HYPRLAND_CONFIG) {
+    return path.dirname(path.resolve(process.env.HYPRLAND_CONFIG));
+  }
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+  return path.join(xdgConfigHome, "hypr");
+}
+
+function getHyprlandConfPath() {
+  if (process.env.HYPRLAND_CONFIG) {
+    return path.resolve(process.env.HYPRLAND_CONFIG);
+  }
+  return path.join(getHyprConfigDir(), "hyprland.conf");
+}
+
+function getBindsFilePath() {
+  return path.join(getHyprConfigDir(), BINDS_FILENAME);
+}
 
 let dbus = null;
 
@@ -231,9 +268,95 @@ class HyprlandShortcutManager {
     };
   }
 
+  _writeBindToConfig(bindLine) {
+    const bindsFile = getBindsFilePath();
+    fs.mkdirSync(path.dirname(bindsFile), { recursive: true });
+
+    let content = "";
+    try {
+      content = fs.readFileSync(bindsFile, "utf-8");
+    } catch (err) {
+      if (err.code !== "ENOENT") throw err;
+    }
+
+    const lines = content.split("\n").filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || isManagedHeaderLine(trimmed)) return false;
+      if (trimmed.startsWith("#")) return true;
+      return !trimmed.includes(DBUS_SERVICE_NAME);
+    });
+
+    const newContent = buildManagedBindsContent([...lines, bindLine]);
+
+    fs.writeFileSync(bindsFile, newContent, "utf-8");
+  }
+
+  _removeBindFromConfig() {
+    const bindsFile = getBindsFilePath();
+    let content = "";
+    try {
+      content = fs.readFileSync(bindsFile, "utf-8");
+    } catch (err) {
+      if (err.code === "ENOENT") return;
+      throw err;
+    }
+
+    const lines = content.split("\n").filter((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || isManagedHeaderLine(trimmed)) return false;
+      if (trimmed.startsWith("#")) return true;
+      return !trimmed.includes(DBUS_SERVICE_NAME);
+    });
+
+    fs.writeFileSync(bindsFile, buildManagedBindsContent(lines), "utf-8");
+  }
+
+  _ensureSourceInMainConfig() {
+    const mainConfig = getHyprlandConfPath();
+    let content;
+    try {
+      content = fs.readFileSync(mainConfig, "utf-8");
+    } catch (err) {
+      if (err.code === "ENOENT") return;
+      throw err;
+    }
+
+    const sourceLine = `source = ./${BINDS_FILENAME}`;
+    if (content.includes(`./${BINDS_FILENAME}`)) return;
+
+    const separator = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
+    fs.appendFileSync(mainConfig, `${separator}${sourceLine}\n`, "utf-8");
+    debugLogger.log("[HyprlandShortcut] Added source directive to hyprland.conf");
+  }
+
+  static getHyprlandConfigStatus() {
+    const mainConfig = getHyprlandConfPath();
+    const status = {
+      path: mainConfig,
+      canWrite: false,
+    };
+
+    try {
+      fs.accessSync(mainConfig, fs.constants.F_OK);
+      try {
+        fs.accessSync(mainConfig, fs.constants.W_OK);
+        status.canWrite = true;
+      } catch {
+        debugLogger.log("[HyprlandShortcut] Hyprland config is not writable:", mainConfig);
+      }
+    } catch {
+      debugLogger.log("[HyprlandShortcut] Hyprland config not found:", mainConfig);
+    }
+
+    return status;
+  }
+
   /**
    * Register a keybinding in Hyprland using hyprctl keyword bind.
    * The binding executes a dbus-send command that calls our Toggle() method.
+   *
+   * Also writes the bind to openwhispr-binds.conf (sourced from hyprland.conf)
+   * so it survives `hyprctl reload`.
    */
   async registerKeybinding(hotkey) {
     if (!HyprlandShortcutManager.isHyprland()) {
@@ -253,8 +376,8 @@ class HyprlandShortcutManager {
     }
 
     try {
-      // First unregister any existing binding
-      if (this.currentBinding) {
+      // First unregister any existing OpenWhispr binding if the hotkey changed.
+      if (this.currentBinding && this.currentBinding !== converted.bindKey) {
         await this.unregisterKeybinding();
       }
 
@@ -263,6 +386,18 @@ class HyprlandShortcutManager {
       // hyprctl keyword bind "MODS, key, exec, command"
       const bindValue = `${converted.bindKey}, exec, ${dbusCommand}`;
 
+      try {
+        execFileSync("hyprctl", ["keyword", "unbind", converted.bindKey], {
+          stdio: "pipe",
+          timeout: 5000,
+        });
+      } catch (err) {
+        debugLogger.log(
+          `[HyprlandShortcut] Pre-bind unbind for "${converted.bindKey}" failed, continuing:`,
+          err.message
+        );
+      }
+
       execFileSync("hyprctl", ["keyword", "bind", bindValue], {
         stdio: "pipe",
         timeout: 5000,
@@ -270,6 +405,17 @@ class HyprlandShortcutManager {
 
       this.currentBinding = converted.bindKey;
       this.isRegistered = true;
+
+      try {
+        this._writeBindToConfig(`bind = ${bindValue}`);
+        this._ensureSourceInMainConfig();
+      } catch (err) {
+        debugLogger.log(
+          "[HyprlandShortcut] Failed to persist keybinding; runtime bind is still active:",
+          err.message
+        );
+      }
+
       debugLogger.log(
         `[HyprlandShortcut] Keybinding "${hotkey}" (${converted.bindKey}) registered successfully`
       );
@@ -297,25 +443,27 @@ class HyprlandShortcutManager {
       return true;
     }
 
+    const binding = this.currentBinding;
+
     try {
-      execFileSync("hyprctl", ["keyword", "unbind", this.currentBinding], {
+      execFileSync("hyprctl", ["keyword", "unbind", binding], {
         stdio: "pipe",
         timeout: 5000,
       });
-
-      debugLogger.log(
-        `[HyprlandShortcut] Keybinding "${this.currentBinding}" unregistered successfully`
-      );
-      this.currentBinding = null;
-      this.isRegistered = false;
-      return true;
     } catch (err) {
-      debugLogger.log("[HyprlandShortcut] Failed to unregister keybinding:", err.message);
-      // Even if unbind fails, clear state so we don't keep retrying
-      this.currentBinding = null;
-      this.isRegistered = false;
-      return false;
+      debugLogger.log(`[HyprlandShortcut] Runtime unbind for "${binding}" failed:`, err.message);
     }
+
+    try {
+      this._removeBindFromConfig();
+    } catch (err) {
+      debugLogger.log("[HyprlandShortcut] Failed to remove persisted keybinding:", err.message);
+    }
+
+    debugLogger.log(`[HyprlandShortcut] Keybinding "${binding}" unregistered successfully`);
+    this.currentBinding = null;
+    this.isRegistered = false;
+    return true;
   }
 
   /**

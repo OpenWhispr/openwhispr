@@ -440,16 +440,28 @@ class WindowManager {
     this.handleWindowsPushKeyUp();
   }
 
-  sendToggleDictation() {
+  _sendDictationToggle(channel) {
     if (this.hotkeyManager.isInListeningMode()) {
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.showDictationPanel();
-      this.mainWindow.webContents.send("toggle-dictation");
+      this.mainWindow.webContents.send(channel);
       this._isDictatingToggle = !this._isDictatingToggle;
       this.meetingDetectionEngine?.setUserRecording(this._isDictatingToggle);
     }
+  }
+
+  sendToggleDictation() {
+    this._sendDictationToggle("toggle-dictation");
+  }
+
+  sendToggleVoiceAgent() {
+    // The voice-agent hotkeys, unlike the dictation paths, don't capture the
+    // target PID at their call sites, so capture here or the paste can't
+    // refocus the target (#668).
+    if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+    this._sendDictationToggle("toggle-voice-agent");
   }
 
   sendStartDictation() {
@@ -480,6 +492,26 @@ class WindowManager {
 
   setActivationModeCache(mode) {
     this._cachedActivationMode = mode === "push" ? "push" : "tap";
+  }
+
+  /**
+   * Sync the native low-level key listeners (Windows/Linux) so every hotkey slot
+   * that needs one is watched. Call after any change to a slot hotkey or the
+   * activation mode. No-op during hotkey capture (listeners are stopped then).
+   */
+  reconcileNativeKeyListeners() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    if (this.hotkeyManager.isInListeningMode()) return;
+    // GNOME/KDE/Hyprland deliver hotkeys via D-Bus native shortcuts; the low-level
+    // listener would be redundant there and could double-fire, so watch nothing.
+    const keys = this.hotkeyManager.isUsingNativeShortcut()
+      ? []
+      : this.hotkeyManager.getNativeListenerKeys(this.getActivationMode());
+    if (process.platform === "win32" && this.windowsKeyManager) {
+      this.windowsKeyManager.setKeys(keys);
+    } else if (process.platform === "linux" && this.linuxKeyManager) {
+      this.linuxKeyManager.setKeys(keys);
+    }
   }
 
   setFloatingIconAutoHide(enabled) {
@@ -522,6 +554,10 @@ class WindowManager {
 
   isUsingHyprlandHotkeys() {
     return this.hotkeyManager.isUsingHyprland();
+  }
+
+  getHyprlandConfigStatus() {
+    return this.hotkeyManager.getHyprlandConfigStatus();
   }
 
   isUsingKDEHotkeys() {
@@ -1009,11 +1045,7 @@ class WindowManager {
   showDictationPanel(options = {}) {
     const { focus = false } = options;
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      const wasHidden = !this.mainWindow.isVisible() || this.mainWindow.isMinimized();
-
-      if (wasHidden) {
-        this._repositionToCursorDisplay();
-      }
+      this._repositionToCursorDisplay();
 
       if (this.mainWindow.isMinimized()) {
         this.mainWindow.restore();

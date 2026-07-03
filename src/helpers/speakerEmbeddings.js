@@ -59,10 +59,10 @@ class SpeakerEmbeddings {
       samples.byteOffset + samples.byteLength
     );
 
+    // No transfer-list: MessagePortMain can't transfer ArrayBuffers, so the samples are cloned.
     const { embeddingBuffer } = await onnxWorkerClient.request(
       "speaker.extract",
-      { samplesBuffer },
-      [samplesBuffer]
+      { samplesBuffer }
     );
 
     if (!embeddingBuffer) return null;

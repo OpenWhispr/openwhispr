@@ -6,6 +6,24 @@ const DISCONNECT_TIMEOUT_MS = 3000;
 const SAMPLE_RATE = 24000;
 const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
 
+// A socket factory does network work before the socket exists, so the dial
+// must be bounded; a socket resolving after the deadline is closed, not leaked.
+async function createSocketWithTimeout(createSocket, timeoutMs) {
+  const socketPromise = createSocket();
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      socketPromise.then((socket) => socket?.close?.()).catch(() => {});
+      reject(new Error("Realtime socket setup timeout"));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([socketPromise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 class OpenAIRealtimeStreaming {
   constructor() {
     this.ws = null;
@@ -33,7 +51,7 @@ class OpenAIRealtimeStreaming {
   }
 
   async connect(options = {}) {
-    const { apiKey, model, preconfigured } = options;
+    const { apiKey, model, preconfigured, inputRate, createSocket } = options;
     if (!apiKey) throw new Error("OpenAI API key is required");
 
     if (this.isConnected || this.isConnecting) {
@@ -44,6 +62,7 @@ class OpenAIRealtimeStreaming {
     this.isConnecting = true;
     this.model = model || "gpt-4o-mini-transcribe";
     this.preconfigured = !!preconfigured;
+    this.inputRate = inputRate || SAMPLE_RATE;
     this.completedSegments = [];
     this.currentPartial = "";
     this.audioBytesSent = 0;
@@ -53,6 +72,18 @@ class OpenAIRealtimeStreaming {
 
     const url = "wss://api.openai.com/v1/realtime?intent=transcription";
     debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
+
+    // Attested providers (Tinfoil) supply their socket via an async factory.
+    let ws;
+    try {
+      ws = createSocket
+        ? await createSocketWithTimeout(createSocket, WEBSOCKET_TIMEOUT_MS)
+        : new WebSocket(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+    } catch (err) {
+      this.isConnecting = false;
+      this.cleanup();
+      throw err;
+    }
 
     return new Promise((resolve, reject) => {
       this.pendingResolve = resolve;
@@ -64,11 +95,7 @@ class OpenAIRealtimeStreaming {
         reject(new Error("OpenAI Realtime connection timeout"));
       }, WEBSOCKET_TIMEOUT_MS);
 
-      this.ws = new WebSocket(url, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-      });
+      this.ws = ws;
 
       this.ws.on("open", () => {
         debugLogger.debug("OpenAI Realtime WebSocket opened");
@@ -143,7 +170,7 @@ class OpenAIRealtimeStreaming {
                   type: "transcription",
                   audio: {
                     input: {
-                      format: { type: "audio/pcm", rate: SAMPLE_RATE },
+                      format: { type: "audio/pcm", rate: this.inputRate },
                       transcription: { model: this.model },
                       turn_detection: {
                         type: "server_vad",
