@@ -621,10 +621,7 @@ class ClipboardManager {
       if (html) data.html = html;
     }
 
-    if (
-      typeof clipboard.readRTF === "function" &&
-      (formats.includes("text/rtf") || formats.includes("public.rtf"))
-    ) {
+    if (formats.includes("text/rtf") || formats.includes("public.rtf")) {
       const rtf = clipboard.readRTF();
       if (rtf) data.rtf = rtf;
     }
@@ -651,9 +648,7 @@ class ClipboardManager {
     if (original.type === "formats") {
       clipboard.write(original.data);
     } else if (original.type === "image") {
-      if (!original.data.isEmpty()) clipboard.writeImage(original.data);
-    } else if (original.type === "html") {
-      clipboard.write({ text: original.text, html: original.html });
+      clipboard.writeImage(original.data);
     } else {
       clipboard.writeText(original.data);
     }
