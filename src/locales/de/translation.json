@@ -538,6 +538,10 @@
         "title": "Fallback-Modus",
         "description": "Lokales Whisper ist fehlgeschlagen. Stattdessen wurde die OpenAI API verwendet."
       },
+      "cleanupWarning": {
+        "title": "Bereinigung fehlgeschlagen",
+        "description": "Die Rohtranskription wurde verwendet, weil die Diktatbereinigung fehlgeschlagen ist. Prüfe die Einstellungen des Bereinigungsmodells, wenn dies weiterhin passiert."
+      },
       "noAudio": {
         "title": "Kein Audio erkannt",
         "description": "Die Aufnahme enthielt kein erkennbares Audio. Bitte versuchen Sie es erneut."

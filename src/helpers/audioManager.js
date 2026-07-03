@@ -32,6 +32,12 @@ import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording } from "./recordingValidation";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
+import {
+  mergeReasoningFallbackWarning,
+  mergeTranscriptionWarnings,
+  normalizeProcessedTranscriptionResult,
+  withTranscriptionWarnings,
+} from "../utils/transcriptionWarnings";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
@@ -896,12 +902,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           throw new Error("No audio detected");
         }
         const rawText = result.text;
-        const reasoningStart = performance.now();
-        const text = await this.processTranscription(result.text, "local");
-        timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+        const processed = await this.processTranscriptionWithWarnings(
+          result.text,
+          "local",
+          timings
+        );
 
-        if (text !== null && text !== undefined) {
-          return { success: true, text: text || result.text, rawText, source: "local", timings };
+        if (processed.text !== null && processed.text !== undefined) {
+          return withTranscriptionWarnings(
+            {
+              success: true,
+              text: processed.text || result.text,
+              rawText,
+              source: "local",
+              timings,
+            },
+            processed.warnings
+          );
         } else {
           throw new Error("No text transcribed");
         }
@@ -965,18 +982,23 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       if (result.success && result.text) {
         const rawText = result.text;
-        const reasoningStart = performance.now();
-        const text = await this.processTranscription(result.text, "local-parakeet");
-        timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+        const processed = await this.processTranscriptionWithWarnings(
+          result.text,
+          "local-parakeet",
+          timings
+        );
 
-        if (text !== null && text !== undefined) {
-          return {
-            success: true,
-            text: text || result.text,
-            rawText,
-            source: "local-parakeet",
-            timings,
-          };
+        if (processed.text !== null && processed.text !== undefined) {
+          return withTranscriptionWarnings(
+            {
+              success: true,
+              text: processed.text || result.text,
+              rawText,
+              source: "local-parakeet",
+              timings,
+            },
+            processed.warnings
+          );
         } else {
           throw new Error("No text transcribed");
         }
@@ -1252,13 +1274,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async processTranscription(text, source) {
     const normalizedText = typeof text === "string" ? text.trim() : "";
+    const fallbackResult = { text: normalizedText, warnings: [] };
 
     if (!normalizedText) {
       logger.logReasoning("TRANSCRIPTION_EMPTY_SKIPPING_REASONING", {
         source,
         reason: "Empty text after normalization",
       });
-      return normalizedText;
+      return fallbackResult;
     }
 
     if (this.skipReasoning) {
@@ -1266,7 +1289,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         source,
         reason: "skipReasoning is set (agent mode) — returning raw transcription",
       });
-      return normalizedText;
+      return fallbackResult;
     }
 
     logger.logReasoning("TRANSCRIPTION_RECEIVED", {
@@ -1290,7 +1313,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       logger.logReasoning("REASONING_SKIPPED", {
         reason: "No cleanup or dictation-agent model available",
       });
-      return normalizedText;
+      return fallbackResult;
     }
 
     const useReasoning = await this.isReasoningAvailable();
@@ -1303,14 +1326,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
 
     if (useReasoning) {
+      let route = null;
       try {
-        const route = resolveReasoningRoute(
+        route = resolveReasoningRoute(
           normalizedText,
           getSettings(),
           agentName,
           this.voiceAgentRequested
         );
-        if (route.kind === "skip") return normalizedText;
+        if (route.kind === "skip") return fallbackResult;
 
         const targetModel = route.kind === "agent" ? route.model : cleanupModel;
         const reasoningConfig = route.config;
@@ -1336,7 +1360,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           processingTime: new Date().toISOString(),
         });
 
-        return result;
+        return { text: result, warnings: [] };
       } catch (error) {
         logger.logReasoning("REASONING_FAILED", {
           error: error.message,
@@ -1344,6 +1368,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           fallbackToCleanup: true,
         });
         logger.warn("Reasoning failed", { source, error: error.message }, "notes");
+        return {
+          text: normalizedText,
+          warnings: mergeReasoningFallbackWarning([], route, cleanupProvider),
+        };
       }
     }
 
@@ -1351,7 +1379,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       reason: useReasoning ? "Reasoning failed" : "Reasoning not enabled",
     });
 
-    return normalizedText;
+    return fallbackResult;
+  }
+
+  async processTranscriptionWithWarnings(text, source, timings) {
+    const reasoningStart = performance.now();
+    const processed = normalizeProcessedTranscriptionResult(
+      await this.processTranscription(text, source),
+      text
+    );
+    timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+    return processed;
   }
 
   shouldStreamTranscription(model, provider) {
@@ -1552,6 +1590,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       throw new Error("No audio detected");
     }
     let processedText = result.text;
+    let warnings = [];
     if (processedText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
@@ -1618,21 +1657,29 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           { error: reasonError.message },
           "transcription"
         );
+        warnings = mergeReasoningFallbackWarning(
+          warnings,
+          route,
+          route.kind === "cleanup" ? cleanupCloudMode : route.config?.provider
+        );
       }
       timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
     }
 
-    return {
-      success: true,
-      text: processedText,
-      rawText,
-      source: "openwhispr",
-      timings,
-      limitReached: result.limitReached,
-      wordsUsed: result.wordsUsed,
-      wordsRemaining: result.wordsRemaining,
-      clientTranscriptionId: result.clientTranscriptionId,
-    };
+    return withTranscriptionWarnings(
+      {
+        success: true,
+        text: processedText,
+        rawText,
+        source: "openwhispr",
+        timings,
+        limitReached: result.limitReached,
+        wordsUsed: result.wordsUsed,
+        wordsRemaining: result.wordsRemaining,
+        clientTranscriptionId: result.clientTranscriptionId,
+      },
+      warnings
+    );
   }
 
   getCustomDictionaryArray() {
@@ -1773,12 +1820,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
           const rawText = proxyText;
-          const reasoningStart = performance.now();
-          const text = await this.processTranscription(proxyText, "mistral");
-          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+          const processed = await this.processTranscriptionWithWarnings(
+            proxyText,
+            "mistral",
+            timings
+          );
 
           const source = (await this.isReasoningAvailable()) ? "mistral-reasoned" : "mistral";
-          return { success: true, text, rawText, source, timings };
+          return withTranscriptionWarnings(
+            { success: true, text: processed.text, rawText, source, timings },
+            processed.warnings
+          );
         }
 
         throw new Error("No text transcribed - Mistral response was empty");
@@ -1806,12 +1858,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
           const rawText = proxyText;
-          const reasoningStart = performance.now();
-          const text = await this.processTranscription(proxyText, "xai");
-          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+          const processed = await this.processTranscriptionWithWarnings(proxyText, "xai", timings);
 
           const source = (await this.isReasoningAvailable()) ? "xai-reasoned" : "xai";
-          return { success: true, text, rawText, source, timings };
+          return withTranscriptionWarnings(
+            { success: true, text: processed.text, rawText, source, timings },
+            processed.warnings
+          );
         }
 
         throw new Error("No text transcribed - xAI response was empty");
@@ -1837,12 +1890,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           }
           timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
           const rawText = proxyText;
-          const reasoningStart = performance.now();
-          const text = await this.processTranscription(proxyText, "corti");
-          timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+          const processed = await this.processTranscriptionWithWarnings(
+            proxyText,
+            "corti",
+            timings
+          );
 
           const source = (await this.isReasoningAvailable()) ? "corti-reasoned" : "corti";
-          return { success: true, text, rawText, source, timings };
+          return withTranscriptionWarnings(
+            { success: true, text: processed.text, rawText, source, timings },
+            processed.warnings
+          );
         }
 
         throw new Error("No text transcribed - Corti response was empty");
@@ -1988,23 +2046,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
         const rawText = result.text;
 
-        const reasoningStart = performance.now();
-        const text = await this.processTranscription(result.text, "openai");
-        timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+        const processed = await this.processTranscriptionWithWarnings(
+          result.text,
+          "openai",
+          timings
+        );
 
         const source = (await this.isReasoningAvailable()) ? "openai-reasoned" : "openai";
         logger.debug(
           "Transcription successful",
           {
             originalLength: result.text.length,
-            processedLength: text.length,
+            processedLength: processed.text.length,
             source,
             transcriptionProcessingDurationMs: timings.transcriptionProcessingDurationMs,
             reasoningProcessingDurationMs: timings.reasoningProcessingDurationMs,
           },
           "transcription"
         );
-        return { success: true, text, rawText, source, timings };
+        return withTranscriptionWarnings(
+          { success: true, text: processed.text, rawText, source, timings },
+          processed.warnings
+        );
       } else {
         // Log at info level so it shows without debug mode
         logger.info(
@@ -2052,9 +2115,21 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const result = await window.electronAPI.transcribeLocalWhisper(arrayBuffer, options);
 
           if (result.success && result.text) {
-            const text = await this.processTranscription(result.text, "local-fallback");
-            if (text) {
-              return { success: true, text, source: "local-fallback" };
+            const processed = await this.processTranscriptionWithWarnings(
+              result.text,
+              "local-fallback",
+              timings
+            );
+            if (processed.text) {
+              return withTranscriptionWarnings(
+                {
+                  success: true,
+                  text: processed.text,
+                  rawText: result.text,
+                  source: "local-fallback",
+                },
+                processed.warnings
+              );
             }
           }
           throw error;
@@ -2804,7 +2879,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       if (isStaleDeviceError(error) && !forceDefaultMic && !stopRequested) {
         // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
-        logger.warn("Pinned microphone unavailable, retrying streaming on default mic", {}, "streaming");
+        logger.warn(
+          "Pinned microphone unavailable, retrying streaming on default mic",
+          {},
+          "streaming"
+        );
         this.cachedMicDeviceId = null;
         await this.cleanupStreaming();
         this.isRecording = false;
@@ -2968,6 +3047,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingSttWordCount = finalText ? finalText.split(/\s+/).filter(Boolean).length : 0;
 
     let usedCloudReasoning = false;
+    let warnings = [];
     if (finalText && !this.skipReasoning) {
       const reasoningStart = performance.now();
       const agentName = localStorage.getItem("agentName") || null;
@@ -3054,6 +3134,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           { error: reasonError.message },
           "streaming"
         );
+        warnings = mergeReasoningFallbackWarning(
+          warnings,
+          route,
+          route.kind === "cleanup" ? cleanupCloudMode : route.config?.provider
+        );
       }
     }
 
@@ -3072,6 +3157,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         });
         if (batchResult?.text) {
           finalText = batchResult.text;
+          warnings = mergeTranscriptionWarnings(warnings, batchResult.warnings);
           usedBatchFallback = true;
           logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
         }
@@ -3090,12 +3176,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         provider: `${this.getStreamingProviderName()}-streaming`,
         model: streamingSttModel || null,
       };
-      this.onTranscriptionComplete?.({
-        success: true,
-        text: finalText,
-        rawText: finalText,
-        source: `${this.getStreamingProviderName()}-streaming`,
-      });
+      this.onTranscriptionComplete?.(
+        withTranscriptionWarnings(
+          {
+            success: true,
+            text: finalText,
+            rawText: finalText,
+            source: `${this.getStreamingProviderName()}-streaming`,
+          },
+          warnings
+        )
+      );
 
       if (!usedBatchFallback) {
         (async () => {

@@ -538,6 +538,10 @@
         "title": "Fallback Mode",
         "description": "Local Whisper failed. Used OpenAI API instead."
       },
+      "cleanupWarning": {
+        "title": "Cleanup Failed",
+        "description": "Raw transcription was used because dictation cleanup failed. Check your cleanup model settings if this keeps happening."
+      },
       "noAudio": {
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."
