@@ -151,22 +151,20 @@ function buildDirect(manifest) {
     path.join(sourceDir, "aec_processor.cc"),
     path.join(sourceDir, "null_aec_dump_factory.cc"),
   ];
-  log(`Compiling ${manifest.cSources.length + manifest.cxxSources.length + localSources.length} sources`);
+  log(
+    `Compiling ${manifest.cSources.length + manifest.cxxSources.length + localSources.length} sources`
+  );
 
   for (const source of [...manifest.cSources, ...manifest.cxxSources, ...localSources]) {
     const outputObject = path.join(objectDir, getSourceObjectName(source));
     const compiler = source.endsWith(".c") ? toolchain.cc : toolchain.cxx;
     const languageArgs = source.endsWith(".c") ? ["-std=c11"] : ["-std=c++20"];
     const perSourceArgs = avx2Set.has(source) ? manifest.avx2CompileOptions : [];
-    const result = run(compiler, [
-      ...languageArgs,
-      ...commonArgs,
-      ...perSourceArgs,
-      "-c",
-      source,
-      "-o",
-      outputObject,
-    ], { logCommand: false });
+    const result = run(
+      compiler,
+      [...languageArgs, ...commonArgs, ...perSourceArgs, "-c", source, "-o", outputObject],
+      { logCommand: false }
+    );
 
     if (result.status !== 0) {
       return false;

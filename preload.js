@@ -34,7 +34,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Database functions
   saveTranscription: (text, rawText, options) =>
     ipcRenderer.invoke("db-save-transcription", text, rawText, options),
-  getTranscriptions: (limit) => ipcRenderer.invoke("db-get-transcriptions", limit),
+  getTranscriptions: (limit, options) =>
+    ipcRenderer.invoke("db-get-transcriptions", limit, options),
   clearTranscriptions: () => ipcRenderer.invoke("db-clear-transcriptions"),
   deleteTranscription: (id) => ipcRenderer.invoke("db-delete-transcription", id),
 
@@ -59,6 +60,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const listener = (_event, words) => callback?.(words);
     ipcRenderer.on("dictionary-updated", listener);
     return () => ipcRenderer.removeListener("dictionary-updated", listener);
+  },
+  getSnippets: () => ipcRenderer.invoke("db-get-snippets"),
+  setSnippets: (snippets) => ipcRenderer.invoke("db-set-snippets", snippets),
+  onSnippetsUpdated: (callback) => {
+    const listener = (_event, snippets) => callback?.(snippets);
+    ipcRenderer.on("snippets-updated", listener);
+    return () => ipcRenderer.removeListener("snippets-updated", listener);
   },
   setAutoLearnEnabled: (enabled) => ipcRenderer.send("auto-learn-changed", enabled),
   onCorrectionsLearned: (callback) => {
@@ -216,7 +224,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // CUDA GPU acceleration
   listGpus: () => ipcRenderer.invoke("list-gpus"),
-  setGpuDeviceIndex: (purpose, index) => ipcRenderer.invoke("set-gpu-device-index", purpose, index),
+  setGpuDeviceIndex: (purpose, uuid) => ipcRenderer.invoke("set-gpu-device-index", purpose, uuid),
   getGpuDeviceIndex: (purpose) => ipcRenderer.invoke("get-gpu-device-index", purpose),
   detectGpu: () => ipcRenderer.invoke("detect-gpu"),
   getCudaWhisperStatus: () => ipcRenderer.invoke("get-cuda-whisper-status"),
@@ -285,7 +293,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   snapToMeetingMode: () => ipcRenderer.invoke("snap-to-meeting-mode"),
   restoreFromMeetingMode: () => ipcRenderer.invoke("restore-from-meeting-mode"),
   getPlatform: () => process.platform,
-  appQuit: () => ipcRenderer.invoke("app-quit"),
 
   // Cleanup function
   cleanupApp: () => ipcRenderer.invoke("cleanup-app"),
@@ -839,6 +846,37 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-mark-transcription-synced", id, cloudId),
   getPendingTranscriptionDeletes: () => ipcRenderer.invoke("db-get-pending-transcription-deletes"),
   hardDeleteTranscription: (id) => ipcRenderer.invoke("db-hard-delete-transcription", id),
+
+  getPendingDictionary: () => ipcRenderer.invoke("db-get-pending-dictionary"),
+  getPendingDictionaryDeletes: () => ipcRenderer.invoke("db-get-pending-dictionary-deletes"),
+  getDictionaryByClientId: (clientDictId) =>
+    ipcRenderer.invoke("db-get-dictionary-by-client-id", clientDictId),
+  upsertDictionaryFromCloud: (cloudEntry) =>
+    ipcRenderer.invoke("db-upsert-dictionary-from-cloud", cloudEntry),
+  markDictionarySynced: (id, cloudId) =>
+    ipcRenderer.invoke("db-mark-dictionary-synced", id, cloudId),
+  hardDeleteDictionary: (id) => ipcRenderer.invoke("db-hard-delete-dictionary", id),
+  clearDictionaryCloudId: (id) => ipcRenderer.invoke("db-clear-dictionary-cloud-id", id),
+  broadcastDictionaryUpdated: () => ipcRenderer.invoke("db-broadcast-dictionary-updated"),
+
+  getPendingSnippets: () => ipcRenderer.invoke("db-get-pending-snippets"),
+  getPendingSnippetDeletes: () => ipcRenderer.invoke("db-get-pending-snippet-deletes"),
+  getSnippetForCloudMerge: (cloudEntry) =>
+    ipcRenderer.invoke("db-get-snippet-for-cloud-merge", cloudEntry),
+  upsertSnippetFromCloud: (cloudEntry) =>
+    ipcRenderer.invoke("db-upsert-snippet-from-cloud", cloudEntry),
+  markSnippetSynced: (id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement) =>
+    ipcRenderer.invoke(
+      "db-mark-snippet-synced",
+      id,
+      cloudId,
+      serverUpdatedAt,
+      expectedTrigger,
+      expectedReplacement
+    ),
+  hardDeleteSnippet: (id) => ipcRenderer.invoke("db-hard-delete-snippet", id),
+  clearSnippetCloudId: (id) => ipcRenderer.invoke("db-clear-snippet-cloud-id", id),
+  broadcastSnippetsUpdated: () => ipcRenderer.invoke("db-broadcast-snippets-updated"),
 
   // Google Calendar
   gcalStartOAuth: () => ipcRenderer.invoke("gcal-start-oauth"),

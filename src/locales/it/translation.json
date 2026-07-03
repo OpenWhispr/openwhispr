@@ -101,13 +101,6 @@
     "accessibility": "Le impostazioni di accessibilità non sono disponibili su questa piattaforma.",
     "systemAudio": "Le impostazioni audio di sistema non sono disponibili su questa piattaforma."
   },
-  "titleBar": {
-    "quitTitle": "Esci da OpenWhispr",
-    "quitConfirmTitle": "Uscire da OpenWhispr?",
-    "quitConfirmDescription": "Questa operazione chiuderà OpenWhispr e interromperà i processi in background.",
-    "quit": "Esci",
-    "cancel": "Annulla"
-  },
   "upgradePrompt": {
     "paymentFailed": "Non siamo riusciti a elaborare il pagamento",
     "weeklyLimit": "Hai raggiunto il limite settimanale",
@@ -165,14 +158,18 @@
     "unknownError": "Une erreur inconnue s'est produite",
     "copy": "Copier",
     "copied": "Copié",
-    "done": "Terminé"
+    "done": "Terminé",
+    "skip": "Salta"
   },
   "onboarding": {
     "steps": {
       "welcome": "Benvenuto",
       "setup": "Configurazione",
       "permissions": "Permessi",
-      "activation": "Attivazione",
+      "activation": "Dettatura",
+      "useCase": "Su di te",
+      "meeting": "Riunioni",
+      "finish": "Fine",
       "voiceAgent": "Agente vocale"
     },
     "hotkey": {
@@ -187,17 +184,17 @@
     "permissions": {
       "title": "Permessi",
       "microphoneTitle": "Microfono",
-      "microphoneDescription": "Cattura la tua voce per la trascrizione",
+      "microphoneDescription": "Trasforma la tua voce in testo. Non viene registrato nulla finché non premi la scorciatoia.",
       "grant": "Concedi",
       "grantAccess": "Concedi accesso",
       "accessibilityTitle": "Accessibilità",
-      "accessibilityDescription": "Permette di incollare automaticamente il testo trascritto in qualsiasi app",
+      "accessibilityDescription": "Digita il testo finale direttamente nell'app in cui ti trovi — documenti, email, chat.",
       "testAndGrant": "Testa e concedi",
       "requiredForApp": "Necessario per usare OpenWhispr",
       "microphoneRequired": "Accesso al microfono richiesto",
       "openSystemSettings": "Apri Impostazioni di Sistema",
       "systemAudioTitle": "Audio di Sistema",
-      "systemAudioDescription": "Trascrivi riunioni, chiamate, lezioni, podcast e altri audio di sistema.",
+      "systemAudioDescription": "Permette al registratore delle riunioni di sentire l'altro lato delle tue chiamate — riunioni, lezioni, podcast. Puoi attivarlo più tardi nelle Impostazioni.",
       "optional": "Facoltativo",
       "recommended": "Consigliato",
       "accessibilityTroubleshooting": "In Impostazioni di Sistema → Accessibilità, disattiva l'interruttore di OpenWhispr e riattivalo. Se non funziona, rimuovi OpenWhispr dall'elenco e aggiungilo di nuovo. Ancora problemi? Scrivi a support@openwhispr.com."
@@ -208,7 +205,7 @@
       "preferredLanguage": "Lingua preferita"
     },
     "activation": {
-      "title": "Configurazione attivazione",
+      "title": "Configurazione dettatura",
       "description": "Configura come avviare la dettatura",
       "hotkey": "Scorciatoia",
       "mode": "Modalità",
@@ -220,10 +217,19 @@
       "textareaPlaceholder": "Clicca qui e usa la scorciatoia per dettare..."
     },
     "voiceAgent": {
-      "title": "Scorciatoia dell'agente vocale",
+      "title": "Configurazione dell'agente vocale",
       "description": "Parla con il tuo agente IA con un solo tasto",
       "hotkey": "Scorciatoia",
       "howItWorks": "Premi il tasto e di' cosa vuoi — ad esempio “scrivi un breve messaggio di ringraziamento”. {{agentName}} scrive il risultato dove si trova il cursore. Non serve dire prima “Hey {{agentName}}”.",
+      "test": "Provalo",
+      "testInstruction": "Fai clic qui sotto, premi {{hotkey}} e pronuncia un comando",
+      "testSetHotkey": "Imposta una scorciatoia sopra per provarlo",
+      "testPlaceholder": "Fai clic qui, premi la tua scorciatoia e pronuncia uno degli esempi...",
+      "examples": [
+        "Traduci in italiano: «Parlo più velocemente di quanto scrivo»",
+        "Scrivi una breve email al mio capo dicendogli che voglio una promozione, si chiama Mark",
+        "Quanto fa 5 × 5?"
+      ],
       "optionalNote": "Facoltativo — puoi impostarla o modificarla in qualsiasi momento nelle impostazioni."
     },
     "connectivity": {
@@ -231,6 +237,71 @@
       "body": "{{cause}} Puoi passare al motore locale o continuare e riprovare più tardi.",
       "useLocal": "Usa motore locale",
       "continue": "Continua comunque"
+    },
+    "useCase": {
+      "title": "Cosa ti porta qui?",
+      "description": "Siamo un piccolo team e pubblichiamo ogni settimana. Ciò che scegli configura l'app per te — e ci dice cosa costruire dopo.",
+      "noteLabel": "C'è altro che vorresti farci sapere?",
+      "notePlaceholder": "Facoltativo",
+      "options": {
+        "dictation": {
+          "title": "Scrivere più velocemente",
+          "description": "Detta in qualsiasi app invece di digitare"
+        },
+        "meetings": {
+          "title": "Note e riepiloghi delle riunioni",
+          "description": "Registra, trascrivi e riassumi le riunioni"
+        },
+        "healthcare": {
+          "title": "Trascrizione medica, clinica e terapeutica",
+          "description": "Detta note dei pazienti, note di seduta e referti"
+        },
+        "translation": {
+          "title": "Tradurre lingue",
+          "description": "Parla una lingua, scrivi in un'altra"
+        },
+        "ai": {
+          "title": "Parlare con la mia IA",
+          "description": "Guida con la voce ChatGPT, Claude e altri agenti"
+        },
+        "upload": {
+          "title": "Caricare file audio",
+          "description": "Carica e trascrivi MP3, OGG e altro"
+        }
+      },
+      "selectHint": "Seleziona tutte le opzioni pertinenti"
+    },
+    "meeting": {
+      "title": "Note delle riunioni",
+      "description": "Cattura e riassumi le tue riunioni",
+      "autoDetect": "OpenWhispr rileva automaticamente quando sei in riunione e ti propone di avviare le note — nulla viene registrato senza di te.",
+      "notification": {
+        "title": "Riunione rilevata",
+        "body": "Sembra che tu sia in riunione. Vuoi prendere appunti?",
+        "cta": "Avvia registrazione"
+      },
+      "hotkeyLabel": "Scorciatoia riunione",
+      "hotkeyHint": "Facoltativa — premila in qualsiasi riunione per avviare subito una nota."
+    },
+    "finish": {
+      "title": "Tutto pronto",
+      "cloudDescription": "Sei su OpenWhispr Cloud: veloce, preciso, zero conservazione dei dati e 2.000 parole gratis a settimana. Preferisci tutto sul tuo dispositivo? Passa all'elaborazione locale nelle Impostazioni.",
+      "localDescription": "Sei configurato con l'elaborazione locale o con la tua chiave. Regola come viene elaborato il tuo audio in qualsiasi momento nelle Impostazioni.",
+      "cleanupNote": "La pulizia del testo con IA usa impostazioni predefinite sensate. Puoi regolarla in qualsiasi momento nelle Impostazioni.",
+      "openSettings": "Apri Impostazioni",
+      "skipForNow": "Salta per ora",
+      "corti": {
+        "title": "Ci hai detto che sei qui per la trascrizione clinica",
+        "description": "Siamo partner di Corti — riconoscimento vocale di livello clinico con la massima accuratezza, conforme alla HIPAA.",
+        "createAccount": "Crea il tuo account Corti",
+        "creditBadge": "50 $ di credito gratuito",
+        "regionHint": "Scegli dove elaborare il tuo audio — USA o UE.",
+        "useCorti": "Usa Corti",
+        "skip": "Non ora",
+        "step1": "Registrati su corti.ai",
+        "step2": "Apri la console Corti e crea le credenziali API",
+        "step3": "Incolla qui sotto Client ID e Secret"
+      }
     }
   },
   "streaming": {
@@ -320,7 +391,16 @@
       "retryError": "Ritrascrizione non riuscita",
       "audioNotFound": "File audio non trovato o scaduto",
       "noAiProcessing": "Nessuna elaborazione IA applicata a questa trascrizione",
-      "rawTranscript": "Trascrizione grezza"
+      "rawTranscript": "Trascrizione grezza",
+      "discarded": {
+        "show": "Mostra scartate",
+        "hide": "Nascondi scartate",
+        "badge": "Scartata",
+        "recording": "Registrazione scartata",
+        "recordingWithDuration": "Registrazione scartata · {{duration}}",
+        "recover": "Recupera",
+        "recovered": "Recuperata"
+      }
     },
     "cloudMigration": {
       "title": "Benvenuto in OpenWhispr Cloud",
@@ -432,6 +512,7 @@
     "apiKeyOptional": "Chiave API (opzionale)",
     "getKey": "Ottieni chiave ->",
     "endpointUrl": "URL endpoint",
+    "azureHint": "Azure AI Foundry: inserisci l'endpoint della tua risorsa (es. https://your-resource.cognitiveservices.azure.com) e imposta Modello con il nome esatto della tua distribuzione.",
     "customProvider": "Personalizzato",
     "fallback": {
       "whisperModelDescription": "Modello",
@@ -450,7 +531,8 @@
       "errorTitles": {
         "sessionExpired": "Sessione scaduta",
         "offline": "Sei offline",
-        "dailyLimitReached": "Limite giornaliero raggiunto"
+        "dailyLimitReached": "Limite giornaliero raggiunto",
+        "providerRateLimited": "Limite di velocità del provider"
       },
       "fallback": {
         "title": "Modalità fallback",
@@ -463,7 +545,8 @@
       "errorDescriptions": {
         "sessionExpired": "La tua sessione OpenWhispr Cloud non è disponibile. Effettua di nuovo l'accesso dalle Impostazioni.",
         "offline": "Sei offline. La trascrizione cloud richiede una connessione Internet.",
-        "dailyLimitReached": "Hai raggiunto il limite di trascrizioni di oggi. Riprova domani o aggiorna il tuo piano."
+        "dailyLimitReached": "Hai raggiunto il limite di trascrizioni di oggi. Riprova domani o aggiorna il tuo piano.",
+        "providerRateLimited": "Il tuo provider di trascrizione ha limitato la richiesta. Attendi un momento e riprova."
       }
     },
     "clipboard": {
@@ -645,6 +728,11 @@
       "welcomeBack": "Bentornato",
       "welcomeBackName": "Bentornato, {{name}}"
     },
+    "sso": {
+      "continueWithSSO": "Accedi con SSO",
+      "emailRequired": "Inserisci la tua email di lavoro per usare l’SSO.",
+      "failed": "Accesso SSO non riuscito. Riprova."
+    },
     "social": {
       "completeInBrowser": "Completa l'accesso nel browser",
       "continueWithApple": "Continua con Apple",
@@ -733,7 +821,8 @@
     "resendIn": "Reinvia tra {{seconds}}s",
     "verifiedDescription": "Il tuo account è pronto.",
     "verifiedTitle": "E-mail verificata",
-    "waiting": "In attesa della verifica..."
+    "waiting": "In attesa della verifica...",
+    "backToSignIn": "Torna all'accesso"
   },
   "errorBoundary": {
     "description": "Si è verificato un errore imprevisto. Ricarica per riprovare.",
@@ -1301,7 +1390,7 @@
         "linuxPttSetupNote": "Dopo aver eseguito il comando, esci e riaccedi.",
         "hyprlandConfigWriteWarningTitle": "Le scorciatoie di Hyprland non verranno mantenute",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr non può scrivere in {{path}}, quindi le scorciatoie non sopravvivranno a un ricaricamento della configurazione di Hyprland. Assicurati che il file esista e sia scrivibile.",
-        "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr si appropria della scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usi la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia."
+        "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia."
       },
       "meetingHotkey": {
         "title": "Scorciatoia modalità meeting",
@@ -1525,7 +1614,9 @@
       "audioStorageFiles": "{{count}} file, {{size}}",
       "audioStorageEmpty": "Nessun file audio salvato",
       "clearAllAudio": "Elimina tutti i file audio",
-      "clearAllAudioConfirm": "Eliminare tutti i file audio salvati? Questa azione è irreversibile."
+      "clearAllAudioConfirm": "Eliminare tutti i file audio salvati? Questa azione è irreversibile.",
+      "saveDiscarded": "Salva le dettature scartate",
+      "saveDiscardedDescription": "Quando annulli una dettatura con Escape, conserva l'audio nella cronologia per poterla recuperare. Richiede la conservazione di dati e audio attiva."
     },
     "prompts": {
       "description": "Visualizza, personalizza e testa il prompt di sistema unificato che gestisce la correzione del testo e il rilevamento delle istruzioni",
@@ -1536,7 +1627,8 @@
       "description": "Scegli un motore per dettatura e registrazione di note",
       "tabs": {
         "dictation": "Dettatura",
-        "noteRecording": "Registrazione note"
+        "noteRecording": "Registrazione note",
+        "upload": "Carica audio"
       },
       "selfHostedStreamingNote": "Richiede un server che supporti la trascrizione in streaming."
     },
@@ -1990,18 +2082,15 @@
       "transcribingCloud": "Trascrizione nel cloud...",
       "transcribingLocal": "Trascrizione locale...",
       "transcribingProvider": "Trascrizione tramite {{provider}}...",
+      "cancelTranscription": "Annulla trascrizione",
       "transcriptionComplete": "Trascrizione completata",
       "openNote": "Apri nota",
       "uploadAnother": "Carica un altro",
       "retry": "Riprova",
       "startOver": "Ricomincia",
-      "transcriptionSettings": "Impostazioni di trascrizione",
       "newFolder": "Nuova cartella",
       "folderName": "Nome cartella",
       "create": "Crea",
-      "setupTitle": "Configura la trascrizione",
-      "setupDescription": "Scegli come trascrivere il tuo audio. Questo si applica anche alla dettatura dal vivo.",
-      "continue": "Continua",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Personalizzato",
       "selectFolder": "Seleziona cartella",
@@ -2541,15 +2630,7 @@
     "noUpcoming": "Nessun evento in programma",
     "meetingStarting": "La riunione inizia ora",
     "today": "Oggi",
-    "tomorrow": "Domani",
-    "detection": {
-      "title": "Rilevamento Riunioni",
-      "description": "Rileva automaticamente quando sei in una riunione",
-      "processDetection": "Rilevamento Applicazioni",
-      "processDescription": "Identifica quale app stai usando quando viene rilevata una riunione",
-      "audioDetection": "Rilevamento Audio",
-      "audioDescription": "Notifica quando viene rilevata un'attività microfono prolungata"
-    }
+    "tomorrow": "Domani"
   },
   "upcoming": {
     "title": "Riunioni in programma",

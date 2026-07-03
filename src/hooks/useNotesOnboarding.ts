@@ -26,7 +26,6 @@ export function useNotesOnboarding(): UseNotesOnboardingReturn {
 
   const complete = useCallback(() => {
     localStorage.setItem("notesOnboardingComplete", "true");
-    localStorage.setItem("uploadSetupComplete", "true");
     setIsComplete(true);
   }, []);
 

@@ -101,13 +101,6 @@
     "accessibility": "このプラットフォームではアクセシビリティ設定を利用できません。",
     "systemAudio": "システムオーディオの設定はこのプラットフォームでは利用できません。"
   },
-  "titleBar": {
-    "quitTitle": "OpenWhispr を終了",
-    "quitConfirmTitle": "OpenWhispr を終了しますか？",
-    "quitConfirmDescription": "OpenWhispr を終了し、バックグラウンドプロセスを停止します。",
-    "quit": "終了",
-    "cancel": "キャンセル"
-  },
   "upgradePrompt": {
     "paymentFailed": "お支払いを処理できませんでした",
     "weeklyLimit": "週間の利用上限に達しました",
@@ -165,14 +158,18 @@
     "unknownError": "Ocurrió un error desconocido",
     "copy": "Copiar",
     "copied": "Copiado",
-    "done": "Listo"
+    "done": "Listo",
+    "skip": "スキップ"
   },
   "onboarding": {
     "steps": {
       "welcome": "ようこそ",
       "setup": "セットアップ",
       "permissions": "権限",
-      "activation": "アクティベーション",
+      "activation": "ディクテーション",
+      "useCase": "あなたについて",
+      "meeting": "会議",
+      "finish": "完了",
       "voiceAgent": "ボイスエージェント"
     },
     "hotkey": {
@@ -187,17 +184,17 @@
     "permissions": {
       "title": "権限",
       "microphoneTitle": "マイク",
-      "microphoneDescription": "文字起こしのためにあなたの声を録音します",
+      "microphoneDescription": "あなたの声をテキストに変換します。ホットキーを押すまで何も録音されません。",
       "grant": "許可",
       "grantAccess": "アクセスを許可",
       "accessibilityTitle": "アクセシビリティ",
-      "accessibilityDescription": "文字起こしテキストを任意のアプリに自動貼り付けします",
+      "accessibilityDescription": "完成したテキストを、今使っているアプリ（ドキュメント、メール、チャット）に直接入力します。",
       "testAndGrant": "テストして許可",
       "requiredForApp": "OpenWhispr の動作に必要です",
       "microphoneRequired": "マイクへのアクセスが必要です",
       "openSystemSettings": "システム設定を開く",
       "systemAudioTitle": "システムオーディオ",
-      "systemAudioDescription": "会議、通話、講義、ポッドキャストなど、システム音声を文字起こしします。",
+      "systemAudioDescription": "会議レコーダーが通話の相手側の音声（会議、講義、ポッドキャストなど）を聴けるようにします。後から設定で有効にできます。",
       "optional": "任意",
       "recommended": "推奨",
       "accessibilityTroubleshooting": "システム設定 → アクセシビリティで、OpenWhisprのスイッチをオフにしてから再度オンにしてください。それでもうまくいかない場合は、リストからOpenWhisprを削除して再度追加してみてください。それでも解決しませんか？support@openwhispr.com までメールでお問い合わせください。"
@@ -208,7 +205,7 @@
       "preferredLanguage": "優先言語"
     },
     "activation": {
-      "title": "アクティベーション設定",
+      "title": "ディクテーション設定",
       "description": "ディクテーションの起動方法を設定",
       "hotkey": "ホットキー",
       "mode": "モード",
@@ -220,10 +217,19 @@
       "textareaPlaceholder": "ここをクリックしてホットキーでディクテーション..."
     },
     "voiceAgent": {
-      "title": "ボイスエージェントホットキー",
+      "title": "ボイスエージェント設定",
       "description": "ワンキーでAIエージェントに話しかけられます",
       "hotkey": "ホットキー",
       "howItWorks": "キーを押して、してほしいことを話すだけ。例えば「お礼のメッセージを書いて」と言えば、{{agentName}}がカーソル位置に結果を入力します。「Hey {{agentName}}」と言う必要はありません。",
+      "test": "試す",
+      "testInstruction": "下をクリックし、{{hotkey}} を押してコマンドを話してください",
+      "testSetHotkey": "上でホットキーを設定すると試せます",
+      "testPlaceholder": "ここをクリックし、ホットキーを押して例の一つを話してください...",
+      "examples": [
+        "イタリア語に翻訳して:「私はタイプするより話す方が速い」",
+        "上司に昇進したいと伝える短いメールを書いて、彼の名前はマークです",
+        "5 × 5 はいくつ?"
+      ],
       "optionalNote": "任意です。設定からいつでも追加・変更できます。"
     },
     "connectivity": {
@@ -231,6 +237,71 @@
       "body": "{{cause}} ローカルエンジンに切り替えるか、続行して後でもう一度お試しください。",
       "useLocal": "ローカルエンジンを使う",
       "continue": "そのまま続行"
+    },
+    "useCase": {
+      "title": "どんな目的でお使いですか？",
+      "description": "私たちは小さなチームで、毎週リリースしています。選んだ内容に合わせてアプリを設定し、次に何を作るかの参考にします。",
+      "noteLabel": "他に伝えておきたいことはありますか？",
+      "notePlaceholder": "任意",
+      "options": {
+        "dictation": {
+          "title": "より速く書く",
+          "description": "タイピングの代わりにどのアプリでも音声入力"
+        },
+        "meetings": {
+          "title": "会議のメモと要約",
+          "description": "会議を録音・文字起こし・要約"
+        },
+        "healthcare": {
+          "title": "医療・臨床・セラピーの文字起こし",
+          "description": "患者メモ、セッション記録、レポートを音声入力"
+        },
+        "translation": {
+          "title": "言語の翻訳",
+          "description": "話す言語とは別の言語で入力"
+        },
+        "ai": {
+          "title": "AI との対話",
+          "description": "ChatGPT、Claude などのエージェントを声で操作"
+        },
+        "upload": {
+          "title": "音声ファイルのアップロード",
+          "description": "MP3、OGG などをアップロードして文字起こし"
+        }
+      },
+      "selectHint": "当てはまるものをすべて選択してください"
+    },
+    "meeting": {
+      "title": "会議メモ",
+      "description": "会議を記録して要約します",
+      "autoDetect": "OpenWhispr は会議中であることを自動的に検出し、メモの開始を提案します。あなたの操作なしに録音されることはありません。",
+      "notification": {
+        "title": "会議を検出しました",
+        "body": "会議中のようです。メモを取りますか？",
+        "cta": "録音を開始"
+      },
+      "hotkeyLabel": "会議ホットキー",
+      "hotkeyHint": "任意 — 会議中に押すとすぐにメモを開始できます。"
+    },
+    "finish": {
+      "title": "準備完了",
+      "cloudDescription": "OpenWhispr Cloud をご利用中です — 高速・高精度、データ保持なし、毎週 2,000 ワード無料。すべてを端末内で処理したい場合は、設定からローカル処理に切り替えられます。",
+      "localDescription": "ローカル処理またはご自身の API キーで設定済みです。音声の処理方法はいつでも設定から変更できます。",
+      "cleanupNote": "AI によるテキスト整形は適切な初期設定で動作します。設定からいつでも調整できます。",
+      "openSettings": "設定を開く",
+      "skipForNow": "今はスキップ",
+      "corti": {
+        "title": "臨床文字起こしが目的とのことですね",
+        "description": "私たちは Corti と提携しています — 最高精度の臨床グレード音声認識で、HIPAA に準拠しています。",
+        "createAccount": "Corti アカウントを作成",
+        "creditBadge": "50ドルの無料クレジット",
+        "regionHint": "音声の処理場所を選べます — 米国または EU。",
+        "useCorti": "Corti を使う",
+        "skip": "後で",
+        "step1": "corti.ai でアカウントを作成",
+        "step2": "Corti コンソールで API 認証情報を作成",
+        "step3": "Client ID と Secret を下に貼り付け"
+      }
     }
   },
   "streaming": {
@@ -320,7 +391,16 @@
       "retryError": "再文字起こしに失敗しました",
       "audioNotFound": "音声ファイルが見つからないか有効期限切れです",
       "noAiProcessing": "この文字起こしにはAI処理が適用されていません",
-      "rawTranscript": "生の文字起こし"
+      "rawTranscript": "生の文字起こし",
+      "discarded": {
+        "show": "破棄したものを表示",
+        "hide": "破棄したものを非表示",
+        "badge": "破棄済み",
+        "recording": "破棄した録音",
+        "recordingWithDuration": "破棄した録音 · {{duration}}",
+        "recover": "復元",
+        "recovered": "復元しました"
+      }
     },
     "cloudMigration": {
       "title": "OpenWhispr Cloud へようこそ",
@@ -432,6 +512,7 @@
     "apiKeyOptional": "API キー（任意）",
     "getKey": "キーを取得 ->",
     "endpointUrl": "エンドポイント URL",
+    "azureHint": "Azure AI Foundry: リソースのエンドポイント（例: https://your-resource.cognitiveservices.azure.com）を入力し、モデルにデプロイの正確な名前を設定してください。",
     "customProvider": "カスタム",
     "fallback": {
       "whisperModelDescription": "モデル",
@@ -450,7 +531,8 @@
       "errorTitles": {
         "sessionExpired": "セッション期限切れ",
         "offline": "オフラインです",
-        "dailyLimitReached": "1 日の上限に達しました"
+        "dailyLimitReached": "1 日の上限に達しました",
+        "providerRateLimited": "プロバイダーのレート制限"
       },
       "fallback": {
         "title": "フォールバックモード",
@@ -463,7 +545,8 @@
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
-        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。"
+        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
+        "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。"
       }
     },
     "clipboard": {
@@ -645,6 +728,11 @@
       "welcomeBack": "おかえりなさい",
       "welcomeBackName": "おかえりなさい、{{name}} さん"
     },
+    "sso": {
+      "continueWithSSO": "SSO でサインイン",
+      "emailRequired": "SSO を使用するには勤務先のメールアドレスを入力してください。",
+      "failed": "シングルサインオンに失敗しました。もう一度お試しください。"
+    },
     "social": {
       "completeInBrowser": "ブラウザでサインインを完了してください",
       "continueWithApple": "Apple で続ける",
@@ -733,7 +821,8 @@
     "resendIn": "{{seconds}} 秒後に再送信可能",
     "verifiedDescription": "アカウントの設定が完了しました。",
     "verifiedTitle": "メール確認完了",
-    "waiting": "確認を待っています..."
+    "waiting": "確認を待っています...",
+    "backToSignIn": "サインインに戻る"
   },
   "errorBoundary": {
     "description": "予期しないエラーが発生しました。再読み込みしてもう一度お試しください。",
@@ -1299,9 +1388,9 @@
         "linuxPttSetupTitle": "長押しして話すには設定が必要です",
         "linuxPttSetupDescription": "キーボード入力デバイスへのアクセス権が必要です。",
         "linuxPttSetupNote": "コマンド実行後、ログアウトして再度ログインしてください。",
-        "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは保持されません",
-        "hyprlandConfigWriteWarningDescription": "OpenWhispr が {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは失われます。ファイルが存在し、書き込み可能であることを確認してください。",
-        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを占有します。同じキーの組み合わせを使用している既存の Hyprland バインドは、OpenWhispr がショートカットを登録するときに解除されます。"
+        "hyprlandConfigWriteWarningTitle": "Hyprland のキーバインドは永続化されません",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr は {{path}} に書き込めないため、Hyprland の設定を再読み込みするとキーバインドは維持されません。ファイルが存在し、書き込み可能であることを確認してください。",
+        "hyprlandUnbindDescription": "Hyprland では、OpenWhispr が選択したショートカットを使用します。同じキーの組み合わせを使う既存の Hyprland バインドは、OpenWhispr がショートカットを登録すると解除されます。"
       },
       "meetingHotkey": {
         "title": "ミーティングモードホットキー",
@@ -1525,7 +1614,9 @@
       "audioStorageFiles": "{{count}}ファイル、{{size}}",
       "audioStorageEmpty": "保存された音声ファイルはありません",
       "clearAllAudio": "すべての音声を削除",
-      "clearAllAudioConfirm": "保存されたすべての音声ファイルを削除しますか？この操作は元に戻せません。"
+      "clearAllAudioConfirm": "保存されたすべての音声ファイルを削除しますか？この操作は元に戻せません。",
+      "saveDiscarded": "破棄したディクテーションを保存",
+      "saveDiscardedDescription": "Escape でディクテーションをキャンセルしたとき、音声を履歴に残して後で復元できるようにします。データと音声の保持を有効にする必要があります。"
     },
     "prompts": {
       "description": "テキスト補正と指示検出を行う統合システムプロンプトの表示、カスタマイズ、テスト",
@@ -1536,7 +1627,8 @@
       "description": "ディクテーションとノート録音用のエンジンを選択",
       "tabs": {
         "dictation": "ディクテーション",
-        "noteRecording": "ノート録音"
+        "noteRecording": "ノート録音",
+        "upload": "音声のアップロード"
       },
       "selfHostedStreamingNote": "ストリーミング文字起こしに対応したサーバーが必要です。"
     },
@@ -1973,18 +2065,15 @@
       "transcribingCloud": "クラウドで文字起こし中...",
       "transcribingLocal": "ローカルで文字起こし中...",
       "transcribingProvider": "{{provider}} で文字起こし中...",
+      "cancelTranscription": "文字起こしをキャンセル",
       "transcriptionComplete": "文字起こし完了",
       "openNote": "ノートを開く",
       "uploadAnother": "別のファイルをアップロード",
       "retry": "再試行",
       "startOver": "やり直す",
-      "transcriptionSettings": "文字起こし設定",
       "newFolder": "新しいフォルダ",
       "folderName": "フォルダ名",
       "create": "作成",
-      "setupTitle": "文字起こしを設定",
-      "setupDescription": "音声の文字起こし方法を選択してください。ライブディクテーションにも適用されます。",
-      "continue": "続ける",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "カスタム",
       "selectFolder": "フォルダを選択",
@@ -2541,15 +2630,7 @@
     "noUpcoming": "今後の予定はありません",
     "meetingStarting": "ミーティングが開始されます",
     "today": "今日",
-    "tomorrow": "明日",
-    "detection": {
-      "title": "ミーティング検出",
-      "description": "ミーティング中であることを自動的に検出する",
-      "processDetection": "アプリ検出",
-      "processDescription": "ミーティングが検出されたときに使用中のアプリを特定する",
-      "audioDetection": "オーディオ検出",
-      "audioDescription": "持続的なマイク使用が検出されたときに通知する"
-    }
+    "tomorrow": "明日"
   },
   "upcoming": {
     "title": "今後の会議",

@@ -19,10 +19,10 @@ Requires Node.js 20 or later. Verify with `openwhispr --version`. If the user re
 
 Every command runs against one of two backends. The behavior is identical from the user's perspective — only the data source differs.
 
-| Backend | What it talks to | Use when |
-|---------|------------------|----------|
-| **local** | Desktop app's loopback HTTP bridge on `127.0.0.1` | The desktop app is running. Authoritative during/right after a recording. |
-| **remote** | `https://api.openwhispr.com/api/v1` | Desktop is closed, or running on a different machine, or the user wants cloud-side semantics. |
+| Backend    | What it talks to                                  | Use when                                                                                      |
+| ---------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| **local**  | Desktop app's loopback HTTP bridge on `127.0.0.1` | The desktop app is running. Authoritative during/right after a recording.                     |
+| **remote** | `https://api.openwhispr.com/api/v1`               | Desktop is closed, or running on a different machine, or the user wants cloud-side semantics. |
 
 ### How the CLI picks a backend
 
@@ -49,13 +49,13 @@ openwhispr auth logout   # clear it
 
 API keys are scoped server-side. Match scopes to the commands the user needs to run:
 
-| Scope | Commands |
-|-------|----------|
-| `notes:read` | `notes list/get/search`, `folders list` |
-| `notes:write` | `notes create/update/delete`, `folders create` |
-| `transcriptions:read` | `transcriptions list/get` |
-| `transcriptions:delete` | `transcriptions delete` |
-| `usage:read` | (used internally by `doctor` and the remote backend's reachability ping) |
+| Scope                   | Commands                                                                 |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `notes:read`            | `notes list/get/search`, `folders list`                                  |
+| `notes:write`           | `notes create/update/delete`, `folders create`                           |
+| `transcriptions:read`   | `transcriptions list/get`                                                |
+| `transcriptions:delete` | `transcriptions delete`                                                  |
+| `usage:read`            | (used internally by `doctor` and the remote backend's reachability ping) |
 
 Scopes are enforced server-side; the CLI does not validate them locally. If a scope is missing, the API returns a 401/403 and the CLI exits with code 3.
 
@@ -80,13 +80,13 @@ Always pass `--format json` when parsing CLI output programmatically.
 
 Honor these exit codes when scripting or recovering from errors:
 
-| Code | Meaning | Recovery |
-|------|---------|----------|
-| 0 | Success | Continue |
-| 1 | User error (bad args, missing required flag) | Fix the command and rerun |
-| 2 | Backend unreachable | Start the desktop app, or run `auth login` for cloud, or try `--remote`/`--local` explicitly |
-| 3 | Auth failure (missing/invalid key, insufficient scope) | Do not retry — surface to the user |
-| 4 | Not found (no such note/transcription/folder) | Check the ID and rerun |
+| Code | Meaning                                                | Recovery                                                                                     |
+| ---- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| 0    | Success                                                | Continue                                                                                     |
+| 1    | User error (bad args, missing required flag)           | Fix the command and rerun                                                                    |
+| 2    | Backend unreachable                                    | Start the desktop app, or run `auth login` for cloud, or try `--remote`/`--local` explicitly |
+| 3    | Auth failure (missing/invalid key, insufficient scope) | Do not retry — surface to the user                                                           |
+| 4    | Not found (no such note/transcription/folder)          | Check the ID and rerun                                                                       |
 
 ## Commands
 
@@ -191,21 +191,21 @@ Use the IDs returned to read related notes with `notes get` before composing the
 
 The CLI reads/writes these files. Both should always be `0600`.
 
-| File | Written by | Contains |
-|------|-----------|----------|
-| `~/.openwhispr/cli-bridge.json` | The desktop app at startup | `{version, port, token}` for the loopback bridge |
-| `~/.openwhispr/cli-config.json` | The CLI's `auth login` and `config set` | `{backend, apiBase, apiKey}` |
+| File                            | Written by                              | Contains                                         |
+| ------------------------------- | --------------------------------------- | ------------------------------------------------ |
+| `~/.openwhispr/cli-bridge.json` | The desktop app at startup              | `{version, port, token}` for the loopback bridge |
+| `~/.openwhispr/cli-config.json` | The CLI's `auth login` and `config set` | `{backend, apiBase, apiKey}`                     |
 
 The CLI writes both files with `0600`. If you see them with looser permissions (e.g., after manual editing), tighten with `chmod 0600 <file>`.
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|---------|--------------|-----|
-| `Backend unreachable` (exit 2) on every command | Desktop closed and no API key | Start desktop, or `openwhispr auth login` |
-| `Auth failed` (exit 3) on remote commands only | API key revoked, expired, or missing scope | Regenerate key with the right scopes |
-| `Not found` (exit 4) on a known-existing note | Wrong backend — the note is on the other side, not yet synced | Try the opposite backend (`--local` or `--remote`) |
-| Config file readable by other users | File created or edited outside the CLI | `chmod 0600 ~/.openwhispr/cli-config.json` |
+| Symptom                                         | Likely cause                                                  | Fix                                                |
+| ----------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------- |
+| `Backend unreachable` (exit 2) on every command | Desktop closed and no API key                                 | Start desktop, or `openwhispr auth login`          |
+| `Auth failed` (exit 3) on remote commands only  | API key revoked, expired, or missing scope                    | Regenerate key with the right scopes               |
+| `Not found` (exit 4) on a known-existing note   | Wrong backend — the note is on the other side, not yet synced | Try the opposite backend (`--local` or `--remote`) |
+| Config file readable by other users             | File created or edited outside the CLI                        | `chmod 0600 ~/.openwhispr/cli-config.json`         |
 
 ## Programmatic invocation
 

@@ -8,6 +8,8 @@ const POLL_INTERVAL_MS = 500;
 const INITIAL_QUERY_DELAY_MS = 500; // Wait for paste to settle in target app
 const INITIAL_QUERY_RETRIES = 4; // Retry if AXValue is empty (paste not yet processed)
 const INITIAL_QUERY_RETRY_DELAY_MS = 300;
+const ACTIVATE_CONFIRM_RETRIES = 6; // Poll the frontmost app until activation lands
+const ACTIVATE_CONFIRM_DELAY_MS = 25;
 
 // AppleScript to enable AXEnhancedUserInterface on the target app.
 // Chromium-based apps (Chrome, Electron, VS Code, Slack, etc.) don't build their
@@ -94,45 +96,73 @@ class TextEditMonitor extends EventEmitter {
    */
   captureTargetPid() {
     if (process.platform !== "darwin") return;
-    const script =
-      'ObjC.import("AppKit"); $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier';
-    execFile("osascript", ["-l", "JavaScript", "-e", script], { timeout: 2000 }, (err, stdout) => {
-      if (err) {
-        this.lastTargetPid = null;
-      } else {
-        const pid = parseInt(stdout.trim(), 10);
-        this.lastTargetPid = isNaN(pid) ? null : pid;
-      }
-      debugLogger.debug("[TextEditMonitor] Captured target PID", { pid: this.lastTargetPid });
+    this._readFrontmostPid().then((pid) => {
+      this.lastTargetPid = pid;
+      debugLogger.debug("[TextEditMonitor] Captured target PID", { pid });
     });
   }
 
   /**
-   * macOS: bring the captured target app to the front before pasting.
-   * More reliable than hide()'s implicit hand-off for Chromium apps (#668).
+   * macOS: resolve the frontmost app's PID, or null if it can't be read.
    */
-  activateTargetPid() {
+  _readFrontmostPid() {
     return new Promise((resolve) => {
-      if (process.platform !== "darwin" || !this.lastTargetPid) {
-        resolve(false);
+      if (process.platform !== "darwin") {
+        resolve(null);
         return;
       }
-      const pid = this.lastTargetPid;
       const script =
-        `ObjC.import("AppKit"); ` +
-        `const app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(${pid}); ` +
-        `if (app.isNil) { "not_found" } else { app.activateWithOptions(2); "ok" }`;
-      execFile(
-        "osascript",
-        ["-l", "JavaScript", "-e", script],
-        { timeout: 1000 },
-        (err, stdout) => {
-          const ok = !err && stdout.trim() === "ok";
-          debugLogger.debug("[TextEditMonitor] Activated target PID", { pid, ok });
-          resolve(ok);
-        }
-      );
+        'ObjC.import("AppKit"); $.NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier';
+      execFile("osascript", ["-l", "JavaScript", "-e", script], { timeout: 2000 }, (err, stdout) => {
+        const pid = err ? NaN : parseInt(stdout.trim(), 10);
+        resolve(isNaN(pid) ? null : pid);
+      });
     });
+  }
+
+  /**
+   * macOS: request activation of the app with the given PID, bringing all its
+   * windows forward (AllWindows|IgnoringOtherApps) so one becomes key. Scans
+   * runningApplications because NSRunningApplication's PID lookup returns nil under JXA.
+   */
+  _activateApp(pid) {
+    return new Promise((resolve) => {
+      const script = `
+        ObjC.import("AppKit");
+        const apps = $.NSWorkspace.sharedWorkspace.runningApplications;
+        for (let i = 0; i < apps.count; i++) {
+          const a = apps.objectAtIndex(i);
+          if (a.processIdentifier === ${pid}) { a.activateWithOptions(3); break; }
+        }
+      `;
+      execFile("osascript", ["-l", "JavaScript", "-e", script], { timeout: 2000 }, () => resolve());
+    });
+  }
+
+  /**
+   * macOS: make the captured target app frontmost before pasting, so the global
+   * Cmd+V lands in its focused field (#668). Resolves true once the target is
+   * confirmed frontmost. If it is already frontmost we do nothing: re-activating
+   * an already-active Chromium app (e.g. Claude Desktop) drops its field's first
+   * responder — the focus loss this fixes — and skipping also avoids a needless
+   * activation round-trip. Otherwise we activate and poll until the OS reports the
+   * target frontmost, the macOS analogue of Linux's `xdotool windowactivate --sync`.
+   */
+  async activateTargetPid() {
+    if (process.platform !== "darwin" || !this.lastTargetPid) return false;
+    const pid = this.lastTargetPid;
+    if ((await this._readFrontmostPid()) === pid) return true;
+
+    await this._activateApp(pid);
+    for (let i = 0; i < ACTIVATE_CONFIRM_RETRIES; i++) {
+      await new Promise((resolve) => setTimeout(resolve, ACTIVATE_CONFIRM_DELAY_MS));
+      if ((await this._readFrontmostPid()) === pid) {
+        debugLogger.debug("[TextEditMonitor] Activated target PID", { pid });
+        return true;
+      }
+    }
+    debugLogger.debug("[TextEditMonitor] Target did not become frontmost", { pid });
+    return false;
   }
 
   /**

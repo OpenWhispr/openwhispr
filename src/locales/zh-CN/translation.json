@@ -101,13 +101,6 @@
     "accessibility": "此平台不支持辅助功能设置。",
     "systemAudio": "系统音频设置在此平台上不可用。"
   },
-  "titleBar": {
-    "quitTitle": "退出 OpenWhispr",
-    "quitConfirmTitle": "确定退出 OpenWhispr？",
-    "quitConfirmDescription": "这将关闭 OpenWhispr 并停止后台进程。",
-    "quit": "退出",
-    "cancel": "取消"
-  },
   "upgradePrompt": {
     "paymentFailed": "我们无法处理你的付款",
     "weeklyLimit": "你已达到本周的使用上限",
@@ -165,14 +158,18 @@
     "unknownError": "Ocurrió un error desconocido",
     "copy": "Copiar",
     "copied": "Copiado",
-    "done": "Listo"
+    "done": "Listo",
+    "skip": "跳过"
   },
   "onboarding": {
     "steps": {
       "welcome": "欢迎",
       "setup": "设置",
       "permissions": "权限",
-      "activation": "激活",
+      "activation": "听写",
+      "useCase": "关于你",
+      "meeting": "会议",
+      "finish": "完成",
       "voiceAgent": "语音助手"
     },
     "hotkey": {
@@ -187,17 +184,17 @@
     "permissions": {
       "title": "权限",
       "microphoneTitle": "麦克风",
-      "microphoneDescription": "录制您的声音用于转录",
+      "microphoneDescription": "将你的语音转为文字。按下快捷键之前不会录制任何内容。",
       "grant": "授权",
       "grantAccess": "授予访问权限",
       "accessibilityTitle": "辅助功能",
-      "accessibilityDescription": "允许将转录文本自动粘贴到任何应用程序",
+      "accessibilityDescription": "将完成的文字直接输入到你正在使用的应用中 — 文档、邮件、聊天。",
       "testAndGrant": "测试并授权",
       "requiredForApp": "OpenWhispr 运行所必需的权限",
       "microphoneRequired": "需要麦克风访问权限",
       "openSystemSettings": "打开系统设置",
       "systemAudioTitle": "系统音频",
-      "systemAudioDescription": "转录会议、通话、讲座、播客和其他系统音频。",
+      "systemAudioDescription": "让会议录音机听到通话另一方的声音 — 会议、讲座、播客。你可以稍后在“设置”中开启。",
       "optional": "可选",
       "recommended": "推荐",
       "accessibilityTroubleshooting": "在系统设置 → 辅助功能中，将 OpenWhispr 的开关关闭再重新打开。如果无效，请将 OpenWhispr 从列表中移除后重新添加。还是不行？请发邮件至 support@openwhispr.com。"
@@ -208,7 +205,7 @@
       "preferredLanguage": "首选语言"
     },
     "activation": {
-      "title": "激活设置",
+      "title": "听写设置",
       "description": "配置触发听写的方式",
       "hotkey": "快捷键",
       "mode": "模式",
@@ -220,10 +217,19 @@
       "textareaPlaceholder": "点击此处，然后使用快捷键进行听写..."
     },
     "voiceAgent": {
-      "title": "语音助手快捷键",
+      "title": "语音助手设置",
       "description": "一键唤起你的 AI 助手",
       "hotkey": "快捷键",
       "howItWorks": "按下快捷键，说出你想要的内容，例如“写一段简短的感谢语”。{{agentName}} 会把结果输入到光标所在的位置。无需先说“Hey {{agentName}}”。",
+      "test": "试一试",
+      "testInstruction": "点击下方，按下 {{hotkey}} 并说出指令",
+      "testSetHotkey": "在上方设置快捷键即可试用",
+      "testPlaceholder": "点击这里，按下快捷键并说出其中一个示例...",
+      "examples": [
+        "翻译成意大利语:“我说话比打字快”",
+        "给我的老板写一封简短的邮件,告诉他我想要升职,他叫 Mark",
+        "5 × 5 等于多少?"
+      ],
       "optionalNote": "可选——你可以随时在设置中添加或修改。"
     },
     "connectivity": {
@@ -231,6 +237,71 @@
       "body": "{{cause}} 你可以切换到本地引擎，或继续并稍后重试。",
       "useLocal": "使用本地引擎",
       "continue": "仍然继续"
+    },
+    "useCase": {
+      "title": "你为什么来到这里？",
+      "description": "我们是一个小团队，每周发布更新。你的选择会为你配置应用，也告诉我们接下来该做什么。",
+      "noteLabel": "还有什么想告诉我们的吗？",
+      "notePlaceholder": "可选",
+      "options": {
+        "dictation": {
+          "title": "更快地写作",
+          "description": "在任何应用中口述，而不是打字"
+        },
+        "meetings": {
+          "title": "会议笔记与摘要",
+          "description": "录制、转写并总结会议"
+        },
+        "healthcare": {
+          "title": "医疗、临床与治疗转写",
+          "description": "口述病历、咨询记录和报告"
+        },
+        "translation": {
+          "title": "语言翻译",
+          "description": "说一种语言，输出另一种"
+        },
+        "ai": {
+          "title": "与我的 AI 对话",
+          "description": "用语音驱动 ChatGPT、Claude 等智能体"
+        },
+        "upload": {
+          "title": "上传音频文件",
+          "description": "上传并转写 MP3、OGG 等"
+        }
+      },
+      "selectHint": "可多选"
+    },
+    "meeting": {
+      "title": "会议笔记",
+      "description": "捕捉并总结你的会议",
+      "autoDetect": "OpenWhispr 会自动检测你是否在开会，并提议开始记录 — 未经你确认不会录制任何内容。",
+      "notification": {
+        "title": "检测到会议",
+        "body": "你似乎正在开会。要开始记录吗？",
+        "cta": "开始录制"
+      },
+      "hotkeyLabel": "会议快捷键",
+      "hotkeyHint": "可选 — 在任何会议中按下即可立即开始记录。"
+    },
+    "finish": {
+      "title": "一切就绪",
+      "cloudDescription": "你正在使用 OpenWhispr Cloud — 快速、准确、零数据保留，每周免费 2,000 词。希望一切都在本地？可在“设置”中切换到本地处理。",
+      "localDescription": "你已配置本地处理或自带密钥。可随时在“设置”中调整音频处理方式。",
+      "cleanupNote": "AI 文本清理使用合理的默认设置，可随时在“设置”中调整。",
+      "openSettings": "打开设置",
+      "skipForNow": "暂时跳过",
+      "corti": {
+        "title": "你告诉我们你是为临床转写而来",
+        "description": "我们与 Corti 合作 — 临床级语音转文字，准确率最高，并符合 HIPAA。",
+        "createAccount": "创建你的 Corti 账户",
+        "creditBadge": "50 美元免费额度",
+        "regionHint": "选择音频处理地区 — 美国或欧盟。",
+        "useCorti": "使用 Corti",
+        "skip": "暂不需要",
+        "step1": "在 corti.ai 注册",
+        "step2": "打开 Corti 控制台并创建 API 凭据",
+        "step3": "在下方粘贴 Client ID 和 Secret"
+      }
     }
   },
   "streaming": {
@@ -320,7 +391,16 @@
       "retryError": "重新转录失败",
       "audioNotFound": "音频文件未找到或已过期",
       "noAiProcessing": "此转录未应用 AI 处理",
-      "rawTranscript": "原始转录"
+      "rawTranscript": "原始转录",
+      "discarded": {
+        "show": "显示已放弃",
+        "hide": "隐藏已放弃",
+        "badge": "已放弃",
+        "recording": "已放弃的录音",
+        "recordingWithDuration": "已放弃的录音 · {{duration}}",
+        "recover": "恢复",
+        "recovered": "已恢复"
+      }
     },
     "cloudMigration": {
       "title": "欢迎使用 OpenWhispr 云端",
@@ -432,6 +512,7 @@
     "apiKeyOptional": "API Key（可选）",
     "getKey": "获取密钥 ->",
     "endpointUrl": "端点 URL",
+    "azureHint": "Azure AI Foundry：输入你的资源终结点（例如 https://your-resource.cognitiveservices.azure.com），并将“模型”设置为你的确切部署名称。",
     "customProvider": "自定义",
     "fallback": {
       "whisperModelDescription": "模型",
@@ -450,7 +531,8 @@
       "errorTitles": {
         "sessionExpired": "会话已过期",
         "offline": "你已离线",
-        "dailyLimitReached": "已达到每日上限"
+        "dailyLimitReached": "已达到每日上限",
+        "providerRateLimited": "服务商速率限制"
       },
       "fallback": {
         "title": "回退模式",
@@ -463,7 +545,8 @@
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 会话不可用。请到「设置」中重新登录。",
         "offline": "你目前离线。云端转录需要互联网连接。",
-        "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。"
+        "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。",
+        "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。"
       }
     },
     "clipboard": {
@@ -644,6 +727,11 @@
       "welcomeBack": "欢迎回来",
       "welcomeBackName": "欢迎回来，{{name}}"
     },
+    "sso": {
+      "continueWithSSO": "使用 SSO 登录",
+      "emailRequired": "输入您的工作邮箱以使用 SSO。",
+      "failed": "单点登录失败，请重试。"
+    },
     "social": {
       "completeInBrowser": "在浏览器中完成登录",
       "continueWithApple": "使用 Apple 继续",
@@ -733,7 +821,8 @@
     "resendIn": "{{seconds}} 秒后可重新发送",
     "verifiedDescription": "你的账户已准备就绪。",
     "verifiedTitle": "邮箱已验证",
-    "waiting": "正在等待验证..."
+    "waiting": "正在等待验证...",
+    "backToSignIn": "返回登录"
   },
   "errorBoundary": {
     "description": "发生了意外错误，请重新加载后重试。",
@@ -1294,9 +1383,9 @@
         "linuxPttSetupTitle": "按住说话需要设置",
         "linuxPttSetupDescription": "您的用户需要访问键盘输入设备的权限。",
         "linuxPttSetupNote": "运行命令后，请注销并重新登录。",
-        "hyprlandConfigWriteWarningTitle": "Hyprland 快捷键将不会保留",
-        "hyprlandConfigWriteWarningDescription": "OpenWhispr 无法写入 {{path}}，因此快捷键在 Hyprland 配置重新加载后将无法保留。请确保该文件存在且可写入。",
-        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 会占用所选的快捷键。当 OpenWhispr 注册其快捷键时，任何使用相同按键组合的现有 Hyprland 绑定都将被解除。"
+        "hyprlandConfigWriteWarningTitle": "Hyprland 键绑定不会持久保存",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr 无法写入 {{path}}，因此键绑定不会在 Hyprland 配置重新加载后保留。请确保该文件存在且可写。",
+        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 会占用所选快捷键。OpenWhispr 注册快捷键时，任何使用相同组合键的现有 Hyprland 绑定都会被解除。"
       },
       "meetingHotkey": {
         "title": "会议模式快捷键",
@@ -1520,7 +1609,9 @@
       "audioStorageFiles": "{{count}} 个文件，{{size}}",
       "audioStorageEmpty": "没有存储的音频文件",
       "clearAllAudio": "清除所有音频",
-      "clearAllAudioConfirm": "删除所有已存储的音频文件？此操作无法撤销。"
+      "clearAllAudioConfirm": "删除所有已存储的音频文件？此操作无法撤销。",
+      "saveDiscarded": "保存已放弃的听写",
+      "saveDiscardedDescription": "用 Escape 取消听写时，将其音频保留在历史记录中以便恢复。需开启数据和音频保留。"
     },
     "prompts": {
       "description": "查看、自定义和测试用于文本整理和指令识别的统一系统提示词",
@@ -1531,7 +1622,8 @@
       "description": "为听写和笔记录音选择一个引擎",
       "tabs": {
         "dictation": "听写",
-        "noteRecording": "笔记录音"
+        "noteRecording": "笔记录音",
+        "upload": "上传音频"
       },
       "selfHostedStreamingNote": "需要支持流式转录的服务器。"
     },
@@ -1985,18 +2077,15 @@
       "transcribingCloud": "正在通过云端转录...",
       "transcribingLocal": "正在本地转录...",
       "transcribingProvider": "正在通过 {{provider}} 转录...",
+      "cancelTranscription": "取消转录",
       "transcriptionComplete": "转录完成",
       "openNote": "打开笔记",
       "uploadAnother": "上传另一个",
       "retry": "重试",
       "startOver": "重新开始",
-      "transcriptionSettings": "转录设置",
       "newFolder": "新建文件夹",
       "folderName": "文件夹名称",
       "create": "创建",
-      "setupTitle": "设置转录",
-      "setupDescription": "选择转录音频的方式。此设置也适用于实时听写。",
-      "continue": "继续",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "自定义",
       "selectFolder": "选择文件夹",
@@ -2536,15 +2625,7 @@
     "noUpcoming": "没有即将到来的事件",
     "meetingStarting": "会议即将开始",
     "today": "今天",
-    "tomorrow": "明天",
-    "detection": {
-      "title": "会议检测",
-      "description": "自动检测您是否在会议中",
-      "processDetection": "应用检测",
-      "processDescription": "检测到会议时识别您正在使用的应用",
-      "audioDetection": "音频检测",
-      "audioDescription": "检测到持续麦克风活动时提示"
-    }
+    "tomorrow": "明天"
   },
   "upcoming": {
     "title": "即将开始的会议",

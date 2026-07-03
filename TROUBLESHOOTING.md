@@ -77,6 +77,17 @@
 2. If using packaged app, try reinstalling
 3. **Windows:** check that antivirus / Windows Defender hasn't quarantined the bundled FFmpeg binary
 
+### Electron Failed to Install Correctly
+
+**Symptoms:** Running `npm run dev` fails with "Electron failed to install correctly".
+
+**Fix:**
+
+1. Use Node.js 24: `node -v`
+2. Ensure npm install scripts are enabled: `npm config set ignore-scripts false`
+3. Rebuild Electron's platform binary: `npm rebuild electron`
+4. If `ELECTRON_SKIP_BINARY_DOWNLOAD` is set, unset it and run `npm install` again
+
 ### whisper.cpp Issues
 
 **Symptoms:** Local transcription fails, "whisper.cpp not found"

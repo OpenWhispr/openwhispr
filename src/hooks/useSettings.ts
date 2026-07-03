@@ -48,6 +48,11 @@ export interface HotkeySettings {
   activationMode: "tap" | "push";
 }
 
+export interface OnboardingSettings {
+  onboardingUseCases: string[];
+  onboardingUseCaseNote: string;
+}
+
 export interface MicrophoneSettings {
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
@@ -71,6 +76,7 @@ export interface PrivacySettings {
   telemetryEnabled: boolean;
   audioRetentionDays: number;
   dataRetentionEnabled: boolean;
+  saveDiscardedTranscriptions: boolean;
 }
 
 export interface ThemeSettings {
@@ -90,7 +96,8 @@ export interface ChatAgentSettings {
 
 function useSettingsInternal() {
   const store = useSettingsStore();
-  const { setCustomDictionary } = store;
+  const { setCustomDictionary, applyCustomDictionaryFromExternal, applySnippetsFromExternal } =
+    store;
 
   // One-time initialization: sync API keys, dictation key, activation mode,
   // UI language, and dictionary from the main process / SQLite.
@@ -107,16 +114,28 @@ function useSettingsInternal() {
     });
   }, []);
 
-  // Listen for dictionary updates from main process (auto-learn corrections)
+  // Refresh the in-memory store from main-process broadcasts (auto-learn, sync
+  // pulls) without re-triggering a sync — that would loop, since pulls emit the
+  // broadcast. Writes that must sync go through setCustomDictionary instead.
   useEffect(() => {
     if (typeof window === "undefined" || !window.electronAPI?.onDictionaryUpdated) return;
     const unsubscribe = window.electronAPI.onDictionaryUpdated((words: string[]) => {
       if (Array.isArray(words)) {
-        setCustomDictionary(words);
+        applyCustomDictionaryFromExternal(words);
       }
     });
     return unsubscribe;
-  }, [setCustomDictionary]);
+  }, [applyCustomDictionaryFromExternal]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.electronAPI?.onSnippetsUpdated) return;
+    const unsubscribe = window.electronAPI.onSnippetsUpdated((snippets: Snippet[]) => {
+      if (Array.isArray(snippets)) {
+        applySnippetsFromExternal(snippets);
+      }
+    });
+    return unsubscribe;
+  }, [applySnippetsFromExternal]);
 
   // Auto-learn corrections from user edits in external apps
   const [autoLearnCorrections, setAutoLearnCorrectionsRaw] = useLocalStorage(
@@ -267,6 +286,10 @@ function useSettingsInternal() {
     setDictationKey: store.setDictationKey,
     setMeetingKey: store.setMeetingKey,
     setVoiceAgentKey: store.setVoiceAgentKey,
+    onboardingUseCases: store.onboardingUseCases,
+    setOnboardingUseCases: store.setOnboardingUseCases,
+    onboardingUseCaseNote: store.onboardingUseCaseNote,
+    setOnboardingUseCaseNote: store.setOnboardingUseCaseNote,
     setTheme: store.setTheme,
     activationMode: store.activationMode,
     setActivationMode: store.setActivationMode,
@@ -330,6 +353,8 @@ function useSettingsInternal() {
     setAudioRetentionDays: store.setAudioRetentionDays,
     dataRetentionEnabled: store.dataRetentionEnabled,
     setDataRetentionEnabled: store.setDataRetentionEnabled,
+    saveDiscardedTranscriptions: store.saveDiscardedTranscriptions,
+    setSaveDiscardedTranscriptions: store.setSaveDiscardedTranscriptions,
     updateTranscriptionSettings: store.updateTranscriptionSettings,
     updateCleanupSettings: store.updateCleanupSettings,
     updateApiKeys: store.updateApiKeys,

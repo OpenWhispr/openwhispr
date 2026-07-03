@@ -229,7 +229,9 @@ function main() {
 
   if (args.list || !args.actual) {
     if (!args.json) {
-      console.log(`Loaded ${fixtures.length} diarization fixture${fixtures.length === 1 ? "" : "s"}:\n`);
+      console.log(
+        `Loaded ${fixtures.length} diarization fixture${fixtures.length === 1 ? "" : "s"}:\n`
+      );
       for (const fixture of fixtures) {
         const inputSummary = summarizeSegments(fixture.input);
         const expectedSummary = summarizeSegments(fixture.expected);
@@ -282,7 +284,9 @@ function main() {
   } else {
     for (const result of results) {
       const status = result.pass ? "PASS" : "FAIL";
-      console.log(`${status} ${result.name} (${result.actualCount}/${result.expectedCount} segments)`);
+      console.log(
+        `${status} ${result.name} (${result.actualCount}/${result.expectedCount} segments)`
+      );
 
       if (!result.pass) {
         for (const mismatch of result.mismatches.slice(0, 8)) {

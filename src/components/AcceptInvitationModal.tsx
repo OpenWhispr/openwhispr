@@ -10,6 +10,10 @@ import {
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { InvitationsService } from "../services/InvitationsService";
+import {
+  storePendingInvitationToken,
+  clearPendingInvitationToken,
+} from "../utils/pendingInvitationToken";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useToast } from "./ui/useToast";
 import type { InvitationPreview } from "../types/electron";
@@ -20,8 +24,6 @@ interface Props {
   isSignedIn: boolean;
   onSignIn: () => void;
 }
-
-const STORAGE_KEY = "pendingInvitationToken";
 
 export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSignIn }: Props) {
   const { t } = useTranslation();
@@ -49,14 +51,14 @@ export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSi
   async function handleAccept() {
     if (!token) return;
     if (!isSignedIn) {
-      localStorage.setItem(STORAGE_KEY, token);
+      storePendingInvitationToken(token);
       onSignIn();
       return;
     }
     setAccepting(true);
     try {
       const result = await InvitationsService.accept(token);
-      localStorage.removeItem(STORAGE_KEY);
+      clearPendingInvitationToken();
       await refresh();
       setActive(result.workspace_id);
       toast({
@@ -78,7 +80,7 @@ export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSi
   }
 
   function handleDecline() {
-    if (token) localStorage.removeItem(STORAGE_KEY);
+    if (token) clearPendingInvitationToken();
     onClose();
   }
 
@@ -114,15 +116,4 @@ export default function AcceptInvitationModal({ token, onClose, isSignedIn, onSi
       </DialogContent>
     </Dialog>
   );
-}
-
-export function consumePendingInvitationToken(): string | null {
-  if (typeof window === "undefined") return null;
-  const token = localStorage.getItem(STORAGE_KEY);
-  return token;
-}
-
-export function clearPendingInvitationToken(): void {
-  if (typeof window === "undefined") return;
-  localStorage.removeItem(STORAGE_KEY);
 }

@@ -55,6 +55,10 @@ const ALLOWED_MEETING_PROVIDERS = new Set([
   "corti-realtime",
 ]);
 
+// Meeting capture runs at 24 kHz (see meetingRecordingStore AudioContext); cloud
+// streaming providers must be told the true PCM rate or they misread the audio.
+const MEETING_STREAM_SAMPLE_RATE = 24000;
+
 function parseAttendees(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -560,7 +564,10 @@ class IPCHandlers {
     if (gpus.length > 0) {
       debugLogger.info(
         "NVIDIA GPUs detected",
-        { count: gpus.length, devices: gpus.map((g) => `${g.name} (${g.vramMb}MB)`) },
+        {
+          count: gpus.length,
+          devices: gpus.map((g) => `[${g.index}] ${g.name} (${g.vramMb}MB) ${g.uuid}`),
+        },
         "gpu"
       );
     } else {
@@ -650,14 +657,16 @@ class IPCHandlers {
 
       if (corrections.length > 0) {
         const updatedDict = [...currentDict, ...corrections];
-        const saveResult = this.databaseManager.setDictionary(updatedDict);
+        const saveResult = this.databaseManager.setDictionary(updatedDict, "learned");
 
         if (saveResult?.success === false) {
           debugLogger.debug("[AutoLearn] Failed to save dictionary", { error: saveResult.error });
           return;
         }
 
-        this.broadcastToWindows("dictionary-updated", updatedDict);
+        // Broadcast the post-save normalized list, not the raw input (which
+        // still has case-variant dupes), so renderers don't flash ghost rows.
+        this.broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
 
         // Show the overlay so the toast is visible (it may have been hidden after dictation)
         this.windowManager.showDictationPanel();
@@ -747,10 +756,6 @@ class IPCHandlers {
       this.meetingDetectionEngine?.setMeetingModeActive(false);
     });
 
-    ipcMain.handle("app-quit", () => {
-      app.quit();
-    });
-
     ipcMain.handle("hide-window", () => {
       if (process.platform === "darwin") {
         this.windowManager.hideDictationPanel();
@@ -803,8 +808,8 @@ class IPCHandlers {
       return result;
     });
 
-    ipcMain.handle("db-get-transcriptions", async (event, limit = 50) => {
-      return this.databaseManager.getTranscriptions(limit);
+    ipcMain.handle("db-get-transcriptions", async (event, limit = 50, options = {}) => {
+      return this.databaseManager.getTranscriptions(limit, options);
     });
 
     ipcMain.handle("db-clear-transcriptions", async (event) => {
@@ -922,6 +927,96 @@ class IPCHandlers {
       return this.databaseManager.setDictionary(words);
     });
 
+    ipcMain.handle("db-get-pending-dictionary", async () => {
+      return this.databaseManager.getPendingDictionary();
+    });
+
+    ipcMain.handle("db-get-pending-dictionary-deletes", async () => {
+      return this.databaseManager.getPendingDictionaryDeletes();
+    });
+
+    ipcMain.handle("db-get-dictionary-by-client-id", async (_event, clientDictId) => {
+      return this.databaseManager.getDictionaryEntryByClientId(clientDictId);
+    });
+
+    ipcMain.handle("db-upsert-dictionary-from-cloud", async (_event, cloudEntry) => {
+      return this.databaseManager.upsertDictionaryFromCloud(cloudEntry);
+    });
+
+    ipcMain.handle("db-mark-dictionary-synced", async (_event, id, cloudId) => {
+      return this.databaseManager.markDictionaryEntrySynced(id, cloudId);
+    });
+
+    ipcMain.handle("db-hard-delete-dictionary", async (_event, id) => {
+      return this.databaseManager.hardDeleteDictionaryEntry(id);
+    });
+
+    ipcMain.handle("db-clear-dictionary-cloud-id", async (_event, id) => {
+      return this.databaseManager.clearDictionaryCloudId(id);
+    });
+
+    ipcMain.handle("db-broadcast-dictionary-updated", async () => {
+      // Emit the normalized list straight from SQLite so renderers see the
+      // post-dedupe truth, never a caller-supplied payload.
+      const words = this.databaseManager.getDictionary();
+      this.broadcastToWindows("dictionary-updated", words);
+      return { success: true };
+    });
+
+    ipcMain.handle("db-get-snippets", async () => {
+      return this.databaseManager.getSnippets();
+    });
+
+    ipcMain.handle("db-set-snippets", async (_event, snippets) => {
+      if (!Array.isArray(snippets)) {
+        throw new Error("snippets must be an array");
+      }
+      return this.databaseManager.setSnippets(snippets);
+    });
+
+    ipcMain.handle("db-get-pending-snippets", async () => {
+      return this.databaseManager.getPendingSnippets();
+    });
+
+    ipcMain.handle("db-get-pending-snippet-deletes", async () => {
+      return this.databaseManager.getPendingSnippetDeletes();
+    });
+
+    ipcMain.handle("db-get-snippet-for-cloud-merge", async (_event, cloudEntry) => {
+      return this.databaseManager.getSnippetForCloudMerge(cloudEntry);
+    });
+
+    ipcMain.handle("db-upsert-snippet-from-cloud", async (_event, cloudEntry) => {
+      return this.databaseManager.upsertSnippetFromCloud(cloudEntry);
+    });
+
+    ipcMain.handle(
+      "db-mark-snippet-synced",
+      async (_event, id, cloudId, serverUpdatedAt, expectedTrigger, expectedReplacement) => {
+        return this.databaseManager.markSnippetSynced(
+          id,
+          cloudId,
+          serverUpdatedAt,
+          expectedTrigger,
+          expectedReplacement
+        );
+      }
+    );
+
+    ipcMain.handle("db-hard-delete-snippet", async (_event, id) => {
+      return this.databaseManager.hardDeleteSnippet(id);
+    });
+
+    ipcMain.handle("db-clear-snippet-cloud-id", async (_event, id) => {
+      return this.databaseManager.clearSnippetCloudId(id);
+    });
+
+    ipcMain.handle("db-broadcast-snippets-updated", async () => {
+      const snippets = this.databaseManager.getSnippets();
+      this.broadcastToWindows("snippets-updated", snippets);
+      return { success: true };
+    });
+
     ipcMain.handle("undo-learned-corrections", async (_event, words) => {
       try {
         if (!Array.isArray(words) || words.length === 0) {
@@ -941,7 +1036,7 @@ class IPCHandlers {
           });
           return { success: false };
         }
-        this.broadcastToWindows("dictionary-updated", updatedDict);
+        this.broadcastToWindows("dictionary-updated", this.databaseManager.getDictionary());
         debugLogger.debug("[AutoLearn] Undo: removed words", { words: validWords });
         return { success: true };
       } catch (err) {
@@ -1541,23 +1636,11 @@ class IPCHandlers {
         }
       }
 
-      // Smart spacing (#856): macOS reads the preceding char via Accessibility
-      // and prepends a space when needed; Windows/Linux (and macOS when the
-      // read fails) append a trailing space instead — the next paste then
-      // sees a leading space and self-corrects.
-      let mode = "append";
-      let precedingChar;
-      if (process.platform === "darwin" && activated && this.textEditMonitor) {
-        const ax = await this.textEditMonitor.getPrecedingChar(targetPid);
-        if (ax.state === "ok") {
-          mode = "prepend";
-          precedingChar = ax.char;
-        } else if (ax.state === "start") {
-          mode = "prepend";
-          precedingChar = "";
-        }
-      }
-      const textToPaste = applySmartSpacing({ text, mode, precedingChar });
+      // Smart spacing (#856): append a trailing space so the next paste's leading
+      // space self-corrects the gap. macOS prepend-mode (getPrecedingChar) is
+      // intentionally skipped here — its Accessibility read costs hundreds of ms,
+      // too slow for the paste hot path.
+      const textToPaste = applySmartSpacing({ text, mode: "append" });
 
       const result = await this.clipboardManager.pasteText(textToPaste, {
         ...options,
@@ -1764,28 +1847,27 @@ class IPCHandlers {
       return listNvidiaGpus();
     });
 
-    ipcMain.handle("set-gpu-device-index", async (_event, purpose, index) => {
+    ipcMain.handle("set-gpu-device-index", async (_event, purpose, uuid) => {
       if (purpose !== "transcription" && purpose !== "intelligence") {
         return { success: false };
       }
-      const parsed = parseInt(index, 10);
-      if (isNaN(parsed) || parsed < 0) {
+      // Empty string clears the pinned GPU; otherwise require an nvidia-smi UUID. See #531.
+      if (typeof uuid !== "string" || (uuid !== "" && !uuid.startsWith("GPU-"))) {
         return { success: false };
       }
-      const idx = String(parsed);
-      const key = purpose === "intelligence" ? "INTELLIGENCE_GPU_INDEX" : "TRANSCRIPTION_GPU_INDEX";
-      const oldIdx = process.env[key] || "0";
-      process.env[key] = idx;
+      const key = purpose === "intelligence" ? "INTELLIGENCE_GPU_UUID" : "TRANSCRIPTION_GPU_UUID";
+      const oldUuid = process.env[key] || "";
+      process.env[key] = uuid;
       this.environmentManager.saveAllKeysToEnvFile().catch((err) => {
-        debugLogger.error("Failed to persist GPU index", { error: err.message }, "gpu");
+        debugLogger.error("Failed to persist GPU UUID", { error: err.message }, "gpu");
       });
 
-      if (oldIdx !== idx) {
+      if (oldUuid !== uuid) {
         try {
           if (purpose === "transcription" && this.whisperManager?.serverManager?.process) {
             debugLogger.info(
               "Restarting whisper-server for GPU change",
-              { from: oldIdx, to: idx },
+              { from: oldUuid, to: uuid },
               "gpu"
             );
             const modelName = this.whisperManager.currentServerModel;
@@ -1801,7 +1883,7 @@ class IPCHandlers {
             if (modelManager.serverManager?.process) {
               debugLogger.info(
                 "Restarting llama-server for GPU change",
-                { from: oldIdx, to: idx },
+                { from: oldUuid, to: uuid },
                 "gpu"
               );
               const modelPath = modelManager.serverManager.modelPath;
@@ -1825,10 +1907,10 @@ class IPCHandlers {
 
     ipcMain.handle("get-gpu-device-index", async (_event, purpose) => {
       if (purpose !== "transcription" && purpose !== "intelligence") {
-        return "0";
+        return "";
       }
-      const key = purpose === "intelligence" ? "INTELLIGENCE_GPU_INDEX" : "TRANSCRIPTION_GPU_INDEX";
-      return process.env[key] || "0";
+      const key = purpose === "intelligence" ? "INTELLIGENCE_GPU_UUID" : "TRANSCRIPTION_GPU_UUID";
+      return process.env[key] || "";
     });
 
     ipcMain.handle("get-cuda-whisper-status", async () => {
@@ -2272,40 +2354,9 @@ class IPCHandlers {
           }
         }
 
-        if (process.platform === "win32" && this.windowsKeyManager) {
-          const activationMode = this.windowManager.getActivationMode();
-          debugLogger.log(
-            `[IPC] Exiting hotkey capture mode, activationMode="${activationMode}", hotkey="${effectiveHotkey}"`
-          );
-          const needsListener =
-            effectiveHotkey &&
-            !isGlobeLikeHotkey(effectiveHotkey) &&
-            (activationMode === "push" ||
-              isModifierOnlyHotkey(effectiveHotkey) ||
-              isRightSideModifier(effectiveHotkey));
-          if (needsListener) {
-            debugLogger.log(`[IPC] Restarting Windows key listener for hotkey: ${effectiveHotkey}`);
-            this.windowsKeyManager.start(effectiveHotkey);
-          } else {
-            this.windowsKeyManager.stop();
-          }
-        }
-
-        if (process.platform === "linux" && this.linuxKeyManager) {
-          const activationMode = this.windowManager.getActivationMode();
-          const needsListener =
-            effectiveHotkey &&
-            !isGlobeLikeHotkey(effectiveHotkey) &&
-            (activationMode === "push" ||
-              isModifierOnlyHotkey(effectiveHotkey) ||
-              isRightSideModifier(effectiveHotkey));
-          if (needsListener) {
-            debugLogger.log(`[IPC] Restarting Linux key listener for hotkey: ${effectiveHotkey}`);
-            this.linuxKeyManager.start(effectiveHotkey);
-          } else {
-            this.linuxKeyManager.stop();
-          }
-        }
+        // Re-sync native key listeners (Windows/Linux) across all hotkey slots now
+        // that capture is done. Idempotent — reads the current slot hotkeys.
+        this.windowManager.reconcileNativeKeyListeners();
 
         // On GNOME, re-register the keybinding with the effective hotkey
         if (hotkeyManager.isUsingGnome() && hotkeyManager.gnomeManager && effectiveHotkey) {
@@ -3862,9 +3913,10 @@ class IPCHandlers {
         this.databaseManager.updateTranscriptionStatus(id, "completed");
         const providerName = result.source || "local";
         const modelName = result.model || null;
+        const existingRow = this.databaseManager.getTranscriptionById(id);
         this.databaseManager.updateTranscriptionAudio(id, {
           hasAudio: 1,
-          audioDurationMs: null,
+          audioDurationMs: existingRow?.audio_duration_ms ?? null,
           provider: providerName,
           model: modelName,
         });
@@ -4456,6 +4508,7 @@ class IPCHandlers {
         environment: options.environment,
         tenant: options.tenant,
         keyterms: options.keyterms,
+        sampleRate: MEETING_STREAM_SAMPLE_RATE,
       };
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
       let pairs;
@@ -6279,28 +6332,47 @@ class IPCHandlers {
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const method = (opts.method || "GET").toUpperCase();
-        const headers = { ...authHeader };
-        const fetchOpts = { method, headers };
+        const sendWith = (header) => {
+          const headers = { ...header };
+          const fetchOpts = { method, headers };
+          if (opts.body !== undefined) {
+            headers["Content-Type"] = "application/json";
+            fetchOpts.body = JSON.stringify(opts.body);
+          }
+          return proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
+        };
 
-        if (opts.body !== undefined) {
-          headers["Content-Type"] = "application/json";
-          fetchOpts.body = JSON.stringify(opts.body);
+        let response = await sendWith(authHeader);
+
+        // A stale bearer is rejected even when the window still holds a valid session
+        // cookie; retry with the cookie alone (a tagging-along bearer overrides it).
+        if (response.status === 401 && authHeader.Authorization) {
+          const cookieHeader = await getSessionCookies(event);
+          if (cookieHeader) response = await sendWith({ Cookie: cookieHeader });
         }
-
-        const response = await proxyFetch(`${apiUrl}${opts.path}`, fetchOpts);
 
         if (response.status === 401) {
-          return { success: false, error: "Session expired", code: "AUTH_EXPIRED" };
+          return {
+            success: false,
+            error: "Session expired",
+            code: "AUTH_EXPIRED",
+            status: 401,
+          };
         }
         if (response.status === 503) {
-          return { success: false, error: "Service temporarily unavailable", code: "SERVER_ERROR" };
+          return {
+            success: false,
+            error: "Service temporarily unavailable",
+            code: "SERVER_ERROR",
+            status: 503,
+          };
         }
 
         const data = await response.json().catch(() => null);
 
         if (!response.ok) {
           const message = data?.error?.message || data?.error || `API error: ${response.status}`;
-          return { success: false, error: message };
+          return { success: false, error: message, status: response.status };
         }
 
         return { success: true, data };
@@ -7269,7 +7341,20 @@ class IPCHandlers {
 
     ipcMain.handle("corti-streaming-warmup", async (_event, options = {}) => {
       try {
-        await this._mintStoredCortiToken(options);
+        if (!this.cortiStreaming) {
+          this.cortiStreaming = new CortiStreaming();
+        }
+        if (this.cortiStreaming.hasWarmConnection() || this.cortiStreaming.isConnected) {
+          return { success: true, alreadyWarm: true };
+        }
+        const { token, environment, tenant } = await this._mintStoredCortiToken(options);
+        await this.cortiStreaming.warmup({
+          token,
+          environment,
+          tenant,
+          language: options.language,
+          keyterms: options.keyterms,
+        });
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message, code: error.code };
@@ -7356,10 +7441,12 @@ class IPCHandlers {
       if (!hotkey) {
         hotkeyManager.unregisterSlot("agent");
         this.environmentManager.saveAgentKey?.("");
+        this.windowManager.reconcileNativeKeyListeners();
         return { success: true, message: "Agent hotkey cleared" };
       }
 
       const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback);
+      this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveAgentKey?.(hotkey);
         return { success: true, message: `Agent hotkey updated to: ${hotkey}` };
@@ -7381,10 +7468,12 @@ class IPCHandlers {
       if (!hotkey) {
         hotkeyManager.unregisterSlot("voiceAgent");
         this.environmentManager.saveVoiceAgentKey?.("");
+        this.windowManager.reconcileNativeKeyListeners();
         return { success: true, message: "Voice agent hotkey cleared" };
       }
 
       const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback);
+      this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveVoiceAgentKey?.(hotkey);
         return { success: true, message: `Voice agent hotkey updated to: ${hotkey}` };
@@ -7590,6 +7679,12 @@ class IPCHandlers {
             this.windowManager.notificationPrefs[k] = !!v;
           }
         }
+        // Detection only serves the notification, so the toggle also gates the detector.
+        const { notificationsEnabled, notifyMeetingDetection } =
+          this.windowManager.notificationPrefs;
+        this.meetingDetectionEngine?.setPreferences({
+          audioDetection: notificationsEnabled && notifyMeetingDetection,
+        });
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -7634,7 +7729,9 @@ class IPCHandlers {
         );
         this.activeMeetingSpeakerConfig = { enabled, expectedCount };
         liveSpeakerIdentifier.setEnabled(enabled);
-        liveSpeakerIdentifier.setMaxSpeakers(expectedCount);
+        // Live identification only labels other speakers (the mic track is "you"),
+        // so cap at expectedCount - 1 to match resolveSessionMaxSpeakers().
+        liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };

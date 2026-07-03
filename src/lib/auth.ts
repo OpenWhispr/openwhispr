@@ -1,10 +1,12 @@
 import { createAuthClient } from "better-auth/react";
+import { ssoClient } from "@better-auth/sso/client";
 import { OPENWHISPR_API_URL } from "../config/constants";
 import { openExternalLink } from "../utils/externalLinks";
 
 export const AUTH_URL = import.meta.env.VITE_AUTH_URL || "https://auth.openwhispr.com";
 export const authClient = createAuthClient({
   baseURL: AUTH_URL,
+  plugins: [ssoClient()],
   fetchOptions: {
     auth: {
       type: "Bearer",
@@ -191,6 +193,30 @@ export async function signInWithSocial(provider: SocialProvider): Promise<{ erro
     return {};
   } catch (error) {
     return { error: error instanceof Error ? error : new Error("Social sign-in failed") };
+  }
+}
+
+export async function signInWithSSO(email: string): Promise<{ error?: Error }> {
+  try {
+    const isElectron = Boolean((window as any).electronAPI);
+
+    if (isElectron) {
+      // Same browser-handoff rationale as signInWithSocial: the SSO state cookie
+      // must land in the browser's cookie jar. The /sso shim routes by work-email
+      // domain and 302s to the workspace's IdP with the cookies attached.
+      const protocol = (await window.electronAPI?.getOAuthProtocol?.()) || "openwhispr";
+      const url = new URL(`${AUTH_URL}/api/desktop-signin/sso`);
+      url.searchParams.set("email", email);
+      url.searchParams.set("callbackURL", `${DESKTOP_OAUTH_CALLBACK_URL}?protocol=${protocol}`);
+      openExternalLink(url.toString());
+      return {};
+    }
+
+    const callbackURL = `${window.location.href.split("?")[0].split("#")[0]}?panel=true`;
+    await authClient.signIn.sso({ email, callbackURL });
+    return {};
+  } catch (error) {
+    return { error: error instanceof Error ? error : new Error("Single sign-on failed") };
   }
 }
 
