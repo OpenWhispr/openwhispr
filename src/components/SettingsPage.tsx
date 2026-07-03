@@ -223,8 +223,7 @@ interface TranscriptionSectionProps {
   }) => void;
 }
 
-// Cloud providers whose realtime path forwards the live-preview flag
-// (mirrors the preview-forwarding entries in STREAMING_PROVIDERS, audioManager.js).
+// Providers that forward the live-preview flag (see STREAMING_PROVIDERS in audioManager.js).
 const CLOUD_PREVIEW_PROVIDERS = new Set(["tinfoil"]);
 
 function TranscriptionSection({

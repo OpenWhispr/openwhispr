@@ -1085,7 +1085,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       apiKey = null;
     } else if (provider === "tinfoil") {
-      // Prefer store value (user-entered via UI) over main process (.env)
       apiKey = s.tinfoilApiKey;
       if (!apiKey?.trim()) {
         apiKey = await window.electronAPI.getTinfoilKey?.();

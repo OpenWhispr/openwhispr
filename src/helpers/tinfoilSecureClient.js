@@ -1,8 +1,6 @@
-// Verified-WebSocket access to Tinfoil's realtime transcription endpoint.
-// The tinfoil SDK's SecureClient attests the enclave against its transparency
-// log and pins the WebSocket's TLS connection to the attested key. One
-// SecureClient is held for the session: the SDK memoizes attestation, so only
-// the first dictation pays the verification round-trip.
+// WebSocket access to Tinfoil's realtime transcription endpoint. The SDK's
+// SecureClient attests the enclave and pins the socket's TLS connection to the
+// attested key; one client is held per session so attestation is paid once.
 let clientPromise = null;
 
 function getSecureClient() {
@@ -17,8 +15,6 @@ function getSecureClient() {
   return clientPromise;
 }
 
-// createWebSocket attests on first use, pins the TLS connection to the
-// attested key, and refuses to send the auth header to any other host.
 async function createTinfoilRealtimeSocket({ model, apiKey }) {
   const client = await getSecureClient();
   const path = `/v1/realtime?model=${encodeURIComponent(model)}&intent=transcription`;

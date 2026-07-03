@@ -5361,8 +5361,7 @@ class IPCHandlers {
           await streaming.connect({
             apiKey,
             model,
-            // Declare the capture worklet's true 16kHz rate — Tinfoil honors
-            // it, unlike OpenAI's fixed 24kHz contract.
+            // The capture worklet emits 16kHz PCM; declare the true rate.
             inputRate: 16000,
             createSocket: () => createTinfoilRealtimeSocket({ model, apiKey }),
           });

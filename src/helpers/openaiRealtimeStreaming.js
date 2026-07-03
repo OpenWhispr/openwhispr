@@ -6,9 +6,8 @@ const DISCONNECT_TIMEOUT_MS = 3000;
 const SAMPLE_RATE = 24000;
 const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
 
-// Socket factories (attested providers) do network work before the socket
-// exists, so the dial itself must be bounded; a socket that resolves after
-// the deadline is closed rather than leaked.
+// A socket factory does network work before the socket exists, so the dial
+// must be bounded; a socket resolving after the deadline is closed, not leaked.
 async function createSocketWithTimeout(createSocket, timeoutMs) {
   const socketPromise = createSocket();
   let timer;
@@ -74,8 +73,7 @@ class OpenAIRealtimeStreaming {
     const url = "wss://api.openai.com/v1/realtime?intent=transcription";
     debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
 
-    // Attested providers verify the enclave before dialing, so their socket
-    // arrives via an async factory instead of a direct WebSocket constructor.
+    // Attested providers (Tinfoil) supply their socket via an async factory.
     let ws;
     try {
       ws = createSocket
