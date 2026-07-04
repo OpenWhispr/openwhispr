@@ -32,24 +32,24 @@
       "show": "Dikte Panelini Göster",
       "hide": "Dikte Panelini Gizle"
     },
-    "openControlPanel": "Denetim Masasını Aç",
-    "quit": "OpenWhispr'den çıkın",
+    "openControlPanel": "Kontrol Paneli'ni Aç",
+    "quit": "OpenWhispr'dan Çık",
     "tooltip": "OpenWhispr - Ses Diktesi"
   },
   "menu": {
     "appLabel": "OpenWhispr",
-    "quit": "OpenWhispr'den çıkın",
+    "quit": "OpenWhispr'dan Çık",
     "speech": "Konuşma",
     "settings": "Ayarlar...",
     "help": "Yardım",
-    "learnMore": "Daha Fazla Bilgi Edinin",
+    "learnMore": "Daha Fazla Bilgi",
     "file": "Dosya",
     "closeWindow": "Pencereyi Kapat"
   },
   "window": {
     "voiceRecorderTitle": "Ses Kaydedici",
     "controlPanelTitle": "Kontrol Paneli",
-    "agentChatTitle": "Temsilci Sohbeti"
+    "agentChatTitle": "Asistan Sohbeti"
   },
   "dialog": {
     "openLink": {
@@ -85,7 +85,7 @@
   },
   "hotkey": {
     "errors": {
-      "callbackRequired": "Kısayol tuşu kurulumu için geri arama işlevi gereklidir",
+      "callbackRequired": "Kısayol tuşu için geri çağırma işlevi gerekli",
       "globeOnlyMac": "Globe tuşu yalnızca macOS'ta mevcuttur.",
       "mouseButtonOnlyMac": "Fare düğmesi kısayol tuşları şu anda yalnızca macOS'ta desteklenmektedir.",
       "alreadyRegistered": "\"{{hotkey}}\" zaten başka bir uygulama tarafından kayıtlı.",
@@ -139,7 +139,7 @@
     "cloud": "Bulut",
     "local": "Yerel",
     "apiKey": "API Anahtarı",
-    "model": "Modeli",
+    "model": "Model",
     "loading": "Yükleniyor...",
     "unknown": "Bilinmiyor",
     "availableModels": "Mevcut Modeller",
@@ -148,7 +148,7 @@
     "private": "Özel",
     "tap": "Dokunun",
     "close": "Kapat",
-    "dismiss": "Reddet",
+    "dismiss": "Kapat",
     "save": "Kaydet",
     "saving": "Kaydediliyor…",
     "create": "Oluştur",
@@ -170,7 +170,7 @@
       "useCase": "Senin hakkında",
       "meeting": "Toplantılar",
       "finish": "Bitiş",
-      "voiceAgent": "Ses Aracısı"
+      "voiceAgent": "Ses Asistanı"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Bu kısayol tuşu kaydedilemedi",
@@ -185,7 +185,7 @@
       "title": "İzinler",
       "microphoneTitle": "Mikrofon",
       "microphoneDescription": "Konuşmanızı metne dönüştürür. Kısayol tuşuna basana kadar hiçbir şey kaydedilmez.",
-      "grant": "Hibe",
+      "grant": "Onayla",
       "grantAccess": "Erişim Ver",
       "accessibilityTitle": "Erişilebilirlik",
       "accessibilityDescription": "Tamamlanan metni doğrudan hangi uygulamada olursanız olun (dokümanlar, e-posta, sohbet) yazar.",
@@ -217,8 +217,8 @@
       "textareaPlaceholder": "Buraya tıklayın ve dikte etmek için kısayol tuşunuzu kullanın..."
     },
     "voiceAgent": {
-      "title": "Sesli Aracı Kurulumu",
-      "description": "Tek bir tuşa basarak AI temsilcinizle konuşun",
+      "title": "Sesli Asistan Kurulumu",
+      "description": "Tek bir tuşa basarak AI asistanınızla konuşun",
       "hotkey": "Kısayol tuşu",
       "howItWorks": "tuşuna basın ve ne istediğinizi söyleyin; örneğin “kısa bir teşekkür notu yazın”. {{agentName}}, imlecinizin olduğu yere sonucu yazar. Önce “Merhaba {{agentName}}” demenize gerek yok.",
       "test": "Deneyin",
@@ -389,8 +389,8 @@
       "clearAllErrorTitle": "Geçmiş temizlenemedi",
       "clearAllErrorDescription": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
       "discarded": {
-        "show": "Gösteri iptal edildi",
-        "hide": "Gizle silindi",
+        "show": "İptal edilenleri göster",
+        "hide": "İptal edilenleri gizle",
         "badge": "Atıldı",
         "recording": "Atılan kayıt",
         "recordingWithDuration": "Atılan kayıt · {{duration}}",
@@ -432,7 +432,7 @@
       "endpointUnauthorized": "Uç nokta isteği reddetti (401/403). Bir API anahtarı ekleyin veya sunucu kimlik doğrulama ayarlarını düzenleyin.",
       "endpointTitle": "Uç nokta URL'si",
       "endpointExamples": "Örnekler:",
-      "ollama": "(Olama)",
+      "ollama": "(Ollama)",
       "localAi": "(Yerel AI)",
       "apiKeyOptional": "API Anahtarı (İsteğe Bağlı)",
       "apiKeyHelp": "İsteğe bağlı. Kimlik doğrulama için Taşıyıcı belirteci olarak gönderilir. Bu, OpenAI API anahtarınızdan ayrıdır.",
@@ -448,7 +448,7 @@
       "unableToLoadModels": "Modeller uç noktadan yüklenemiyor."
     },
     "getApiKey": "API anahtarınızı alın ->",
-    "selectModel": "Modeli Seçin",
+    "selectModel": "Model Seç",
     "availableModels": "Mevcut Modeller",
     "disableThinking": {
       "label": "Düşünme çıktısını devre dışı bırak",
@@ -465,7 +465,7 @@
       "testSuccess": "Bağlandı",
       "testFailed": "Bağlantı başarısız oldu",
       "authMode": "Kimlik Doğrulama",
-      "ssoProfile": "TOA Profili",
+      "ssoProfile": "SSO Profili",
       "accessKeys": "Erişim Tuşları",
       "adc": "Uygulama Varsayılan Kimlik Bilgileri",
       "apiKeyMode": "API Anahtarı",
@@ -512,9 +512,9 @@
     "customProvider": "Özel",
     "fallback": {
       "whisperModelDescription": "Modeli",
-      "parakeetModelDescription": "NVIDIA Muhabbetkuşu Modeli"
+      "parakeetModelDescription": "NVIDIA Parakeet Modeli"
     },
-    "whisperModels": "Fısıltı Modelleri",
+    "whisperModels": "Whisper Modelleri",
     "corti": {
       "clientId": "İstemci Kimliği",
       "clientSecret": "Müşteri Sırrı",
@@ -749,9 +749,9 @@
       "title": "Takvim Entegrasyonu",
       "description": "Toplantıları otomatik olarak algılayın ve transkripsiyonları kaydedin"
     },
-    "connect": "Google Takvimi Bağlayın",
+    "connect": "Google Takvimi Bağla",
     "connecting": "Bağlanıyor...",
-    "disconnect": "Bağlantıyı kes",
+    "disconnect": "Bağlantıyı Kes",
     "disconnecting": "Bağlantı kesiliyor...",
     "sync": "Senkronizasyon",
     "syncing": "Senkronizasyon yapılıyor...",
@@ -779,7 +779,7 @@
     "notABot": "OpenWhispr, sistem sesinizi kullanarak kayıt yapar; toplantılara asla bot olarak katılmaz.",
     "connectCalendarButton": "Takvimi Bağla"
   },
-  "cleanupPrompt": "Temizleme",
+  "cleanupPrompt": "Temizleme İstemi",
   "developerSection": {
     "currentLogFile": "Geçerli günlük dosyası",
     "debugMode": {
@@ -893,7 +893,7 @@
       "revokeFailed": "API anahtarı iptal edilemedi"
     }
   },
-  "dictionarySuffix": "Sözlük Son Eki",
+  "dictionarySuffix": "Sözlük Eki",
   "emailVerification": {
     "checkEmailDescription": "Şu adrese bir doğrulama bağlantısı gönderdik:",
     "checkEmailTitle": "E-postanızı kontrol edin",
@@ -939,7 +939,7 @@
     "platforms": {
       "linux": "Linux",
       "macos": "macOS",
-      "windows": "Pencereler"
+      "windows": "Windows"
     },
     "recommended": {
       "linux": {
@@ -1057,7 +1057,7 @@
       }
     },
     "edit": {
-      "agentNameLabel": "Temsilci adı:",
+      "agentNameLabel": "Asistan adı:",
       "cautionLabel": "Dikkat",
       "cautionTextPrefix": "Bu istemin değiştirilmesi transkripsiyon kalitesini etkileyebilir.",
       "cautionTextSuffix": "Aracı tespitini korumak için {{agentName}} yer tutucusunu koruyun.",
@@ -1166,7 +1166,7 @@
       },
       "general": {
         "nameLabel": "Çalışma alanı adı",
-        "slugLabel": "Sümüklüböcek",
+        "slugLabel": "Slug",
         "slugHint": "URL'lerde ve davet bağlantılarında kullanılır. Yalnızca küçük harfler, rakamlar ve kısa çizgiler.",
         "saved": "Çalışma alanı güncellendi",
         "dangerTitle": "Çalışma alanını sil",
@@ -1178,13 +1178,13 @@
       "members": {
         "title": "Üyeler",
         "description": "{{count}} / {{seats}} koltuk kullanıldı.",
-        "invite": "Davet et",
+        "invite": "Davet Et",
         "empty": "Henüz üye yok.",
         "roleUpdated": "Rol güncellendi",
-        "promote": "Yönetici yap",
-        "demote": "Üye ol",
-        "transferOwnership": "Sahipliği aktarma",
-        "remove": "Çalışma alanından kaldır"
+        "promote": "Yönetici Yap",
+        "demote": "Üye Yap",
+        "transferOwnership": "Sahipliği Aktar",
+        "remove": "Çalışma Alanından Kaldır"
       },
       "invites": {
         "title": "Bekleyen davetiyeler",
