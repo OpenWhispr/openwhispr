@@ -14,6 +14,7 @@ export const SUPPORTED_UI_LANGUAGES = [
   "ja",
   "zh-CN",
   "zh-TW",
+  "tr",
 ] as const;
 export type UiLanguage = (typeof SUPPORTED_UI_LANGUAGES)[number];
 
@@ -76,6 +77,10 @@ const resources = {
   "zh-TW": {
     translation: TRANSLATIONS_BY_LOCALE["zh-TW"],
     prompts: PROMPTS_BY_LOCALE["zh-TW"],
+  },
+  tr: {
+    translation: TRANSLATIONS_BY_LOCALE.tr,
+    prompts: PROMPTS_BY_LOCALE.tr,
   },
 } as const;
 

@@ -1,0 +1,2822 @@
+{
+  "settings": {
+    "language": {
+      "sectionTitle": "Dil",
+      "sectionDescription": "Arayüz ve transkripsiyon dillerini bağımsız olarak ayarlayın",
+      "uiLabel": "Arayüz dili",
+      "uiDescription": "OpenWhispr arayüzünde kullanılan dili seçin",
+      "transcriptionLabel": "Transkripsiyon dili",
+      "transcriptionDescription": "Daha doğru transkripsiyon için konuştuğunuz dili seçin"
+    },
+    "noteFiles": {
+      "title": "Notları dosya olarak kaydedin",
+      "description": "Notları ve transkriptleri klasöre göre düzenlenmiş dosyalar olarak otomatik olarak diske kaydedin",
+      "path": "Konumu kaydet",
+      "changePath": "Konumu değiştir",
+      "rebuild": "Tüm dosyaları yeniden oluşturun",
+      "rebuildDescription": "Tüm notları ve transkriptleri diske yeniden senkronize edin",
+      "rebuildError": {
+        "title": "Yeniden oluşturma başarısız oldu",
+        "description": "Not dosyaları yeniden oluşturulamadı. Özelliğin etkinleştirildiğinden ve klasörün yazılabilir olduğundan emin olun."
+      }
+    },
+    "meeting": {
+      "speakerDetection": {
+        "title": "Hoparlörleri tanımlayın ve etiketleyin",
+        "description": "Kapalıyken transkriptlerde \"Siz\" ve \"Diğerleri\" gösterilir"
+      }
+    }
+  },
+  "tray": {
+    "toggleDictation": {
+      "show": "Dikte Panelini Göster",
+      "hide": "Dikte Panelini Gizle"
+    },
+    "openControlPanel": "Kontrol Paneli'ni Aç",
+    "quit": "OpenWhispr'dan Çık",
+    "tooltip": "OpenWhispr - Ses Diktesi"
+  },
+  "menu": {
+    "appLabel": "OpenWhispr",
+    "quit": "OpenWhispr'dan Çık",
+    "speech": "Konuşma",
+    "settings": "Ayarlar...",
+    "help": "Yardım",
+    "learnMore": "Daha Fazla Bilgi",
+    "file": "Dosya",
+    "closeWindow": "Pencereyi Kapat"
+  },
+  "window": {
+    "voiceRecorderTitle": "Ses Kaydedici",
+    "controlPanelTitle": "Kontrol Paneli",
+    "agentChatTitle": "Asistan Sohbeti"
+  },
+  "dialog": {
+    "openLink": {
+      "title": "Bağlantı Açılamıyor",
+      "message": "Bağlantı tarayıcınızda açılamadı:\n{{url}}\n\nHata: {{error}}"
+    },
+    "loadFailure": {
+      "title": "OpenWhispr yüklenemedi",
+      "message": "OpenWhispr kullanıcı arayüzünü yükleyemedi.",
+      "detail": {
+        "window": "Pencere: {{windowName}}",
+        "error": "Hata {{errorCode}}: {{errorDescription}}",
+        "url": "URL: {{url}}",
+        "hint": "Uygulamayı yeniden yüklemeyi veya --log-level=debug ile başlatmayı deneyin."
+      }
+    }
+  },
+  "startup": {
+    "error": {
+      "title": "OpenWhispr Başlangıç Hatası",
+      "message": "Uygulama başlatılamadı:\n\n{{error}}\n\nLütfen bu sorunu bildirin."
+    },
+    "globeHotkey": {
+      "title": "Küre Kısayol Tuşu Kullanılamıyor",
+      "message": "OpenWhispr, Globe tuşu kısayol tuşunu etkinleştiremedi.",
+      "details": {
+        "unknown": "Globe dinleyicisi başlatılırken bilinmeyen bir hata oluştu.",
+        "fallback": "Globe tuşu kısayolu devre dışı kalacak; mevcut klavye kısayolları çalışmaya devam eder.",
+        "devHint": "'npm run compile:globe' komutunu çalıştırın ve dinleyici ikili dosyasını yeniden oluşturmak için uygulamayı yeniden oluşturun.",
+        "reinstallHint": "OpenWhispr'i yeniden yüklemeyi deneyin veya sorun devam ederse destek ekibiyle iletişime geçin."
+      }
+    }
+  },
+  "hotkey": {
+    "errors": {
+      "callbackRequired": "Kısayol tuşu için geri çağırma işlevi gerekli",
+      "globeOnlyMac": "Globe tuşu yalnızca macOS'ta mevcuttur.",
+      "mouseButtonOnlyMac": "Fare düğmesi kısayol tuşları şu anda yalnızca macOS'ta desteklenmektedir.",
+      "alreadyRegistered": "\"{{hotkey}}\" zaten başka bir uygulama tarafından kayıtlı.",
+      "osReserved": "\"{{hotkey}}\" masaüstü ortamınız tarafından ayrılmış olabilir.",
+      "registrationFailed": "\"{{hotkey}}\" kaydedilemedi. Başka bir uygulama tarafından kullanılıyor olabilir.",
+      "trySuggestions": "Şunu deneyin: {{suggestions}}",
+      "slotConflict": "Bu kısayol tuşu zaten {{slot}} için kullanılıyor."
+    }
+  },
+  "systemSettings": {
+    "microphone": "Mikrofon izinlerini yapılandırmak için lütfen sistem ayarlarınızı açın.",
+    "sound": "Lütfen sisteminizin ses ayarlarını açın (örneğin pavucontrol).",
+    "accessibility": "Erişilebilirlik ayarları bu platformda mevcut değildir.",
+    "systemAudio": "Sistem ses ayarları bu platformda mevcut değildir."
+  },
+  "upgradePrompt": {
+    "paymentFailed": "Ödemenizi işleme koyamadık",
+    "weeklyLimit": "Haftalık sınırınıza ulaştınız",
+    "pastDueDescription": "Şimdilik ücretsiz plandasınız — endişelenmeyin, hâlâ haftada {{limit}} kelime alıyorsunuz.",
+    "limitDescription": "{{used}} / {{limit}} kelime kullanıldı.",
+    "updatePayment": "Ödeme yöntemini güncelleyin",
+    "updatePaymentDescription": "Sınırsız Pro transkripsiyona geri dönün.",
+    "upgradeToPro": "Pro'ya Yükseltme",
+    "upgradeDescription": "Ayda 8$ gibi düşük bir ücretle sınırsız transkripsiyon alın.",
+    "useApiKey": "Kendi API anahtarınızı kullanın",
+    "useApiKeyDescription": "Sınırsız kullanım için kendi anahtarınızı getirin.",
+    "switchToLocal": "Yerele geç",
+    "switchToLocalDescription": "Çevrimdışı transkripsiyon. Sınır yok.",
+    "rollingWeeklyLimit": "Değişen haftalık limit"
+  },
+  "windowControls": {
+    "minimize": "Küçült",
+    "maximize": "Büyüt",
+    "restore": "Geri Yükle",
+    "close": "Kapat"
+  },
+  "windows": {
+    "pttUnavailable": "Bas-Konuş yerel dinleyicisi mevcut değil"
+  },
+  "common": {
+    "back": "Geri",
+    "next": "Sonraki",
+    "complete": "Tamamlandı",
+    "reset": "Sıfırla",
+    "refresh": "Yenile",
+    "download": "İndir",
+    "cancel": "İptal",
+    "recommended": "Önerilen",
+    "active": "Aktif",
+    "freeAccountRequired": "Ücretsiz hesap gerekli",
+    "cloud": "Bulut",
+    "local": "Yerel",
+    "apiKey": "API Anahtarı",
+    "model": "Model",
+    "loading": "Yükleniyor...",
+    "unknown": "Bilinmiyor",
+    "availableModels": "Mevcut Modeller",
+    "fast": "Hızlı",
+    "hold": "Basılı tutun",
+    "private": "Özel",
+    "tap": "Dokunun",
+    "close": "Kapat",
+    "dismiss": "Kapat",
+    "save": "Kaydet",
+    "saving": "Kaydediliyor…",
+    "create": "Oluştur",
+    "delete": "Sil",
+    "actions": "Eylemler",
+    "error": "Bir şeyler ters gitti",
+    "unknownError": "Bilinmeyen bir hata oluştu",
+    "copy": "Kopyala",
+    "copied": "Kopyalandı",
+    "done": "Bitti",
+    "skip": "Atla"
+  },
+  "onboarding": {
+    "steps": {
+      "welcome": "Hoş geldiniz",
+      "setup": "Kurulum",
+      "permissions": "İzinler",
+      "activation": "Dikte",
+      "useCase": "Senin hakkında",
+      "meeting": "Toplantılar",
+      "finish": "Bitiş",
+      "voiceAgent": "Ses Asistanı"
+    },
+    "hotkey": {
+      "couldNotRegisterTitle": "Bu kısayol tuşu kaydedilemedi",
+      "couldNotRegisterDescription": "Bu tuş kombinasyonu zaten kullanımda olabilir. Farklı bir tane deneyin."
+    },
+    "setup": {
+      "title": "Kurulum",
+      "description": "Dilinizi seçin ve izinleri verin",
+      "language": "Dil"
+    },
+    "permissions": {
+      "title": "İzinler",
+      "microphoneTitle": "Mikrofon",
+      "microphoneDescription": "Konuşmanızı metne dönüştürür. Kısayol tuşuna basana kadar hiçbir şey kaydedilmez.",
+      "grant": "Onayla",
+      "grantAccess": "Erişim Ver",
+      "accessibilityTitle": "Erişilebilirlik",
+      "accessibilityDescription": "Tamamlanan metni doğrudan hangi uygulamada olursanız olun (dokümanlar, e-posta, sohbet) yazar.",
+      "testAndGrant": "Test Et ve Onay Ver",
+      "requiredForApp": "OpenWhispr'ın çalışması için gereklidir",
+      "microphoneRequired": "Mikrofon erişimi gerekli",
+      "openSystemSettings": "Sistem Ayarlarını Aç",
+      "systemAudioTitle": "Sistem Sesi",
+      "systemAudioDescription": "Toplantı kaydedicinin aramalarınızın diğer tarafını (toplantılar, konferanslar, podcast'ler) duymasını sağlar. Bunu daha sonra Ayarlar'dan açabilirsiniz.",
+      "optional": "İsteğe bağlı",
+      "recommended": "Önerilen",
+      "accessibilityTroubleshooting": "Sistem Ayarları → Erişilebilirlik'te OpenWhispr'in açma/kapama düğmesini kapatıp tekrar açın. Bu işe yaramazsa OpenWhispr'ı listeden kaldırın ve tekrar ekleyin. Hala sıkıştınız mı? support@openwhispr.com adresine e-posta gönderin."
+    },
+    "transcription": {
+      "title": "Transkripsiyon Kurulumu",
+      "description": "Modunuzu ve sağlayıcınızı seçin",
+      "preferredLanguage": "Tercih Edilen Dil"
+    },
+    "activation": {
+      "title": "Dikte Kurulumu",
+      "description": "Dikteyi nasıl tetikleyeceğinizi yapılandırın",
+      "hotkey": "Kısayol tuşu",
+      "mode": "Mod",
+      "tapDescription": "Başlatmak/durdurmak için basın",
+      "holdDescription": "Konuşurken basılı tutun",
+      "test": "Testi",
+      "hotkeyToStartStop": "{{hotkey}} başlatmak/durdurmak için",
+      "holdHotkey": "{{hotkey}} tuşunu basılı tutun",
+      "textareaPlaceholder": "Buraya tıklayın ve dikte etmek için kısayol tuşunuzu kullanın..."
+    },
+    "voiceAgent": {
+      "title": "Sesli Asistan Kurulumu",
+      "description": "Tek bir tuşa basarak AI asistanınızla konuşun",
+      "hotkey": "Kısayol tuşu",
+      "howItWorks": "tuşuna basın ve ne istediğinizi söyleyin; örneğin “kısa bir teşekkür notu yazın”. {{agentName}}, imlecinizin olduğu yere sonucu yazar. Önce “Merhaba {{agentName}}” demenize gerek yok.",
+      "test": "Deneyin",
+      "testInstruction": "Aşağıya tıklayın, {{hotkey}} tuşuna basın ve bir komut söyleyin",
+      "testSetHotkey": "Denemek için yukarıdan bir kısayol tuşu ayarlayın",
+      "testPlaceholder": "Buraya tıklayın, kısayol tuşuna basın ve örneklerden birini söyleyin...",
+      "examples": "İtalyancaya çevir: “Yazdığımdan daha hızlı konuşurum”, Patronuma terfi istediğimi söyleyen kısa bir e-posta yaz, adı Mark, 5 × 5 nedir?",
+      "optionalNote": "İsteğe bağlı — bunu istediğiniz zaman Ayarlar'dan ayarlayabilir veya değiştirebilirsiniz."
+    },
+    "connectivity": {
+      "title": "Bu ağdan OpenWhispr Cloud'a ulaşamıyoruz",
+      "body": "{{cause}} Yerel motora geçebilir veya devam edip daha sonra tekrar deneyebilirsiniz.",
+      "useLocal": "Yerel motoru kullan",
+      "continue": "Yine de devam et"
+    },
+    "useCase": {
+      "title": "Neden buradasın?",
+      "description": "Her hafta nakliye yapan küçük bir ekibiz. Seçtikleriniz uygulamayı sizin için kurar ve bize bundan sonra ne oluşturacağımızı söyler.",
+      "noteLabel": "Bilmemizi istediğiniz başka bir şey var mı?",
+      "notePlaceholder": "İsteğe bağlı",
+      "options": {
+        "dictation": {
+          "title": "Daha hızlı yazma",
+          "description": "Yazmak yerine herhangi bir uygulamaya dikte edin"
+        },
+        "meetings": {
+          "title": "Toplantı notları ve özetleri",
+          "description": "Toplantıları kaydedin, yazıya dökün ve özetleyin"
+        },
+        "healthcare": {
+          "title": "Tıbbi, klinik ve terapi transkripsiyonu",
+          "description": "Hasta notlarını, seans notlarını ve raporları dikte edin"
+        },
+        "translation": {
+          "title": "Çeviri dilleri",
+          "description": "Bir dil konuş, başka bir dil yaz"
+        },
+        "ai": {
+          "title": "Yapay zekamla konuşuyorum",
+          "description": "Sesli ChatGPT, Claude ve diğer aracılar"
+        },
+        "upload": {
+          "title": "Ses dosyalarını yükleme",
+          "description": "MP3, OGG ve daha fazlasını yükleyin ve yazıya dökün"
+        }
+      },
+      "selectHint": "Geçerli olanların tümünü seçin"
+    },
+    "meeting": {
+      "title": "Toplantı notları",
+      "description": "Toplantılarınızı yakalayın ve özetleyin",
+      "autoDetect": "OpenWhispr, bir toplantıda olduğunuzu otomatik olarak algılar ve not almaya başlamayı önerir; siz olmadan hiçbir şey kaydedilmez.",
+      "notification": {
+        "title": "Toplantı algılandı",
+        "body": "Bir toplantıdaymışsınız gibi görünüyor. Not almak ister misiniz?",
+        "cta": "Kaydı Başlat"
+      },
+      "hotkeyLabel": "Toplantı kısayol tuşu",
+      "hotkeyHint": "İsteğe bağlı — herhangi bir toplantıda anında not almaya başlamak için buna basın."
+    },
+    "finish": {
+      "title": "Artık hazırsınız",
+      "cloudDescription": "OpenWhispr Cloud'dasınız; hızlı, doğru, sıfır veri saklama, her hafta 2.000 kelime ücretsiz. Cihazdaki her şeyi mi tercih ediyorsunuz? Ayarlar'da yerel işlemeye geçin.",
+      "localDescription": "Yerel işleme veya kendi anahtarınıza göre kurulum yaptınız. Sesinizin nasıl işleneceğini istediğiniz zaman Ayarlar'dan ayarlayabilirsiniz.",
+      "cleanupNote": "AI metin temizleme, makul varsayılanlarla çalışır. Bunu istediğiniz zaman Ayarlar'dan ayarlayabilirsiniz.",
+      "openSettings": "Ayarları Aç",
+      "skipForNow": "Şimdilik atla",
+      "corti": {
+        "title": "Bize klinik transkripsiyon için burada olduğunuzu söylemiştiniz",
+        "description": "En yüksek doğrulukla klinik düzeyde konuşmayı metne dönüştüren Corti ile ortaklık kurduk ve HIPAA uyumludur.",
+        "createAccount": "Corti hesabınızı oluşturun",
+        "creditBadge": "50$ ücretsiz kredi",
+        "regionHint": "Sesinizin nerede işleneceğini seçin — ABD veya AB.",
+        "useCorti": "Corti'yi kullanın",
+        "skip": "Şimdi değil",
+        "step1": "Corti.ai'ye kaydolun",
+        "step2": "Corti konsolunu açın ve API kimlik bilgilerini oluşturun",
+        "step3": "Müşteri Kimliğinizi ve Sırrınızı aşağıya yapıştırın"
+      }
+    }
+  },
+  "streaming": {
+    "errors": {
+      "cloudUnreachable": {
+        "title": "OpenWhispr Cloud'a ulaşılamıyor",
+        "generic": "Ağ isteği başarısız oldu. Bağlantınızı kontrol edin.",
+        "dnsBlocked": "DNS, openwhispr.com'u çözümlemiyor; bir reklam engelleyici veya filtre onu engelliyor olabilir.",
+        "refused": "Bağlantı reddedildi; muhtemelen bir güvenlik duvarı veya VPN.",
+        "timeout": "Ağ zaman aşımına uğradı — VPN, sabit portal veya dengesiz bağlantı.",
+        "tls": "TLS anlaşması başarısız oldu — sistem saatinizi veya kurumsal proxy'yi kontrol edin.",
+        "fallback": "Buluta erişilemiyor — bu kayıt için yerel motor kullanılıyor."
+      }
+    }
+  },
+  "controlPanel": {
+    "update": {
+      "readyTitle": "Güncelleme kurulmaya hazır",
+      "readyDescription": "En son sürümle yeniden başlatmak için 'Güncellemeyi Yükle'ye tıklayın.",
+      "problemTitle": "Güncelleme bir sorunla karşılaştı",
+      "problemDescription": "Güncellemeyi tamamlayamadık. Lütfen daha sonra tekrar deneyin.",
+      "installTitle": "Güncellemeyi Yükle",
+      "installDescription": "OpenWhispr güncellemeyi uygulamak için yeniden başlatılacak. Devam eden tüm çalışmalar kaydedilecektir.",
+      "couldNotInstallTitle": "Güncelleme yüklenemedi",
+      "couldNotInstallDescription": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
+      "couldNotDownloadTitle": "Güncelleme indirilemedi",
+      "couldNotDownloadDescription": "İnternet bağlantınızı kontrol edip tekrar deneyin.",
+      "installing": "Yükleniyor...",
+      "installButton": "Güncellemeyi Yükle",
+      "availableButton": "Güncelleme Mevcut"
+    },
+    "limit": {
+      "weeklyTitle": "Haftalık limite ulaşıldı",
+      "weeklyDescription": "Limitiniz sürekli olarak sıfırlanır. Sınırsız kullanım için Pro'ya yükseltin veya kendi API anahtarınızı kullanın."
+    },
+    "accessibilityMissing": {
+      "title": "Erişilebilirlik izinleri gerekli",
+      "description": "OpenWhispr'ın düzgün çalışması için erişilebilirlik izinlerine ihtiyacı olduğunu tespit ettik. Lütfen bunları aşağıda etkinleştirin."
+    },
+    "billing": {
+      "pastDueTitle": "Ödemenizi işleme koyamadık",
+      "pastDueDescription": "Endişelenmeyin, şimdilik ücretsiz plandasınız. Pro'ya geri dönmek için ödemenizi Ayarlar'da güncelleyin.",
+      "bannerDescription": "Şimdilik ücretsiz plandasınız; hâlâ haftada {{limit}} kelime alıyorsunuz. Pro'ya geri dönmek için ödemenizi güncelleyin.",
+      "updatePayment": "Ödemeyi Güncelle"
+    },
+    "history": {
+      "couldNotLoadTitle": "Geçmişiniz yüklenemedi",
+      "couldNotLoadDescription": "Çeviri yazılarınız yüklenirken bir şeyler ters gitti. Uygulamayı kapatıp yeniden açmayı deneyin.",
+      "copiedTitle": "Kopyalandı!",
+      "copiedDescription": "Metin panonuza kopyalandı",
+      "couldNotCopyTitle": "Kopyalanamadı",
+      "couldNotCopyDescription": "Panoya kopyalanırken bir şeyler ters gitti. Tekrar deneyin.",
+      "deleteTitle": "Transkripsiyonu Sil",
+      "deleteDescription": "Bu transkripsiyon kalıcı olarak kaldırılacaktır.",
+      "couldNotDeleteTitle": "Silinemedi",
+      "couldNotDeleteDescription": "Bu transkripsiyon zaten kaldırılmış olabilir.",
+      "couldNotDeleteDescriptionGeneric": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
+      "empty": "Henüz transkripsiyon yok",
+      "dataRetentionDisabled": "Veri saklama kapalı. Transkripsiyonlar ve ses geçmişe kaydedilmez.",
+      "press": "Basın",
+      "toStart": "başlamak için",
+      "dateGroups": {
+        "today": "Bugün",
+        "yesterday": "Dün"
+      },
+      "copyText": "Metni kopyala",
+      "deleteItem": "Sil",
+      "viewRawTranscript": "Ham transkripti görüntüle",
+      "showInFolder": "Finder'da Göster",
+      "showInFolderWindows": "Explorer'da Göster",
+      "showInFolderLinux": "Dosya Yöneticisinde Göster",
+      "retryTranscription": "Yeniden yazıya dök",
+      "retrying": "Yeniden yazıya aktarılıyor...",
+      "retrySuccess": "Transkripsiyon güncellendi",
+      "retryError": "Yeniden yazıya dökülemedi",
+      "audioNotFound": "Ses dosyası bulunamadı veya süresi dolmuş",
+      "noAiProcessing": "Bu transkripsiyona hiçbir AI işlemi uygulanmadı",
+      "transcriptionFailed": "Transkripsiyon başarısız oldu",
+      "failedCtaSettings": "Transkripsiyon sağlayıcınızı kurun",
+      "failedCtaAndRetry": "ardından yeniden dene'ye tıklayın",
+      "failedCtaSettingsOnly": "Ayarlar'da transkripsiyon sağlayıcınızı kurun",
+      "failedLimitReached": "Günlük sınıra ulaşıldı",
+      "failedOffline": "Çevrimdışısınız",
+      "rawTranscript": "Ham Transkript",
+      "clearAll": "Tümünü temizle",
+      "clearAllTitle": "Tüm Transkripsiyonları Temizle",
+      "clearAllDescription": "Tüm transkripsiyonlar ve ses dosyaları kalıcı olarak kaldırılacaktır.",
+      "clearAllSuccess": "Geçmiş temizlendi",
+      "clearAllErrorTitle": "Geçmiş temizlenemedi",
+      "clearAllErrorDescription": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
+      "discarded": {
+        "show": "İptal edilenleri göster",
+        "hide": "İptal edilenleri gizle",
+        "badge": "Atıldı",
+        "recording": "Atılan kayıt",
+        "recordingWithDuration": "Atılan kayıt · {{duration}}",
+        "recover": "Kurtar",
+        "recovered": "Kurtarıldı"
+      }
+    },
+    "cloudMigration": {
+      "title": "OpenWhispr Cloud'a Hoş Geldiniz",
+      "description": "Daha hızlı ve daha doğru sonuçlar için transkripsiyonunuzu OpenWhispr Cloud'a geçirdik. Önceki ayarlarınız kaydedildi; istediğiniz zaman Ayarlar'dan geri dönün.",
+      "viewSettings": "Ayarları Görüntüle"
+    },
+    "aiCta": {
+      "title": "Transkripsiyonlarınızı AI ile geliştirin",
+      "description": "Konuşurken dil bilgisini, noktalama işaretlerini ve biçimlendirmeyi otomatik olarak düzeltin.",
+      "enable": "Yapay Zeka Geliştirmeyi Etkinleştir"
+    },
+    "loading": "Yükleniyor...",
+    "gpu": {
+      "bannerTitle": "GPU hızlandırma mevcut",
+      "bannerDescription": "Daha hızlı performans için GPU hızlandırmayı etkinleştirin.",
+      "enableButton": "GPU'yu etkinleştir",
+      "dismissButton": "Şimdi değil"
+    },
+    "backToNotes": "Notlara geri dön"
+  },
+  "reasoning": {
+    "mode": {
+      "cloud": "Bulut",
+      "local": "Yerel",
+      "enterprise": "Kurumsal",
+      "localDescription": "Cihazınızda çalışır. Tam gizlilik, çevrimdışı çalışır.",
+      "cloudDescription": "API aracılığıyla gelişmiş modeller. Hızlı ve yetenekli, internet gerektirir.",
+      "enterpriseDescription": "Kuruluşunuzun kendi bulut sağlayıcısı kimlik bilgilerini kullanın."
+    },
+    "custom": {
+      "endpointWithProtocol": "Protokol dahil tam bir temel URL girin (örneğin, https://sunucu/v1).",
+      "httpsRequired": "HTTPS gerekli (HTTP'ye yalnızca yerel ağ için izin verilir).",
+      "endpointUnauthorized": "Uç nokta isteği reddetti (401/403). Bir API anahtarı ekleyin veya sunucu kimlik doğrulama ayarlarını düzenleyin.",
+      "endpointTitle": "Uç nokta URL'si",
+      "endpointExamples": "Örnekler:",
+      "ollama": "(Ollama)",
+      "localAi": "(Yerel AI)",
+      "apiKeyOptional": "API Anahtarı (İsteğe Bağlı)",
+      "apiKeyHelp": "İsteğe bağlı. Kimlik doğrulama için Taşıyıcı belirteci olarak gönderilir. Bu, OpenAI API anahtarınızdan ayrıdır.",
+      "applyAndRefresh": "Uygula ve Yenile",
+      "queryPrefix": "Sorgulayacağız",
+      "querySuffix": "mevcut modeller için.",
+      "modelsReloadHint": "URL alanından uzaklaştığınızda veya \"Uygula ve Yenile\"yi tıkladığınızda modeller yeniden yüklenecektir.",
+      "enterEndpoint": "Modelleri yüklemek için yukarıya bir uç nokta URL'si girin.",
+      "fetchingModels": "Uç noktadan model listesi alınıyor...",
+      "noModels": "Hiçbir model geri dönmedi. Uç nokta URL'nizi kontrol edin.",
+      "providerName": "Özel",
+      "ownerLabel": "Sahip: {{owner}}",
+      "unableToLoadModels": "Modeller uç noktadan yüklenemiyor."
+    },
+    "getApiKey": "API anahtarınızı alın ->",
+    "selectModel": "Model Seç",
+    "availableModels": "Mevcut Modeller",
+    "disableThinking": {
+      "label": "Düşünme çıktısını devre dışı bırak",
+      "help": "Daha temiz çıktı için akıl yürütme belirteçlerini atlar. Temizleme için önerilir. Bazı sunucular bu ipucunu görmezden geliyor."
+    },
+    "selfHosted": {
+      "endpointHelp": "Yerel ağınızdaki OpenAI uyumlu bir sunucuya (örn. Ollama, LM Studio, vLLM veya llama-server) gelin."
+    },
+    "enterprise": {
+      "title": "Kurumsal Sağlayıcılar",
+      "description": "Kuruluşunuzun kimlik bilgilerini kullanarak bulut sağlayıcılarına bağlanın.",
+      "testConnection": "Bağlantıyı Test Et",
+      "testing": "Test ediliyor...",
+      "testSuccess": "Bağlandı",
+      "testFailed": "Bağlantı başarısız oldu",
+      "authMode": "Kimlik Doğrulama",
+      "ssoProfile": "SSO Profili",
+      "accessKeys": "Erişim Tuşları",
+      "adc": "Uygulama Varsayılan Kimlik Bilgileri",
+      "apiKeyMode": "API Anahtarı",
+      "region": "Bölge",
+      "profile": "Profil Adı",
+      "accessKeyId": "Erişim Anahtarı Kimliği",
+      "secretAccessKey": "Gizli Erişim Anahtarı",
+      "sessionToken": "Oturum Jetonu (isteğe bağlı)",
+      "endpoint": "Uç nokta URL'si",
+      "deploymentName": "Dağıtım Adı",
+      "apiVersion": "API Sürümü",
+      "projectId": "Proje Kimliği",
+      "location": "Konum",
+      "customModelId": "Özel Model Kimliği",
+      "customModelPlaceholder": "Model kimliğini veya dağıtım adını girin",
+      "suggestedModels": "Önerilen Modeller",
+      "bedrock": {
+        "ssoHelp": "AWS CLI SSO yapılandırmanızı kullanır. 'aws sso giriş' komutunu çalıştırdığınızdan emin olun.",
+        "keysHelp": "AWS IAM erişim anahtarlarınızı girin."
+      },
+      "azure": {
+        "endpointHelp": "Azure OpenAI kaynak uç noktanız (ör. https://myresource.openai.azure.com).",
+        "deploymentHelp": "Azure OpenAI'deki model dağıtımınızın adı."
+      },
+      "vertex": {
+        "adcHelp": "Uygulama Varsayılan Kimlik Bilgilerini kullanır. Çalıştır: gcloud kimlik doğrulama uygulaması varsayılan girişi",
+        "apikeyHelp": "Google AI Studio'dan Vertex AI Express Modu API anahtarı."
+      }
+    }
+  },
+  "transcription": {
+    "deleteModel": {
+      "title": "Modeli Sil",
+      "description": "Bu modeli silmek istediğinizden emin misiniz? Tekrar kullanmak istiyorsanız yeniden indirmeniz gerekecektir."
+    },
+    "parakeet": {
+      "multilingual": "25 dil",
+      "english": "İngilizce"
+    },
+    "apiKeyOptional": "API Anahtarı (İsteğe Bağlı)",
+    "getKey": "Anahtarı al ->",
+    "endpointUrl": "Uç nokta URL'si",
+    "azureHint": "Azure AI Foundry: kaynak uç noktanızı girin (ör. https://resource.cognitiveservices.azure.com) ve Modeli tam dağıtım adınıza ayarlayın.",
+    "customProvider": "Özel",
+    "fallback": {
+      "whisperModelDescription": "Modeli",
+      "parakeetModelDescription": "NVIDIA Parakeet Modeli"
+    },
+    "whisperModels": "Whisper Modelleri",
+    "corti": {
+      "clientId": "İstemci Kimliği",
+      "clientSecret": "Müşteri Sırrı",
+      "environment": "Veri Bölgesi",
+      "tenant": "Kiracı"
+    }
+  },
+  "hooks": {
+    "audioRecording": {
+      "errorTitles": {
+        "sessionExpired": "Oturumun Süresi Doldu",
+        "offline": "Çevrimdışısınız",
+        "dailyLimitReached": "Günlük Limite Ulaşıldı",
+        "providerRateLimited": "Sağlayıcı Hızı Sınırlı"
+      },
+      "fallback": {
+        "title": "Geri Dönüş Modu",
+        "description": "Yerel Fısıltı başarısız oldu. Bunun yerine OpenAI API kullanıldı."
+      },
+      "noAudio": {
+        "title": "Ses Algılanmadı",
+        "description": "Kayıtta algılanabilir bir ses yoktu. Lütfen tekrar deneyin."
+      },
+      "errorDescriptions": {
+        "sessionExpired": "OpenWhispr Bulut oturumunuz kullanılamıyor. Lütfen Ayarlar'dan tekrar oturum açın.",
+        "offline": "Çevrimdışısınız. Bulut transkripsiyonu internet bağlantısı gerektirir.",
+        "dailyLimitReached": "Bugünün transkripsiyon sınırına ulaştınız. Yarın tekrar deneyin veya planınızı yükseltin.",
+        "providerRateLimited": "Transkripsiyon sağlayıcınız isteğinize hız sınırlaması getirdi. Bir süre bekleyip tekrar deneyin."
+      }
+    },
+    "clipboard": {
+      "pasteFailed": {
+        "title": "Panoya Yapıştırma Başarısız",
+        "description": "Panodan yapıştırılamadı. Lütfen yazmayı veya Cmd+V/Ctrl+V tuşlarını kullanmayı deneyin."
+      }
+    },
+    "hotkeyRegistration": {
+      "titles": {
+        "invalidHotkey": "Geçersiz Kısayol Tuşu",
+        "notRegistered": "Kısayol Tuşu Kayıtlı Değil",
+        "saved": "Kısayol Tuşu Kaydedildi",
+        "error": "Kısayol Tuşu Hatası"
+      },
+      "errors": {
+        "enterValidHotkey": "Lütfen geçerli bir kısayol tuşu girin",
+        "unsupportedShortcut": "Bu kısayol desteklenmiyor.",
+        "couldNotRegister": "Bu anahtar kaydedilemedi. Lütfen farklı bir anahtar seçin.",
+        "failedToRegister": "Kısayol tuşu kaydedilemedi. Lütfen tekrar deneyin."
+      },
+      "messages": {
+        "nowUsing": "Artık dikte için {{hotkey}} kullanılıyor"
+      }
+    },
+    "modelDownload": {
+      "errors": {
+        "timeout": "İndirme zaman aşımına uğradı. İnternet bağlantınızı kontrol edip tekrar deneyin.",
+        "notFound": "İndirme sunucusuna ulaşılamadı. İnternet bağlantınızı kontrol edin.",
+        "corrupted": "İndirme işlemi eksik veya bozuk. Lütfen tekrar deneyin.",
+        "rateLimited": "İndirme sunucusu hız sınırlayıcıdır. Lütfen birkaç dakika bekleyip tekrar deneyin.",
+        "server": "Sunucu hatası ({{error}}). Lütfen daha sonra tekrar deneyin.",
+        "generic": "İndirme başarısız oldu: {{error}}",
+        "extractionFailed": "Model indirildi ancak kurulum başarısız oldu. Yeniden indirmeden kurulumu yeniden denemek için İndir'i tıklayın.",
+        "tlsError": "Sertifika hatası — ağınız, indirmeleri engelleyen SSL denetimini kullanıyor olabilir. Farklı bir ağdan indirmeyi deneyin.",
+        "unknown": "Bilinmeyen hata"
+      },
+      "downloadFailed": {
+        "title": "İndirme Başarısız"
+      },
+      "installationFailed": {
+        "title": "Kurulum Başarısız"
+      },
+      "downloadInProgress": {
+        "title": "İndirme Devam Ediyor",
+        "description": "Lütfen önce mevcut indirme işleminin tamamlanmasını bekleyin veya iptal edin."
+      },
+      "modelDeleted": {
+        "title": "Model Silindi",
+        "descriptionWithSpace": "Model başarıyla silindi! {{sizeMb}} MB disk alanı boşaltıldı.",
+        "description": "Model başarıyla silindi!"
+      },
+      "deleteFailed": {
+        "title": "Silme Başarısız",
+        "description": "Model silinemedi: {{error}}"
+      },
+      "downloadCancelled": {
+        "title": "İndirme İptal Edildi",
+        "description": "İndirme iptal edildi."
+      }
+    },
+    "permissions": {
+      "paths": {
+        "windowsMicrophone": "Ayarlar -> Gizlilik -> Mikrofon",
+        "linuxSound": "sistem ses ayarlarınız",
+        "defaultSound": "Sistem Ayarları -> Ses -> Giriş",
+        "linuxPrivacy": "sistem gizlilik ayarlarınız",
+        "defaultPrivacy": "Sistem Ayarları -> Gizlilik ve Güvenlik -> Mikrofon"
+      },
+      "micErrors": {
+        "accessFailed": "Mikrofon erişimi başarısız oldu. Lütfen tekrar deneyin.",
+        "noMicrophones": "Hiçbir mikrofon algılanmadı. {{settingsPath}} içinden bir mikrofon bağlayın veya seçin.",
+        "permissionDenied": "İzin reddedildi. {{privacyPath}}'yi açın ve OpenWhispr'a izin verin.",
+        "couldNotStart": "Seçilen mikrofon başlatılamadı. {{settingsPath}} içinden bir giriş cihazı seçin ve ardından testi yeniden çalıştırın.",
+        "noActiveInput": "Aktif ses girişi bulunamadı. {{settingsPath}} içinden bir mikrofon seçin.",
+        "unknown": "Mikrofon erişimi başarısız oldu: {{error}}. Farklı bir giriş cihazı seçip tekrar deneyin.",
+        "unknownFallback": "Bilinmeyen hata"
+      },
+      "settingsTitles": {
+        "microphone": "Mikrofon Ayarları",
+        "sound": "Ses Ayarları",
+        "accessibility": "Erişilebilirlik Ayarları"
+      },
+      "settingsErrors": {
+        "unableToOpenMicrophone": "Mikrofon ayarları açılamıyor. Lütfen sistem ayarlarınızı manuel olarak açın.",
+        "unableToOpenSound": "Ses ayarları açılamıyor. Lütfen sistem ayarlarınızı manuel olarak açın.",
+        "unableToOpenAccessibility": "Erişilebilirlik ayarları açılamıyor. Lütfen sistem ayarlarınızı manuel olarak açın."
+      },
+      "micUnavailable": "Mikrofon API'leri bu ortamda kullanılamaz. Lütfen uygulamayı yeniden başlatın.",
+      "titles": {
+        "microphoneUnavailable": "Mikrofon Kullanılamıyor",
+        "microphonePermissionRequired": "Mikrofon İzni Gerekli",
+        "accessibilityNeeded": "Erişilebilirlik İzinleri Gerekli",
+        "readyToGo": "Gitmeye Hazır!",
+        "waylandClipboardMode": "Wayland'de Pano Modu",
+        "optionalPasteTool": "İsteğe Bağlı: Yapıştırma Aracını Yükleyin"
+      },
+      "descriptions": {
+        "accessibilityNeeded": "Otomatik metin yapıştırmayı etkinleştirmek için lütfen Sistem Ayarlarında erişilebilirlik izinlerini verin.",
+        "windowsReady": "Windows, otomatik yapıştırma için özel izinler gerektirmez. Artık hazırsınız!",
+        "linuxReadyWithMethod": "Otomatik yapıştırma, {{method}} kullanılarak yapılabilir. Artık hazırsınız!",
+        "waylandClipboardMode": "Otomatik yapıştırma bu Wayland oturumunda mevcut değildir. OpenWhispr metni panonuza kopyalayacaktır ve siz de Ctrl+V tuşlarına basarak yapıştırabilirsiniz.",
+        "optionalPasteTool": "Otomatik yapıştırma için {{tool}} yükleyin:\n\n{{installCmd}}{{waylandNote}}\n\nBu olmadan da OpenWhispr'ı kullanmaya devam edebilirsiniz - metin panonuza kopyalanır ve Ctrl+V ile yapıştırabilirsiniz."
+      },
+      "alerts": {
+        "accessibilityNeeded": "Erişilebilirlik izinleri gerekli! Lütfen bunları Sistem Ayarlarında verin."
+      },
+      "notes": {
+        "waylandWtype": "Not: XWayland uygulamaları için xdotool da çalışır.",
+        "waylandXwaylandOnly": "Not: Otomatik yapıştırma yalnızca XWayland uygulamalarında çalışır."
+      },
+      "labels": {
+        "defaultPasteTool": "xdotool",
+        "xdotoolXwayland": "xdotool (XWayland uygulamaları)"
+      },
+      "accessibilityTestText": "OpenWhispr erişilebilirlik testi",
+      "warning": {
+        "messages": {
+          "macos": "Giriş cihazınızı seçmek için Ses ayarlarını kontrol edin",
+          "windows": "Giriş cihazınızı seçmek için Windows Ayarlarını kontrol edin",
+          "linux": "Giriş cihazınızı seçmek için sistem ses ayarlarını kontrol edin"
+        },
+        "soundLabel": "Ses",
+        "privacyLabel": "Gizlilik"
+      }
+    }
+  },
+  "auth": {
+    "cloudNotConfigured": "Bulut Yapılandırılmadı",
+    "common": {
+      "back": "Geri",
+      "continue": "Devam et",
+      "or": "veya"
+    },
+    "emailStep": {
+      "continueWithEmail": "E-postayla devam et",
+      "continueWithoutAccount": "Hesapsız devam et",
+      "emailPlaceholder": "siz@example.com"
+    },
+    "errors": {
+      "accountExistsSignIn": "Bu e-postaya sahip bir hesap zaten mevcut. Lütfen oturum açın.",
+      "accountNotFoundCreate": "Bu e-postaya ait hesap bulunamadı. Lütfen bir hesap oluşturun.",
+      "authNotConfigured": "Kimlik doğrulama yapılandırılmamış",
+      "createAccountFailed": "Hesap oluşturulamadı",
+      "failedProviderSignIn": "{{provider}} ile oturum açılamadı",
+      "failedUserCheck": "Kullanıcı hesabı kontrol edilemedi",
+      "generic": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
+      "invalidCredentials": "Geçersiz e-posta veya şifre",
+      "plusAliasUnsupported": "'+' işaretli e-posta takma adları desteklenmiyor"
+    },
+    "getStarted": "Başlayın",
+    "legal": {
+      "and": "ve",
+      "prefix": "Devam ederek şunları kabul etmiş olursunuz:",
+      "privacy": "Gizlilik Politikası",
+      "suffix": "",
+      "terms": "Hizmet Şartları"
+    },
+    "passwordForm": {
+      "createAccount": "Bir hesap oluşturun",
+      "createAccountButton": "Hesap Oluştur",
+      "createAccountLink": "Hesap oluştur",
+      "createPasswordPlaceholder": "Bir şifre oluşturun",
+      "creatingAccount": "Hesap oluşturuluyor...",
+      "enterPasswordPlaceholder": "Şifrenizi girin",
+      "forgotPassword": "Şifrenizi mi unuttunuz?",
+      "fullNamePlaceholder": "Tam ad",
+      "haveAccount": "Zaten bir hesabınız var mı?",
+      "newHere": "Burada yeni misiniz?",
+      "passwordMinLength": "Şifre en az 8 karakter olmalıdır",
+      "signIn": "Oturum Aç",
+      "signInLink": "Oturum aç",
+      "signingIn": "Oturum açılıyor...",
+      "welcomeBack": "Tekrar hoş geldiniz"
+    },
+    "signedIn": {
+      "ready": "Hazır",
+      "welcomeBack": "Tekrar hoş geldiniz",
+      "welcomeBackName": "Tekrar hoş geldiniz {{name}}"
+    },
+    "sso": {
+      "continueWithSSO": "SSO ile oturum açın",
+      "emailRequired": "SSO'yu kullanmak için iş e-postanızı girin.",
+      "failed": "Tek oturum açma başarısız oldu. Lütfen tekrar deneyin."
+    },
+    "social": {
+      "completeInBrowser": "Tarayıcınızda oturum açma işlemini tamamlayın",
+      "continueWithApple": "Apple ile devam et",
+      "continueWithGoogle": "Google ile devam et",
+      "continueWithMicrosoft": "Microsoft ile devam edin",
+      "protocolUnavailable": "Tarayıcıda oturum açılamıyor — sisteminizin Varsayılan Uygulama ayarlarında openwhispr:// protokolünü yeniden kaydedin."
+    },
+    "welcomeSubtitle": "Sesinizi kullanarak istediğiniz yere dikte edin",
+    "welcomeTitle": "OpenWhispr'a hoş geldiniz",
+    "sessionExpired": "Oturumun süresi doldu. Lütfen kayıt işlemini yeniden başlatın."
+  },
+  "calendar": {
+    "title": "Google Takvim",
+    "status": "Durum",
+    "connected": "Bağlandı",
+    "disconnected": "Bağlantı kesildi",
+    "notConnectedDescription": "Toplantıları algılamak ve kaydetmek için bağlanın",
+    "connectCta": {
+      "title": "Takvim Entegrasyonu",
+      "description": "Toplantıları otomatik olarak algılayın ve transkripsiyonları kaydedin"
+    },
+    "connect": "Google Takvimi Bağla",
+    "connecting": "Bağlanıyor...",
+    "disconnect": "Bağlantıyı Kes",
+    "disconnecting": "Bağlantı kesiliyor...",
+    "sync": "Senkronizasyon",
+    "syncing": "Senkronizasyon yapılıyor...",
+    "calendarsTitle": "Takvimler",
+    "upcomingTitle": "Yaklaşan",
+    "noUpcoming": "Yaklaşan etkinlik yok",
+    "meetingStarting": "Toplantı şimdi başlıyor",
+    "today": "Bugün",
+    "tomorrow": "Yarın"
+  },
+  "upcoming": {
+    "title": "Yaklaşan Toplantılar",
+    "transcriptions": "Transkripsiyonlar",
+    "tomorrow": "Yarın",
+    "noMoreMeetings": "Bugün başka toplantı yok",
+    "now": "Şimdi",
+    "join": "Katıl",
+    "untitledEvent": "Başlıksız Etkinlik",
+    "systemAudioRequired": "Diğer katılımcıların sesini yakalamak için Sistem Sesi izni gereklidir.",
+    "openSettings": "Sistem Ayarlarını Aç",
+    "signInRequired": "Toplantı kaydını kullanmak için oturum açın",
+    "signInDescription": "Toplantıları kaydetmek ve yazıya dökmek için bir hesap oluşturun veya oturum açın.",
+    "connectCalendar": "Takviminizi bağlayın",
+    "connectCalendarDescription": "Yaklaşan toplantıları görmek ve notları otomatik olarak kaydetmek için Google Takviminizi bağlayın.",
+    "notABot": "OpenWhispr, sistem sesinizi kullanarak kayıt yapar; toplantılara asla bot olarak katılmaz.",
+    "connectCalendarButton": "Takvimi Bağla"
+  },
+  "cleanupPrompt": "Temizleme İstemi",
+  "developerSection": {
+    "currentLogFile": "Geçerli günlük dosyası",
+    "debugMode": {
+      "disabledDescription": "Ayrıntılı tanılama bilgilerini yakalamak için etkinleştirin",
+      "enabledDescription": "Ses işlemeyi, API isteklerini ve sistem işlemlerini günlüğe kaydetme",
+      "label": "Hata ayıklama modu"
+    },
+    "description": "Sorunların teşhis edilmesine yardımcı olacak ayrıntılı günlükler yakalayın",
+    "openLogsFolder": "Günlükler Klasörünü Aç",
+    "performanceNote": {
+      "description": "Hata ayıklama günlüğü sürekli olarak diske yazar ve performansı biraz etkileyebilir. Sorun giderilmediğinde devre dışı bırakın.",
+      "label": "Not"
+    },
+    "sharing": {
+      "footer": "Günlükler API anahtarları veya hassas veriler içermiyor",
+      "steps": {
+        "0": "Hata ayıklama modu etkinken sorunu yeniden oluşturun",
+        "1": "Yukarıdaki \"Günlükler Klasörünü Aç\"a tıklayın",
+        "2": "En güncel günlük dosyasını hata raporunuza ekleyin"
+      },
+      "title": "Destek için günlüklerin paylaşılması"
+    },
+    "title": "Hata Ayıklama Günlüğü",
+    "toasts": {
+      "copied": {
+        "description": "Günlük dosyası yolu panoya kopyalandı",
+        "title": "Kopyalandı"
+      },
+      "copyFailed": {
+        "description": "Panoya kopyalanırken bir şeyler ters gitti.",
+        "title": "Kopyalanamadı"
+      },
+      "debugDisabled": {
+        "description": "Hata ayıklama günlüğü kapatıldı",
+        "title": "Hata Ayıklama Günlüğü Devre Dışı"
+      },
+      "debugEnabled": {
+        "description": "Ayrıntılı günlükler artık diske yazılıyor",
+        "title": "Hata Ayıklama Günlüğü Etkin"
+      },
+      "loadFailed": {
+        "description": "Bir şeyler ters gitti. Ayarları yeniden açmayı deneyin.",
+        "title": "Hata ayıklama ayarları yüklenemedi"
+      },
+      "openLogsFailed": {
+        "description": "Günlükler dizinini açarken bir şeyler ters gitti.",
+        "title": "Günlükler klasörü açılamadı"
+      },
+      "updateFailed": {
+        "description": "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
+        "title": "Hata ayıklama günlüğü güncellenemedi"
+      }
+    },
+    "whatGetsLogged": {
+      "items": {
+        "apiRequests": "API istekleri",
+        "audioProcessing": "Ses işleme",
+        "errorDetails": "Hata ayrıntıları",
+        "ffmpegOperations": "FFmpeg işlemleri",
+        "systemDiagnostics": "Sistem diyagnostiği",
+        "transcriptionPipeline": "Transkripsiyon hattı"
+      },
+      "title": "Neler günlüğe kaydedilir?"
+    }
+  },
+  "apiKeysSection": {
+    "title": "API Anahtarları",
+    "description": "OpenWhispr API'sine programlı olarak erişmek için anahtarlar oluşturun.",
+    "docsLink": "API Dokümanları",
+    "empty": "Henüz API anahtarı yok",
+    "createButton": "API Anahtarı Oluştur",
+    "create": {
+      "title": "API Anahtarı Oluştur",
+      "nameLabel": "Tuş Adı",
+      "namePlaceholder": "ör. Entegrasyonum",
+      "scopesLabel": "İzinler",
+      "expiryLabel": "Sona Erme",
+      "expiryOptions": {
+        "never": "Süresi asla dolmaz",
+        "30days": "30 gün",
+        "60days": "60 gün",
+        "90days": "90 gün",
+        "1year": "1 yıl"
+      },
+      "submit": "Oluştur",
+      "cancel": "İptal"
+    },
+    "created": {
+      "title": "API Anahtarı Oluşturuldu",
+      "warning": "Şimdi bu anahtarı kopyalayın. Bir daha gösterilmeyecek.",
+      "copied": "Kopyalandı!",
+      "copyButton": "Panoya Kopyala",
+      "done": "Bitti"
+    },
+    "scopes": {
+      "notesRead": "Notları okuyun",
+      "notesWrite": "Not oluşturma ve düzenleme",
+      "transcriptionsRead": "Transkripsiyonları okuyun"
+    },
+    "revoke": {
+      "button": "İptal Et",
+      "confirm": "Bu anahtar iptal edilsin mi? Bunu kullanan tüm entegrasyonlar çalışmayı durduracaktır.",
+      "success": "API anahtarı iptal edildi"
+    },
+    "neverUsed": "Hiç kullanılmadı",
+    "lastUsed": "Son kullanılan {{time}}",
+    "maxKeysReached": "İzin verilen maksimum {{max}} anahtar",
+    "errors": {
+      "loadFailed": "API anahtarları yüklenemedi",
+      "createFailed": "API anahtarı oluşturulamadı",
+      "revokeFailed": "API anahtarı iptal edilemedi"
+    }
+  },
+  "dictionarySuffix": "Sözlük Eki",
+  "emailVerification": {
+    "checkEmailDescription": "Şu adrese bir doğrulama bağlantısı gönderdik:",
+    "checkEmailTitle": "E-postanızı kontrol edin",
+    "errors": {
+      "resendFailed": "E-postayı tekrar gönderemedik. Lütfen tekrar deneyin.",
+      "serverUnreachable": "Sunucuya ulaşılamadı. Bağlantınızı kontrol edip tekrar deneyin."
+    },
+    "resendButton": "Doğrulama e-postasını yeniden gönder",
+    "resendIn": "{{seconds}} saniye içinde yeniden gönder",
+    "verifiedDescription": "Hesabınız hazır.",
+    "verifiedTitle": "E-posta doğrulandı",
+    "waiting": "Doğrulama bekleniyor...",
+    "backToSignIn": "Oturum açmaya geri dön"
+  },
+  "errorBoundary": {
+    "description": "Beklenmeyen bir hata oluştu. Tekrar denemek için lütfen yeniden yükleyin.",
+    "reload": "Yeniden yükle",
+    "title": "Bir şeyler ters gitti"
+  },
+  "forgotPassword": {
+    "back": "Geri",
+    "backToSignIn": "Oturum açmaya geri dön",
+    "emailPlaceholder": "E-postanızı girin",
+    "goBack": "Geri Dön",
+    "notConfigured": "Kimlik doğrulama henüz kurulmadı.",
+    "sendResetLink": "Sıfırlama Bağlantısını Gönder",
+    "sending": "Gönderiliyor...",
+    "subtitle": "E-postanızı girin, size bir sıfırlama bağlantısı göndereceğiz",
+    "success": {
+      "description": "adresine bir şifre sıfırlama bağlantısı gönderdik.",
+      "help": "E-postayı almadınız mı? Spam klasörünüzü kontrol edin veya tekrar deneyin.",
+      "title": "E-postanızı kontrol edin",
+      "tryAnother": "Başka bir e-posta deneyin"
+    },
+    "title": "Şifrenizi sıfırlayın"
+  },
+  "actionPrompt": "Eylem İstemi",
+  "hotkeyGuidance": {
+    "blockedDescription": "Bu kısayollar sistem tarafından yaygın olarak kullanıldığı için engellenmiştir.",
+    "blockedTitle": "Engellenen kısayollar",
+    "description": "Sisteminizle çakışmayacak bir kısayol seçmek için bu platform kurallarını kullanın.",
+    "examplesTitle": "Geçerli örnekler",
+    "platforms": {
+      "linux": "Linux",
+      "macos": "macOS",
+      "windows": "Windows"
+    },
+    "recommended": {
+      "linux": {
+        "0": "Ctrl+Alt+Boşluk",
+        "1": "Süper+S",
+        "2": "Ctrl+Alt+D",
+        "3": "Ctrl+Üst Karakter+J",
+        "4": "Alt+Boşluk"
+      },
+      "macos": {
+        "0": "⌥Uzay",
+        "1": "⌃⌥S",
+        "2": "⌃⌥D",
+        "3": "Fn",
+        "4": "⌘⇧J"
+      },
+      "windows": {
+        "0": "Ctrl+Alt+Boşluk",
+        "1": "Ctrl+Üst Karakter+S",
+        "2": "Ctrl+Alt+D",
+        "3": "Kazan+Alt+K"
+      }
+    },
+    "recommendedTitle": "Önerilen kısayollar",
+    "rulesTitle": "Kısayol kuralları",
+    "showAll": "Tümünü göster",
+    "showFewer": "Daha azını göster",
+    "title": "Kısayol Kılavuzu",
+    "validationRules": {
+      "0": "En az bir değiştirici kullanılmalıdır (Ctrl, Alt, Shift vb.)",
+      "1": "Ayrılmış sistem kısayolları kullanılamıyor",
+      "2": "Tek tuşlara tek başına izin verilmez",
+      "3": "Bazı kombinasyonlar diğer uygulamalarla çakışabilir"
+    }
+  },
+  "hotkeyInput": {
+    "ariaLabel": "Kısayol tuşunu ayarlamak için bir tuş kombinasyonuna basın",
+    "clickToChange": "Değiştirmek için tıklayın",
+    "clickToChangeLower": "değiştirmek için tıklayın",
+    "clickToSet": "Kısayol tuşunu ayarlamak için tıklayın",
+    "fnCaptureHint": "Birleştirmek için bir tuşa basın veya Globe için bırakın",
+    "fnHeldHint": "+ Globe için anahtar veya serbest bırakma",
+    "globe": "Küre",
+    "hotkeyLabel": "Kısayol tuşu",
+    "keyHint": "+ tuşu",
+    "listening": "Dinleniyor...",
+    "pressAnyKey": "Herhangi bir tuşa veya Ctrl+Shift+K'ye basın",
+    "pressAnyKeyMac": "Herhangi bir tuşa veya ⌘⇧K'ye basın",
+    "recording": "Kayıt",
+    "tryShortcut": "Ctrl+Shift+K'yi deneyin",
+    "tryShortcutMac": "⌘⇧K'yi deneyin",
+    "remove": "Kısayol tuşunu kaldır"
+  },
+  "languageSelector": {
+    "noLanguagesFound": "Hiçbir dil bulunamadı",
+    "searchPlaceholder": "Ara..."
+  },
+  "microphoneSettings": {
+    "builtIn": "(Yerleşik)",
+    "errors": {
+      "unableToAccess": "Mikrofona erişilemiyor. Lütfen izinleri kontrol edin."
+    },
+    "helpText": "Belirli bir mikrofon seçin veya sistemin varsayılan ayarını kullanın.",
+    "inputDevice": "Giriş Cihazı",
+    "noBuiltInDetected": "Dahili mikrofon algılanmadı. Sistem varsayılanını kullanma.",
+    "preferBuiltIn": {
+      "description": "Harici mikrofonlar gecikmeye veya transkripsiyon kalitesinin düşmesine neden olabilir",
+      "label": "Dahili Mikrofonu Tercih Edin"
+    },
+    "selectPlaceholder": "Bir mikrofon seçin",
+    "systemDefault": "Sistem Varsayılanı",
+    "unknownDevice": "Bilinmeyen Cihaz",
+    "using": "Kullanarak: {{device}}"
+  },
+  "pasteToolsInfo": {
+    "checking": "Sistem yetenekleri kontrol ediliyor...",
+    "installCommands": {
+      "archLinux": "# Arch Linux",
+      "debianUbuntu": "#Debian/Ubuntu",
+      "debianUbuntuMint": "# Debian / Ubuntu / Nane",
+      "fedoraRhel": "# Fedora / RHEL"
+    },
+    "installPrefix": "Otomatik metin yapıştırma için şunu yükleyin:",
+    "methodReady": "otomatik metin yapıştırma için",
+    "noteXwaylandAlso": "Not: XWayland uygulamaları için xdotool da çalışır.",
+    "noteXwaylandOnly": "Not: otomatik yapıştırma yalnızca XWayland uygulamalarında çalışır.",
+    "optionalEnableTitle": "İsteğe bağlı: Otomatik Yapıştırmayı Etkinleştir",
+    "readyTitle": "Otomatik Yapıştırmaya Hazır",
+    "recheck": "Tekrar kontrol et",
+    "recheckChecking": "Kontrol ediliyor...",
+    "title": "Otomatik Yapıştırma",
+    "usingMethodPrefix": "Kullanma",
+    "waylandClipboardDescription": "Otomatik yapıştırma bu Wayland oturumunda mevcut değildir. OpenWhispr metni panonuza kopyalayacaktır, böylece Ctrl+V tuşlarına basarak manuel olarak yapıştırabilirsiniz.",
+    "waylandClipboardTitle": "Wayland'de Pano Modu",
+    "windowsReady": "Windows, kutudan otomatik olarak yapıştırmayı destekler. Kurulum gerekmez!",
+    "withoutToolPrefix": "Bu araç olmadan OpenWhispr metni panonuza kopyalayacaktır. Daha sonra Ctrl+V tuşlarıyla manuel olarak yapıştırabilirsiniz.",
+    "xwaylandAppsOnly": "otomatik yapıştırma yalnızca XWayland uygulamalarında çalışır"
+  },
+  "promptStudio": {
+    "common": {
+      "copied": "Kopyalandı",
+      "copy": "Kopyala",
+      "reset": "Sıfırla",
+      "save": "Kaydet"
+    },
+    "defaultTestInput": "Hey Whispr, bugün hava nasıl?",
+    "dialogs": {
+      "reset": {
+        "description": "İstem varsayılan değere sıfırlandı.",
+        "title": "Sıfırlama Tamamlandı"
+      },
+      "saved": {
+        "description": "Özel isteminiz gelecekteki tüm yapay zeka işlemleri için kullanılacaktır.",
+        "title": "İstem Kaydedildi"
+      }
+    },
+    "edit": {
+      "agentNameLabel": "Asistan adı:",
+      "cautionLabel": "Dikkat",
+      "cautionTextPrefix": "Bu istemin değiştirilmesi transkripsiyon kalitesini etkileyebilir.",
+      "cautionTextSuffix": "Aracı tespitini korumak için {{agentName}} yer tutucusunu koruyun.",
+      "placeholder": "Özel sistem isteminizi girin..."
+    },
+    "tabs": {
+      "customize": "Özelleştir",
+      "test": "Test",
+      "view": "Görüntüle"
+    },
+    "test": {
+      "addressHint": "Talimat modunu test etmek için \"{{agentName}}\" adreslemeyi deneyin",
+      "aiModels": "Yapay Zeka Modelleri",
+      "baseUrlMissing": "{{provider}} temel URL'si eksik. Bunu AI Models ayarlarına ekleyin.",
+      "cleanup": "Temizleme",
+      "disabledInSettingsPrefix": "AI metin geliştirme devre dışı.",
+      "disabledInSettingsSuffix": "İstemleri test etmek için bunu AI Modellerinde etkinleştirin.",
+      "disabledReasoning": "AI metin geliştirme devre dışı. İstemleri test etmek için bunu AI Modellerinde etkinleştirin.",
+      "failed": "Test başarısız oldu: {{error}}",
+      "inputLabel": "Giriş",
+      "inputPlaceholder": "Test edilecek metni girin...",
+      "instruction": "Talimat",
+      "modelLabel": "Modeli",
+      "noModelSelected": "Model seçilmedi",
+      "none": "Yok",
+      "outputLabel": "Çıkış",
+      "processing": "İşleniyor...",
+      "openwhisprCloud": "OpenWhispr Bulutu",
+      "providerLabel": "Sağlayıcı",
+      "run": "Testi Çalıştır",
+      "customEndpoint": "Özel uç nokta"
+    },
+    "view": {
+      "customPrompt": "Özel istem",
+      "defaultPrompt": "Varsayılan istem",
+      "modified": "Değiştirildi"
+    }
+  },
+  "settingsModal": {
+    "groups": {
+      "account": "Hesap",
+      "app": "Uygulama",
+      "aiModels": "Yapay Zeka Modelleri",
+      "system": "Sistem"
+    },
+    "sections": {
+      "account": {
+        "description": "Profil oluştur ve oturum aç",
+        "label": "Hesap"
+      },
+      "plansBilling": {
+        "description": "Planlar, kullanım ve faturalandırma",
+        "label": "Planlar ve Faturalandırma"
+      },
+      "workspace": {
+        "description": "Üyeler, ekipler, faturalandırma ve API anahtarları",
+        "label": "Çalışma Alanı"
+      },
+      "general": {
+        "description": "Görünüm, sesler ve başlatma",
+        "label": "Tercihler"
+      },
+      "hotkeys": {
+        "description": "Dikte kısayol tuşu ve etkinleştirme",
+        "label": "Kısayol Tuşları"
+      },
+      "speechToText": {
+        "description": "Dikte ve nota kaydı için motorlar",
+        "label": "Konuşmayı Metne Dönüştürme"
+      },
+      "llms": {
+        "description": "Sohbet, temizlik ve özetler için modeller",
+        "label": "Dil Modelleri"
+      },
+      "privacyData": {
+        "description": "Gizlilik, izinler ve analizler",
+        "label": "Gizlilik ve Veriler"
+      },
+      "system": {
+        "description": "Güncellemeler, depolama ve geliştirici araçları",
+        "label": "Sistem"
+      }
+    },
+    "title": "Ayarlar"
+  },
+  "settingsPage": {
+    "workspace": {
+      "title": "Çalışma Alanı",
+      "description": "Ekip arkadaşlarınızla işbirliği yapın, notları paylaşın ve faturalandırmayı tek bir yerden yönetin.",
+      "empty": {
+        "title": "İlk çalışma alanınızı yaratın",
+        "description": "Çalışma alanları ekip arkadaşlarınızla işbirliği yapmanıza ve not paylaşmanıza olanak tanır.",
+        "create": "Çalışma alanı oluştur"
+      },
+      "tab": {
+        "general": "Genel",
+        "members": "Üyeler",
+        "teams": "Takımlar",
+        "billing": "Faturalandırma",
+        "developer": "Geliştirici"
+      },
+      "role": {
+        "owner": "Sahip",
+        "admin": "Yönetici",
+        "member": "Üye"
+      },
+      "general": {
+        "nameLabel": "Çalışma alanı adı",
+        "slugLabel": "Slug",
+        "slugHint": "URL'lerde ve davet bağlantılarında kullanılır. Yalnızca küçük harfler, rakamlar ve kısa çizgiler.",
+        "saved": "Çalışma alanı güncellendi",
+        "dangerTitle": "Çalışma alanını sil",
+        "dangerDescription": "Tüm paylaşılan notlar, klasörler ve entegrasyonlar silinecek. Bu geri alınamaz.",
+        "delete": "Çalışma alanını sil",
+        "confirmTitle": "{{name}} silinsin mi?",
+        "confirmDescription": "Bu, aboneliği iptal eder ve tüm çalışma alanı verilerini kalıcı olarak kaldırır."
+      },
+      "members": {
+        "title": "Üyeler",
+        "description": "{{count}} / {{seats}} koltuk kullanıldı.",
+        "invite": "Davet Et",
+        "empty": "Henüz üye yok.",
+        "roleUpdated": "Rol güncellendi",
+        "promote": "Yönetici Yap",
+        "demote": "Üye Yap",
+        "transferOwnership": "Sahipliği Aktar",
+        "remove": "Çalışma Alanından Kaldır"
+      },
+      "invites": {
+        "title": "Bekleyen davetiyeler",
+        "resend": "Yeniden gönder",
+        "revoke": "İptal Et",
+        "resent": "Davet yeniden gönderildi"
+      },
+      "teams": {
+        "title": "Takımlar",
+        "description": "Kapsamlı paylaşım için grup üyeleri.",
+        "new": "Yeni takım",
+        "empty": "Henüz takım yok.",
+        "createFirst": "İlk takımınızı oluşturun",
+        "createTitle": "Ekip oluştur",
+        "nameLabel": "Takım adı",
+        "descriptionLabel": "Açıklama",
+        "memberCount": "{{count}} üye"
+      },
+      "billing": {
+        "title": "Faturalandırma",
+        "description": "Plan, koltuklar ve ödeme.",
+        "plan": "Planı",
+        "seats": "Koltuklar",
+        "nextInvoice": "Sonraki fatura",
+        "manageStripe": "Stripe'da Yönet",
+        "startSubscription": "Aboneliği başlat"
+      },
+      "developer": {
+        "title": "API anahtarları",
+        "description": "Programatik erişim bu çalışma alanını kapsamına aldı.",
+        "empty": "Henüz API anahtarı yok. Bu çalışma alanıyla entegre olacak bir tane oluşturun.",
+        "new": "Yeni anahtar",
+        "create": "Anahtar oluştur",
+        "createTitle": "API anahtarı oluştur",
+        "createDescription": "Bu anahtarın ihtiyaç duyduğu izinleri seçin. İstediğiniz zaman iptal edebilirsiniz.",
+        "nameLabel": "Tuş adı",
+        "namePlaceholder": "Üretim entegrasyonu",
+        "revoke": "İptal tuşu",
+        "lastUsed": "Son kullanılan {{date}}",
+        "neverUsed": "Hiç kullanılmadı",
+        "keyCreatedTitle": "API anahtarı oluşturuldu",
+        "keyCreatedDescription": "Bu anahtarı şimdi kopyalayın; bir daha göremeyeceksiniz."
+      }
+    },
+    "account": {
+      "badges": {
+        "free": "Ücretsiz",
+        "limitReached": "Sınıra ulaşıldı",
+        "pastDue": "Vadesi geçmiş",
+        "pro": "Profesyonel",
+        "business": "İş",
+        "trial": "Deneme"
+      },
+      "billing": {
+        "couldNotOpenDescription": "Fatura sayfasını açarken sorun yaşadık. Lütfen tekrar deneyin.",
+        "couldNotOpenTitle": "Faturalandırma açılamadı",
+        "manageBilling": "Faturalandırmayı Yönet",
+        "opening": "Açılıyor...",
+        "updatePaymentMethod": "Ödeme Yöntemini Güncelle"
+      },
+      "checkout": {
+        "couldNotOpenDescription": "Ödeme sayfasını açarken sorun yaşadık. Lütfen tekrar deneyin.",
+        "couldNotOpenTitle": "Ödeme açılamadı",
+        "opening": "Açılıyor...",
+        "upgradeToPro": "Pro'ya Yükseltme"
+      },
+      "disabled": "Devre Dışı",
+      "featuresDisabled": "Hesap Özellikleri Devre Dışı",
+      "featuresDisabledDescription": "Hesap özelliklerini etkinleştirmek için .env dosyanızda VITE_AUTH_URL değerini ayarlayın.",
+      "notConfigured": "Kimlik doğrulama yapılandırılmamış",
+      "notSignedIn": "Oturum açılmadı",
+      "notSignedInDescription": "Premium özelliklerin kilidini açmak için bir hesap oluşturun.",
+      "offline": "Çevrimdışı",
+      "pastDue": {
+        "description": "Şimdilik ücretsiz plandasınız. Pro'ya geri dönmek için ödeme yönteminizi güncelleyin.",
+        "title": "Ödemenizi işleme koyamadık"
+      },
+      "planDescriptions": {
+        "freeUsage": "Bu hafta {{used}} / {{limit}} kelime",
+        "nextBilling": "Sonraki faturalandırma: {{date}}",
+        "pastDue": "Bu hafta {{used}} / {{limit}} ücretsiz kelime - Pro'yu geri yüklemek için ödemeyi güncelleyin",
+        "trial": "{{days}} gün kaldı - sınırsız transkripsiyon",
+        "unlimited": "Sınırsız"
+      },
+      "planLabels": {
+        "free": "Ücretsiz",
+        "pro": "Profesyonel",
+        "business": "İş",
+        "trial": "Deneme"
+      },
+      "planTitle": "Planı",
+      "pricing": {
+        "title": "Planlar",
+        "billedYearly": "Yıllık olarak faturalandırılır",
+        "free": {
+          "name": "Ücretsiz",
+          "price": "0$",
+          "period": "sonsuza kadar",
+          "features": "## OpenWhispr Bulutu,2.000 kelime/hafta transkripsiyon,5 saatlik toplantı kaydı/ay,## Her zaman ücretsiz,Sınırsız yerel AI modelleri,Kendi API anahtarlarınızla sınırsız bulut transkripsiyon,100'den fazla dil desteklenir,Özel sözlük,Sıfır veri saklama,Topluluk desteği"
+        },
+        "pro": {
+          "name": "Profesyonel",
+          "monthlyPrice": "8 dolar",
+          "monthlyPeriod": "/ay",
+          "annualPrice": "80$",
+          "annualPeriod": "/yıl",
+          "annualEquivalent": "6,67$",
+          "includesPrefix": "Tüm Ücretsiz özellikler +",
+          "features": "Sınırsız bulut transkripsiyon, ayda 20 saatlik toplantı kaydı, Cihazlar arasında senkronizasyon, Kişisel API erişimi, tüm uygulamalarınızda MCP entegrasyonu, Mobil uygulama (iOS Çok Yakında), E-posta desteği",
+          "cta": "Başlayın",
+          "switchToAnnual": "Yıllık'a Geçiş"
+        },
+        "business": {
+          "name": "İş",
+          "monthlyPrice": "20$",
+          "monthlyPeriod": "/ay",
+          "annualPrice": "200$",
+          "annualPeriod": "/yıl",
+          "annualEquivalent": "16,67$",
+          "includesPrefix": "Tüm Pro özellikleri +",
+          "badge": "En Popüler",
+          "features": "Sınırsız toplantı kaydı, Temsilci modu, Verileriniz üzerinden sohbet, Öncelikli destek",
+          "cta": "Başlayın",
+          "switchToAnnual": "Yıllık'a Geçiş"
+        },
+        "enterprise": {
+          "name": "Kurumsal",
+          "price": "Özel",
+          "subtitle": "Gelişmiş güvenlik ve destek için",
+          "includesPrefix": "Tüm İşletme özellikleri +",
+          "features": "Yönetilen API kredileri, Cihazlar arasında bulut senkronizasyonu, Ekip özellikleri ve yönetimi, TOA ve uyumluluk, Özel destek",
+          "cta": "Satış Ekibiyle İletişime Geçin"
+        },
+        "currentPlan": "Mevcut plan",
+        "upgrade": "Yükseltme",
+        "downgrade": "Sürüm Düşürme",
+        "planSwitched": "Plan başarıyla güncellendi",
+        "confirmSwitch": {
+          "title": "Plan değişikliğini onaylayın",
+          "description": "{{plan}}'a geç ({{interval}})",
+          "monthly": "aylık",
+          "yearly": "yıllık",
+          "chargeToday": "Bugün şarj edin",
+          "accountCredit": "Hesap kredisi",
+          "newPrice": "Yeni fiyat",
+          "nextBilling": "Sonraki faturalandırma",
+          "mo": "ay",
+          "yr": "yıl",
+          "cancel": "İptal",
+          "confirm": "Onayla"
+        }
+      },
+      "rollingWeeklyLimit": "Değişen haftalık limit",
+      "signOut": {
+        "failedDescription": "Oturum kapatılırken bir şeyler ters gitti. Lütfen tekrar deneyin.",
+        "failedTitle": "Oturum kapatılamadı",
+        "signOut": "Oturumu Kapat",
+        "signingOut": "Oturum kapatılıyor..."
+      },
+      "signedIn": "Oturum açıldı",
+      "title": "Hesap",
+      "toasts": {
+        "approachingLimit": {
+          "description": "Bu hafta {{limit}} ücretsiz kelimeden {{used}} tanesini kullandınız. Sınırsız kullanım için Pro'ya yükseltin.",
+          "title": "Haftalık limite yaklaşılıyor"
+        }
+      },
+      "trialCta": {
+        "button": "Ücretsiz Hesap Oluşturun",
+        "description": "Sınırsız transkripsiyon, öncelikli işleme ve daha fazlası.",
+        "title": "Pro'yu 7 gün boyunca ücretsiz deneyin"
+      },
+      "signedOutPlans": {
+        "button": "Ücretsiz Hesap Oluşturun"
+      },
+      "user": "Kullanıcı",
+      "wordsRemaining": "{{remaining}} kaldı",
+      "deleteAccount": {
+        "label": "Hesabı Sil",
+        "labelDescription": "Hesabınızı, tüm bulut verilerinizi ve yerel verilerinizi kalıcı olarak silin. Bu eylem geri alınamaz.",
+        "button": "Hesabımı Sil",
+        "deleting": "Siliniyor...",
+        "title": "Hesabınız Silinsin mi?",
+        "description": "Bu, OpenWhispr hesabınızı, bulutla senkronize edilmiş tüm notlarınızı ve transkripsiyonlar, ses kayıtları, indirilen modeller, takvim bağlantıları ve ayarlar dahil tüm yerel verileri kalıcı olarak silecektir. Bu eylem geri alınamaz.",
+        "confirmText": "Herşeyi Sil",
+        "successTitle": "Hesap Silindi",
+        "successDescription": "Hesabınız ve tüm verileriniz silindi. Uygulama şimdi yeniden yüklenecek.",
+        "failedTitle": "Silme Başarısız",
+        "failedDescription": "Hesabınız silinirken bir şeyler ters gitti. Yerel verileriniz kısmen kaldırılmış olabilir. Lütfen tekrar deneyin."
+      }
+    },
+    "agentConfig": {
+      "agentName": "Temsilci Adı",
+      "description": "Dikte sırasında doğrudan adresleyebilmeniz için AI asistanınıza bir ad verin",
+      "dialogs": {
+        "updatedDescription": "Temsilcinizin adı artık \"{{name}}\". \"Hey {{name}}\" diyerek ve ardından talimatlarınızı vererek bu soruna hitap edin.",
+        "updatedTitle": "Agent Name Updated"
+      },
+      "examplesTitle": "Örnekler",
+      "helper": "Yüksek sesle söylemek için kısa ve doğal bir şey seçin",
+      "howItWorksDescription": "\"Hey {{agentName}}\" deyip ardından bir talimat verdiğinizde, yapay zeka, harfi harfine yazmak yerine komutunuzu (içerik oluşturmak, metni biçimlendirmek veya soruları yanıtlamak) yürütür.",
+      "howItWorksTitle": "Nasıl çalışır?",
+      "instructionMode": "Talimat",
+      "placeholder": "ör. Jarvis, Nova, Atlas...",
+      "save": "Kaydet",
+      "title": "Ses Aracısı",
+      "examples": {
+        "formalEmail": "Merhaba {{agentName}}, bütçeyle ilgili resmi bir e-posta yazın",
+        "professional": "Merhaba {{agentName}}, bunu daha profesyonel hale getir",
+        "bulletPoints": "Hey {{agentName}}, bunu madde işaretlerine dönüştür"
+      }
+    },
+    "aiModels": {
+      "customSetup": "Özel Kurulum",
+      "customSetupDescription": "Kendi sağlayıcınızı ve API anahtarınızı kullanın.",
+      "description": "Ses tonunuzu korurken transkripsiyonları temizleyin, komutları yönetin ve hataları düzeltin.",
+      "enableTextCleanup": "Metin temizlemeyi etkinleştir",
+      "enableTextCleanupDescription": "Dolgu sözcüklerini kaldırmak, dilbilgisini düzeltmek ve noktalama işaretlerini düzeltmek için yapay zekayı kullanın",
+      "modes": {
+        "openwhispr": "OpenWhispr Bulutu",
+        "providers": "Bulut Sağlayıcıları",
+        "local": "Yerel",
+        "selfHosted": "Self-Hosted",
+        "enterprise": "Kurumsal",
+        "openwhisprDesc": "Güvenilir doğruluk. Kurulum gerekmez.",
+        "providersDesc": "Kendi API anahtarınızı getirin.",
+        "localDesc": "Cihaz üstü modeller. Tamamen özel.",
+        "selfHostedDesc": "Ağınızdaki kendi sunucunuz.",
+        "enterpriseDesc": "Kuruluşunuzun bulut hesabını kullanın (AWS, Azure, GCP)."
+      },
+      "openwhisprCloud": "OpenWhispr Bulutu",
+      "openwhisprCloudDescription": "Güvenilir doğruluk. Kurulum gerekmez.",
+      "title": "Yapay Zeka Metin Geliştirme",
+      "toasts": {
+        "switchedCloud": {
+          "description": "Metin geliştirme OpenWhispr'in bulut hizmetini kullanacak.",
+          "title": "OpenWhispr Cloud'a Geçildi"
+        },
+        "switchedCustom": {
+          "description": "Kendi sağlayıcınızı ve API anahtarınızı yapılandırın.",
+          "title": "Switched to Custom Setup"
+        },
+        "switchedProviders": {
+          "title": "Bulut Sağlayıcıları",
+          "description": "Kendi API anahtarlarınızı kullanma."
+        },
+        "switchedLocal": {
+          "title": "Cihazda",
+          "description": "AI, makinenizde yerel olarak çalışır."
+        },
+        "switchedSelfHosted": {
+          "title": "Kendi Kendine Barındırılan",
+          "description": "Kendi sunucunuzu kullanma."
+        },
+        "switchedEnterprise": {
+          "title": "Kurumsal",
+          "description": "Kuruluşunuzun bulut hesabını kullanma."
+        }
+      }
+    },
+    "developer": {
+      "clearCache": "Önbelleği Temizle",
+      "dataManagementDescription": "Önbelleğe alınmış modelleri ve uygulama verilerini yönetin",
+      "dataManagementTitle": "Veri Yönetimi",
+      "modelCache": "Model önbelleği",
+      "open": "Aç",
+      "removeModels": {
+        "confirmText": "Modelleri Sil",
+        "description": "Bu, yerel olarak önbelleğe alınmış tüm Whisper modellerini ({{path}}) siler ve disk alanını boşaltır. Bunları model seçiciden tekrar indirebilirsiniz.",
+        "failedDescription": "Modeller kaldırılırken bir şeyler ters gitti. Lütfen tekrar deneyin.",
+        "failedDescriptionShort": "Önbelleğe alınmış modeller kaldırılamadı.",
+        "failedTitle": "Modeller kaldırılamadı",
+        "successDescription": "Önbelleğe alınan tüm modeller kaldırıldı.",
+        "successTitle": "Kaldırılan modeller",
+        "title": "İndirilen modeller kaldırılsın mı?"
+      },
+      "removing": "Kaldırılıyor...",
+      "resetAll": {
+        "confirmText": "Herşeyi Sil",
+        "description": "Bu, tüm yerel ayarları, transkripsiyonları, ses kayıtlarını, indirilen AI modellerini, takvim bağlantılarını ve önbelleğe alınmış verileri kalıcı olarak silecektir. Bulut verileri ve hesabınız etkilenmeyecektir. Uygulama sıfırlandıktan sonra yeniden yüklenecektir.",
+        "failedDescription": "Bir şeyler ters gitti. Lütfen tekrar deneyin veya uygulamayı yeniden yükleyin.",
+        "failedTitle": "Sıfırlanamadı",
+        "successDescription": "Her şey sıfırlandı. Uygulama şimdi yeniden yüklenecek.",
+        "successTitle": "Hepsi bitti",
+        "title": "Tüm Uygulama Verilerini Sıfırla"
+      },
+      "resetAppData": "Uygulama verilerini sıfırla",
+      "resetAppDataDescription": "Tüm yerel ayarları, transkripsiyonları, ses kayıtlarını, indirilen modelleri ve önbelleğe alınmış verileri kalıcı olarak silin"
+    },
+    "dictionary": {
+      "title": "Özel Sözlük",
+      "description": "Yapay zekaya kelime dağarcığınızı öğretin; adları, jargonu ve normalde gözden kaçırabileceği terimleri",
+      "addWordOrPhrase": "Kelime veya kelime öbeği ekleyin",
+      "placeholder": "Bir kelime veya kelime öbeği ekleyin...",
+      "add": "Ekle",
+      "pressEnterToAdd": "Eklemek için Enter'a basın",
+      "autoLearnTitle": "Düzeltmelerden otomatik öğrenme",
+      "autoLearnDescription": "Hedef uygulamada bir transkripsiyonu düzelttiğinizde düzeltilen kelime otomatik olarak sözlüğünüze eklenir.",
+      "yourWords": "Sözlerin",
+      "clearDictionaryTitle": "Sözlük temizlensin mi?",
+      "clearDictionaryDescription": "Bu, özel sözlüğünüzdeki tüm kelimeleri kaldıracaktır. Bu eylem geri alınamaz.",
+      "clearAll": "Tümünü temizle",
+      "agentNameAutoManaged": "Otomatik olarak yönetilen — aracı adından senkronize edilir",
+      "removeWord": "Kelimeyi kaldır",
+      "noWords": "Henüz kelime yok",
+      "wordsAppearHere": "Eklediğiniz kelimeler burada görünecektir",
+      "howItWorksTitle": "Nasıl çalışır?",
+      "howItWorksDescription": "Kelimeler, konuşma modeline bağlam ipuçları olarak beslenir ve alışılmadık terimleri tanımasına yardımcı olur. Zor sözcükler için, sözcüğün yanına \"The Word is Synty\" gibi bir bağlam eklemeyi deneyin.",
+      "tipLabel": "İpucu",
+      "tipDescription": "Birden fazla kelimeyi virgülle ayırın. Daha iyi tanınması için \"Sözcük Synty\" gibi bağlam ifadeleri ekleyin."
+    },
+    "general": {
+      "appearance": {
+        "auto": "Otomatik",
+        "dark": "Karanlık",
+        "description": "OpenWhispr'in nasıl göründüğünü kontrol edin",
+        "light": "Işık",
+        "theme": "Tema",
+        "themeDescription": "Açık, koyu veya sisteminize uygun olanı seçin",
+        "title": "Görünüm"
+      },
+      "floatingIcon": {
+        "autoHide": "Boştayken otomatik gizle",
+        "autoHideDescription": "Dikte etmeye başlayıncaya kadar simgeyi gizli tutun",
+        "startPosition": "Başlangıç konumu",
+        "startPositionDescription": "Ses kayıt panelinin ekranda göründüğü yer",
+        "bottomRight": "Sağ Alt",
+        "center": "Alt Orta",
+        "bottomLeft": "Sol Alt",
+        "description": "Dikte simgesinin ekranınızda ne zaman görüneceğini kontrol edin",
+        "title": "Yüzen Simge"
+      },
+      "hotkey": {
+        "activationMode": "Etkinleştirme Modu",
+        "description": "Sesli dikteyi başlatan ve durduran tuş kombinasyonu",
+        "resetToDefault": "{{hotkey}}'na sıfırla",
+        "title": "Dikte Kısayol Tuşu",
+        "linuxPttPermissionTitle": "Basılı Tut ve Konuşmak için ekstra kurulum gerekiyor",
+        "linuxPttPermissionDescription": "Bu komutu çalıştırın ve oturumu kapatın/girin: sudo usermod -aG input $USER",
+        "linuxPttSetupTitle": "Konuşmak için Tut kurulumunun yapılması gerekiyor",
+        "linuxPttSetupDescription": "Kullanıcınızın klavye giriş cihazlarına erişmesi gerekiyor.",
+        "linuxPttSetupNote": "Komutu çalıştırdıktan sonra oturumu kapatıp tekrar açın.",
+        "hyprlandConfigWriteWarningTitle": "Hyprland tuş bağlantıları devam etmeyecek",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr, {{path}}'a yazamaz, dolayısıyla tuş atamaları Hyprland yapılandırmasının yeniden yüklenmesine dayanamaz. Dosyanın var olduğundan ve yazılabilir olduğundan emin olun.",
+        "hyprlandUnbindDescription": "Hyprland'da OpenWhispr seçilen kısayolu talep eder. Aynı tuş kombinasyonunu kullanan herhangi bir mevcut Hyprland bağlantısı, OpenWhispr kısayolunu kaydettiğinde kaldırılacaktır."
+      },
+      "meetingHotkey": {
+        "title": "Toplantı Modu Kısayol Tuşu",
+        "description": "Toplantı modunu başlatın ve paneli ekranın yan tarafına yaslayın",
+        "layoutLabel": "Kısayol tuşuyla tetiklendiğinde şunu açın:",
+        "layoutFullWidth": "Tam genişlik",
+        "layoutSidePanel": "Yan panel"
+      },
+      "voiceAgentHotkey": {
+        "title": "Ses Aracısı Kısayol Tuşu",
+        "description": "Bir isteği söyleyin; kelimelerinizi değil sonucu AI temsilciniz yazar"
+      },
+      "microphone": {
+        "description": "Dikte için hangi giriş cihazının kullanılacağını seçin",
+        "title": "Mikrofon"
+      },
+      "soundEffects": {
+        "dictationSounds": "Dikte sesleri",
+        "dictationSoundsDescription": "Kayıt başladığında ve durduğunda bir ses tonu çal",
+        "pauseMedia": "Medyayı duraklat",
+        "pauseMediaDescription": "Dikte başladığında müziği otomatik olarak duraklatın",
+        "title": "Ses Efektleri"
+      },
+      "notifications": {
+        "title": "Bildirimler",
+        "description": "OpenWhispr'ın hangi bildirimleri gösterebileceğini kontrol edin",
+        "disableAll": "Tüm bildirimleri devre dışı bırak",
+        "disableAllDescription": "Hata mesajları dışında her şeyi susturun",
+        "meetingDetection": "Toplantı algılama",
+        "meetingDetectionDescription": "Kaydı başlatabilmeniz için bir toplantı algılandığında bilgilendirin",
+        "calendarReminders": "Takvim hatırlatıcıları",
+        "calendarRemindersDescription": "Planlanmış bir toplantının başlamak üzere olduğunu bildir",
+        "updates": "Uygulama güncellemeleri",
+        "updatesDescription": "Yeni bir sürüm mevcut olduğunda bilgilendir"
+      },
+      "clipboard": {
+        "title": "Pano",
+        "autoPaste": "Otomatik yapıştırma",
+        "autoPasteDescription": "Dikte tamamlandığında, metne dönüştürülmüş metni otomatik olarak etkin uygulamaya yapıştırın",
+        "keepInClipboard": "Transkripsiyonu panoda tut",
+        "keepInClipboardDescription": "Gerektiğinde manuel olarak yapıştırabilmeniz için dikte edilen metni panonuzda tutun"
+      },
+      "startup": {
+        "launchAtLogin": "Giriş sırasında başlat",
+        "launchAtLoginDescription": "Oturum açtığınızda OpenWhispr'ı otomatik olarak başlatın",
+        "title": "Başlatma",
+        "description": "OpenWhispr başlatıldığında nasıl davranacağını kontrol edin",
+        "startMinimized": "Başlangıç simge durumuna küçültüldü",
+        "startMinimizedDescription": "Kontrol paneli penceresini göstermeden başlat"
+      },
+      "waylandPaste": {
+        "title": "Wayland Yapıştırma Kurulumu",
+        "description": "Wayland'de otomatik yapıştırma için ydotool gerekir. Aşağıdaki her bileşenin durumunu kontrol edin.",
+        "allGoodDesc": "Otomatik yapıştırma kullanıma hazır.",
+        "recheck": "Tekrar kontrol et",
+        "copy": "Kopyala",
+        "ydotoolDesc": "Wayland için giriş otomasyon aracı",
+        "ydotooldDesc": "Ydotool için Daemon (Ubuntu/Pop!_OS'ta ayrı paket)",
+        "uinputDesc": "Çekirdek giriş aygıtı erişimi",
+        "uinputRuleFound": "Kural mevcut ancak aktif değil. Yeniden başlatma sorunu çözmelidir.",
+        "uinputRuleMissing": "udev kuralı bulunamadı",
+        "inputGroup": "giriş grubu",
+        "inputGroupDesc": "Kullanıcı giriş grubunda olmalıdır (yeniden oturum açmayı gerektirir)",
+        "service": "sistem hizmeti",
+        "serviceDesc": "Ydotoold'un otomatik başlatılması için kullanıcı hizmet dosyası",
+        "daemon": "ydotooled arka plan programı",
+        "daemonDesc": "Arka plan hizmeti çalışıyor olmalı",
+        "guide": {
+          "open": "Kılavuz",
+          "ydotool": {
+            "step1Title": "ydotool'u yükleyin",
+            "step1Desc": "Ydotool'u yüklemek için dağıtımınızın paket yöneticisini kullanın.",
+            "step2Title": "Kurulumu doğrulayın",
+            "step2Desc": "Ydotool'un PATH'inizde mevcut olup olmadığını kontrol edin."
+          },
+          "ydotoold": {
+            "step1Title": "ydotoold'u yükleyin",
+            "step1Desc": "Ubuntu ve Pop!_OS'ta ydotoold ayrı bir pakettir. Fedora'da ydotool'a dahildir."
+          },
+          "uinput": {
+            "ruleFoundTitle": "udev kuralı zaten yapılandırılmış",
+            "ruleFoundDesc": "/dev/uinput için udev kuralı sisteminizde zaten var ancak yürürlüğe girmedi. Yeniden yüklemeyi deneyin:",
+            "rebootTitle": "Yeniden yükleme işe yaramadıysa yeniden başlatın",
+            "rebootDesc": "Bazı dağıtımlarda udev değişiklikleri yalnızca tam yeniden başlatmanın ardından uygulanır. Bilgisayarınızı yeniden başlatın ve tekrar kontrol etmek için geri gelin.",
+            "step1Title": "Bir udev kuralı oluşturun",
+            "step1Desc": "Bu kural, giriş grubundaki kullanıcılar için /dev/uinput'a erişim izni verir.",
+            "step2Title": "Udev kurallarını yeniden yükle",
+            "step2Desc": "Yeni kuralı yeniden başlatmadan uygulayın."
+          },
+          "group": {
+            "step1Title": "Kullanıcınızı giriş grubuna ekleyin",
+            "step2Title": "Oturumu kapatıp tekrar açın",
+            "step2Desc": "Grup değişiklikleri yalnızca yeni bir oturum açma oturumundan sonra etkili olur. Masaüstünüzden çıkış yapın ve tekrar giriş yapın, ardından OpenWhispr'i yeniden açın."
+          },
+          "service": {
+            "step1Title": "Servis dizinini oluşturun",
+            "step2Title": "Hizmet dosyasını oluşturun",
+            "step2Desc": "Bu, oturum açtığınızda ydotoold'u otomatik olarak başlatan kullanıcı düzeyinde bir systemd hizmeti oluşturur.",
+            "step3Title": "Yeniden yükle ve etkinleştir"
+          },
+          "daemon": {
+            "step1Title": "Arka plan programını başlat",
+            "step1Desc": "Ydotoold'u başlatın ve her oturum açmada çalışması için etkinleştirin.",
+            "step2Title": "Çalıştığını doğrulayın"
+          },
+          "xclip": {
+            "step1Title": "xclip'i yükleyin"
+          }
+        },
+        "xclipDesc": "KDE Wayland yapıştırması için pano aracı (xclip veya xsel)",
+        "nixos": {
+          "intro": "NixOS'tasınız. Otomatik yapıştırma, NixOS'un bildirimli olarak sağladığı ydotool ve /dev/uinput erişimine ihtiyaç duyar.",
+          "detected": "Algılandı",
+          "manualTitle": "Bunu yapılandırmanıza ekleyin",
+          "manualDesc": "Kendiniz yapılandırın, sonra yeniden oluşturun.",
+          "flakeTitle": "Bizim pulumuz aracılığıyla kurulum mu?",
+          "flakeDesc": "OpenWhispr'ı flake'ten yüklerseniz,programs.openwhispr.enable sizin için ydotool'u, uinput modülünü ve grup üyeliklerini açar.",
+          "rebuildNote": "Sudo nixos-rebuild switch komutunu çalıştırın, ardından oturumu kapatıp tekrar açın, böylece grup değişikliği ve /dev/uinput kuralı etkili olur. <siz> kısmını kullanıcı adınızla değiştirin."
+        }
+      },
+      "updates": {
+        "badges": {
+          "dev": "Geliştirici",
+          "latest": "En Son",
+          "update": "Güncelleme"
+        },
+        "checkForUpdates": "Güncellemeleri Kontrol Et",
+        "checking": "Kontrol ediliyor...",
+        "currentVersion": "Güncel sürüm",
+        "devMode": "Geliştirme modunda çalıştırma",
+        "dialogs": {
+          "almostThere": {
+            "description": "Güncelleme neredeyse hazır. Lütfen biraz bekleyin.",
+            "title": "Neredeyse orada"
+          },
+          "checkFailed": {
+            "description": "Güncellemeleri kontrol etmekte sorun yaşadık. Lütfen daha sonra tekrar deneyin.",
+            "title": "Güncellemeler kontrol edilemedi"
+          },
+          "downloadFailed": {
+            "description": "Güncellemeyi indirirken sorun yaşadık. Lütfen tekrar deneyin.",
+            "title": "Güncelleme indirilemedi"
+          },
+          "installFailed": {
+            "description": "Güncellemeyi yüklerken sorun yaşadık. Lütfen tekrar deneyin.",
+            "title": "Güncelleme yüklenemedi"
+          },
+          "installUpdate": {
+            "confirmText": "Kur ve Yeniden Başlat",
+            "description": "OpenWhispr güncellemeyi uygulamak için yeniden başlatılacak.",
+            "title": "Güncellemeyi Yükle"
+          },
+          "noUpdates": {
+            "description": "En son sürümdesiniz.",
+            "title": "Güncelleme Yok"
+          },
+          "updateAvailable": {
+            "description": "Güncelleme mevcut: v{{version}}",
+            "title": "Güncelleme Mevcut"
+          },
+          "updateError": {
+            "description": "Güncellemeyle ilgili bir şeyler ters gitti. Lütfen tekrar deneyin.",
+            "title": "Güncelleme Hatası"
+          }
+        },
+        "downloadUpdate": "Güncellemeyi İndirin {{version}}",
+        "downloading": "İndiriliyor... %{{progress}}",
+        "installAndRestart": "Kur ve Yeniden Başlat",
+        "latestVersion": "En son sürümdesiniz",
+        "newVersion": "Daha yeni bir sürüm mevcut",
+        "newVersionAvailable": "Yeni sürüm mevcut",
+        "restarting": "Yeniden başlatılıyor...",
+        "title": "Güncellemeler",
+        "versionPlaceholder": "—",
+        "whatsNew": "v{{version}} sürümündeki yenilikler"
+      }
+    },
+    "permissions": {
+      "accessibilityDescription": "Transkripsiyondan sonra otomatik yapıştırmanın çalışması için gereklidir",
+      "accessibilityTitle": "Erişilebilirlik",
+      "description": "OpenWhispr'ın düzgün çalışması için gereken sistem izinlerini test edin ve yönetin",
+      "microphoneDescription": "Captures your voice for dictation and transcription",
+      "microphoneTitle": "Mikrofon",
+      "resetAccessibility": {
+        "description": "Bu, OpenWhispr'ı erişilebilirlik izinlerinden kaldıracaktır. Sistem Ayarları > Gizlilik ve Güvenlik > Erişilebilirlik bölümünden yeniden erişim izni vermeniz gerekecektir.",
+        "label": "Erişilebilirlik izinlerini sıfırla",
+        "rowDescription": "Uygulamayı yeniden yükledikten veya yeniden oluşturduktan sonra Sistem Ayarlarında OpenWhispr'ı kaldırıp yeniden ekleyerek sorunları düzeltin",
+        "title": "Erişilebilirlik İzinlerini Sıfırla"
+      },
+      "optional": "İsteğe bağlı",
+      "systemAudioTitle": "Sistem Sesi",
+      "systemAudioDescription": "Toplantıları, çağrıları, dersleri, podcast'leri ve diğer sistem seslerini yazıya dökün.",
+      "grantAccess": "Erişim Ver",
+      "test": "Test",
+      "testAndGrant": "Test Et ve Onay Ver",
+      "title": "İzinler",
+      "troubleshoot": "Sorun giderme",
+      "troubleshootingTitle": "Sorun giderme"
+    },
+    "privacy": {
+      "cloudBackup": "Bulut yedekleme",
+      "cloudBackupDescription": "Cihazlar arasında sorunsuz erişim için transkripsiyonlarınızı ve notlarınızı buluta yedekleyin.",
+      "cloudNotesMigration": "Notlar yedekleniyor… {{done}} / {{total}}",
+      "cloudNotesMigrationDone": "Tüm notlar yedeklendi",
+      "description": "Cihazınızdan hangi verilerin çıkacağını kontrol edin. Her şey varsayılan olarak kapalıdır.",
+      "title": "Gizlilik",
+      "usageAnalytics": "Kullanım analitiği",
+      "usageAnalyticsDescription": "Anonim performans ölçümlerini paylaşarak OpenWhispr'ı geliştirmemize yardımcı olun. Hiçbir zaman transkripsiyon içeriğini göndermeyiz; yalnızca zamanlama ve hata verilerini göndeririz.",
+      "audioRetention": "Ses Saklama",
+      "audioRetentionDescription": "Yeniden transkripsiyon ve indirme için ses kayıtlarını yerel olarak saklayın. Saklama süresi sonunda dosyalar otomatik olarak silinir.",
+      "audioRetentionDisabled": "Devre Dışı",
+      "audioRetentionDays": "{{count}} gün",
+      "audioStorageUsage": "Depolama Kullanımı",
+      "audioStorageUsageDescription": "Bu cihazda depolanan ses dosyaları",
+      "audioStorageFiles": "{{count}} dosya, {{size}}",
+      "audioStorageEmpty": "Kayıtlı ses dosyası yok",
+      "clearAllAudio": "Tüm Sesi Temizle",
+      "clearAllAudioConfirm": "Saklanan tüm ses dosyaları silinsin mi? Bu geri alınamaz.",
+      "dataRetention": "Veri Saklama",
+      "dataRetentionDescription": "Transkripsiyonları ve sesi yerel olarak geçmişinizde saklayın. Devre dışı bırakıldığında transkripsiyonlar yapıştırılır ancak kaydedilmez.",
+      "hoursAgo": "{{count}} saat önce",
+      "justNow": "az önce",
+      "lastSynced": "Son senkronizasyon {{time}}",
+      "minutesAgo": "{{count}} dakika önce",
+      "saveDiscarded": "Atılan dikteleri kaydet",
+      "saveDiscardedDescription": "Escape ile bir dikteyi iptal ettiğinizde, sesini geçmişte tutun, böylece onu kurtarabilirsiniz. Veri ve ses saklamanın açık olması gerekir."
+    },
+    "prompts": {
+      "description": "Metin temizleme ve talimat algılamayı destekleyen birleşik sistem istemini görüntüleyin, özelleştirin ve test edin",
+      "title": "İstem Stüdyosu"
+    },
+    "speechToText": {
+      "title": "Konuşmayı Metne Dönüştürme",
+      "description": "Dikte ve nota kaydı için bir motor seçin",
+      "tabs": {
+        "dictation": "Dikte",
+        "noteRecording": "Not Kaydı",
+        "upload": "Ses Yükleme"
+      },
+      "selfHostedStreamingNote": "Akış transkripsiyonunu destekleyen bir sunucu gerektirir."
+    },
+    "llms": {
+      "title": "Dil Modelleri",
+      "description": "Temizleme, not biçimlendirme ve sohbet için modelleri yapılandırma",
+      "tabs": {
+        "dictationCleanup": "Dikte Temizleme",
+        "dictationAgent": "Ses Aracısı",
+        "noteFormatting": "Not Formatlama",
+        "chatIntelligence": "Sohbet"
+      }
+    },
+    "noteFormatting": {
+      "autoGenerateTitle": "Not başlıklarını otomatik olarak oluştur",
+      "autoGenerateTitleDescription": "Transkripsiyon veya geliştirme sonrasında notlara kısa bir başlık oluşturmak için yapay zekayı kullanın"
+    },
+    "transcription": {
+      "customSetup": "Özel Kurulum",
+      "customSetupDescription": "Kendi sağlayıcınızı ve API anahtarınızı kullanın.",
+      "description": "OpenWhispr'ın sesinizi nasıl yazıya dökeceğini seçin",
+      "modes": {
+        "openwhispr": "OpenWhispr Bulutu",
+        "providers": "Bulut Sağlayıcıları",
+        "local": "Yerel",
+        "selfHosted": "Kendi Kendine Barındırılan",
+        "openwhisprDesc": "Güvenilir doğruluk. Kurulum gerekmez.",
+        "providersDesc": "Kendi API anahtarınızı getirin.",
+        "localDesc": "Cihaz üstü modeller. Tamamen özel.",
+        "selfHostedDesc": "Ağınızdaki kendi sunucunuz."
+      },
+      "openwhisprCloud": "OpenWhispr Bulutu",
+      "openwhisprCloudDescription": "Güvenilir doğruluk. Kurulum gerekmez.",
+      "title": "Metne Konuşma",
+      "toasts": {
+        "switchedCloud": {
+          "description": "Transkripsiyon OpenWhispr'ın bulut hizmetini kullanacak.",
+          "title": "OpenWhispr Cloud'a Geçildi"
+        },
+        "switchedCustom": {
+          "description": "Kendi sağlayıcınızı ve API anahtarınızı yapılandırın.",
+          "title": "Özel Kuruluma Geçildi"
+        },
+        "switchedProviders": {
+          "title": "Bulut Sağlayıcıları",
+          "description": "Kendi API anahtarlarınızı kullanma."
+        },
+        "switchedLocal": {
+          "title": "Cihazda",
+          "description": "Transkripsiyon makinenizde yerel olarak çalışır."
+        },
+        "switchedSelfHosted": {
+          "title": "Kendi Kendine Barındırılan",
+          "description": "Kendi sunucunuzu kullanma."
+        }
+      },
+      "gpuDevice": {
+        "title": "Transkripsiyon GPU'su",
+        "description": "Yerel konuşmayı metne dönüştürmek için kullanılan GPU"
+      },
+      "diarization": {
+        "title": "Konuşmacı Kimliği",
+        "description": "Toplantı kayıtlarında bireysel konuşmacıları tanımlama",
+        "modelsReady": "Modeller Hazır",
+        "deleteModels": "Modelleri Sil"
+      },
+      "transcriptionPreview": "Canlı Transkripsiyon Önizlemesi",
+      "transcriptionPreviewDescription": "Temizlemeden önce transkripsiyonu kayan bir pencerede göster",
+      "vad": {
+        "title": "Ses Etkinliği Algılama",
+        "description": "Silero VAD'ın yerel Whisper transkripsiyonu için konuşmayı nasıl algılayıp bölümlere ayırdığını yapılandırın",
+        "toggles": {
+          "dictation": {
+            "title": "Dikte için Silero VAD",
+            "description": "Yerel dikte transkripsiyonu için ses etkinliği algılamayı etkinleştirin"
+          },
+          "noteRecording": {
+            "title": "Not Kaydı için Silero VAD",
+            "description": "Yerel not kaydı transkripsiyonu için ses etkinliği algılamayı etkinleştirin"
+          },
+          "meeting": {
+            "title": "Toplantılar için Silero VAD",
+            "description": "Yerel toplantı transkripsiyonu için ses etkinliği algılamayı etkinleştirin"
+          }
+        },
+        "fields": {
+          "threshold": {
+            "label": "VAD eşiği",
+            "info": "Bir çerçevenin konuşma olarak sınıflandırıldığı olasılık."
+          },
+          "minSpeechDurationMs": {
+            "label": "Minimum konuşma süresi (ms)",
+            "info": "Bundan daha kısa olan konuşma bölümleri gürültü veya hatalı pozitifler olarak atılır."
+          },
+          "minSilenceDurationMs": {
+            "label": "Minimum sessizlik süresi (ms)",
+            "info": "Bir konuşma bölümünün sona ermesi için sessizliğin en az bu kadar sürmesi gerekir. Segment içinde daha kısa duraklamalar tutulur."
+          },
+          "maxSpeechDurationS": {
+            "label": "Maksimum konuşma süresi (s)",
+            "info": "Bundan daha uzun olan segmentler, bireysel parçaları yönetilebilir tutmak için sessizlik noktalarında bölünür."
+          },
+          "speechPadMs": {
+            "label": "Konuşma dolgusu (ms)",
+            "info": "Kelime kenarlarının kırpılmaması için algılanan her bölümün önüne ve arkasına dolgu eklendi."
+          },
+          "samplesOverlap": {
+            "label": "Örnekler örtüşüyor (ler)",
+            "info": "Birleştirme sırasında ani kesintileri önlemek için ses her bölümden diğerine taşınıyor."
+          }
+        }
+      }
+    },
+    "intelligence": {
+      "gpuDevice": {
+        "title": "Zeka GPU'su",
+        "description": "Yerel AI işleme için kullanılan GPU"
+      }
+    },
+    "selfHosted": {
+      "endpointUrl": "Uç nokta URL'si",
+      "serverUrl": "Sunucu URL'si",
+      "apiKeyOptional": "API Anahtarı (isteğe bağlı)"
+    }
+  },
+  "models": {
+    "learnMore": "Daha fazlasını öğrenin",
+    "descriptions": {
+      "parakeet": {
+        "parakeet_tdt_0_6b_v3": "Otomatik dil algılamalı hızlı çok dilli ASR (25 dil)",
+        "parakeet_unified_en_0_6b": "En son teknolojiye sahip doğrulukla yalnızca İngilizce ASR (ortalama %5,91 WER)"
+      },
+      "diarization": {
+        "segmentation": "Konuşmacı günlüğü için konuşma sınırı algılama",
+        "embedding_en": "Tanımlama için konuşmacının ses parmak izi"
+      },
+      "whisper": {
+        "tiny": "En hızlı, daha düşük kalite",
+        "base": "İyi denge",
+        "small": "Daha kaliteli, daha yavaş",
+        "medium": "Yüksek kalite",
+        "large": "En iyi kalite, en yavaş",
+        "turbo": "Hızlı ve kaliteli"
+      },
+      "transcription": {
+        "openai_gpt_4o_mini_transcribe": "Hızlı ve doğru transkripsiyon",
+        "openai_gpt_4o_transcribe": "En doğru transkripsiyon",
+        "openai_whisper_1": "Orijinal Whisper modeli",
+        "groq_whisper_large_v3": "Yüksek doğrulukta konuşma tanıma",
+        "groq_whisper_large_v3_turbo": "216x gerçek zamanlı hız",
+        "mistral_voxtral_mini_latest": "Hızlı çok dilli transkripsiyon",
+        "corti_transcribe": "Klinik düzeyde tıbbi transkripsiyon",
+        "xai_grok_stt": "xAI tarafından yüksek doğrulukta konuşma tanıma",
+        "tinfoil_voxtral_mini_realtime": "Doğrulanabilir şekilde özel akış transkripsiyonu"
+      },
+      "cloud": {
+        "openai_gpt_5_2": "Güçlü muhakeme modeli",
+        "openai_gpt_5_mini": "Hızlı ve uygun maliyetli",
+        "openai_gpt_5_nano": "Ultra hızlı, düşük gecikme süresi",
+        "openai_gpt_4_1": "Güçlü temel, 1 milyon bağlam",
+        "openai_gpt_4_1_mini": "Daha küçük GPT-4.1 modeli",
+        "openai_gpt_4_1_nano": "En düşük gecikme süresi GPT-4.1",
+        "anthropic_claude_sonnet_4_6": "Dengeli performans",
+        "anthropic_claude_sonnet_4_5": "Önceki Sonnet nesli",
+        "anthropic_claude_haiku_4_5": "Sınıra yakın istihbaratla hızlı",
+        "gemini_gemini_3_5_flash": "En yeni hızlı, yüksek kapasiteli Gemini modeli",
+        "gemini_gemini_3_1_pro_preview": "Karmaşık akıl yürütme için yeni nesil amiral gemisi modeli",
+        "gemini_gemini_3_flash_preview": "Ultra hızlı, yüksek kapasiteli yeni nesil model",
+        "gemini_gemini_2_5_flash_lite": "En düşük gecikme ve maliyet",
+        "gemini_gemma_4_31b_it": "Google'ın en büyük Gemma 4, 31B yoğun, 256K bağlamı",
+        "gemini_gemma_4_26b_a4b_it": "Google'ın Gemma 4 MoE, 4B aktif parametreleri, 256K bağlamı",
+        "groq_qwen_qwen3_32b": "Güçlü akıl yürütme modeli, 131K bağlamı",
+        "groq_openai_gpt_oss_120b": "OpenAI'nin açık kaynaklı amiral gemisi, 500 T/sn",
+        "groq_openai_gpt_oss_20b": "Hızlı açık kaynaklı model, 1000 T/sn",
+        "groq_llama_3_3_70b_versatile": "Meta'nın çok yönlü modeli, 280 T/sn",
+        "groq_llama_3_1_8b_instant": "Ultra hızlı 560 T/sn, 131K bağlam",
+        "groq_llama_4_scout": "Meta'nın verimli multimodal'ı, 750 T/sn",
+        "groq_compound": "Groq'un bileşik sistemi, 450 T/sn",
+        "groq_compound_mini": "Hızlı bileşik sistem, 3 kat daha düşük gecikme süresi",
+        "groq_kimi_k2_0905": "Moonshot AI'nin 1T MoE, 256K bağlamı",
+        "openai_gpt_5_5": "Karmaşık akıl yürütme için sınır modeli",
+        "anthropic_claude_opus_4_8": "En yetenekli Claude modeli",
+        "anthropic_claude_opus_4_7": "Güçlü Opus modeli",
+        "anthropic_claude_opus_4_6": "Önceki Opus nesli, 1M bağlamı",
+        "anthropic_claude_opus_4_5": "Daha önceki Opus modeli"
+      },
+      "enterprise": {
+        "bedrock_claude_haiku_4_5": "Hızlı ve ucuz. Metin temizleme için harika bir varsayılan.",
+        "bedrock_claude_sonnet_4_6": "Dengeli iş gücü. Temsilci Modu için en iyi varsayılan.",
+        "bedrock_claude_opus_4_7": "Maksimum zeka. Karmaşık Ajan Modu görevleri için en iyisi.",
+        "bedrock_nova_lite": "En ucuz seçenek. AWS'de yerel, yüksek hacimler için idealdir.",
+        "vertex_gemini_2_5_flash": "Vertex aracılığıyla hızlı çok modlu model",
+        "vertex_gemini_2_5_pro": "Vertex aracılığıyla gelişmiş akıl yürütme"
+      },
+      "local": {
+        "qwen_qwen3_5_9b_q4_k_m": "Güçlü hibrit model",
+        "qwen_qwen3_5_4b_q4_k_m": "Genel kullanım için dengeli Qwen3.5",
+        "qwen_qwen3_5_2b_q4_k_m": "Hızlı görevler için küçük Qwen3.5",
+        "qwen_qwen3_8b_q4_k_m": "Düşünme modu desteğine sahip en yeni Qwen3",
+        "qwen_qwen3_8b_q5_k_m": "Düşünme moduyla daha yüksek kaliteli Qwen3",
+        "qwen_qwen3_4b_q4_k_m": "Muhakeme yeteneklerine sahip kompakt Qwen3",
+        "qwen_qwen3_1_7b_q8_0": "Küçük ama yetenekli Qwen3 modeli",
+        "qwen_qwen3_32b_q4_k_m": "Derin mantığa sahip en güçlü yerel Qwen3",
+        "qwen_qwen2_5_1_5b_instruct_q5_k_m": "Küçük model, temel görevler için uygundur",
+        "qwen_qwen2_5_3b_instruct_q5_k_m": "Genel kullanım için dengeli model",
+        "qwen_qwen2_5_7b_instruct_q4_k_m": "Yüksek kaliteli, büyük model (Q4_K_M)",
+        "qwen_qwen2_5_7b_instruct_q5_k_m": "Büyük model, yüksek kaliteli muhakeme (Q5_K_M)",
+        "mistral_mistral_7b_instruct_v0_3_q4_k_m": "Hızlı ve etkili öğretim modeli",
+        "mistral_mistral_7b_instruct_v0_3_q5_k_m": "Daha yüksek kalitede öğretim modeli",
+        "mistral_nemo_12b_instruct_q4_k_m": "Mistral'ın 12B modeli, güçlü çok dilli performans",
+        "llama_llama_3_2_1b_instruct_q4_k_m": "Uç cihazlar için küçük model",
+        "llama_llama_3_2_3b_instruct_q4_k_m": "Küçük ama yetenekli çok dilli model",
+        "llama_llama_3_1_8b_instruct_q4_k_m": "Mükemmel performansa sahip güçlü model",
+        "openai_oss_gpt_oss_20b_mxfp4": "OpenAI'nin tüketici donanımına yönelik açık ağırlıklı modeli",
+        "gemma_gemma_3_4b_it_q4_k_m": "Google'ın açık ağırlıklı modeli, mükemmel hız ve kalite dengesi",
+        "gemma_gemma_4_31b_it_q4_k_m": "Google'ın en büyük Gemma 4'ü, en iyi kalite",
+        "gemma_gemma_4_26b_a4b_it_q4_k_m": "Google'ın MoE Gemma 4'ü, 4B aktif parametrelerle hızlı",
+        "gemma_gemma_4_e4b_it_q4_k_m": "Google'ın en son çok modlu, güçlü muhakemesi",
+        "gemma_gemma_4_e2b_it_q4_k_m": "Google'ın kompakt Gemma 4'ü, hızlı ve verimli",
+        "gemma_gemma_3_12b_it_q4_k_m": "Google'ın orta sınıf modeli, güçlü muhakeme",
+        "gemma_gemma_3_1b_it_q4_k_m": "Ultra hızlı Google modeli, kısa dikte temizliği için en iyisi"
+      }
+    }
+  },
+  "sidebar": {
+    "home": "Ana sayfa",
+    "notes": "Notlar",
+    "upload": "Yükleme",
+    "dictionary": "Sözlük",
+    "referral": "Bir ay ücretsiz kazanın",
+    "settings": "Ayarlar",
+    "support": "Destek",
+    "limitReached": "Haftalık sınıra ulaşıldı",
+    "limitReachedDescription": "Sınırsız transkripsiyon için Pro'ya yükseltin.",
+    "viewPlans": "Planları Görüntüle",
+    "upgradeTitle": "Pro'ya Yükseltme",
+    "upgradeDescription": "Sınırsız transkripsiyon ve premium özellikler.",
+    "learnMore": "Daha fazlasını öğrenin",
+    "integrations": "Entegrasyonlar",
+    "defaultUser": "Kullanıcı",
+    "notSignedIn": "Oturum açılmadı",
+    "chat": "Sohbet",
+    "inviteTeammate": "Takım arkadaşını davet et",
+    "createWorkspace": "Çalışma alanı oluştur"
+  },
+  "workspaces": {
+    "switcher": {
+      "personal": "Kişisel",
+      "workspaces": "Çalışma Alanları",
+      "empty": "Henüz çalışma alanı yok",
+      "create": "Çalışma alanı oluştur…"
+    },
+    "create": {
+      "title": "Çalışma alanı oluştur",
+      "description": "Çalışma alanları, tek bir yerden ortak çalışmanıza, not paylaşmanıza ve faturalandırmayı yönetmenize olanak tanır.",
+      "nameLabel": "Çalışma alanı adı",
+      "namePlaceholder": "Acme Şirketi",
+      "submit": "Çalışma alanı oluştur",
+      "submitting": "Oluşturuluyor…",
+      "errorTitle": "Çalışma alanı oluşturulamadı"
+    },
+    "created": {
+      "title": "Çalışma alanı oluşturuldu",
+      "description": "Artık {{name}}'nin sahibisiniz."
+    },
+    "invite": {
+      "title": "{{workspace}}'e davet edin",
+      "description": "Takım arkadaşlarını e-postayla ekleyin. Katılmak için bir bağlantı alacaklar.",
+      "emailLabel": "E-posta",
+      "roleLabel": "Rol",
+      "teamsLabel": "Ekiplere ekle",
+      "submit": "Davet gönder",
+      "submitting": "Gönderiliyor…",
+      "sentTitle": "Davet gönderildi",
+      "sentDescription": "{{email}} adresine bir davetiye gönderdik.",
+      "errorTitle": "Davetiye gönderilemedi",
+      "role": {
+        "admin": "Yönetici",
+        "member": "Üye"
+      }
+    },
+    "accept": {
+      "title": "Çalışma alanına katılın",
+      "description": "{{inviter}} sizi {{workspace}}'e {{role}} olarak katılmaya davet etti.",
+      "loading": "Davetiye yükleniyor…",
+      "accept": "Daveti kabul et",
+      "accepting": "Kabul ediliyor…",
+      "signInToAccept": "Kabul etmek için oturum açın",
+      "successTitle": "İçeridesiniz",
+      "successDescription": "{{name}}'ye hoş geldiniz.",
+      "errorTitle": "Davet kabul edilemedi"
+    }
+  },
+  "chat": {
+    "newChat": "Yeni sohbet",
+    "search": "Konuşmaları arayın...",
+    "archived": "Arşivlendi",
+    "noConversations": "İlk görüşmenizi başlatın",
+    "selectChat": "Bir görüşme seçin veya yeni bir görüşme başlatın",
+    "noResults": "Eşleşen konuşma yok",
+    "today": "Bugün",
+    "yesterday": "Dün",
+    "previousWeek": "Önceki 7 Gün",
+    "older": "Daha yaşlı",
+    "archive": "Arşiv",
+    "unarchive": "Arşivden Çıkar",
+    "delete": "Sil",
+    "deleteConfirm": "Bu görüşme kalıcı olarak silinecek. Bu geri alınamaz.",
+    "editTitle": "Başlığı düzenlemek için çift tıklayın",
+    "untitled": "İsimsiz",
+    "searchChats": "Sohbetlerde ara",
+    "searchTitle": "Konuşmaları arayın",
+    "searchDescription": "Tüm konuşmalarınızda arama yapın",
+    "newChatEmpty": "Notlarınızı, transkriptlerinizi veya başka herhangi bir şeyi sorun"
+  },
+  "referral": {
+    "title": "Yönlendirin ve ödüller kazanın",
+    "modalTitle": "Yönlendirin ve ödüller kazanın",
+    "subtitle": "Bir ay ver. Bir ay al.",
+    "tabs": {
+      "refer": "Bakınız",
+      "pastInvites": "Geçmiş davetler"
+    },
+    "howItWorks": {
+      "shareLink": "Davet bağlantınızı paylaşın",
+      "theySignUp": "Kaydolurlar ve bir",
+      "freeMonthOfPro": "Pro ayı ücretsiz",
+      "youGet": "Bir",
+      "freeMonth": "ücretsiz ay",
+      "whenTheyDictate": "2.000 kelime yazdırdıklarında"
+    },
+    "inviteLink": {
+      "title": "Davet bağlantınız",
+      "copy": "Kopyala",
+      "copied": "Kopyalandı"
+    },
+    "sendInvites": {
+      "title": "Davet gönder",
+      "placeholder": "arkadaş@example.com",
+      "send": "Gönder",
+      "sending": "Gönderiliyor"
+    },
+    "stats": {
+      "referred": "Yönlendirildi",
+      "converted": "Dönüştürülen",
+      "monthsEarned": "Kazanılan ay"
+    },
+    "status": {
+      "converted": "Dönüştürülen",
+      "opened": "Açıldı",
+      "failed": "Başarısız",
+      "sent": "Gönderildi"
+    },
+    "friends": {
+      "title": "Arkadaşlar",
+      "completed": "Tamamlandı",
+      "sentInvites": "Davet gönderildi"
+    },
+    "empty": {
+      "title": "Henüz davet gönderilmedi",
+      "description": "Bağlantınızı paylaşın veya başlamak için bir davet gönderin"
+    },
+    "toasts": {
+      "copiedTitle": "Kopyalandı!",
+      "copiedDescription": "Tavsiye bağlantısı panoya kopyalandı",
+      "copyFailedTitle": "Kopyalama Başarısız",
+      "copyFailedDescription": "Bağlantı panoya kopyalanamadı",
+      "invalidEmailTitle": "Geçersiz E-posta",
+      "invalidEmailDescription": "Lütfen geçerli bir e-posta adresi girin",
+      "inviteSentTitle": "Davet Gönderildi!",
+      "inviteSentDescription": "Davetiye {{email}} adresine gönderildi",
+      "sendFailedTitle": "Gönderim Başarısız",
+      "sendFailedDescription": "Davetiye gönderilemedi. Lütfen tekrar deneyin."
+    },
+    "errors": {
+      "unableToLoad": "Yönlendirme verileri yüklenemiyor",
+      "unableToLoadStats": "Yönlendirme istatistikleri yüklenemiyor. Lütfen daha sonra tekrar deneyin."
+    },
+    "tryAgain": "Tekrar Deneyin",
+    "card": {
+      "brand": "OpenWhispr",
+      "signalId": "Sinyal Kimliği",
+      "audioSignature": "Ses imzanız",
+      "stop": "Durdur",
+      "playSignal": "Çalma sinyali"
+    }
+  },
+  "usage": {
+    "approachingLimit": "Haftalık Limite Yaklaşılıyor",
+    "approachingLimitDescription": "Bu hafta {{limit}} ücretsiz kelimeden {{wordsUsed}} kadarını kullandınız.",
+    "yourPlan": "Planınız",
+    "trial": "Deneme ({{days}} gün kaldı)",
+    "trial_other": "Deneme ({{days}} gün kaldı)",
+    "pro": "Profesyonel",
+    "business": "İş",
+    "unlimitedTrial": "Deneme süreniz boyunca sınırsız transkripsiyon",
+    "unlimited": "Sınırsız transkripsiyon",
+    "manageSubscription": "Aboneliği Yönet",
+    "weeklyUsage": "Haftalık Kullanım",
+    "limitReached": "Sınıra ulaşıldı",
+    "free": "Ücretsiz",
+    "wordsRemaining": "{{remaining}} kelime kaldı",
+    "rollingLimit": "Değişen haftalık limit",
+    "upgradeToPro": "Pro'ya Yükseltme",
+    "useYourOwnKey": "Kendi Anahtarınızı Kullanın",
+    "upgradeUnlimited": "Pro'ya Yükseltme — sınırsız transkripsiyon"
+  },
+  "notes": {
+    "sidebar": {
+      "newNote": "Yeni not",
+      "searchNotes": "Notları arayın",
+      "actions": "Eylemler"
+    },
+    "folders": {
+      "title": "Klasörler",
+      "soon": "Yakında",
+      "folderName": "Klasör adı",
+      "couldNotCreate": "Klasör oluşturulamadı",
+      "couldNotRename": "Klasör yeniden adlandırılamadı",
+      "couldNotDelete": "Klasör silinemedi",
+      "deleteTitle": "Klasör silinsin mi?",
+      "deleteDescription": "Bu, \"{{name}}\" ve onun {{count}} notunu kalıcı olarak silecektir. Bu geri alınamaz.",
+      "deleteDescriptionEmpty": "Bu, \"{{name}}\" dosyasını kalıcı olarak silecektir. Bu geri alınamaz.",
+      "deleteConfirm": "Klasörü ve notları sil"
+    },
+    "list": {
+      "title": "Notlar",
+      "newNote": "Yeni not",
+      "untitled": "İsimsiz",
+      "untitledNote": "Başlıksız Not",
+      "timeNow": "şimdi",
+      "minutesAgo": "{{count}}m",
+      "hoursAgo": "{{count}}sa",
+      "daysAgo": "{{count}}d"
+    },
+    "editor": {
+      "untitled": "İsimsiz",
+      "noteTitle": "Not başlığı",
+      "stop": "Durdur",
+      "transcribe": "Metne Dönüştür",
+      "processing": "İşleniyor...",
+      "export": "İhracat",
+      "asMarkdown": "Markdown olarak",
+      "asPlainText": "Düz Metin Olarak",
+      "asTranscriptText": "Düz Metin Olarak (.txt)",
+      "asSubtitles": "Altyazı Olarak (.srt)",
+      "asJson": "JSON olarak (.json)",
+      "asTranscriptMarkdown": "İşaretleme Olarak (.md)",
+      "raw": "Ham",
+      "enhanced": "Geliştirilmiş",
+      "saving": "Kaydediliyor",
+      "startWriting": "Yazmaya başlayın...",
+      "staleIndicator": "Geliştirmeden bu yana içerik değişti",
+      "live": "Canlı",
+      "transcript": "Transkript",
+      "notes": "Notlar",
+      "conversationWillAppear": "Konuşma burada görünecek...",
+      "linkedEvent": "Bağlantılı olay",
+      "noFolder": "Klasör yok",
+      "participants": "Katılımcılar"
+    },
+    "participants": {
+      "attendee": "katılımcı",
+      "attendees": "katılımcı",
+      "addAttendees": "Katılımcı ekle",
+      "addPlaceholder": "Katılımcı ekle...",
+      "typeEmail": "Eklemek için bir e-posta yazın...",
+      "me": "(ben)"
+    },
+    "upload": {
+      "title": "Ses Yükle",
+      "using": "{{model}} kullanma",
+      "dropOrBrowse": "Ses dosyasını bırakın veya göz atmak için tıklayın",
+      "supportedFormats": "MP3, WAV, M4A, WebM, OGG, FLAC, AAC",
+      "dropToUpload": "Yüklemek için bırakın",
+      "transcribe": "Metne Dönüştür",
+      "cancel": "İptal",
+      "transcribingCloud": "Bulut aracılığıyla yazıya aktarılıyor...",
+      "transcribingLocal": "Yerel olarak yazıya aktarılıyor...",
+      "transcribingProvider": "{{provider}} aracılığıyla yazıya aktarılıyor...",
+      "cancelTranscription": "Transkripsiyonu iptal et",
+      "transcriptionComplete": "Transkripsiyon tamamlandı",
+      "openNote": "Notu Aç",
+      "uploadAnother": "Başka Birini Yükle",
+      "retry": "Tekrar Dene",
+      "startOver": "Yeniden Başla",
+      "newFolder": "Yeni Klasör",
+      "folderName": "Klasör adı",
+      "create": "Oluştur",
+      "openwhisprCloud": "OpenWhispr Bulutu",
+      "custom": "Özel",
+      "selectFolder": "Klasör seç",
+      "transcriptionFailed": "Transkripsiyon başarısız oldu",
+      "errorOccurred": "Bir hata oluştu",
+      "noSpeechDetected": "Bu seste konuşma algılanmadı.",
+      "noProviderTitle": "Transkripsiyon sağlayıcısı kurulmadı",
+      "noProviderDescription": "Metne dönüştürmeye başlamak için bir API anahtarı ekleyin veya yerel bir model indirin.",
+      "noProviderAction": "Transkripsiyon Ayarlarını Aç",
+      "fileTooLarge": "Bu dosya 500 MB sınırını aşıyor.",
+      "paidPlanRequired": "25 MB'ın üzerindeki dosyalar için bulut transkripsiyonu ücretli bir plan gerektirir. Güvenilir, yüksek kaliteli sonuçlar için büyük dosyalar OpenWhispr Cloud ile işlenir.",
+      "largeFileNote": "Büyük dosyalar paralel olarak bölünür ve kopyalanır.",
+      "chunkProgress": "{{total}} bölümünün {{completed}} kısmı yazıya aktarılıyor...",
+      "byokTooLarge": "Üçüncü taraf API anahtarları yalnızca 25 MB'a kadar olan dosyaları destekler.",
+      "byokTooLargeDetail": "OpenWhispr Cloud, 25 MB'ın üzerindeki dosyalar için bölme, paralel işleme ve yeniden birleştirme işlemlerini gerçekleştirir; böylece üçüncü taraf sağlayıcı sınırlarına bağlı kalmadan güvenilir sonuçlar elde edersiniz.",
+      "byokTooLargeNeedsAccount": "OpenWhispr Cloud ile daha büyük dosyaları yazıya dökmek için bir hesap oluşturun ve ücretli bir plana yükseltin.",
+      "byokTooLargeNeedsUpgrade": "OpenWhispr Cloud ile daha büyük dosyaları yazıya dökmek için ücretli bir plana yükseltin.",
+      "switchToCloudForLargeFiles": "Bu dosyayı yazıya dönüştürmek için OpenWhispr Cloud'a geçin.",
+      "createAccount": "Hesap Oluştur",
+      "upgrade": "Yükseltme",
+      "switchToCloud": "OpenWhispr Bulutu"
+    },
+    "meeting": {
+      "title": "Toplantı Notları",
+      "description": "Transkripsiyonlar ve yapılandırılmış özetler",
+      "comingSoon": "Çok Yakında",
+      "back": "Geri"
+    },
+    "meetingPill": {
+      "returnToNote": "Kayda geri dön"
+    },
+    "empty": {
+      "title": "Burada henüz not yok",
+      "description": "Yazmaya başlamak için ilk notunuzu oluşturun",
+      "selectTitle": "Bir not seçin",
+      "selectDescription": "Kenar çubuğundan bir not seçin",
+      "createNote": "Not oluştur",
+      "emptyFolder": "Bu klasörde not yok"
+    },
+    "addToFolder": {
+      "title": "Not ekle",
+      "searchPlaceholder": "Eklenecek notları arayın...",
+      "addExisting": "Mevcut olanı ekle",
+      "addCount": "{{count}} not ekle",
+      "noResults": "Eşleşen not yok",
+      "noNotesAvailable": "Başka not mevcut değil"
+    },
+    "context": {
+      "moveToFolder": "Klasöre taşı",
+      "delete": "Sil",
+      "rename": "Yeniden adlandır",
+      "searchFolders": "Klasörleri ara...",
+      "noResults": "Klasör bulunamadı",
+      "newFolder": "Yeni klasör",
+      "showInFileManager": "{{manager}}'de göster"
+    },
+    "actions": {
+      "done": "Bitti",
+      "manage": "Eylemleri Yönet...",
+      "manageTitle": "Özel Eylemler",
+      "addAction": "Yeni Eylem",
+      "editAction": "Eylemi Düzenle",
+      "namePlaceholder": "Eylem adı",
+      "descriptionPlaceholder": "Kısa açıklama (isteğe bağlı)",
+      "promptPlaceholder": "Yapay zeka not içeriğiyle ne yapmalı?",
+      "builtIn": "Dahili",
+      "save": "Kaydet",
+      "update": "Güncelleme",
+      "cancel": "İptal",
+      "noActions": "Henüz özel işlem yok",
+      "promptLabel": "İstemi",
+      "emptyEditorTitle": "Bir eylem seçin",
+      "emptyEditorDescription": "Listeden bir eylem seçin veya yeni bir eylem oluşturun",
+      "runAction": "{{name}}'yi çalıştır",
+      "selectAction": "Eylem seç",
+      "builtin": {
+        "generateNotes": {
+          "name": "Not Oluştur",
+          "description": "Notlarınızı temizleyin, yapılandırın ve geliştirin"
+        }
+      },
+      "errors": {
+        "noModel": "Hiçbir AI modeli seçilmedi. Ayarlar'da bir tane yapılandırın.",
+        "actionFailed": "Eylem başarısız oldu"
+      }
+    },
+    "onboarding": {
+      "llm": {
+        "title": "Bir yapay zeka modelini yapılandırma",
+        "description": "Eylemler, notlarınızı dönüştürmek için yapay zekayı kullanır. Başlamak için bir dil modeli ayarlayın.",
+        "configured": "AI modeli yapılandırıldı"
+      },
+      "actions": {
+        "title": "Yapay Zeka Destekli Eylemler",
+        "description": "Eylemler notlarınızı dönüştürür; transkripsiyonları temizleyin, toplantıları özetleyin ve daha fazlasını yapın. Yerleşik eylemleri kullanın veya kendinizinkini oluşturun.",
+        "builtInLabel": "Dahili",
+        "createTitle": "Kendi eyleminizi yaratın",
+        "createDescription": "Kendi yapay zeka isteminizle özel bir eylem tanımlayın. Daha sonra istediğiniz zaman ayarlardan düzenleyebilir veya daha fazlasını ekleyebilirsiniz.",
+        "created": "Yaratıldı!"
+      },
+      "getStarted": "Başlayın",
+      "systemAudio": {
+        "title": "Sistem Sesi",
+        "description": "Mikrofonunuzla toplantılardan ve diğer uygulamalardan ses yakalayın.",
+        "grant": "İzin Verme",
+        "enabled": "Etkin"
+      }
+    },
+    "realtimeBanner": {
+      "message": "Pro'da gerçek zamanlı transkripsiyon mevcut",
+      "upgrade": "Yükseltme"
+    },
+    "enhance": {
+      "title": "Geliştirme hatası"
+    },
+    "speaker": {
+      "you": "Siz",
+      "them": "Onlar",
+      "label": "Konuşmacı {{n}}",
+      "identifyingSpeakers": "Konuşmacıları tanımlama...",
+      "liveAccuracyHint": "Hala konuşmacılar belirleniyor. Arama sona erdiğinde etiketleme doğruluğu artacaktır.",
+      "speakersIdentified": "Konuşmacılar belirlendi",
+      "typeNamePlaceholder": "Bir ad yazın",
+      "nameOrEmailPlaceholder": "Bir ad veya e-posta yazın",
+      "knownSpeakers": "Bilinen konuşmacılar",
+      "meetingAttendees": "Toplantıya katılanlar",
+      "createNewPrefix": "Oluştur",
+      "addContact": "Kişi ekle",
+      "emailPlaceholder": "isim@örnek.com",
+      "save": "Kaydet",
+      "cancel": "İptal",
+      "assignName": "Ad atayın",
+      "isThisPerson": "Bu {{name}} mi?",
+      "selected": "{{n}} seçildi",
+      "assignTo": "Ata…",
+      "deselectAll": "Tümünün seçimini kaldır",
+      "confirmed": "Onaylandı",
+      "nameAssigned": "Atanan ad",
+      "state": {
+        "provisional": "Geçici",
+        "confirmed": "Onaylandı",
+        "suggested": "Önerilen",
+        "locked": "Kilitli"
+      },
+      "pill": {
+        "identifying": "Konuşmacıları tanımlama",
+        "notLabeled": "Hoparlörler etiketlenmemiş",
+        "finalizing": "Konuşmacılar sonlandırılıyor…",
+        "justYou": "sadece sen",
+        "defaultingHint": "varsayılan olarak 1 tane daha seçiliyor — daha fazlası varsa değiştirin",
+        "toggleAria": "Bu kayıt için hoparlör kimliğini değiştir",
+        "incAria": "Beklenen konuşmacı sayısını artırın",
+        "decAria": "Beklenen konuşmacı sayısını azaltın",
+        "othersInCall_one": "{{count}} kişi daha görüşmede",
+        "othersInCall_other": "{{count}} kişi daha görüşmede"
+      }
+    }
+  },
+  "dictionary": {
+    "clearTitle": "Sözlük temizlensin mi?",
+    "clearDescription": "Bu, özel sözlüğünüzdeki tüm kelimeleri kaldıracaktır. Bu eylem geri alınamaz.",
+    "addWord": "Kelime ekle",
+    "addPlaceholder": "Virgülle ayrılmış sözcükler ekleyin — OpenWhispr, Supabase, John Snow, ARR",
+    "removeWord": "{{word}} öğesini kaldır",
+    "clearAll": "Tümünü temizle",
+    "add": "Ekle",
+    "importWords": "Kelimeleri içe aktar",
+    "importPlaceholder": "Kelimeleri virgülle ayırarak yapıştırın...",
+    "separateWithCommas": "Virgülle ayırın",
+    "wordsReady_one": "{{count}} kelime hazır",
+    "wordsReady_other": "{{count}} kelime hazır",
+    "import": "İçe Aktarma",
+    "yourDictionary": "Sözlüğünüz",
+    "exportDictionary": "Sözlüğü dışa aktar",
+    "exportFailed": "Dışa aktarma başarısız oldu",
+    "editWord": "{{word}} düzenle",
+    "noMatches": "Eşleşme yok — \"{{word}}\" eklemek için Enter'a basın",
+    "tabDictionary": "Sözlük",
+    "tabSnippets": "Parçacıklar",
+    "snippets": {
+      "title": "Parçacıklar",
+      "edit": "{{trigger}} düzenle",
+      "remove": "{{trigger}} öğesini kaldır",
+      "editTitle": "Parçayı düzenle",
+      "dialogDescription": "Tetikleyiciyi söylediğinizde, bunun yerine kayıtlı metniniz gelir.",
+      "triggerLabel": "Tetikleyici",
+      "triggerPlaceholder": "ör. çağrı bağlantısı",
+      "replacementLabel": "Değiştirme",
+      "replacementPlaceholder": "Tetikleyiciyi söylediğinizde eklenecek metin…",
+      "create": "Parçacık oluştur",
+      "duplicate": "Bu tetikleyiciyi içeren bir snippet zaten mevcut",
+      "emptyTitle": "Söylememeniz gereken şeyler",
+      "emptyTitleAccent": "iki kez",
+      "emptyDescription": "Bir tetikleyici kelime söyleyin ve OpenWhispr onu kaydettiğiniz her şeyle (URL'ler, girişler, oturum kapatmalar, istemler) değiştirir.",
+      "new": "Yeni parça",
+      "examples": {
+        "linkedinTrigger": "LinkedIn'im",
+        "linkedinText": "linkedin.com/in/you",
+        "rewriteTrigger": "Yeniden yazma istemi",
+        "rewriteText": "Daha kısa ve profesyonel olması için bunu yeniden yazın",
+        "introTrigger": "Giriş e-postası",
+        "introText": "Hey, bu haftanın ilerleyen saatlerinde sohbet etmek için biraz zaman bulmayı çok isterim…",
+        "signoffTrigger": "Oturumu kapat",
+        "signoffText": "En iyi, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Tetikleyici bir ifade ekleyin — \"yatırımcıya sor\", \"arama bağlantısı\""
+    },
+    "emptyTitle": "Sözlüğünüz boş",
+    "emptyDescription": "{{agentName}} her zaman doğru olması gereken kelimeleri ekleyin: adlar, araçlar, kısaltmalar.",
+    "addFirstWord": "İlk kelimenizi ekleyin",
+    "importList": "Bir listeyi içe aktar",
+    "agentDefault": "Varsayılan olarak eklendi"
+  },
+  "support": {
+    "documentation": "Dokümantasyon",
+    "joinDiscord": "Discord'a Katılın",
+    "contactSupport": "Desteğe Başvurun",
+    "submitBug": "Hata Gönder"
+  },
+  "postMigration": {
+    "title": "OpenWhispr'a tekrar hoş geldiniz",
+    "description": "Notlarınız ve ayarlarınız önceki sürümden aktarılmıştır. Ancak macOS bunu yeni bir uygulama olarak ele aldığından birkaç iznin tekrar verilmesi gerekiyor.",
+    "done": "Bitti",
+    "remindLater": "Daha Sonra Hatırlat"
+  },
+  "apiKeyInput": {
+    "placeholder": "API anahtarınızı yapıştırın",
+    "label": "API Anahtarı",
+    "save": "API anahtarını kaydet",
+    "cancelEdit": "Düzenlemeyi iptal et",
+    "edit": "API anahtarını düzenle",
+    "add": "API anahtarı ekle",
+    "editButton": "düzenle",
+    "addButton": "ekle"
+  },
+  "gpu": {
+    "transcriptionBanner": "GPU hızlandırmayla transkripsiyonu hızlandırın",
+    "reasoningBanner": "GPU hızlandırmayla yapay zeka işlemeyi hızlandırın",
+    "enableButton": "GPU'yu etkinleştir",
+    "active": "GPU hızlandırma etkin",
+    "ready": "GPU hızlandırmaya hazır",
+    "activating": "GPU etkinleştiriliyor...",
+    "activationFailed": "GPU etkinleştirilemedi",
+    "retry": "Tekrar Dene",
+    "remove": "Kaldır",
+    "dismiss": "Şimdi değil",
+    "cancel": "İptal"
+  },
+  "app": {
+    "toasts": {
+      "hotkeyChanged": {
+        "title": "Kısayol tuşu değiştirildi",
+        "description": "\"{{original}}\" kullanılamıyor. Bunun yerine \"{{fallback}}\" kullanılıyor. Bunu Ayarlar'dan değiştirebilirsiniz."
+      },
+      "hotkeyUnavailable": {
+        "title": "Kısayol tuşu kullanılamıyor",
+        "description": "Seçilen kısayol tuşu kaydedilemedi. Lütfen ayarlardan farklı bir tane seçin."
+      },
+      "addedToDict": "Sözlüğünüze {{words}} eklendi",
+      "undo": "Geri al",
+      "accessibilityMissing": {
+        "title": "Erişilebilirlik izinleri gerekli",
+        "description": "OpenWhispr'ın kısayol tuşunuzu algılamak ve metni yapıştırmak için erişilebilirlik izinlerine ihtiyacı var. Lütfen bunları Kontrol Panelinde etkinleştirin."
+      }
+    },
+    "mic": {
+      "hotkeyToSpeak": "{{hotkey}} konuşmak için",
+      "recording": "Kaydediliyor...",
+      "processing": "İşleniyor...",
+      "clickToSpeak": "Konuşmak için tıklayın"
+    },
+    "buttons": {
+      "cancelRecording": "Kaydı iptal et",
+      "cancelProcessing": "İşlemeyi iptal et"
+    },
+    "commandMenu": {
+      "stopListening": "Dinlemeyi bırak",
+      "startListening": "Dinlemeye başla",
+      "hideForNow": "Şimdilik gizle"
+    }
+  },
+  "dictationAgent": {
+    "enabled": "Sesli aracıyı etkinleştir",
+    "enabledDescription": "Temsilcinize talimatları dikte edin. \"{{agentName}}\" diyerek etkinleştirin. Aşağıda yapılandırılabilir.",
+    "modes": {
+      "openwhispr": "OpenWhispr Bulutu",
+      "openwhisprDesc": "OpenWhispr tarafından yönetilen aracıyı kullanın; API anahtarına gerek yoktur.",
+      "providers": "Kendi anahtarınızı getirin",
+      "providersDesc": "Kendi API anahtarınızla OpenAI, Anthropic, Gemini veya Groq'a bağlanın.",
+      "local": "Yerel",
+      "localDesc": "Cihazınızda yerel bir LLM çalıştırın - tamamen özel.",
+      "selfHosted": "Kendi kendine barındırılan",
+      "selfHostedDesc": "Şirket içinde barındırılan OpenAI uyumlu bir uç noktaya gelin.",
+      "enterprise": "Kurumsal",
+      "enterpriseDesc": "AWS Bedrock, Azure OpenAI veya Google Vertex'i kullanın."
+    },
+    "prompt": {
+      "title": "Aracı istemi",
+      "description": "Uyandırma sözcüğü algılandığında kullanılan sistem istemi. Yerleşik varsayılana geri döner."
+    }
+  },
+  "agentMode": {
+    "settings": {
+      "hotkey": "Sohbet Temsilcisi Kısayol Tuşu",
+      "hotkeyDescription": "Sohbet aracısı katmanını açın ve kapatın",
+      "model": "Ajan Modeli",
+      "modelDescription": "Temsilci görüşmeleri için kullanılan yapay zeka modeli",
+      "systemPrompt": "Sistem İstemi",
+      "systemPromptDescription": "Temsilci için özel talimatlar",
+      "systemPromptPlaceholder": "Özel sistem istemini girin...",
+      "modes": {
+        "openwhispr": "OpenWhispr Bulutu",
+        "providers": "Bulut Sağlayıcıları",
+        "local": "Yerel",
+        "selfHosted": "Kendi Kendine Barındırılan",
+        "enterprise": "Kurumsal",
+        "openwhisprDesc": "Güvenilir doğruluk. Kurulum gerekmez.",
+        "providersDesc": "Kendi API anahtarınızı getirin.",
+        "localDesc": "Cihaz üstü modeller. Tamamen özel.",
+        "selfHostedDesc": "Ağınızdaki kendi sunucunuz.",
+        "enterpriseDesc": "Kuruluşunuzun bulut hesabını kullanın (AWS, Azure, GCP)."
+      },
+      "openwhisprCloud": "OpenWhispr Bulutu",
+      "openwhisprCloudDescription": "Güvenilir doğruluk. Kurulum gerekmez.",
+      "customSetup": "Özel Kurulum (BYOK)",
+      "customSetupDescription": "Kendi API anahtarlarınızı kullanın ve tercih ettiğiniz modeli seçin"
+    },
+    "chat": {
+      "placeholder": "Konuşmak için {{hotkey}} tuşuna basın",
+      "thinking": "Düşünüyorum...",
+      "transcribing": "Yazıya aktarılıyor...",
+      "listening": "Dinleniyor...",
+      "newConversation": "Yeni",
+      "copyToClipboard": "Panoya kopyala",
+      "copied": "Kopyalandı!",
+      "emptyState": "Bana bir şey sor",
+      "errorPrefix": "Hata"
+    },
+    "titleBar": {
+      "label": "Temsilci",
+      "newChat": "Yeni görüşme",
+      "close": "Kapat"
+    },
+    "input": {
+      "holdToSpeak": "Konuşmak için basılı tutun",
+      "toClose": "kapat",
+      "listening": "Dinleniyor...",
+      "transcribing": "Yazıya aktarılıyor...",
+      "thinking": "Düşünüyorum...",
+      "typeMessage": "Bir mesaj yazın...",
+      "send": "Gönder"
+    },
+    "tools": {
+      "search_notesStatus": "Notlar aranıyor...",
+      "web_searchStatus": "Web'de arama yapılıyor...",
+      "copy_to_clipboardStatus": "Panoya kopyalanıyor...",
+      "get_calendar_eventsStatus": "Takvim kontrol ediliyor...",
+      "get_noteStatus": "Not okunuyor...",
+      "create_noteStatus": "Not oluşturuluyor...",
+      "update_noteStatus": "Not güncelleniyor...",
+      "copiedToClipboard": "Panonuza kopyalandı",
+      "foundNotes": "{{count}} not bulundu",
+      "foundNotes_plural": "{{count}} not bulundu",
+      "searchResults": "{{count}} sonuç bulundu",
+      "searchResults_plural": "{{count}} sonuç bulundu",
+      "openNote": "Notu aç",
+      "calendarEvents": "{{count}} etkinlik bulundu",
+      "calendarEvents_plural": "{{count}} etkinlik bulundu",
+      "noResults": "Sonuç bulunamadı",
+      "error": "Takım hatası",
+      "unknownTool": "Bilinmeyen araç: {{name}}",
+      "invalidArgs": "{{name}} için geçersiz araç bağımsız değişkenleri"
+    }
+  },
+  "integrations": {
+    "title": "Entegrasyonlar",
+    "description": "İş akışınızı güçlendirmek için hizmetleri bağlayın",
+    "googleCalendar": {
+      "title": "Google Takvim",
+      "optional": "İsteğe bağlı",
+      "description": "Takviminizden toplantı başlıklarını ve katılımcıları otomatik olarak doldurun.",
+      "connect": "Google Takvim'i bağlayın",
+      "connecting": "Bağlanıyor...",
+      "connected": "Bağlandı",
+      "addAnother": "Başka bir takvim ekle",
+      "primaryOnly": "Yalnızca birincil takvimi senkronize et",
+      "primaryOnlyDescription": "Sizinle paylaşılan takvimlerdeki etkinlikleri göz ardı edin.",
+      "disconnect": "Bağlantıyı kes",
+      "disconnectConfirm": "{{email}} bağlantısı kesilsin mi?",
+      "disconnectDescription": "Toplantı notları artık bu takvimden kaydedilmeyecek.",
+      "systemAudioRequired": "Sistem Ses İzni Gerekli",
+      "systemAudioDescription": "OpenWhispr, toplantıları yazıya dökmek ve diğer katılımcıların sesini yakalamak için Sistem Sesi iznine ihtiyaç duyar. Ekranınızı asla kaydetmiyoruz. Etkinleştirmek için Sistem Ayarlarına yönlendirileceksiniz.",
+      "openSettings": "Sistem Ayarlarını Aç"
+    },
+    "sections": {
+      "calendar": "Takvim",
+      "api": "API",
+      "mcp": "MCP",
+      "cli": "CLI"
+    },
+    "api": {
+      "title": "API anahtarları",
+      "description": "Programatik erişim için API anahtarlarını yönetin",
+      "proRequired": "API'ye erişmek için ücretli bir plana geçin",
+      "manage": "Anahtarları yönet",
+      "viewPlans": "Planları Görüntüle",
+      "dialogTitle": "API anahtarları"
+    },
+    "mcp": {
+      "title": "Notlarınızı AI araçlarınıza taşıyın",
+      "description": "Claude, ChatGPT ve Cursor'da notlarınızla sohbet edin, arama yapın ve çalışın.",
+      "step1": "AI aracınızda, genel URL'yi kullanarak OpenWhispr MCP'yi ekleyin",
+      "step2": "Yukarıda ihtiyacınız olan kapsamları içeren bir API anahtarı oluşturun.",
+      "step3": "Bağlanmak için anahtarı Yetkilendirme başlığı olarak yapıştırın.",
+      "learnMore": "Daha fazlasını öğrenin",
+      "viewPlans": "Planları Görüntüle",
+      "copyUrl": "MCP URL'sini kopyala",
+      "proRequired": "OpenWhispr'ı Claude, ChatGPT ve Cursor'a bağlamak için ücretli bir plana yükseltin.",
+      "copied": "Kopyalandı"
+    },
+    "cli": {
+      "title": "Komut satırı erişimi",
+      "description": "Temsilcinizin terminalden notlarınıza erişmesine izin verin.",
+      "installLabel": "Kurulum",
+      "learnMore": "Dokümanları okuyun",
+      "copyDocsLink": "Dokümanlar bağlantısını kopyala",
+      "docsLinkCopied": "Dokümanlar bağlantısı kopyalandı",
+      "viewPlans": "Planları Görüntüle",
+      "local": {
+        "label": "Yerel",
+        "freeBadge": "Ücretsiz",
+        "description": "Yerel notlarınızı doğrudan okuyun. Oturum açma veya API anahtarı yok; OpenWhispr çalışırken çalışır."
+      },
+      "cloud": {
+        "label": "Bulut",
+        "description": "API anahtarınızı kullanarak makineler arasında senkronizasyon yapın.",
+        "proRequired": "CLI'yi bulut modunda kullanmak için ücretli bir plana yükseltin."
+      }
+    },
+    "plan": {
+      "title": "Planınız",
+      "current": "Güncel",
+      "free": "Ücretsiz",
+      "freeLimit": "5 toplantı/ay",
+      "essential": "Temel",
+      "essentialLimit": "20 toplantı/ay",
+      "pro": "Profesyonel",
+      "proLimit": "Sınırsız",
+      "upgrade": "Yükseltme"
+    },
+    "notABot": {
+      "title": "OpenWhispr bir bot değil, bir toplantı kaydedicidir",
+      "description": "OpenWhispr, sesi doğrudan sisteminizden yakalar; toplantılarınıza hiçbir zaman katılımcı olarak katılmaz. Takviminizi bağlayın ve normal şekilde not alın."
+    }
+  },
+  "notesView": {
+    "searchPlaceholder": "Notları ara…",
+    "newNote": "Yeni Not",
+    "empty": {
+      "title": "Henüz not yok",
+      "description": "Başlamak için ilk notunuzu oluşturun."
+    },
+    "searchEmpty": {
+      "title": "Sonuç yok",
+      "description": "\"{{query}}\" için not bulunamadı."
+    },
+    "noteType": {
+      "personal": "kişisel",
+      "meeting": "toplantı",
+      "upload": "yükleme"
+    }
+  },
+  "noteEditor": {
+    "saved": "Kaydedildi",
+    "deleteNote": "Notu sil",
+    "deleteConfirmTitle": "Not silinsin mi?",
+    "deleteConfirmDescription": "Bu not kalıcı olarak silinecek ve kurtarılamaz.",
+    "deleteConfirm": "Sil",
+    "share": {
+      "button": "Paylaş",
+      "dialog": {
+        "title": "Notu paylaş",
+        "searchPlaceholder": "Kişileri e-postayla ekleyin",
+        "emailLabel": "Alıcı e-postası",
+        "shareButton": "Paylaş",
+        "copyLink": "Bağlantıyı kopyala",
+        "copied": "Kopyalandı",
+        "owner": "Sahip",
+        "pending": "Beklemede",
+        "accepted": "Erişimi var",
+        "resend": "Daveti yeniden gönder",
+        "revoke": "Kaldır",
+        "invitationActions": "Davet eylemleri",
+        "permissionRequired": "Paylaşımı yalnızca not sahibi değiştirebilir.",
+        "visibility": {
+          "label": "Görünürlük",
+          "link": "Bağlantıya sahip olan herkes",
+          "domain": "{{domain}} alanındaki herkes bağlantıya sahip",
+          "invited": "Yalnızca davet edilen kişiler"
+        },
+        "error": {
+          "invalidEmail": "Geçerli bir e-posta adresi girin",
+          "alreadyInvited": "{{email}} zaten davet edildi",
+          "inviteFailed": "Davetiye gönderilemedi. Tekrar deneyin.",
+          "linkUnavailable": "Kopyalamak için bağlantıyı oluşturun veya döndürün"
+        }
+      }
+    }
+  },
+  "commandSearch": {
+    "title": "Ara",
+    "description": "Notlar ve transkriptler arasında arama yapın",
+    "shortPlaceholder": "Ara",
+    "placeholder": "Notları ve transkriptleri arayın…",
+    "sections": {
+      "notes": "Notlar",
+      "transcripts": "Transkriptler"
+    },
+    "noResults": "Sonuç yok",
+    "emptyState": "Aramak için yazmaya başlayın",
+    "footer": {
+      "navigate": "Gezin",
+      "open": "Açık",
+      "dismiss": "Reddet"
+    }
+  },
+  "updateNotification": {
+    "title": "OpenWhispr Güncellemesi Mevcut",
+    "body": "Sürüm {{version}} indirilmeye hazır",
+    "cta": "Şimdi Güncelle"
+  },
+  "permissionsGate": {
+    "title": "İzinler Gerekli",
+    "description": "OpenWhispr'ın bu bilgisayarda çalışması için birkaç izne ihtiyacı var.",
+    "continue": "Devam et"
+  },
+  "embeddedChat": {
+    "askPlaceholder": "Herhangi bir şey sorun...",
+    "send": "Gönder",
+    "title": "Sohbet",
+    "emptyState": "Bu not hakkında bir soru sorun",
+    "dock": "Kenar çubuğuna sabitle",
+    "undock": "Kenar çubuğundan çıkarma",
+    "close": "Sohbeti kapat",
+    "newChat": "Yeni sohbet",
+    "conversationSelector": "Konuşmayı değiştir"
+  },
+  "transcriptionPreview": {
+    "label": "Önizleme",
+    "listening": "Dinleniyor...",
+    "polishing": "Parlatma...",
+    "ready": "Hazır",
+    "copy": "Kopyala",
+    "copied": "Kopyalandı",
+    "waitingForInput": "Bir şey söyle..."
+  },
+  "transcript": {
+    "speaker": {
+      "you": "Sen",
+      "others": "Diğerleri"
+    }
+  }
+}
