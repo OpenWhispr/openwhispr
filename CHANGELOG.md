@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixes
+
+- **Snippets now match triggers containing Turkish İ and ı.** Trigger matching used `toLowerCase()`, whose lowercase form of İ (U+0130) is "i" plus a combining dot, so a snippet like "İmza" never matched the transcript — and the regex `/i` flag case-folds neither İ nor dotless ı (U+0131). Triggers and matches are now folded to a canonical key, the pattern matches İ/ı explicitly, and the transcript is NFC-normalized, so "imza", "İmza", "İMZA" — and "Işık"/"IŞIK" for an "ışık" trigger — all expand the same snippet.
+
 ### Transcription
 
 - **Azure AI Foundry / Azure OpenAI speech-to-text.** The custom transcription provider now recognizes Azure endpoints (`*.cognitiveservices.azure.com`, `*.openai.azure.com`, `*.services.ai.azure.com`) and builds the deployment-style URL Azure requires (`/openai/deployments/{model}/audio/transcriptions?api-version=...`) instead of the plain OpenAI `{base}/audio/transcriptions` shape, which returned `404 DeploymentNotFound`. Auth now uses Azure's `api-key` header on Azure hosts. Enter your resource endpoint as the URL and your exact deployment name in the Model field; `api-version` defaults to a transcribe-capable preview and can be overridden by appending `?api-version=...` to the endpoint.
