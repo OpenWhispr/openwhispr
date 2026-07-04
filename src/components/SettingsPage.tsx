@@ -135,6 +135,7 @@ const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
   { value: "ja", label: "日本語", flag: "🇯🇵" },
   { value: "zh-CN", label: "简体中文", flag: "🇨🇳" },
   { value: "zh-TW", label: "繁體中文", flag: "🇹🇼" },
+  { value: "tr", label: "Türkçe", flag: "🇹🇷" },
 ];
 
 const noop = () => {};

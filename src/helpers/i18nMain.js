@@ -10,6 +10,7 @@ const ruTranslation = require("../locales/ru/translation.json");
 const jaTranslation = require("../locales/ja/translation.json");
 const zhCNTranslation = require("../locales/zh-CN/translation.json");
 const zhTWTranslation = require("../locales/zh-TW/translation.json");
+const trTranslation = require("../locales/tr/translation.json");
 
 const enPrompts = require("../locales/en/prompts.json");
 const esPrompts = require("../locales/es/prompts.json");
@@ -21,8 +22,21 @@ const ruPrompts = require("../locales/ru/prompts.json");
 const jaPrompts = require("../locales/ja/prompts.json");
 const zhCNPrompts = require("../locales/zh-CN/prompts.json");
 const zhTWPrompts = require("../locales/zh-TW/prompts.json");
+const trPrompts = require("../locales/tr/prompts.json");
 
-const SUPPORTED_UI_LANGUAGES = ["en", "es", "fr", "de", "pt", "it", "ru", "ja", "zh-CN", "zh-TW"];
+const SUPPORTED_UI_LANGUAGES = [
+  "en",
+  "es",
+  "fr",
+  "de",
+  "pt",
+  "it",
+  "ru",
+  "ja",
+  "zh-CN",
+  "zh-TW",
+  "tr",
+];
 
 function normalizeUiLanguage(language) {
   const candidate = (language || "").trim();
@@ -83,6 +97,10 @@ void i18nMain.init({
     "zh-TW": {
       translation: zhTWTranslation,
       prompts: zhTWPrompts,
+    },
+    tr: {
+      translation: trTranslation,
+      prompts: trPrompts,
     },
   },
   lng: normalizeUiLanguage(process.env.UI_LANGUAGE),
