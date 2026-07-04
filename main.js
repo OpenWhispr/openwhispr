@@ -900,29 +900,6 @@ async function startApp() {
     }
   }
 
-  // Set up translation hotkey (dictation cleaned up and translated into the
-  // configured target language before pasting)
-  const translationHotkeyCallback = () => {
-    windowManager.sendToggleTranslation();
-  };
-  windowManager._translationHotkeyCallback = translationHotkeyCallback;
-
-  const savedTranslationKey = environmentManager.getTranslationKey?.() || "";
-  if (savedTranslationKey) {
-    const result = await hotkeyManager.registerSlot(
-      "translation",
-      savedTranslationKey,
-      translationHotkeyCallback
-    );
-    if (!result.success) {
-      debugLogger.warn(
-        "Failed to restore translation hotkey",
-        { hotkey: savedTranslationKey },
-        "hotkey"
-      );
-    }
-  }
-
   // Set up meeting mode hotkey
   const meetingHotkeyCallback = () => {
     if (hotkeyManager.isInListeningMode()) return;
@@ -1086,11 +1063,13 @@ async function startApp() {
     const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");
     let globeKeyDownTime = 0;
     let globeKeyIsRecording = false;
+    let globeKeyWasUsedAsModifier = false;
     let globeLastStopTime = 0;
     const MIN_HOLD_DURATION_MS = 150;
     const POST_STOP_COOLDOWN_MS = 300;
 
     globeKeyManager.on("globe-down", async () => {
+      globeKeyWasUsedAsModifier = false;
       const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
       const mainWindowLive = isLiveWindow(windowManager.mainWindow);
       debugLogger?.debug("[Globe] globe-down received", {
@@ -1122,21 +1101,84 @@ async function startApp() {
             globeKeyDownTime = pressTime;
             globeKeyIsRecording = false;
             setTimeout(async () => {
-              if (globeKeyDownTime === pressTime && !globeKeyIsRecording) {
+              if (
+                globeKeyDownTime === pressTime &&
+                !globeKeyIsRecording &&
+                !globeKeyWasUsedAsModifier
+              ) {
                 globeKeyIsRecording = true;
                 debugLogger?.debug("[Globe] Starting dictation (push hold)");
                 windowManager.sendStartDictation();
               }
             }, MIN_HOLD_DURATION_MS);
-          } else {
-            windowManager.sendToggleDictation();
           }
         } else {
           debugLogger?.debug("[Globe] Ignored — mainWindow not live");
         }
       }
 
-      // Check agent and voice agent slots for Globe/Fn key
+    });
+
+    globeKeyManager.on("globe-used-as-modifier", () => {
+      globeKeyWasUsedAsModifier = true;
+      globeKeyDownTime = 0;
+      if (globeKeyIsRecording) {
+        globeKeyIsRecording = false;
+        globeLastStopTime = Date.now();
+        debugLogger?.debug("[Globe] Stopping dictation (Fn used as modifier)");
+        windowManager.sendStopDictation();
+      } else if (
+        hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey) &&
+        isLiveWindow(windowManager.mainWindow) &&
+        windowManager.getActivationMode() === "push"
+      ) {
+        windowManager.hideDictationPanel();
+      }
+    });
+
+    globeKeyManager.on("globe-up", async (event = {}) => {
+      const usedAsModifier = globeKeyWasUsedAsModifier || !!event.usedAsModifier;
+      const dictationUsesGlobe = hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey);
+      const mainWindowLive = isLiveWindow(windowManager.mainWindow);
+      debugLogger?.debug("[Globe] globe-up received", {
+        wasRecording: globeKeyIsRecording,
+        usedAsModifier,
+      });
+
+      // Forward to control panel for hotkey capture (Fn key released)
+      if (isLiveWindow(windowManager.controlPanelWindow)) {
+        windowManager.controlPanelWindow.webContents.send("globe-key-released");
+      }
+
+      // Fn release also stops compound push-to-talk for Fn+F-key hotkeys
+      windowManager.handleMacPushModifierUp("fn");
+
+      if (usedAsModifier) {
+        globeKeyWasUsedAsModifier = false;
+        globeKeyDownTime = 0;
+        debugLogger?.debug("[Globe] Ignored — Fn was used with another key");
+        return;
+      }
+
+      if (dictationUsesGlobe) {
+        const activationMode = windowManager.getActivationMode();
+        if (activationMode === "push") {
+          globeKeyDownTime = 0;
+          globeLastStopTime = Date.now();
+          if (globeKeyIsRecording) {
+            globeKeyIsRecording = false;
+            debugLogger?.debug("[Globe] Stopping dictation (push release)");
+            windowManager.sendStopDictation();
+          }
+        } else if (mainWindowLive) {
+          // Toggle on key-up so Fn+Delete/Arrow/etc. remains a normal macOS chord.
+          if (textEditMonitor) textEditMonitor.captureTargetPid();
+          windowManager.sendToggleDictation();
+        } else {
+          debugLogger?.debug("[Globe] Ignored — mainWindow not live");
+        }
+      }
+
       const agentUsesGlobe = hotkeyManager.getSlotHotkeys("agent").some(isGlobeLikeHotkey);
       const voiceAgentUsesGlobe = hotkeyManager
         .getSlotHotkeys("voiceAgent")
@@ -1154,33 +1196,10 @@ async function startApp() {
         windowManager.sendToggleTranslation();
       }
       if (!agentUsesGlobe && !voiceAgentUsesGlobe && !translationUsesGlobe && !dictationUsesGlobe) {
-        debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE", { currentHotkey });
-      }
-    });
-
-    globeKeyManager.on("globe-up", async () => {
-      debugLogger?.debug("[Globe] globe-up received", { wasRecording: globeKeyIsRecording });
-
-      // Forward to control panel for hotkey capture (Fn key released)
-      if (isLiveWindow(windowManager.controlPanelWindow)) {
-        windowManager.controlPanelWindow.webContents.send("globe-key-released");
+        debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE");
       }
 
-      if (hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey)) {
-        const activationMode = windowManager.getActivationMode();
-        if (activationMode === "push") {
-          globeKeyDownTime = 0;
-          globeLastStopTime = Date.now();
-          if (globeKeyIsRecording) {
-            globeKeyIsRecording = false;
-            debugLogger?.debug("[Globe] Stopping dictation (push release)");
-            windowManager.sendStopDictation();
-          }
-        }
-      }
-
-      // Fn release also stops compound push-to-talk for Fn+F-key hotkeys
-      windowManager.handleMacPushModifierUp("fn");
+      globeKeyWasUsedAsModifier = false;
     });
 
     // Another key was pressed while Fn was held — user is using Fn as a
@@ -1223,9 +1242,6 @@ async function startApp() {
       }
       if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
         windowManager.sendToggleVoiceAgent();
-      }
-      if (hotkeyManager.slotHasHotkey("translation", modifier)) {
-        windowManager.sendToggleTranslation();
       }
 
       if (!hotkeyManager.slotHasHotkey("dictation", modifier)) return;
@@ -1285,7 +1301,7 @@ async function startApp() {
 
     const syncSuppressedMouseButtons = () => {
       const buttons = [];
-      for (const slotName of ["dictation", "agent", "voiceAgent", "translation"]) {
+      for (const slotName of ["dictation", "agent", "voiceAgent"]) {
         for (const hotkey of hotkeyManager.getSlotHotkeys(slotName)) {
           if (isMouseButtonHotkey(hotkey)) buttons.push(hotkey);
         }
@@ -1308,9 +1324,6 @@ async function startApp() {
       }
       if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
         windowManager.sendToggleVoiceAgent();
-      }
-      if (hotkeyManager.slotHasHotkey("translation", button)) {
-        windowManager.sendToggleTranslation();
       }
 
       if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
@@ -1437,8 +1450,6 @@ async function startApp() {
       }
       if (hotkeyManager.slotHasHotkey("voiceAgent", key)) {
         windowManager.sendToggleVoiceAgent();
-      } else if (hotkeyManager.slotHasHotkey("translation", key)) {
-        windowManager.sendToggleTranslation();
       } else if (hotkeyManager.slotHasHotkey("agent", key)) {
         if (!hotkeyManager.isInListeningMode()) windowManager.toggleAgentOverlay();
       } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
