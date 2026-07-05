@@ -33,7 +33,7 @@ class LocalReasoningService {
     try {
       const inferenceConfig = {
         maxTokens: config.maxTokens || this.calculateMaxTokens(text.length),
-        temperature: config.temperature || 0.7,
+        temperature: config.temperature ?? 0.3,
         topK: config.topK || 40,
         topP: config.topP || 0.9,
         repeatPenalty: config.repeatPenalty || 1.1,

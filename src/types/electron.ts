@@ -1163,6 +1163,7 @@ declare global {
           customDictionary?: string[];
           customPrompt?: string;
           systemPrompt?: string;
+          promptMode?: "cleanup" | "agent";
           language?: string;
           locale?: string;
         }

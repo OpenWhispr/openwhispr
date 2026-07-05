@@ -18,6 +18,7 @@ export const openwhisprProvider: InferenceProvider = {
         customDictionary: ctx.getCustomDictionary(),
         customPrompt,
         systemPrompt: config.systemPrompt,
+        promptMode: config.promptMode,
         language: ctx.getPreferredLanguage(),
         locale: ctx.getUiLanguage(),
       });

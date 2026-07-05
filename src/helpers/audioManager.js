@@ -47,6 +47,33 @@ function dictationAgentReachable(settings) {
   });
 }
 
+function buildCleanupReasoningConfig(settings, agentName) {
+  return {
+    disableThinking: settings.cleanupDisableThinking,
+    temperature: 0.3,
+    promptMode: "cleanup",
+    systemPrompt: resolvePrompt("cleanup", {
+      agentName,
+      language: settings.preferredLanguage,
+      customDictionary: getDictionaryHintWords(settings),
+      uiLanguage: settings.uiLanguage,
+    }),
+  };
+}
+
+function buildCloudCleanupReasonOpts(settings, agentName, extra = {}) {
+  const config = buildCleanupReasoningConfig(settings, agentName);
+  return {
+    agentName,
+    customDictionary: getDictionaryHintWords(settings),
+    systemPrompt: config.systemPrompt,
+    promptMode: "cleanup",
+    language: settings.preferredLanguage || "auto",
+    locale: settings.uiLanguage || "en",
+    ...extra,
+  };
+}
+
 function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
   const cleanupReachable =
     !!settings.useCleanupModel && (!!settings.cleanupModel?.trim() || isCloudCleanupMode());
@@ -84,6 +111,7 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
             ? settings.dictationAgentCustomApiKey || undefined
             : undefined,
         disableThinking: settings.dictationAgentDisableThinking,
+        promptMode: "agent",
         systemPrompt: resolvePrompt("dictationAgent", {
           agentName,
           language: settings.preferredLanguage,
@@ -96,7 +124,7 @@ function resolveReasoningRoute(text, settings, agentName, voiceAgentRequested) {
   if (kind === "cleanup") {
     return {
       kind: "cleanup",
-      config: { disableThinking: settings.cleanupDisableThinking },
+      config: buildCleanupReasoningConfig(settings, agentName),
     };
   }
   return { kind: "skip" };
@@ -1574,21 +1602,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           if (reasoned) processedText = reasoned;
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const reasonResult = await withSessionRefresh(async () => {
-            const res = await window.electronAPI.cloudReason(processedText, {
-              agentName,
-              customDictionary: getDictionaryHintWords(settings),
-              customPrompt: this.getCustomPrompt(),
-              language: settings.preferredLanguage || "auto",
-              locale: settings.uiLanguage || "en",
-              sttProvider: result.sttProvider,
-              sttModel: result.sttModel,
-              sttProcessingMs: result.sttProcessingMs,
-              sttWordCount: result.sttWordCount,
-              sttLanguage: result.sttLanguage,
-              audioDurationMs: result.audioDurationMs,
-              audioSizeBytes,
-              audioFormat,
-            });
+            const res = await window.electronAPI.cloudReason(
+              processedText,
+              buildCloudCleanupReasonOpts(settings, agentName, {
+                sttProvider: result.sttProvider,
+                sttModel: result.sttModel,
+                sttProcessingMs: result.sttProcessingMs,
+                sttWordCount: result.sttWordCount,
+                sttLanguage: result.sttLanguage,
+                audioDurationMs: result.audioDurationMs,
+                audioSizeBytes,
+                audioFormat,
+              })
+            );
             if (!res.success) {
               const err = new Error(res.error || "Cloud reasoning failed");
               err.code = res.code;
@@ -2995,21 +3021,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         } else if (route.kind === "cleanup" && cleanupCloudMode === "openwhispr") {
           const reasonResult = await withSessionRefresh(async () => {
-            const res = await window.electronAPI.cloudReason(finalText, {
-              agentName,
-              customDictionary: getDictionaryHintWords(stSettings),
-              customPrompt: this.getCustomPrompt(),
-              language: stSettings.preferredLanguage || "auto",
-              locale: stSettings.uiLanguage || "en",
-              sttProvider: this.getStreamingProviderName(),
-              sttModel: streamingSttModel,
-              sttProcessingMs: streamingSttProcessingMs,
-              sttWordCount: streamingSttWordCount,
-              sttLanguage: streamingSttLanguage,
-              audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
-              audioSizeBytes: streamingAudioBytesSent || undefined,
-              audioFormat: "linear16",
-            });
+            const res = await window.electronAPI.cloudReason(
+              finalText,
+              buildCloudCleanupReasonOpts(stSettings, agentName, {
+                sttProvider: this.getStreamingProviderName(),
+                sttModel: streamingSttModel,
+                sttProcessingMs: streamingSttProcessingMs,
+                sttWordCount: streamingSttWordCount,
+                sttLanguage: streamingSttLanguage,
+                audioDurationMs: durationSeconds ? Math.round(durationSeconds * 1000) : undefined,
+                audioSizeBytes: streamingAudioBytesSent || undefined,
+                audioFormat: "linear16",
+              })
+            );
             if (!res.success) {
               const err = new Error(res.error || "Cloud reasoning failed");
               err.code = res.code;

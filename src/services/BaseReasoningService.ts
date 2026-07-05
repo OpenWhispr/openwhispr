@@ -7,6 +7,7 @@ export interface ReasoningConfig {
   temperature?: number;
   contextSize?: number;
   systemPrompt?: string;
+  promptMode?: "cleanup" | "agent";
   lanUrl?: string;
   baseUrl?: string;
   customApiKey?: string;
