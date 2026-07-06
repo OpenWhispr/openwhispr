@@ -22,6 +22,7 @@ export interface TranscriptionSettings {
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
+  remoteTranscriptionModel: string;
   customDictionary: string[];
   snippets: Snippet[];
   assemblyAiStreaming: boolean;
@@ -225,6 +226,7 @@ function useSettingsInternal() {
     transcriptionMode: store.transcriptionMode,
     remoteTranscriptionType: store.remoteTranscriptionType,
     remoteTranscriptionUrl: store.remoteTranscriptionUrl,
+    remoteTranscriptionModel: store.remoteTranscriptionModel,
     cleanupMode: store.cleanupMode,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
     customDictionary: store.customDictionary,
@@ -269,6 +271,7 @@ function useSettingsInternal() {
     setTranscriptionMode: store.setTranscriptionMode,
     setRemoteTranscriptionType: store.setRemoteTranscriptionType,
     setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,
+    setRemoteTranscriptionModel: store.setRemoteTranscriptionModel,
     setCleanupMode: store.setCleanupMode,
     setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,

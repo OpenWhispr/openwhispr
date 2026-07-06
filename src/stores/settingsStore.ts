@@ -437,6 +437,7 @@ export interface SettingsState
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
+  remoteTranscriptionModel: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
 
@@ -497,6 +498,7 @@ export interface SettingsState
   setTranscriptionMode: (mode: InferenceMode) => void;
   setRemoteTranscriptionType: (type: SelfHostedType) => void;
   setRemoteTranscriptionUrl: (url: string) => void;
+  setRemoteTranscriptionModel: (model: string) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
 
@@ -1002,6 +1004,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
   })(),
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
+  remoteTranscriptionModel: readString("remoteTranscriptionModel", ""),
   cleanupMode: (() => {
     const v = readString("cleanupMode", "openwhispr");
     if (
@@ -1079,6 +1082,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     type: SelfHostedType
   ) => void,
   setRemoteTranscriptionUrl: createStringSetter("remoteTranscriptionUrl"),
+  setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
 

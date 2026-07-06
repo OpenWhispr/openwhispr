@@ -213,6 +213,8 @@ interface TranscriptionSectionProps {
   setTranscriptionMode: (mode: InferenceMode) => void;
   remoteTranscriptionUrl: string;
   setRemoteTranscriptionUrl: (url: string) => void;
+  remoteTranscriptionModel: string;
+  setRemoteTranscriptionModel: (model: string) => void;
   showTranscriptionPreview: boolean;
   setShowTranscriptionPreview: (value: boolean) => void;
   toast: (opts: {
@@ -250,6 +252,8 @@ function TranscriptionSection({
   setTranscriptionMode,
   remoteTranscriptionUrl,
   setRemoteTranscriptionUrl,
+  remoteTranscriptionModel,
+  setRemoteTranscriptionModel,
   showTranscriptionPreview,
   setShowTranscriptionPreview,
   toast,
@@ -387,6 +391,8 @@ function TranscriptionSection({
           service="transcription"
           url={remoteTranscriptionUrl}
           onUrlChange={setRemoteTranscriptionUrl}
+          model={remoteTranscriptionModel}
+          onModelChange={setRemoteTranscriptionModel}
         />
       )}
 
@@ -735,6 +741,8 @@ export default function SettingsPage({
     setTranscriptionMode,
     remoteTranscriptionUrl,
     setRemoteTranscriptionUrl,
+    remoteTranscriptionModel,
+    setRemoteTranscriptionModel,
     notificationsEnabled,
     setNotificationsEnabled,
     notifyMeetingDetection,
@@ -3963,6 +3971,8 @@ EOF`,
                   setTranscriptionMode={setTranscriptionMode}
                   remoteTranscriptionUrl={remoteTranscriptionUrl}
                   setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                  remoteTranscriptionModel={remoteTranscriptionModel}
+                  setRemoteTranscriptionModel={setRemoteTranscriptionModel}
                   showTranscriptionPreview={showTranscriptionPreview}
                   setShowTranscriptionPreview={setShowTranscriptionPreview}
                   toast={toast}
