@@ -44,7 +44,9 @@ export const useAudioRecording = (toast, options = {}) => {
         ? await audioManagerRef.current.startStreamingRecording()
         : await audioManagerRef.current.startRecording();
 
-      if (didStart) {
+      // A quick tap can end the recording inside the start call itself (deferred
+      // streaming stop) — don't pause media for a recording that already ended. See #1060.
+      if (didStart && audioManagerRef.current.getState().isRecording) {
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.pauseMediaPlayback?.();
         }
