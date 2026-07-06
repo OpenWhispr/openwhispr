@@ -1176,7 +1176,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最熱門",
-          "features": ["無限會議錄製", "代理模式", "與您的資料對話", "優先支援"],
+          "features": [
+            "無限會議錄製",
+            "代理模式",
+            "與您的資料對話",
+            "優先支援"
+          ],
           "cta": "開始使用",
           "switchToAnnual": "切換為年付"
         },
@@ -1832,6 +1837,29 @@
         "keyCreatedTitle": "Clave API creada",
         "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo."
       }
+    },
+    "seoRadar": {
+      "title": "SEO YouTube Radar",
+      "description": "Find newly popular SEO videos, transcribe them, and summarize them with local AI.",
+      "enabled": "Run daily",
+      "enabledDescription": "Automatically checks YouTube once per day using cached video IDs.",
+      "apiKey": "YouTube API key",
+      "apiKeySaved": "YouTube API key saved",
+      "apiKeyPlaceholder": "Paste a YouTube Data API key",
+      "save": "Save",
+      "keywords": "Search topics",
+      "keywordsPlaceholder": "seo, technical seo, google algorithm update",
+      "maxVideos": "Max videos per run",
+      "lookbackHours": "Lookback hours",
+      "runHour": "Run hour",
+      "runNow": "Run now",
+      "running": "Running",
+      "lastRun": "Last run",
+      "noRunYet": "No runs yet",
+      "saved": "SEO Radar settings saved",
+      "failed": "SEO Radar failed",
+      "alreadyRunning": "SEO Radar is already running",
+      "lastRunSummary": "{{processed}} processed, {{rejected}} rejected, {{skipped}} skipped"
     }
   },
   "models": {

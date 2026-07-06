@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
+import { Textarea } from "./ui/textarea";
 import {
   RefreshCw,
   Download,
@@ -34,6 +35,7 @@ import {
   FileAudio,
   Wand2,
   Upload,
+  Search,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
@@ -87,7 +89,13 @@ import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
 import { useTheme } from "../hooks/useTheme";
-import type { GpuDevice, LocalTranscriptionProvider, InferenceMode } from "../types/electron";
+import type {
+  GpuDevice,
+  LocalTranscriptionProvider,
+  InferenceMode,
+  SeoRadarConfig,
+  SeoRadarRunResult,
+} from "../types/electron";
 import logger from "../utils/logger";
 import { SettingsRow, InferenceModeSelector } from "./ui/SettingsSection";
 import type { InferenceModeOption } from "./ui/SettingsSection";
@@ -424,6 +432,289 @@ function NoteFormattingSettings() {
         </SettingsPanelRow>
       </SettingsPanel>
       <InferenceConfigEditor scope="noteFormatting" />
+    </div>
+  );
+}
+
+const FALLBACK_SEO_RADAR_CONFIG: SeoRadarConfig = {
+  enabled: false,
+  keywords: [
+    "seo",
+    "technical seo",
+    "google algorithm update",
+    "search console",
+    "local seo",
+    "ai seo",
+  ],
+  lookbackHours: 72,
+  maxSearchResultsPerQuery: 10,
+  maxVideosToProcess: 5,
+  minDurationSeconds: 180,
+  excludeShorts: true,
+  regionCode: "US",
+  language: "en",
+  runHourLocal: 7,
+  localModelId: "",
+};
+
+function formatSeoRadarRunResult(t: ReturnType<typeof useTranslation>["t"], result: SeoRadarRunResult) {
+  if (result.skipReason === "already_running") return t("settingsPage.seoRadar.alreadyRunning");
+  return t("settingsPage.seoRadar.lastRunSummary", {
+    processed: result.processed,
+    rejected: result.rejected,
+    skipped: result.skipped,
+  });
+}
+
+function SeoRadarSettings() {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const [config, setConfig] = useState<SeoRadarConfig>(FALLBACK_SEO_RADAR_CONFIG);
+  const [keywordsText, setKeywordsText] = useState(FALLBACK_SEO_RADAR_CONFIG.keywords.join(", "));
+  const [apiKey, setApiKey] = useState("");
+  const [hasKey, setHasKey] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [lastRunLabel, setLastRunLabel] = useState("");
+
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      window.electronAPI?.seoRadarGetConfig?.() ?? Promise.resolve(FALLBACK_SEO_RADAR_CONFIG),
+      window.electronAPI?.seoRadarHasYouTubeKey?.() ??
+        Promise.resolve({ success: true, hasKey: false }),
+    ])
+      .then(([loadedConfig, keyState]) => {
+        if (!mounted) return;
+        const nextConfig = loadedConfig || FALLBACK_SEO_RADAR_CONFIG;
+        setConfig(nextConfig);
+        setKeywordsText(nextConfig.keywords.join(", "));
+        setHasKey(Boolean(keyState?.hasKey));
+      })
+      .finally(() => {
+        if (mounted) setIsLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const patchConfig = (patch: Partial<SeoRadarConfig>) => {
+    setConfig((current) => ({ ...current, ...patch }));
+  };
+
+  const buildConfigFromInputs = () => ({
+    ...config,
+    keywords: keywordsText
+      .split(/[,\n]/)
+      .map((value) => value.trim())
+      .filter(Boolean),
+  });
+
+  const persistConfig = useCallback(
+    async (nextConfig: SeoRadarConfig, successTitle = t("settingsPage.seoRadar.saved")) => {
+      const response = await window.electronAPI?.seoRadarSetConfig?.(nextConfig);
+      if (!response?.success || !response.config) {
+        throw new Error(response?.error || t("settingsPage.seoRadar.failed"));
+      }
+      setConfig(response.config);
+      setKeywordsText(response.config.keywords.join(", "));
+      toast({ title: successTitle, variant: "success" });
+      return response.config;
+    },
+    [t, toast]
+  );
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      await persistConfig(buildConfigFromInputs());
+      if (apiKey.trim()) {
+        const keyResult = await window.electronAPI?.seoRadarSaveYouTubeKey?.(apiKey.trim());
+        if (!keyResult?.success) {
+          throw new Error(keyResult?.error || t("settingsPage.seoRadar.failed"));
+        }
+        setApiKey("");
+        setHasKey(true);
+        toast({ title: t("settingsPage.seoRadar.apiKeySaved"), variant: "success" });
+      }
+    } catch (error) {
+      toast({
+        title: t("settingsPage.seoRadar.failed"),
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleEnabledChange = async (enabled: boolean) => {
+    const nextConfig = { ...config, enabled };
+    patchConfig({ enabled });
+    try {
+      await persistConfig(nextConfig, enabled ? t("settingsPage.seoRadar.enabled") : t("settingsPage.seoRadar.saved"));
+    } catch (error) {
+      patchConfig({ enabled: !enabled });
+      toast({
+        title: t("settingsPage.seoRadar.failed"),
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRunNow = async () => {
+    setIsRunning(true);
+    try {
+      const configResult = await window.electronAPI?.seoRadarSetConfig?.(buildConfigFromInputs());
+      if (!configResult?.success || !configResult.config) {
+        throw new Error(configResult?.error || t("settingsPage.seoRadar.failed"));
+      }
+      setConfig(configResult.config);
+      setKeywordsText(configResult.config.keywords.join(", "));
+      if (apiKey.trim()) {
+        const keyResult = await window.electronAPI?.seoRadarSaveYouTubeKey?.(apiKey.trim());
+        if (!keyResult?.success) {
+          throw new Error(keyResult?.error || t("settingsPage.seoRadar.failed"));
+        }
+        setApiKey("");
+        setHasKey(true);
+      }
+      const result = await window.electronAPI?.seoRadarRunNow?.();
+      if (!result?.success || !result.result) {
+        throw new Error(result?.error || t("settingsPage.seoRadar.failed"));
+      }
+      const label = formatSeoRadarRunResult(t, result.result);
+      setLastRunLabel(label);
+      toast({ title: label, variant: "success" });
+    } catch (error) {
+      toast({
+        title: t("settingsPage.seoRadar.failed"),
+        description: error instanceof Error ? error.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setIsRunning(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-border/40 pt-6">
+      <SectionHeader
+        title={t("settingsPage.seoRadar.title")}
+        description={t("settingsPage.seoRadar.description")}
+      />
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.seoRadar.enabled")}
+            description={t("settingsPage.seoRadar.enabledDescription")}
+          >
+            <Toggle checked={config.enabled} disabled={isLoading} onChange={handleEnabledChange} />
+          </SettingsRow>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">
+                {t("settingsPage.seoRadar.apiKey")}
+              </label>
+              <Input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={
+                  hasKey
+                    ? t("settingsPage.seoRadar.apiKeySaved")
+                    : t("settingsPage.seoRadar.apiKeyPlaceholder")
+                }
+                autoComplete="off"
+              />
+            </div>
+            <Button size="sm" variant="outline" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Key className="h-3.5 w-3.5" />}
+              {t("settingsPage.seoRadar.save")}
+            </Button>
+          </div>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">
+              {t("settingsPage.seoRadar.keywords")}
+            </label>
+            <Textarea
+              value={keywordsText}
+              onChange={(e) => setKeywordsText(e.target.value)}
+              placeholder={t("settingsPage.seoRadar.keywordsPlaceholder")}
+              className="min-h-[84px] rounded-md border-border bg-background text-xs"
+            />
+          </div>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">
+                {t("settingsPage.seoRadar.maxVideos")}
+              </label>
+              <Input
+                type="number"
+                min="1"
+                max="10"
+                value={config.maxVideosToProcess}
+                onChange={(e) => patchConfig({ maxVideosToProcess: Number(e.target.value) })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">
+                {t("settingsPage.seoRadar.lookbackHours")}
+              </label>
+              <Input
+                type="number"
+                min="1"
+                max="168"
+                value={config.lookbackHours}
+                onChange={(e) => patchConfig({ lookbackHours: Number(e.target.value) })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-foreground">
+                {t("settingsPage.seoRadar.runHour")}
+              </label>
+              <Input
+                type="number"
+                min="0"
+                max="23"
+                value={config.runHourLocal}
+                onChange={(e) => patchConfig({ runHourLocal: Number(e.target.value) })}
+              />
+            </div>
+          </div>
+        </SettingsPanelRow>
+        <SettingsPanelRow>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-foreground">
+                {t("settingsPage.seoRadar.lastRun")}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {lastRunLabel || t("settingsPage.seoRadar.noRunYet")}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                {t("settingsPage.seoRadar.save")}
+              </Button>
+              <Button size="sm" onClick={handleRunNow} disabled={isRunning || isLoading}>
+                {isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
+                {isRunning ? t("settingsPage.seoRadar.running") : t("settingsPage.seoRadar.runNow")}
+              </Button>
+            </div>
+          </div>
+        </SettingsPanelRow>
+      </SettingsPanel>
     </div>
   );
 }
@@ -3975,6 +4266,7 @@ EOF`,
             renderUpload={() => (
               <div className="space-y-6">
                 <UploadTranscriptionPanel />
+                <SeoRadarSettings />
               </div>
             )}
           />
