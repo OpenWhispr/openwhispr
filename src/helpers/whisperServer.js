@@ -176,6 +176,7 @@ class WhisperServerManager extends EventEmitter {
     this.useCuda = false;
     this.vadSignature = "vad:off";
     this.threadSignature = "threads:default";
+    this.lastStartOptions = {};
   }
 
   getFFmpegPath() {
@@ -371,6 +372,10 @@ class WhisperServerManager extends EventEmitter {
 
   async start(modelPath, options = {}) {
     if (this.startupPromise) return this.startupPromise;
+
+    // Remember the options so a wake re-warm can reload with the same VAD/thread
+    // signature and survive start()'s no-op guard on the next dictation. See #766.
+    this.lastStartOptions = { ...options };
 
     const threadResolution = resolveWhisperThreads(options);
     const nextThreadSignature = getThreadSignature(threadResolution);

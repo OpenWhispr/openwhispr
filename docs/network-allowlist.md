@@ -54,13 +54,14 @@ Contacted only if the user connects Google Calendar in settings.
 Required only when a user configures their own API key for the corresponding
 provider. Skip any provider not in use.
 
-| Host                                | Protocol | Port | Used when                                               |
-| ----------------------------------- | -------- | ---- | ------------------------------------------------------- |
-| `api.openai.com`                    | HTTPS    | 443  | OpenAI API key configured (transcription or reasoning). |
-| `api.anthropic.com`                 | HTTPS    | 443  | Anthropic API key configured.                           |
-| `generativelanguage.googleapis.com` | HTTPS    | 443  | Gemini API key configured.                              |
-| `api.groq.com`                      | HTTPS    | 443  | Groq API key configured.                                |
-| `api.mistral.ai`                    | HTTPS    | 443  | Mistral API key configured.                             |
+| Host                                | Protocol   | Port | Used when                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------- | ---------- | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `api.openai.com`                    | HTTPS      | 443  | OpenAI API key configured (transcription or reasoning).                                                                                                                                                                                                                                                                                                  |
+| `api.anthropic.com`                 | HTTPS      | 443  | Anthropic API key configured.                                                                                                                                                                                                                                                                                                                            |
+| `generativelanguage.googleapis.com` | HTTPS      | 443  | Gemini API key configured.                                                                                                                                                                                                                                                                                                                               |
+| `api.groq.com`                      | HTTPS      | 443  | Groq API key configured.                                                                                                                                                                                                                                                                                                                                 |
+| `atc.tinfoil.sh`, `*.tinfoil.sh`    | WSS, HTTPS | 443  | Tinfoil API key configured. `atc.tinfoil.sh` serves the enclave attestation bundle (verified locally against an embedded sigstore root). Inference and realtime transcription connect to an enclave host assigned dynamically at runtime (e.g. `inference.tinfoil.sh`, `router.infN.tinfoil.sh`), so allowlist `*.tinfoil.sh` rather than pinning hosts. |
+| `api.mistral.ai`                    | HTTPS      | 443  | Mistral API key configured.                                                                                                                                                                                                                                                                                                                              |
 
 ## Notes
 

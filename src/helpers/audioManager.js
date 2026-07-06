@@ -3148,7 +3148,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "streaming"
       );
     } else {
-      // Silence: still fire callback so media playback resumes.
+      // Silence: still fire callback to dismiss the preview and show the no-audio toast.
       this.onTranscriptionComplete?.({ success: true, text: "" });
     }
 
