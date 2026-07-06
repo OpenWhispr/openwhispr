@@ -2127,7 +2127,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
     const deployment = (deploymentName || "").trim();
 
-    const isSelfHosted = transcriptionMode === "self-hosted" && remoteUrl.length > 0;
+    const isSelfHosted = isSelfHostedTranscription(s);
     const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
 
     if (
