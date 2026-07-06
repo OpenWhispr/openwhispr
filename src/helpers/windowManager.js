@@ -529,11 +529,12 @@ class WindowManager {
   reconcileNativeKeyListeners() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     if (this.hotkeyManager.isInListeningMode()) return;
-    // GNOME/KDE/Hyprland deliver hotkeys via D-Bus native shortcuts; the low-level
-    // listener would be redundant there and could double-fire, so watch nothing.
-    const keys = this.hotkeyManager.isUsingNativeShortcut()
-      ? []
-      : this.hotkeyManager.getNativeListenerKeys(this.getActivationMode());
+    // GNOME/KDE/Hyprland deliver tap hotkeys via D-Bus native shortcuts, but their
+    // single-trigger events cannot drive push-to-talk, which needs the listener.
+    const keys = this.hotkeyManager.getNativeListenerKeys(
+      this.getActivationMode(),
+      this.hotkeyManager.isUsingNativeShortcut()
+    );
     if (process.platform === "win32" && this.windowsKeyManager) {
       this.windowsKeyManager.setKeys(keys);
     } else if (process.platform === "linux" && this.linuxKeyManager) {
