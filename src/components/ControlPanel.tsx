@@ -375,7 +375,25 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [toast, t]);
 
   useEffect(() => {
-    syncService.syncAll().catch(console.error);
+    // Keep syncing during a long session, not just once at launch.
+    syncService.requestSyncAll("mount");
+
+    const onFocus = () => syncService.requestSyncAll("focus");
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        syncService.requestSyncAll("focus");
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    const interval = setInterval(() => syncService.requestSyncAll("interval"), 5 * 60 * 1000);
+
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+      clearInterval(interval);
+    };
   }, []);
 
   useEffect(() => {

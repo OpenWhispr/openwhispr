@@ -21,6 +21,8 @@ const BATCH_SIZE = 50;
 const TRANSCRIPTION_BATCH_SIZE = 100;
 const DICTIONARY_BATCH_SIZE = 200;
 const SNIPPET_BATCH_SIZE = 200;
+// Skip a redundant syncAll() if focus + interval fire close together.
+const AUTO_SYNC_THROTTLE_MS = 20000;
 
 // SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
 // the cloud sends ISO 8601 "YYYY-MM-DDTHH:MM:SS.sssZ". Normalize both to
@@ -38,6 +40,7 @@ class SyncService {
   private dictionaryDirty = false;
   private snippetsDirty = false;
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private lastSyncAllAt = 0;
 
   canSync(): boolean {
     return (
@@ -71,6 +74,15 @@ class SyncService {
     } finally {
       this.syncing = false;
     }
+  }
+
+  requestSyncAll(reason: "mount" | "focus" | "interval" | "manual"): void {
+    if (!this.canSync()) return;
+    if (reason !== "manual" && Date.now() - this.lastSyncAllAt < AUTO_SYNC_THROTTLE_MS) {
+      return;
+    }
+    this.lastSyncAllAt = Date.now();
+    void this.syncAll().catch(console.error);
   }
 
   async syncDictionaryNow(): Promise<void> {
