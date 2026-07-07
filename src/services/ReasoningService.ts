@@ -17,6 +17,7 @@ import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders
 import { getConfiguredOpenAIBase } from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
+import { resolveReasoningRequest } from "./reasoningRouting";
 
 export type AgentStreamChunk =
   | { type: "content"; text: string }
@@ -297,6 +298,25 @@ class ReasoningService extends BaseReasoningService {
     const trimmedModel = model?.trim?.() || "";
     const isLanCleanup = !!config.lanUrl || this.isLanCleanupMode();
     const providerId = isLanCleanup ? "lan" : config.provider || getModelProvider(trimmedModel);
+
+    if (providerId === "openwhispr") {
+      const route = resolveReasoningRequest({
+        isSignedIn: Boolean(getSettings().isSignedIn),
+        config: {
+          scope: "dictationCleanup",
+          mode: "openwhispr",
+          provider: "openwhispr",
+          model: "",
+          cloudMode: "openwhispr",
+          disableThinking: config.disableThinking,
+        },
+      });
+      if (!route.usable) {
+        throw new Error(
+          "OpenWhispr Cloud reasoning requires a signed-in account. Switch to Local or Providers."
+        );
+      }
+    }
 
     if (!trimmedModel && providerId !== "openwhispr" && providerId !== "lan") {
       throw new Error("No reasoning model selected");

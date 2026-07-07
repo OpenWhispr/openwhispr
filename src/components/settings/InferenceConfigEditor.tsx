@@ -62,12 +62,10 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
   const prefix = MODE_LABEL_PREFIX[scope];
   const modes: InferenceModeOption[] = [
     {
-      id: "openwhispr",
-      label: t(`${prefix}.openwhispr`),
-      description: t(`${prefix}.openwhisprDesc`),
-      icon: <Cloud className="w-4 h-4" />,
-      disabled: !isSignedIn,
-      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+      id: "local",
+      label: t(`${prefix}.local`),
+      description: t(`${prefix}.localDesc`),
+      icon: <Cpu className="w-4 h-4" />,
     },
     {
       id: "providers",
@@ -76,16 +74,18 @@ export default function InferenceConfigEditor({ scope, onModeChange }: Inference
       icon: <Key className="w-4 h-4" />,
     },
     {
-      id: "local",
-      label: t(`${prefix}.local`),
-      description: t(`${prefix}.localDesc`),
-      icon: <Cpu className="w-4 h-4" />,
-    },
-    {
       id: "self-hosted",
       label: t(`${prefix}.selfHosted`),
       description: t(`${prefix}.selfHostedDesc`),
       icon: <Network className="w-4 h-4" />,
+    },
+    {
+      id: "openwhispr",
+      label: t(`${prefix}.openwhispr`),
+      description: t(`${prefix}.openwhisprDesc`),
+      icon: <Cloud className="w-4 h-4" />,
+      disabled: !isSignedIn,
+      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
     },
     {
       id: "enterprise",

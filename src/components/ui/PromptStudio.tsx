@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useShallow } from "zustand/react/shallow";
 import { Button } from "./button";
 import { Textarea } from "./textarea";
 import {
@@ -17,10 +18,14 @@ import { AlertDialog } from "./dialog";
 import { useDialogs } from "../../hooks/useDialogs";
 import { useAgentName } from "../../utils/agentName";
 import ReasoningService from "../../services/ReasoningService";
-import { getModelProvider } from "../../models/ModelRegistry";
 import logger from "../../utils/logger";
 import { getDefaultPromptText, type PromptKind } from "../../config/prompts";
-import { useSettingsStore, selectIsCloudCleanupMode } from "../../stores/settingsStore";
+import { resolveReasoningRequest } from "../../services/reasoningRouting";
+import {
+  useSettingsStore,
+  selectResolvedLLMConfig,
+} from "../../stores/settingsStore";
+import type { InferenceScope } from "../../config/inferenceScopes";
 
 interface PromptStudioProps {
   className?: string;
@@ -46,6 +51,13 @@ const PROVIDER_CONFIG: Record<string, ProviderConfig> = {
     baseStorageKey: "cleanupCloudBaseUrl",
   },
   local: { label: "Local" },
+  lan: { label: "Self-hosted" },
+};
+
+const PROMPT_KIND_SCOPE: Record<PromptKind, InferenceScope> = {
+  cleanup: "dictationCleanup",
+  dictationAgent: "dictationAgent",
+  chatAgent: "chatIntelligence",
 };
 
 export default function PromptStudio({ className = "", kind = "cleanup" }: PromptStudioProps) {
@@ -60,9 +72,11 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
   const { agentName } = useAgentName();
   const uiLanguage = useSettingsStore((s) => s.uiLanguage);
 
-  const isCloudMode = useSettingsStore(selectIsCloudCleanupMode);
   const useCleanupModel = useSettingsStore((s) => s.useCleanupModel);
-  const cleanupModel = useSettingsStore((s) => s.cleanupModel);
+  const isSignedIn = useSettingsStore((s) => s.isSignedIn);
+  const scope = PROMPT_KIND_SCOPE[kind];
+  const reasoningConfig = useSettingsStore(useShallow((s) => selectResolvedLLMConfig(s, scope)));
+  const reasoningRequest = resolveReasoningRequest({ isSignedIn, config: reasoningConfig });
 
   const customPrompt = useSettingsStore((s) => s.customPrompts[kind]);
   const setCustomPrompt = useSettingsStore((s) => s.setCustomPrompt);
@@ -99,22 +113,17 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
     setTestResult("");
 
     try {
-      const cleanupProvider = isCloudMode
-        ? "openwhispr"
-        : cleanupModel
-          ? getModelProvider(cleanupModel)
-          : "openai";
-
       logger.debug(
         "PromptStudio test starting",
-        {
-          useCleanupModel,
-          isCloudMode,
-          cleanupModel,
-          cleanupProvider,
-          testTextLength: testText.length,
-          agentName,
-        },
+          {
+            useCleanupModel,
+            scope,
+            reasoningRoute:
+              reasoningRequest.usable === true ? reasoningRequest.route : reasoningRequest.reason,
+            reasoningProvider: reasoningRequest.usable === true ? reasoningRequest.provider : undefined,
+            testTextLength: testText.length,
+            agentName,
+          },
         "prompt-studio"
       );
 
@@ -123,39 +132,26 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         return;
       }
 
-      if (!isCloudMode && !cleanupModel) {
-        setTestResult(t("promptStudio.test.noModelSelected"));
+      if (reasoningRequest.usable === false) {
+        const reason = reasoningRequest.reason;
+        setTestResult(
+          reason === "account_required_for_hosted"
+            ? t("common.freeAccountRequired")
+            : reason === "endpoint_required"
+              ? t("promptStudio.test.baseUrlMissing", {
+                  provider: t("promptStudio.test.customEndpoint"),
+                })
+              : t("promptStudio.test.noModelSelected")
+        );
         return;
       }
-
-      if (!isCloudMode) {
-        const providerConfig = PROVIDER_CONFIG[cleanupProvider] || {
-          label: cleanupProvider.charAt(0).toUpperCase() + cleanupProvider.slice(1),
-        };
-
-        if (providerConfig.baseStorageKey) {
-          const baseUrl = (useSettingsStore.getState().cleanupCloudBaseUrl || "").trim();
-          if (!baseUrl) {
-            setTestResult(
-              t("promptStudio.test.baseUrlMissing", {
-                provider:
-                  cleanupProvider === "custom"
-                    ? t("promptStudio.test.customEndpoint")
-                    : providerConfig.label,
-              })
-            );
-            return;
-          }
-        }
-      }
-
-      const modelToUse = isCloudMode ? cleanupModel || "auto" : cleanupModel;
 
       const previous = customPrompt;
       setCustomPrompt(kind, editedPrompt);
       try {
-        const result = await ReasoningService.processText(testText, modelToUse, agentName, {
-          disableThinking: useSettingsStore.getState().cleanupDisableThinking,
+        const result = await ReasoningService.processText(testText, reasoningRequest.modelId, agentName, {
+          ...reasoningRequest.config,
+          systemPrompt: editedPrompt.replace(/\{\{agentName\}\}/g, agentName),
         });
         setTestResult(result);
       } finally {
@@ -305,20 +301,21 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
         {/* ── Test Tab ── */}
         {activeTab === "test" &&
           (() => {
-            const cleanupProvider = isCloudMode
-              ? "openwhispr"
-              : cleanupModel
-                ? getModelProvider(cleanupModel)
-                : "openai";
-            const providerConfig = PROVIDER_CONFIG[cleanupProvider] || {
-              label: cleanupProvider.charAt(0).toUpperCase() + cleanupProvider.slice(1),
+            const providerId = reasoningRequest.usable
+              ? reasoningRequest.provider
+              : reasoningConfig.provider || reasoningConfig.mode;
+            const providerConfig = PROVIDER_CONFIG[providerId] || {
+              label: providerId.charAt(0).toUpperCase() + providerId.slice(1),
             };
 
-            const displayModel = isCloudMode
+            const displayModel =
+              reasoningRequest.usable && reasoningRequest.provider === "openwhispr"
               ? t("promptStudio.test.openwhisprCloud")
-              : cleanupModel || t("promptStudio.test.none");
+                : reasoningRequest.usable
+                  ? reasoningRequest.modelId || t("promptStudio.test.none")
+                  : t("promptStudio.test.none");
             const displayProvider =
-              cleanupProvider === "custom"
+              providerId === "custom"
                 ? t("promptStudio.test.customEndpoint")
                 : providerConfig.label;
 
@@ -395,7 +392,12 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
                 <div className="px-5 py-4">
                   <Button
                     onClick={testPrompt}
-                    disabled={!testText.trim() || isLoading || !useCleanupModel}
+                    disabled={
+                      !testText.trim() ||
+                      isLoading ||
+                      !useCleanupModel ||
+                      !reasoningRequest.usable
+                    }
                     size="sm"
                     className="w-full"
                   >
