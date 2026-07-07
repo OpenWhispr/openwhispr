@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixes
+
+- **No more Windows Firewall prompt for local Parakeet transcription.** The bundled sherpa-onnx server only serves OpenWhispr itself over `127.0.0.1`, but the upstream binary has no loopback-only bind option, so Windows raised an "allow public and private networks" prompt when it started. All-users installs now register a scoped inbound block rule for the server binary: the prompt is gone, the port is closed to the network, and transcription is unaffected because Windows never filters loopback traffic. The rule is removed on uninstall. (#1090)
+
 ## [1.7.4] - 2026-07-07
 
 A feature-and-hardening release on top of 1.7.3: Tinfoil confidential inference for both transcription and AI reasoning, Azure AI Foundry / Azure OpenAI speech-to-text, native Windows system-audio capture for meeting notes, enterprise SSO in onboarding, cross-device Snippets sync, ambient sync that now runs even in tray-only sessions, and a broad stack of fixes across cleanup routing, clipboard, media playback, hotkeys, local GPU transcription, macOS paste, updates, and Linux packaging — plus SOC 2 dependency remediation.
