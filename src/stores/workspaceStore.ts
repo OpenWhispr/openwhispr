@@ -2,6 +2,11 @@ import { create } from "zustand";
 import type { Workspace, WorkspaceMember, Team } from "../types/electron";
 import { WorkspacesService } from "../services/WorkspacesService";
 import { TeamsService } from "../services/TeamsService";
+import {
+  getLocalWorkspace,
+  isLocalWorkspaceId,
+  listLocalTeams,
+} from "../services/LocalWorkspaceService";
 import logger from "../utils/logger";
 
 interface WorkspaceState {
@@ -43,26 +48,45 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   setActiveWorkspaceId: (id) => {
     writeActiveWorkspaceId(id);
-    set({ activeWorkspaceId: id, members: [], teams: [] });
+    set({
+      activeWorkspaceId: id,
+      members: [],
+      teams: isLocalWorkspaceId(id) ? listLocalTeams() : [],
+    });
   },
 
   refresh: async () => {
     if (get().loading) return;
     set({ loading: true });
+    const localWorkspace = getLocalWorkspace();
+    const includeHosted =
+      typeof window !== "undefined" && localStorage.getItem("isSignedIn") === "true";
     try {
-      const workspaces = await WorkspacesService.list();
+      const hostedWorkspaces = includeHosted ? await WorkspacesService.list() : [];
+      const workspaces = [localWorkspace, ...hostedWorkspaces];
       const activeId = get().activeWorkspaceId;
       const stillValid = activeId && workspaces.some((w) => w.id === activeId);
+      const nextActiveId = stillValid ? activeId : localWorkspace.id;
       set({
         workspaces,
         loaded: true,
         loading: false,
-        activeWorkspaceId: stillValid ? activeId : null,
+        activeWorkspaceId: nextActiveId,
+        teams: isLocalWorkspaceId(nextActiveId) ? listLocalTeams() : get().teams,
+        members: isLocalWorkspaceId(nextActiveId) ? [] : get().members,
       });
-      if (!stillValid && activeId) writeActiveWorkspaceId(null);
+      if (!stillValid) writeActiveWorkspaceId(localWorkspace.id);
     } catch (error) {
       logger.error("Failed to load workspaces", { error: (error as Error).message }, "workspaces");
-      set({ loading: false, loaded: true });
+      set({
+        workspaces: [localWorkspace],
+        loaded: true,
+        loading: false,
+        activeWorkspaceId: localWorkspace.id,
+        members: [],
+        teams: listLocalTeams(),
+      });
+      writeActiveWorkspaceId(localWorkspace.id);
     }
   },
 
@@ -73,6 +97,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   refreshMembers: async (workspaceId) => {
+    if (isLocalWorkspaceId(workspaceId)) {
+      set({ members: [] });
+      return;
+    }
     try {
       const members = await WorkspacesService.listMembers(workspaceId);
       set({ members });
@@ -86,6 +114,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   refreshTeams: async (workspaceId) => {
+    if (isLocalWorkspaceId(workspaceId)) {
+      set({ teams: listLocalTeams() });
+      return;
+    }
     try {
       const teams = await TeamsService.list(workspaceId);
       set({ teams });

@@ -16,6 +16,8 @@ import {
 import { WorkspaceApiKeysService } from "../../services/WorkspaceApiKeysService";
 import type { Workspace, WorkspaceApiKey, NewWorkspaceApiKey } from "../../types/electron";
 import { cn } from "../lib/utils";
+import { CopyableCommand } from "../ui/CopyableCommand";
+import { isLocalWorkspace } from "../../services/LocalWorkspaceService";
 
 interface Props {
   workspace: Workspace;
@@ -67,6 +69,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
   const [name, setName] = useState("");
   const [selectedScopes, setSelectedScopes] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
+  const local = isLocalWorkspace(workspace);
   const canManage = workspace.role === "owner" || workspace.role === "admin";
 
   async function refresh() {
@@ -78,9 +81,42 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
   }
 
   useEffect(() => {
+    if (local) return;
     if (canManage) void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
+
+  if (local) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-xs font-semibold text-foreground">
+            {t("settingsPage.workspace.developer.title")}
+          </h3>
+          <p className="text-xs text-muted-foreground/80 mt-0.5">
+            {t("settingsPage.workspace.local.developerDescription")}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-4 space-y-4">
+          <div>
+            <p className="text-xs font-medium text-foreground mb-1">
+              {t("settingsPage.workspace.local.localCliTitle")}
+            </p>
+            <CopyableCommand command="openwhispr --local notes list" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-foreground mb-1">
+              {t("settingsPage.workspace.local.localMcpTitle")}
+            </p>
+            <CopyableCommand command="~/.openwhispr/cli-bridge.json" />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t("settingsPage.workspace.local.hostedApiKeysOnly")}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   function toggleScope(id: string) {
     setSelectedScopes((prev) => {

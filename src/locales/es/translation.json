@@ -1832,6 +1832,19 @@
         "admin": "Administrador",
         "member": "Miembro"
       },
+      "local": {
+        "modeLabel": "Local workspace",
+        "slugHint": "Local workspaces stay on this device and do not use hosted URLs.",
+        "membersDescription": "Local workspaces are for personal organization on this device.",
+        "hostedMembersOnly": "Members, invitations, and roles are available in hosted workspaces.",
+        "teamsDescription": "Create local team labels for organizing notes on this device.",
+        "billingDescription": "Local workspace mode has no hosted subscription or seats.",
+        "hostedBillingOnly": "Billing and seat management are only used by hosted workspaces.",
+        "developerDescription": "Use local CLI and MCP paths without hosted workspace API keys.",
+        "localCliTitle": "Local CLI",
+        "localMcpTitle": "Local MCP bridge",
+        "hostedApiKeysOnly": "Hosted workspace API keys require a hosted workspace subscription."
+      },
       "general": {
         "nameLabel": "Nombre del espacio de trabajo",
         "slugLabel": "Slug",
@@ -2631,6 +2644,11 @@
     "mcp": {
       "title": "Lleva tus notas a tus herramientas de IA",
       "description": "Chatea, busca y trabaja con tus notas en Claude, ChatGPT y Cursor.",
+      "localBadge": "Local",
+      "localDescription": "Use the local MCP bridge while OpenWhispr is running. No hosted subscription required.",
+      "localCommand": "Local MCP command",
+      "localBridgeFile": "Loopback bridge token",
+      "hostedTitle": "Hosted MCP",
       "step1": "En tu herramienta de IA, añade OpenWhispr MCP usando la URL pública",
       "step2": "Crea una clave API arriba con los permisos que necesites.",
       "step3": "Pega la clave como cabecera Authorization para conectar.",

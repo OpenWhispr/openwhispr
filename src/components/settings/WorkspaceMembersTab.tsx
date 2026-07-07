@@ -15,6 +15,7 @@ import {
   DropdownMenuItem,
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
+import { isLocalWorkspace } from "../../services/LocalWorkspaceService";
 
 interface Props {
   workspace: Workspace;
@@ -27,6 +28,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
   const refreshMembers = useWorkspaceStore((s) => s.refreshMembers);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const local = isLocalWorkspace(workspace);
   const canManage = workspace.role === "owner" || workspace.role === "admin";
 
   async function refreshInvitations() {
@@ -39,10 +41,31 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
   }
 
   useEffect(() => {
+    if (local) return;
     void refreshMembers(workspace.id);
     if (canManage) void refreshInvitations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
+
+  if (local) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-xs font-semibold text-foreground">
+            {t("settingsPage.workspace.members.title")}
+          </h3>
+          <p className="text-xs text-muted-foreground/80 mt-0.5">
+            {t("settingsPage.workspace.local.membersDescription")}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-4">
+          <p className="text-xs text-muted-foreground">
+            {t("settingsPage.workspace.local.hostedMembersOnly")}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   async function handleRoleChange(userId: string, role: "owner" | "admin" | "member") {
     try {

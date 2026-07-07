@@ -9,6 +9,11 @@ import { Label } from "../ui/label";
 import { useToast } from "../ui/useToast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../ui/dialog";
 import type { Workspace, Team } from "../../types/electron";
+import {
+  createLocalTeam,
+  deleteLocalTeam,
+  isLocalWorkspace,
+} from "../../services/LocalWorkspaceService";
 
 interface Props {
   workspace: Workspace;
@@ -23,6 +28,7 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const local = isLocalWorkspace(workspace);
   const canManage = workspace.role === "owner" || workspace.role === "admin";
 
   useEffect(() => {
@@ -35,10 +41,14 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
     if (!name.trim()) return;
     setSubmitting(true);
     try {
-      await TeamsService.create(workspace.id, {
-        name: name.trim(),
-        description: description.trim() || undefined,
-      });
+      if (local) {
+        createLocalTeam(name.trim(), description.trim() || null);
+      } else {
+        await TeamsService.create(workspace.id, {
+          name: name.trim(),
+          description: description.trim() || undefined,
+        });
+      }
       await refreshTeams(workspace.id);
       setName("");
       setDescription("");
@@ -56,7 +66,11 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
 
   async function handleDelete(team: Team) {
     try {
-      await TeamsService.remove(team.id);
+      if (local) {
+        deleteLocalTeam(team.id);
+      } else {
+        await TeamsService.remove(team.id);
+      }
       await refreshTeams(workspace.id);
     } catch (error) {
       toast({
@@ -75,7 +89,9 @@ export default function WorkspaceTeamsTab({ workspace }: Props) {
             {t("settingsPage.workspace.teams.title")}
           </h3>
           <p className="text-xs text-muted-foreground/80 mt-0.5">
-            {t("settingsPage.workspace.teams.description")}
+            {local
+              ? t("settingsPage.workspace.local.teamsDescription")
+              : t("settingsPage.workspace.teams.description")}
           </p>
         </div>
         {canManage && (

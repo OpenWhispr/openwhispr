@@ -3,8 +3,10 @@ import { useTranslation } from "react-i18next";
 import { Check, Copy, ExternalLink, Plus } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { CopyableCommand } from "./ui/CopyableCommand";
 import { LogoTile } from "./ui/LogoTile";
 import { useToast } from "./ui/useToast";
+import { resolveIntegrationsAvailability } from "./integrationsAvailability";
 import logo from "../assets/logo.svg";
 import claudeIcon from "../assets/icons/providers/claude.svg";
 import openaiIcon from "../assets/icons/providers/openai.svg";
@@ -12,6 +14,8 @@ import cursorIcon from "../assets/icons/providers/cursor.svg";
 
 const MCP_URL = "https://mcp.openwhispr.com/mcp";
 const MCP_DOCS_URL = "https://docs.openwhispr.com/integrations/mcp";
+const LOCAL_MCP_COMMAND = "openwhispr --local mcp start";
+const LOCAL_MCP_CONFIG_PATH = "~/.openwhispr/cli-bridge.json";
 
 interface McpIntegrationCardProps {
   isPaid: boolean;
@@ -22,6 +26,12 @@ export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegration
   const { t } = useTranslation();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const availability = resolveIntegrationsAvailability({
+    isSignedIn: typeof localStorage !== "undefined" && localStorage.getItem("isSignedIn") === "true",
+    isPaid,
+    isDesktopAppRunning: typeof window !== "undefined" && Boolean(window.electronAPI),
+  });
+  const hostedMcpUsable = availability.hostedMcp.usable;
 
   const handleCopy = async () => {
     try {
@@ -48,17 +58,48 @@ export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegration
 
       <div className="flex items-center gap-1.5 mb-1">
         <h3 className="text-sm font-semibold text-foreground">{t("integrations.mcp.title")}</h3>
-        {!isPaid && (
+        {!hostedMcpUsable && (
           <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
-            {t("integrations.plan.pro")}
+            {t("integrations.mcp.localBadge")}
           </Badge>
         )}
       </div>
       <p className="text-xs text-muted-foreground/70 mb-4 leading-relaxed">
-        {isPaid ? t("integrations.mcp.description") : t("integrations.mcp.proRequired")}
+        {t("integrations.mcp.localDescription")}
       </p>
 
-      {isPaid && (
+      <div className="space-y-3 mb-4">
+        <div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-1.5">
+            {t("integrations.mcp.localCommand")}
+          </div>
+          <CopyableCommand command={LOCAL_MCP_COMMAND} />
+        </div>
+        <div>
+          <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 mb-1.5">
+            {t("integrations.mcp.localBridgeFile")}
+          </div>
+          <CopyableCommand command={LOCAL_MCP_CONFIG_PATH} />
+        </div>
+      </div>
+
+      <div className="border-t border-border/40 pt-4">
+        <div className="flex items-center gap-1.5 mb-1">
+          <h4 className="text-xs font-semibold text-foreground">
+            {t("integrations.mcp.hostedTitle")}
+          </h4>
+          {!hostedMcpUsable && (
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+              {t("integrations.plan.pro")}
+            </Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground/70 mb-3 leading-relaxed">
+          {hostedMcpUsable ? t("integrations.mcp.description") : t("integrations.mcp.proRequired")}
+        </p>
+      </div>
+
+      {hostedMcpUsable && (
         <ol className="space-y-1.5 text-xs text-muted-foreground mb-4 list-decimal pl-4 marker:text-muted-foreground/40">
           <li className="leading-relaxed">
             {t("integrations.mcp.step1")}{" "}
@@ -83,7 +124,7 @@ export default function McpIntegrationCard({ isPaid, onUpgrade }: McpIntegration
         </ol>
       )}
 
-      {isPaid ? (
+      {hostedMcpUsable ? (
         <Button
           size="sm"
           onClick={() => window.electronAPI?.openExternal?.(MCP_DOCS_URL)}

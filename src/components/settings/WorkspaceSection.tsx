@@ -31,6 +31,7 @@ import WorkspaceTeamsTab from "./WorkspaceTeamsTab";
 import WorkspaceBillingTab from "./WorkspaceBillingTab";
 import WorkspaceDeveloperTab from "./WorkspaceDeveloperTab";
 import type { Workspace } from "../../types/electron";
+import { isLocalWorkspace, renameLocalWorkspace } from "../../services/LocalWorkspaceService";
 
 const SUB_TABS = ["general", "members", "teams", "billing", "developer"] as const;
 type WorkspaceTab = (typeof SUB_TABS)[number];
@@ -142,9 +143,17 @@ export default function WorkspaceSection({ initialSubTab }: Props) {
             <h2 className="text-sm font-semibold text-foreground truncate">{workspace.name}</h2>
           )}
           <p className="text-xs text-muted-foreground mt-0.5">
-            {t(`settingsPage.workspace.role.${workspace.role}`)} · {workspace.slug}
+            {isLocalWorkspace(workspace)
+              ? t("settingsPage.workspace.local.modeLabel")
+              : `${t(`settingsPage.workspace.role.${workspace.role}`)} · ${workspace.slug}`}
           </p>
         </div>
+        {isLocalWorkspace(workspace) && (
+          <Button size="sm" variant="outline" onClick={() => setCreateOpen(true)}>
+            <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+            {t("settingsPage.workspace.empty.create")}
+          </Button>
+        )}
       </div>
 
       <div className="border-b border-border/40 dark:border-border-subtle/60 -mx-1">
@@ -190,8 +199,9 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
   const [slug, setSlug] = useState(workspace.slug);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const local = isLocalWorkspace(workspace);
   const isOwner = workspace.role === "owner";
-  const dirty = name !== workspace.name || slug !== workspace.slug;
+  const dirty = local ? name !== workspace.name : name !== workspace.name || slug !== workspace.slug;
 
   useEffect(() => {
     setName(workspace.name);
@@ -201,7 +211,11 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
   async function handleSave() {
     setSaving(true);
     try {
-      await WorkspacesService.update(workspace.id, { name, slug });
+      if (local) {
+        renameLocalWorkspace(name);
+      } else {
+        await WorkspacesService.update(workspace.id, { name, slug });
+      }
       await refresh();
       toast({ title: t("settingsPage.workspace.general.saved") });
     } catch (error) {
@@ -256,12 +270,14 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
             id="ws-slug"
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
-            disabled={!isOwner && workspace.role !== "admin"}
+            disabled={local || (!isOwner && workspace.role !== "admin")}
             maxLength={48}
             pattern="[a-z0-9-]+"
           />
           <p className="text-[11px] text-muted-foreground">
-            {t("settingsPage.workspace.general.slugHint")}
+            {local
+              ? t("settingsPage.workspace.local.slugHint")
+              : t("settingsPage.workspace.general.slugHint")}
           </p>
         </div>
         <div className="pt-1">
@@ -271,7 +287,7 @@ function GeneralTab({ workspace }: { workspace: Workspace }) {
         </div>
       </div>
 
-      {isOwner && (
+      {isOwner && !local && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/3 dark:bg-destructive/6 p-4 space-y-3">
           <div>
             <p className="text-xs font-medium text-foreground">

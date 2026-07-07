@@ -6,6 +6,7 @@ import { useToast } from "../ui/useToast";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Workspace } from "../../types/electron";
+import { isLocalWorkspace } from "../../services/LocalWorkspaceService";
 
 interface Props {
   workspace: Workspace;
@@ -21,12 +22,33 @@ export default function WorkspaceBillingTab({ workspace }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const members = useWorkspaceStore((s) => s.members);
+  const local = isLocalWorkspace(workspace);
   const isOwner = workspace.role === "owner";
   const [busy, setBusy] = useState(false);
 
   const seatsUsed = members.length;
   const seatsTotal = Math.max(workspace.seats, seatsUsed);
   const pct = seatsTotal === 0 ? 0 : Math.min(100, (seatsUsed / seatsTotal) * 100);
+
+  if (local) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-xs font-semibold text-foreground">
+            {t("settingsPage.workspace.billing.title")}
+          </h3>
+          <p className="text-xs text-muted-foreground/80 mt-0.5">
+            {t("settingsPage.workspace.local.billingDescription")}
+          </p>
+        </div>
+        <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 bg-card/50 dark:bg-surface-2/50 p-4">
+          <p className="text-xs text-muted-foreground">
+            {t("settingsPage.workspace.local.hostedBillingOnly")}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   async function handleCheckout() {
     setBusy(true);
