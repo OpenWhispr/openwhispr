@@ -3372,7 +3372,7 @@ EOF`,
                             setCloudBackupEnabled(v);
                             if (v) {
                               startMigration().catch(console.error);
-                              syncService.syncAll().catch(console.error);
+                              syncService.requestSyncAll("manual");
                             }
                           }}
                         />

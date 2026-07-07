@@ -37,6 +37,7 @@ function normalizeTimestamp(value: string | null | undefined): string {
 
 class SyncService {
   private syncing = false;
+  private syncAllPending = false;
   private dictionaryDirty = false;
   private snippetsDirty = false;
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -51,7 +52,13 @@ class SyncService {
   }
 
   async syncAll(): Promise<void> {
-    if (this.syncing || !this.canSync()) return;
+    if (!this.canSync()) return;
+    // A pass already running may have synced past the data this request covers,
+    // so flag a re-run instead of dropping it.
+    if (this.syncing) {
+      this.syncAllPending = true;
+      return;
+    }
     this.syncing = true;
     try {
       await this.syncFolders();
@@ -69,20 +76,27 @@ class SyncService {
         await this.syncSnippets();
       } while (this.snippetsDirty);
       localStorage.setItem("lastSyncedAt", new Date().toISOString());
+      this.lastSyncAllAt = Date.now();
     } catch (err) {
       console.error("Sync failed:", err);
     } finally {
       this.syncing = false;
     }
+    if (this.syncAllPending) {
+      this.syncAllPending = false;
+      await this.syncAll();
+    }
   }
 
-  requestSyncAll(reason: "mount" | "focus" | "interval" | "manual"): void {
+  requestSyncAll(reason: "mount" | "focus" | "interval" | "online" | "manual"): void {
     if (!this.canSync()) return;
-    if (reason !== "manual" && Date.now() - this.lastSyncAllAt < AUTO_SYNC_THROTTLE_MS) {
+    if (
+      reason !== "manual" &&
+      (this.syncing || Date.now() - this.lastSyncAllAt < AUTO_SYNC_THROTTLE_MS)
+    ) {
       return;
     }
-    this.lastSyncAllAt = Date.now();
-    void this.syncAll().catch(console.error);
+    void this.syncAll();
   }
 
   async syncDictionaryNow(): Promise<void> {
