@@ -21,12 +21,16 @@ const BATCH_SIZE = 50;
 const TRANSCRIPTION_BATCH_SIZE = 100;
 const DICTIONARY_BATCH_SIZE = 200;
 const SNIPPET_BATCH_SIZE = 200;
-// Skip a redundant syncAll() if focus + interval fire close together.
+// Minimum gap between auto syncs, measured from the last completed pass in
+// any window (the stamp lives in shared localStorage).
 const AUTO_SYNC_THROTTLE_MS = 20000;
 const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 // Web Lock name serializing syncAll() across windows (each renderer has its
 // own SyncService instance, but localStorage and the local DB are shared).
 const SYNC_ALL_LOCK = "openwhispr-sync-all";
+// localStorage keys gating canSync(); a change in another window means sync
+// may have just become possible (sign-in, subscription, backup enabled).
+const CAN_SYNC_KEYS = ["isSignedIn", "cloudBackupEnabled", "isSubscribed"];
 
 // SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
 // the cloud sends ISO 8601 "YYYY-MM-DDTHH:MM:SS.sssZ". Normalize both to
@@ -63,9 +67,8 @@ class SyncService {
     return iso ? Date.parse(iso) : 0;
   }
 
-  // Keeps data fresh for the whole session: initial pass, then re-sync on
-  // window focus/visibility, network reconnect, and a fixed interval.
-  // Runs in every window; the throttle and Web Lock dedupe across them.
+  // Runs in every window for the whole session; the throttle and Web Lock
+  // dedupe across windows.
   startAutoSync(): void {
     if (this.autoSyncStarted) return;
     this.autoSyncStarted = true;
@@ -78,10 +81,17 @@ class SyncService {
       }
     });
     window.addEventListener("online", () => this.requestSyncAll("online"));
+    // storage events fire only in the windows that didn't write the change,
+    // which is exactly where a first sync is still needed.
+    window.addEventListener("storage", (e) => {
+      if (e.key && CAN_SYNC_KEYS.includes(e.key)) {
+        this.requestSyncAll("start");
+      }
+    });
     setInterval(() => this.requestSyncAll("interval"), AUTO_SYNC_INTERVAL_MS);
   }
 
-  async syncAll(): Promise<void> {
+  async syncAll(waitForLock = false): Promise<void> {
     if (!this.canSync()) return;
     // A pass already running may have synced past the data this request covers,
     // so flag a re-run instead of dropping it.
@@ -91,9 +101,10 @@ class SyncService {
     }
     this.syncing = true;
     try {
-      // Skip when another window holds the lock — its pass reads the same
-      // local DB and cloud state, so it covers this request.
-      await navigator.locks.request(SYNC_ALL_LOCK, { ifAvailable: true }, async (lock) => {
+      // Ambient passes skip when another window holds the lock — that pass
+      // reads the same local DB and cloud state, so it covers this request.
+      // Manual passes wait so a user action is never silently dropped.
+      await navigator.locks.request(SYNC_ALL_LOCK, { ifAvailable: !waitForLock }, async (lock) => {
         if (!lock) return;
         await this.syncFolders();
         await this.syncNotes();
@@ -130,7 +141,7 @@ class SyncService {
     ) {
       return;
     }
-    void this.syncAll();
+    void this.syncAll(reason === "manual");
   }
 
   async syncDictionaryNow(): Promise<void> {

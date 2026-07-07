@@ -58,8 +58,8 @@ function MainApp() {
       }
     }
 
-    // Both the dictation overlay and the control panel keep cloud data fresh,
-    // so sync runs even in tray-only sessions where the panel is never opened.
+    // Sync runs in every non-agent window, so tray-only sessions where the
+    // control panel is never opened still stay fresh.
     if (!isAgentPanel) {
       import("./services/SyncService.js")
         .then(({ syncService }) => syncService.startAutoSync())
