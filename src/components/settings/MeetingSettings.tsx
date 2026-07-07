@@ -55,12 +55,10 @@ export function MeetingTranscriptionPanel() {
 
   const transcriptionModes: InferenceModeOption[] = [
     {
-      id: "openwhispr",
-      label: t("settingsPage.transcription.modes.openwhispr"),
-      description: t("settingsPage.transcription.modes.openwhisprDesc"),
-      icon: <Cloud className="w-4 h-4" />,
-      disabled: !isSignedIn,
-      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+      id: "local",
+      label: t("settingsPage.transcription.modes.local"),
+      description: t("settingsPage.transcription.modes.localDesc"),
+      icon: <Cpu className="w-4 h-4" />,
     },
     {
       id: "providers",
@@ -69,16 +67,18 @@ export function MeetingTranscriptionPanel() {
       icon: <Key className="w-4 h-4" />,
     },
     {
-      id: "local",
-      label: t("settingsPage.transcription.modes.local"),
-      description: t("settingsPage.transcription.modes.localDesc"),
-      icon: <Cpu className="w-4 h-4" />,
-    },
-    {
       id: "self-hosted",
       label: t("settingsPage.transcription.modes.selfHosted"),
       description: t("settingsPage.transcription.modes.selfHostedDesc"),
       icon: <Network className="w-4 h-4" />,
+    },
+    {
+      id: "openwhispr",
+      label: t("settingsPage.transcription.modes.openwhispr"),
+      description: t("settingsPage.transcription.modes.openwhisprDesc"),
+      icon: <Cloud className="w-4 h-4" />,
+      disabled: !isSignedIn,
+      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
     },
   ];
 
