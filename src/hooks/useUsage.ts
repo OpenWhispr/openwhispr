@@ -97,6 +97,7 @@ export function useUsage(): UseUsageResult | null {
           });
           lastFetchRef.current = Date.now();
           localStorage.setItem("isSubscribed", String(result.isSubscribed ?? false));
+          localStorage.setItem("isTrial", String(result.isTrial ?? false));
         } else {
           const error: any = new Error(result.error || "Failed to fetch usage");
           error.code = result.code;

@@ -11,6 +11,7 @@ import { TranscriptionsService } from "./TranscriptionsService.js";
 import { DictionaryService } from "./DictionaryService.js";
 import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError } from "./cloudApi.js";
+import { canUseHostedSync } from "./syncCapability";
 
 function isHttpStatus(err: unknown, status: number): boolean {
   return err instanceof CloudApiError && err.status === status;
@@ -52,11 +53,12 @@ class SyncService {
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   canSync(): boolean {
-    return (
-      localStorage.getItem("isSignedIn") === "true" &&
-      localStorage.getItem("cloudBackupEnabled") === "true" &&
-      localStorage.getItem("isSubscribed") === "true"
-    );
+    return canUseHostedSync({
+      isSignedIn: localStorage.getItem("isSignedIn") === "true",
+      cloudBackupEnabled: localStorage.getItem("cloudBackupEnabled") === "true",
+      isSubscribed: localStorage.getItem("isSubscribed") === "true",
+      isTrial: localStorage.getItem("isTrial") === "true",
+    });
   }
 
   // lastSyncedAt is written only when a syncAll() pass completes, and

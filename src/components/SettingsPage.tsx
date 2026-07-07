@@ -97,6 +97,8 @@ import { cn } from "./lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
+import { exportLocalBackup, importLocalBackup } from "../services/LocalBackupService";
+import { canUseHostedSync } from "../services/syncCapability";
 import { formatBytes } from "../utils/formatBytes";
 import { useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
@@ -105,6 +107,28 @@ import { WORKSPACES_ENABLED } from "../lib/features";
 
 const formatAmount = (cents: number, currency: string) =>
   (cents / 100).toLocaleString(undefined, { style: "currency", currency });
+
+function downloadJsonFile(filename: string, data: unknown): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function pickJsonFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.onchange = () => resolve(input.files?.[0] ?? null);
+    input.click();
+  });
+}
 
 export type SettingsSectionType =
   | "account"
@@ -846,6 +870,7 @@ export default function SettingsPage({
     fileCount: number;
     totalBytes: number;
   }>({ fileCount: 0, totalBytes: 0 });
+  const [localBackupAction, setLocalBackupAction] = useState<"export" | "import" | null>(null);
 
   useEffect(() => {
     if (activeSection !== "privacyData") return;
@@ -882,6 +907,51 @@ export default function SettingsPage({
       // silent fail
     }
   };
+
+  const handleExportLocalBackup = useCallback(async () => {
+    if (localBackupAction) return;
+    setLocalBackupAction("export");
+    try {
+      const backup = await exportLocalBackup();
+      downloadJsonFile(`openwhispr-local-backup-${backup.exportedAt.slice(0, 10)}.json`, backup);
+      toast({ title: t("settingsPage.privacy.localBackupExported") });
+    } catch (error) {
+      logger.error("Local backup export failed", error, "settings");
+      toast({
+        title: t("settingsPage.privacy.localBackupFailed"),
+        variant: "destructive",
+      });
+    } finally {
+      setLocalBackupAction(null);
+    }
+  }, [localBackupAction, t, toast]);
+
+  const handleImportLocalBackup = useCallback(async () => {
+    if (localBackupAction) return;
+    setLocalBackupAction("import");
+    try {
+      const file = await pickJsonFile();
+      if (!file) return;
+      const backup = JSON.parse(await file.text());
+      const result = await importLocalBackup(backup);
+      toast({
+        title: t("settingsPage.privacy.localBackupImported"),
+        description: t("settingsPage.privacy.localBackupImportSummary", {
+          notes: result.notes,
+          transcriptions: result.transcriptions,
+          conversations: result.conversations,
+        }),
+      });
+    } catch (error) {
+      logger.error("Local backup import failed", error, "settings");
+      toast({
+        title: t("settingsPage.privacy.localBackupFailed"),
+        variant: "destructive",
+      });
+    } finally {
+      setLocalBackupAction(null);
+    }
+  }, [localBackupAction, t, toast]);
 
   // ydotool status for Wayland paste diagnostics
   const [ydotoolStatus, setYdotoolStatus] = useState<{
@@ -1253,6 +1323,12 @@ export default function SettingsPage({
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
   const { isSignedIn, isLoaded, user } = useAuth();
+  const canUseHostedBackup = canUseHostedSync({
+    isSignedIn,
+    cloudBackupEnabled: true,
+    isSubscribed: Boolean(usage?.isSubscribed),
+    isTrial: Boolean(usage?.isTrial),
+  });
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isOpeningBilling, setIsOpeningBilling] = useState(false);
@@ -3372,10 +3448,15 @@ EOF`,
                     <SettingsPanelRow>
                       <SettingsRow
                         label={t("settingsPage.privacy.cloudBackup")}
-                        description={t("settingsPage.privacy.cloudBackupDescription")}
+                        description={
+                          canUseHostedBackup
+                            ? t("settingsPage.privacy.cloudBackupDescription")
+                            : t("settingsPage.privacy.cloudBackupSubscriptionRequired")
+                        }
                       >
                         <Toggle
-                          checked={cloudBackupEnabled}
+                          checked={canUseHostedBackup && cloudBackupEnabled}
+                          disabled={!canUseHostedBackup || usage?.isLoading}
                           onChange={(v) => {
                             setCloudBackupEnabled(v);
                             if (v) {
@@ -3445,6 +3526,47 @@ EOF`,
               )}
 
               <SettingsPanel>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.localBackup")}
+                    description={t("settingsPage.privacy.localBackupDescription")}
+                  >
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1.5"
+                        disabled={Boolean(localBackupAction)}
+                        onClick={() => void handleExportLocalBackup()}
+                      >
+                        {localBackupAction === "export" ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Download size={13} />
+                        )}
+                        {localBackupAction === "export"
+                          ? t("settingsPage.privacy.exportingLocalBackup")
+                          : t("settingsPage.privacy.exportLocalBackup")}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1.5"
+                        disabled={Boolean(localBackupAction)}
+                        onClick={() => void handleImportLocalBackup()}
+                      >
+                        {localBackupAction === "import" ? (
+                          <Loader2 size={13} className="animate-spin" />
+                        ) : (
+                          <Upload size={13} />
+                        )}
+                        {localBackupAction === "import"
+                          ? t("settingsPage.privacy.importingLocalBackup")
+                          : t("settingsPage.privacy.importLocalBackup")}
+                      </Button>
+                    </div>
+                  </SettingsRow>
+                </SettingsPanelRow>
                 <SettingsPanelRow>
                   <SettingsRow
                     label={t("settingsPage.privacy.usageAnalytics")}
