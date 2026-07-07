@@ -2862,6 +2862,21 @@ class DatabaseManager {
     }
   }
 
+  adoptFolderIdentity(id, clientFolderId, cloudId, updatedAt) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      this.db
+        .prepare(
+          "UPDATE folders SET client_folder_id = ?, cloud_id = ?, sync_status = 'synced', updated_at = COALESCE(?, updated_at) WHERE id = ?"
+        )
+        .run(clientFolderId, cloudId, updatedAt ?? null, id);
+      return { success: true };
+    } catch (error) {
+      debugLogger.error("Error adopting folder identity", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
   getFolderIdMap() {
     try {
       if (!this.db) throw new Error("Database not initialized");

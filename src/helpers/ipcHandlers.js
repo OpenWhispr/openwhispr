@@ -1394,6 +1394,9 @@ class IPCHandlers {
     ipcMain.handle("db-mark-folder-synced", (_, id, cloudId) =>
       this.databaseManager.markFolderSynced(id, cloudId)
     );
+    ipcMain.handle("db-adopt-folder-identity", (_, id, clientFolderId, cloudId, updatedAt) =>
+      this.databaseManager.adoptFolderIdentity(id, clientFolderId, cloudId, updatedAt)
+    );
     ipcMain.handle("db-get-folder-id-map", () => this.databaseManager.getFolderIdMap());
     ipcMain.handle("db-get-pending-folder-deletes", () =>
       this.databaseManager.getPendingFolderDeletes()

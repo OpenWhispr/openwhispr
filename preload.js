@@ -825,6 +825,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   upsertFolderFromCloud: (cloudFolder) =>
     ipcRenderer.invoke("db-upsert-folder-from-cloud", cloudFolder),
   markFolderSynced: (id, cloudId) => ipcRenderer.invoke("db-mark-folder-synced", id, cloudId),
+  adoptFolderIdentity: (id, clientFolderId, cloudId, updatedAt) =>
+    ipcRenderer.invoke("db-adopt-folder-identity", id, clientFolderId, cloudId, updatedAt),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
   getPendingFolderDeletes: () => ipcRenderer.invoke("db-get-pending-folder-deletes"),
   hardDeleteFolder: (id) => ipcRenderer.invoke("db-hard-delete-folder", id),
