@@ -57,6 +57,14 @@ function MainApp() {
         import("./components/OnboardingFlow.tsx").catch(() => {});
       }
     }
+
+    // Both the dictation overlay and the control panel keep cloud data fresh,
+    // so sync runs even in tray-only sessions where the panel is never opened.
+    if (!isAgentPanel) {
+      import("./services/SyncService.js")
+        .then(({ syncService }) => syncService.startAutoSync())
+        .catch(() => {});
+    }
   }, [isAgentPanel, isControlPanel]);
 
   useEffect(() => {

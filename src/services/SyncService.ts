@@ -23,6 +23,10 @@ const DICTIONARY_BATCH_SIZE = 200;
 const SNIPPET_BATCH_SIZE = 200;
 // Skip a redundant syncAll() if focus + interval fire close together.
 const AUTO_SYNC_THROTTLE_MS = 20000;
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+// Web Lock name serializing syncAll() across windows (each renderer has its
+// own SyncService instance, but localStorage and the local DB are shared).
+const SYNC_ALL_LOCK = "openwhispr-sync-all";
 
 // SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
 // the cloud sends ISO 8601 "YYYY-MM-DDTHH:MM:SS.sssZ". Normalize both to
@@ -38,10 +42,10 @@ function normalizeTimestamp(value: string | null | undefined): string {
 class SyncService {
   private syncing = false;
   private syncAllPending = false;
+  private autoSyncStarted = false;
   private dictionaryDirty = false;
   private snippetsDirty = false;
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private lastSyncAllAt = 0;
 
   canSync(): boolean {
     return (
@@ -49,6 +53,32 @@ class SyncService {
       localStorage.getItem("cloudBackupEnabled") === "true" &&
       localStorage.getItem("isSubscribed") === "true"
     );
+  }
+
+  // lastSyncedAt is written only when a syncAll() pass completes, and
+  // localStorage is shared across windows, so it doubles as the global
+  // "last completed sync" stamp for throttling.
+  private lastCompletedSyncAt(): number {
+    const iso = localStorage.getItem("lastSyncedAt");
+    return iso ? Date.parse(iso) : 0;
+  }
+
+  // Keeps data fresh for the whole session: initial pass, then re-sync on
+  // window focus/visibility, network reconnect, and a fixed interval.
+  // Runs in every window; the throttle and Web Lock dedupe across them.
+  startAutoSync(): void {
+    if (this.autoSyncStarted) return;
+    this.autoSyncStarted = true;
+
+    this.requestSyncAll("start");
+    window.addEventListener("focus", () => this.requestSyncAll("focus"));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        this.requestSyncAll("focus");
+      }
+    });
+    window.addEventListener("online", () => this.requestSyncAll("online"));
+    setInterval(() => this.requestSyncAll("interval"), AUTO_SYNC_INTERVAL_MS);
   }
 
   async syncAll(): Promise<void> {
@@ -61,22 +91,26 @@ class SyncService {
     }
     this.syncing = true;
     try {
-      await this.syncFolders();
-      await this.syncNotes();
-      await this.syncConversations();
-      await this.syncTranscriptions();
-      // Edits during the awaits above set dictionaryDirty (syncing is already
-      // true), so re-run until clean rather than stalling until the next trigger.
-      do {
-        this.dictionaryDirty = false;
-        await this.syncDictionary();
-      } while (this.dictionaryDirty);
-      do {
-        this.snippetsDirty = false;
-        await this.syncSnippets();
-      } while (this.snippetsDirty);
-      localStorage.setItem("lastSyncedAt", new Date().toISOString());
-      this.lastSyncAllAt = Date.now();
+      // Skip when another window holds the lock — its pass reads the same
+      // local DB and cloud state, so it covers this request.
+      await navigator.locks.request(SYNC_ALL_LOCK, { ifAvailable: true }, async (lock) => {
+        if (!lock) return;
+        await this.syncFolders();
+        await this.syncNotes();
+        await this.syncConversations();
+        await this.syncTranscriptions();
+        // Edits during the awaits above set dictionaryDirty (syncing is already
+        // true), so re-run until clean rather than stalling until the next trigger.
+        do {
+          this.dictionaryDirty = false;
+          await this.syncDictionary();
+        } while (this.dictionaryDirty);
+        do {
+          this.snippetsDirty = false;
+          await this.syncSnippets();
+        } while (this.snippetsDirty);
+        localStorage.setItem("lastSyncedAt", new Date().toISOString());
+      });
     } catch (err) {
       console.error("Sync failed:", err);
     } finally {
@@ -88,11 +122,11 @@ class SyncService {
     }
   }
 
-  requestSyncAll(reason: "mount" | "focus" | "interval" | "online" | "manual"): void {
+  requestSyncAll(reason: "start" | "focus" | "interval" | "online" | "manual"): void {
     if (!this.canSync()) return;
     if (
       reason !== "manual" &&
-      (this.syncing || Date.now() - this.lastSyncAllAt < AUTO_SYNC_THROTTLE_MS)
+      (this.syncing || Date.now() - this.lastCompletedSyncAt() < AUTO_SYNC_THROTTLE_MS)
     ) {
       return;
     }
