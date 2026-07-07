@@ -10,6 +10,7 @@ import { withRetry, createApiRetryStrategy } from "../utils/retry";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl, ensureV1Suffix } from "../config/constants";
 import logger from "../utils/logger";
 import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
+import { wrapCleanupTranscript } from "../config/prompts";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
@@ -144,8 +145,11 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig,
     providerName: string
   ): Promise<string> {
+    // No systemPrompt override means the default cleanup path: a deterministic
+    // transform, so zero temperature and a delimited transcript.
+    const isCleanup = !config.systemPrompt;
     const systemPrompt = config.systemPrompt || this.getSystemPrompt(agentName);
-    const userPrompt = text;
+    const userPrompt = isCleanup ? wrapCleanupTranscript(text) : text;
 
     const messages = [
       { role: "system", content: systemPrompt },
@@ -155,7 +159,7 @@ class ReasoningService extends BaseReasoningService {
     const requestBody: any = {
       model,
       messages,
-      temperature: config.temperature ?? 0.3,
+      temperature: config.temperature ?? (isCleanup ? 0 : 0.3),
       max_tokens:
         config.maxTokens ||
         Math.max(
@@ -168,6 +172,14 @@ class ReasoningService extends BaseReasoningService {
           )
         ),
     };
+
+    // gpt-oss defaults to medium reasoning effort; low cuts hidden reasoning
+    // tokens (latency) and the tendency to answer the transcript instead of
+    // cleaning it. applyThinkingSuppression still wins when thinking is
+    // disabled by the user.
+    if (isCleanup && model.includes("gpt-oss")) {
+      requestBody.reasoning_effort = "low";
+    }
 
     applyThinkingSuppression(requestBody, model, providerName, config);
 

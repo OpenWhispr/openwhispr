@@ -5,6 +5,7 @@ import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { applyThinkingSuppression } from "../thinkingSuppression";
 import { getTinfoilChatClient } from "../tinfoilClient";
+import { wrapCleanupTranscript } from "../../../config/prompts";
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -19,9 +20,10 @@ export const tinfoilProvider: InferenceProvider = {
     const client = await getTinfoilChatClient(apiKey);
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const messages = [
       { role: "system", content: systemPrompt },
-      { role: "user", content: text },
+      { role: "user", content: userContent },
     ];
 
     const apiConfig = getOpenAiApiConfig(model);
@@ -44,7 +46,7 @@ export const tinfoilProvider: InferenceProvider = {
     };
 
     if (apiConfig.supportsTemperature) {
-      requestBody.temperature = config.temperature ?? 0.3;
+      requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
     }
 
     applyThinkingSuppression(requestBody, model, "tinfoil", config);
