@@ -225,7 +225,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: resources/bin
-          key: macos-${{ matrix.arch }}-bin-${{ hashFiles('scripts/download-*.js', 'scripts/build-globe-listener.js', 'resources/macos-globe-listener.swift', 'scripts/build-macos-fast-paste.js', 'resources/macos-fast-paste.swift', 'scripts/build-media-remote.js', 'resources/macos-media-remote.swift', 'scripts/build-macos-audio-tap.js', 'resources/macos-audio-tap.swift') }}
+          key: macos-${{ matrix.arch }}-bin-${{ hashFiles('scripts/download-*.js', 'scripts/build-globe-listener.js', 'resources/macos-globe-listener.swift', 'scripts/build-macos-fast-paste.js', 'resources/macos-fast-paste.swift', 'scripts/build-media-remote.js', 'resources/macos-media-remote.swift', 'scripts/build-macos-media-key.js', 'resources/macos-media-key.swift', 'scripts/build-macos-audio-tap.js', 'resources/macos-audio-tap.swift') }}
 
       - name: Compile macos-globe-listener binary
         run: npm run compile:globe -- --arch ${{ matrix.arch }}
@@ -235,6 +235,9 @@ jobs:
 
       - name: Compile macos-media-remote binary
         run: npm run compile:media-remote -- --arch ${{ matrix.arch }}
+
+      - name: Compile macos-media-key binary
+        run: npm run compile:media-key -- --arch ${{ matrix.arch }}
 
       - name: Compile macos-audio-tap binary
         run: npm run compile:audio-tap -- --arch ${{ matrix.arch }}
@@ -317,7 +320,7 @@ jobs:
       - name: Verify packaged macOS native binaries
         run: |
           APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
-          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-text-monitor macos-media-remote; do
+          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-text-monitor macos-media-remote macos-media-key; do
             test -x "$APP_PATH/Contents/Resources/bin/$bin" || { echo "Missing in bundle: $bin"; exit 1; }
           done
 

@@ -1,19 +1,36 @@
 const { spawnSync } = require("child_process");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 const debugLogger = require("./debugLogger");
 
 class MediaPlayer {
-  constructor() {
+  constructor(options = {}) {
+    this._macMediaKeyResourceRoot =
+      options.resourceRoot || path.join(__dirname, "..", "..", "resources");
+    this._resourcesPath = Object.hasOwn(options, "resourcesPath")
+      ? options.resourcesPath
+      : process.resourcesPath;
+    this._homeDir = options.homeDir || os.homedir;
+    this._env = options.env || process.env;
+    this._defaultApp = Object.hasOwn(options, "defaultApp")
+      ? options.defaultApp
+      : process.defaultApp;
     this._linuxBinaryChecked = false;
     this._linuxBinaryPath = null;
     this._nircmdChecked = false;
     this._nircmdPath = null;
     this._macBinaryChecked = false;
     this._macBinaryPath = null;
+    this._macMediaKeyHelperChecked = false;
+    this._macMediaKeyHelperPath = null;
     this._pausedPlayers = []; // MPRIS players we paused (Linux)
     this._didPause = false; // Whether we sent a pause via toggle fallback
     this._pausedWinApps = []; // GSMTC app IDs we paused (Windows)
+  }
+
+  _spawnSync(command, args, options) {
+    return spawnSync(command, args, options);
   }
 
   _resolveLinuxFastPaste() {
@@ -89,6 +106,48 @@ class MediaPlayer {
         continue;
       }
     }
+    return null;
+  }
+
+  _isDevelopmentRuntime() {
+    return this._env.NODE_ENV === "development" || this._defaultApp === true;
+  }
+
+  _resolveMacMediaKeyHelper() {
+    if (this._macMediaKeyHelperChecked) return this._macMediaKeyHelperPath;
+    this._macMediaKeyHelperChecked = true;
+
+    const candidates = [
+      path.join(this._macMediaKeyResourceRoot, "bin", "macos-media-key"),
+      path.join(this._macMediaKeyResourceRoot, "macos-media-key"),
+    ];
+
+    if (this._resourcesPath) {
+      candidates.push(path.join(this._resourcesPath, "bin", "macos-media-key"));
+    }
+
+    if (this._isDevelopmentRuntime()) {
+      const homeDir = this._homeDir();
+      if (homeDir) {
+        candidates.push(
+          path.join(homeDir, ".local", "bin", "macos-media-key"),
+          path.join(homeDir, ".local", "bin", "mac-mediakey")
+        );
+      }
+    }
+
+    for (const candidate of candidates) {
+      try {
+        if (fs.existsSync(candidate)) {
+          fs.accessSync(candidate, fs.constants.X_OK);
+          this._macMediaKeyHelperPath = candidate;
+          return candidate;
+        }
+      } catch {
+        continue;
+      }
+    }
+
     return null;
   }
 
@@ -270,7 +329,7 @@ class MediaPlayer {
     if (listResult.status !== 0) return [];
 
     const output = listResult.stdout?.toString() || "";
-    const matches = output.match(/string "org\.mpris\.MediaPlayer2\.[A-Za-z0-9_.\-]+"/g);
+    const matches = output.match(/string "org\.mpris\.MediaPlayer2\.[A-Za-z0-9_.-]+"/g);
     if (!matches || matches.length === 0) return [];
 
     return matches.map((m) => m.replace(/^string "/, "").replace(/"$/, ""));
@@ -384,7 +443,32 @@ class MediaPlayer {
   }
 
   _sendMacMediaKey() {
-    const result = spawnSync(
+    const helper = this._resolveMacMediaKeyHelper();
+    if (helper) {
+      const helperResult = this._spawnSync(helper, [], {
+        stdio: "pipe",
+        timeout: 3000,
+      });
+      if (helperResult.status === 0 && !helperResult.error) {
+        debugLogger.debug(
+          "Media key sent via macOS native media key helper",
+          { helper: path.basename(helper) },
+          "media"
+        );
+        return true;
+      }
+      debugLogger.debug(
+        "macOS native media key helper failed, falling back to osascript",
+        {
+          status: helperResult.status,
+          signal: helperResult.signal,
+          error: helperResult.error?.message,
+        },
+        "media"
+      );
+    }
+
+    const result = this._spawnSync(
       "osascript",
       ["-e", 'tell application "System Events" to key code 100'],
       {
@@ -400,19 +484,7 @@ class MediaPlayer {
   }
 
   _toggleMacOS() {
-    const result = spawnSync(
-      "osascript",
-      ["-e", 'tell application "System Events" to key code 100'],
-      {
-        stdio: "pipe",
-        timeout: 3000,
-      }
-    );
-    if (result.status === 0) {
-      debugLogger.debug("Media toggled via osascript", {}, "media");
-      return true;
-    }
-    return false;
+    return this._sendMacMediaKey();
   }
 
   // --- Windows: GSMTC-aware pause/resume ---
@@ -595,4 +667,7 @@ try {
   }
 }
 
-module.exports = new MediaPlayer();
+const mediaPlayer = new MediaPlayer();
+
+module.exports = mediaPlayer;
+module.exports.MediaPlayer = MediaPlayer;
