@@ -6005,6 +6005,7 @@ class IPCHandlers {
             customDictionary: opts.customDictionary,
             customPrompt: opts.customPrompt,
             systemPrompt: opts.systemPrompt,
+            promptMode: opts.promptMode,
             language: opts.language,
             locale: opts.locale,
             sessionId: this.sessionId,
