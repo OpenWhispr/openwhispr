@@ -42,6 +42,8 @@ class OpenAIRealtimeStreaming {
     this.isDisconnecting = false;
     this.audioBytesSent = 0;
     this.model = "gpt-4o-mini-transcribe";
+    this.inputRate = SAMPLE_RATE;
+    this.captureRate = SAMPLE_RATE;
     this.coldStartBuffer = [];
     this.coldStartBufferSize = 0;
     this.speechStartedAt = null;
@@ -63,7 +65,7 @@ class OpenAIRealtimeStreaming {
   }
 
   async connect(options = {}) {
-    const { apiKey, model, preconfigured, inputRate, createSocket } = options;
+    const { apiKey, model, preconfigured, inputRate, captureRate, createSocket } = options;
     if (!apiKey) throw new Error("OpenAI API key is required");
 
     if (this.isConnected || this.isConnecting) {
@@ -79,6 +81,7 @@ class OpenAIRealtimeStreaming {
     this.model = model || "gpt-4o-mini-transcribe";
     this.preconfigured = !!preconfigured;
     this.inputRate = inputRate || SAMPLE_RATE;
+    this.captureRate = captureRate || this.inputRate;
     this.completedSegments = [];
     this.currentPartial = "";
     this.audioBytesSent = 0;
@@ -322,6 +325,22 @@ class OpenAIRealtimeStreaming {
     }
   }
 
+  // OpenAI rejects PCM session rates below 24kHz, so 16kHz capture can't be
+  // declared as-is; it is upsampled to the declared rate before sending.
+  _resampleToInputRate(pcmBuffer) {
+    if (this.captureRate === this.inputRate) return pcmBuffer;
+    const src = new Int16Array(pcmBuffer.buffer, pcmBuffer.byteOffset, pcmBuffer.length / 2);
+    const ratio = this.inputRate / this.captureRate;
+    const out = new Int16Array(Math.floor(src.length * ratio));
+    for (let i = 0; i < out.length; i++) {
+      const pos = i / ratio;
+      const low = Math.floor(pos);
+      const high = Math.min(low + 1, src.length - 1);
+      out[i] = Math.round(src[low] + (src[high] - src[low]) * (pos - low));
+    }
+    return Buffer.from(out.buffer);
+  }
+
   sendAudio(pcmBuffer) {
     const isOpen = this.ws?.readyState === WebSocket.OPEN;
 
@@ -340,17 +359,21 @@ class OpenAIRealtimeStreaming {
         bytes: this.coldStartBufferSize,
       });
       for (const buf of this.coldStartBuffer) {
-        const b64 = buf.toString("base64");
-        this.ws.send(JSON.stringify({ type: "input_audio_buffer.append", audio: b64 }));
-        this.audioBytesSent += buf.length;
+        const audio = this._resampleToInputRate(buf);
+        this.ws.send(
+          JSON.stringify({ type: "input_audio_buffer.append", audio: audio.toString("base64") })
+        );
+        this.audioBytesSent += audio.length;
       }
       this.coldStartBuffer = [];
       this.coldStartBufferSize = 0;
     }
 
-    const base64Audio = Buffer.from(pcmBuffer).toString("base64");
-    this.ws.send(JSON.stringify({ type: "input_audio_buffer.append", audio: base64Audio }));
-    this.audioBytesSent += pcmBuffer.length;
+    const audio = this._resampleToInputRate(Buffer.from(pcmBuffer));
+    this.ws.send(
+      JSON.stringify({ type: "input_audio_buffer.append", audio: audio.toString("base64") })
+    );
+    this.audioBytesSent += audio.length;
     return true;
   }
 

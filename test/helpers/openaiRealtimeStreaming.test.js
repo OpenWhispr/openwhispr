@@ -42,7 +42,11 @@ test("sendAudio drops frames when no connection attempt is in flight (idle/dead 
   const sent = streaming.sendAudio(Buffer.from([1, 2, 3, 4]));
 
   assert.equal(sent, false);
-  assert.equal(streaming.coldStartBuffer.length, 0, "must not buffer forever with no connect in flight");
+  assert.equal(
+    streaming.coldStartBuffer.length,
+    0,
+    "must not buffer forever with no connect in flight"
+  );
 });
 
 test("sendAudio stops buffering once COLD_START_BUFFER_MAX is reached", async () => {
@@ -56,7 +60,11 @@ test("sendAudio stops buffering once COLD_START_BUFFER_MAX is reached", async ()
   streaming.sendAudio(chunk); // size 100000 -> 150000 (still under cap when checked)
   streaming.sendAudio(chunk); // size 150000, over the 144000 cap: dropped
 
-  assert.equal(streaming.coldStartBuffer.length, 3, "4th chunk must be dropped once the cap is exceeded");
+  assert.equal(
+    streaming.coldStartBuffer.length,
+    3,
+    "4th chunk must be dropped once the cap is exceeded"
+  );
   assert.equal(streaming.coldStartBufferSize, 150000);
 });
 
@@ -74,10 +82,11 @@ test("sendAudio flushes buffered audio in order once the socket opens, then send
   assert.equal(sent, true);
   assert.equal(streaming.ws.sent.length, 3);
   const payloads = streaming.ws.sent.map((raw) => JSON.parse(raw).audio);
-  assert.deepEqual(
-    payloads,
-    [Buffer.from("first").toString("base64"), Buffer.from("second").toString("base64"), Buffer.from("third").toString("base64")]
-  );
+  assert.deepEqual(payloads, [
+    Buffer.from("first").toString("base64"),
+    Buffer.from("second").toString("base64"),
+    Buffer.from("third").toString("base64"),
+  ]);
   assert.equal(streaming.coldStartBuffer.length, 0, "buffer must be cleared after flush");
 });
 
@@ -89,12 +98,42 @@ test("connect() preserves audio buffered during beginConnecting() instead of wip
   streaming.sendAudio(Buffer.from("pre-token-fetch audio"));
   assert.equal(streaming.coldStartBuffer.length, 1);
 
-  // connect() requires a real "ws" socket dial, so only assert the pre-reset
-  // guard: the buffer survives a bufferingAudio=true entry into connect()'s
-  // reset block, i.e. it is not cleared a second time.
-  assert.equal(streaming.bufferingAudio, true);
-  streaming.coldStartBuffer = streaming.bufferingAudio ? streaming.coldStartBuffer : [];
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const connected = streaming.connect({
+    apiKey: "key",
+    preconfigured: true,
+    createSocket: async () => socket,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
   assert.equal(streaming.coldStartBuffer.length, 1, "buffer must survive into connect()");
+
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+  await connected;
+
+  streaming.sendAudio(Buffer.from("live"));
+  const payloads = streaming.ws.sent.map((raw) => JSON.parse(raw).audio);
+  assert.deepEqual(payloads, [
+    Buffer.from("pre-token-fetch audio").toString("base64"),
+    Buffer.from("live").toString("base64"),
+  ]);
+  streaming.cleanup();
+});
+
+test("sendAudio upsamples 16kHz capture to the 24kHz session rate", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  streaming.inputRate = 24000;
+  streaming.captureRate = 16000;
+  streaming.ws = makeFakeSocket(WS.OPEN);
+
+  const pcm = new Int16Array([0, 100, 200, 300]);
+  streaming.sendAudio(Buffer.from(pcm.buffer));
+
+  const raw = Buffer.from(JSON.parse(streaming.ws.sent[0]).audio, "base64");
+  const out = new Int16Array(raw.buffer, raw.byteOffset, raw.length / 2);
+  assert.deepEqual([...out], [0, 67, 133, 200, 267, 300]);
+  assert.equal(streaming.audioBytesSent, out.length * 2);
 });
 
 test("cleanup() resets bufferingAudio so a dead instance stops buffering", async () => {

@@ -5392,8 +5392,8 @@ class IPCHandlers {
             await streaming.connect({
               apiKey,
               model: options.model || "gpt-4o-mini-transcribe",
-              // The capture worklet emits 16kHz PCM; declare the true rate.
-              inputRate: 16000,
+              // OpenAI rejects rates below 24kHz; the 16kHz capture is upsampled instead.
+              captureRate: 16000,
               preconfigured: isCloud,
             });
           }
