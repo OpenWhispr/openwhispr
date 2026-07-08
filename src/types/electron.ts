@@ -1144,6 +1144,7 @@ declare global {
       ) => Promise<{
         success: boolean;
         text?: string;
+        warning?: string;
         clientTranscriptionId?: string;
         wordsUsed?: number;
         wordsRemaining?: number;
@@ -1267,6 +1268,7 @@ declare global {
       transcribeAudioFileCloud?: (filePath: string) => Promise<{
         success: boolean;
         text?: string;
+        warning?: string;
         error?: string;
         code?: string;
       }>;

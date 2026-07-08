@@ -542,6 +542,10 @@
         "title": "未检测到音频",
         "description": "录音中未检测到音频，请重试。"
       },
+      "partialTranscription": {
+        "title": "部分转录",
+        "description": "部分录音内容无法转录。"
+      },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 会话不可用。请到「设置」中重新登录。",
         "offline": "你目前离线。云端转录需要互联网连接。",
@@ -2086,6 +2090,7 @@
       "transcribingProvider": "正在通过 {{provider}} 转录...",
       "cancelTranscription": "取消转录",
       "transcriptionComplete": "转录完成",
+      "partialWarning": "部分音频内容无法转录。",
       "openNote": "打开笔记",
       "uploadAnother": "上传另一个",
       "retry": "重试",

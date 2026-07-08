@@ -542,6 +542,10 @@
         "title": "Звук не обнаружен",
         "description": "В записи не обнаружен звук. Попробуйте ещё раз."
       },
+      "partialTranscription": {
+        "title": "Частичная транскрипция",
+        "description": "Не удалось транскрибировать часть записи."
+      },
       "errorDescriptions": {
         "sessionExpired": "Сессия OpenWhispr Cloud недоступна. Войдите снова из Настроек.",
         "offline": "Вы офлайн. Облачная транскрипция требует подключения к интернету.",
@@ -2091,6 +2095,7 @@
       "transcribingProvider": "Транскрибирование через {{provider}}...",
       "cancelTranscription": "Отменить транскрибирование",
       "transcriptionComplete": "Транскрибирование завершено",
+      "partialWarning": "Не удалось транскрибировать часть аудио.",
       "openNote": "Открыть заметку",
       "uploadAnother": "Загрузить ещё",
       "retry": "Повторить",

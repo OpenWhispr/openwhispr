@@ -542,6 +542,10 @@
         "title": "Kein Audio erkannt",
         "description": "Die Aufnahme enthielt kein erkennbares Audio. Bitte versuchen Sie es erneut."
       },
+      "partialTranscription": {
+        "title": "Unvollständige Transkription",
+        "description": "Ein Teil der Aufnahme konnte nicht transkribiert werden."
+      },
       "errorDescriptions": {
         "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
         "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
@@ -2091,6 +2095,7 @@
       "transcribingProvider": "Wird über {{provider}} transkribiert...",
       "cancelTranscription": "Transkription abbrechen",
       "transcriptionComplete": "Transkription abgeschlossen",
+      "partialWarning": "Ein Teil der Audiodatei konnte nicht transkribiert werden.",
       "openNote": "Notiz öffnen",
       "uploadAnother": "Weitere hochladen",
       "retry": "Erneut versuchen",

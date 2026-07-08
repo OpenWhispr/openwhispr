@@ -125,6 +125,7 @@ const AUDIO_MIME_TYPES = {
 const CLOUD_INLINE_LIMIT = 4 * 1024 * 1024;
 const CLOUD_CHUNK_CONCURRENCY = 5;
 const CLOUD_CHUNK_SEGMENT_SECONDS = 240;
+const CLOUD_CHUNK_MAX_ATTEMPTS = 3;
 
 function buildMultipartBody(fileBuffer, fileName, contentType, fields = {}) {
   const boundary = `----OpenWhispr${Date.now()}`;
@@ -168,7 +169,11 @@ async function postMultipart(url, body, boundary, headers = {}) {
   try {
     return { statusCode: response.status, data: JSON.parse(text) };
   } catch {
-    throw new Error(`Invalid JSON response: ${text.slice(0, 200)}`);
+    // Vercel platform errors (413 payload cap, 504 timeout) return non-JSON bodies.
+    throw Object.assign(new Error(`Server error ${response.status}: ${text.slice(0, 120)}`), {
+      code: "SERVER_ERROR",
+      statusCode: response.status,
+    });
   }
 }
 
@@ -191,9 +196,18 @@ function interpretTranscribeResponse(data) {
     });
   }
   if (data.statusCode !== 200) {
-    throw new Error(data.data?.error || `API error: ${data.statusCode}`);
+    throw Object.assign(new Error(data.data?.error || `API error: ${data.statusCode}`), {
+      statusCode: data.statusCode,
+    });
   }
   return data.data;
+}
+
+const NON_RETRYABLE_CHUNK_CODES = new Set(["AUTH_EXPIRED", "LIMIT_REACHED", "NO_SPEECH_DETECTED"]);
+
+function isTransientChunkError(err) {
+  if (NON_RETRYABLE_CHUNK_CODES.has(err.code)) return false;
+  return !err.statusCode || err.statusCode >= 500;
 }
 
 async function chunkedCloudTranscribe({
@@ -243,9 +257,21 @@ async function chunkedCloudTranscribe({
         multipartFields
       );
       const url = new URL(`${apiUrl}/api/transcribe`);
-      const data = await postMultipart(url, body, boundary, authHeader);
 
-      results[index] = interpretTranscribeResponse(data);
+      for (let attempt = 1; ; attempt++) {
+        try {
+          const data = await postMultipart(url, body, boundary, authHeader);
+          results[index] = interpretTranscribeResponse(data);
+          break;
+        } catch (err) {
+          if (attempt >= CLOUD_CHUNK_MAX_ATTEMPTS || !isTransientChunkError(err)) throw err;
+          debugLogger.warn(`Chunk ${index} attempt ${attempt} failed, retrying`, {
+            error: err.message,
+          });
+          await new Promise((resolve) => setTimeout(resolve, 1000 * attempt + Math.random() * 500));
+        }
+      }
+
       completedCount++;
       onProgress?.({
         stage: "transcribing",
@@ -3705,7 +3731,7 @@ class IPCHandlers {
         debugLogger.debug("Cloud transcribe request", { audioSize: audioData.length }, "cloud-api");
 
         if (audioData.length > CLOUD_INLINE_LIMIT) {
-          const { text, responses, lastResponse } = await chunkedCloudTranscribe({
+          const { text, responses, lastResponse, warning } = await chunkedCloudTranscribe({
             buffer: audioData,
             apiUrl,
             authHeader,
@@ -3715,6 +3741,7 @@ class IPCHandlers {
           return {
             success: true,
             text,
+            ...(warning ? { warning } : {}),
             clientTranscriptionId,
             wordsUsed: lastResponse?.wordsUsed,
             wordsRemaining: lastResponse?.wordsRemaining,

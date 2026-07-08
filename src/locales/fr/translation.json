@@ -542,6 +542,10 @@
         "title": "Aucun audio détecté",
         "description": "L'enregistrement ne contient pas d'audio détectable. Réessayez."
       },
+      "partialTranscription": {
+        "title": "Transcription partielle",
+        "description": "Une partie de l'enregistrement n'a pas pu être transcrite."
+      },
       "errorDescriptions": {
         "sessionExpired": "Votre session OpenWhispr Cloud est indisponible. Reconnectez-vous depuis Paramètres.",
         "offline": "Vous êtes hors ligne. La transcription cloud nécessite une connexion Internet.",
@@ -2202,6 +2206,7 @@
       "transcribingProvider": "Transcription via {{provider}}...",
       "cancelTranscription": "Annuler la transcription",
       "transcriptionComplete": "Transcription terminée",
+      "partialWarning": "Une partie de l'audio n'a pas pu être transcrite.",
       "openNote": "Ouvrir la note",
       "uploadAnother": "Téléverser un autre fichier",
       "retry": "Réessayer",
