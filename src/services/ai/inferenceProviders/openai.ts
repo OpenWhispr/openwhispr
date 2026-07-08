@@ -6,6 +6,7 @@ import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
 import { getConfiguredOpenAIBase } from "../openaiBase";
 import { applyThinkingSuppression } from "../thinkingSuppression";
+import { wrapCleanupTranscript } from "../../../config/prompts";
 
 const OPENAI_ENDPOINT_PREF_STORAGE_KEY = "openAiEndpointPreference";
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -139,9 +140,10 @@ export const openaiProvider: InferenceProvider = {
     });
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
+    const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
     const messages = [
       { role: "system", content: systemPrompt },
-      { role: "user", content: text },
+      { role: "user", content: userContent },
     ];
 
     const openAiBase = config.baseUrl?.trim() || getConfiguredOpenAIBase();
@@ -195,11 +197,14 @@ export const openaiProvider: InferenceProvider = {
           } else {
             requestBody.messages = messages;
             requestBody[apiConfig.tokenParam] = maxTokens;
+            if (!config.systemPrompt && model.includes("gpt-oss")) {
+              requestBody.reasoning_effort = "low";
+            }
             applyThinkingSuppression(requestBody, model, resolvedProvider, config);
           }
 
           if (apiConfig.supportsTemperature) {
-            requestBody.temperature = config.temperature || 0.3;
+            requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
           }
 
           const res = await fetch(endpoint, {

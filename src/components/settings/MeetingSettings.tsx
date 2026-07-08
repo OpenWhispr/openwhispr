@@ -8,6 +8,7 @@ import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
 import SelfHostedPanel from "../SelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
+import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 
 export function MeetingSpeakerDetectionRow() {
   const { t } = useTranslation();
@@ -25,15 +26,6 @@ export function MeetingSpeakerDetectionRow() {
 }
 
 const noop = () => {};
-
-function useStartOnboarding() {
-  return useCallback(() => {
-    localStorage.setItem("pendingCloudMigration", "true");
-    localStorage.setItem("onboardingCurrentStep", "0");
-    localStorage.removeItem("onboardingCompleted");
-    window.location.reload();
-  }, []);
-}
 
 export function MeetingTranscriptionPanel() {
   const { t } = useTranslation();

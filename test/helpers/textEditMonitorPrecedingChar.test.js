@@ -19,3 +19,21 @@ test("getPrecedingChar returns unknown when the AX read fails or hangs", async (
   assert.equal(result.state, "unknown");
   assert.ok(Date.now() - start < 3000);
 });
+
+test("activateTargetPid resolves false when no target PID was captured", async () => {
+  const m = new TextEditMonitor();
+  m.lastTargetPid = null;
+  assert.equal(await m.activateTargetPid(), false);
+});
+
+test("activateTargetPid resolves false for an unmapped PID", async () => {
+  const m = new TextEditMonitor();
+  // Non-darwin short-circuits; darwin can't make a non-existent PID frontmost,
+  // so the confirm poll times out. Both resolve quickly to false rather than
+  // reporting a target that was never frontmost as active.
+  m.lastTargetPid = 99999999;
+  const start = Date.now();
+  const result = await m.activateTargetPid();
+  assert.equal(result, false);
+  assert.ok(Date.now() - start < 3000);
+});

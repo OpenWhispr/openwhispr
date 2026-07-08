@@ -101,13 +101,6 @@
     "accessibility": "Bedienungshilfen-Einstellungen sind auf dieser Plattform nicht verfügbar.",
     "systemAudio": "Systemaudio-Einstellungen sind auf dieser Plattform nicht verfügbar."
   },
-  "titleBar": {
-    "quitTitle": "OpenWhispr beenden",
-    "quitConfirmTitle": "OpenWhispr beenden?",
-    "quitConfirmDescription": "Dadurch wird OpenWhispr geschlossen und Hintergrundprozesse werden gestoppt.",
-    "quit": "Beenden",
-    "cancel": "Abbrechen"
-  },
   "upgradePrompt": {
     "paymentFailed": "Ihre Zahlung konnte nicht verarbeitet werden",
     "weeklyLimit": "Sie haben Ihr Wochenlimit erreicht",
@@ -165,14 +158,19 @@
     "unknownError": "Ein unbekannter Fehler ist aufgetreten",
     "copy": "Kopieren",
     "copied": "Kopiert",
-    "done": "Fertig"
+    "done": "Fertig",
+    "skip": "Überspringen"
   },
   "onboarding": {
     "steps": {
       "welcome": "Willkommen",
       "setup": "Einrichtung",
       "permissions": "Berechtigungen",
-      "activation": "Aktivierung"
+      "activation": "Diktat",
+      "useCase": "Über dich",
+      "meeting": "Meetings",
+      "finish": "Fertig",
+      "voiceAgent": "Sprachagent"
     },
     "hotkey": {
       "couldNotRegisterTitle": "Dieser Hotkey konnte nicht registriert werden",
@@ -186,17 +184,17 @@
     "permissions": {
       "title": "Berechtigungen",
       "microphoneTitle": "Mikrofon",
-      "microphoneDescription": "Nimmt Ihre Stimme für die Transkription auf",
+      "microphoneDescription": "Wandelt deine Sprache in Text um. Es wird nichts aufgenommen, bis du deinen Hotkey drückst.",
       "grant": "Erteilen",
       "grantAccess": "Zugriff gewähren",
       "accessibilityTitle": "Bedienungshilfen",
-      "accessibilityDescription": "Ermöglicht das automatische Einfügen transkribierter Texte in jede App",
+      "accessibilityDescription": "Fügt den fertigen Text direkt in die App ein, in der du gerade bist — Dokumente, E-Mail, Chat.",
       "testAndGrant": "Testen & erteilen",
       "requiredForApp": "Erforderlich, damit OpenWhispr funktioniert",
       "microphoneRequired": "Mikrofonzugriff erforderlich",
       "openSystemSettings": "Systemeinstellungen öffnen",
       "systemAudioTitle": "Systemaudio",
-      "systemAudioDescription": "Transkribiert Meetings, Anrufe, Vorträge, Podcasts und andere Systemaudios.",
+      "systemAudioDescription": "Lässt den Meeting-Rekorder die Gegenseite deiner Anrufe hören — Meetings, Vorlesungen, Podcasts. Kann später in den Einstellungen aktiviert werden.",
       "optional": "Optional",
       "recommended": "Empfohlen",
       "accessibilityTroubleshooting": "Schalte in Systemeinstellungen → Bedienungshilfen den Schalter für OpenWhispr aus und wieder ein. Wenn das nicht hilft, entferne OpenWhispr aus der Liste und füge es erneut hinzu. Klappt's immer noch nicht? Schreib an support@openwhispr.com."
@@ -207,7 +205,7 @@
       "preferredLanguage": "Bevorzugte Sprache"
     },
     "activation": {
-      "title": "Aktivierungs-Einrichtung",
+      "title": "Diktat-Einrichtung",
       "description": "Legen Sie fest, wie Sie das Diktat auslösen",
       "hotkey": "Hotkey",
       "mode": "Modus",
@@ -218,11 +216,92 @@
       "holdHotkey": "{{hotkey}} gedrückt halten",
       "textareaPlaceholder": "Hier klicken und Hotkey zum Diktieren verwenden..."
     },
+    "voiceAgent": {
+      "title": "Sprachagent-Einrichtung",
+      "description": "Sprechen Sie mit Ihrem KI-Agenten per Tastendruck",
+      "hotkey": "Hotkey",
+      "howItWorks": "Drücken Sie die Taste und sagen Sie, was Sie möchten — zum Beispiel „schreibe eine kurze Dankesnachricht“. {{agentName}} schreibt das Ergebnis direkt an Ihren Cursor. Sie müssen nicht zuerst „Hey {{agentName}}“ sagen.",
+      "test": "Ausprobieren",
+      "testInstruction": "Klicke unten, drücke {{hotkey}} und sprich einen Befehl",
+      "testSetHotkey": "Lege oben einen Hotkey fest, um es auszuprobieren",
+      "testPlaceholder": "Klicke hier, drücke deinen Hotkey und sprich eines der Beispiele...",
+      "examples": [
+        "Übersetze ins Italienische: „Ich spreche schneller, als ich tippe“",
+        "Schreibe eine kurze E-Mail an meinen Chef, dass ich eine Beförderung möchte, sein Name ist Mark",
+        "Was ist 5 × 5?"
+      ],
+      "optionalNote": "Optional — Sie können ihn jederzeit in den Einstellungen festlegen oder ändern."
+    },
     "connectivity": {
       "title": "OpenWhispr Cloud ist aus diesem Netzwerk nicht erreichbar",
       "body": "{{cause}} Sie können zur lokalen Engine wechseln oder fortfahren und es später erneut versuchen.",
       "useLocal": "Lokale Engine verwenden",
       "continue": "Trotzdem fortfahren"
+    },
+    "useCase": {
+      "title": "Was führt dich hierher?",
+      "description": "Wir sind ein kleines Team und liefern jede Woche. Deine Auswahl richtet die App für dich ein — und sagt uns, was wir als Nächstes bauen sollen.",
+      "noteLabel": "Möchtest du uns noch etwas mitteilen?",
+      "notePlaceholder": "Optional",
+      "options": {
+        "dictation": {
+          "title": "Schneller schreiben",
+          "description": "Diktiere in jede App, statt zu tippen"
+        },
+        "meetings": {
+          "title": "Meeting-Notizen & Zusammenfassungen",
+          "description": "Meetings aufnehmen, transkribieren und zusammenfassen"
+        },
+        "healthcare": {
+          "title": "Medizinische, klinische & Therapie-Transkription",
+          "description": "Diktiere Patientennotizen, Sitzungsnotizen und Berichte"
+        },
+        "translation": {
+          "title": "Sprachen übersetzen",
+          "description": "Sprich eine Sprache, schreibe eine andere"
+        },
+        "ai": {
+          "title": "Mit meiner KI sprechen",
+          "description": "Steuere ChatGPT, Claude und andere Agenten per Stimme"
+        },
+        "upload": {
+          "title": "Audiodateien hochladen",
+          "description": "Lade MP3, OGG und mehr hoch und transkribiere sie"
+        }
+      },
+      "selectHint": "Wähle alles Zutreffende aus"
+    },
+    "meeting": {
+      "title": "Meeting-Notizen",
+      "description": "Erfasse und fasse deine Meetings zusammen",
+      "autoDetect": "OpenWhispr erkennt automatisch, wenn du in einem Meeting bist, und bietet an, Notizen zu starten — ohne dich wird nichts aufgenommen.",
+      "notification": {
+        "title": "Meeting erkannt",
+        "body": "Es klingt, als wärst du in einem Meeting. Notizen aufnehmen?",
+        "cta": "Aufnahme starten"
+      },
+      "hotkeyLabel": "Meeting-Hotkey",
+      "hotkeyHint": "Optional — drücke ihn in jedem Meeting, um sofort eine Notiz zu starten."
+    },
+    "finish": {
+      "title": "Alles bereit",
+      "cloudDescription": "Du nutzt OpenWhispr Cloud — schnell, präzise, keine Datenspeicherung und 2.000 Wörter gratis pro Woche. Lieber alles auf dem Gerät? Wechsle in den Einstellungen zur lokalen Verarbeitung.",
+      "localDescription": "Du bist mit lokaler Verarbeitung oder deinem eigenen Schlüssel eingerichtet. Passe die Audioverarbeitung jederzeit in den Einstellungen an.",
+      "cleanupNote": "Die KI-Textbereinigung läuft mit sinnvollen Standardwerten. Du kannst sie jederzeit in den Einstellungen anpassen.",
+      "openSettings": "Einstellungen öffnen",
+      "skipForNow": "Vorerst überspringen",
+      "corti": {
+        "title": "Du hast uns gesagt, dass du für klinische Transkription hier bist",
+        "description": "Wir sind eine Partnerschaft mit Corti eingegangen — klinische Spracherkennung mit höchster Genauigkeit, HIPAA-konform.",
+        "createAccount": "Corti-Konto erstellen",
+        "creditBadge": "50 $ Gratis-Guthaben",
+        "regionHint": "Wähle, wo dein Audio verarbeitet wird — USA oder EU.",
+        "useCorti": "Corti verwenden",
+        "skip": "Jetzt nicht",
+        "step1": "Registriere dich auf corti.ai",
+        "step2": "Öffne die Corti-Konsole und erstelle API-Zugangsdaten",
+        "step3": "Füge Client-ID und Secret unten ein"
+      }
     }
   },
   "streaming": {
@@ -312,7 +391,16 @@
       "retryError": "Erneute Transkription fehlgeschlagen",
       "audioNotFound": "Audiodatei nicht gefunden oder abgelaufen",
       "noAiProcessing": "Auf diese Transkription wurde keine KI-Verarbeitung angewendet",
-      "rawTranscript": "Rohtranskript"
+      "rawTranscript": "Rohtranskript",
+      "discarded": {
+        "show": "Verworfene anzeigen",
+        "hide": "Verworfene ausblenden",
+        "badge": "Verworfen",
+        "recording": "Verworfene Aufnahme",
+        "recordingWithDuration": "Verworfene Aufnahme · {{duration}}",
+        "recover": "Wiederherstellen",
+        "recovered": "Wiederhergestellt"
+      }
     },
     "cloudMigration": {
       "title": "Willkommen bei OpenWhispr Cloud",
@@ -424,19 +512,27 @@
     "apiKeyOptional": "API-Schlüssel (optional)",
     "getKey": "Schlüssel holen ->",
     "endpointUrl": "Endpoint-URL",
+    "azureHint": "Azure AI Foundry: Geben Sie Ihren Ressourcen-Endpunkt ein (z. B. https://your-resource.cognitiveservices.azure.com) und setzen Sie „Model“ auf den exakten Namen Ihrer Bereitstellung.",
     "customProvider": "Benutzerdefiniert",
     "fallback": {
       "whisperModelDescription": "Modell",
       "parakeetModelDescription": "NVIDIA-Parakeet-Modell"
     },
-    "whisperModels": "Whisper-Modelle"
+    "whisperModels": "Whisper-Modelle",
+    "corti": {
+      "clientId": "Client-ID",
+      "clientSecret": "Client-Secret",
+      "environment": "Datenregion",
+      "tenant": "Tenant"
+    }
   },
   "hooks": {
     "audioRecording": {
       "errorTitles": {
         "sessionExpired": "Sitzung abgelaufen",
         "offline": "Sie sind offline",
-        "dailyLimitReached": "Tägliches Limit erreicht"
+        "dailyLimitReached": "Tägliches Limit erreicht",
+        "providerRateLimited": "Anbieter-Ratenlimit erreicht"
       },
       "fallback": {
         "title": "Fallback-Modus",
@@ -449,7 +545,8 @@
       "errorDescriptions": {
         "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
         "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
-        "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan."
+        "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan.",
+        "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut."
       }
     },
     "clipboard": {
@@ -630,6 +727,11 @@
       "welcomeBack": "Willkommen zurück",
       "welcomeBackName": "Willkommen zurück, {{name}}"
     },
+    "sso": {
+      "continueWithSSO": "Mit SSO anmelden",
+      "emailRequired": "Geben Sie Ihre geschäftliche E-Mail-Adresse ein, um SSO zu verwenden.",
+      "failed": "Single Sign-on fehlgeschlagen. Bitte versuchen Sie es erneut."
+    },
     "social": {
       "completeInBrowser": "Anmeldung im Browser abschließen",
       "continueWithApple": "Weiter mit Apple",
@@ -719,7 +821,8 @@
     "resendIn": "Erneut senden in {{seconds}}s",
     "verifiedDescription": "Ihr Konto ist eingerichtet.",
     "verifiedTitle": "E-Mail bestätigt",
-    "waiting": "Warte auf Bestätigung..."
+    "waiting": "Warte auf Bestätigung...",
+    "backToSignIn": "Zurück zur Anmeldung"
   },
   "errorBoundary": {
     "description": "Ein unerwarteter Fehler ist aufgetreten. Bitte laden Sie die Seite neu.",
@@ -803,7 +906,8 @@
     "pressAnyKeyMac": "Beliebige Taste drücken oder ⌘⇧K",
     "recording": "Aufnahme",
     "tryShortcut": "Versuchen Sie Ctrl+Shift+K",
-    "tryShortcutMac": "Versuchen Sie ⌘⇧K"
+    "tryShortcutMac": "Versuchen Sie ⌘⇧K",
+    "remove": "Hotkey entfernen"
   },
   "languageSelector": {
     "noLanguagesFound": "Keine Sprachen gefunden",
@@ -1283,15 +1387,21 @@
         "linuxPttPermissionDescription": "Führen Sie diesen Befehl aus und melden Sie sich ab/an: sudo usermod -aG input $USER",
         "linuxPttSetupTitle": "Gedrückt halten zum Sprechen erfordert Einrichtung",
         "linuxPttSetupDescription": "Ihr Benutzer benötigt Zugriff auf die Tastatureingabegeräte.",
-        "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls ab und wieder an."
+        "linuxPttSetupNote": "Melden Sie sich nach dem Ausführen des Befehls ab und wieder an.",
+        "hyprlandConfigWriteWarningTitle": "Hyprland-Tastenkombinationen werden nicht dauerhaft gespeichert",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr kann nicht in {{path}} schreiben. Deshalb bleiben Tastenkombinationen nach einem Neuladen der Hyprland-Konfiguration nicht erhalten. Stellen Sie sicher, dass die Datei existiert und beschreibbar ist.",
+        "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert."
       },
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
         "description": "Meeting-Modus starten und das Panel an den Bildschirmrand verschieben",
-        "clear": "Hotkey entfernen",
         "layoutLabel": "Beim Auslösen per Hotkey öffnen in:",
         "layoutFullWidth": "Volle Breite",
         "layoutSidePanel": "Seitenleiste"
+      },
+      "voiceAgentHotkey": {
+        "title": "Sprachagent-Hotkey",
+        "description": "Sagen Sie, was Sie brauchen — Ihr KI-Agent schreibt das Ergebnis, nicht Ihre Worte"
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",
@@ -1504,7 +1614,9 @@
       "audioStorageFiles": "{{count}} Dateien, {{size}}",
       "audioStorageEmpty": "Keine Audiodateien gespeichert",
       "clearAllAudio": "Alle Audiodateien löschen",
-      "clearAllAudioConfirm": "Alle gespeicherten Audiodateien löschen? Dies kann nicht rückgängig gemacht werden."
+      "clearAllAudioConfirm": "Alle gespeicherten Audiodateien löschen? Dies kann nicht rückgängig gemacht werden.",
+      "saveDiscarded": "Verworfene Diktate speichern",
+      "saveDiscardedDescription": "Wenn Sie ein Diktat mit Escape abbrechen, bleibt das Audio im Verlauf, damit Sie es wiederherstellen können. Erfordert aktive Daten- und Audio-Aufbewahrung."
     },
     "prompts": {
       "description": "Den einheitlichen System-Prompt anzeigen, anpassen und testen, der Textbereinigung und Anweisungserkennung steuert",
@@ -1515,7 +1627,8 @@
       "description": "Wählen Sie eine Engine für Diktat und Notizaufnahme",
       "tabs": {
         "dictation": "Diktat",
-        "noteRecording": "Notizaufnahme"
+        "noteRecording": "Notizaufnahme",
+        "upload": "Audio-Upload"
       },
       "selfHostedStreamingNote": "Erfordert einen Server, der Streaming-Transkription unterstützt."
     },
@@ -1811,7 +1924,10 @@
         "openai_whisper_1": "Originales Whisper-Modell",
         "groq_whisper_large_v3": "Hochpräzise Spracherkennung",
         "groq_whisper_large_v3_turbo": "216x Echtzeitgeschwindigkeit",
-        "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription"
+        "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
+        "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
+        "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
+        "tinfoil_voxtral_mini_realtime": "Nachweisbar private Streaming-Transkription"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",
@@ -1842,7 +1958,13 @@
         "anthropic_claude_opus_4_8": "Leistungsstärkstes Claude-Modell",
         "anthropic_claude_opus_4_7": "Leistungsstarkes Opus-Modell",
         "anthropic_claude_opus_4_6": "Vorherige Opus-Generation, 1M Kontext",
-        "anthropic_claude_opus_4_5": "Früheres Opus-Modell"
+        "anthropic_claude_opus_4_5": "Früheres Opus-Modell",
+        "tinfoil_deepseek_v4_pro": "Privates Long-Context-Reasoning in sicheren Enklaven, 800K Kontext",
+        "tinfoil_glm_5_2": "Privates agentisches Engineering-Modell in sicheren Enklaven, 384K Kontext",
+        "tinfoil_kimi_k2_6": "Privates Modell für langfristiges Coding und Multimodalität, 256K Kontext",
+        "tinfoil_gemma4_31b": "Privates mehrsprachiges Reasoning-Modell mit Tool-Aufrufen, 256K Kontext",
+        "tinfoil_gpt_oss_120b": "Privates Open-Weight-Reasoning-Modell mit Tool-Nutzung, 131K Kontext",
+        "tinfoil_llama3_3_70b": "Privates Konversationsmodell mit Tool-Aufrufen, 128K Kontext"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",
@@ -2031,18 +2153,15 @@
       "transcribingCloud": "Wird über die Cloud transkribiert...",
       "transcribingLocal": "Wird lokal transkribiert...",
       "transcribingProvider": "Wird über {{provider}} transkribiert...",
+      "cancelTranscription": "Transkription abbrechen",
       "transcriptionComplete": "Transkription abgeschlossen",
       "openNote": "Notiz öffnen",
       "uploadAnother": "Weitere hochladen",
       "retry": "Erneut versuchen",
       "startOver": "Neu beginnen",
-      "transcriptionSettings": "Transkriptionseinstellungen",
       "newFolder": "Neuer Ordner",
       "folderName": "Ordnername",
       "create": "Erstellen",
-      "setupTitle": "Transkription einrichten",
-      "setupDescription": "Wähle, wie dein Audio transkribiert werden soll. Dies gilt auch für die Live-Diktierfunktion.",
-      "continue": "Weiter",
       "openwhisprCloud": "OpenWhispr Cloud",
       "custom": "Benutzerdefiniert",
       "selectFolder": "Ordner auswählen",
@@ -2205,15 +2324,56 @@
     "addWord": "Wort hinzufügen",
     "removeWord": "{{word}} entfernen",
     "clearAll": "Alle löschen",
-    "howItWorks": "So funktioniert es",
-    "howItWorksDetail": "Hinzugefügte Wörter werden in den KI-Prompt aufgenommen, damit das Modell diese Begriffe bei der Transkriptionsbereinigung erkennt und beibehält.",
-    "autoManaged": "Agent-Name (automatisch verwaltet)",
-    "inputHint": "Enter drücken zum Hinzufügen",
-    "title": "Benutzerdefiniertes Wörterbuch",
-    "description": "Bringe der KI dein Vokabular bei – Namen, Fachbegriffe und Ausdrücke, die sie sonst übersehen könnte",
     "clearTitle": "Wörterbuch leeren?",
     "clearDescription": "Dadurch werden alle Wörter aus deinem benutzerdefinierten Wörterbuch entfernt. Diese Aktion kann nicht rückgängig gemacht werden.",
-    "addPlaceholder": "Ein Wort oder eine Phrase hinzufügen..."
+    "addPlaceholder": "Wörter durch Kommas getrennt hinzufügen – OpenWhispr, Supabase, John Snow, ARR",
+    "add": "Hinzufügen",
+    "importWords": "Wörter importieren",
+    "importPlaceholder": "Wörter durch Kommas getrennt einfügen...",
+    "separateWithCommas": "Mit Kommas trennen",
+    "wordsReady_one": "{{count}} Wort bereit",
+    "wordsReady_other": "{{count}} Wörter bereit",
+    "import": "Importieren",
+    "yourDictionary": "Dein Wörterbuch",
+    "exportDictionary": "Wörterbuch exportieren",
+    "exportFailed": "Export fehlgeschlagen",
+    "editWord": "{{word}} bearbeiten",
+    "noMatches": "Keine Treffer — Enter drücken, um \"{{word}}\" hinzuzufügen",
+    "tabDictionary": "Wörterbuch",
+    "tabSnippets": "Snippets",
+    "snippets": {
+      "title": "Snippets",
+      "edit": "{{trigger}} bearbeiten",
+      "remove": "{{trigger}} entfernen",
+      "editTitle": "Snippet bearbeiten",
+      "dialogDescription": "Wenn du den Auslöser sprichst, wird er durch deinen gespeicherten Text ersetzt.",
+      "triggerLabel": "Auslöser",
+      "triggerPlaceholder": "z. B. mein Kalender",
+      "replacementLabel": "Ersetzung",
+      "replacementPlaceholder": "Text, der beim Sprechen des Auslösers eingefügt wird …",
+      "create": "Snippet erstellen",
+      "duplicate": "Ein Snippet mit diesem Auslöser existiert bereits",
+      "emptyTitle": "Sag es nur",
+      "emptyTitleAccent": "einmal",
+      "emptyDescription": "Sprich ein Auslösewort und OpenWhispr ersetzt es durch deinen gespeicherten Text – Links, Intros, Grußformeln, Prompts.",
+      "new": "Neues Snippet",
+      "examples": {
+        "linkedinTrigger": "Mein LinkedIn",
+        "linkedinText": "linkedin.com/in/du",
+        "rewriteTrigger": "Umschreib-Prompt",
+        "rewriteText": "Schreibe das prägnanter und professioneller um",
+        "introTrigger": "Intro-E-Mail",
+        "introText": "Hallo, ich würde mich freuen, diese Woche Zeit für ein Gespräch zu finden …",
+        "signoffTrigger": "Grußformel",
+        "signoffText": "Viele Grüße, Alex · alex@example.com"
+      },
+      "addPlaceholder": "Auslöser-Phrase hinzufügen – „mein Kalender“, „mein LinkedIn“"
+    },
+    "emptyTitle": "Dein Wörterbuch ist leer",
+    "emptyDescription": "Füge Wörter hinzu, die {{agentName}} immer richtig erkennen soll: Namen, Tools, Abkürzungen.",
+    "addFirstWord": "Füge dein erstes Wort hinzu",
+    "importList": "Liste importieren",
+    "agentDefault": "Standardmäßig enthalten"
   },
   "sidebar": {
     "home": "Startseite",
@@ -2368,9 +2528,8 @@
   },
   "agentMode": {
     "settings": {
-      "hotkey": "Agent-Tastenkombination",
-      "hotkeyDescription": "Tastenkombination zum Umschalten des Agent-Overlays",
-      "clearHotkey": "Hotkey entfernen",
+      "hotkey": "Chat-Agent-Hotkey",
+      "hotkeyDescription": "Öffnet und schließt das Chat-Agent-Overlay",
       "model": "Agent-Modell",
       "modelDescription": "KI-Modell für Agent-Unterhaltungen",
       "systemPrompt": "System-Prompt",
@@ -2542,15 +2701,7 @@
     "noUpcoming": "Keine anstehenden Ereignisse",
     "meetingStarting": "Meeting beginnt jetzt",
     "today": "Heute",
-    "tomorrow": "Morgen",
-    "detection": {
-      "title": "Meeting-Erkennung",
-      "description": "Automatisch erkennen, wenn du in einem Meeting bist",
-      "processDetection": "App-Erkennung",
-      "processDescription": "Erkennen, welche App du verwendest, wenn ein Meeting erkannt wird",
-      "audioDetection": "Audio-Erkennung",
-      "audioDescription": "Benachrichtigung bei anhaltender Mikrofonaktivität"
-    }
+    "tomorrow": "Morgen"
   },
   "upcoming": {
     "title": "Anstehende Meetings",

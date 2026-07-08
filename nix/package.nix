@@ -6,11 +6,11 @@
 
 let
   pname = "openwhispr";
-  version = "1.7.2";
+  version = "1.7.4";
 
   src = fetchurl {
     url = "https://github.com/OpenWhispr/openwhispr/releases/download/v${version}/OpenWhispr-${version}-linux-x86_64.AppImage";
-    hash = "sha256-EPJTZFtd2bQ026KNcI/FOHfoAMu96HKfJxTPceTc5jw=";
+    hash = "sha256-hp7FVUi5/K+QiQam8YAOrRsemFkC8MnupT+hhroP+6Y=";
   };
 
   appimageContents = appimageTools.extractType2 { inherit pname version src; };
@@ -35,6 +35,7 @@ appimageTools.wrapType2 {
     libsecret # Electron safeStorage keyring (API keys at rest)
     libnotify # Electron desktop notifications
     libpulseaudio # Chromium mic capture via PulseAudio/PipeWire
+    pipewire # Native Linux system audio helper links libpipewire-0.3
     stdenv.cc.cc.lib # libstdc++/libgomp for bundled whisper/llama/sherpa/qdrant
   ];
 

@@ -27,12 +27,7 @@ import { useWorkspace } from "../hooks/useWorkspace";
 const platform = getCachedPlatform();
 
 export type ControlPanelView =
-  | "home"
-  | "chat"
-  | "personal-notes"
-  | "dictionary"
-  | "upload"
-  | "integrations";
+  "home" | "chat" | "personal-notes" | "dictionary" | "upload" | "integrations";
 
 interface ControlPanelSidebarProps {
   activeView: ControlPanelView;

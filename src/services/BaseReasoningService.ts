@@ -1,5 +1,6 @@
 import { getCleanupSystemPrompt } from "../config/prompts";
 import { getSettings } from "../stores/settingsStore";
+import { getDictionaryHintWords } from "../utils/snippets";
 
 export interface ReasoningConfig {
   maxTokens?: number;
@@ -17,7 +18,7 @@ export abstract class BaseReasoningService {
   protected isProcessing = false;
 
   protected getCustomDictionary(): string[] {
-    return getSettings().customDictionary;
+    return getDictionaryHintWords(getSettings());
   }
 
   protected getPreferredLanguage(): string {

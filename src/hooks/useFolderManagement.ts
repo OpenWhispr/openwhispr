@@ -208,7 +208,7 @@ export function useFolderManagement(): UseFolderManagementReturn {
           const personalFolder = findDefaultFolder(items);
           if (personalFolder) setActiveFolderId(personalFolder.id);
         }
-        syncService.syncAll().catch(console.error);
+        syncService.requestSyncAll("manual");
       } else if (result.error) {
         toast({
           title: t("notes.folders.couldNotDelete"),
