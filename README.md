@@ -110,5 +110,5 @@ We welcome contributions. Fork the repo, create a feature branch, and open a pul
 - **[llama.cpp](https://github.com/ggerganov/llama.cpp)** — local LLM inference for AI text processing
 - **[Electron](https://www.electronjs.org/)** — cross-platform desktop framework
 - **[React](https://react.dev/)** — UI component library
-- **[shadcn/ui](https://ui.shadcn.com/)** — accessible components built on Radix primitives
+- **[shadcn/ui](https://ui.shadcn.com/)** — accessible components built on Base UI primitives
 - **[Neon](https://console.neon.tech/app/?promo=openwhispr)** — serverless Postgres powering OpenWhispr Cloud
