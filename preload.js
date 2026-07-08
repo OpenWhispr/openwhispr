@@ -105,6 +105,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("semantic-reindex-progress", listener);
   },
   updateNoteCloudId: (id, cloudId) => ipcRenderer.invoke("db-update-note-cloud-id", id, cloudId),
+  updateNoteShareState: (id, state) => ipcRenderer.invoke("db-update-note-share-state", id, state),
 
   // Folder functions
   getFolders: () => ipcRenderer.invoke("db-get-folders"),

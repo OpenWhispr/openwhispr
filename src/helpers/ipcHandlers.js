@@ -1159,6 +1159,14 @@ class IPCHandlers {
       return this.databaseManager.updateNoteCloudId(id, cloudId);
     });
 
+    ipcMain.handle("db-update-note-share-state", async (event, id, state) => {
+      const note = this.databaseManager.updateNoteShareState(id, state);
+      if (note) {
+        setImmediate(() => this.broadcastToWindows("note-updated", note));
+      }
+      return note;
+    });
+
     ipcMain.handle("db-get-folders", async () => {
       return this.databaseManager.getFolders();
     });

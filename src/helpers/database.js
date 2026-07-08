@@ -1491,8 +1491,6 @@ class DatabaseManager {
         "deleted_at",
         "client_note_id",
         "cloud_id",
-        "is_shared",
-        "share_token",
       ];
       const fields = [];
       const values = [];
@@ -2284,6 +2282,25 @@ class DatabaseManager {
       return this.db.prepare("SELECT * FROM notes WHERE id = ?").get(id);
     } catch (error) {
       debugLogger.error("Error updating note cloud_id", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  // Share bookkeeping, not a content edit — must not bump updated_at (which
+  // would reorder note lists and churn sync last-write-wins comparisons).
+  updateNoteShareState(id, { is_shared, share_token }) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      if (share_token !== undefined) {
+        this.db
+          .prepare("UPDATE notes SET is_shared = ?, share_token = ? WHERE id = ?")
+          .run(is_shared, share_token, id);
+      } else {
+        this.db.prepare("UPDATE notes SET is_shared = ? WHERE id = ?").run(is_shared, id);
+      }
+      return this.db.prepare("SELECT * FROM notes WHERE id = ?").get(id);
+    } catch (error) {
+      debugLogger.error("Error updating note share state", { error: error.message }, "database");
       throw error;
     }
   }

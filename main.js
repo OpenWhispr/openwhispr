@@ -546,8 +546,10 @@ function handleInvitationDeepLink(deepLinkUrl) {
     if (isLiveWindow(windowManager.controlPanelWindow)) {
       windowManager.controlPanelWindow.show();
       windowManager.controlPanelWindow.focus();
+      // Best-effort fast path; the renderer may not be listening yet (reload,
+      // lazy mount). Only the get-pending-invitation-token pull consumes the
+      // stash — the renderer also pulls on push receipt to mark it handled.
       windowManager.controlPanelWindow.webContents.send("workspace-invitation-token", token);
-      pendingInvitationDeepLinkToken = null;
     } else {
       windowManager.createControlPanelWindow();
     }

@@ -215,7 +215,7 @@ export async function persistNoteShareState(
   noteId: number,
   updates: { is_shared: number; share_token?: string | null }
 ): Promise<void> {
-  await window.electronAPI?.updateNote(noteId, updates);
+  await window.electronAPI?.updateNoteShareState(noteId, updates);
 }
 
 export function getShareCacheEntry(cloudId: string): NoteShareCacheEntry | null {

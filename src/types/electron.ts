@@ -605,8 +605,6 @@ declare global {
           participants?: string | null;
           diarization_enabled?: number | null;
           expected_speaker_count?: number | null;
-          is_shared?: number;
-          share_token?: string | null;
         }
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;
@@ -626,6 +624,10 @@ declare global {
         callback: (data: { done: number; total: number }) => void
       ) => () => void;
       updateNoteCloudId: (id: number, cloudId: string) => Promise<NoteItem>;
+      updateNoteShareState: (
+        id: number,
+        state: { is_shared: number; share_token?: string | null }
+      ) => Promise<NoteItem>;
 
       // Folder operations
       getFolders: () => Promise<FolderItem[]>;
