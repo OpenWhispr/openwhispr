@@ -8,6 +8,7 @@ const { isPortAvailable } = require("../utils/serverUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { app } = require("electron");
 const sidecarPidFile = require("./sidecarPidFile");
+const { UNKNOWN_DURATION_TIMEOUT_MS } = require("./transcriptionTimeout");
 
 // Range kept clear of cliBridge (8200-8219) to avoid port-bind collisions.
 const PORT_RANGE_START = 8221;
@@ -471,7 +472,8 @@ class LlamaServerManager {
             "Content-Type": "application/json",
             "Content-Length": Buffer.byteLength(body),
           },
-          timeout: 300000,
+          // No audio duration to scale on here; use the flat cap.
+          timeout: UNKNOWN_DURATION_TIMEOUT_MS,
         },
         (res) => {
           let data = "";

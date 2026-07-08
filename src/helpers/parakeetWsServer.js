@@ -13,6 +13,7 @@ const { getSafeTempDir } = require("./safeTempDir");
 const sidecarPidFile = require("./sidecarPidFile");
 const { parseOfflineMessage, createOnlineAccumulator } = require("./parakeetWsResult");
 const { pcm16ToFloat32 } = require("../utils/audioUtils");
+const { computeTranscriptionTimeoutMs } = require("./transcriptionTimeout");
 
 const PORT_RANGE_START = 6006;
 const PORT_RANGE_END = 6029;
@@ -260,6 +261,11 @@ class ParakeetWsServer {
   }
 
   _transcribeOffline(samplesBuffer, sampleRate) {
+    // float32 samples: 4 bytes each; scale the timeout with audio length.
+    const timeoutMs = computeTranscriptionTimeoutMs(
+      sampleRate > 0 ? samplesBuffer.length / 4 / sampleRate : NaN
+    );
+
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
       let result = "";
@@ -269,7 +275,7 @@ class ParakeetWsServer {
           ws.close();
         } catch {}
         reject(new Error("parakeet-ws transcription timed out"));
-      }, TRANSCRIPTION_TIMEOUT_MS);
+      }, timeoutMs);
 
       const ws = new WebSocket(`ws://127.0.0.1:${this.port}`);
 

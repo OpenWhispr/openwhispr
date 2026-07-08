@@ -16,6 +16,7 @@ const {
   transcriptsLooselyOverlap,
   buildMergedCandidates,
 } = require("./transcriptText");
+const { computeTranscriptionTimeoutMs } = require("./transcriptionTimeout");
 
 const DIARIZATION_TIMEOUT_MS = 3600000; // 60 minutes
 const POST_MERGE_CONTEXT_WINDOW_MS = 6000;
@@ -318,6 +319,15 @@ class DiarizationManager {
       wavPath,
     });
 
+    // 16 kHz mono s16le WAV is 32000 bytes/s; scale with length but never below the 60-minute floor.
+    let timeoutMs = DIARIZATION_TIMEOUT_MS;
+    try {
+      timeoutMs = Math.max(
+        DIARIZATION_TIMEOUT_MS,
+        computeTranscriptionTimeoutMs(fs.statSync(wavPath).size / 32000)
+      );
+    } catch {}
+
     return new Promise((resolve) => {
       let stdout = "";
       let stderr = "";
@@ -341,10 +351,10 @@ class DiarizationManager {
       };
 
       const timeout = setTimeout(() => {
-        debugLogger.warn("Diarization timed out", { timeoutMs: DIARIZATION_TIMEOUT_MS });
+        debugLogger.warn("Diarization timed out", { timeoutMs });
         gracefulStopProcess(proc);
         resolve([]);
-      }, DIARIZATION_TIMEOUT_MS);
+      }, timeoutMs);
 
       proc.stdout.on("data", (data) => {
         stdout += data.toString();
