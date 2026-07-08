@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { syncService } from "../services/SyncService.js";
 import type { NoteItem, NoteShareInvitation, ShareSettings } from "../types/electron";
 
 export interface NoteShareCacheEntry {
@@ -52,6 +53,11 @@ function ensureIpcListeners() {
     const dispose = window.electronAPI.onNoteUpdated((note) => {
       if (note) {
         updateNoteInStore(note);
+        // Sharing is per-note consent: edits to a shared note must reach the
+        // cloud even when the global backup toggle is off.
+        if (note.is_shared) {
+          syncService.debouncedPush("note", note.id);
+        }
       }
     });
     if (typeof dispose === "function") {
@@ -205,11 +211,15 @@ export async function startMigration(): Promise<void> {
   useNoteStore.setState({ migration: null });
 }
 
-export function setShareCache(cloudId: string, entry: NoteShareCacheEntry): void {
-  const { shareByCloudId } = useNoteStore.getState();
-  const next = new Map(shareByCloudId);
-  next.set(cloudId, entry);
-  useNoteStore.setState({ shareByCloudId: next });
+export async function persistNoteShareState(
+  noteId: number,
+  updates: { is_shared: number; share_token?: string | null }
+): Promise<void> {
+  await window.electronAPI?.updateNote(noteId, updates);
+}
+
+export function getShareCacheEntry(cloudId: string): NoteShareCacheEntry | null {
+  return useNoteStore.getState().shareByCloudId.get(cloudId) ?? null;
 }
 
 export function updateShareCache(
@@ -219,14 +229,6 @@ export function updateShareCache(
   const { shareByCloudId } = useNoteStore.getState();
   const next = new Map(shareByCloudId);
   next.set(cloudId, updater(next.get(cloudId)));
-  useNoteStore.setState({ shareByCloudId: next });
-}
-
-export function clearShareCache(cloudId: string): void {
-  const { shareByCloudId } = useNoteStore.getState();
-  if (!shareByCloudId.has(cloudId)) return;
-  const next = new Map(shareByCloudId);
-  next.delete(cloudId);
   useNoteStore.setState({ shareByCloudId: next });
 }
 

@@ -59,6 +59,15 @@ class SyncService {
     );
   }
 
+  // Sharing a note is per-note consent: shared notes keep syncing even when
+  // the global cloud-backup toggle is off, as long as the account can sync.
+  private canSyncSharedNotes(): boolean {
+    return (
+      localStorage.getItem("isSignedIn") === "true" &&
+      localStorage.getItem("isSubscribed") === "true"
+    );
+  }
+
   // lastSyncedAt is written only when a syncAll() pass completes, and
   // localStorage is shared across windows, so it doubles as the global
   // "last completed sync" stamp for throttling.
@@ -92,7 +101,21 @@ class SyncService {
   }
 
   async syncAll(waitForLock = false): Promise<void> {
-    if (!this.canSync()) return;
+    if (!this.canSync()) {
+      // Backup is off, but shared-note deletes must still reach the cloud so
+      // revoked notes stop being served (edits flow through debouncedPush).
+      if (this.canSyncSharedNotes() && !this.syncing) {
+        this.syncing = true;
+        try {
+          await this.pushNoteDeletes(true);
+        } catch (err) {
+          console.error("Shared note sync failed:", err);
+        } finally {
+          this.syncing = false;
+        }
+      }
+      return;
+    }
     // A pass already running may have synced past the data this request covers,
     // so flag a re-run instead of dropping it.
     if (this.syncing) {
@@ -134,7 +157,7 @@ class SyncService {
   }
 
   requestSyncAll(reason: "start" | "focus" | "interval" | "online" | "manual"): void {
-    if (!this.canSync()) return;
+    if (!this.canSync() && !this.canSyncSharedNotes()) return;
     if (
       reason !== "manual" &&
       (this.syncing || Date.now() - this.lastCompletedSyncAt() < AUTO_SYNC_THROTTLE_MS)
@@ -185,7 +208,7 @@ class SyncService {
   }
 
   debouncedPush(entityType: string, entityId: number): void {
-    if (!this.canSync()) return;
+    if (!this.canSync() && !(entityType === "note" && this.canSyncSharedNotes())) return;
     const key = `${entityType}:${entityId}`;
     const existing = this.pushTimers.get(key);
     if (existing) clearTimeout(existing);
@@ -199,7 +222,13 @@ class SyncService {
   }
 
   private async pushEntity(entityType: string, entityId: number): Promise<void> {
-    if (!this.canSync()) return;
+    if (!this.canSync()) {
+      // Only shared notes may push without the global backup toggle.
+      if (entityType !== "note" || !this.canSyncSharedNotes()) return;
+      const note = await window.electronAPI.getNote?.(entityId);
+      if (!note?.is_shared) return;
+      return this.pushNote(entityId);
+    }
     switch (entityType) {
       case "folder":
         return this.pushFolder(entityId);
@@ -280,6 +309,18 @@ class SyncService {
       });
       await window.electronAPI.markNoteSynced?.(note.id, cloud.id);
     }
+  }
+
+  // Sharing requires a cloud copy. Deliberate single-note push that does not
+  // depend on the global backup toggle; returns the note's cloud id.
+  async ensureNoteSynced(localId: number): Promise<string | null> {
+    const note = await window.electronAPI.getNote?.(localId);
+    if (!note) return null;
+    if (note.cloud_id) return note.cloud_id;
+    if (!this.canSyncSharedNotes()) return null;
+    await this.pushNote(localId);
+    const synced = await window.electronAPI.getNote?.(localId);
+    return synced?.cloud_id ?? null;
   }
 
   private async pushConversation(id: number): Promise<void> {
@@ -538,9 +579,10 @@ class SyncService {
     }
   }
 
-  private async pushNoteDeletes(): Promise<void> {
+  private async pushNoteDeletes(sharedOnly = false): Promise<void> {
     const deletes = (await window.electronAPI.getPendingNoteDeletes?.()) ?? [];
     for (const note of deletes) {
+      if (sharedOnly && !note.is_shared) continue;
       try {
         await NotesService.delete(note.cloud_id!);
         await window.electronAPI.hardDeleteNote?.(note.id);

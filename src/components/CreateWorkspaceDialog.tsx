@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,10 @@ export default function CreateWorkspaceDialog({ open, onOpenChange, onCreated }:
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (!open) setName("");
+  }, [open]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
@@ -35,13 +40,12 @@ export default function CreateWorkspaceDialog({ open, onOpenChange, onCreated }:
     try {
       const workspace = await createWorkspace(name.trim());
       setActive(workspace.id);
-      onCreated?.(workspace.id);
       onOpenChange(false);
-      setName("");
       toast({
         title: t("workspaces.created.title"),
         description: t("workspaces.created.description", { name: workspace.name }),
       });
+      onCreated?.(workspace.id);
     } catch (error) {
       toast({
         title: t("workspaces.create.errorTitle"),
@@ -84,6 +88,7 @@ export default function CreateWorkspaceDialog({ open, onOpenChange, onCreated }:
               {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={!name.trim() || submitting}>
+              {submitting && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               {submitting ? t("workspaces.create.submitting") : t("workspaces.create.submit")}
             </Button>
           </DialogFooter>

@@ -127,7 +127,6 @@ export interface SnippetEntryItem {
 }
 
 export type WorkspaceRole = "owner" | "admin" | "member";
-export type TeamRole = "admin" | "member";
 
 export interface Workspace {
   id: string;
@@ -156,30 +155,10 @@ export interface WorkspaceMember {
   image: string | null;
 }
 
-export interface Team {
-  id: string;
-  workspace_id: string;
-  name: string;
-  slug: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-  member_count?: number;
-}
-
-export interface TeamMember {
-  user_id: string;
-  role: TeamRole;
-  joined_at: string;
-  email: string;
-  name: string | null;
-  image: string | null;
-}
-
 export interface WorkspaceInvitation {
   id: string;
   email: string;
-  workspace_role: TeamRole;
+  workspace_role: WorkspaceRole;
   team_ids: string[];
   invited_by_user_id: string;
   expires_at: string;
@@ -191,7 +170,7 @@ export interface WorkspaceInvitation {
 export interface InvitationPreview {
   id: string;
   email: string;
-  workspace_role: TeamRole;
+  workspace_role: WorkspaceRole;
   team_ids: string[];
   expires_at: string;
   workspace_id: string;
@@ -626,6 +605,8 @@ declare global {
           participants?: string | null;
           diarization_enabled?: number | null;
           expected_speaker_count?: number | null;
+          is_shared?: number;
+          share_token?: string | null;
         }
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       deleteNote: (id: number) => Promise<{ success: boolean }>;

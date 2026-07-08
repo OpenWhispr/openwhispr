@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Copy, Trash2, Check, Key } from "lucide-react";
 import { Button } from "../ui/button";
@@ -70,7 +70,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
   const [name, setName] = useState("");
   const [selectedScopes, setSelectedScopes] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
-  const canManage = workspace.role === "owner" || workspace.role === "admin";
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function refresh() {
     try {
@@ -81,9 +81,16 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
   }
 
   useEffect(() => {
-    if (canManage) void refresh();
+    void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspace.id]);
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    },
+    []
+  );
 
   function toggleScope(id: string) {
     setSelectedScopes((prev) => {
@@ -144,9 +151,14 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
 
   async function handleCopy() {
     if (!newKey) return;
-    await navigator.clipboard.writeText(newKey.key);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(newKey.key);
+      setCopied(true);
+      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard write failed — user can still manually select+copy
+    }
   }
 
   return (
@@ -160,12 +172,10 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
             {t("settingsPage.workspace.developer.description")}
           </p>
         </div>
-        {canManage && (
-          <Button size="sm" onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            {t("settingsPage.workspace.developer.new")}
-          </Button>
-        )}
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="mr-1.5 h-3.5 w-3.5" />
+          {t("settingsPage.workspace.developer.new")}
+        </Button>
       </div>
 
       <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
@@ -192,16 +202,14 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                   })
                 : t("settingsPage.workspace.developer.neverUsed")}
             </span>
-            {canManage && (
-              <button
-                type="button"
-                onClick={() => confirmRevoke(k)}
-                aria-label={t("settingsPage.workspace.developer.revoke")}
-                className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => confirmRevoke(k)}
+              aria-label={t("settingsPage.workspace.developer.revoke")}
+              className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
           </div>
         ))}
       </div>
@@ -241,6 +249,7 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
                         <button
                           key={s.id}
                           type="button"
+                          aria-pressed={checked}
                           onClick={() => toggleScope(s.id)}
                           className={cn(
                             "h-7 px-2.5 rounded-md border text-xs transition-colors outline-none",
@@ -291,7 +300,15 @@ export default function WorkspaceDeveloperTab({ workspace }: Props) {
         variant={confirmDialog.variant}
       />
 
-      <Dialog open={!!newKey} onOpenChange={(open) => !open && setNewKey(null)}>
+      <Dialog
+        open={!!newKey}
+        onOpenChange={(open) => {
+          if (!open) {
+            setNewKey(null);
+            setCopied(false);
+          }
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{t("settingsPage.workspace.developer.keyCreatedTitle")}</DialogTitle>

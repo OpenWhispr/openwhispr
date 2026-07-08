@@ -1117,7 +1117,7 @@
         "label": "Plans & Billing"
       },
       "workspace": {
-        "description": "Members, teams, billing & API keys",
+        "description": "Members, billing & API keys",
         "label": "Workspace"
       },
       "general": {
@@ -1156,10 +1156,14 @@
         "description": "Workspaces let you collaborate with teammates and share notes.",
         "create": "Create workspace"
       },
+      "loadError": {
+        "title": "Couldn't load workspaces",
+        "description": "Check your connection and try again.",
+        "retry": "Retry"
+      },
       "tab": {
         "general": "General",
         "members": "Members",
-        "teams": "Teams",
         "billing": "Billing",
         "developer": "Developer"
       },
@@ -1172,12 +1176,24 @@
         "nameLabel": "Workspace name",
         "slugLabel": "Slug",
         "slugHint": "Used in URLs and invite links. Lowercase letters, digits, and dashes only.",
+        "slugInvalid": "Only lowercase letters, digits, and dashes.",
         "saved": "Workspace updated",
         "dangerTitle": "Delete workspace",
         "dangerDescription": "All shared notes, folders, and integrations will be deleted. This cannot be undone.",
         "delete": "Delete workspace",
         "confirmTitle": "Delete {{name}}?",
-        "confirmDescription": "This cancels the subscription and removes all workspace data permanently."
+        "confirmDescription": "This cancels the subscription and removes all workspace data permanently.",
+        "deleting": "Deleting…",
+        "deleted": "Workspace deleted",
+        "leaveTitle": "Leave workspace",
+        "leaveDescription": "You'll lose access to this workspace and its shared notes.",
+        "leave": "Leave workspace",
+        "leaving": "Leaving…",
+        "leaveConfirm": {
+          "title": "Leave {{name}}?",
+          "description": "You'll lose access immediately. An admin can invite you back."
+        },
+        "left": "You left {{name}}"
       },
       "members": {
         "title": "Members",
@@ -1192,32 +1208,25 @@
         "removeConfirm": {
           "title": "Remove this member?",
           "description": "{{name}} will lose access to {{workspace}} immediately."
+        },
+        "transferConfirm": {
+          "title": "Transfer ownership?",
+          "description": "{{name}} becomes the owner of {{workspace}}. Your role changes to admin and only the new owner can transfer it back."
         }
       },
       "invites": {
         "title": "Pending invitations",
+        "expiresIn_one": "Expires in {{count}} day",
+        "expiresIn_other": "Expires in {{count}} days",
+        "expired": "Expired",
         "resend": "Resend",
+        "resending": "Resending…",
         "revoke": "Revoke",
         "resent": "Invitation resent",
         "revokeFailed": "Could not revoke invitation",
         "revokeConfirm": {
           "title": "Revoke this invitation?",
           "description": "The invitation link for {{email}} will stop working."
-        }
-      },
-      "teams": {
-        "title": "Teams",
-        "description": "Group members for scoped sharing.",
-        "new": "New team",
-        "empty": "No teams yet.",
-        "createFirst": "Create your first team",
-        "createTitle": "Create team",
-        "nameLabel": "Team name",
-        "descriptionLabel": "Description",
-        "memberCount": "{{count}} members",
-        "deleteConfirm": {
-          "title": "Delete this team?",
-          "description": "{{name}} will be removed. Shared notes stay with the workspace."
         }
       },
       "billing": {
@@ -1227,6 +1236,7 @@
         "seats": "Seats",
         "nextInvoice": "Next invoice",
         "manageStripe": "Manage in Stripe",
+        "opening": "Opening…",
         "startSubscription": "Start subscription",
         "planLabel": {
           "business": "Business",
@@ -1290,11 +1300,6 @@
             "admin": "Workspace admin"
           }
         }
-      },
-      "signInRequired": {
-        "title": "Sign in to manage workspaces",
-        "description": "Workspaces require an OpenWhispr account.",
-        "signIn": "Sign in"
       }
     },
     "account": {
@@ -2113,15 +2118,11 @@
     "integrations": "Integrations",
     "defaultUser": "User",
     "notSignedIn": "Not signed in",
-    "chat": "Chat",
-    "inviteTeammate": "Invite teammate",
-    "createWorkspace": "Create workspace"
+    "chat": "Chat"
   },
   "workspaces": {
     "switcher": {
-      "personal": "Personal",
       "workspaces": "Workspaces",
-      "empty": "No workspaces yet",
       "create": "Create workspace…"
     },
     "create": {
@@ -2141,8 +2142,11 @@
       "title": "Invite to {{workspace}}",
       "description": "Add teammates by email. They'll get a link to join.",
       "emailLabel": "Email",
+      "emailPlaceholder": "teammate@example.com",
       "roleLabel": "Role",
-      "teamsLabel": "Add to teams",
+      "seatUsage": "Using {{used}} of {{seats}} seats",
+      "seatLimit": "All {{seats}} seats are in use.",
+      "manageSeats": "Manage seats",
       "submit": "Send invite",
       "submitting": "Sending…",
       "sentTitle": "Invite sent",
@@ -2151,6 +2155,10 @@
       "role": {
         "admin": "Admin",
         "member": "Member"
+      },
+      "roleDescription": {
+        "admin": "Manages members and billing",
+        "member": "Uses the workspace"
       }
     },
     "accept": {
@@ -2161,9 +2169,10 @@
       "accepting": "Accepting…",
       "signInToAccept": "Sign in to accept",
       "successTitle": "You're in",
-      "successDescription": "Welcome to {{name}}.",
+      "successDescription": "You're a member of {{name}}. Manage it in Settings → Workspace.",
       "errorTitle": "Couldn't accept invitation",
-      "sentTo": "Invitation sent to {{email}}"
+      "sentTo": "Invitation sent to {{email}}",
+      "wrongAccount": "This invitation was sent to {{email}}. You're signed in as {{current}}."
     }
   },
   "chat": {
@@ -2303,6 +2312,7 @@
       "newNote": "New note",
       "untitled": "Untitled",
       "untitledNote": "Untitled Note",
+      "shared": "Shared",
       "timeNow": "now",
       "minutesAgo": "{{count}}m",
       "hoursAgo": "{{count}}h",
@@ -2844,9 +2854,11 @@
       "button": "Share",
       "dialog": {
         "title": "Share note",
+        "description": "Invite people by email or share a link to this note.",
         "searchPlaceholder": "Add people by email",
         "emailLabel": "Recipient email",
         "shareButton": "Share",
+        "createLink": "Create link",
         "copyLink": "Copy link",
         "copied": "Copied",
         "owner": "Owner",
@@ -2855,9 +2867,14 @@
         "resend": "Resend invite",
         "revoke": "Remove",
         "invitationActions": "Invitation actions",
-        "permissionRequired": "Only the note owner can change sharing.",
+        "resendSent": "Invitation sent",
+        "resendThrottled": "Invitation sent recently. Try again in a minute.",
+        "syncPrompt": "Sharing keeps a copy of this note in your OpenWhispr cloud.",
+        "syncAndShare": "Sync and share",
         "visibility": {
           "label": "Visibility",
+          "private": "Private",
+          "privateOption": "Private — only you",
           "link": "Anyone with the link",
           "domain": "Everyone at {{domain}} with the link",
           "invited": "Only people invited"
@@ -2866,7 +2883,11 @@
           "invalidEmail": "Enter a valid email address",
           "alreadyInvited": "{{email}} is already invited",
           "inviteFailed": "Couldn't send the invitation. Try again.",
-          "linkUnavailable": "Generate or rotate the link to copy it",
+          "visibilityFailed": "Couldn't update sharing. Try again.",
+          "copyFailed": "Couldn't copy the link. Try again.",
+          "revokeFailed": "Couldn't remove the invitation. Try again.",
+          "resendFailed": "Couldn't resend the invitation. Try again.",
+          "syncFailed": "Couldn't sync this note. Try again.",
           "loadFailed": "Couldn't load share settings"
         }
       }

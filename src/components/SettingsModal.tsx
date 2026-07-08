@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import SidebarModal, { type SidebarItem } from "./ui/SidebarModal";
 import SettingsPage, { SettingsSectionType } from "./SettingsPage";
+import { useAuth } from "../hooks/useAuth";
 
 export type { SettingsSectionType };
 
@@ -53,8 +54,9 @@ interface SettingsModalProps {
 
 export default function SettingsModal({ open, onOpenChange, initialSection }: SettingsModalProps) {
   const { t } = useTranslation();
-  const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(
-    () => [
+  const { isSignedIn } = useAuth();
+  const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(() => {
+    const items: SidebarItem<SettingsSectionType>[] = [
       {
         id: "account",
         label: t("settingsModal.sections.account.label"),
@@ -118,9 +120,9 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         description: t("settingsModal.sections.system.description"),
         group: t("settingsModal.groups.system"),
       },
-    ],
-    [t]
-  );
+    ];
+    return isSignedIn ? items : items.filter((item) => item.id !== "workspace");
+  }, [t, isSignedIn]);
 
   const resolveSection = (section: string | undefined): SettingsSectionType => {
     if (!section) return "account";

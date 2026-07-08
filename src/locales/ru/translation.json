@@ -1053,8 +1053,8 @@
         "label": "Система"
       },
       "workspace": {
-        "label": "Workspace",
-        "description": "Mitglieder, Teams, Abrechnung und API-Schlüssel"
+        "description": "Участники, оплата и API-ключи",
+        "label": "Рабочее пространство"
       }
     },
     "title": "Настройки"
@@ -1754,152 +1754,159 @@
       "apiKeyOptional": "API-ключ (необязательно)"
     },
     "workspace": {
-      "title": "Workspace",
-      "description": "Arbeiten Sie zusammen, teilen Sie Notizen und verwalten Sie die Abrechnung an einem Ort.",
+      "title": "Рабочее пространство",
+      "description": "Работайте с командой, делитесь заметками и управляйте оплатой в одном месте.",
       "empty": {
-        "title": "Ersten Workspace erstellen",
-        "description": "Workspaces ermöglichen die Zusammenarbeit und das Teilen von Notizen.",
-        "create": "Workspace erstellen"
+        "title": "Создайте первое рабочее пространство",
+        "description": "Рабочие пространства позволяют работать с командой и делиться заметками.",
+        "create": "Создать рабочее пространство"
+      },
+      "loadError": {
+        "title": "Не удалось загрузить рабочие пространства",
+        "description": "Проверьте подключение и попробуйте ещё раз.",
+        "retry": "Повторить"
       },
       "tab": {
-        "general": "Allgemein",
-        "members": "Mitglieder",
-        "teams": "Teams",
-        "billing": "Abrechnung",
-        "developer": "Entwickler"
+        "general": "Общие",
+        "members": "Участники",
+        "billing": "Оплата",
+        "developer": "Разработчик"
       },
       "role": {
-        "owner": "Inhaber",
-        "admin": "Administrator",
-        "member": "Mitglied"
+        "owner": "Владелец",
+        "admin": "Администратор",
+        "member": "Участник"
       },
       "general": {
-        "nameLabel": "Workspace-Name",
+        "nameLabel": "Название рабочего пространства",
         "slugLabel": "Slug",
-        "slugHint": "Wird in URLs verwendet. Nur Kleinbuchstaben, Ziffern und Bindestriche.",
-        "saved": "Workspace aktualisiert",
-        "dangerTitle": "Workspace löschen",
-        "dangerDescription": "Alle geteilten Notizen, Ordner und Integrationen werden gelöscht. Dies kann nicht rückgängig gemacht werden.",
-        "delete": "Workspace löschen",
-        "confirmTitle": "{{name}} löschen?",
-        "confirmDescription": "Dies kündigt das Abonnement und entfernt alle Workspace-Daten dauerhaft."
+        "slugHint": "Используется в URL и ссылках-приглашениях. Только строчные буквы, цифры и дефисы.",
+        "slugInvalid": "Только строчные буквы, цифры и дефисы.",
+        "saved": "Рабочее пространство обновлено",
+        "dangerTitle": "Удалить рабочее пространство",
+        "dangerDescription": "Все общие заметки, папки и интеграции будут удалены. Это действие нельзя отменить.",
+        "delete": "Удалить рабочее пространство",
+        "confirmTitle": "Удалить {{name}}?",
+        "confirmDescription": "Подписка будет отменена, а все данные рабочего пространства безвозвратно удалены.",
+        "deleting": "Удаление…",
+        "deleted": "Рабочее пространство удалено",
+        "leaveTitle": "Покинуть рабочее пространство",
+        "leaveDescription": "Вы потеряете доступ к этому рабочему пространству и его общим заметкам.",
+        "leave": "Покинуть рабочее пространство",
+        "leaving": "Выход…",
+        "leaveConfirm": {
+          "title": "Покинуть {{name}}?",
+          "description": "Вы сразу потеряете доступ. Администратор сможет пригласить вас снова."
+        },
+        "left": "Вы покинули {{name}}"
       },
       "members": {
-        "title": "Mitglieder",
-        "description": "{{count}} von {{seats}} Plätzen belegt.",
-        "invite": "Einladen",
-        "empty": "Noch keine Mitglieder.",
-        "roleUpdated": "Rolle aktualisiert",
-        "promote": "Zum Administrator machen",
-        "demote": "Zum Mitglied machen",
-        "transferOwnership": "Eigentum übertragen",
-        "remove": "Aus Workspace entfernen",
+        "title": "Участники",
+        "description": "Занято {{count}} из {{seats}} мест.",
+        "invite": "Пригласить",
+        "empty": "Пока нет участников.",
+        "roleUpdated": "Роль обновлена",
+        "promote": "Сделать администратором",
+        "demote": "Сделать участником",
+        "transferOwnership": "Передать владение",
+        "remove": "Удалить из рабочего пространства",
         "removeConfirm": {
-          "title": "Remove this member?",
-          "description": "{{name}} will lose access to {{workspace}} immediately."
+          "title": "Удалить этого участника?",
+          "description": "{{name}} сразу потеряет доступ к {{workspace}}."
+        },
+        "transferConfirm": {
+          "title": "Передать владение?",
+          "description": "{{name}} станет владельцем {{workspace}}. Ваша роль изменится на администратора, и вернуть владение сможет только новый владелец."
         }
       },
       "invites": {
-        "title": "Ausstehende Einladungen",
-        "resend": "Erneut senden",
-        "revoke": "Widerrufen",
-        "resent": "Einladung erneut gesendet",
-        "revokeFailed": "Could not revoke invitation",
+        "title": "Ожидающие приглашения",
+        "expiresIn_one": "Истекает через {{count}} день",
+        "expiresIn_few": "Истекает через {{count}} дня",
+        "expiresIn_many": "Истекает через {{count}} дней",
+        "expiresIn_other": "Истекает через {{count}} дня",
+        "expired": "Истекло",
+        "resend": "Отправить снова",
+        "resending": "Отправка…",
+        "revoke": "Отозвать",
+        "resent": "Приглашение отправлено повторно",
+        "revokeFailed": "Не удалось отозвать приглашение",
         "revokeConfirm": {
-          "title": "Revoke this invitation?",
-          "description": "The invitation link for {{email}} will stop working."
-        }
-      },
-      "teams": {
-        "title": "Teams",
-        "description": "Mitglieder gruppieren für gezieltes Teilen.",
-        "new": "Neues Team",
-        "empty": "Noch keine Teams.",
-        "createFirst": "Erstellen Sie Ihr erstes Team",
-        "createTitle": "Team erstellen",
-        "nameLabel": "Team-Name",
-        "descriptionLabel": "Beschreibung",
-        "memberCount": "{{count}} Mitglieder",
-        "deleteConfirm": {
-          "title": "Delete this team?",
-          "description": "{{name}} will be removed. Shared notes stay with the workspace."
+          "title": "Отозвать это приглашение?",
+          "description": "Ссылка-приглашение для {{email}} перестанет работать."
         }
       },
       "billing": {
-        "title": "Abrechnung",
-        "description": "Plan, Plätze und Zahlung.",
-        "plan": "Plan",
-        "seats": "Plätze",
-        "nextInvoice": "Nächste Rechnung",
-        "manageStripe": "In Stripe verwalten",
-        "startSubscription": "Abonnement starten",
+        "title": "Оплата",
+        "description": "Тариф, места и оплата.",
+        "plan": "Тариф",
+        "seats": "Места",
+        "nextInvoice": "Следующий счёт",
+        "manageStripe": "Управлять в Stripe",
+        "opening": "Открытие…",
+        "startSubscription": "Оформить подписку",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
-          "free": "Free"
+          "free": "Бесплатный"
         },
         "status": {
-          "active": "Active",
-          "trialing": "Trialing",
-          "past_due": "Past due",
-          "canceled": "Canceled",
-          "incomplete": "Incomplete",
-          "unpaid": "Unpaid"
+          "active": "Активна",
+          "trialing": "Пробный период",
+          "past_due": "Просрочена",
+          "canceled": "Отменена",
+          "incomplete": "Не завершена",
+          "unpaid": "Не оплачена"
         }
       },
       "developer": {
-        "title": "API-Schlüssel",
-        "description": "Programmatischer Zugriff auf diesen Workspace.",
-        "empty": "Noch keine API-Schlüssel. Erstellen Sie einen für Integrationen.",
-        "new": "Neuer Schlüssel",
-        "create": "Schlüssel erstellen",
-        "createTitle": "API-Schlüssel erstellen",
-        "createDescription": "Wählen Sie die Berechtigungen. Sie können den Schlüssel jederzeit widerrufen.",
-        "nameLabel": "Schlüsselname",
-        "namePlaceholder": "Produktionsintegration",
-        "revoke": "Schlüssel widerrufen",
-        "lastUsed": "Zuletzt verwendet {{date}}",
-        "neverUsed": "Nie verwendet",
-        "keyCreatedTitle": "API-Schlüssel erstellt",
-        "keyCreatedDescription": "Kopieren Sie diesen Schlüssel jetzt — Sie können ihn nicht erneut sehen.",
+        "title": "API-ключи",
+        "description": "Программный доступ в рамках этого рабочего пространства.",
+        "empty": "Пока нет API-ключей. Создайте ключ для интеграции с этим рабочим пространством.",
+        "new": "Новый ключ",
+        "create": "Создать ключ",
+        "createTitle": "Создать API-ключ",
+        "createDescription": "Выберите разрешения для этого ключа. Вы можете отозвать его в любой момент.",
+        "nameLabel": "Название ключа",
+        "namePlaceholder": "Интеграция для продакшена",
+        "revoke": "Отозвать ключ",
+        "lastUsed": "Последнее использование: {{date}}",
+        "neverUsed": "Не использовался",
+        "keyCreatedTitle": "API-ключ создан",
+        "keyCreatedDescription": "Скопируйте ключ сейчас — увидеть его снова будет невозможно.",
         "revokeConfirm": {
-          "title": "Revoke this key?",
-          "description": "{{name}} will stop working immediately. Any integration using it will start failing."
+          "title": "Отозвать этот ключ?",
+          "description": "{{name}} сразу перестанет работать. Все интеграции, использующие этот ключ, начнут выдавать ошибки."
         },
         "scopes": {
           "notes": {
-            "title": "Notes",
-            "read": "Read notes",
-            "write": "Write notes"
+            "title": "Заметки",
+            "read": "Чтение заметок",
+            "write": "Запись заметок"
           },
           "folders": {
-            "title": "Folders",
-            "read": "Read folders",
-            "write": "Write folders"
+            "title": "Папки",
+            "read": "Чтение папок",
+            "write": "Запись папок"
           },
           "transcriptions": {
-            "title": "Transcriptions",
-            "read": "Read transcriptions"
+            "title": "Транскрипции",
+            "read": "Чтение транскрипций"
           },
           "members": {
-            "title": "Members",
-            "read": "Read members",
-            "write": "Manage members"
+            "title": "Участники",
+            "read": "Чтение участников",
+            "write": "Управление участниками"
           },
           "billing": {
-            "title": "Billing",
-            "read": "Read billing"
+            "title": "Оплата",
+            "read": "Чтение данных об оплате"
           },
           "full": {
-            "title": "Full access",
-            "admin": "Workspace admin"
+            "title": "Полный доступ",
+            "admin": "Администратор рабочего пространства"
           }
         }
-      },
-      "signInRequired": {
-        "title": "Sign in to manage workspaces",
-        "description": "Workspaces require an OpenWhispr account.",
-        "signIn": "Sign in"
       }
     }
   },
@@ -2103,6 +2110,7 @@
       "newNote": "Новая заметка",
       "untitled": "Без названия",
       "untitledNote": "Заметка без названия",
+      "shared": "Общий доступ",
       "timeNow": "Только что",
       "minutesAgo": "{{count}} мин. назад",
       "hoursAgo": "{{count}} ч. назад",
@@ -2396,9 +2404,7 @@
     "integrations": "Интеграции",
     "defaultUser": "Пользователь",
     "notSignedIn": "Не авторизован",
-    "chat": "Чат",
-    "inviteTeammate": "Teammitglied einladen",
-    "createWorkspace": "Workspace erstellen"
+    "chat": "Чат"
   },
   "chat": {
     "newChat": "Новый чат",
@@ -2751,9 +2757,11 @@
       "button": "Поделиться",
       "dialog": {
         "title": "Поделиться заметкой",
+        "description": "Приглашайте людей по эл. почте или поделитесь ссылкой на эту заметку.",
         "searchPlaceholder": "Добавьте людей по эл. почте",
         "emailLabel": "Эл. почта получателя",
         "shareButton": "Поделиться",
+        "createLink": "Создать ссылку",
         "copyLink": "Скопировать ссылку",
         "copied": "Скопировано",
         "owner": "Владелец",
@@ -2762,9 +2770,14 @@
         "resend": "Отправить приглашение снова",
         "revoke": "Удалить",
         "invitationActions": "Действия с приглашением",
-        "permissionRequired": "Изменять настройки публикации может только владелец заметки.",
+        "resendSent": "Приглашение отправлено",
+        "resendThrottled": "Приглашение недавно отправлено. Попробуйте через минуту.",
+        "syncPrompt": "При публикации копия этой заметки сохраняется в вашем облаке OpenWhispr.",
+        "syncAndShare": "Синхронизировать и поделиться",
         "visibility": {
           "label": "Видимость",
+          "private": "Приватная",
+          "privateOption": "Приватная — только вы",
           "link": "Любой со ссылкой",
           "domain": "Все в {{domain}} со ссылкой",
           "invited": "Только приглашённые"
@@ -2773,8 +2786,12 @@
           "invalidEmail": "Введите корректный адрес эл. почты",
           "alreadyInvited": "{{email}} уже приглашён",
           "inviteFailed": "Не удалось отправить приглашение. Попробуйте ещё раз.",
-          "linkUnavailable": "Сгенерируйте или обновите ссылку, чтобы скопировать её",
-          "loadFailed": "Couldn't load share settings"
+          "visibilityFailed": "Не удалось обновить настройки доступа. Попробуйте ещё раз.",
+          "copyFailed": "Не удалось скопировать ссылку. Попробуйте ещё раз.",
+          "revokeFailed": "Не удалось удалить приглашение. Попробуйте ещё раз.",
+          "resendFailed": "Не удалось отправить приглашение повторно. Попробуйте ещё раз.",
+          "syncFailed": "Не удалось синхронизировать заметку. Попробуйте ещё раз.",
+          "loadFailed": "Не удалось загрузить настройки доступа"
         }
       }
     }
@@ -2882,51 +2899,57 @@
   },
   "workspaces": {
     "switcher": {
-      "personal": "Persönlich",
-      "workspaces": "Workspaces",
-      "empty": "Noch keine Workspaces",
-      "create": "Workspace erstellen…"
+      "workspaces": "Рабочие пространства",
+      "create": "Создать рабочее пространство…"
     },
     "create": {
-      "title": "Workspace erstellen",
-      "description": "Workspaces ermöglichen Zusammenarbeit, geteilte Notizen und gemeinsame Abrechnung.",
-      "nameLabel": "Workspace-Name",
+      "title": "Создать рабочее пространство",
+      "description": "Рабочие пространства позволяют работать с командой, делиться заметками и управлять оплатой в одном месте.",
+      "nameLabel": "Название рабочего пространства",
       "namePlaceholder": "Acme Corp",
-      "submit": "Workspace erstellen",
-      "submitting": "Erstelle…",
-      "errorTitle": "Workspace konnte nicht erstellt werden"
+      "submit": "Создать рабочее пространство",
+      "submitting": "Создание…",
+      "errorTitle": "Не удалось создать рабочее пространство"
     },
     "created": {
-      "title": "Workspace erstellt",
-      "description": "Sie sind nun Inhaber von {{name}}."
+      "title": "Рабочее пространство создано",
+      "description": "Теперь вы владелец {{name}}."
     },
     "invite": {
-      "title": "Zu {{workspace}} einladen",
-      "description": "Fügen Sie Teammitglieder per E-Mail hinzu. Sie erhalten einen Beitrittslink.",
-      "emailLabel": "E-Mail",
-      "roleLabel": "Rolle",
-      "teamsLabel": "Zu Teams hinzufügen",
-      "submit": "Einladung senden",
-      "submitting": "Sende…",
-      "sentTitle": "Einladung gesendet",
-      "sentDescription": "Einladung an {{email}} gesendet.",
-      "errorTitle": "Einladung konnte nicht gesendet werden",
+      "title": "Пригласить в {{workspace}}",
+      "description": "Добавьте коллег по эл. почте. Они получат ссылку для присоединения.",
+      "emailLabel": "Эл. почта",
+      "emailPlaceholder": "kollega@example.com",
+      "roleLabel": "Роль",
+      "seatUsage": "Занято {{used}} из {{seats}} мест",
+      "seatLimit": "Все {{seats}} мест заняты.",
+      "manageSeats": "Управлять местами",
+      "submit": "Отправить приглашение",
+      "submitting": "Отправка…",
+      "sentTitle": "Приглашение отправлено",
+      "sentDescription": "Мы отправили приглашение на {{email}}.",
+      "errorTitle": "Не удалось отправить приглашение",
       "role": {
-        "admin": "Administrator",
-        "member": "Mitglied"
+        "admin": "Администратор",
+        "member": "Участник"
+      },
+      "roleDescription": {
+        "admin": "Управляет участниками и оплатой",
+        "member": "Пользуется рабочим пространством"
       }
     },
     "accept": {
-      "title": "Workspace beitreten",
-      "description": "{{inviter}} hat Sie eingeladen, {{workspace}} als {{role}} beizutreten.",
-      "loading": "Lade Einladung…",
-      "accept": "Einladung annehmen",
-      "accepting": "Annehmen…",
-      "signInToAccept": "Anmelden zum Annehmen",
-      "successTitle": "Beigetreten",
-      "successDescription": "Willkommen bei {{name}}.",
-      "errorTitle": "Einladung konnte nicht angenommen werden",
-      "sentTo": "Invitation sent to {{email}}"
+      "title": "Присоединиться к рабочему пространству",
+      "description": "{{inviter}} приглашает вас в {{workspace}} с ролью «{{role}}».",
+      "loading": "Загрузка приглашения…",
+      "accept": "Принять приглашение",
+      "accepting": "Принятие…",
+      "signInToAccept": "Войдите, чтобы принять",
+      "successTitle": "Вы в команде",
+      "successDescription": "Вы участник {{name}}. Управляйте им в разделе Настройки → Рабочее пространство.",
+      "errorTitle": "Не удалось принять приглашение",
+      "sentTo": "Приглашение отправлено на {{email}}",
+      "wrongAccount": "Это приглашение было отправлено на {{email}}. Вы вошли как {{current}}."
     }
   }
 }

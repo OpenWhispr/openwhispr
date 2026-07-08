@@ -149,16 +149,16 @@
     "tap": "タップ",
     "close": "閉じる",
     "dismiss": "閉じる",
-    "save": "Guardar",
-    "saving": "Guardando…",
-    "create": "Crear",
-    "delete": "Eliminar",
-    "actions": "Acciones",
-    "error": "Algo salió mal",
-    "unknownError": "Ocurrió un error desconocido",
-    "copy": "Copiar",
-    "copied": "Copiado",
-    "done": "Listo",
+    "save": "保存",
+    "saving": "保存中…",
+    "create": "作成",
+    "delete": "削除",
+    "actions": "操作",
+    "error": "問題が発生しました",
+    "unknownError": "不明なエラーが発生しました",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "done": "完了",
     "skip": "スキップ"
   },
   "onboarding": {
@@ -1053,8 +1053,8 @@
         "label": "システム"
       },
       "workspace": {
-        "label": "Espacio de trabajo",
-        "description": "Miembros, equipos, facturación y claves API"
+        "description": "メンバー、請求、API キー",
+        "label": "ワークスペース"
       }
     },
     "title": "設定"
@@ -1754,152 +1754,157 @@
       "apiKeyOptional": "API キー（任意）"
     },
     "workspace": {
-      "title": "Espacio de trabajo",
-      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "title": "ワークスペース",
+      "description": "チームメイトとのコラボレーション、ノートの共有、請求の管理を一括で行えます。",
       "empty": {
-        "title": "Crea tu primer espacio de trabajo",
-        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
-        "create": "Crear espacio de trabajo"
+        "title": "最初のワークスペースを作成",
+        "description": "ワークスペースでは、チームメイトとのコラボレーションやノートの共有ができます。",
+        "create": "ワークスペースを作成"
+      },
+      "loadError": {
+        "title": "ワークスペースを読み込めませんでした",
+        "description": "接続を確認して、もう一度お試しください。",
+        "retry": "再試行"
       },
       "tab": {
-        "general": "General",
-        "members": "Miembros",
-        "teams": "Equipos",
-        "billing": "Facturación",
-        "developer": "Desarrollador"
+        "general": "一般",
+        "members": "メンバー",
+        "billing": "請求",
+        "developer": "開発者"
       },
       "role": {
-        "owner": "Propietario",
-        "admin": "Administrador",
-        "member": "Miembro"
+        "owner": "オーナー",
+        "admin": "管理者",
+        "member": "メンバー"
       },
       "general": {
-        "nameLabel": "Nombre del espacio de trabajo",
-        "slugLabel": "Slug",
-        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
-        "saved": "Espacio de trabajo actualizado",
-        "dangerTitle": "Eliminar espacio de trabajo",
-        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
-        "delete": "Eliminar espacio de trabajo",
-        "confirmTitle": "¿Eliminar {{name}}?",
-        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+        "nameLabel": "ワークスペース名",
+        "slugLabel": "スラッグ",
+        "slugHint": "URL や招待リンクに使用されます。小文字の英字、数字、ハイフンのみ使用できます。",
+        "slugInvalid": "小文字の英字、数字、ハイフンのみ使用できます。",
+        "saved": "ワークスペースを更新しました",
+        "dangerTitle": "ワークスペースを削除",
+        "dangerDescription": "共有されているノート、フォルダ、連携がすべて削除されます。この操作は取り消せません。",
+        "delete": "ワークスペースを削除",
+        "confirmTitle": "{{name}} を削除しますか？",
+        "confirmDescription": "サブスクリプションがキャンセルされ、ワークスペースのすべてのデータが完全に削除されます。",
+        "deleting": "削除中…",
+        "deleted": "ワークスペースを削除しました",
+        "leaveTitle": "ワークスペースから退出",
+        "leaveDescription": "このワークスペースと共有ノートにアクセスできなくなります。",
+        "leave": "ワークスペースから退出",
+        "leaving": "退出中…",
+        "leaveConfirm": {
+          "title": "{{name}} から退出しますか？",
+          "description": "すぐにアクセスできなくなります。管理者が再度招待できます。"
+        },
+        "left": "{{name}} から退出しました"
       },
       "members": {
-        "title": "Miembros",
-        "description": "{{count}} de {{seats}} asientos utilizados.",
-        "invite": "Invitar",
-        "empty": "Aún no hay miembros.",
-        "roleUpdated": "Rol actualizado",
-        "promote": "Hacer administrador",
-        "demote": "Hacer miembro",
-        "transferOwnership": "Transferir propiedad",
-        "remove": "Quitar del espacio de trabajo",
+        "title": "メンバー",
+        "description": "{{seats}} シート中 {{count}} シートを使用中。",
+        "invite": "招待",
+        "empty": "まだメンバーがいません。",
+        "roleUpdated": "役割を更新しました",
+        "promote": "管理者にする",
+        "demote": "メンバーにする",
+        "transferOwnership": "オーナー権限を譲渡",
+        "remove": "ワークスペースから削除",
         "removeConfirm": {
-          "title": "Remove this member?",
-          "description": "{{name}} will lose access to {{workspace}} immediately."
+          "title": "このメンバーを削除しますか？",
+          "description": "{{name}} はすぐに {{workspace}} にアクセスできなくなります。"
+        },
+        "transferConfirm": {
+          "title": "オーナー権限を譲渡しますか？",
+          "description": "{{name}} が {{workspace}} のオーナーになります。あなたの役割は管理者に変わり、元に戻せるのは新しいオーナーのみです。"
         }
       },
       "invites": {
-        "title": "Invitaciones pendientes",
-        "resend": "Reenviar",
-        "revoke": "Revocar",
-        "resent": "Invitación reenviada",
-        "revokeFailed": "Could not revoke invitation",
+        "title": "保留中の招待",
+        "expiresIn_one": "有効期限まであと{{count}}日",
+        "expiresIn_other": "有効期限まであと{{count}}日",
+        "expired": "期限切れ",
+        "resend": "再送信",
+        "resending": "再送信中…",
+        "revoke": "取り消す",
+        "resent": "招待を再送信しました",
+        "revokeFailed": "招待を取り消せませんでした",
         "revokeConfirm": {
-          "title": "Revoke this invitation?",
-          "description": "The invitation link for {{email}} will stop working."
-        }
-      },
-      "teams": {
-        "title": "Equipos",
-        "description": "Agrupa miembros para compartir con alcance limitado.",
-        "new": "Nuevo equipo",
-        "empty": "Aún no hay equipos.",
-        "createFirst": "Crea tu primer equipo",
-        "createTitle": "Crear equipo",
-        "nameLabel": "Nombre del equipo",
-        "descriptionLabel": "Descripción",
-        "memberCount": "{{count}} miembros",
-        "deleteConfirm": {
-          "title": "Delete this team?",
-          "description": "{{name}} will be removed. Shared notes stay with the workspace."
+          "title": "この招待を取り消しますか？",
+          "description": "{{email}} への招待リンクが無効になります。"
         }
       },
       "billing": {
-        "title": "Facturación",
-        "description": "Plan, asientos y pago.",
-        "plan": "Plan",
-        "seats": "Asientos",
-        "nextInvoice": "Próxima factura",
-        "manageStripe": "Administrar en Stripe",
-        "startSubscription": "Iniciar suscripción",
+        "title": "請求",
+        "description": "プラン、シート、支払い。",
+        "plan": "プラン",
+        "seats": "シート",
+        "nextInvoice": "次回の請求",
+        "manageStripe": "Stripe で管理",
+        "opening": "開いています…",
+        "startSubscription": "サブスクリプションを開始",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
           "free": "Free"
         },
         "status": {
-          "active": "Active",
-          "trialing": "Trialing",
-          "past_due": "Past due",
-          "canceled": "Canceled",
-          "incomplete": "Incomplete",
-          "unpaid": "Unpaid"
+          "active": "有効",
+          "trialing": "トライアル中",
+          "past_due": "支払い期限超過",
+          "canceled": "キャンセル済み",
+          "incomplete": "未完了",
+          "unpaid": "未払い"
         }
       },
       "developer": {
-        "title": "Claves API",
-        "description": "Acceso programático limitado a este espacio de trabajo.",
-        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
-        "new": "Nueva clave",
-        "create": "Crear clave",
-        "createTitle": "Crear clave API",
-        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
-        "nameLabel": "Nombre de la clave",
-        "namePlaceholder": "Integración de producción",
-        "revoke": "Revocar clave",
-        "lastUsed": "Último uso {{date}}",
-        "neverUsed": "Nunca utilizada",
-        "keyCreatedTitle": "Clave API creada",
-        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo.",
+        "title": "API キー",
+        "description": "このワークスペースに限定されたプログラムからのアクセス。",
+        "empty": "まだ API キーがありません。このワークスペースと連携するには作成してください。",
+        "new": "新規キー",
+        "create": "キーを作成",
+        "createTitle": "API キーを作成",
+        "createDescription": "このキーに必要な権限を選択してください。いつでも取り消せます。",
+        "nameLabel": "キー名",
+        "namePlaceholder": "本番環境の連携",
+        "revoke": "キーを取り消す",
+        "lastUsed": "最終使用: {{date}}",
+        "neverUsed": "未使用",
+        "keyCreatedTitle": "API キーを作成しました",
+        "keyCreatedDescription": "このキーを今すぐコピーしてください。後で再表示することはできません。",
         "revokeConfirm": {
-          "title": "Revoke this key?",
-          "description": "{{name}} will stop working immediately. Any integration using it will start failing."
+          "title": "このキーを取り消しますか？",
+          "description": "{{name}} はすぐに使用できなくなります。このキーを使用している連携は失敗するようになります。"
         },
         "scopes": {
           "notes": {
-            "title": "Notes",
-            "read": "Read notes",
-            "write": "Write notes"
+            "title": "ノート",
+            "read": "ノートの読み取り",
+            "write": "ノートの書き込み"
           },
           "folders": {
-            "title": "Folders",
-            "read": "Read folders",
-            "write": "Write folders"
+            "title": "フォルダ",
+            "read": "フォルダの読み取り",
+            "write": "フォルダの書き込み"
           },
           "transcriptions": {
-            "title": "Transcriptions",
-            "read": "Read transcriptions"
+            "title": "文字起こし",
+            "read": "文字起こしの読み取り"
           },
           "members": {
-            "title": "Members",
-            "read": "Read members",
-            "write": "Manage members"
+            "title": "メンバー",
+            "read": "メンバーの読み取り",
+            "write": "メンバーの管理"
           },
           "billing": {
-            "title": "Billing",
-            "read": "Read billing"
+            "title": "請求",
+            "read": "請求の読み取り"
           },
           "full": {
-            "title": "Full access",
-            "admin": "Workspace admin"
+            "title": "フルアクセス",
+            "admin": "ワークスペース管理者"
           }
         }
-      },
-      "signInRequired": {
-        "title": "Sign in to manage workspaces",
-        "description": "Workspaces require an OpenWhispr account.",
-        "signIn": "Sign in"
       }
     }
   },
@@ -2120,6 +2125,7 @@
       "newNote": "新規ノート",
       "untitled": "無題",
       "untitledNote": "無題のノート",
+      "shared": "共有中",
       "timeNow": "たった今",
       "minutesAgo": "{{count}}分前",
       "hoursAgo": "{{count}}時間前",
@@ -2392,9 +2398,7 @@
     "integrations": "連携",
     "defaultUser": "ユーザー",
     "notSignedIn": "未サインイン",
-    "chat": "チャット",
-    "inviteTeammate": "Invitar compañero",
-    "createWorkspace": "Crear espacio de trabajo"
+    "chat": "チャット"
   },
   "chat": {
     "newChat": "新しいチャット",
@@ -2747,9 +2751,11 @@
       "button": "共有",
       "dialog": {
         "title": "ノートを共有",
+        "description": "メールで招待するか、このノートへのリンクを共有します。",
         "searchPlaceholder": "メールアドレスでメンバーを追加",
         "emailLabel": "受信者のメールアドレス",
         "shareButton": "共有",
+        "createLink": "リンクを作成",
         "copyLink": "リンクをコピー",
         "copied": "コピーしました",
         "owner": "オーナー",
@@ -2758,9 +2764,14 @@
         "resend": "招待を再送信",
         "revoke": "削除",
         "invitationActions": "招待の操作",
-        "permissionRequired": "共有設定を変更できるのはノートのオーナーのみです。",
+        "resendSent": "招待を送信しました",
+        "resendThrottled": "招待を送信したばかりです。1分ほど待ってからお試しください。",
+        "syncPrompt": "共有すると、このノートのコピーが OpenWhispr クラウドに保存されます。",
+        "syncAndShare": "同期して共有",
         "visibility": {
           "label": "公開範囲",
+          "private": "非公開",
+          "privateOption": "非公開 — 自分のみ",
           "link": "リンクを持つ全員",
           "domain": "{{domain}} の全員（リンクを持つ人）",
           "invited": "招待された人のみ"
@@ -2769,8 +2780,12 @@
           "invalidEmail": "有効なメールアドレスを入力してください",
           "alreadyInvited": "{{email}} はすでに招待されています",
           "inviteFailed": "招待を送信できませんでした。もう一度お試しください。",
-          "linkUnavailable": "リンクをコピーするには生成またはローテーションしてください",
-          "loadFailed": "Couldn't load share settings"
+          "visibilityFailed": "共有設定を更新できませんでした。もう一度お試しください。",
+          "copyFailed": "リンクをコピーできませんでした。もう一度お試しください。",
+          "revokeFailed": "招待を削除できませんでした。もう一度お試しください。",
+          "resendFailed": "招待を再送信できませんでした。もう一度お試しください。",
+          "syncFailed": "このノートを同期できませんでした。もう一度お試しください。",
+          "loadFailed": "共有設定を読み込めませんでした"
         }
       }
     }
@@ -2878,51 +2893,57 @@
   },
   "workspaces": {
     "switcher": {
-      "personal": "Personal",
-      "workspaces": "Espacios de trabajo",
-      "empty": "Aún no hay espacios de trabajo",
-      "create": "Crear espacio de trabajo…"
+      "workspaces": "ワークスペース",
+      "create": "ワークスペースを作成…"
     },
     "create": {
-      "title": "Crear espacio de trabajo",
-      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
-      "nameLabel": "Nombre del espacio de trabajo",
+      "title": "ワークスペースを作成",
+      "description": "ワークスペースでは、コラボレーション、ノートの共有、請求の管理を一括で行えます。",
+      "nameLabel": "ワークスペース名",
       "namePlaceholder": "Acme Corp",
-      "submit": "Crear espacio de trabajo",
-      "submitting": "Creando…",
-      "errorTitle": "No se pudo crear el espacio de trabajo"
+      "submit": "ワークスペースを作成",
+      "submitting": "作成中…",
+      "errorTitle": "ワークスペースを作成できませんでした"
     },
     "created": {
-      "title": "Espacio de trabajo creado",
-      "description": "Ahora eres el propietario de {{name}}."
+      "title": "ワークスペースを作成しました",
+      "description": "{{name}} のオーナーになりました。"
     },
     "invite": {
-      "title": "Invitar a {{workspace}}",
-      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
-      "emailLabel": "Correo electrónico",
-      "roleLabel": "Rol",
-      "teamsLabel": "Agregar a equipos",
-      "submit": "Enviar invitación",
-      "submitting": "Enviando…",
-      "sentTitle": "Invitación enviada",
-      "sentDescription": "Enviamos una invitación a {{email}}.",
-      "errorTitle": "No se pudo enviar la invitación",
+      "title": "{{workspace}} に招待",
+      "description": "メールアドレスでチームメイトを追加します。参加用のリンクが送信されます。",
+      "emailLabel": "メールアドレス",
+      "emailPlaceholder": "teammate@example.com",
+      "roleLabel": "役割",
+      "seatUsage": "{{seats}} シート中 {{used}} シートを使用中",
+      "seatLimit": "{{seats}} シートすべてが使用中です。",
+      "manageSeats": "シートを管理",
+      "submit": "招待を送信",
+      "submitting": "送信中…",
+      "sentTitle": "招待を送信しました",
+      "sentDescription": "{{email}} に招待を送信しました。",
+      "errorTitle": "招待を送信できませんでした",
       "role": {
-        "admin": "Administrador",
-        "member": "Miembro"
+        "admin": "管理者",
+        "member": "メンバー"
+      },
+      "roleDescription": {
+        "admin": "メンバーと請求を管理できます",
+        "member": "ワークスペースを利用できます"
       }
     },
     "accept": {
-      "title": "Unirse al espacio de trabajo",
-      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
-      "loading": "Cargando invitación…",
-      "accept": "Aceptar invitación",
-      "accepting": "Aceptando…",
-      "signInToAccept": "Inicia sesión para aceptar",
-      "successTitle": "Te uniste",
-      "successDescription": "Bienvenido a {{name}}.",
-      "errorTitle": "No se pudo aceptar la invitación",
-      "sentTo": "Invitation sent to {{email}}"
+      "title": "ワークスペースに参加",
+      "description": "{{inviter}} さんから、{{workspace}} に{{role}}として参加するよう招待されています。",
+      "loading": "招待を読み込み中…",
+      "accept": "招待を承諾",
+      "accepting": "承諾中…",
+      "signInToAccept": "サインインして承諾",
+      "successTitle": "参加しました",
+      "successDescription": "{{name}} のメンバーになりました。設定 → ワークスペースで管理できます。",
+      "errorTitle": "招待を承諾できませんでした",
+      "sentTo": "{{email}} に送信された招待です",
+      "wrongAccount": "この招待は {{email}} 宛てに送信されました。現在 {{current}} でサインインしています。"
     }
   }
 }

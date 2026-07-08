@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import ShareNoteDialog from "./ShareNoteDialog";
 import { useShareCacheEntry } from "../../stores/noteStore";
+import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
@@ -151,8 +152,11 @@ export default function NoteEditor({
   const [newFolderName, setNewFolderName] = useState("");
   const [isDiarizing, setIsDiarizing] = useState(false);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const { isSignedIn } = useAuth();
   const shareCache = useShareCacheEntry(note.cloud_id);
-  const isShared = (shareCache?.share.visibility ?? "private") !== "private";
+  // Persisted flag is the restart-safe truth; the live cache overlays it for
+  // the current session (it reflects server state before the flag persists).
+  const isShared = shareCache ? shareCache.share.visibility !== "private" : Boolean(note.is_shared);
   const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerProfiles, setSpeakerProfiles] = useState<
@@ -784,7 +788,7 @@ export default function NoteEditor({
                   )}
                 </div>
               )}
-              {note.cloud_id && (
+              {isSignedIn && (
                 <button
                   type="button"
                   onClick={() => setShareDialogOpen(true)}
@@ -978,7 +982,7 @@ export default function NoteEditor({
           onNewChat={embeddedChat.startNewChat}
         />
       )}
-      {note.cloud_id && (
+      {isSignedIn && (
         <ShareNoteDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} note={note} />
       )}
     </div>

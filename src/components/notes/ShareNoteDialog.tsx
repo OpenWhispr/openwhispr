@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Copy, Loader2, MoreHorizontal } from "lucide-react";
-import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
+import { Check, Copy, Link2, Loader2, MoreHorizontal } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import {
   DropdownMenu,
@@ -11,21 +11,24 @@ import {
 } from "../ui/dropdown-menu";
 import { cn } from "../lib/utils";
 import ShareVisibilityMenu from "./ShareVisibilityMenu";
+import { notesInputClass } from "./shared";
 import { useAuth } from "../../hooks/useAuth";
-import { NoteSharingService } from "../../services/NoteSharingService.js";
-import { setShareCache, updateShareCache, useShareCacheEntry } from "../../stores/noteStore";
-import { useLocalStorage } from "../../hooks/useLocalStorage";
+import {
+  NoteSharingService,
+  type ShareMutationResponse,
+} from "../../services/NoteSharingService.js";
+import { syncService } from "../../services/SyncService.js";
+import {
+  getShareCacheEntry,
+  persistNoteShareState,
+  updateShareCache,
+  useShareCacheEntry,
+} from "../../stores/noteStore";
 import { useToast } from "../ui/useToast";
 import { emailDomain, isPersonalEmailDomain } from "../../utils/personalEmailDomains";
-import type {
-  NoteItem,
-  NoteShareInvitation,
-  ShareSettings,
-  ShareVisibility,
-} from "../../types/electron";
+import type { NoteItem, NoteShareInvitation, ShareVisibility } from "../../types/electron";
 
 const SHARE_VIEWER_BASE_URL = "https://notes.openwhispr.com";
-const LAST_VISIBILITY_KEY = "openwhispr.shareDefaultVisibility";
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface ShareNoteDialogProps {
@@ -38,36 +41,59 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
   const { user } = useAuth();
   const ownerName: string | null = user?.name ?? null;
   const ownerEmail: string = user?.email ?? "";
-  // The desktop has no concept of multi-user workspaces yet — the signed-in
-  // user is always the note owner. When workspaces ship, this becomes a
-  // server-side flag in the share settings response.
-  const isOwner = Boolean(user);
   const { t } = useTranslation();
   const { toast } = useToast();
-  const cloudId = note.cloud_id;
+
+  // A note synced from this dialog: markNoteSynced doesn't broadcast, so the
+  // note prop can lag behind the local DB until the next note-updated event.
+  const [syncedFor, setSyncedFor] = useState<{ noteId: number; cloudId: string } | null>(null);
+  const cloudId = note.cloud_id ?? (syncedFor?.noteId === note.id ? syncedFor.cloudId : null);
   const cached = useShareCacheEntry(cloudId);
-  const [defaultVisibility, setDefaultVisibility] = useLocalStorage<ShareVisibility>(
-    LAST_VISIBILITY_KEY,
-    "invited"
-  );
 
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [savingVisibility, setSavingVisibility] = useState(false);
+  const [linkBusy, setLinkBusy] = useState(false);
   const [emailInput, setEmailInput] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
   const copyTimeoutRef = useRef<number | null>(null);
+  const localIsSharedRef = useRef(Boolean(note.is_shared));
+
+  useEffect(() => {
+    localIsSharedRef.current = Boolean(note.is_shared);
+  }, [note.is_shared]);
 
   const ownerDomain = useMemo(() => emailDomain(ownerEmail), [ownerEmail]);
-  const showDomainOption = ownerDomain && !isPersonalEmailDomain(ownerDomain);
+  const showDomainOption = Boolean(ownerDomain && !isPersonalEmailDomain(ownerDomain));
 
   const share = cached?.share ?? null;
   const invitations = useMemo(() => cached?.invitations ?? [], [cached?.invitations]);
+  const isPrivate = (share?.visibility ?? "private") === "private";
 
-  // Load share state once per open. The dialog is the only place that reads
-  // share settings — invalidating on close keeps the cache scoped.
+  // The store's note can miss a cloud_id assigned by a background sync
+  // (markNoteSynced doesn't broadcast); read the DB before offering to sync.
+  useEffect(() => {
+    if (!open || note.cloud_id) return;
+    let cancelled = false;
+    window.electronAPI
+      .getNote?.(note.id)
+      ?.then((fresh) => {
+        if (!cancelled && fresh?.cloud_id) {
+          setSyncedFor({ noteId: note.id, cloudId: fresh.cloud_id });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, note.id, note.cloud_id]);
+
+  // Pure read of server state on open, plus reconciling the local is_shared
+  // flag when it disagrees with the server.
   useEffect(() => {
     if (!open || !cloudId) return;
     let cancelled = false;
@@ -75,11 +101,18 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     NoteSharingService.getShareSettings(cloudId)
       .then((res) => {
         if (cancelled) return;
-        setShareCache(cloudId, {
+        updateShareCache(cloudId, (entry) => ({
           share: res.share,
           invitations: res.invitations,
-          rawToken: null,
-        });
+          rawToken: entry?.rawToken ?? null,
+        }));
+        const serverShared = res.share.visibility !== "private";
+        if (serverShared !== localIsSharedRef.current) {
+          void persistNoteShareState(
+            note.id,
+            serverShared ? { is_shared: 1 } : { is_shared: 0, share_token: null }
+          );
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -96,17 +129,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     return () => {
       cancelled = true;
     };
-  }, [open, cloudId, t, toast]);
-
-  // Apply the user's last-used visibility on first open of a still-private note.
-  useEffect(() => {
-    if (!open || !cloudId || !share || !isOwner) return;
-    if (share.visibility !== "private") return;
-    void applyVisibility(defaultVisibility, share);
-    // applyVisibility is stable-by-closure; suppressing exhaustive-deps lint
-    // would obscure intent. We genuinely only want this on first hit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, share?.visibility]);
+  }, [open, cloudId, note.id, t, toast]);
 
   useEffect(() => {
     if (open) {
@@ -125,15 +148,15 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
   }, []);
 
   const applyVisibility = useCallback(
-    async (next: ShareVisibility, current: ShareSettings | null) => {
-      if (!cloudId || !current) return;
-      if (current.visibility === next) return;
+    async (next: ShareVisibility): Promise<ShareMutationResponse | null> => {
+      if (!cloudId) return null;
+      const previous = getShareCacheEntry(cloudId);
+      if (!previous || previous.share.visibility === next) return null;
       setSavingVisibility(true);
-      const previous = current;
       // Optimistic update so the dropdown feels instant.
       updateShareCache(cloudId, (entry) => ({
         share: {
-          ...(entry?.share ?? previous),
+          ...(entry?.share ?? previous.share),
           visibility: next,
           domain_allowlist:
             next === "domain" && ownerDomain
@@ -146,6 +169,16 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
         rawToken: entry?.rawToken ?? null,
       }));
       try {
+        if (next === "private") {
+          const res = await NoteSharingService.clearShare(cloudId);
+          updateShareCache(cloudId, (entry) => ({
+            share: res.share,
+            invitations: entry?.invitations ?? [],
+            rawToken: null,
+          }));
+          await persistNoteShareState(note.id, { is_shared: 0, share_token: null });
+          return null;
+        }
         const res = await NoteSharingService.updateShareSettings(
           cloudId,
           next,
@@ -156,36 +189,86 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
           invitations: entry?.invitations ?? [],
           rawToken: res.raw_token ?? entry?.rawToken ?? null,
         }));
-        setDefaultVisibility(next);
+        await persistNoteShareState(
+          note.id,
+          res.raw_token ? { is_shared: 1, share_token: res.raw_token } : { is_shared: 1 }
+        );
+        return res;
       } catch (err) {
-        console.error("Failed to update visibility:", err);
+        console.error("Failed to update sharing:", err);
         updateShareCache(cloudId, (entry) => ({
-          share: previous,
-          invitations: entry?.invitations ?? [],
-          rawToken: entry?.rawToken ?? null,
+          share: previous.share,
+          invitations: entry?.invitations ?? previous.invitations,
+          rawToken: previous.rawToken,
         }));
+        toast({
+          title: t("noteEditor.share.dialog.error.visibilityFailed"),
+          variant: "destructive",
+        });
+        return null;
       } finally {
         setSavingVisibility(false);
       }
     },
-    [cloudId, ownerDomain, setDefaultVisibility]
+    [cloudId, ownerDomain, note.id, t, toast]
   );
 
-  const handleCopyLink = useCallback(async () => {
-    if (!cached?.rawToken) {
-      setInputError(t("noteEditor.share.dialog.error.linkUnavailable"));
-      return;
-    }
-    const url = `${SHARE_VIEWER_BASE_URL}/n/${encodeURIComponent(cached.rawToken)}`;
+  const copyLink = useCallback(
+    async (token: string) => {
+      try {
+        await navigator.clipboard.writeText(
+          `${SHARE_VIEWER_BASE_URL}/n/${encodeURIComponent(token)}`
+        );
+        setCopied(true);
+        if (copyTimeoutRef.current) window.clearTimeout(copyTimeoutRef.current);
+        copyTimeoutRef.current = window.setTimeout(() => setCopied(false), 1500);
+      } catch (err) {
+        console.error("Clipboard write failed:", err);
+        toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
+      }
+    },
+    [t, toast]
+  );
+
+  // Legacy shares can predate local token persistence; rotating is the only
+  // way to recover a copyable link (the old one stops working by design).
+  const rotateAndCopy = useCallback(async () => {
+    if (!cloudId) return;
     try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      if (copyTimeoutRef.current) window.clearTimeout(copyTimeoutRef.current);
-      copyTimeoutRef.current = window.setTimeout(() => setCopied(false), 1500);
+      const res = await NoteSharingService.rotateToken(cloudId);
+      updateShareCache(cloudId, (entry) => ({
+        share: res.share,
+        invitations: entry?.invitations ?? [],
+        rawToken: res.raw_token,
+      }));
+      await persistNoteShareState(note.id, { is_shared: 1, share_token: res.raw_token });
+      await copyLink(res.raw_token);
     } catch (err) {
-      console.error("Clipboard write failed:", err);
+      console.error("Share link recovery failed:", err);
+      toast({ title: t("noteEditor.share.dialog.error.copyFailed"), variant: "destructive" });
     }
-  }, [cached?.rawToken, t]);
+  }, [cloudId, note.id, copyLink, t, toast]);
+
+  const handleLinkButton = useCallback(async () => {
+    if (!cloudId || !share) return;
+    setLinkBusy(true);
+    try {
+      if (share.visibility === "private") {
+        // Create link: the click is the sharing consent.
+        const res = await applyVisibility("link");
+        if (!res) return;
+        const token = res.raw_token ?? note.share_token ?? getShareCacheEntry(cloudId)?.rawToken;
+        if (token) await copyLink(token);
+        else await rotateAndCopy();
+        return;
+      }
+      const known = note.share_token ?? getShareCacheEntry(cloudId)?.rawToken;
+      if (known) await copyLink(known);
+      else await rotateAndCopy();
+    } finally {
+      setLinkBusy(false);
+    }
+  }, [cloudId, share, note.share_token, applyVisibility, copyLink, rotateAndCopy]);
 
   const handleInvite = useCallback(async () => {
     if (!cloudId) return;
@@ -213,42 +296,80 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
         invitations: refreshed.invitations,
         rawToken: entry?.rawToken ?? null,
       }));
+      // The invite itself is the sharing consent: a still-private note becomes
+      // invite-only once an invitation exists.
+      if (refreshed.share.visibility === "private" && res.created.length > 0) {
+        await applyVisibility("invited");
+      }
     } catch (err) {
       console.error("Invite failed:", err);
       setInputError(t("noteEditor.share.dialog.error.inviteFailed"));
     } finally {
       setSubmitting(false);
     }
-  }, [cloudId, emailInput, t]);
+  }, [cloudId, emailInput, applyVisibility, t]);
 
   const handleRevoke = useCallback(
     async (invitation: NoteShareInvitation) => {
       if (!cloudId) return;
+      const previous = getShareCacheEntry(cloudId);
+      if (!previous) return;
       updateShareCache(cloudId, (entry) => ({
-        share: entry?.share ?? share!,
-        invitations: (entry?.invitations ?? invitations).filter((i) => i.id !== invitation.id),
-        rawToken: entry?.rawToken ?? null,
+        share: entry?.share ?? previous.share,
+        invitations: (entry?.invitations ?? previous.invitations).filter(
+          (i) => i.id !== invitation.id
+        ),
+        rawToken: entry?.rawToken ?? previous.rawToken,
       }));
       try {
         await NoteSharingService.revokeInvite(cloudId, invitation.id);
       } catch (err) {
         console.error("Revoke failed:", err);
+        updateShareCache(cloudId, (entry) => ({
+          share: entry?.share ?? previous.share,
+          invitations: previous.invitations,
+          rawToken: entry?.rawToken ?? previous.rawToken,
+        }));
+        toast({ title: t("noteEditor.share.dialog.error.revokeFailed"), variant: "destructive" });
       }
     },
-    [cloudId, share, invitations]
+    [cloudId, t, toast]
   );
 
   const handleResend = useCallback(
     async (invitation: NoteShareInvitation) => {
       if (!cloudId) return;
+      setResendingId(invitation.id);
       try {
-        await NoteSharingService.resendInvite(cloudId, invitation.id);
+        const res = await NoteSharingService.resendInvite(cloudId, invitation.id);
+        if (res.resent) {
+          toast({ title: t("noteEditor.share.dialog.resendSent"), variant: "success" });
+        } else {
+          toast({ title: t("noteEditor.share.dialog.resendThrottled") });
+        }
       } catch (err) {
         console.error("Resend failed:", err);
+        toast({ title: t("noteEditor.share.dialog.error.resendFailed"), variant: "destructive" });
+      } finally {
+        setResendingId(null);
       }
     },
-    [cloudId]
+    [cloudId, t, toast]
   );
+
+  const handleSyncAndShare = useCallback(async () => {
+    setSyncing(true);
+    try {
+      const assignedCloudId = await syncService.ensureNoteSynced(note.id);
+      if (!assignedCloudId) throw new Error("Note sync did not assign a cloud id");
+      setSyncedFor({ noteId: note.id, cloudId: assignedCloudId });
+    } catch (err) {
+      console.error("Note sync for sharing failed:", err);
+      toast({ title: t("noteEditor.share.dialog.error.syncFailed"), variant: "destructive" });
+    } finally {
+      setSyncing(false);
+    }
+  }, [note.id, t, toast]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || (e.metaKey && e.key === "Enter")) {
@@ -257,146 +378,173 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
     }
   };
 
-  // NoteEditor only renders the dialog when cloud_id is set, so cloudId is
-  // guaranteed non-null here. We early-return for type-narrowing.
-  if (!cloudId) return null;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md gap-3 p-5">
         <DialogTitle className="text-base">{t("noteEditor.share.dialog.title")}</DialogTitle>
 
-        {/* Invite row */}
-        <div className="flex items-center gap-2">
-          <input
-            ref={emailInputRef}
-            type="email"
-            value={emailInput}
-            onChange={(e) => {
-              setEmailInput(e.target.value);
-              if (inputError) setInputError(null);
-            }}
-            onKeyDown={onKeyDown}
-            placeholder={t("noteEditor.share.dialog.searchPlaceholder")}
-            disabled={!isOwner || submitting}
-            className={cn(
-              "flex-1 h-8 px-2.5 rounded-md text-xs",
-              "bg-foreground/4 dark:bg-white/5 text-foreground placeholder:text-foreground/40",
-              "border border-transparent",
-              "focus:outline-none focus:bg-background dark:focus:bg-surface-1 focus:border-border/60",
-              "disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            )}
-            aria-label={t("noteEditor.share.dialog.emailLabel")}
-          />
-          <Button
-            size="sm"
-            onClick={() => void handleInvite()}
-            disabled={!isOwner || submitting || !emailInput.trim()}
-            className="h-8 px-3 text-xs"
-          >
-            {submitting ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              t("noteEditor.share.dialog.shareButton")
-            )}
-          </Button>
-        </div>
+        {!cloudId ? (
+          <>
+            <DialogDescription className="text-xs text-foreground/50">
+              {t("noteEditor.share.dialog.syncPrompt")}
+            </DialogDescription>
+            <Button
+              size="sm"
+              onClick={() => void handleSyncAndShare()}
+              disabled={syncing}
+              className="h-8 px-3 text-xs gap-1.5 justify-self-start"
+            >
+              {syncing && <Loader2 size={12} className="animate-spin" />}
+              {t("noteEditor.share.dialog.syncAndShare")}
+            </Button>
+          </>
+        ) : (
+          <>
+            <DialogDescription className="sr-only">
+              {t("noteEditor.share.dialog.description")}
+            </DialogDescription>
 
-        {inputError && <p className="text-xs text-red-500/90 -mt-1">{inputError}</p>}
+            {/* Invite row */}
+            <div className="flex items-center gap-2">
+              <input
+                ref={emailInputRef}
+                type="email"
+                value={emailInput}
+                onChange={(e) => {
+                  setEmailInput(e.target.value);
+                  if (inputError) setInputError(null);
+                }}
+                onKeyDown={onKeyDown}
+                placeholder={t("noteEditor.share.dialog.searchPlaceholder")}
+                disabled={submitting}
+                className={cn(
+                  notesInputClass,
+                  "flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                )}
+                aria-label={t("noteEditor.share.dialog.emailLabel")}
+                aria-invalid={inputError ? true : undefined}
+                aria-describedby={inputError ? "share-invite-error" : undefined}
+              />
+              <Button
+                size="sm"
+                onClick={() => void handleInvite()}
+                disabled={submitting || !emailInput.trim()}
+                className="h-8 px-3 text-xs gap-1.5"
+              >
+                {submitting && <Loader2 size={12} className="animate-spin" />}
+                {t("noteEditor.share.dialog.shareButton")}
+              </Button>
+            </div>
 
-        {/* Members list */}
-        <div className="flex flex-col gap-1.5 mt-1">
-          <MemberRow
-            primary={ownerName || ownerEmail}
-            secondary={ownerEmail}
-            trailing={
-              <span className="text-[11px] text-foreground/40">
-                {t("noteEditor.share.dialog.owner")}
-              </span>
-            }
-          />
+            <p
+              id="share-invite-error"
+              aria-live="polite"
+              className={cn("text-xs text-red-500/90 -mt-1", !inputError && "sr-only")}
+            >
+              {inputError}
+            </p>
 
-          {invitations.map((invitation) => (
-            <MemberRow
-              key={invitation.id}
-              primary={invitation.email}
-              secondary={
-                invitation.accepted_at
-                  ? t("noteEditor.share.dialog.accepted")
-                  : t("noteEditor.share.dialog.pending")
-              }
-              trailing={
-                isOwner ? (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="h-6 w-6 flex items-center justify-center rounded-md hover:bg-foreground/8 dark:hover:bg-white/8 transition-colors"
-                        aria-label={t("noteEditor.share.dialog.invitationActions")}
-                      >
-                        <MoreHorizontal size={13} className="text-foreground/50" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" sideOffset={4}>
-                      <DropdownMenuItem
-                        className="text-xs"
-                        onClick={() => void handleResend(invitation)}
-                      >
-                        {t("noteEditor.share.dialog.resend")}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-xs text-red-500"
-                        onClick={() => void handleRevoke(invitation)}
-                      >
-                        {t("noteEditor.share.dialog.revoke")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                ) : null
-              }
-            />
-          ))}
-        </div>
+            {/* Members list */}
+            <div className="flex flex-col gap-1.5 mt-1">
+              <MemberRow
+                primary={ownerName || ownerEmail}
+                secondary={ownerEmail}
+                trailing={
+                  <span className="text-[11px] text-foreground/40">
+                    {t("noteEditor.share.dialog.owner")}
+                  </span>
+                }
+              />
 
-        {/* Footer: visibility + copy link */}
-        <div className="flex items-center gap-2 pt-3 mt-1 border-t border-border/60">
-          <ShareVisibilityMenu
-            value={
-              (share?.visibility ?? "invited") === "private"
-                ? "invited"
-                : (share?.visibility ?? "invited")
-            }
-            ownerDomain={ownerDomain}
-            showDomainOption={Boolean(showDomainOption)}
-            disabled={!isOwner || loading || savingVisibility}
-            onChange={(v) => void applyVisibility(v, share)}
-          />
-          <div className="flex-1" />
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 px-3 text-xs gap-1.5"
-            disabled={!cached?.rawToken || copied}
-            onClick={() => void handleCopyLink()}
-          >
-            {copied ? (
-              <>
-                <Check size={12} />
-                {t("noteEditor.share.dialog.copied")}
-              </>
-            ) : (
-              <>
-                <Copy size={12} />
-                {t("noteEditor.share.dialog.copyLink")}
-              </>
-            )}
-          </Button>
-        </div>
+              {invitations.map((invitation) => (
+                <MemberRow
+                  key={invitation.id}
+                  primary={invitation.email}
+                  secondary={
+                    invitation.accepted_at
+                      ? t("noteEditor.share.dialog.accepted")
+                      : t("noteEditor.share.dialog.pending")
+                  }
+                  trailing={
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className={cn(
+                            "h-6 w-6 flex items-center justify-center rounded-md",
+                            "hover:bg-foreground/8 dark:hover:bg-white/8",
+                            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                            "transition-colors"
+                          )}
+                          aria-label={t("noteEditor.share.dialog.invitationActions")}
+                        >
+                          <MoreHorizontal size={13} className="text-foreground/50" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" sideOffset={4}>
+                        <DropdownMenuItem
+                          className="text-xs"
+                          disabled={resendingId === invitation.id}
+                          onClick={() => void handleResend(invitation)}
+                        >
+                          {t("noteEditor.share.dialog.resend")}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-xs text-red-500"
+                          onClick={() => void handleRevoke(invitation)}
+                        >
+                          {t("noteEditor.share.dialog.revoke")}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  }
+                />
+              ))}
+            </div>
 
-        {!isOwner && (
-          <p className="text-[11px] text-foreground/40 -mt-1">
-            {t("noteEditor.share.dialog.permissionRequired")}
-          </p>
+            {/* Footer: visibility + link */}
+            <div className="flex items-center gap-2 pt-3 mt-1 border-t border-border/60">
+              <ShareVisibilityMenu
+                value={share?.visibility ?? "private"}
+                ownerDomain={ownerDomain}
+                showDomainOption={showDomainOption}
+                disabled={loading || !share || savingVisibility || linkBusy}
+                onChange={(v) => void applyVisibility(v)}
+              />
+              <div className="flex-1" />
+              <Button
+                variant={isPrivate ? "default" : "outline"}
+                size="sm"
+                className="h-8 px-3 text-xs gap-1.5"
+                disabled={loading || !share || savingVisibility || linkBusy || copied}
+                onClick={() => void handleLinkButton()}
+              >
+                {linkBusy ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" />
+                    {isPrivate
+                      ? t("noteEditor.share.dialog.createLink")
+                      : t("noteEditor.share.dialog.copyLink")}
+                  </>
+                ) : copied ? (
+                  <>
+                    <Check size={12} />
+                    {t("noteEditor.share.dialog.copied")}
+                  </>
+                ) : isPrivate ? (
+                  <>
+                    <Link2 size={12} />
+                    {t("noteEditor.share.dialog.createLink")}
+                  </>
+                ) : (
+                  <>
+                    <Copy size={12} />
+                    {t("noteEditor.share.dialog.copyLink")}
+                  </>
+                )}
+              </Button>
+            </div>
+          </>
         )}
       </DialogContent>
     </Dialog>

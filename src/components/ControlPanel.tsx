@@ -262,6 +262,9 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
       setInvitationToken(token);
     });
+    window.electronAPI?.getPendingInvitationToken?.().then((token) => {
+      if (token) setInvitationToken(token);
+    });
     return () => unsubscribe?.();
   }, []);
 
@@ -699,14 +702,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </Suspense>
       )}
 
-      <AcceptInvitationModal
-        token={invitationToken}
-        onClose={() => setInvitationToken(null)}
-        isSignedIn={isSignedIn}
-        onSignIn={() => {
-          setInvitationToken(null);
-        }}
-      />
+      <AcceptInvitationModal token={invitationToken} onClose={() => setInvitationToken(null)} />
 
       {showSearch && (
         <Suspense fallback={null}>

@@ -8,6 +8,7 @@ import {
   Plus,
   Search,
   ExternalLink,
+  Share2,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import {
@@ -135,6 +136,13 @@ export default function NoteListItem({
             {note.title || t("notes.list.untitled")}
           </p>
           <div className="flex items-center gap-0.5 shrink-0">
+            {Boolean(note.is_shared) && (
+              <Share2
+                size={11}
+                className="text-foreground/40 mr-1 group-hover:opacity-0 transition-opacity"
+                aria-label={t("notes.list.shared")}
+              />
+            )}
             <span className="text-xs text-muted-foreground dark:text-muted-foreground/30 tabular-nums group-hover:opacity-0 transition-opacity">
               {relativeTime(note.updated_at, t)}
             </span>

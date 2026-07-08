@@ -19,7 +19,7 @@ import { getCachedPlatform } from "../utils/platform";
 import ForgotPasswordView from "./ForgotPasswordView";
 
 interface AuthenticationStepProps {
-  onContinueWithoutAccount: () => void;
+  onContinueWithoutAccount?: () => void;
   onAuthComplete: () => void;
   onNeedsVerification: (email: string) => void;
 }
@@ -316,10 +316,12 @@ export default function AuthenticationStep({
           </p>
         </div>
 
-        <Button onClick={onContinueWithoutAccount} className="w-full h-9">
-          <span className="text-sm font-medium">{t("auth.getStarted")}</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Button>
+        {onContinueWithoutAccount && (
+          <Button onClick={onContinueWithoutAccount} className="w-full h-9">
+            <span className="text-sm font-medium">{t("auth.getStarted")}</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Button>
+        )}
       </div>
     );
   }
@@ -646,18 +648,20 @@ export default function AuthenticationStep({
         </div>
       )}
 
-      <div className="pt-1">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={onContinueWithoutAccount}
-          className="w-full font-normal text-muted-foreground/85 hover:text-foreground hover:bg-muted/30"
-          disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
-        >
-          {t("auth.emailStep.continueWithoutAccount")}
-        </Button>
-      </div>
+      {onContinueWithoutAccount && (
+        <div className="pt-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onContinueWithoutAccount}
+            className="w-full font-normal text-muted-foreground/85 hover:text-foreground hover:bg-muted/30"
+            disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
+          >
+            {t("auth.emailStep.continueWithoutAccount")}
+          </Button>
+        </div>
+      )}
 
       <p className="text-xs text-muted-foreground/80 leading-tight text-center">
         {t("auth.legal.prefix")}{" "}

@@ -1053,8 +1053,8 @@
         "label": "系统"
       },
       "workspace": {
-        "label": "Espacio de trabajo",
-        "description": "Miembros, equipos, facturación y claves API"
+        "description": "成员、账单和 API 密钥",
+        "label": "工作区"
       }
     },
     "title": "设置"
@@ -1749,152 +1749,157 @@
       "apiKeyOptional": "API Key（可选）"
     },
     "workspace": {
-      "title": "Espacio de trabajo",
-      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "title": "工作区",
+      "description": "在一处与同事协作、共享笔记并管理账单。",
       "empty": {
-        "title": "Crea tu primer espacio de trabajo",
-        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
-        "create": "Crear espacio de trabajo"
+        "title": "创建你的第一个工作区",
+        "description": "工作区让你与同事协作并共享笔记。",
+        "create": "创建工作区"
+      },
+      "loadError": {
+        "title": "无法加载工作区",
+        "description": "请检查网络连接后重试。",
+        "retry": "重试"
       },
       "tab": {
-        "general": "General",
-        "members": "Miembros",
-        "teams": "Equipos",
-        "billing": "Facturación",
-        "developer": "Desarrollador"
+        "general": "常规",
+        "members": "成员",
+        "billing": "账单",
+        "developer": "开发者"
       },
       "role": {
-        "owner": "Propietario",
-        "admin": "Administrador",
-        "member": "Miembro"
+        "owner": "所有者",
+        "admin": "管理员",
+        "member": "成员"
       },
       "general": {
-        "nameLabel": "Nombre del espacio de trabajo",
+        "nameLabel": "工作区名称",
         "slugLabel": "Slug",
-        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
-        "saved": "Espacio de trabajo actualizado",
-        "dangerTitle": "Eliminar espacio de trabajo",
-        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
-        "delete": "Eliminar espacio de trabajo",
-        "confirmTitle": "¿Eliminar {{name}}?",
-        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+        "slugHint": "用于 URL 和邀请链接。仅限小写字母、数字和连字符。",
+        "slugInvalid": "仅限小写字母、数字和连字符。",
+        "saved": "工作区已更新",
+        "dangerTitle": "删除工作区",
+        "dangerDescription": "所有共享笔记、文件夹和集成都将被删除。此操作无法撤销。",
+        "delete": "删除工作区",
+        "confirmTitle": "删除 {{name}}？",
+        "confirmDescription": "这将取消订阅并永久删除工作区的所有数据。",
+        "deleting": "删除中…",
+        "deleted": "工作区已删除",
+        "leaveTitle": "退出工作区",
+        "leaveDescription": "你将失去对此工作区及其共享笔记的访问权限。",
+        "leave": "退出工作区",
+        "leaving": "退出中…",
+        "leaveConfirm": {
+          "title": "退出 {{name}}？",
+          "description": "你将立即失去访问权限。管理员可以重新邀请你。"
+        },
+        "left": "你已退出 {{name}}"
       },
       "members": {
-        "title": "Miembros",
-        "description": "{{count}} de {{seats}} asientos utilizados.",
-        "invite": "Invitar",
-        "empty": "Aún no hay miembros.",
-        "roleUpdated": "Rol actualizado",
-        "promote": "Hacer administrador",
-        "demote": "Hacer miembro",
-        "transferOwnership": "Transferir propiedad",
-        "remove": "Quitar del espacio de trabajo",
+        "title": "成员",
+        "description": "已使用 {{count}}/{{seats}} 个席位。",
+        "invite": "邀请",
+        "empty": "暂无成员。",
+        "roleUpdated": "角色已更新",
+        "promote": "设为管理员",
+        "demote": "设为成员",
+        "transferOwnership": "转让所有权",
+        "remove": "从工作区移除",
         "removeConfirm": {
-          "title": "Remove this member?",
-          "description": "{{name}} will lose access to {{workspace}} immediately."
+          "title": "移除此成员？",
+          "description": "{{name}} 将立即失去对 {{workspace}} 的访问权限。"
+        },
+        "transferConfirm": {
+          "title": "转让所有权？",
+          "description": "{{name}} 将成为 {{workspace}} 的所有者。你的角色将变为管理员，只有新所有者才能转回所有权。"
         }
       },
       "invites": {
-        "title": "Invitaciones pendientes",
-        "resend": "Reenviar",
-        "revoke": "Revocar",
-        "resent": "Invitación reenviada",
-        "revokeFailed": "Could not revoke invitation",
+        "title": "待处理的邀请",
+        "expiresIn_one": "{{count}} 天后过期",
+        "expiresIn_other": "{{count}} 天后过期",
+        "expired": "已过期",
+        "resend": "重新发送",
+        "resending": "重新发送中…",
+        "revoke": "撤销",
+        "resent": "邀请已重新发送",
+        "revokeFailed": "无法撤销邀请",
         "revokeConfirm": {
-          "title": "Revoke this invitation?",
-          "description": "The invitation link for {{email}} will stop working."
-        }
-      },
-      "teams": {
-        "title": "Equipos",
-        "description": "Agrupa miembros para compartir con alcance limitado.",
-        "new": "Nuevo equipo",
-        "empty": "Aún no hay equipos.",
-        "createFirst": "Crea tu primer equipo",
-        "createTitle": "Crear equipo",
-        "nameLabel": "Nombre del equipo",
-        "descriptionLabel": "Descripción",
-        "memberCount": "{{count}} miembros",
-        "deleteConfirm": {
-          "title": "Delete this team?",
-          "description": "{{name}} will be removed. Shared notes stay with the workspace."
+          "title": "撤销此邀请？",
+          "description": "发送给 {{email}} 的邀请链接将失效。"
         }
       },
       "billing": {
-        "title": "Facturación",
-        "description": "Plan, asientos y pago.",
-        "plan": "Plan",
-        "seats": "Asientos",
-        "nextInvoice": "Próxima factura",
-        "manageStripe": "Administrar en Stripe",
-        "startSubscription": "Iniciar suscripción",
+        "title": "账单",
+        "description": "套餐、席位和付款。",
+        "plan": "套餐",
+        "seats": "席位",
+        "nextInvoice": "下一张账单",
+        "manageStripe": "在 Stripe 中管理",
+        "opening": "正在打开...",
+        "startSubscription": "开始订阅",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
-          "free": "Free"
+          "free": "免费版"
         },
         "status": {
-          "active": "Active",
-          "trialing": "Trialing",
-          "past_due": "Past due",
-          "canceled": "Canceled",
-          "incomplete": "Incomplete",
-          "unpaid": "Unpaid"
+          "active": "生效中",
+          "trialing": "试用中",
+          "past_due": "逾期未付",
+          "canceled": "已取消",
+          "incomplete": "未完成",
+          "unpaid": "未支付"
         }
       },
       "developer": {
-        "title": "Claves API",
-        "description": "Acceso programático limitado a este espacio de trabajo.",
-        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
-        "new": "Nueva clave",
-        "create": "Crear clave",
-        "createTitle": "Crear clave API",
-        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
-        "nameLabel": "Nombre de la clave",
-        "namePlaceholder": "Integración de producción",
-        "revoke": "Revocar clave",
-        "lastUsed": "Último uso {{date}}",
-        "neverUsed": "Nunca utilizada",
-        "keyCreatedTitle": "Clave API creada",
-        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo.",
+        "title": "API 密钥",
+        "description": "仅限此工作区的编程访问。",
+        "empty": "暂无 API 密钥。创建一个即可与此工作区集成。",
+        "new": "新建密钥",
+        "create": "创建密钥",
+        "createTitle": "创建 API 密钥",
+        "createDescription": "选择此密钥所需的权限。你可以随时撤销。",
+        "nameLabel": "密钥名称",
+        "namePlaceholder": "生产环境集成",
+        "revoke": "撤销密钥",
+        "lastUsed": "上次使用于 {{date}}",
+        "neverUsed": "从未使用",
+        "keyCreatedTitle": "API 密钥已创建",
+        "keyCreatedDescription": "请立即复制此密钥——之后将无法再次查看。",
         "revokeConfirm": {
-          "title": "Revoke this key?",
-          "description": "{{name}} will stop working immediately. Any integration using it will start failing."
+          "title": "撤销此密钥？",
+          "description": "{{name}} 将立即失效。使用它的所有集成都将开始报错。"
         },
         "scopes": {
           "notes": {
-            "title": "Notes",
-            "read": "Read notes",
-            "write": "Write notes"
+            "title": "笔记",
+            "read": "读取笔记",
+            "write": "写入笔记"
           },
           "folders": {
-            "title": "Folders",
-            "read": "Read folders",
-            "write": "Write folders"
+            "title": "文件夹",
+            "read": "读取文件夹",
+            "write": "写入文件夹"
           },
           "transcriptions": {
-            "title": "Transcriptions",
-            "read": "Read transcriptions"
+            "title": "转录",
+            "read": "读取转录"
           },
           "members": {
-            "title": "Members",
-            "read": "Read members",
-            "write": "Manage members"
+            "title": "成员",
+            "read": "读取成员",
+            "write": "管理成员"
           },
           "billing": {
-            "title": "Billing",
-            "read": "Read billing"
+            "title": "账单",
+            "read": "读取账单"
           },
           "full": {
-            "title": "Full access",
-            "admin": "Workspace admin"
+            "title": "完全访问",
+            "admin": "工作区管理员"
           }
         }
-      },
-      "signInRequired": {
-        "title": "Sign in to manage workspaces",
-        "description": "Workspaces require an OpenWhispr account.",
-        "signIn": "Sign in"
       }
     }
   },
@@ -2098,6 +2103,7 @@
       "newNote": "新建笔记",
       "untitled": "无标题",
       "untitledNote": "无标题笔记",
+      "shared": "已分享",
       "timeNow": "刚刚",
       "minutesAgo": "{{count}} 分钟前",
       "hoursAgo": "{{count}} 小时前",
@@ -2387,9 +2393,7 @@
     "integrations": "集成",
     "defaultUser": "用户",
     "notSignedIn": "未登录",
-    "chat": "聊天",
-    "inviteTeammate": "Invitar compañero",
-    "createWorkspace": "Crear espacio de trabajo"
+    "chat": "聊天"
   },
   "chat": {
     "newChat": "新对话",
@@ -2742,9 +2746,11 @@
       "button": "分享",
       "dialog": {
         "title": "分享笔记",
+        "description": "通过电子邮件邀请他人，或分享此笔记的链接。",
         "searchPlaceholder": "通过电子邮件添加成员",
         "emailLabel": "收件人邮箱",
         "shareButton": "分享",
+        "createLink": "创建链接",
         "copyLink": "复制链接",
         "copied": "已复制",
         "owner": "所有者",
@@ -2753,9 +2759,14 @@
         "resend": "重新发送邀请",
         "revoke": "移除",
         "invitationActions": "邀请操作",
-        "permissionRequired": "只有笔记的所有者可以更改分享设置。",
+        "resendSent": "邀请已发送",
+        "resendThrottled": "邀请刚刚发送过，请一分钟后再试。",
+        "syncPrompt": "分享会在你的 OpenWhispr 云端保留此笔记的副本。",
+        "syncAndShare": "同步并分享",
         "visibility": {
           "label": "可见性",
+          "private": "私密",
+          "privateOption": "私密 — 仅自己",
           "link": "拥有链接的任何人",
           "domain": "{{domain}} 内拥有链接的所有人",
           "invited": "仅受邀者"
@@ -2764,8 +2775,12 @@
           "invalidEmail": "请输入有效的电子邮件地址",
           "alreadyInvited": "{{email}} 已经被邀请",
           "inviteFailed": "无法发送邀请。请重试。",
-          "linkUnavailable": "生成或更换链接后即可复制",
-          "loadFailed": "Couldn't load share settings"
+          "visibilityFailed": "无法更新分享设置。请重试。",
+          "copyFailed": "无法复制链接。请重试。",
+          "revokeFailed": "无法移除邀请。请重试。",
+          "resendFailed": "无法重新发送邀请。请重试。",
+          "syncFailed": "无法同步此笔记。请重试。",
+          "loadFailed": "无法加载分享设置"
         }
       }
     }
@@ -2873,51 +2888,57 @@
   },
   "workspaces": {
     "switcher": {
-      "personal": "Personal",
-      "workspaces": "Espacios de trabajo",
-      "empty": "Aún no hay espacios de trabajo",
-      "create": "Crear espacio de trabajo…"
+      "workspaces": "工作区",
+      "create": "创建工作区…"
     },
     "create": {
-      "title": "Crear espacio de trabajo",
-      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
-      "nameLabel": "Nombre del espacio de trabajo",
+      "title": "创建工作区",
+      "description": "工作区让你在一处协作、共享笔记并管理账单。",
+      "nameLabel": "工作区名称",
       "namePlaceholder": "Acme Corp",
-      "submit": "Crear espacio de trabajo",
-      "submitting": "Creando…",
-      "errorTitle": "No se pudo crear el espacio de trabajo"
+      "submit": "创建工作区",
+      "submitting": "创建中…",
+      "errorTitle": "无法创建工作区"
     },
     "created": {
-      "title": "Espacio de trabajo creado",
-      "description": "Ahora eres el propietario de {{name}}."
+      "title": "工作区已创建",
+      "description": "你现在是 {{name}} 的所有者。"
     },
     "invite": {
-      "title": "Invitar a {{workspace}}",
-      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
-      "emailLabel": "Correo electrónico",
-      "roleLabel": "Rol",
-      "teamsLabel": "Agregar a equipos",
-      "submit": "Enviar invitación",
-      "submitting": "Enviando…",
-      "sentTitle": "Invitación enviada",
-      "sentDescription": "Enviamos una invitación a {{email}}.",
-      "errorTitle": "No se pudo enviar la invitación",
+      "title": "邀请加入 {{workspace}}",
+      "description": "通过电子邮件添加同事。他们将收到加入链接。",
+      "emailLabel": "电子邮件",
+      "emailPlaceholder": "teammate@example.com",
+      "roleLabel": "角色",
+      "seatUsage": "已使用 {{used}}/{{seats}} 个席位",
+      "seatLimit": "全部 {{seats}} 个席位均已使用。",
+      "manageSeats": "管理席位",
+      "submit": "发送邀请",
+      "submitting": "发送中…",
+      "sentTitle": "邀请已发送",
+      "sentDescription": "我们已向 {{email}} 发送邀请。",
+      "errorTitle": "无法发送邀请",
       "role": {
-        "admin": "Administrador",
-        "member": "Miembro"
+        "admin": "管理员",
+        "member": "成员"
+      },
+      "roleDescription": {
+        "admin": "管理成员和账单",
+        "member": "使用工作区"
       }
     },
     "accept": {
-      "title": "Unirse al espacio de trabajo",
-      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
-      "loading": "Cargando invitación…",
-      "accept": "Aceptar invitación",
-      "accepting": "Aceptando…",
-      "signInToAccept": "Inicia sesión para aceptar",
-      "successTitle": "Te uniste",
-      "successDescription": "Bienvenido a {{name}}.",
-      "errorTitle": "No se pudo aceptar la invitación",
-      "sentTo": "Invitation sent to {{email}}"
+      "title": "加入工作区",
+      "description": "{{inviter}} 邀请你以{{role}}身份加入 {{workspace}}。",
+      "loading": "正在加载邀请…",
+      "accept": "接受邀请",
+      "accepting": "接受中…",
+      "signInToAccept": "登录以接受",
+      "successTitle": "你已加入",
+      "successDescription": "你已成为 {{name}} 的成员。可在设置 → 工作区中管理。",
+      "errorTitle": "无法接受邀请",
+      "sentTo": "邀请已发送至 {{email}}",
+      "wrongAccount": "此邀请发送给了 {{email}}，而你当前登录的是 {{current}}。"
     }
   }
 }

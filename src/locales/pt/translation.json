@@ -1032,8 +1032,8 @@
         "label": "Sistema"
       },
       "workspace": {
-        "label": "Espacio de trabajo",
-        "description": "Miembros, equipos, facturación y claves API"
+        "description": "Membros, cobrança e chaves de API",
+        "label": "Espaço de trabalho"
       }
     },
     "title": "Configurações"
@@ -1733,152 +1733,157 @@
       "apiKeyOptional": "API Key (opcional)"
     },
     "workspace": {
-      "title": "Espacio de trabajo",
-      "description": "Colabora con compañeros, comparte notas y administra la facturación en un solo lugar.",
+      "title": "Espaço de trabalho",
+      "description": "Colabore com colegas, compartilhe notas e gerencie a cobrança em um só lugar.",
       "empty": {
-        "title": "Crea tu primer espacio de trabajo",
-        "description": "Los espacios de trabajo te permiten colaborar con compañeros y compartir notas.",
-        "create": "Crear espacio de trabajo"
+        "title": "Crie seu primeiro espaço de trabalho",
+        "description": "Espaços de trabalho permitem colaborar com colegas e compartilhar notas.",
+        "create": "Criar espaço de trabalho"
+      },
+      "loadError": {
+        "title": "Não foi possível carregar os espaços de trabalho",
+        "description": "Verifique sua conexão e tente novamente.",
+        "retry": "Tentar novamente"
       },
       "tab": {
-        "general": "General",
-        "members": "Miembros",
-        "teams": "Equipos",
-        "billing": "Facturación",
-        "developer": "Desarrollador"
+        "general": "Geral",
+        "members": "Membros",
+        "billing": "Cobrança",
+        "developer": "Desenvolvedor"
       },
       "role": {
-        "owner": "Propietario",
+        "owner": "Proprietário",
         "admin": "Administrador",
-        "member": "Miembro"
+        "member": "Membro"
       },
       "general": {
-        "nameLabel": "Nombre del espacio de trabajo",
+        "nameLabel": "Nome do espaço de trabalho",
         "slugLabel": "Slug",
-        "slugHint": "Se usa en URLs y enlaces de invitación. Solo letras minúsculas, dígitos y guiones.",
-        "saved": "Espacio de trabajo actualizado",
-        "dangerTitle": "Eliminar espacio de trabajo",
-        "dangerDescription": "Todas las notas, carpetas e integraciones compartidas se eliminarán. Esto no se puede deshacer.",
-        "delete": "Eliminar espacio de trabajo",
-        "confirmTitle": "¿Eliminar {{name}}?",
-        "confirmDescription": "Esto cancela la suscripción y elimina todos los datos del espacio de trabajo permanentemente."
+        "slugHint": "Usado em URLs e links de convite. Apenas letras minúsculas, dígitos e hifens.",
+        "slugInvalid": "Apenas letras minúsculas, dígitos e hifens.",
+        "saved": "Espaço de trabalho atualizado",
+        "dangerTitle": "Excluir espaço de trabalho",
+        "dangerDescription": "Todas as notas, pastas e integrações compartilhadas serão excluídas. Esta ação não pode ser desfeita.",
+        "delete": "Excluir espaço de trabalho",
+        "confirmTitle": "Excluir {{name}}?",
+        "confirmDescription": "Isso cancela a assinatura e remove todos os dados do espaço de trabalho permanentemente.",
+        "deleting": "Excluindo…",
+        "deleted": "Espaço de trabalho excluído",
+        "leaveTitle": "Sair do espaço de trabalho",
+        "leaveDescription": "Você perderá o acesso a este espaço de trabalho e às notas compartilhadas dele.",
+        "leave": "Sair do espaço de trabalho",
+        "leaving": "Saindo…",
+        "leaveConfirm": {
+          "title": "Sair de {{name}}?",
+          "description": "Você perderá o acesso imediatamente. Um administrador pode convidá-lo de volta."
+        },
+        "left": "Você saiu de {{name}}"
       },
       "members": {
-        "title": "Miembros",
-        "description": "{{count}} de {{seats}} asientos utilizados.",
-        "invite": "Invitar",
-        "empty": "Aún no hay miembros.",
-        "roleUpdated": "Rol actualizado",
-        "promote": "Hacer administrador",
-        "demote": "Hacer miembro",
-        "transferOwnership": "Transferir propiedad",
-        "remove": "Quitar del espacio de trabajo",
+        "title": "Membros",
+        "description": "{{count}} de {{seats}} assentos usados.",
+        "invite": "Convidar",
+        "empty": "Ainda não há membros.",
+        "roleUpdated": "Função atualizada",
+        "promote": "Tornar administrador",
+        "demote": "Tornar membro",
+        "transferOwnership": "Transferir propriedade",
+        "remove": "Remover do espaço de trabalho",
         "removeConfirm": {
-          "title": "Remove this member?",
-          "description": "{{name}} will lose access to {{workspace}} immediately."
+          "title": "Remover este membro?",
+          "description": "{{name}} perderá o acesso a {{workspace}} imediatamente."
+        },
+        "transferConfirm": {
+          "title": "Transferir a propriedade?",
+          "description": "{{name}} se torna o proprietário de {{workspace}}. Sua função muda para administrador e apenas o novo proprietário pode transferi-la de volta."
         }
       },
       "invites": {
-        "title": "Invitaciones pendientes",
+        "title": "Convites pendentes",
+        "expiresIn_one": "Expira em {{count}} dia",
+        "expiresIn_other": "Expira em {{count}} dias",
+        "expired": "Expirado",
         "resend": "Reenviar",
-        "revoke": "Revocar",
-        "resent": "Invitación reenviada",
-        "revokeFailed": "Could not revoke invitation",
+        "resending": "Reenviando…",
+        "revoke": "Revogar",
+        "resent": "Convite reenviado",
+        "revokeFailed": "Não foi possível revogar o convite",
         "revokeConfirm": {
-          "title": "Revoke this invitation?",
-          "description": "The invitation link for {{email}} will stop working."
-        }
-      },
-      "teams": {
-        "title": "Equipos",
-        "description": "Agrupa miembros para compartir con alcance limitado.",
-        "new": "Nuevo equipo",
-        "empty": "Aún no hay equipos.",
-        "createFirst": "Crea tu primer equipo",
-        "createTitle": "Crear equipo",
-        "nameLabel": "Nombre del equipo",
-        "descriptionLabel": "Descripción",
-        "memberCount": "{{count}} miembros",
-        "deleteConfirm": {
-          "title": "Delete this team?",
-          "description": "{{name}} will be removed. Shared notes stay with the workspace."
+          "title": "Revogar este convite?",
+          "description": "O link de convite de {{email}} deixará de funcionar."
         }
       },
       "billing": {
-        "title": "Facturación",
-        "description": "Plan, asientos y pago.",
-        "plan": "Plan",
-        "seats": "Asientos",
-        "nextInvoice": "Próxima factura",
-        "manageStripe": "Administrar en Stripe",
-        "startSubscription": "Iniciar suscripción",
+        "title": "Cobrança",
+        "description": "Plano, assentos e pagamento.",
+        "plan": "Plano",
+        "seats": "Assentos",
+        "nextInvoice": "Próxima fatura",
+        "manageStripe": "Gerenciar no Stripe",
+        "opening": "Abrindo…",
+        "startSubscription": "Iniciar assinatura",
         "planLabel": {
           "business": "Business",
           "pro": "Pro",
-          "free": "Free"
+          "free": "Gratuito"
         },
         "status": {
-          "active": "Active",
-          "trialing": "Trialing",
-          "past_due": "Past due",
-          "canceled": "Canceled",
-          "incomplete": "Incomplete",
-          "unpaid": "Unpaid"
+          "active": "Ativa",
+          "trialing": "Em teste",
+          "past_due": "Em atraso",
+          "canceled": "Cancelada",
+          "incomplete": "Incompleta",
+          "unpaid": "Não paga"
         }
       },
       "developer": {
-        "title": "Claves API",
-        "description": "Acceso programático limitado a este espacio de trabajo.",
-        "empty": "Aún no hay claves API. Crea una para integrarte con este espacio de trabajo.",
-        "new": "Nueva clave",
-        "create": "Crear clave",
-        "createTitle": "Crear clave API",
-        "createDescription": "Elige los permisos que necesita esta clave. Puedes revocarla en cualquier momento.",
-        "nameLabel": "Nombre de la clave",
-        "namePlaceholder": "Integración de producción",
-        "revoke": "Revocar clave",
+        "title": "Chaves de API",
+        "description": "Acesso programático limitado a este espaço de trabalho.",
+        "empty": "Ainda não há chaves de API. Crie uma para integrar com este espaço de trabalho.",
+        "new": "Nova chave",
+        "create": "Criar chave",
+        "createTitle": "Criar chave de API",
+        "createDescription": "Escolha as permissões que esta chave precisa. Você pode revogá-la a qualquer momento.",
+        "nameLabel": "Nome da chave",
+        "namePlaceholder": "Integração de produção",
+        "revoke": "Revogar chave",
         "lastUsed": "Último uso {{date}}",
-        "neverUsed": "Nunca utilizada",
-        "keyCreatedTitle": "Clave API creada",
-        "keyCreatedDescription": "Copia esta clave ahora — no podrás verla de nuevo.",
+        "neverUsed": "Nunca usada",
+        "keyCreatedTitle": "Chave de API criada",
+        "keyCreatedDescription": "Copie esta chave agora — você não poderá vê-la novamente.",
         "revokeConfirm": {
-          "title": "Revoke this key?",
-          "description": "{{name}} will stop working immediately. Any integration using it will start failing."
+          "title": "Revogar esta chave?",
+          "description": "{{name}} deixará de funcionar imediatamente. Qualquer integração que a utilize começará a falhar."
         },
         "scopes": {
           "notes": {
-            "title": "Notes",
-            "read": "Read notes",
-            "write": "Write notes"
+            "title": "Notas",
+            "read": "Ler notas",
+            "write": "Escrever notas"
           },
           "folders": {
-            "title": "Folders",
-            "read": "Read folders",
-            "write": "Write folders"
+            "title": "Pastas",
+            "read": "Ler pastas",
+            "write": "Escrever pastas"
           },
           "transcriptions": {
-            "title": "Transcriptions",
-            "read": "Read transcriptions"
+            "title": "Transcrições",
+            "read": "Ler transcrições"
           },
           "members": {
-            "title": "Members",
-            "read": "Read members",
-            "write": "Manage members"
+            "title": "Membros",
+            "read": "Ler membros",
+            "write": "Gerenciar membros"
           },
           "billing": {
-            "title": "Billing",
-            "read": "Read billing"
+            "title": "Cobrança",
+            "read": "Ler cobrança"
           },
           "full": {
-            "title": "Full access",
-            "admin": "Workspace admin"
+            "title": "Acesso total",
+            "admin": "Administrador do espaço de trabalho"
           }
         }
-      },
-      "signInRequired": {
-        "title": "Sign in to manage workspaces",
-        "description": "Workspaces require an OpenWhispr account.",
-        "signIn": "Sign in"
       }
     }
   },
@@ -2103,6 +2108,7 @@
       "newNote": "Nova nota",
       "untitled": "Sem título",
       "untitledNote": "Nota sem título",
+      "shared": "Compartilhada",
       "timeNow": "Agora",
       "minutesAgo": "{{count}}m",
       "hoursAgo": "{{count}}h",
@@ -2392,9 +2398,7 @@
     "integrations": "Integrações",
     "defaultUser": "Usuário",
     "notSignedIn": "Não conectado",
-    "chat": "Chat",
-    "inviteTeammate": "Invitar compañero",
-    "createWorkspace": "Crear espacio de trabajo"
+    "chat": "Chat"
   },
   "chat": {
     "newChat": "Novo chat",
@@ -2747,9 +2751,11 @@
       "button": "Compartilhar",
       "dialog": {
         "title": "Compartilhar nota",
+        "description": "Convide pessoas por e-mail ou compartilhe um link para esta nota.",
         "searchPlaceholder": "Adicione pessoas por e-mail",
         "emailLabel": "E-mail do destinatário",
         "shareButton": "Compartilhar",
+        "createLink": "Criar link",
         "copyLink": "Copiar link",
         "copied": "Copiado",
         "owner": "Proprietário",
@@ -2758,9 +2764,14 @@
         "resend": "Reenviar convite",
         "revoke": "Remover",
         "invitationActions": "Ações do convite",
-        "permissionRequired": "Apenas o proprietário da nota pode alterar o compartilhamento.",
+        "resendSent": "Convite enviado",
+        "resendThrottled": "Convite enviado há pouco. Tente novamente em um minuto.",
+        "syncPrompt": "O compartilhamento mantém uma cópia desta nota na sua nuvem OpenWhispr.",
+        "syncAndShare": "Sincronizar e compartilhar",
         "visibility": {
           "label": "Visibilidade",
+          "private": "Privada",
+          "privateOption": "Privada — apenas você",
           "link": "Qualquer pessoa com o link",
           "domain": "Todos em {{domain}} com o link",
           "invited": "Apenas pessoas convidadas"
@@ -2769,8 +2780,12 @@
           "invalidEmail": "Digite um endereço de e-mail válido",
           "alreadyInvited": "{{email}} já foi convidado",
           "inviteFailed": "Não foi possível enviar o convite. Tente novamente.",
-          "linkUnavailable": "Gere ou rotacione o link para copiá-lo",
-          "loadFailed": "Couldn't load share settings"
+          "visibilityFailed": "Não foi possível atualizar o compartilhamento. Tente novamente.",
+          "copyFailed": "Não foi possível copiar o link. Tente novamente.",
+          "revokeFailed": "Não foi possível remover o convite. Tente novamente.",
+          "resendFailed": "Não foi possível reenviar o convite. Tente novamente.",
+          "syncFailed": "Não foi possível sincronizar esta nota. Tente novamente.",
+          "loadFailed": "Não foi possível carregar as configurações de compartilhamento"
         }
       }
     }
@@ -2878,51 +2893,57 @@
   },
   "workspaces": {
     "switcher": {
-      "personal": "Personal",
-      "workspaces": "Espacios de trabajo",
-      "empty": "Aún no hay espacios de trabajo",
-      "create": "Crear espacio de trabajo…"
+      "workspaces": "Espaços de trabalho",
+      "create": "Criar espaço de trabalho…"
     },
     "create": {
-      "title": "Crear espacio de trabajo",
-      "description": "Los espacios de trabajo te permiten colaborar, compartir notas y administrar la facturación.",
-      "nameLabel": "Nombre del espacio de trabajo",
+      "title": "Criar espaço de trabalho",
+      "description": "Espaços de trabalho permitem colaborar, compartilhar notas e gerenciar a cobrança em um só lugar.",
+      "nameLabel": "Nome do espaço de trabalho",
       "namePlaceholder": "Acme Corp",
-      "submit": "Crear espacio de trabajo",
-      "submitting": "Creando…",
-      "errorTitle": "No se pudo crear el espacio de trabajo"
+      "submit": "Criar espaço de trabalho",
+      "submitting": "Criando…",
+      "errorTitle": "Não foi possível criar o espaço de trabalho"
     },
     "created": {
-      "title": "Espacio de trabajo creado",
-      "description": "Ahora eres el propietario de {{name}}."
+      "title": "Espaço de trabalho criado",
+      "description": "Agora você é o proprietário de {{name}}."
     },
     "invite": {
-      "title": "Invitar a {{workspace}}",
-      "description": "Agrega compañeros por correo. Recibirán un enlace para unirse.",
-      "emailLabel": "Correo electrónico",
-      "roleLabel": "Rol",
-      "teamsLabel": "Agregar a equipos",
-      "submit": "Enviar invitación",
+      "title": "Convidar para {{workspace}}",
+      "description": "Adicione colegas por e-mail. Eles receberão um link para entrar.",
+      "emailLabel": "E-mail",
+      "emailPlaceholder": "colega@exemplo.com",
+      "roleLabel": "Função",
+      "seatUsage": "Usando {{used}} de {{seats}} assentos",
+      "seatLimit": "Todos os {{seats}} assentos estão em uso.",
+      "manageSeats": "Gerenciar assentos",
+      "submit": "Enviar convite",
       "submitting": "Enviando…",
-      "sentTitle": "Invitación enviada",
-      "sentDescription": "Enviamos una invitación a {{email}}.",
-      "errorTitle": "No se pudo enviar la invitación",
+      "sentTitle": "Convite enviado",
+      "sentDescription": "Enviamos um convite para {{email}}.",
+      "errorTitle": "Não foi possível enviar o convite",
       "role": {
         "admin": "Administrador",
-        "member": "Miembro"
+        "member": "Membro"
+      },
+      "roleDescription": {
+        "admin": "Gerencia membros e cobrança",
+        "member": "Usa o espaço de trabalho"
       }
     },
     "accept": {
-      "title": "Unirse al espacio de trabajo",
-      "description": "{{inviter}} te invitó a unirte a {{workspace}} como {{role}}.",
-      "loading": "Cargando invitación…",
-      "accept": "Aceptar invitación",
-      "accepting": "Aceptando…",
-      "signInToAccept": "Inicia sesión para aceptar",
-      "successTitle": "Te uniste",
-      "successDescription": "Bienvenido a {{name}}.",
-      "errorTitle": "No se pudo aceptar la invitación",
-      "sentTo": "Invitation sent to {{email}}"
+      "title": "Entrar no espaço de trabalho",
+      "description": "{{inviter}} convidou você para entrar em {{workspace}} como {{role}}.",
+      "loading": "Carregando convite…",
+      "accept": "Aceitar convite",
+      "accepting": "Aceitando…",
+      "signInToAccept": "Faça login para aceitar",
+      "successTitle": "Você entrou",
+      "successDescription": "Você é membro de {{name}}. Gerencie em Configurações → Espaço de trabalho.",
+      "errorTitle": "Não foi possível aceitar o convite",
+      "sentTo": "Convite enviado para {{email}}",
+      "wrongAccount": "Este convite foi enviado para {{email}}. Você está conectado como {{current}}."
     }
   }
 }

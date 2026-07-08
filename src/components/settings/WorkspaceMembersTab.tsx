@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Trash2, MoreVertical, Mail, X } from "lucide-react";
+import { Trash2, MoreVertical, Mail, X, Loader2 } from "lucide-react";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { WorkspacesService } from "../../services/WorkspacesService";
 import { InvitationsService } from "../../services/InvitationsService";
@@ -20,16 +20,23 @@ import { cn } from "../lib/utils";
 
 interface Props {
   workspace: Workspace;
+  onNavigateToBilling: () => void;
 }
 
-export default function WorkspaceMembersTab({ workspace }: Props) {
+function invitationDaysLeft(inv: WorkspaceInvitation): number {
+  return Math.ceil((new Date(inv.expires_at).getTime() - Date.now()) / 86_400_000);
+}
+
+export default function WorkspaceMembersTab({ workspace, onNavigateToBilling }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const members = useWorkspaceStore((s) => s.members);
   const refreshMembers = useWorkspaceStore((s) => s.refreshMembers);
+  const refresh = useWorkspaceStore((s) => s.refresh);
   const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const canManage = workspace.role === "owner" || workspace.role === "admin";
 
   async function refreshInvitations() {
@@ -51,6 +58,8 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
     try {
       await WorkspacesService.updateMemberRole(workspace.id, userId, role);
       await refreshMembers(workspace.id);
+      // Ownership transfer demotes the caller — refresh so workspace.role updates everywhere.
+      if (role === "owner") await refresh();
       toast({
         title: t("settingsPage.workspace.members.roleUpdated"),
       });
@@ -61,6 +70,19 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
         variant: "destructive",
       });
     }
+  }
+
+  function confirmTransferOwnership(member: WorkspaceMember) {
+    showConfirmDialog({
+      title: t("settingsPage.workspace.members.transferConfirm.title"),
+      description: t("settingsPage.workspace.members.transferConfirm.description", {
+        name: member.name || member.email,
+        workspace: workspace.name,
+      }),
+      confirmText: t("settingsPage.workspace.members.transferOwnership"),
+      variant: "destructive",
+      onConfirm: () => void handleRoleChange(member.user_id, "owner"),
+    });
   }
 
   function confirmRemoveMember(member: WorkspaceMember) {
@@ -111,8 +133,10 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
   }
 
   async function handleResend(inviteId: string) {
+    setResendingId(inviteId);
     try {
       await InvitationsService.resend(workspace.id, inviteId);
+      await refreshInvitations();
       toast({ title: t("settingsPage.workspace.invites.resent") });
     } catch (error) {
       toast({
@@ -120,6 +144,8 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
         description: error instanceof Error ? error.message : t("common.unknownError"),
         variant: "destructive",
       });
+    } finally {
+      setResendingId(null);
     }
   }
 
@@ -197,7 +223,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
                     </DropdownMenuItem>
                   )}
                   {workspace.role === "owner" && (
-                    <DropdownMenuItem onSelect={() => handleRoleChange(member.user_id, "owner")}>
+                    <DropdownMenuItem onSelect={() => confirmTransferOwnership(member)}>
                       {t("settingsPage.workspace.members.transferOwnership")}
                     </DropdownMenuItem>
                   )}
@@ -226,33 +252,54 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
             {t("settingsPage.workspace.invites.title")}
           </h4>
           <div className="rounded-lg border border-border/50 dark:border-border-subtle/70 divide-y divide-border/30 dark:divide-border-subtle/50 bg-card/50 dark:bg-surface-2/50">
-            {invitations.map((inv) => (
-              <div key={inv.id} className="flex items-center gap-3 px-4 h-12">
-                <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-foreground truncate">{inv.email}</p>
+            {invitations.map((inv) => {
+              const daysLeft = invitationDaysLeft(inv);
+              const expired = daysLeft <= 0;
+              return (
+                <div
+                  key={inv.id}
+                  className={cn("flex items-center gap-3 px-4 h-12", expired && "opacity-60")}
+                >
+                  <Mail className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-foreground truncate">{inv.email}</p>
+                    <p
+                      className={cn(
+                        "text-[11px]",
+                        expired ? "text-destructive" : "text-muted-foreground"
+                      )}
+                    >
+                      {expired
+                        ? t("settingsPage.workspace.invites.expired")
+                        : t("settingsPage.workspace.invites.expiresIn", { count: daysLeft })}
+                    </p>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {t(`settingsPage.workspace.role.${inv.workspace_role}`)}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleResend(inv.id)}
+                    disabled={resendingId === inv.id}
+                    className="h-7 px-2"
+                  >
+                    {resendingId === inv.id && <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />}
+                    {resendingId === inv.id
+                      ? t("settingsPage.workspace.invites.resending")
+                      : t("settingsPage.workspace.invites.resend")}
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => confirmRevokeInvitation(inv)}
+                    aria-label={t("settingsPage.workspace.invites.revoke")}
+                    className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  {t(`settingsPage.workspace.role.${inv.workspace_role}`)}
-                </span>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleResend(inv.id)}
-                  className="h-7 px-2"
-                >
-                  {t("settingsPage.workspace.invites.resend")}
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => confirmRevokeInvitation(inv)}
-                  aria-label={t("settingsPage.workspace.invites.revoke")}
-                  className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/8 transition-colors outline-none focus-visible:ring-1 focus-visible:ring-primary/30"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -263,6 +310,7 @@ export default function WorkspaceMembersTab({ workspace }: Props) {
         workspaceId={workspace.id}
         workspaceName={workspace.name}
         onInvited={refreshInvitations}
+        onNavigateToBilling={onNavigateToBilling}
       />
 
       <ConfirmDialog

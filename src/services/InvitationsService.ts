@@ -1,9 +1,5 @@
-import { cloudGet, cloudPost, cloudDelete } from "./cloudApi.js";
+import { cloudGet, cloudGetPublic, cloudPost, cloudDelete, type DataWrap } from "./cloudApi.js";
 import type { WorkspaceInvitation, InvitationPreview } from "../types/electron";
-
-interface DataWrap<T> {
-  data: T;
-}
 
 async function list(workspaceId: string): Promise<WorkspaceInvitation[]> {
   const res = await cloudGet<DataWrap<WorkspaceInvitation[]>>(
@@ -14,7 +10,7 @@ async function list(workspaceId: string): Promise<WorkspaceInvitation[]> {
 
 async function send(
   workspaceId: string,
-  input: { email: string; role?: "admin" | "member"; team_ids?: string[] }
+  input: { email: string; role?: "admin" | "member" }
 ): Promise<WorkspaceInvitation> {
   const res = await cloudPost<DataWrap<WorkspaceInvitation>>(
     `/api/workspaces/${workspaceId}/invitations`,
@@ -32,7 +28,7 @@ async function resend(workspaceId: string, invitationId: string): Promise<void> 
 }
 
 async function preview(token: string): Promise<InvitationPreview> {
-  const res = await cloudGet<DataWrap<InvitationPreview>>(
+  const res = await cloudGetPublic<DataWrap<InvitationPreview>>(
     `/api/invitations/${encodeURIComponent(token)}`
   );
   return res.data;
