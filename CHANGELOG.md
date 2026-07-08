@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes
 
+- **Wayland global hotkeys and the tray icon work again on Electron 41 / Node 24.** `dbus-next` opens its D-Bus connection through `usocket`, a native addon (`uwrap.node`) that broke on the 1.7.4 runtime bump: it first throws `TypeError: util.isError is not a function` during the D-Bus auth handshake (that API was removed in Node 23), then crashes the process with a native SIGTRAP once it performs real socket I/O. On KDE, GNOME, and Hyprland Wayland this aborted startup before global shortcuts registered and before the tray was created — so 1.7.4 showed no tray icon and dead hotkeys while 1.7.3 was fine. `dbus-next` is now patched (via patch-package) to open the D-Bus Unix socket with Node's built-in `net` instead of `usocket`, keeping the native addon out of the connection path entirely; the KGlobalAccel / GNOME / Hyprland shortcut services don't use unix-fd passing. (#1098, #1100)
+
 - **No more Windows Firewall prompt for local Parakeet transcription.** The bundled sherpa-onnx server only serves OpenWhispr itself over `127.0.0.1`, but the upstream binary has no loopback-only bind option, so Windows raised an "allow public and private networks" prompt when it started. All-users installs now register a scoped inbound block rule for the server binary: the prompt is gone, the port is closed to the network, and transcription is unaffected because Windows never filters loopback traffic. The rule is removed on uninstall. (#1090)
 
 ## [1.7.4] - 2026-07-07

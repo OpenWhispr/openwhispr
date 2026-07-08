@@ -1,0 +1,32 @@
+diff --git a/node_modules/dbus-next/lib/connection.js b/node_modules/dbus-next/lib/connection.js
+index 780dc04..292d164 100644
+--- a/node_modules/dbus-next/lib/connection.js
++++ b/node_modules/dbus-next/lib/connection.js
+@@ -45,21 +45,14 @@ function createStream (opts) {
+             return net.createConnection(params.socket);
+           }
+           if (params.abstract) {
+-            const usocket = require('usocket');
+-            const sock = new usocket.USocket({ path: '\u0000' + params.abstract });
+-            sock.supportsUnixFd = negotiateUnixFd;
+-            return sock;
++            // usocket bypass (see path branch): use net for the abstract socket too.
++            return net.createConnection({ path: '\u0000' + params.abstract });
+           }
+           if (params.path) {
+-            try {
+-              const usocket = require('usocket');
+-              const sock = new usocket.USocket({ path: params.path });
+-              sock.supportsUnixFd = negotiateUnixFd;
+-              return sock;
+-            } catch (err) {
+-              // TODO: maybe emit warning?
+-              return net.createConnection(params.path);
+-            }
++            // usocket's native module (uwrap.node) SIGTRAPs under Electron 41.10.0
++            // once it does real socket work; Node's built-in net speaks the D-Bus
++            // path socket fine (unix-fd passing isn't needed for KGlobalAccel/GNOME).
++            return net.createConnection(params.path);
+           }
+           throw new Error(
+             "not enough parameters for 'unix' connection - you need to specify 'socket' or 'abstract' or 'path' parameter"
