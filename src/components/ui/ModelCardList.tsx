@@ -197,7 +197,7 @@ export function ModelCard({
                   className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
                 >
                   <X size={11} className="mr-0.5" />
-                  {isCancelling ? "..." : "Cancel"}
+                  {isCancelling ? "..." : t("common.cancel")}
                 </Button>
               ) : (
                 <Button
@@ -210,7 +210,7 @@ export function ModelCard({
                   className="h-6 px-2.5 text-xs"
                 >
                   <Download size={11} className="mr-1" />
-                  Download
+                  {t("common.download")}
                 </Button>
               )}
             </>
@@ -247,14 +247,10 @@ export default function ModelCardList({
   onCancelDownload,
   isCancelling = false,
 }: ModelCardListProps) {
-  const isLocalMode = Boolean(onDownload);
+  const { t } = useTranslation();
 
   if (models.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground py-2">
-        {isLocalMode ? "No models available for this provider" : "No models available"}
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground py-2">{t("models.noneAvailable")}</p>;
   }
 
   return (

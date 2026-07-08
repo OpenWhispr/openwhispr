@@ -1893,6 +1893,7 @@
   },
   "models": {
     "learnMore": "Más información",
+    "noneAvailable": "No hay modelos disponibles",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilingüe rápido con detección automática de idioma (25 idiomas)",

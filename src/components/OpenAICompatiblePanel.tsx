@@ -28,6 +28,8 @@ interface OpenAICompatiblePanelProps {
   helpExamples?: ReactNode;
   // Hide the endpoint editor when the URL is fixed by the caller (e.g. OpenRouter).
   lockedBaseUrl?: boolean;
+  // Providers whose /models is public but whose inference needs a key.
+  apiKeyRequired?: boolean;
   getKeyUrl?: string;
 }
 
@@ -42,6 +44,7 @@ export default function OpenAICompatiblePanel({
   baseUrlPlaceholder = "https://api.openai.com/v1",
   helpExamples,
   lockedBaseUrl = false,
+  apiKeyRequired = false,
   getKeyUrl,
 }: OpenAICompatiblePanelProps) {
   const { t } = useTranslation();
@@ -99,10 +102,11 @@ export default function OpenAICompatiblePanel({
 
       pendingBaseRef.current = normalized;
 
+      // Keep the previous list visible while refreshing so the searchable list
+      // (and its query state) isn't unmounted mid-fetch.
       if (isMountedRef.current) {
         setModelsLoading(true);
         setModelsError(null);
-        setModelOptions([]);
       }
 
       const trimmedKey = apiKey?.trim();
@@ -148,19 +152,21 @@ export default function OpenAICompatiblePanel({
             ? payload.models
             : [];
 
+        // Coerce fields defensively: non-conformant endpoints may return
+        // numeric ids or object descriptions, which would crash the render.
         const mapped = (rawModels as Array<Record<string, unknown>>)
           .map((item) => {
-            const value = (item?.id || item?.name) as string | undefined;
-            if (!value) return null;
+            const rawValue = item?.id ?? item?.name;
+            if (rawValue === undefined || rawValue === null || rawValue === "") return null;
+            const value = String(rawValue);
             const ownedBy = typeof item?.owned_by === "string" ? item.owned_by : undefined;
-            return {
-              value,
-              label: (item?.id || item?.name || value) as string,
-              description:
-                (item?.description as string) ||
-                (ownedBy ? t("reasoning.custom.ownerLabel", { owner: ownedBy }) : undefined),
-              ownedBy,
-            } as ModelOption;
+            const description =
+              typeof item?.description === "string" && item.description
+                ? item.description
+                : ownedBy
+                  ? t("reasoning.custom.ownerLabel", { owner: ownedBy })
+                  : undefined;
+            return { value, label: value, description, ownedBy } as ModelOption;
           })
           .filter(Boolean) as ModelOption[];
 
@@ -269,14 +275,16 @@ export default function OpenAICompatiblePanel({
 
       <div className="space-y-2 pt-3">
         <div className="flex items-baseline justify-between">
-          <h4 className="font-medium text-foreground">{t("reasoning.custom.apiKeyOptional")}</h4>
+          <h4 className="font-medium text-foreground">
+            {t(apiKeyRequired ? "common.apiKey" : "reasoning.custom.apiKeyOptional")}
+          </h4>
           {getKeyUrl && <GetApiKeyLink url={getKeyUrl} />}
         </div>
         <ApiKeyInput
           apiKey={apiKey}
           setApiKey={setApiKey}
           label=""
-          helpText={t("reasoning.custom.apiKeyHelp")}
+          helpText={apiKeyRequired ? "" : t("reasoning.custom.apiKeyHelp")}
         />
       </div>
 

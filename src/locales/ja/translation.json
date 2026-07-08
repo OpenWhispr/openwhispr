@@ -1845,6 +1845,7 @@
   },
   "models": {
     "learnMore": "詳細を見る",
+    "noneAvailable": "利用可能なモデルがありません",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",

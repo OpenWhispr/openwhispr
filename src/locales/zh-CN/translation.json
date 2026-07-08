@@ -1840,6 +1840,7 @@
   },
   "models": {
     "learnMore": "了解更多",
+    "noneAvailable": "没有可用的模型",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）",

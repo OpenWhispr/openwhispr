@@ -64,7 +64,6 @@ const REMOTE_PROVIDER_ALIASES: Record<string, string> = {
   mistralai: "mistral",
   "x-ai": "xai",
   amazon: "bedrock",
-  microsoft: "azure",
 };
 
 // Resolves the icon for a remote provider prefix (e.g. "openai" from "openai/gpt-4").

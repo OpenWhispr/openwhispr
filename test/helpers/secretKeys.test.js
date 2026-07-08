@@ -5,8 +5,9 @@ const path = require("path");
 const fs = require("fs");
 const Module = require("module");
 
-// Mock electron before environment.js / secretCrypto load. safeStorage reports
-// no encryption so secrets take the plaintext (process.env) fallback path.
+// Mock electron and the OS keyring before environment.js / secretCrypto load,
+// so secrets take the plaintext (process.env) fallback path instead of writing
+// to the developer's real keychain.
 const tmpUserData = fs.mkdtempSync(path.join(os.tmpdir(), "ow-secret-test-"));
 process.resourcesPath = tmpUserData; // Electron-only global; harmless dummy for the .env fallback scan
 const fakeElectron = {
@@ -16,6 +17,7 @@ const fakeElectron = {
 const origLoad = Module._load;
 Module._load = function (request, ...rest) {
   if (request === "electron") return fakeElectron;
+  if (request === "@napi-rs/keyring") throw new Error("keyring disabled in tests");
   return origLoad.call(this, request, ...rest);
 };
 

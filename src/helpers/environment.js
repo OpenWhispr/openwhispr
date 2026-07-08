@@ -8,14 +8,7 @@ const secretCrypto = require("./secretCrypto");
 const { BYOK_API_KEYS } = require("../config/secretKeys");
 
 const SECRET_KEYS = [
-  "OPENAI_API_KEY",
-  "ANTHROPIC_API_KEY",
-  "GEMINI_API_KEY",
-  "GROQ_API_KEY",
-  "XAI_API_KEY",
-  "MISTRAL_API_KEY",
-  "OPENROUTER_API_KEY",
-  "TINFOIL_API_KEY",
+  ...BYOK_API_KEYS.map((k) => k.env),
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "CORTI_CLIENT_ID",

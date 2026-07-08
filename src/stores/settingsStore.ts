@@ -1709,6 +1709,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
     if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
+    if (keys.openrouterApiKey !== undefined) s.setOpenrouterApiKey(keys.openrouterApiKey);
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);

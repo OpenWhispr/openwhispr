@@ -544,6 +544,7 @@ export default function ReasoningModelSelector({
                 model={reasoningModel}
                 setModel={setReasoningModel}
                 lockedBaseUrl
+                apiKeyRequired
                 getKeyUrl={OPENROUTER_KEYS_URL}
               />
             ) : selectedCloudProvider === "custom" ? (

@@ -70,6 +70,7 @@
     "format": "npm run format:js",
     "format:check": "eslint . && cd src && eslint . && prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "lint": "eslint . && cd src && eslint .",
+    "test": "node --test \"test/helpers/*.test.js\"",
     "typecheck": "cd src && tsc --noEmit",
     "quality-check": "npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",

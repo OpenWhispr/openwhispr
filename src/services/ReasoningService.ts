@@ -2,6 +2,7 @@ import {
   getModelProvider,
   getCloudModel,
   getOpenAiApiConfig,
+  getProviderDisplayName,
   isEnterpriseProvider,
 } from "../models/ModelRegistry";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
@@ -126,7 +127,7 @@ class ReasoningService extends BaseReasoningService {
     }
 
     if (!apiKey) {
-      const errorMsg = `${provider.charAt(0).toUpperCase() + provider.slice(1)} API key not configured`;
+      const errorMsg = `${getProviderDisplayName(provider)} API key not configured`;
       logger.logReasoning(`${provider.toUpperCase()}_KEY_MISSING`, {
         provider,
         error: errorMsg,
@@ -900,6 +901,7 @@ class ReasoningService extends BaseReasoningService {
       const anthropicKey = await window.electronAPI?.getAnthropicKey?.();
       const geminiKey = await window.electronAPI?.getGeminiKey?.();
       const groqKey = await window.electronAPI?.getGroqKey?.();
+      const openrouterKey = await window.electronAPI?.getOpenrouterKey?.();
       const tinfoilKey = await window.electronAPI?.getTinfoilKey?.();
       const localAvailable = await window.electronAPI?.checkLocalReasoningAvailable?.();
 
@@ -908,11 +910,20 @@ class ReasoningService extends BaseReasoningService {
         hasAnthropic: !!anthropicKey,
         hasGemini: !!geminiKey,
         hasGroq: !!groqKey,
+        hasOpenrouter: !!openrouterKey,
         hasTinfoil: !!tinfoilKey,
         hasLocal: !!localAvailable,
       });
 
-      return !!(openaiKey || anthropicKey || geminiKey || groqKey || tinfoilKey || localAvailable);
+      return !!(
+        openaiKey ||
+        anthropicKey ||
+        geminiKey ||
+        groqKey ||
+        openrouterKey ||
+        tinfoilKey ||
+        localAvailable
+      );
     } catch (error) {
       logger.logReasoning("API_KEY_CHECK_ERROR", {
         error: (error as Error).message,

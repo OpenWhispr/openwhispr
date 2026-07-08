@@ -283,6 +283,19 @@ export function getReasoningModelLabel(modelId: string): string {
   return model?.fullLabel || modelId;
 }
 
+const NON_REGISTRY_PROVIDER_NAMES: Record<string, string> = {
+  openrouter: "OpenRouter",
+  custom: "Custom",
+};
+
+export function getProviderDisplayName(provider: string): string {
+  return (
+    REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS]?.name ??
+    NON_REGISTRY_PROVIDER_NAMES[provider] ??
+    provider
+  );
+}
+
 export function getModelProvider(modelId: string): string {
   if (isCloudCleanupMode()) {
     return "openwhispr";
@@ -396,6 +409,12 @@ export function getOpenAiApiConfig(modelId: string): OpenAiApiConfig {
       tokenParam: model.tokenParam,
       supportsTemperature: model.supportsTemperature ?? true,
     };
+  }
+
+  // Vendor-prefixed ids (openai/gpt-4o, anthropic/claude-…) come from OpenRouter
+  // or custom endpoints, which speak standard Chat Completions.
+  if (modelId.includes("/")) {
+    return { tokenParam: "max_tokens", supportsTemperature: true };
   }
 
   // Fallback for models not in the registry (custom model IDs, etc.)

@@ -1840,6 +1840,7 @@
   },
   "models": {
     "learnMore": "瞭解更多",
+    "noneAvailable": "沒有可用的模型",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多語言 ASR，自動語言偵測（25 種語言）",

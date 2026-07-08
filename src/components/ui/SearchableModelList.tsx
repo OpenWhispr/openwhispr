@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Search } from "lucide-react";
@@ -29,7 +29,7 @@ function toDisplayOption(model: ModelCardOption, stripPrefix: boolean): ModelCar
   const prefix = providerPrefix(model.value);
   if (!prefix) return model;
   const { icon, invertInDark } = getRemoteProviderIcon(prefix);
-  const label = stripPrefix ? model.value.slice(prefix.length + 1) : model.label;
+  const label = (stripPrefix && model.value.slice(prefix.length + 1)) || model.label;
   return { ...model, label, icon, invertInDark };
 }
 
@@ -45,6 +45,7 @@ export default function SearchableModelList({
   onModelSelect,
 }: SearchableModelListProps) {
   const { t } = useTranslation();
+  const listboxId = useId();
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -57,8 +58,10 @@ export default function SearchableModelList({
 
   const { rows, matchCount } = useMemo(() => {
     const groups = new Map<string, ModelCardOption[]>();
+    const seen = new Set<string>();
     for (const model of models) {
       if (model.value === selectedModel) continue; // pinned separately
+      if (seen.has(model.value)) continue;
       if (
         normalizedQuery &&
         !model.value.toLowerCase().includes(normalizedQuery) &&
@@ -67,8 +70,9 @@ export default function SearchableModelList({
       ) {
         continue;
       }
+      seen.add(model.value);
       const prefix = providerPrefix(model.value);
-      const key = prefix ? prefix.replace(/^~/, "") : OTHER_GROUP;
+      const key = prefix ? prefix.replace(/^~/, "").toLowerCase() : OTHER_GROUP;
       const bucket = groups.get(key);
       if (bucket) bucket.push(model);
       else groups.set(key, [model]);
@@ -125,6 +129,11 @@ export default function SearchableModelList({
     virtualizer.scrollToOffset(0);
   }, [normalizedQuery, virtualizer]);
 
+  // Rows can also rebuild without a query change (model list refetch).
+  useEffect(() => {
+    if (activeIndex >= rows.length) setActiveIndex(-1);
+  }, [rows.length, activeIndex]);
+
   const moveActive = (direction: 1 | -1) => {
     const step = (from: number) => {
       for (let i = from + direction; i >= 0 && i < rows.length; i += direction) {
@@ -156,7 +165,7 @@ export default function SearchableModelList({
   };
 
   const activeRow = activeIndex >= 0 ? rows[activeIndex] : undefined;
-  const activeId = activeRow?.type === "model" ? `model-opt-${activeRow.data.value}` : undefined;
+  const activeId = activeRow?.type === "model" ? `${listboxId}-${activeRow.data.value}` : undefined;
   const showEmpty = normalizedQuery.length > 0 && matchCount === 0;
 
   return (
@@ -174,7 +183,7 @@ export default function SearchableModelList({
           aria-label={t("reasoning.custom.searchPlaceholder")}
           role="combobox"
           aria-expanded={rows.length > 0}
-          aria-controls="model-listbox"
+          aria-controls={listboxId}
           aria-activedescendant={activeId}
           className="h-9 pl-8 text-sm"
         />
@@ -183,7 +192,7 @@ export default function SearchableModelList({
       {rows.length > 0 && (
         <div ref={scrollRef} className="overflow-y-auto pr-0.5 max-h-80">
           <div
-            id="model-listbox"
+            id={listboxId}
             role="listbox"
             aria-label={t("reasoning.custom.searchPlaceholder")}
             style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}
@@ -215,7 +224,7 @@ export default function SearchableModelList({
                     </div>
                   ) : (
                     <div
-                      id={`model-opt-${row.data.value}`}
+                      id={`${listboxId}-${row.data.value}`}
                       role="option"
                       aria-selected={row.data.value === selectedModel}
                       className={`pb-0.5 rounded-md ${isActive ? "ring-1 ring-primary/50" : ""}`}
