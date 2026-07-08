@@ -1,3 +1,5 @@
+import type { OrgPolicy } from "./policy";
+
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
@@ -510,7 +512,18 @@ declare global {
         dictation: { mode: string };
         notes: { mode: string };
         streamingProvider: string;
+        managed?: boolean;
       } | null>;
+
+      // Org policy (see src/types/policy.ts)
+      getWorkspacePolicy?: () => Promise<{
+        success: boolean;
+        status?: "ok" | "cached" | "error";
+        managed?: boolean;
+        policy?: OrgPolicy | null;
+        policyUpdatedAt?: string | null;
+        error?: string;
+      }>;
 
       getNoteRecordingConfig?: () => Promise<{
         success: boolean;

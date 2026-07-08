@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { authClient, isWithinGracePeriod } from "../lib/auth";
 import logger from "../utils/logger";
 import { useSettingsStore } from "../stores/settingsStore";
+import { usePolicyStore } from "../stores/policyStore";
 
 const useStaticSession = () => ({
   data: null,
@@ -31,6 +32,7 @@ export function useAuth() {
         "auth"
       );
       useSettingsStore.getState().setIsSignedIn(true);
+      void usePolicyStore.getState().fetchPolicy();
       lastSyncedRef.current = true;
     }
   }, [isSignedIn, rawIsSignedIn, gracePeriodActive, isPending]);

@@ -99,6 +99,7 @@ import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
 import { formatBytes } from "../utils/formatBytes";
 import { useSettingsStore } from "../stores/settingsStore";
+import { usePolicyStore, enforceModeOptions } from "../stores/policyStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import { WORKSPACES_ENABLED } from "../lib/features";
@@ -259,35 +260,42 @@ function TranscriptionSection({
   toast,
 }: TranscriptionSectionProps) {
   const { t } = useTranslation();
+  const policyManaged = usePolicyStore((s) => s.managed);
+  const policyDoc = usePolicyStore((s) => s.policy);
 
-  const transcriptionModes: InferenceModeOption[] = [
-    {
-      id: "openwhispr",
-      label: t("settingsPage.transcription.modes.openwhispr"),
-      description: t("settingsPage.transcription.modes.openwhisprDesc"),
-      icon: <Cloud className="w-4 h-4" />,
-      disabled: !isSignedIn,
-      badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
-    },
-    {
-      id: "providers",
-      label: t("settingsPage.transcription.modes.providers"),
-      description: t("settingsPage.transcription.modes.providersDesc"),
-      icon: <Key className="w-4 h-4" />,
-    },
-    {
-      id: "local",
-      label: t("settingsPage.transcription.modes.local"),
-      description: t("settingsPage.transcription.modes.localDesc"),
-      icon: <Cpu className="w-4 h-4" />,
-    },
-    {
-      id: "self-hosted",
-      label: t("settingsPage.transcription.modes.selfHosted"),
-      description: t("settingsPage.transcription.modes.selfHostedDesc"),
-      icon: <Network className="w-4 h-4" />,
-    },
-  ];
+  const transcriptionModes: InferenceModeOption[] = enforceModeOptions(
+    [
+      {
+        id: "openwhispr",
+        label: t("settingsPage.transcription.modes.openwhispr"),
+        description: t("settingsPage.transcription.modes.openwhisprDesc"),
+        icon: <Cloud className="w-4 h-4" />,
+        disabled: !isSignedIn,
+        badge: !isSignedIn ? t("common.freeAccountRequired") : undefined,
+      },
+      {
+        id: "providers",
+        label: t("settingsPage.transcription.modes.providers"),
+        description: t("settingsPage.transcription.modes.providersDesc"),
+        icon: <Key className="w-4 h-4" />,
+      },
+      {
+        id: "local",
+        label: t("settingsPage.transcription.modes.local"),
+        description: t("settingsPage.transcription.modes.localDesc"),
+        icon: <Cpu className="w-4 h-4" />,
+      },
+      {
+        id: "self-hosted",
+        label: t("settingsPage.transcription.modes.selfHosted"),
+        description: t("settingsPage.transcription.modes.selfHostedDesc"),
+        icon: <Network className="w-4 h-4" />,
+      },
+    ],
+    "transcription",
+    { managed: policyManaged, policy: policyDoc },
+    t("settingsPage.managedByOrg", "Managed by your organization"),
+  );
 
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (mode === "openwhispr" && !isSignedIn) {

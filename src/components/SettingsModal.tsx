@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { usePolicyStore } from "../stores/policyStore";
 import {
   Sliders,
   Mic,
@@ -54,6 +55,7 @@ interface SettingsModalProps {
 
 export default function SettingsModal({ open, onOpenChange, initialSection }: SettingsModalProps) {
   const { t } = useTranslation();
+  const policyManaged = usePolicyStore((s) => s.managed);
   const sidebarItems: SidebarItem<SettingsSectionType>[] = useMemo(
     () => [
       {
@@ -165,6 +167,11 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
       activeSection={activeSection}
       onSectionChange={handleSectionChange}
     >
+      {policyManaged && (
+        <div className="mx-4 mt-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+          {t("settingsModal.managedByOrg", "Some settings are managed by your organization.")}
+        </div>
+      )}
       <SettingsPage
         activeSection={activeSection}
         onNavigateToSection={handleSectionChange}

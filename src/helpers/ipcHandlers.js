@@ -6432,7 +6432,7 @@ class IPCHandlers {
 
         const method = (opts.method || "GET").toUpperCase();
         const sendWith = (header) => {
-          const headers = { ...header };
+          const headers = { ...header, "x-openwhispr-version": app.getVersion() };
           const fetchOpts = { method, headers };
           if (opts.body !== undefined) {
             headers["Content-Type"] = "application/json";
@@ -6493,7 +6493,7 @@ class IPCHandlers {
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
         const response = await proxyFetch(`${apiUrl}/api/stt-config`, {
-          headers: authHeader,
+          headers: { ...authHeader, "x-openwhispr-version": app.getVersion() },
         });
 
         if (!response.ok) {
@@ -6511,6 +6511,60 @@ class IPCHandlers {
       } catch (error) {
         debugLogger.error("STT config fetch error:", error);
         return null;
+      }
+    });
+
+    // Org policy delivered by the API and enforced by the app. Cached to disk so
+    // enforcement survives a network failure (fail-closed): on error we keep
+    // serving the last policy rather than falling back to unmanaged. An
+    // authoritative `managed: false` clears the cache so leaving a workspace
+    // unlocks settings.
+    ipcMain.handle("get-workspace-policy", async (event) => {
+      const cachePath = path.join(app.getPath("userData"), "workspace-policy.json");
+      try {
+        const apiUrl = getApiUrl();
+        if (!apiUrl) throw new Error("OpenWhispr API URL not configured");
+
+        const authHeader = await getAuthHeader(event);
+        if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
+
+        const response = await proxyFetch(`${apiUrl}/api/workspace-policy`, {
+          headers: { ...authHeader, "x-openwhispr-version": app.getVersion() },
+        });
+        if (!response.ok) throw new Error(`API error: ${response.status}`);
+
+        const json = await response.json();
+        const data = json?.data;
+        // Treat a malformed 200 body as a failure, not an authoritative
+        // "unmanaged" verdict, so the catch serves the cached policy (fail-closed)
+        // instead of deleting it and unlocking the user.
+        if (!data || typeof data.managed !== "boolean") {
+          throw new Error("Malformed policy response");
+        }
+        if (data.managed) {
+          try {
+            fs.writeFileSync(cachePath, JSON.stringify(data), { mode: 0o600 });
+          } catch (err) {
+            debugLogger.error("Policy cache write failed:", err);
+          }
+        } else {
+          try {
+            if (fs.existsSync(cachePath)) fs.unlinkSync(cachePath);
+          } catch {
+            /* ignore */
+          }
+        }
+        return { success: true, status: "ok", ...data };
+      } catch (error) {
+        try {
+          if (fs.existsSync(cachePath)) {
+            const cached = JSON.parse(fs.readFileSync(cachePath, "utf8"));
+            return { success: true, status: "cached", ...cached };
+          }
+        } catch (err) {
+          debugLogger.error("Policy cache read failed:", err);
+        }
+        return { success: false, status: "error", error: error.message };
       }
     });
 
