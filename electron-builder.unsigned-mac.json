@@ -1,0 +1,7 @@
+{
+  "extends": "electron-builder.json",
+  "mac": {
+    "identity": null,
+    "notarize": false
+  }
+}
