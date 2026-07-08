@@ -21,7 +21,7 @@ const AudioStorageManager = require("./audioStorage");
 const TINFOIL_REALTIME_MODEL = "voxtral-mini-4b-realtime";
 const liveSpeakerIdentifier = require("./liveSpeakerIdentifier");
 const MeetingEchoLeakDetector = require("./meetingEchoLeakDetector");
-const { partitionPendingMicFinals } = require("./meetingMicHoldback");
+const { partitionPendingMicFinals, isWithinRetractWindow } = require("./meetingMicHoldback");
 const { applySmartSpacing } = require("./smartSpacing");
 const {
   transcriptsOverlap,
@@ -3965,10 +3965,8 @@ class IPCHandlers {
     const DUPLICATE_TRANSCRIPT_MERGE_LIMIT = 3;
     const STREAMING_RISKY_MIC_SEGMENT_HOLDBACK_MS = 3000;
     const LOCAL_MEETING_CHUNK_INTERVAL_MS = 5000;
-    // Must outlast one local transcription cycle: when a remote utterance
-    // straddles a chunk boundary, its system-side tail is only transcribed in
-    // the next cycle, and the buffered mic echo has to still be held back for
-    // that transcript to confirm it as a duplicate.
+    // Must outlast one local transcription cycle so a straddling remote
+    // utterance's next-cycle system transcript can confirm buffered echo.
     const LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS = LOCAL_MEETING_CHUNK_INTERVAL_MS + 1000;
     const RACING_MIC_RETRACT_WINDOW_MS = 4000;
 
@@ -4043,15 +4041,11 @@ class IPCHandlers {
         const candidate = meetingDiarizationSegments[i];
         if (candidate.source !== "mic" || candidate.timestamp == null) continue;
         if (systemTimestamp != null) {
-          // Bleed-flagged segments get the full duplicate window: their
-          // confirming system transcript can land after the holdback released
-          // them (local mode transcribes in cycles), and the retract is the
-          // last live chance to remove the echo.
-          const retractWindowMs =
+          const windowMs =
             candidate.hasBleedEvidence || candidate.likelyRenderBleed
               ? DUPLICATE_TRANSCRIPT_WINDOW_MS
               : RACING_MIC_RETRACT_WINDOW_MS;
-          if (Math.abs(candidate.timestamp - systemTimestamp) > retractWindowMs) {
+          if (!isWithinRetractWindow({ candidate, systemTimestamp, windowMs })) {
             if (candidate.timestamp < systemTimestamp - DUPLICATE_TRANSCRIPT_WINDOW_MS) break;
             continue;
           }
@@ -4085,15 +4079,12 @@ class IPCHandlers {
       meetingLocalTranscript += `${meetingLocalTranscript ? " " : ""}${text}`;
     };
 
-    // Held-back mic segments are appended at release time, after system
-    // segments spoken later — so insertion order is not spoken order. The
-    // stable sort leaves segments without timestamps in place.
+    // Held-back mic segments are appended at release time, so insertion order
+    // is not spoken order.
     const buildOrderedTranscriptText = (segments) =>
       segments
         .slice()
-        .sort((left, right) =>
-          left.timestamp != null && right.timestamp != null ? left.timestamp - right.timestamp : 0
-        )
+        .sort((left, right) => (left.timestamp ?? 0) - (right.timestamp ?? 0))
         .map((segment) => segment.text)
         .join(" ")
         .trim();
@@ -4103,6 +4094,7 @@ class IPCHandlers {
         text,
         source,
         timestamp,
+        committedAt: Date.now(),
         suppressionReason: source === "mic" ? micSuppression?.reason || null : null,
         hasBleedEvidence: source === "mic" ? !!micSuppression?.hasBleedEvidence : false,
         likelyRenderBleed: source === "mic" ? !!micSuppression?.likelyRenderBleed : false,
@@ -5005,7 +4997,7 @@ class IPCHandlers {
         source === "mic" &&
         rms < MEETING_MIC_BLEED_RMS_CEILING &&
         peak < MEETING_MIC_BLEED_PEAK_CEILING &&
-        meetingEchoLeakDetector.isSystemSpeaking(Date.now() - 5000)
+        meetingEchoLeakDetector.isSystemSpeaking(Date.now() - LOCAL_MEETING_CHUNK_INTERVAL_MS)
       ) {
         debugLogger.debug("Skipping system-dominant mic chunk", {
           source,

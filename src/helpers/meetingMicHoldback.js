@@ -1,25 +1,14 @@
 /**
- * Holdback policy for buffered ("risky") meeting mic finals.
+ * Partitions buffered ("risky") meeting mic finals into entries still inside
+ * their holdback window, confirmed system-audio duplicates, and entries to
+ * release.
  *
- * Mic segments that overlap system audio (double-talk, echo-leak evidence,
- * startup warmup, system speech activity) are buffered for a holdback window
- * before being committed, giving the system channel time to produce a
- * transcript that confirms the mic text as an echo duplicate.
- *
- * Policy: a held-back mic segment may only be dropped when system transcript
- * text actually matches it (`isDuplicate`). Audio-only echo evidence
- * (correlation/residual heuristics) is enough to delay a segment, never to
- * discard it — field logs showed genuine local speech scoring correlations
- * of 0.73–0.81 during double-talk, above every audio gate.
- *
- * Coverage after release: bleed-flagged segments can still be retracted by
- * the racing retract when their matching system transcript arrives late
- * (`removeRacingMicEntriesFor` widens its window for them). Segments buffered
- * only for warmup or system speech activity carry no bleed flags, so the
- * duplicate matcher never confirms them — their drop opportunity is a system
- * transcript arriving while they are still buffered; after release they are
- * committed. The post-meeting merge dedupe additionally filters the
- * diarization payload, but does not rewrite segments already committed live.
+ * Policy: a text match (`isDuplicate`) is the only condition that may drop a
+ * held-back segment. Audio-only echo evidence delays a segment, never
+ * discards it — field logs showed genuine local speech scoring correlations
+ * of 0.73–0.81 during double-talk, above every audio gate. Released segments
+ * with bleed flags can still be retracted when a matching system transcript
+ * arrives late (see removeRacingMicEntriesFor in ipcHandlers.js).
  */
 const partitionPendingMicFinals = ({ pending, now, force = false, isDuplicate }) => {
   const deferred = [];
@@ -43,4 +32,26 @@ const partitionPendingMicFinals = ({ pending, now, force = false, isDuplicate })
   return { deferred, duplicates, releases };
 };
 
-module.exports = { partitionPendingMicFinals };
+/**
+ * A committed mic segment may be retracted by an arriving system transcript
+ * when the two plausibly describe the same audio. Capture timestamps race
+ * directly for segments committed on arrival; held-back segments commit only
+ * after their holdback window, so their confirming transcript — delayed by up
+ * to a transcription cycle — races their commit time instead. Without the
+ * commit-time comparison, a segment released at capture + holdback could
+ * never be retracted: the confirming transcript always arrives more than
+ * `holdback` away from the capture timestamp.
+ */
+const isWithinRetractWindow = ({ candidate, systemTimestamp, windowMs }) => {
+  if (Math.abs(candidate.timestamp - systemTimestamp) <= windowMs) {
+    return true;
+  }
+
+  return (
+    candidate.committedAt != null &&
+    systemTimestamp >= candidate.timestamp &&
+    Math.abs(candidate.committedAt - systemTimestamp) <= windowMs
+  );
+};
+
+module.exports = { partitionPendingMicFinals, isWithinRetractWindow };

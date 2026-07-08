@@ -1,7 +1,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { partitionPendingMicFinals } = require("../../src/helpers/meetingMicHoldback");
+const {
+  partitionPendingMicFinals,
+  isWithinRetractWindow,
+} = require("../../src/helpers/meetingMicHoldback");
 
 const NOW = 1_000_000;
 
@@ -165,4 +168,61 @@ test("handles an empty queue", () => {
   assert.deepEqual(deferred, []);
   assert.deepEqual(duplicates, []);
   assert.deepEqual(releases, []);
+});
+
+test("retract window matches on capture timestamps for segments committed on arrival", () => {
+  const candidate = { timestamp: NOW, committedAt: NOW };
+
+  assert.equal(
+    isWithinRetractWindow({ candidate, systemTimestamp: NOW + 3000, windowMs: 6000 }),
+    true
+  );
+  assert.equal(
+    isWithinRetractWindow({ candidate, systemTimestamp: NOW + 6001, windowMs: 6000 }),
+    false
+  );
+});
+
+test("regression: late confirmation races commit time for held-back segments", () => {
+  // Local mode stamps segments at transcription completion and releases them
+  // holdback ms later, so a confirming next-cycle system transcript is always
+  // more than `holdback` past the capture timestamp. On capture timestamps
+  // alone this candidate could categorically never be retracted.
+  const holdback = 6000;
+  const released = { timestamp: NOW, committedAt: NOW + holdback };
+
+  assert.equal(
+    isWithinRetractWindow({ candidate: released, systemTimestamp: NOW + 6500, windowMs: 6000 }),
+    true
+  );
+  assert.equal(
+    isWithinRetractWindow({
+      candidate: released,
+      systemTimestamp: NOW + holdback + 6001,
+      windowMs: 6000,
+    }),
+    false
+  );
+});
+
+test("commit-time race never matches system transcripts from before the segment was spoken", () => {
+  const released = { timestamp: NOW, committedAt: NOW + 6000 };
+
+  assert.equal(
+    isWithinRetractWindow({ candidate: released, systemTimestamp: NOW - 6500, windowMs: 6000 }),
+    false
+  );
+});
+
+test("segments without a commit time fall back to the capture window only", () => {
+  const legacy = { timestamp: NOW, committedAt: null };
+
+  assert.equal(
+    isWithinRetractWindow({ candidate: legacy, systemTimestamp: NOW + 6500, windowMs: 6000 }),
+    false
+  );
+  assert.equal(
+    isWithinRetractWindow({ candidate: legacy, systemTimestamp: NOW + 5000, windowMs: 6000 }),
+    true
+  );
 });
