@@ -964,6 +964,11 @@
     },
     "helpText": "Seleziona un microfono specifico o usa l'impostazione predefinita di sistema.",
     "inputDevice": "Dispositivo di ingresso",
+    "maxDuration": {
+      "description": "La registrazione si interrompe automaticamente dopo questo numero di secondi. Lascia vuoto o 0 per nessun limite.",
+      "label": "Durata massima di registrazione",
+      "placeholder": "Nessun limite"
+    },
     "noBuiltInDetected": "Nessun microfono integrato rilevato. Verrà usato quello predefinito di sistema.",
     "preferBuiltIn": {
       "description": "I microfoni esterni possono causare latenza o ridurre la qualità della trascrizione",

@@ -4,6 +4,7 @@ import { Toggle } from "./toggle";
 import { SettingsRow } from "./SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
 import { Button } from "./button";
+import { Input } from "./input";
 import { RefreshCw, Mic } from "lucide-react";
 import { isBuiltInMicrophone } from "../../utils/audioDeviceUtils";
 import { resolveMicDeviceSelection } from "../../helpers/micDeviceSelection";
@@ -18,16 +19,20 @@ interface MicrophoneSettingsProps {
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
   selectedMicDeviceLabel: string;
+  maxRecordingDurationSec: number;
   onPreferBuiltInChange: (value: boolean) => void;
   onDeviceSelect: (deviceId: string, label: string) => void;
+  onMaxRecordingDurationChange: (value: number) => void;
 }
 
 export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
   preferBuiltInMic,
   selectedMicDeviceId,
   selectedMicDeviceLabel,
+  maxRecordingDurationSec,
   onPreferBuiltInChange,
   onDeviceSelect,
+  onMaxRecordingDurationChange,
 }) => {
   const { t } = useTranslation();
   const [devices, setDevices] = useState<AudioDevice[]>([]);
@@ -198,6 +203,24 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
           <p className="text-xs text-muted-foreground">{t("microphoneSettings.helpText")}</p>
         </div>
       )}
+
+      <SettingsRow
+        label={t("microphoneSettings.maxDuration.label")}
+        description={t("microphoneSettings.maxDuration.description")}
+      >
+        <Input
+          type="number"
+          min={0}
+          step={1}
+          value={maxRecordingDurationSec > 0 ? maxRecordingDurationSec : ""}
+          placeholder={t("microphoneSettings.maxDuration.placeholder")}
+          onChange={(e) => {
+            const parsed = parseInt(e.target.value, 10);
+            onMaxRecordingDurationChange(Number.isFinite(parsed) && parsed > 0 ? parsed : 0);
+          }}
+          className="w-28"
+        />
+      </SettingsRow>
     </div>
   );
 };

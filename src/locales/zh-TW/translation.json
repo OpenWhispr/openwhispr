@@ -964,6 +964,11 @@
     },
     "helpText": "選擇特定的麥克風，或使用系統預設裝置。",
     "inputDevice": "輸入裝置",
+    "maxDuration": {
+      "description": "錄音將在達到設定的秒數後自動停止。留空或填 0 表示不限制。",
+      "label": "錄音時間上限",
+      "placeholder": "不限制"
+    },
     "noBuiltInDetected": "未偵測到內建麥克風。使用系統預設裝置。",
     "preferBuiltIn": {
       "description": "外接麥克風可能造成延遲或降低轉錄品質",

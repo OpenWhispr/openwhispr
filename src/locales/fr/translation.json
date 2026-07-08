@@ -1012,6 +1012,11 @@
     },
     "helpText": "Sélectionnez un microphone spécifique ou utilisez le réglage par défaut du système.",
     "inputDevice": "Périphérique d'entrée",
+    "maxDuration": {
+      "description": "L'enregistrement s'arrête automatiquement après ce nombre de secondes. Laissez vide ou 0 pour désactiver la limite.",
+      "label": "Durée maximale d'enregistrement",
+      "placeholder": "Aucune limite"
+    },
     "noBuiltInDetected": "Aucun microphone intégré détecté. Utilisation du réglage par défaut du système.",
     "preferBuiltIn": {
       "description": "Les microphones externes peuvent causer de la latence ou réduire la qualité de transcription",
