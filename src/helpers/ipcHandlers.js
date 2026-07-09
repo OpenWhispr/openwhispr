@@ -17,6 +17,7 @@ const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
 const { getTinfoilChatModels } = require("./tinfoilCatalog");
+const { transcribeWithTinfoil } = require("./tinfoilTranscription");
 const AudioStorageManager = require("./audioStorage");
 
 // Tinfoil's only realtime STT model — fallback when the renderer omits one.
@@ -2751,6 +2752,17 @@ class IPCHandlers {
       return getTinfoilChatModels();
     });
 
+    // Enclave attestation is Node-only, so batch transcription is proxied through main.
+    ipcMain.handle("proxy-tinfoil-transcription", async (event, { audioBuffer, language }) => {
+      return transcribeWithTinfoil({
+        audioBuffer: Buffer.from(audioBuffer),
+        fileName: "audio.webm",
+        contentType: "audio/webm",
+        language,
+        apiKey: this.environmentManager.getTinfoilKey(),
+      });
+    });
+
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();
     });
@@ -3850,6 +3862,16 @@ class IPCHandlers {
               }
             }
           }
+        } else if (settings?.cloudTranscriptionProvider === "tinfoil") {
+          // Attested transport, so this can't reuse the generic fetch below.
+          const { text, model } = await transcribeWithTinfoil({
+            audioBuffer: buffer,
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+            language,
+            apiKey: this.environmentManager.getTinfoilKey(),
+          });
+          if (text) result = { text, source: "tinfoil", model };
         } else {
           const provider = settings?.cloudTranscriptionProvider || "openai";
           const model = this._resolveByokModel(provider, settings?.cloudTranscriptionModel);
@@ -6591,6 +6613,18 @@ class IPCHandlers {
               clientSecret,
               audioBuffer: fs.readFileSync(filePath),
               language: language || "en",
+            });
+            return { success: true, text };
+          }
+
+          if (provider === "tinfoil") {
+            const ext = path.extname(filePath).toLowerCase().replace(".", "");
+            const { text } = await transcribeWithTinfoil({
+              audioBuffer: fs.readFileSync(filePath),
+              fileName: path.basename(filePath),
+              contentType: AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+              language,
+              apiKey: this.environmentManager.getTinfoilKey(),
             });
             return { success: true, text };
           }

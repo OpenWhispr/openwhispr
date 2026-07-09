@@ -223,6 +223,7 @@
       "id": "tinfoil",
       "name": "Tinfoil",
       "baseUrl": "https://inference.tinfoil.sh/v1",
+      "batchModel": "voxtral-small-24b",
       "models": [
         {
           "id": "voxtral-mini-4b-realtime",

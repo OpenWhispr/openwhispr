@@ -23,7 +23,7 @@ import {
   isCloudCleanupMode,
   isCloudDictationAgentMode,
 } from "../stores/settingsStore";
-import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { getBatchTranscriptionModel, getTranscriptionProvider } from "../models/ModelRegistry";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
@@ -1681,6 +1681,31 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const apiKey = await this.getAPIKey();
       const optimizedAudio = audioBlob;
 
+      // Tinfoil verifies the enclave from Node, so it never uses the fetch below.
+      // Intercept before an endpoint is resolved — the generic path would send the
+      // Tinfoil key to whatever base URL it picked.
+      if (provider === "tinfoil") {
+        if (!window.electronAPI?.proxyTinfoilTranscription) {
+          throw new Error("Tinfoil transcription is unavailable in this window");
+        }
+        const apiCallStart = performance.now();
+        const result = await window.electronAPI.proxyTinfoilTranscription({
+          audioBuffer: await optimizedAudio.arrayBuffer(),
+          language,
+        });
+        const proxyText = result?.text;
+        if (!proxyText?.trim()) {
+          throw new Error("No text transcribed - Tinfoil response was empty");
+        }
+        timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+        const reasoningStart = performance.now();
+        const text = await this.processTranscription(proxyText, "tinfoil");
+        timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+        const source = (await this.isReasoningAvailable()) ? "tinfoil-reasoned" : "tinfoil";
+        return { success: true, text, rawText: proxyText, source, timings };
+      }
+
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
       const mimeType = optimizedAudio.type || "audio/webm";
@@ -2088,6 +2113,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return trimmedModel || "whisper-1";
       }
 
+      // Only ever consulted on the batch path — Tinfoil's selectable model streams.
+      if (provider === "tinfoil") {
+        return getBatchTranscriptionModel("tinfoil");
+      }
+
       // Validate model matches provider to handle settings migration
       if (trimmedModel) {
         const isGroqModel = trimmedModel.startsWith("whisper-large-v3");
@@ -2124,6 +2154,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   getTranscriptionEndpoint(deploymentName = "") {
     const s = getSettings();
     const currentProvider = s.cloudTranscriptionProvider || "openai";
+
+    // Above the try below, whose catch turns any failure into the OpenAI endpoint.
+    // Tinfoil has no HTTP endpoint we may call directly — it goes through the
+    // attested proxy in main — and resolving one here would leak the key.
+    if (currentProvider === "tinfoil") {
+      throw new Error("Tinfoil transcription must go through the attested main-process proxy");
+    }
+
     const currentBaseUrl = s.cloudTranscriptionBaseUrl || "";
     const transcriptionMode = s.transcriptionMode || "";
     const remoteUrl = (s.remoteTranscriptionUrl || "").trim();

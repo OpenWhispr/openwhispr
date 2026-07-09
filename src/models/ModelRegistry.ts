@@ -68,6 +68,12 @@ export interface TranscriptionProviderData {
   name: string;
   baseUrl: string;
   models: TranscriptionModelDefinition[];
+  /**
+   * Model to use on paths that can't stream — retry, audio upload, and any
+   * fallback out of a streaming session. Set only when `models` is streaming-only,
+   * so the picker never offers a model that would silently disable streaming.
+   */
+  batchModel?: string;
 }
 
 export interface WhisperModelInfo {
@@ -399,6 +405,10 @@ export function getTranscriptionProvider(
 export function getTranscriptionModels(providerId: string): TranscriptionModelDefinition[] {
   const provider = getTranscriptionProvider(providerId);
   return provider?.models || [];
+}
+
+export function getBatchTranscriptionModel(providerId: string): string | undefined {
+  return getTranscriptionProvider(providerId)?.batchModel;
 }
 
 export function getDefaultTranscriptionModel(providerId: string): string {
