@@ -8,6 +8,7 @@ import whisperVadConstants from "../constants/whisperVad.json";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
+import { deriveCleanupMode, buildCleanupScopePatches } from "../helpers/cleanupRouting";
 import {
   INFERENCE_SCOPES,
   type InferenceScope,
@@ -669,6 +670,7 @@ export interface SettingsState
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
   setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => void;
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => void;
+  setCleanupForAllScopes: (settings: Partial<CleanupSettings>) => void;
   updateApiKeys: (keys: Partial<ApiKeySettings>) => void;
   updateChatAgentSettings: (settings: Partial<ChatAgentSettings>) => void;
 }
@@ -1706,6 +1708,27 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.cleanupCloudBaseUrl !== undefined)
       s.setCleanupCloudBaseUrl(settings.cleanupCloudBaseUrl);
     if (settings.cleanupCloudMode !== undefined) s.setCleanupCloudMode(settings.cleanupCloudMode);
+  },
+
+  // Apply a cleanup config to dictation, then mirror its cloud routing to the
+  // note-formatting scope — used when onboarding routes cleanup to one provider
+  // so PHI never reaches a second LLM (e.g. Corti for medical providers).
+  setCleanupForAllScopes: (settings: Partial<CleanupSettings>) => {
+    const s = useSettingsStore.getState();
+    // Derive the mode from the incoming patch (falling back to current state) so
+    // the helper patches are the single source of truth for every scope's mode.
+    const mode = deriveCleanupMode(
+      settings.cleanupCloudMode ?? s.cleanupCloudMode,
+      settings.cleanupProvider ?? s.cleanupProvider
+    );
+    const { dictationCleanup, noteFormatting } = buildCleanupScopePatches(settings, mode);
+    s.updateCleanupSettings(dictationCleanup);
+    s.setCleanupMode(dictationCleanup.cleanupMode);
+    if (noteFormatting.provider !== undefined) s.setNoteFormattingProvider(noteFormatting.provider);
+    if (noteFormatting.model !== undefined) s.setNoteFormattingModel(noteFormatting.model);
+    if (noteFormatting.cloudMode !== undefined)
+      s.setNoteFormattingCloudMode(noteFormatting.cloudMode);
+    s.setNoteFormattingMode(mode);
   },
 
   updateApiKeys: (keys: Partial<ApiKeySettings>) => {

@@ -4,8 +4,9 @@ import { Check, ExternalLink, Settings, Stethoscope } from "lucide-react";
 import { Button } from "../ui/button";
 import ApiKeyInput from "../ui/ApiKeyInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { getTranscriptionProviders } from "../../models/ModelRegistry";
+import { getTranscriptionProviders, modelRegistry } from "../../models/ModelRegistry";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { buildCortiOnboardingPayloads } from "../../helpers/cleanupRouting";
 import { USE_CASE_IDS } from "./useCases";
 
 const CORTI_SIGNUP_URL =
@@ -28,6 +29,7 @@ export default function FinishStep({
   const setCloudTranscriptionForAllScopes = useSettingsStore(
     (s) => s.setCloudTranscriptionForAllScopes
   );
+  const setCleanupForAllScopes = useSettingsStore((s) => s.setCleanupForAllScopes);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
@@ -45,12 +47,16 @@ export default function FinishStep({
     cortiClientId.trim().length > 0 && cortiClientSecret.trim().length > 0;
 
   const startWithCorti = () => {
-    setCloudTranscriptionForAllScopes({
-      useLocalWhisper: false,
-      cloudTranscriptionMode: "byok",
-      cloudTranscriptionProvider: "corti",
-      cloudTranscriptionModel: cortiProvider?.models[0]?.id,
-    });
+    // Route cleanup to the Corti reasoning provider too so PHI never leaves
+    // Corti. Skip cleanup routing if the reasoning entry is absent (Part 1 not
+    // shipped) rather than writing an undefined model.
+    const reasoningProvider = modelRegistry.getCloudProviders().find((p) => p.id === "corti");
+    const { transcription, cleanup } = buildCortiOnboardingPayloads(
+      cortiProvider,
+      reasoningProvider
+    );
+    setCloudTranscriptionForAllScopes(transcription);
+    if (cleanup) setCleanupForAllScopes(cleanup);
     onFinish(false);
   };
 
