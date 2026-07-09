@@ -30,22 +30,16 @@ function normalizeApiKey(apiKey: string): string {
 }
 
 /**
- * Tinfoil adds and retires models without an app release, so pull its list into
- * the registry before every request — later code reads token params and
- * thinking support from there. The main process caps this at one fetch an hour,
- * and a failure leaves the registry on its last known list.
+ * Tinfoil adds and retires models semi-often, so kick off a sync of Tinfoils model registry
  */
-async function syncTinfoilCatalog(): Promise<void> {
-  try {
-    await refreshTinfoilModels();
-  } catch {
-    // Offline or endpoint down: keep the models we already know about.
-  }
+function syncTinfoilCatalog(): void {
+  // Offline or endpoint down: keep the models we already know about.
+  void refreshTinfoilModels().catch(() => {});
 }
 
 export async function getTinfoilChatClient(apiKey: string): Promise<TinfoilAI> {
   const key = normalizeApiKey(apiKey);
-  await syncTinfoilCatalog();
+  syncTinfoilCatalog();
   const cached = chatClientCache.get(key);
   if (cached) return cached;
 
@@ -66,7 +60,7 @@ export async function getTinfoilChatClient(apiKey: string): Promise<TinfoilAI> {
 
 async function getTinfoilAISDKProvider(apiKey: string): Promise<TinfoilAISDKProvider> {
   const key = normalizeApiKey(apiKey);
-  await syncTinfoilCatalog();
+  syncTinfoilCatalog();
   const cached = aiSdkProviderCache.get(key);
   if (cached) return cached;
 
