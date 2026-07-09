@@ -33,7 +33,7 @@ type CloudModelOption = {
   invertInDark?: boolean;
 };
 
-const CLOUD_PROVIDER_IDS = ["openai", "anthropic", "gemini", "groq", "tinfoil", "custom"];
+const CLOUD_PROVIDER_IDS = ["openai", "anthropic", "gemini", "groq", "tinfoil", "corti", "custom"];
 
 interface ReasoningModelSelectorProps {
   reasoningModel: string;
@@ -322,6 +322,10 @@ export default function ReasoningModelSelector({
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
+  const cortiClientId = useSettingsStore((s) => s.cortiClientId);
+  const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
+  const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
+  const setCortiClientSecret = useSettingsStore((s) => s.setCortiClientSecret);
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">(mode || "cloud");
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");
@@ -648,6 +652,47 @@ export default function ReasoningModelSelector({
                       label=""
                       helpText=""
                     />
+                  </div>
+                )}
+
+                {selectedCloudProvider === "corti" && (
+                  <div className="space-y-2">
+                    <div className="flex items-baseline justify-between">
+                      <h4 className="font-medium text-foreground">{t("common.apiKey")}</h4>
+                      <a
+                        href="https://www.corti.ai/?utm_source=referral&utm_content=&utm_campaign=openwhispr"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={createExternalLinkHandler(
+                          "https://www.corti.ai/?utm_source=referral&utm_content=&utm_campaign=openwhispr"
+                        )}
+                        className="text-xs text-link underline decoration-link/30 hover:decoration-link/60 cursor-pointer transition-colors"
+                      >
+                        {t("reasoning.getApiKey")}
+                      </a>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-foreground">
+                        {t("transcription.corti.clientId")}
+                      </label>
+                      <ApiKeyInput
+                        apiKey={cortiClientId}
+                        setApiKey={setCortiClientId}
+                        label=""
+                        helpText=""
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium text-foreground">
+                        {t("transcription.corti.clientSecret")}
+                      </label>
+                      <ApiKeyInput
+                        apiKey={cortiClientSecret}
+                        setApiKey={setCortiClientSecret}
+                        label=""
+                        helpText=""
+                      />
+                    </div>
                   </div>
                 )}
 

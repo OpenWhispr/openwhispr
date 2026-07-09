@@ -814,7 +814,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
 ] as const;
 
 function invalidateApiKeyCaches(
-  provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "tinfoil" | "custom"
+  provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "tinfoil" | "corti" | "custom"
 ) {
   if (provider) {
     if (_ReasoningService) {
@@ -1316,12 +1316,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   setCortiClientId: (key: string) => {
     set({ cortiClientId: key });
     debouncedSaveSecret("cortiClientId", key);
-    invalidateApiKeyCaches();
+    invalidateApiKeyCaches("corti");
   },
   setCortiClientSecret: (key: string) => {
     set({ cortiClientSecret: key });
     debouncedSaveSecret("cortiClientSecret", key);
-    invalidateApiKeyCaches();
+    invalidateApiKeyCaches("corti");
   },
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),

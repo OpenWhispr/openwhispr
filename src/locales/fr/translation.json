@@ -1952,7 +1952,11 @@
         "tinfoil_kimi_k2_6": "Modèle privé de codage longue durée et multimodal, contexte 256K",
         "tinfoil_gemma4_31b": "Modèle privé de raisonnement multilingue avec appel d'outils, contexte 256K",
         "tinfoil_gpt_oss_120b": "Modèle privé de raisonnement à poids ouverts avec usage d'outils, contexte 131K",
-        "tinfoil_llama3_3_70b": "Modèle privé conversationnel avec appel d'outils, contexte 128K"
+        "tinfoil_llama3_3_70b": "Modèle privé conversationnel avec appel d'outils, contexte 128K",
+        "corti_corti_s1_instant": "Modèle de santé rapide, sans trace de raisonnement",
+        "corti_corti_s1": "Modèle clinique le plus performant avec raisonnement",
+        "corti_corti_s1_mini_instant": "Modèle de santé compact, le plus rapide et le moins cher",
+        "corti_corti_s1_mini": "Modèle clinique compact avec raisonnement à moitié prix"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Rapide et économique. Parfait pour nettoyer le texte.",

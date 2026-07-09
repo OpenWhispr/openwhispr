@@ -1996,7 +1996,11 @@
         "tinfoil_kimi_k2_6": "Private long-horizon coding and multimodal model, 256K context",
         "tinfoil_gemma4_31b": "Private multilingual reasoning model with tool calling, 256K context",
         "tinfoil_gpt_oss_120b": "Private open-weight reasoning model with tool use, 131K context",
-        "tinfoil_llama3_3_70b": "Private conversational model with tool calling, 128K context"
+        "tinfoil_llama3_3_70b": "Private conversational model with tool calling, 128K context",
+        "corti_corti_s1_instant": "Fast healthcare model, no reasoning trace",
+        "corti_corti_s1": "Most capable clinical model with reasoning",
+        "corti_corti_s1_mini_instant": "Compact healthcare model, fastest and lowest cost",
+        "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",

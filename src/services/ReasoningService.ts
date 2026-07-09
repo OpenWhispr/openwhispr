@@ -18,6 +18,19 @@ import { getConfiguredOpenAIBase } from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 
+// Corti Models gateway bearer: base64 of the credential template documented in
+// its OpenAPI spec, with only the client id/secret substituted.
+function buildCortiBearer(clientId: string, clientSecret: string): string {
+  if (!clientId || !clientSecret) {
+    throw new Error("Corti API key not configured");
+  }
+  try {
+    return btoa(`base:client_credentials:${clientId}:${clientSecret}`);
+  } catch {
+    throw new Error("Corti credentials contain invalid characters");
+  }
+}
+
 export type AgentStreamChunk =
   | { type: "content"; text: string }
   | { type: "tool_calls"; calls: Array<{ id: string; name: string; arguments: string }> }
@@ -64,8 +77,25 @@ class ReasoningService extends BaseReasoningService {
   }
 
   private async getApiKey(
-    provider: "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom"
+    provider: "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "corti" | "custom"
   ): Promise<string> {
+    if (provider === "corti") {
+      const cached = this.apiKeyCache.get(provider);
+      if (cached) return cached;
+
+      let clientId = "";
+      let clientSecret = "";
+      try {
+        clientId = (await window.electronAPI?.getCortiClientId?.()) || "";
+        clientSecret = (await window.electronAPI?.getCortiClientSecret?.()) || "";
+      } catch (err) {
+        logger.logReasoning("CORTI_KEY_FETCH_ERROR", { error: (err as Error)?.message });
+      }
+      const bearer = buildCortiBearer(clientId.trim(), clientSecret.trim());
+      this.apiKeyCache.set(provider, bearer);
+      return bearer;
+    }
+
     if (provider === "custom") {
       let customKey = "";
       try {
@@ -349,7 +379,7 @@ class ReasoningService extends BaseReasoningService {
     provider: string,
     config: ReasoningConfig & { systemPrompt: string }
   ): AsyncGenerator<string, void, unknown> {
-    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "tinfoil", "custom"];
+    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "tinfoil", "corti", "custom"];
     const isLocalProvider = !cloudProviders.includes(provider);
 
     const settings = getSettings();
@@ -371,13 +401,16 @@ class ReasoningService extends BaseReasoningService {
       endpoint = `http://127.0.0.1:${serverResult.port}/v1/chat/completions`;
     } else {
       const providerKey = provider as
-        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "custom";
+        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "corti" | "custom";
       const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
       apiKey = overrideKey || (await this.getApiKey(providerKey));
 
       switch (providerKey) {
         case "groq":
           endpoint = buildApiUrl(API_ENDPOINTS.GROQ_BASE, "/chat/completions");
+          break;
+        case "corti":
+          endpoint = buildApiUrl(API_ENDPOINTS.CORTI_MODELS_BASE, "/chat/completions");
           break;
         case "gemini":
           endpoint = buildApiUrl(API_ENDPOINTS.GEMINI, "/openai/chat/completions");
@@ -555,7 +588,7 @@ class ReasoningService extends BaseReasoningService {
       );
     }
 
-    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "tinfoil", "custom"];
+    const cloudProviders = ["openai", "groq", "gemini", "anthropic", "tinfoil", "corti", "custom"];
     const isLocalProvider = !cloudProviders.includes(provider);
 
     const settings = getSettings();
@@ -585,7 +618,7 @@ class ReasoningService extends BaseReasoningService {
       baseURL = `http://127.0.0.1:${serverResult.port}/v1`;
     } else {
       const providerKey = provider as
-        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "custom";
+        "openai" | "groq" | "gemini" | "anthropic" | "tinfoil" | "corti" | "custom";
       const overrideKey = providerKey === "custom" ? config.customApiKey?.trim() : "";
       apiKey = overrideKey || (await this.getApiKey(providerKey));
       baseURL =
@@ -900,7 +933,7 @@ class ReasoningService extends BaseReasoningService {
   }
 
   clearApiKeyCache(
-    provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "tinfoil" | "custom"
+    provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "tinfoil" | "corti" | "custom"
   ): void {
     if (provider) {
       if (provider !== "custom") {

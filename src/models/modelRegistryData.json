@@ -510,6 +510,44 @@
           "descriptionKey": "models.descriptions.cloud.tinfoil_llama3_3_70b"
         }
       ]
+    },
+    {
+      "id": "corti",
+      "name": "Corti",
+      "models": [
+        {
+          "id": "corti-s1-instant",
+          "name": "Corti S1 Instant",
+          "description": "Fast healthcare model, no reasoning trace",
+          "descriptionKey": "models.descriptions.cloud.corti_corti_s1_instant",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true
+        },
+        {
+          "id": "corti-s1",
+          "name": "Corti S1",
+          "description": "Most capable clinical model with reasoning",
+          "descriptionKey": "models.descriptions.cloud.corti_corti_s1",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true
+        },
+        {
+          "id": "corti-s1-mini-instant",
+          "name": "Corti S1 Mini Instant",
+          "description": "Compact healthcare model, fastest and lowest cost",
+          "descriptionKey": "models.descriptions.cloud.corti_corti_s1_mini_instant",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true
+        },
+        {
+          "id": "corti-s1-mini",
+          "name": "Corti S1 Mini",
+          "description": "Compact clinical model with reasoning at half the price",
+          "descriptionKey": "models.descriptions.cloud.corti_corti_s1_mini",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true
+        }
+      ]
     }
   ],
   "enterpriseProviders": [

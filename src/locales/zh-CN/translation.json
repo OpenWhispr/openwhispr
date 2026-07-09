@@ -1899,7 +1899,11 @@
         "tinfoil_kimi_k2_6": "私密长程编码与多模态模型，256K 上下文",
         "tinfoil_gemma4_31b": "支持工具调用的私密多语言推理模型，256K 上下文",
         "tinfoil_gpt_oss_120b": "支持工具使用的私密开源权重推理模型，131K 上下文",
-        "tinfoil_llama3_3_70b": "支持工具调用的私密对话模型，128K 上下文"
+        "tinfoil_llama3_3_70b": "支持工具调用的私密对话模型，128K 上下文",
+        "corti_corti_s1_instant": "快速医疗模型，无推理过程",
+        "corti_corti_s1": "功能最强的临床模型，带推理",
+        "corti_corti_s1_mini_instant": "紧凑型医疗模型，最快且成本最低",
+        "corti_corti_s1_mini": "紧凑型临床模型，半价提供推理"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",

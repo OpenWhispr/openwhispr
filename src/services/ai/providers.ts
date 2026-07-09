@@ -4,6 +4,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModel } from "ai";
 import { getTinfoilLanguageModel } from "./tinfoilClient";
+import { API_ENDPOINTS } from "../../config/constants";
 
 // Renderer-side AI SDK factory. Cloud + local only — enterprise providers
 // (bedrock/azure/vertex) run in the main process via the
@@ -28,6 +29,8 @@ export async function getAIModel(
       return createGoogleGenerativeAI({ apiKey })(model);
     case "tinfoil":
       return getTinfoilLanguageModel(apiKey, model);
+    case "corti":
+      return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.CORTI_MODELS_BASE })(model);
     case "custom":
       return createOpenAI({ apiKey, baseURL })(model);
     case "local":
