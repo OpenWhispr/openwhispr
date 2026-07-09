@@ -442,6 +442,21 @@ export default function ReasoningModelSelector({
     loadDownloadedModels();
   }, [loadDownloadedModels]);
 
+  const selectDefaultModelForProvider = (provider: string) => {
+    if (provider === "custom") return;
+
+    if (provider === "tinfoil") {
+      const defaultModel = pickDefaultTinfoilModel(tinfoilModels);
+      if (defaultModel) setReasoningModel(defaultModel.id);
+      return;
+    }
+
+    const providerData = REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS];
+    if (providerData?.models?.length > 0) {
+      setReasoningModel(providerData.models[0].value);
+    }
+  };
+
   const handleModeChange = async (newMode: "cloud" | "local") => {
     setSelectedMode(newMode);
     setReasoningModeProp?.(newMode === "local" ? "local" : "providers");
@@ -449,20 +464,7 @@ export default function ReasoningModelSelector({
     if (newMode === "cloud") {
       window.electronAPI?.llamaServerStop?.();
       setLocalReasoningProvider(selectedCloudProvider);
-
-      if (selectedCloudProvider === "custom") return;
-
-      if (selectedCloudProvider === "tinfoil") {
-        const defaultModel = pickDefaultTinfoilModel(tinfoilModels);
-        if (defaultModel) setReasoningModel(defaultModel.id);
-        return;
-      }
-
-      const provider =
-        REASONING_PROVIDERS[selectedCloudProvider as keyof typeof REASONING_PROVIDERS];
-      if (provider?.models?.length > 0) {
-        setReasoningModel(provider.models[0].value);
-      }
+      selectDefaultModelForProvider(selectedCloudProvider);
     } else {
       setLocalReasoningProvider(selectedLocalProvider);
       const downloaded = await loadDownloadedModels();
@@ -482,21 +484,7 @@ export default function ReasoningModelSelector({
   const handleCloudProviderChange = (provider: string) => {
     setSelectedCloudProvider(provider);
     setLocalReasoningProvider(provider);
-
-    if (provider === "custom") return;
-
-    // Tinfoil's list order isn't a preference, and the refresh may not have
-    // landed yet, so don't let either decide which model the user starts on.
-    if (provider === "tinfoil") {
-      const defaultModel = pickDefaultTinfoilModel(tinfoilModels);
-      if (defaultModel) setReasoningModel(defaultModel.id);
-      return;
-    }
-
-    const providerData = REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS];
-    if (providerData?.models?.length > 0) {
-      setReasoningModel(providerData.models[0].value);
-    }
+    selectDefaultModelForProvider(provider);
   };
 
   const handleLocalProviderChange = async (providerId: string) => {
@@ -697,8 +685,6 @@ export default function ReasoningModelSelector({
                     selectedModel={reasoningModel}
                     onModelSelect={setReasoningModel}
                   />
-                  {/* The known list renders straight away; a refresh, when one
-                      is due, reports itself underneath and swaps the list in. */}
                   {selectedCloudProvider === "tinfoil" && (
                     <>
                       {tinfoilModelsLoading && (
