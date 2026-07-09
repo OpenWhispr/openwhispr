@@ -119,9 +119,6 @@ function getTinfoilCloudProvider(): CloudProviderData | undefined {
   return modelData.cloudProviders.find((provider) => provider.id === "tinfoil");
 }
 
-// Start from the last list Tinfoil gave us, so a model the user selected while
-// online survives a launch that can't reach the endpoint. The bundled models
-// are only the first-run floor, before any fetch has ever landed.
 const cachedTinfoilModels = readCachedTinfoilModels().models;
 if (cachedTinfoilModels.length > 0) {
   const tinfoilProvider = getTinfoilCloudProvider();
@@ -287,12 +284,6 @@ export function getTinfoilModels(): CloudModelDefinition[] {
   return getTinfoilCloudProvider()?.models ?? [];
 }
 
-/**
- * Replaces the bundled Tinfoil model list with a freshly fetched one. The list
- * has to land in the registry, not just the picker: getOpenAiApiConfig and
- * getCloudModel read it synchronously to decide token params and thinking
- * suppression, and fall through to OpenAI's defaults for ids they don't know.
- */
 export function applyTinfoilModels(models: CloudModelDefinition[]): void {
   const provider = getTinfoilCloudProvider();
   if (provider) {

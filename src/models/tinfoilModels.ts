@@ -36,7 +36,7 @@ const DESCRIPTION_KEYS: Record<string, string> = {
  * drop out and models we've never heard of appear. Only the description is
  * ours: every Tinfoil model takes max_tokens and supports temperature.
  */
-export function mergeTinfoilModels(catalog: TinfoilCatalogModel[]): CloudModelDefinition[] {
+function toCloudModels(catalog: TinfoilCatalogModel[]): CloudModelDefinition[] {
   return catalog.map((model) => ({
     id: model.id,
     name: model.name,
@@ -102,7 +102,7 @@ async function fetchAndApply(): Promise<CloudModelDefinition[]> {
     throw new Error("Tinfoil model list is unavailable");
   }
 
-  const models = mergeTinfoilModels(await fetchModels());
+  const models = toCloudModels(await fetchModels());
   // An empty list would mean Tinfoil serves no chat models at all. Far more
   // likely something upstream broke, so keep what we already have.
   if (models.length === 0) {
@@ -116,6 +116,11 @@ async function fetchAndApply(): Promise<CloudModelDefinition[]> {
   return models;
 }
 
+/** Whether refreshTinfoilModels would hit the network rather than short-circuit. */
+export function isTinfoilListFresh(): boolean {
+  return isCachedListFresh(readCachedTinfoilModels());
+}
+
 /**
  * Pulls Tinfoil's model list into the registry, at most once an hour. Cheap to
  * call before every request: a list we fetched recently short-circuits without
@@ -124,11 +129,6 @@ async function fetchAndApply(): Promise<CloudModelDefinition[]> {
  * leaving the registry as it was — an unreachable endpoint says nothing about
  * which models still exist.
  */
-/** Whether refreshTinfoilModels would hit the network rather than short-circuit. */
-export function isTinfoilListFresh(): boolean {
-  return isCachedListFresh(readCachedTinfoilModels());
-}
-
 export function refreshTinfoilModels(): Promise<CloudModelDefinition[]> {
   const cached = readCachedTinfoilModels();
   if (isCachedListFresh(cached)) {
