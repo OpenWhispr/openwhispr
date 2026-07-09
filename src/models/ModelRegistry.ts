@@ -119,9 +119,10 @@ function getTinfoilCloudProvider(): CloudProviderData | undefined {
   return modelData.cloudProviders.find((provider) => provider.id === "tinfoil");
 }
 
-// Tinfoil's models come from its /v1/models endpoint rather than the static
-// registry. Seed from the last good fetch so ids resolve before a refresh
-// lands — getOpenAiApiConfig and getModelProvider both read this synchronously.
+// Tinfoil's models are fetched from its /v1/models endpoint, but getOpenAiApiConfig
+// and getCloudModel read the registry synchronously. Seed from the last good fetch
+// so a cold start doesn't fall through to the wrong defaults for these ids
+// (max_completion_tokens and no temperature, rather than max_tokens with one).
 const seededTinfoilProvider = getTinfoilCloudProvider();
 if (seededTinfoilProvider) {
   seededTinfoilProvider.models = readCachedTinfoilModels();
