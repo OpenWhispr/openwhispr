@@ -692,11 +692,18 @@ export default function ReasoningModelSelector({
                   <h4 className="text-sm font-medium text-foreground">
                     {t("reasoning.selectModel")}
                   </h4>
+                  <ModelCardList
+                    models={selectedCloudModels}
+                    selectedModel={reasoningModel}
+                    onModelSelect={setReasoningModel}
+                  />
+                  {/* The known list renders straight away; a refresh, when one
+                      is due, reports itself underneath and swaps the list in. */}
                   {selectedCloudProvider === "tinfoil" && (
                     <>
                       {tinfoilModelsLoading && (
-                        <p className="text-xs text-primary">
-                          {t("reasoning.custom.fetchingModels")}
+                        <p className="text-xs text-muted-foreground">
+                          {t("reasoning.tinfoil.refreshingModels")}
                         </p>
                       )}
                       {!tinfoilModelsLoading && tinfoilModelsError && (
@@ -706,11 +713,6 @@ export default function ReasoningModelSelector({
                       )}
                     </>
                   )}
-                  <ModelCardList
-                    models={selectedCloudModels}
-                    selectedModel={reasoningModel}
-                    onModelSelect={setReasoningModel}
-                  />
                 </div>
               </>
             )}

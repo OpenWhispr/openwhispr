@@ -122,7 +122,7 @@ function getTinfoilCloudProvider(): CloudProviderData | undefined {
 // Start from the last list Tinfoil gave us, so a model the user selected while
 // online survives a launch that can't reach the endpoint. The bundled models
 // are only the first-run floor, before any fetch has ever landed.
-const cachedTinfoilModels = readCachedTinfoilModels();
+const cachedTinfoilModels = readCachedTinfoilModels().models;
 if (cachedTinfoilModels.length > 0) {
   const tinfoilProvider = getTinfoilCloudProvider();
   if (tinfoilProvider) {

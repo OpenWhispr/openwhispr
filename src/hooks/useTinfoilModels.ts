@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getTinfoilModels, type CloudModelDefinition } from "../models/ModelRegistry";
-import { refreshTinfoilModels } from "../models/tinfoilModels";
+import { isTinfoilListFresh, refreshTinfoilModels } from "../models/tinfoilModels";
 import logger from "../utils/logger";
 
 interface UseTinfoilModelsResult {
@@ -30,7 +30,11 @@ export function useTinfoilModels(enabled: boolean): UseTinfoilModelsResult {
   }, []);
 
   const refresh = useCallback(async () => {
-    if (isMountedRef.current) {
+    // A list we fetched within the hour resolves without touching the network,
+    // so don't flash a "refreshing" state the user can't even read.
+    const willFetch = !isTinfoilListFresh();
+
+    if (willFetch && isMountedRef.current) {
       setLoading(true);
       setError(null);
     }
@@ -48,7 +52,7 @@ export function useTinfoilModels(enabled: boolean): UseTinfoilModelsResult {
         setError((err as Error).message || "Unable to load models");
       }
     } finally {
-      if (isMountedRef.current) {
+      if (willFetch && isMountedRef.current) {
         setLoading(false);
       }
     }

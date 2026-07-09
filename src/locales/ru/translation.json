@@ -501,7 +501,8 @@
     },
     "tinfoil": {
       "modelRetiredTitle": "Модель больше недоступна",
-      "modelRetired": "Tinfoil прекратил поддержку {{from}}. Выполнен переход на {{to}}."
+      "modelRetired": "Tinfoil прекратил поддержку {{from}}. Выполнен переход на {{to}}.",
+      "refreshingModels": "Обновление моделей…"
     }
   },
   "transcription": {

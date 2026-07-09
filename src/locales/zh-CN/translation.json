@@ -501,7 +501,8 @@
     },
     "tinfoil": {
       "modelRetiredTitle": "模型已不可用",
-      "modelRetired": "Tinfoil 已停用 {{from}}，已切换至 {{to}}。"
+      "modelRetired": "Tinfoil 已停用 {{from}}，已切换至 {{to}}。",
+      "refreshingModels": "正在刷新模型…"
     }
   },
   "transcription": {

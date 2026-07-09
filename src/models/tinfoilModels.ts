@@ -1,5 +1,9 @@
 import { applyTinfoilModels, getTinfoilModels, type CloudModelDefinition } from "./ModelRegistry";
-import { writeCachedTinfoilModels } from "./tinfoilModelCache";
+import {
+  isCachedListFresh,
+  readCachedTinfoilModels,
+  writeCachedTinfoilModels,
+} from "./tinfoilModelCache";
 import { INFERENCE_SCOPES } from "../config/inferenceScopes";
 import { getSettings, setStringSetting } from "../stores/settingsStore";
 import { recordTinfoilModelSwitch } from "../stores/tinfoilModelSwitchStore";
@@ -113,12 +117,26 @@ async function fetchAndApply(): Promise<CloudModelDefinition[]> {
 }
 
 /**
- * Pulls Tinfoil's model list into the registry and the cache. The main process
- * refetches at most once an hour, so this is cheap to call before every
- * request. Rejects when Tinfoil can't be reached, leaving the registry as it
- * was — an unreachable endpoint says nothing about which models still exist.
+ * Pulls Tinfoil's model list into the registry, at most once an hour. Cheap to
+ * call before every request: a list we fetched recently short-circuits without
+ * touching the network, and the timestamp is persisted so a restart doesn't
+ * refetch a list we pulled a minute ago. Rejects when Tinfoil can't be reached,
+ * leaving the registry as it was — an unreachable endpoint says nothing about
+ * which models still exist.
  */
+/** Whether refreshTinfoilModels would hit the network rather than short-circuit. */
+export function isTinfoilListFresh(): boolean {
+  return isCachedListFresh(readCachedTinfoilModels());
+}
+
 export function refreshTinfoilModels(): Promise<CloudModelDefinition[]> {
+  const cached = readCachedTinfoilModels();
+  if (isCachedListFresh(cached)) {
+    // Another window may have fetched this; make sure our registry has it too.
+    applyTinfoilModels(cached.models);
+    return Promise.resolve(cached.models);
+  }
+
   if (!inFlight) {
     inFlight = fetchAndApply().finally(() => {
       inFlight = null;

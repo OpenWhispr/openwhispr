@@ -5,13 +5,11 @@ const { net } = require("electron");
 const debugLogger = require("./debugLogger");
 
 const TINFOIL_MODELS_URL = "https://inference.tinfoil.sh/v1/models";
-const REFETCH_INTERVAL_MS = 60 * 60 * 1000;
 // Callers refresh before every request, so don't make each one wait out the
 // timeout while Tinfoil is unreachable.
 const RETRY_AFTER_FAILURE_MS = 60 * 1000;
 const REQUEST_TIMEOUT_MS = 10_000;
 
-let cached = null;
 let lastFailureAt = 0;
 let inFlight = null;
 
@@ -56,15 +54,12 @@ async function fetchModels() {
 }
 
 /**
- * Resolves to Tinfoil's chat models, refetching at most once an hour. Rejects
- * when the fetch fails so callers can tell "Tinfoil says this model is gone"
- * apart from "we couldn't ask".
+ * Resolves to Tinfoil's chat models. How often to ask is the renderer's call —
+ * it holds the persisted list and the timestamp that goes with it. Rejects when
+ * the fetch fails so callers can tell "Tinfoil says this model is gone" apart
+ * from "we couldn't ask".
  */
 async function getTinfoilChatModels() {
-  if (cached && Date.now() - cached.fetchedAt < REFETCH_INTERVAL_MS) {
-    return cached.models;
-  }
-
   if (Date.now() - lastFailureAt < RETRY_AFTER_FAILURE_MS) {
     throw new Error("Tinfoil models unavailable");
   }
@@ -72,7 +67,6 @@ async function getTinfoilChatModels() {
   if (!inFlight) {
     inFlight = fetchModels()
       .then((models) => {
-        cached = { models, fetchedAt: Date.now() };
         lastFailureAt = 0;
         return models;
       })

@@ -501,7 +501,8 @@
     },
     "tinfoil": {
       "modelRetiredTitle": "Modello non più disponibile",
-      "modelRetired": "Tinfoil ha ritirato {{from}}. Passato a {{to}}."
+      "modelRetired": "Tinfoil ha ritirato {{from}}. Passato a {{to}}.",
+      "refreshingModels": "Aggiornamento dei modelli…"
     }
   },
   "transcription": {

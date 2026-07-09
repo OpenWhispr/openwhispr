@@ -501,7 +501,8 @@
     },
     "tinfoil": {
       "modelRetiredTitle": "モデルが利用できません",
-      "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。"
+      "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
+      "refreshingModels": "モデルを更新しています…"
     }
   },
   "transcription": {

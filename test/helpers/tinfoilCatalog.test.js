@@ -62,7 +62,7 @@ test("reports supportsThinking from the reasoning flag", async () => {
   assert.equal(model.supportsThinking, false);
 });
 
-test("refetches at most once an hour and shares one request between callers", async () => {
+test("shares one in-flight request between concurrent callers", async () => {
   let calls = 0;
   const { getTinfoilChatModels } = loadCatalog(async () => {
     calls += 1;
@@ -70,11 +70,9 @@ test("refetches at most once an hour and shares one request between callers", as
   });
 
   const [first, second] = await Promise.all([getTinfoilChatModels(), getTinfoilChatModels()]);
-  const third = await getTinfoilChatModels();
 
   assert.equal(calls, 1);
   assert.equal(first, second);
-  assert.equal(first, third);
 });
 
 test("rejects rather than returning a list when the payload is malformed", async () => {
