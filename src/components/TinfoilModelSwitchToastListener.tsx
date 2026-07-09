@@ -7,9 +7,7 @@ import {
 } from "../stores/tinfoilModelSwitchStore";
 
 /**
- * Headless. Tinfoil can retire the model a user selected, and the switch onto a
- * replacement happens in the background — say so rather than silently changing
- * which model their dictation goes to.
+ * Tinfoils models are a bit ephemeral, alert user if one switches out from under them
  */
 export default function TinfoilModelSwitchToastListener() {
   const { t } = useTranslation();

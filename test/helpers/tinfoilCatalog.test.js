@@ -9,8 +9,8 @@ function loadCatalog(fetchImpl) {
   delete require.cache[catalogModulePath];
 
   Module._load = function loadWithMocks(request, parent, isMain) {
-    if (request === "electron") {
-      return { net: { fetch: fetchImpl } };
+    if (request === "./tinfoilSecureClient") {
+      return { tinfoilSecureFetch: fetchImpl };
     }
     if (request === "./debugLogger") {
       return { warn() {} };

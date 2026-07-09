@@ -1,12 +1,9 @@
-// Tinfoil serves its model list from an unauthenticated OpenAI-compatible
-// endpoint. Fetching it here rather than in the renderer keeps the request off
-// the page's origin and lets every window share one throttle.
-const { net } = require("electron");
+// Tinfoil's model list comes from the attested endoint.
+// Fetching from the main process rather than the renderer lets every window share one request.
 const debugLogger = require("./debugLogger");
+const { tinfoilSecureFetch } = require("./tinfoilSecureClient");
 
-const TINFOIL_MODELS_URL = "https://inference.tinfoil.sh/v1/models";
-// Callers refresh before every request, so don't make each one wait out the
-// timeout while Tinfoil is unreachable.
+const TINFOIL_MODELS_PATH = "/v1/models";
 const RETRY_AFTER_FAILURE_MS = 60 * 1000;
 const REQUEST_TIMEOUT_MS = 10_000;
 
@@ -42,10 +39,10 @@ function parseModels(payload) {
 }
 
 async function fetchModels() {
-  const response = await net.fetch(TINFOIL_MODELS_URL, {
+  // The first call also attests the enclave, so allow for more than a plain GET.
+  const response = await tinfoilSecureFetch(TINFOIL_MODELS_PATH, {
     method: "GET",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    useSessionCookies: false,
   });
   if (!response.ok) {
     throw new Error(`Tinfoil models request failed: ${response.status}`);
@@ -54,8 +51,7 @@ async function fetchModels() {
 }
 
 /**
- * Resolves to Tinfoil's chat models. How often to ask is the renderer's call —
- * it holds the persisted list and the timestamp that goes with it. Rejects when
+ * Resolves to Tinfoil's chat models. Rejects when
  * the fetch fails so callers can tell "Tinfoil says this model is gone" apart
  * from "we couldn't ask".
  */
