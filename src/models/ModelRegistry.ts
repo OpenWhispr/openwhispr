@@ -68,11 +68,7 @@ export interface TranscriptionProviderData {
   name: string;
   baseUrl: string;
   models: TranscriptionModelDefinition[];
-  /**
-   * Substituted on paths that can't stream — retry, audio upload, and any fallback
-   * out of a streaming session. Lets one picker entry cover a provider that serves
-   * streaming and batch as separate models, without exposing the split as a choice.
-   */
+  /** Allows for a stream/batch split */
   batchModel?: string;
 }
 

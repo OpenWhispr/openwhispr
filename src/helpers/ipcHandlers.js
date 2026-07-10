@@ -825,8 +825,6 @@ class IPCHandlers {
       return this.windowManager.resizeMainWindow(sizeKey);
     });
 
-    // Uniform BYOK key channels (get-<base>-key / save-<base>-key) from the
-    // shared manifest — adding a provider needs no handler here.
     for (const k of BYOK_API_KEYS) {
       ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
       ipcMain.handle(`save-${k.base}-key`, (event, key) => this.environmentManager[k.save](key));
