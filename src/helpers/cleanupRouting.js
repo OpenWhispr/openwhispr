@@ -20,18 +20,19 @@ export function buildCleanupScopePatches(settings, mode) {
 }
 
 // Build the onboarding "use Corti everywhere" payloads from the Corti registry
-// entries. `cleanup` is null when the reasoning provider or its first model is
+// entries. `cleanup` is null when `environment` is not "eu" (the Corti Models
+// LLM gateway is EU-only) or the reasoning provider or its first model is
 // missing, so the caller skips cleanup routing instead of writing an undefined
 // model. `useCleanupModel` is forced true so the routing takes effect even if
 // the user had cleanup toggled off.
-export function buildCortiOnboardingPayloads(transcriptionProvider, reasoningProvider) {
+export function buildCortiOnboardingPayloads(transcriptionProvider, reasoningProvider, environment) {
   const transcription = {
     useLocalWhisper: false,
     cloudTranscriptionMode: "byok",
     cloudTranscriptionProvider: "corti",
     cloudTranscriptionModel: transcriptionProvider?.models?.[0]?.id,
   };
-  const cleanupModel = reasoningProvider?.models?.[0]?.id;
+  const cleanupModel = environment === "eu" ? reasoningProvider?.models?.[0]?.id : undefined;
   const cleanup = cleanupModel
     ? {
         useCleanupModel: true,

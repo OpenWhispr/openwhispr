@@ -296,6 +296,8 @@
         "createAccount": "建立你的 Corti 帳戶",
         "creditBadge": "50 美元免費額度",
         "regionHint": "選擇音訊處理地區 — 美國或歐盟。",
+        "cleanupEuHint": "文字清理也會在 Corti 模型上執行。",
+        "cleanupUsHint": "Corti 語言模型目前僅限歐盟；文字清理會保留你目前的提供者。",
         "useCorti": "使用 Corti",
         "skip": "暫時不用",
         "step1": "在 corti.ai 註冊",

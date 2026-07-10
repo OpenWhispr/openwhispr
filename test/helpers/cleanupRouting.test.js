@@ -61,7 +61,8 @@ test("onboarding payloads route both transcription and cleanup to corti", async 
   const { buildCortiOnboardingPayloads } = await load();
   const { transcription, cleanup } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
-    { id: "corti", models: [{ id: "corti-s1-instant" }, { id: "corti-s1" }] }
+    { id: "corti", models: [{ id: "corti-s1-instant" }, { id: "corti-s1" }] },
+    "eu"
   );
 
   assert.deepEqual(transcription, {
@@ -82,7 +83,8 @@ test("onboarding forces cleanup enabled on the corti path", async () => {
   const { buildCortiOnboardingPayloads } = await load();
   const { cleanup } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
-    { id: "corti", models: [{ id: "corti-s1-instant" }] }
+    { id: "corti", models: [{ id: "corti-s1-instant" }] },
+    "eu"
   );
   assert.equal(cleanup.useCleanupModel, true);
 });
@@ -91,7 +93,8 @@ test("missing corti reasoning provider yields no cleanup payload", async () => {
   const { buildCortiOnboardingPayloads } = await load();
   const { transcription, cleanup } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
-    undefined
+    undefined,
+    "eu"
   );
 
   assert.equal(cleanup, null);
@@ -102,7 +105,50 @@ test("corti reasoning provider with empty models yields no cleanup payload", asy
   const { buildCortiOnboardingPayloads } = await load();
   const { cleanup } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
-    { id: "corti", models: [] }
+    { id: "corti", models: [] },
+    "eu"
   );
   assert.equal(cleanup, null);
+});
+
+test("environment us yields the transcription payload but null cleanup", async () => {
+  const { buildCortiOnboardingPayloads } = await load();
+  const { transcription, cleanup } = buildCortiOnboardingPayloads(
+    { id: "corti", models: [{ id: "corti-transcribe" }] },
+    { id: "corti", models: [{ id: "corti-s1-instant" }] },
+    "us"
+  );
+
+  assert.deepEqual(transcription, {
+    useLocalWhisper: false,
+    cloudTranscriptionMode: "byok",
+    cloudTranscriptionProvider: "corti",
+    cloudTranscriptionModel: "corti-transcribe",
+  });
+  assert.equal(cleanup, null);
+});
+
+test("undefined environment yields no cleanup payload", async () => {
+  const { buildCortiOnboardingPayloads } = await load();
+  const { cleanup } = buildCortiOnboardingPayloads(
+    { id: "corti", models: [{ id: "corti-transcribe" }] },
+    { id: "corti", models: [{ id: "corti-s1-instant" }] },
+    undefined
+  );
+  assert.equal(cleanup, null);
+});
+
+test("environment eu yields the cleanup payload", async () => {
+  const { buildCortiOnboardingPayloads } = await load();
+  const { cleanup } = buildCortiOnboardingPayloads(
+    { id: "corti", models: [{ id: "corti-transcribe" }] },
+    { id: "corti", models: [{ id: "corti-s1-instant" }] },
+    "eu"
+  );
+  assert.deepEqual(cleanup, {
+    useCleanupModel: true,
+    cleanupProvider: "corti",
+    cleanupModel: "corti-s1-instant",
+    cleanupCloudMode: "byok",
+  });
 });

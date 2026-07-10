@@ -296,6 +296,8 @@
         "createAccount": "Crea tu cuenta de Corti",
         "creditBadge": "50 $ de crédito gratis",
         "regionHint": "Elige dónde se procesa tu audio: EE. UU. o UE.",
+        "cleanupEuHint": "La limpieza de texto también se ejecutará en los modelos de Corti.",
+        "cleanupUsHint": "Los modelos de lenguaje de Corti solo están disponibles en la UE por ahora; la limpieza de texto mantiene tu proveedor actual.",
         "useCorti": "Usar Corti",
         "skip": "Ahora no",
         "step1": "Regístrate en corti.ai",

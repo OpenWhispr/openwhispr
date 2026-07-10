@@ -296,6 +296,8 @@
         "createAccount": "Corti-Konto erstellen",
         "creditBadge": "50 $ Gratis-Guthaben",
         "regionHint": "Wähle, wo dein Audio verarbeitet wird — USA oder EU.",
+        "cleanupEuHint": "Die Textbereinigung läuft ebenfalls über die Corti-Modelle.",
+        "cleanupUsHint": "Corti-Sprachmodelle sind vorerst nur in der EU verfügbar; die Textbereinigung behält deinen aktuellen Anbieter.",
         "useCorti": "Corti verwenden",
         "skip": "Jetzt nicht",
         "step1": "Registriere dich auf corti.ai",

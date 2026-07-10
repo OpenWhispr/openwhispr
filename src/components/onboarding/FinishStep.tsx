@@ -53,7 +53,8 @@ export default function FinishStep({
     const reasoningProvider = modelRegistry.getCloudProviders().find((p) => p.id === "corti");
     const { transcription, cleanup } = buildCortiOnboardingPayloads(
       cortiProvider,
-      reasoningProvider
+      reasoningProvider,
+      cortiEnvironment
     );
     setCloudTranscriptionForAllScopes(transcription);
     if (cleanup) setCleanupForAllScopes(cleanup);
@@ -127,6 +128,11 @@ export default function FinishStep({
             </Select>
             <p className="text-xs text-muted-foreground/70">
               {t("onboarding.finish.corti.regionHint")}
+            </p>
+            <p className="text-xs text-muted-foreground/70">
+              {cortiEnvironment === "eu"
+                ? t("onboarding.finish.corti.cleanupEuHint")
+                : t("onboarding.finish.corti.cleanupUsHint")}
             </p>
           </div>
         </div>
