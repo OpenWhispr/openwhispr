@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const { classifyAndLog } = require("./networkErrors");
 const GnomeShortcutManager = require("./gnomeShortcut");
@@ -15,6 +16,7 @@ const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
+const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const AudioStorageManager = require("./audioStorage");
 
 // Tinfoil's only realtime STT model — fallback when the renderer omits one.
@@ -822,13 +824,12 @@ class IPCHandlers {
       return this.windowManager.resizeMainWindow(sizeKey);
     });
 
-    ipcMain.handle("get-openai-key", async (event) => {
-      return this.environmentManager.getOpenAIKey();
-    });
-
-    ipcMain.handle("save-openai-key", async (event, key) => {
-      return this.environmentManager.saveOpenAIKey(key);
-    });
+    // Uniform BYOK key channels (get-<base>-key / save-<base>-key) from the
+    // shared manifest — adding a provider needs no handler here.
+    for (const k of BYOK_API_KEYS) {
+      ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
+      ipcMain.handle(`save-${k.base}-key`, (event, key) => this.environmentManager[k.save](key));
+    }
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
@@ -2291,15 +2292,17 @@ class IPCHandlers {
       return await this.windowManager.updateHotkey(hotkey);
     });
 
-    ipcMain.handle("set-hotkey-listening-mode", async (event, enabled, newHotkey = null) => {
+    ipcMain.handle("set-hotkey-listening-mode", async (event, enabled) => {
       if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
       this._hotkeyCaptureMode = enabled;
       this.windowManager.setHotkeyListeningMode(enabled);
       ipcMain.emit("hotkey-listening-mode-changed", null, enabled);
       const hotkeyManager = this.windowManager.hotkeyManager;
 
-      // When exiting capture mode with a new hotkey, use that to avoid reading stale state
-      const effectiveHotkey = !enabled && newHotkey ? newHotkey : hotkeyManager.getCurrentHotkey();
+      // Restore from slot state only. A freshly captured hotkey is registered by
+      // its own update IPC (invoked before this one); re-binding it here would
+      // overwrite the primary on DE backends or leak untracked registrations.
+      const effectiveHotkey = hotkeyManager.getCurrentHotkey();
 
       const {
         isGlobeLikeHotkey,
@@ -2319,15 +2322,16 @@ class IPCHandlers {
         // Dictation is always active; meeting and agent may or may not be set.
         const allSlots = hotkeyManager.slots;
         for (const [slot, info] of allSlots) {
-          if (!info?.hotkey) continue;
-
-          if (!usesNativeListener(info.hotkey)) {
+          // Native-listener entries (null accelerator) are handled by stopping
+          // the key listeners below.
+          for (const accel of info?.accelerators || []) {
+            if (!accel) continue;
             debugLogger.log(
-              `[IPC] Unregistering globalShortcut "${info.hotkey}" (slot "${slot}") for capture mode`
+              `[IPC] Unregistering globalShortcut "${accel}" (slot "${slot}") for capture mode`
             );
             const { globalShortcut } = require("electron");
             try {
-              globalShortcut.unregister(info.hotkey);
+              globalShortcut.unregister(accel);
             } catch {}
           }
         }
@@ -2370,21 +2374,24 @@ class IPCHandlers {
           hotkeyManager.isUsingKDE() ||
           hotkeyManager.isUsingGnome() ||
           hotkeyManager.isUsingHyprland();
-        if (effectiveHotkey && !usesNativeListener(effectiveHotkey) && !usesNativePath) {
+        if (!usesNativePath) {
           const { globalShortcut } = require("electron");
-          const accelerator = effectiveHotkey.startsWith("Fn+")
-            ? effectiveHotkey.slice(3)
-            : effectiveHotkey;
-          if (!globalShortcut.isRegistered(accelerator)) {
-            debugLogger.log(
-              `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
-            );
-            const callback = this.windowManager.createHotkeyCallback();
-            const registered = globalShortcut.register(accelerator, callback);
-            if (!registered) {
-              debugLogger.warn(
-                `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
+          // Re-register every globalShortcut-backed dictation hotkey (the slot
+          // may hold several).
+          for (const hk of hotkeyManager.getSlotHotkeys("dictation")) {
+            if (!hk || usesNativeListener(hk)) continue;
+            const accelerator = hk.startsWith("Fn+") ? hk.slice(3) : hk;
+            if (!globalShortcut.isRegistered(accelerator)) {
+              debugLogger.log(
+                `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
               );
+              const callback = this.windowManager.createHotkeyCallback();
+              const registered = globalShortcut.register(accelerator, () => callback(hk));
+              if (!registered) {
+                debugLogger.warn(
+                  `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
+                );
+              }
             }
           }
         }
@@ -2399,10 +2406,7 @@ class IPCHandlers {
           debugLogger.log(
             `[IPC] Re-registering GNOME keybinding "${gnomeHotkey}" after capture mode`
           );
-          const success = await hotkeyManager.gnomeManager.registerKeybinding(gnomeHotkey);
-          if (success) {
-            hotkeyManager.currentHotkey = effectiveHotkey;
-          }
+          await hotkeyManager.gnomeManager.registerKeybinding(gnomeHotkey);
         }
 
         // On Hyprland Wayland, re-register the keybinding with the effective hotkey
@@ -2410,10 +2414,7 @@ class IPCHandlers {
           debugLogger.log(
             `[IPC] Re-registering Hyprland keybinding "${effectiveHotkey}" after capture mode`
           );
-          const success = await hotkeyManager.hyprlandManager.registerKeybinding(effectiveHotkey);
-          if (success) {
-            hotkeyManager.currentHotkey = effectiveHotkey;
-          }
+          await hotkeyManager.hyprlandManager.registerKeybinding(effectiveHotkey);
         }
 
         // On KDE (X11 or Wayland), re-register the keybinding with the effective hotkey
@@ -2427,9 +2428,7 @@ class IPCHandlers {
             "dictation",
             callback
           );
-          if (result === true) {
-            hotkeyManager.currentHotkey = effectiveHotkey;
-          } else {
+          if (result !== true) {
             debugLogger.warn(
               `[IPC] Failed to re-register KDE keybinding "${effectiveHotkey}" after capture mode`,
               { result }
@@ -2439,12 +2438,13 @@ class IPCHandlers {
 
         // Re-register non-dictation slots (meeting, agent) that were unregistered on capture enter
         for (const [slot, info] of hotkeyManager.slots) {
-          if (slot === "dictation" || slot === "cancel" || !info?.hotkey || !info?.callback)
+          const hotkeys = info?.hotkeys || [];
+          if (slot === "dictation" || slot === "cancel" || hotkeys.length === 0 || !info?.callback)
             continue;
           debugLogger.log(
-            `[IPC] Re-registering slot "${slot}" ("${info.hotkey}") after capture mode`
+            `[IPC] Re-registering slot "${slot}" ("${hotkeys.join(", ")}") after capture mode`
           );
-          await hotkeyManager.registerSlot(slot, info.hotkey, info.callback).catch((err) => {
+          await hotkeyManager.registerSlot(slot, hotkeys, info.callback).catch((err) => {
             debugLogger.warn(`[IPC] Failed to re-register slot "${slot}":`, err.message);
           });
         }
@@ -2497,6 +2497,10 @@ class IPCHandlers {
 
     ipcMain.handle("open-external", async (event, url) => {
       try {
+        const { protocol } = new URL(url);
+        if (!["http:", "https:", "mailto:"].includes(protocol)) {
+          return { success: false, error: `Blocked URL scheme: ${protocol}` };
+        }
         await shell.openExternal(url);
         return { success: true };
       } catch (error) {
@@ -2631,34 +2635,6 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("get-anthropic-key", async (event) => {
-      return this.environmentManager.getAnthropicKey();
-    });
-
-    ipcMain.handle("get-gemini-key", async (event) => {
-      return this.environmentManager.getGeminiKey();
-    });
-
-    ipcMain.handle("save-gemini-key", async (event, key) => {
-      return this.environmentManager.saveGeminiKey(key);
-    });
-
-    ipcMain.handle("get-groq-key", async (event) => {
-      return this.environmentManager.getGroqKey();
-    });
-
-    ipcMain.handle("save-groq-key", async (event, key) => {
-      return this.environmentManager.saveGroqKey(key);
-    });
-
-    ipcMain.handle("get-xai-key", async () => {
-      return this.environmentManager.getXaiKey();
-    });
-
-    ipcMain.handle("save-xai-key", async (event, key) => {
-      return this.environmentManager.saveXaiKey(key);
-    });
-
     ipcMain.handle(
       "proxy-xai-transcription",
       async (event, { audioBuffer, language, keyterms }) => {
@@ -2694,14 +2670,6 @@ class IPCHandlers {
         return await response.json();
       }
     );
-
-    ipcMain.handle("get-mistral-key", async () => {
-      return this.environmentManager.getMistralKey();
-    });
-
-    ipcMain.handle("save-mistral-key", async (event, key) => {
-      return this.environmentManager.saveMistralKey(key);
-    });
 
     ipcMain.handle(
       "proxy-mistral-transcription",
@@ -2786,12 +2754,8 @@ class IPCHandlers {
       }
     );
 
-    ipcMain.handle("get-tinfoil-key", async () => {
-      return this.environmentManager.getTinfoilKey();
-    });
-
-    ipcMain.handle("save-tinfoil-key", async (event, key) => {
-      return this.environmentManager.saveTinfoilKey(key);
+    ipcMain.handle("get-tinfoil-chat-models", async () => {
+      return getTinfoilChatModels();
     });
 
     ipcMain.handle("get-custom-transcription-key", async () => {
@@ -2975,6 +2939,141 @@ class IPCHandlers {
       }
     );
 
+    // Runs doStream for the renderer's enterprise chat model shim; parts are
+    // relayed verbatim over enterprise-stream-part, ending with {done}/{error}.
+    this.enterpriseStreamAborts = new Map();
+    ipcMain.handle("enterprise-stream-start", async (event, payload) => {
+      const {
+        isEnterpriseProvider,
+        mapEnterpriseError,
+        pickEnterpriseConfig,
+        validateEnterpriseEndpoint,
+      } = require("./enterpriseProviderErrors");
+      const { streamId, provider, modelId, config, options } = payload || {};
+      const send = (message) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("enterprise-stream-part", { streamId, ...message });
+        }
+      };
+      const abortController = new AbortController();
+      this.enterpriseStreamAborts.set(streamId, abortController);
+      // isDestroyed() stays false across reload/navigation, which wipes the
+      // renderer listeners — abort so the provider request isn't billed for
+      // a generation nobody receives.
+      const abortOnGone = (_event, _url, isInPlace, isMainFrame) => {
+        if (isMainFrame && !isInPlace) abortController.abort();
+      };
+      const abortOnDestroyed = () => abortController.abort();
+      event.sender.on("did-start-navigation", abortOnGone);
+      event.sender.once("destroyed", abortOnDestroyed);
+      try {
+        if (!streamId || !isEnterpriseProvider(provider)) {
+          throw new Error(`Unsupported enterprise provider: ${provider}`);
+        }
+        if (!modelId) {
+          throw new Error("No model specified for enterprise streaming");
+        }
+        validateEnterpriseEndpoint(config?.azureEndpoint);
+
+        const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
+        const model = getEnterpriseAIModel(
+          provider,
+          modelId,
+          config?.apiKey || "",
+          pickEnterpriseConfig(config || {})
+        );
+
+        const { stream } = await model.doStream({
+          ...options,
+          abortSignal: abortController.signal,
+        });
+        const reader = stream.getReader();
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (event.sender.isDestroyed()) {
+              abortController.abort();
+              break;
+            }
+            send({ part: value });
+          }
+        } finally {
+          reader.releaseLock();
+        }
+        send({ done: true });
+        return { success: true };
+      } catch (err) {
+        debugLogger.error("Enterprise stream error:", err);
+        const mapped = mapEnterpriseError(provider, err, config || {});
+        send({ error: mapped.message });
+        return { success: false, error: mapped.message };
+      } finally {
+        this.enterpriseStreamAborts.delete(streamId);
+        if (!event.sender.isDestroyed()) {
+          event.sender.removeListener("did-start-navigation", abortOnGone);
+          event.sender.removeListener("destroyed", abortOnDestroyed);
+        }
+      }
+    });
+
+    ipcMain.handle("enterprise-stream-cancel", async (event, streamId) => {
+      this.enterpriseStreamAborts.get(streamId)?.abort();
+      this.enterpriseStreamAborts.delete(streamId);
+    });
+
+    // Lists the text models the account serves in the selected region,
+    // resolved to invocable IDs (bare on-demand or geo-scoped profile IDs).
+    ipcMain.handle("bedrock-list-models", async (event, config) => {
+      const { mapEnterpriseError } = require("./enterpriseProviderErrors");
+      try {
+        const {
+          BedrockClient,
+          ListFoundationModelsCommand,
+          paginateListInferenceProfiles,
+        } = require("@aws-sdk/client-bedrock");
+        const { normalizeBedrockCatalog } = require("./bedrockCatalog");
+
+        const region = config?.bedrockRegion || "us-east-1";
+        let credentials;
+        if (config?.bedrockProfile) {
+          const { fromNodeProviderChain } = require("@aws-sdk/credential-providers");
+          credentials = fromNodeProviderChain({ profile: config.bedrockProfile });
+        } else if (config?.bedrockAccessKeyId && config?.bedrockSecretAccessKey) {
+          credentials = {
+            accessKeyId: config.bedrockAccessKeyId,
+            secretAccessKey: config.bedrockSecretAccessKey,
+            sessionToken: config.bedrockSessionToken || undefined,
+          };
+        }
+        const client = new BedrockClient({ region, ...(credentials ? { credentials } : {}) });
+
+        const [foundationModels, profileSummaries] = await Promise.all([
+          client.send(new ListFoundationModelsCommand({ byOutputModality: "TEXT" })),
+          (async () => {
+            const summaries = [];
+            const paginator = paginateListInferenceProfiles(
+              { client },
+              { typeEquals: "SYSTEM_DEFINED" }
+            );
+            for await (const page of paginator) {
+              summaries.push(...(page.inferenceProfileSummaries || []));
+            }
+            return summaries;
+          })(),
+        ]);
+
+        return {
+          success: true,
+          models: normalizeBedrockCatalog(foundationModels.modelSummaries, profileSummaries),
+        };
+      } catch (err) {
+        debugLogger.error("Bedrock model listing error:", err);
+        const mapped = mapEnterpriseError("bedrock", err, config || {});
+        return { success: false, error: mapped.message };
+      }
+    });
+
     ipcMain.handle("get-dictation-key", async () => {
       return this.environmentManager.getDictationKey();
     });
@@ -2984,7 +3083,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-active-dictation-key", async () => {
-      return this.windowManager?.hotkeyManager?.currentHotkey ?? null;
+      const hotkeys = this.windowManager?.hotkeyManager?.getSlotHotkeys?.("dictation") ?? [];
+      return hotkeys.length > 0 ? hotkeys.join(",") : null;
     });
 
     ipcMain.handle("get-effective-default-hotkey", async () => {
@@ -2997,10 +3097,6 @@ class IPCHandlers {
 
     ipcMain.handle("save-activation-mode", async (event, mode) => {
       return this.environmentManager.saveActivationMode(mode);
-    });
-
-    ipcMain.handle("save-anthropic-key", async (event, key) => {
-      return this.environmentManager.saveAnthropicKey(key);
     });
 
     ipcMain.handle("get-ui-language", async () => {
@@ -4400,6 +4496,119 @@ class IPCHandlers {
       streaming.onError = (error) => {
         send("meeting-transcription-error", error.message);
       };
+      streaming.onSessionExpired = () => reconnectMeetingStreams();
+    };
+
+    const reconnectMeetingStreams = async () => {
+      if (meetingReconnecting || meetingLocalMode) return;
+
+      const options = meetingConnectionOptions;
+      const win = meetingConnectionWin;
+      if (!options || !win || win.isDestroyed()) {
+        debugLogger.error("Cannot reconnect meeting streams: missing connection context");
+        return;
+      }
+
+      if (meetingReconnectCount >= MAX_MEETING_RECONNECTS) {
+        debugLogger.error("Meeting reconnect limit reached", { count: meetingReconnectCount });
+        win.webContents.send(
+          "meeting-transcription-error",
+          "Session reconnect limit reached. Please stop and restart the recording."
+        );
+        return;
+      }
+
+      meetingReconnecting = true;
+      meetingReconnectCount++;
+
+      const StreamingClass =
+        STREAMING_CLIENT_BY_PROVIDER[options.provider] ?? OpenAIRealtimeStreaming;
+
+      const oldMic = this._meetingMicStreaming;
+      const oldSystem = this._meetingSystemStreaming;
+
+      // Swap fresh instances in before the token fetch so audio arriving during
+      // the swap lands in their pre-connect buffers instead of a dead socket.
+      const newMic = new StreamingClass();
+      newMic.beginConnecting?.();
+      attachMeetingStreamingHandlers(newMic, win, "mic");
+      this._meetingMicStreaming = newMic;
+      let newSystem = null;
+      if (oldSystem) {
+        newSystem = new StreamingClass();
+        newSystem.beginConnecting?.();
+        attachMeetingStreamingHandlers(newSystem, win, "system");
+        this._meetingSystemStreaming = newSystem;
+      }
+
+      debugLogger.info("Reconnecting meeting streams", {
+        attempt: meetingReconnectCount,
+        maxAttempts: MAX_MEETING_RECONNECTS,
+      });
+
+      const tokenEvent = { sender: win.webContents };
+      try {
+        const connectOpts = {
+          model: options.model,
+          language: options.language,
+          preconfigured: options.mode !== "byok",
+          environment: options.environment,
+          tenant: options.tenant,
+          keyterms: options.keyterms,
+          sampleRate: MEETING_STREAM_SAMPLE_RATE,
+        };
+
+        let pairs;
+        if (newSystem) {
+          const secrets = await fetchRealtimeToken(tokenEvent, options, { streams: 2 });
+          pairs = [
+            { streaming: newMic, secret: secrets[0] },
+            { streaming: newSystem, secret: secrets[1] },
+          ];
+        } else {
+          pairs = [{ streaming: newMic, secret: await fetchRealtimeToken(tokenEvent, options) }];
+        }
+
+        await Promise.all(
+          pairs.map(({ streaming, secret }) =>
+            streaming.connect({ apiKey: secret, token: secret, ...connectOpts })
+          )
+        );
+
+        if (meetingConnectionOptions !== options) {
+          // Recording stopped while the reconnect was in flight.
+          for (const { streaming } of pairs) streaming.disconnect().catch(() => {});
+          oldMic?.disconnect().catch(() => {});
+          oldSystem?.disconnect().catch(() => {});
+          return;
+        }
+
+        oldMic?.disconnect().catch(() => {});
+        oldSystem?.disconnect().catch(() => {});
+
+        debugLogger.info("Meeting streams reconnected", { attempt: meetingReconnectCount });
+      } catch (error) {
+        debugLogger.error("Meeting stream reconnect failed", {
+          error: error.message,
+          attempt: meetingReconnectCount,
+        });
+        newMic.disconnect().catch(() => {});
+        newSystem?.disconnect().catch(() => {});
+        if (meetingConnectionOptions === options) {
+          // A proactive reconnect leaves the old connections open; restore them
+          // so transcription continues until the hard limit retries this path.
+          this._meetingMicStreaming = oldMic;
+          this._meetingSystemStreaming = oldSystem;
+          if (!win.isDestroyed()) {
+            win.webContents.send("meeting-transcription-error", error.message);
+          }
+        } else {
+          oldMic?.disconnect().catch(() => {});
+          oldSystem?.disconnect().catch(() => {});
+        }
+      } finally {
+        meetingReconnecting = false;
+      }
     };
 
     const fetchRealtimeToken = async (event, options, { streams } = {}) => {
@@ -4625,6 +4834,11 @@ class IPCHandlers {
     let meetingStartedAt = null;
     let meetingSendCounts = { mic: 0, system: 0 };
     const meetingEchoLeakDetector = new MeetingEchoLeakDetector();
+    let meetingReconnecting = false;
+    let meetingReconnectCount = 0;
+    const MAX_MEETING_RECONNECTS = 5;
+    let meetingConnectionOptions = null;
+    let meetingConnectionWin = null;
 
     const fs = require("fs");
     let meetingDiarizationStream = null;
@@ -5327,6 +5541,10 @@ class IPCHandlers {
       resetPendingMicFinals();
       meetingAecEnabled = false;
       meetingEchoLeakDetector.reset();
+      meetingReconnecting = false;
+      meetingReconnectCount = 0;
+      meetingConnectionOptions = null;
+      meetingConnectionWin = null;
     };
 
     const disconnectMeetingStreaming = async ({ flushPending = false } = {}) => {
@@ -5531,6 +5749,9 @@ class IPCHandlers {
 
       meetingTranscriptionStartInProgress = true;
       meetingStartedAt = Date.now();
+      meetingConnectionOptions = options;
+      meetingConnectionWin = BrowserWindow.fromWebContents(event.sender);
+      meetingReconnectCount = 0;
       this.meetingDetectionEngine?.setUserRecording(true);
       try {
         const systemAudioPlan = await getMeetingSystemAudioPlan();
@@ -7552,7 +7773,9 @@ class IPCHandlers {
         return { success: true, message: "Agent hotkey cleared" };
       }
 
-      const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback);
+      const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback, {
+        atomic: true,
+      });
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveAgentKey?.(hotkey);
@@ -7579,7 +7802,9 @@ class IPCHandlers {
         return { success: true, message: "Voice agent hotkey cleared" };
       }
 
-      const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback);
+      const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback, {
+        atomic: true,
+      });
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveVoiceAgentKey?.(hotkey);

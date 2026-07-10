@@ -91,6 +91,7 @@
       "alreadyRegistered": "«{{hotkey}}» уже зарегистрирована другим приложением.",
       "osReserved": "«{{hotkey}}» может быть зарезервирована вашей операционной системой.",
       "registrationFailed": "Не удалось зарегистрировать «{{hotkey}}». Возможно, она используется другим приложением.",
+      "updateFailedCheckFormat": "Не удалось обновить горячую клавишу на «{{hotkey}}». Проверьте правильность формата.",
       "trySuggestions": "Попробуйте: {{suggestions}}",
       "slotConflict": "Эта горячая клавиша уже используется для {{slot}}."
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "Нативный слушатель Push-to-Talk недоступен"
   },
   "common": {
+    "retry": "Повторить",
     "back": "Назад",
     "next": "Далее",
     "complete": "Готово",
@@ -450,7 +452,13 @@
       "noModels": "Модели не найдены. Проверьте URL конечной точки.",
       "providerName": "Пользовательский",
       "ownerLabel": "Автор: {{owner}}",
-      "unableToLoadModels": "Не удалось загрузить модели с конечной точки."
+      "unableToLoadModels": "Не удалось загрузить модели с конечной точки.",
+      "searchPlaceholder": "Поиск моделей…",
+      "selectedGroup": "Выбрано",
+      "otherGroup": "Другое",
+      "noSearchResults": "Нет моделей по запросу «{{query}}»",
+      "selectModelHint": "Модель ещё не выбрана — выберите её из списка ниже.",
+      "keyRequiredHint": "Для инференса требуется API-ключ — добавьте его, чтобы использовать этого провайдера."
     },
     "getApiKey": "Получить API-ключ ->",
     "selectModel": "Выберите модель",
@@ -487,6 +495,10 @@
       "customModelId": "Пользовательский ID модели",
       "customModelPlaceholder": "Введите ID модели или имя развёртывания",
       "suggestedModels": "Рекомендуемые модели",
+      "browseModels": "Просмотреть все модели",
+      "loadingModels": "Загрузка моделей...",
+      "allModels": "Все модели в {{region}}",
+      "modelListError": "Не удалось загрузить модели.",
       "bedrock": {
         "ssoHelp": "Использует настройки SSO из AWS CLI. Убедитесь, что выполнили 'aws sso login'.",
         "keysHelp": "Введите ключи доступа AWS IAM."
@@ -499,6 +511,11 @@
         "adcHelp": "Использует Application Default Credentials. Выполните: gcloud auth application-default login",
         "apikeyHelp": "API-ключ Vertex AI Express Mode из Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Модель больше недоступна",
+      "modelRetired": "Tinfoil прекратил поддержку {{from}}. Выполнен переход на {{to}}.",
+      "refreshingModels": "Обновление моделей…"
     }
   },
   "transcription": {
@@ -913,7 +930,9 @@
     "recording": "Запись",
     "tryShortcut": "Попробуйте Ctrl+Shift+K",
     "tryShortcutMac": "Попробуйте ⌘⇧K",
-    "remove": "Удалить горячую клавишу"
+    "remove": "Удалить горячую клавишу",
+    "addAnother": "Добавить ещё одну горячую клавишу",
+    "duplicate": "Уже добавлена"
   },
   "languageSelector": {
     "noLanguagesFound": "Языки не найдены",
@@ -1010,7 +1029,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Провайдер",
       "run": "Запустить тест",
-      "customEndpoint": "Пользовательская конечная точка"
+      "customEndpoint": "Пользовательская конечная точка",
+      "apiKeyMissing": "API-ключ {{provider}} не настроен. Добавьте его в настройках ИИ-моделей."
     },
     "view": {
       "customPrompt": "Пользовательский промпт",
@@ -1847,6 +1867,7 @@
   },
   "models": {
     "learnMore": "Подробнее",
+    "noneAvailable": "Нет доступных моделей",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Быстрое многоязычное распознавание с автоопределением языка (25 языков)",
@@ -1914,9 +1935,11 @@
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Быстрая и дешёвая. Отлично подходит для очистки текста.",
-        "bedrock_claude_sonnet_4_6": "Сбалансированная. Лучший выбор для режима агента.",
-        "bedrock_claude_opus_4_7": "Максимальный интеллект. Для сложных задач в режиме агента.",
-        "bedrock_nova_lite": "Самая дешёвая. Нативная для AWS, идеальна для больших объёмов.",
+        "bedrock_claude_sonnet_5": "Сбалансированная. Лучший выбор для режима агента.",
+        "bedrock_claude_opus_4_8": "Максимальный интеллект. Для сложных задач в режиме агента.",
+        "bedrock_gpt_oss_120b": "Открытая модель OpenAI. Сильные рассуждения по низкой цене.",
+        "bedrock_deepseek_v3_2": "Открытая передовая модель. Отличный выбор для режима агента.",
+        "bedrock_qwen3_next_80b": "Разреженная открытая модель. Быстрая и многоязычная.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },

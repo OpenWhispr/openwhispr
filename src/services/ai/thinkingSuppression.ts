@@ -20,6 +20,13 @@ function suppressThinking(requestBody: Record<string, unknown>, providerKey: str
     return;
   }
 
+  // OpenRouter forwards unknown params to upstream backends, which may reject
+  // them — use its native reasoning control instead.
+  if (providerKey === "openrouter") {
+    requestBody.reasoning = { enabled: false };
+    return;
+  }
+
   if (usesOllamaDialect(providerKey)) {
     requestBody.think = false;
   } else {

@@ -6,6 +6,8 @@ const DISCONNECT_TIMEOUT_MS = 3000;
 const SAMPLE_RATE = 24000;
 const COLD_START_BUFFER_MAX = 3 * SAMPLE_RATE * 2; // 3 seconds of 16-bit PCM
 const KEEPALIVE_INTERVAL_MS = 15000;
+// OpenAI Realtime sessions die at 60 minutes; reconnect proactively before that.
+const SESSION_PREEMPT_MS = 55 * 60 * 1000;
 
 // A socket factory does network work before the socket exists, so the dial
 // must be bounded; a socket resolving after the deadline is closed, not leaked.
@@ -36,6 +38,9 @@ class OpenAIRealtimeStreaming {
     this.onFinalTranscript = null;
     this.onError = null;
     this.onSessionEnd = null;
+    this.onSessionExpired = null;
+    this._sessionExpired = false;
+    this._sessionTimer = null;
     this.pendingResolve = null;
     this.pendingReject = null;
     this.connectionTimeout = null;
@@ -86,6 +91,7 @@ class OpenAIRealtimeStreaming {
     this.currentPartial = "";
     this.audioBytesSent = 0;
     this.speechStartedAt = null;
+    this._sessionExpired = false;
 
     const url = "wss://api.openai.com/v1/realtime?intent=transcription";
     debugLogger.debug("OpenAI Realtime connecting", { model: this.model });
@@ -148,7 +154,7 @@ class OpenAIRealtimeStreaming {
           this.pendingResolve = null;
         }
         this.cleanup();
-        if (wasActive && !this.isDisconnecting) {
+        if (wasActive && !this.isDisconnecting && !this._sessionExpired) {
           this.onSessionEnd?.({ text: this.getFullTranscript() });
         }
       });
@@ -246,6 +252,14 @@ class OpenAIRealtimeStreaming {
         case "error": {
           const errCode = event.error?.code;
           const errMsg = event.error?.message || "OpenAI Realtime error";
+          // Only consumers that attach onSessionExpired (meetings) get the
+          // reconnect path; others (dictation) keep the onError/onSessionEnd flow.
+          if (errCode === "session_expired" && this.onSessionExpired) {
+            debugLogger.warn("OpenAI Realtime session expired", { message: errMsg });
+            this._sessionExpired = true;
+            this.onSessionExpired();
+            break;
+          }
           const isEmptyBuffer =
             errCode === "input_audio_buffer_commit_empty" ||
             errMsg.includes("buffer too small") ||
@@ -277,11 +291,21 @@ class OpenAIRealtimeStreaming {
     this.isConnecting = false;
     clearTimeout(this.connectionTimeout);
     this.startKeepAlive();
+    this._startSessionTimer();
     if (this.pendingResolve) {
       this.pendingResolve();
       this.pendingResolve = null;
       this.pendingReject = null;
     }
+  }
+
+  _startSessionTimer() {
+    clearTimeout(this._sessionTimer);
+    this._sessionTimer = setTimeout(() => {
+      if (!this.isConnected) return;
+      debugLogger.debug("OpenAI Realtime session approaching 60min limit, requesting reconnect");
+      this.onSessionExpired?.();
+    }, SESSION_PREEMPT_MS);
   }
 
   // A warm connection sits idle between dictations for up to 5 minutes and is
@@ -450,6 +474,8 @@ class OpenAIRealtimeStreaming {
   cleanup() {
     clearTimeout(this.connectionTimeout);
     this.connectionTimeout = null;
+    clearTimeout(this._sessionTimer);
+    this._sessionTimer = null;
     this.stopKeepAlive();
 
     if (this.ws) {

@@ -70,16 +70,26 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Notifies renderer via IPC when hotkey registration fails
   - Integrates with GnomeShortcutManager for GNOME Wayland support
   - Integrates with HyprlandShortcutManager for Hyprland Wayland support
+  - Integrates with KDEShortcutManager for KDE Wayland support
 - **gnomeShortcut.js**: GNOME Wayland global shortcut integration
   - Uses D-Bus service to receive hotkey toggle commands
   - Registers shortcuts via gsettings (visible in GNOME Settings → Keyboard → Shortcuts)
   - Converts Electron hotkey format to GNOME keysym format
   - Only active on Linux + Wayland + GNOME desktop
+  - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
 - **hyprlandShortcut.js**: Hyprland Wayland global shortcut integration
   - Uses D-Bus service to receive hotkey toggle commands (same `com.openwhispr.App` service)
   - Registers shortcuts via `hyprctl keyword bind` (runtime keybinding)
   - Converts Electron hotkey format to Hyprland bind format (`MODS, key`)
   - Only active on Linux + Wayland + Hyprland (detected via `HYPRLAND_INSTANCE_SIGNATURE`)
+  - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
+- **kdeShortcut.js**: KDE Wayland global shortcut integration
+  - Uses D-Bus to communicate with KGlobalAccel for global hotkey registration
+  - Registers hotkeys via `setShortcut`/`doRegister` D-Bus calls on the KGlobalAccel interface
+  - Listens for `globalShortcutPressed` signals to trigger callbacks
+  - Converts Electron hotkey format to Qt key codes
+  - Only active on Linux + KDE desktop (detected via `XDG_CURRENT_DESKTOP`)
+  - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
 - **ipcHandlers.js**: Centralized IPC handler registration
 - **windowsKeyManager.js**: Windows Push-to-Talk support with native key listener
   - Spawns native `windows-key-listener.exe` binary for low-level keyboard hooks
@@ -749,7 +759,7 @@ const { t } = useTranslation();
   - Default fallback: `F8` when `Control+Super` cannot be registered
   - Push-to-talk unavailable (GNOME shortcuts only fire single toggle event)
   - Falls back to X11/globalShortcut if GNOME integration fails
-  - `dbus-next` npm package used for D-Bus communication
+  - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
 
 ## Code Style and Conventions
 

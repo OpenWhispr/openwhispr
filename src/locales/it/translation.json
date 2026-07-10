@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
+      "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
       "trySuggestions": "Prova: {{suggestions}}",
       "slotConflict": "Questa scorciatoia è già utilizzata per {{slot}}."
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "Il listener nativo Push-to-Talk non è disponibile"
   },
   "common": {
+    "retry": "Riprova",
     "back": "Indietro",
     "next": "Avanti",
     "complete": "Completa",
@@ -450,7 +452,13 @@
       "noModels": "Nessun modello restituito. Controlla l'URL dell'endpoint.",
       "providerName": "Personalizzato",
       "ownerLabel": "Proprietario: {{owner}}",
-      "unableToLoadModels": "Impossibile caricare i modelli dall'endpoint."
+      "unableToLoadModels": "Impossibile caricare i modelli dall'endpoint.",
+      "searchPlaceholder": "Cerca modelli…",
+      "selectedGroup": "Selezionato",
+      "otherGroup": "Altro",
+      "noSearchResults": "Nessun modello corrisponde a \"{{query}}\"",
+      "selectModelHint": "Nessun modello selezionato — scegline uno dall'elenco qui sotto.",
+      "keyRequiredHint": "Per l'inferenza è richiesta una chiave API — aggiungine una per usare questo provider."
     },
     "getApiKey": "Ottieni la chiave API ->",
     "selectModel": "Seleziona modello",
@@ -487,6 +495,10 @@
       "customModelId": "ID modello personalizzato",
       "customModelPlaceholder": "Inserisci un ID modello o nome di deployment",
       "suggestedModels": "Modelli suggeriti",
+      "browseModels": "Sfoglia tutti i modelli",
+      "loadingModels": "Recupero dei modelli...",
+      "allModels": "Tutti i modelli in {{region}}",
+      "modelListError": "Impossibile caricare i modelli.",
       "bedrock": {
         "ssoHelp": "Usa la tua configurazione SSO di AWS CLI. Assicurati di aver eseguito 'aws sso login'.",
         "keysHelp": "Inserisci le tue chiavi di accesso AWS IAM."
@@ -499,6 +511,11 @@
         "adcHelp": "Usa Application Default Credentials. Esegui: gcloud auth application-default login",
         "apikeyHelp": "Chiave API Vertex AI Express Mode da Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Modello non più disponibile",
+      "modelRetired": "Tinfoil ha ritirato {{from}}. Passato a {{to}}.",
+      "refreshingModels": "Aggiornamento dei modelli…"
     }
   },
   "transcription": {
@@ -913,7 +930,9 @@
     "recording": "Registrazione",
     "tryShortcut": "Prova Ctrl+Shift+K",
     "tryShortcutMac": "Prova ⌘⇧K",
-    "remove": "Rimuovi scorciatoia"
+    "remove": "Rimuovi scorciatoia",
+    "addAnother": "Aggiungi un'altra scorciatoia",
+    "duplicate": "Già aggiunto"
   },
   "languageSelector": {
     "noLanguagesFound": "Nessuna lingua trovata",
@@ -1010,7 +1029,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Provider",
       "run": "Esegui test",
-      "customEndpoint": "Endpoint personalizzato"
+      "customEndpoint": "Endpoint personalizzato",
+      "apiKeyMissing": "Chiave API di {{provider}} non configurata. Aggiungila nelle impostazioni Modelli IA."
     },
     "view": {
       "customPrompt": "Prompt personalizzato",
@@ -1847,6 +1867,7 @@
   },
   "models": {
     "learnMore": "Scopri di più",
+    "noneAvailable": "Nessun modello disponibile",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilingue veloce con rilevamento automatico della lingua (25 lingue)",
@@ -1914,9 +1935,11 @@
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Veloce ed economico. Ideale per ripulire il testo.",
-        "bedrock_claude_sonnet_4_6": "Equilibrato. Scelta predefinita per la Modalità Agente.",
-        "bedrock_claude_opus_4_7": "Massima intelligenza. Per compiti complessi in Modalità Agente.",
-        "bedrock_nova_lite": "Opzione più economica. Nativo di AWS, ideale per grandi volumi.",
+        "bedrock_claude_sonnet_5": "Equilibrato. Scelta predefinita per la Modalità Agente.",
+        "bedrock_claude_opus_4_8": "Massima intelligenza. Per compiti complessi in Modalità Agente.",
+        "bedrock_gpt_oss_120b": "Modello aperto di OpenAI. Ottimo ragionamento a basso costo.",
+        "bedrock_deepseek_v3_2": "Modello frontier a pesi aperti. Ottimo valore per la Modalità Agente.",
+        "bedrock_qwen3_next_80b": "Modello aperto sparso. Veloce e multilingue.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },

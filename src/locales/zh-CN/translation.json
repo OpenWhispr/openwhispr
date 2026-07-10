@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他应用注册。",
       "osReserved": "\"{{hotkey}}\" 可能被系统保留。",
       "registrationFailed": "无法注册 \"{{hotkey}}\"，该快捷键可能已被其他应用占用。",
+      "updateFailedCheckFormat": "无法将快捷键更新为 \"{{hotkey}}\"，请检查格式是否有效。",
       "trySuggestions": "建议尝试：{{suggestions}}",
       "slotConflict": "此快捷键已用于{{slot}}。"
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "按住说话原生监听器不可用"
   },
   "common": {
+    "retry": "重试",
     "back": "返回",
     "next": "下一步",
     "complete": "完成",
@@ -450,7 +452,13 @@
       "noModels": "未返回任何模型，请检查端点 URL。",
       "providerName": "自定义",
       "ownerLabel": "所有者：{{owner}}",
-      "unableToLoadModels": "无法从端点加载模型。"
+      "unableToLoadModels": "无法从端点加载模型。",
+      "searchPlaceholder": "搜索模型…",
+      "selectedGroup": "已选择",
+      "otherGroup": "其他",
+      "noSearchResults": "没有与“{{query}}”匹配的模型",
+      "selectModelHint": "尚未选择模型 — 请从下方列表中选择一个。",
+      "keyRequiredHint": "推理需要 API 密钥 — 请添加密钥以使用此提供商。"
     },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
@@ -487,6 +495,10 @@
       "customModelId": "自定义模型 ID",
       "customModelPlaceholder": "输入模型 ID 或部署名称",
       "suggestedModels": "推荐模型",
+      "browseModels": "浏览全部模型",
+      "loadingModels": "正在获取模型...",
+      "allModels": "{{region}} 的全部模型",
+      "modelListError": "无法加载模型。",
       "bedrock": {
         "ssoHelp": "使用你的 AWS CLI SSO 配置。请确保已运行 'aws sso login'。",
         "keysHelp": "输入你的 AWS IAM 访问密钥。"
@@ -499,6 +511,11 @@
         "adcHelp": "使用 Application Default Credentials。请执行：gcloud auth application-default login",
         "apikeyHelp": "从 Google AI Studio 获取的 Vertex AI Express Mode API 密钥。"
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "模型已不可用",
+      "modelRetired": "Tinfoil 已停用 {{from}}，已切换至 {{to}}。",
+      "refreshingModels": "正在刷新模型…"
     }
   },
   "transcription": {
@@ -913,7 +930,9 @@
     "recording": "录制中",
     "tryShortcut": "试试 Ctrl+Shift+K",
     "tryShortcutMac": "试试 ⌘⇧K",
-    "remove": "移除快捷键"
+    "remove": "移除快捷键",
+    "addAnother": "添加其他快捷键",
+    "duplicate": "已添加"
   },
   "languageSelector": {
     "noLanguagesFound": "未找到匹配的语言",
@@ -1010,7 +1029,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "服务商",
       "run": "运行测试",
-      "customEndpoint": "自定义端点"
+      "customEndpoint": "自定义端点",
+      "apiKeyMissing": "未配置 {{provider}} API 密钥，请在 AI 模型设置中添加。"
     },
     "view": {
       "customPrompt": "自定义提示词",
@@ -1842,6 +1862,7 @@
   },
   "models": {
     "learnMore": "了解更多",
+    "noneAvailable": "没有可用的模型",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）",
@@ -1909,9 +1930,11 @@
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",
-        "bedrock_claude_sonnet_4_6": "均衡性能。推荐用作智能助手模式的默认模型。",
-        "bedrock_claude_opus_4_7": "最高智能。适用于复杂的智能助手模式任务。",
-        "bedrock_nova_lite": "最便宜的选择。AWS 原生，适合高流量场景。",
+        "bedrock_claude_sonnet_5": "均衡性能。推荐用作智能助手模式的默认模型。",
+        "bedrock_claude_opus_4_8": "最高智能。适用于复杂的智能助手模式任务。",
+        "bedrock_gpt_oss_120b": "OpenAI 开放权重模型。低成本下的强大推理能力。",
+        "bedrock_deepseek_v3_2": "开放权重前沿模型。智能助手模式的高性价比之选。",
+        "bedrock_qwen3_next_80b": "稀疏开放权重模型。快速且多语言。",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },

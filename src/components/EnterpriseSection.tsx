@@ -2,6 +2,7 @@ import { ProviderTabs } from "./ui/ProviderTabs";
 import EnterpriseProviderConfig from "./EnterpriseProviderConfig";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { useSettingsStore } from "../stores/settingsStore";
+import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 
 const ENTERPRISE_PROVIDER_TABS = [
   { id: "bedrock", name: "AWS Bedrock" },
@@ -23,6 +24,7 @@ export default function EnterpriseSection({
   setLocalReasoningProvider,
 }: EnterpriseSectionProps) {
   const azureDeploymentName = useSettingsStore((s) => s.azureDeploymentName);
+  const bedrockRegion = useSettingsStore((s) => s.bedrockRegion);
   const selectedEnterprise = ENTERPRISE_PROVIDER_TABS.some((p) => p.id === currentProvider)
     ? currentProvider
     : "";
@@ -33,7 +35,12 @@ export default function EnterpriseSection({
 
     const providerData = REASONING_PROVIDERS[providerId];
     if (providerData?.models?.length) {
-      setReasoningModel(providerData.models[0].value);
+      const defaultModel = providerData.models[0].value;
+      setReasoningModel(
+        providerId === "bedrock"
+          ? adjustBedrockModelForRegion(defaultModel, bedrockRegion)
+          : defaultModel
+      );
     } else if (providerId === "azure" && azureDeploymentName) {
       setReasoningModel(azureDeploymentName);
     }

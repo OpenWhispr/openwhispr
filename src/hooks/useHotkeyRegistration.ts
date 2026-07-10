@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { formatHotkeyLabel } from "../utils/hotkeys";
+import { formatHotkeyListLabel } from "../utils/hotkeys";
 import { validateHotkey } from "../utils/hotkeyValidator";
 import { getPlatform } from "../utils/platform";
 
@@ -161,7 +161,7 @@ export function useHotkeyRegistration(
 
         // Success!
         if (showSuccessToast && showAlert) {
-          const displayLabel = formatHotkeyLabel(hotkey);
+          const displayLabel = formatHotkeyListLabel(hotkey);
           showAlert({
             title: t("hooks.hotkeyRegistration.titles.saved"),
             description: t("hooks.hotkeyRegistration.messages.nowUsing", { hotkey: displayLabel }),

@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
+      "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",
       "slotConflict": "このホットキーは既に{{slot}}で使用されています。"
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "プッシュトゥトークのネイティブリスナーが利用できません"
   },
   "common": {
+    "retry": "再試行",
     "back": "戻る",
     "next": "次へ",
     "complete": "完了",
@@ -450,7 +452,13 @@
       "noModels": "モデルが見つかりません。エンドポイント URL を確認してください。",
       "providerName": "カスタム",
       "ownerLabel": "提供元: {{owner}}",
-      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。"
+      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。",
+      "searchPlaceholder": "モデルを検索…",
+      "selectedGroup": "選択中",
+      "otherGroup": "その他",
+      "noSearchResults": "「{{query}}」に一致するモデルはありません",
+      "selectModelHint": "モデルが未選択です — 下のリストから選択してください。",
+      "keyRequiredHint": "推論には API キーが必要です — このプロバイダーを使用するには追加してください。"
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
@@ -487,6 +495,10 @@
       "customModelId": "カスタムモデル ID",
       "customModelPlaceholder": "モデル ID またはデプロイメント名を入力",
       "suggestedModels": "推奨モデル",
+      "browseModels": "すべてのモデルを表示",
+      "loadingModels": "モデルを取得中...",
+      "allModels": "{{region}} のすべてのモデル",
+      "modelListError": "モデルを読み込めませんでした。",
       "bedrock": {
         "ssoHelp": "AWS CLI の SSO 設定を使用します。'aws sso login' を実行済みであることを確認してください。",
         "keysHelp": "AWS IAM のアクセスキーを入力してください。"
@@ -499,6 +511,11 @@
         "adcHelp": "Application Default Credentials を使用します。次を実行してください: gcloud auth application-default login",
         "apikeyHelp": "Google AI Studio で取得した Vertex AI Express Mode の API キー。"
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "モデルが利用できません",
+      "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
+      "refreshingModels": "モデルを更新しています…"
     }
   },
   "transcription": {
@@ -913,7 +930,9 @@
     "recording": "記録中",
     "tryShortcut": "Ctrl+Shift+K をお試しください",
     "tryShortcutMac": "⌘⇧K をお試しください",
-    "remove": "ホットキーを削除"
+    "remove": "ホットキーを削除",
+    "addAnother": "ホットキーをもう1つ追加",
+    "duplicate": "すでに追加されています"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
@@ -1010,7 +1029,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "プロバイダー",
       "run": "テスト実行",
-      "customEndpoint": "カスタムエンドポイント"
+      "customEndpoint": "カスタムエンドポイント",
+      "apiKeyMissing": "{{provider}} の API キーが未設定です。AI モデル設定で追加してください。"
     },
     "view": {
       "customPrompt": "カスタムプロンプト",
@@ -1847,6 +1867,7 @@
   },
   "models": {
     "learnMore": "詳細を見る",
+    "noneAvailable": "利用可能なモデルがありません",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",
@@ -1914,9 +1935,11 @@
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
-        "bedrock_claude_sonnet_4_6": "バランス型。エージェントモードの既定モデルに最適です。",
-        "bedrock_claude_opus_4_7": "最高性能。複雑なエージェントモードのタスクに最適です。",
-        "bedrock_nova_lite": "最も安価。AWS ネイティブで大量処理に最適です。",
+        "bedrock_claude_sonnet_5": "バランス型。エージェントモードの既定モデルに最適です。",
+        "bedrock_claude_opus_4_8": "最高性能。複雑なエージェントモードのタスクに最適です。",
+        "bedrock_gpt_oss_120b": "OpenAI のオープンウェイトモデル。低コストで高い推論力。",
+        "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。エージェントモードに最適。",
+        "bedrock_qwen3_next_80b": "スパースなオープンウェイトモデル。高速で多言語対応。",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
