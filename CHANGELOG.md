@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes
 
+- **Dictating into Claude Desktop and claude.ai no longer breaks after the first paste.** The auto-learn correction monitor used to force the `AXEnhancedUserInterface` accessibility flag onto the app it pasted into. On some Chromium apps (Claude Desktop, claude.ai in any browser) that flag permanently blurs the message composer, so every dictation after the first pasted into a field that no longer had keyboard focus. Monitoring is now strictly read-only: apps that expose their accessibility tree keep auto-learn working as before, and apps that don't simply skip correction learning for that paste. Restart the affected app once after updating to clear the stuck flag.
 - **No more Windows Firewall prompt for local Parakeet transcription.** The bundled sherpa-onnx server only serves OpenWhispr itself over `127.0.0.1`, but the upstream binary has no loopback-only bind option, so Windows raised an "allow public and private networks" prompt when it started. All-users installs now register a scoped inbound block rule for the server binary: the prompt is gone, the port is closed to the network, and transcription is unaffected because Windows never filters loopback traffic. The rule is removed on uninstall. (#1090)
 
 ## [1.7.4] - 2026-07-07
