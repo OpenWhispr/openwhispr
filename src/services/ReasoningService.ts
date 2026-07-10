@@ -592,8 +592,7 @@ class ReasoningService extends BaseReasoningService {
         provider === "custom" ? config.baseUrl?.trim() || getConfiguredOpenAIBase() : undefined;
     }
     const aiProvider = isLocalProvider || isLanCleanup ? "local" : provider;
-    // Resolving the model can refresh the registry (Tinfoil pulls its list at
-    // request time), so read model config only once that has settled.
+    // Resolving a Tinfoil model refreshes the registry, so read model config after it.
     const aiModel = await getAIModel(aiProvider, model, apiKey, baseURL);
 
     const apiConfig = getOpenAiApiConfig(model);

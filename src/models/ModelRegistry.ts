@@ -322,9 +322,8 @@ export function getModelProvider(modelId: string): string {
 
   const storedProvider = getSettings().cleanupProvider;
 
-  // Trust the provider the user chose over the heuristic
-  if (storedProvider === "custom" || storedProvider === "tinfoil") {
-    return storedProvider;
+  if (storedProvider === "custom") {
+    return "custom";
   }
 
   if (isEnterpriseProvider(storedProvider)) {
@@ -334,6 +333,9 @@ export function getModelProvider(modelId: string): string {
   const model = getAllReasoningModels().find((m) => m.value === modelId);
 
   if (!model) {
+    // An unknown model here is one Tinfoil retired or added since our last
+    // sync — don't let the id heuristics misroute it.
+    if (storedProvider === "tinfoil") return "tinfoil";
     if (modelId.includes("claude")) return "anthropic";
     if (modelId.includes("gemini") && !modelId.includes("gemma")) return "gemini";
     if ((modelId.includes("gpt-4") || modelId.includes("gpt-5")) && !modelId.includes("gpt-oss"))

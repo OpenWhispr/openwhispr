@@ -18,7 +18,7 @@ export interface TinfoilCatalogModel {
 
 /**
  * Curated, translated descriptions keyed by model id. The endpoint only returns
- * English copy
+ * English copy.
  */
 const DESCRIPTION_KEYS: Record<string, string> = {
   "deepseek-v4-pro": "models.descriptions.cloud.tinfoil_deepseek_v4_pro",
@@ -29,9 +29,6 @@ const DESCRIPTION_KEYS: Record<string, string> = {
   "llama3-3-70b": "models.descriptions.cloud.tinfoil_llama3_3_70b",
 };
 
-/**
- * Turns Tinfoil's live list into registry entries.
- */
 function toCloudModels(catalog: TinfoilCatalogModel[]): CloudModelDefinition[] {
   return catalog.map((model) => ({
     id: model.id,

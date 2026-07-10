@@ -379,7 +379,6 @@ export default function ReasoningModelSelector({
     const iconUrl = getProviderIcon(selectedCloudProvider);
     const invertInDark = isMonochromeProvider(selectedCloudProvider);
 
-    // Tinfoil's list is dynamic. Redraw when it changes
     const models =
       selectedCloudProvider === "tinfoil"
         ? tinfoilModels.map(toReasoningModel)

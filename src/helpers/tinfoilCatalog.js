@@ -1,4 +1,4 @@
-// Tinfoil's model list comes from the attested endoint.
+// Tinfoil's model list comes from the attested endpoint.
 // Fetching from the main process rather than the renderer lets every window share one request.
 const debugLogger = require("./debugLogger");
 const { tinfoilSecureFetch } = require("./tinfoilSecureClient");

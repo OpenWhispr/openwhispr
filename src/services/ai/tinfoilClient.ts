@@ -29,9 +29,7 @@ function normalizeApiKey(apiKey: string): string {
   return key;
 }
 
-/**
- * Tinfoil adds and retires models semi-often, so kick off a sync of Tinfoils model registry
- */
+/** Tinfoil adds and retires models often; sync the registry in the background. */
 function syncTinfoilCatalog(): void {
   void refreshTinfoilModels().catch(() => {});
 }
