@@ -492,6 +492,10 @@
       "customModelId": "自訂模型 ID",
       "customModelPlaceholder": "輸入模型 ID 或部署名稱",
       "suggestedModels": "建議模型",
+      "browseModels": "瀏覽全部模型",
+      "loadingModels": "正在取得模型...",
+      "allModels": "{{region}} 的全部模型",
+      "modelListError": "無法載入模型。",
       "bedrock": {
         "ssoHelp": "使用你的 AWS CLI SSO 設定。請確保已執行 'aws sso login'。",
         "keysHelp": "輸入你的 AWS IAM 存取金鑰。"

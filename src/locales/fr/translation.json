@@ -492,6 +492,10 @@
       "customModelId": "ID de modèle personnalisé",
       "customModelPlaceholder": "Saisissez un ID de modèle ou un nom de déploiement",
       "suggestedModels": "Modèles suggérés",
+      "browseModels": "Parcourir tous les modèles",
+      "loadingModels": "Récupération des modèles...",
+      "allModels": "Tous les modèles dans {{region}}",
+      "modelListError": "Impossible de charger les modèles.",
       "bedrock": {
         "ssoHelp": "Utilise votre configuration SSO d'AWS CLI. Assurez-vous d'avoir exécuté 'aws sso login'.",
         "keysHelp": "Saisissez vos clés d'accès AWS IAM."

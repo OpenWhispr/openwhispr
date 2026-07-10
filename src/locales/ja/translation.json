@@ -492,6 +492,10 @@
       "customModelId": "カスタムモデル ID",
       "customModelPlaceholder": "モデル ID またはデプロイメント名を入力",
       "suggestedModels": "推奨モデル",
+      "browseModels": "すべてのモデルを表示",
+      "loadingModels": "モデルを取得中...",
+      "allModels": "{{region}} のすべてのモデル",
+      "modelListError": "モデルを読み込めませんでした。",
       "bedrock": {
         "ssoHelp": "AWS CLI の SSO 設定を使用します。'aws sso login' を実行済みであることを確認してください。",
         "keysHelp": "AWS IAM のアクセスキーを入力してください。"

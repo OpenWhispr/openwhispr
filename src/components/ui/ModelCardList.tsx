@@ -12,6 +12,9 @@ export interface ModelCardOption {
   specUrl?: string;
   icon?: string;
   invertInDark?: boolean;
+  // Explicit group for SearchableModelList; falls back to the "provider/"
+  // prefix of `value` when absent (e.g. Bedrock ids carry no slash).
+  group?: string;
   // Local model properties (optional)
   isDownloaded?: boolean;
   isDownloading?: boolean;

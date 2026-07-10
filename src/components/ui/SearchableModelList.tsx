@@ -36,7 +36,11 @@ function matchesQuery(model: ModelCardOption, normalizedQuery: string): boolean 
 // "Selected" row keeps the full id so its provider stays identifiable.
 function toDisplayOption(model: ModelCardOption, stripPrefix: boolean): ModelCardOption {
   const prefix = providerPrefix(model.value);
-  if (!prefix) return model;
+  if (!prefix) {
+    if (!model.group || model.icon) return model;
+    const { icon, invertInDark } = getRemoteProviderIcon(model.group.toLowerCase(), model.value);
+    return { ...model, icon, invertInDark };
+  }
   const name = model.value.slice(prefix.length + 1);
   const { icon, invertInDark } = getRemoteProviderIcon(prefix, name);
   const label = (stripPrefix && name) || model.label;
@@ -74,7 +78,7 @@ export default function SearchableModelList({
       if (seen.has(model.value)) continue;
       if (normalizedQuery && !matchesQuery(model, normalizedQuery)) continue;
       seen.add(model.value);
-      const prefix = providerPrefix(model.value);
+      const prefix = model.group ?? providerPrefix(model.value);
       const key = prefix ? prefix.replace(/^~/, "").toLowerCase() : OTHER_GROUP;
       const bucket = groups.get(key);
       if (bucket) bucket.push(model);

@@ -1,8 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Loader2, Search } from "lucide-react";
+import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import ApiKeyInput from "./ui/ApiKeyInput";
-import ModelCardList from "./ui/ModelCardList";
+import ModelCardList, { type ModelCardOption } from "./ui/ModelCardList";
+import SearchableModelList from "./ui/SearchableModelList";
 import CustomModelInput from "./ui/CustomModelInput";
 import TestConnectionButton from "./TestConnectionButton";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
@@ -129,10 +132,18 @@ function useSuggestedModels(provider: "bedrock" | "vertex") {
   }, [t, provider]);
 }
 
+type BedrockCatalogState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; error: string }
+  | { status: "loaded"; models: ModelCardOption[] };
+
 function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderConfigProps) {
   const { t } = useTranslation();
   const store = useSettingsStore();
   const suggestedModels = useSuggestedModels("bedrock");
+  const [catalog, setCatalog] = useState<BedrockCatalogState>({ status: "idle" });
+  const catalogRequestRef = useRef(0);
 
   const regionModels = useMemo(
     () =>
@@ -143,18 +154,47 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
     [suggestedModels, store.bedrockRegion]
   );
 
-  const handleRegionChange = (region: string) => {
-    store.setBedrockRegion(region);
-    const adjusted = adjustBedrockModelForRegion(reasoningModel, region);
-    if (adjusted !== reasoningModel) setReasoningModel(adjusted);
-  };
-
-  const getTestConfig = () => ({
+  const getConnectionConfig = () => ({
     bedrockRegion: store.bedrockRegion,
     bedrockProfile: store.bedrockAuthMode === "sso" ? store.bedrockProfile : "",
     bedrockAccessKeyId: store.bedrockAuthMode === "keys" ? store.bedrockAccessKeyId : "",
     bedrockSecretAccessKey: store.bedrockAuthMode === "keys" ? store.bedrockSecretAccessKey : "",
     bedrockSessionToken: store.bedrockAuthMode === "keys" ? store.bedrockSessionToken : "",
+  });
+
+  const loadCatalog = async (region: string) => {
+    const requestId = ++catalogRequestRef.current;
+    setCatalog({ status: "loading" });
+    const result = await window.electronAPI?.listBedrockModels?.({
+      ...getConnectionConfig(),
+      bedrockRegion: region,
+    });
+    if (requestId !== catalogRequestRef.current) return;
+    if (result?.success && result.models) {
+      setCatalog({
+        status: "loaded",
+        models: result.models.map((m) => ({ value: m.value, label: m.label, group: m.vendor })),
+      });
+    } else {
+      setCatalog({
+        status: "error",
+        error:
+          result?.error ||
+          t("reasoning.enterprise.modelListError", { defaultValue: "Could not load models." }),
+      });
+    }
+  };
+
+  const handleRegionChange = (region: string) => {
+    store.setBedrockRegion(region);
+    const adjusted = adjustBedrockModelForRegion(reasoningModel, region);
+    if (adjusted !== reasoningModel) setReasoningModel(adjusted);
+    // The catalog is region-specific; refresh it if it's open.
+    if (catalog.status !== "idle") void loadCatalog(region);
+  };
+
+  const getTestConfig = () => ({
+    ...getConnectionConfig(),
     model: reasoningModel,
   });
 
@@ -265,6 +305,49 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
             onModelSelect={setReasoningModel}
             colorScheme="purple"
           />
+        </div>
+      )}
+
+      {catalog.status === "loaded" ? (
+        <div className="space-y-1.5">
+          <FieldLabel>
+            {t("reasoning.enterprise.allModels", {
+              defaultValue: "All Models in {{region}}",
+              region: store.bedrockRegion,
+            })}
+          </FieldLabel>
+          <SearchableModelList
+            models={catalog.models}
+            selectedModel={reasoningModel}
+            onModelSelect={setReasoningModel}
+          />
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            disabled={catalog.status === "loading"}
+            onClick={() => loadCatalog(store.bedrockRegion)}
+          >
+            {catalog.status === "loading" ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Search className="w-3.5 h-3.5 mr-1.5" />
+            )}
+            {catalog.status === "loading"
+              ? t("reasoning.enterprise.loadingModels", { defaultValue: "Fetching models..." })
+              : catalog.status === "error"
+                ? t("common.retry", { defaultValue: "Retry" })
+                : t("reasoning.enterprise.browseModels", { defaultValue: "Browse all models" })}
+          </Button>
+          {catalog.status === "error" && (
+            <FieldHint>
+              <span className="text-destructive">{catalog.error}</span>
+            </FieldHint>
+          )}
         </div>
       )}
 

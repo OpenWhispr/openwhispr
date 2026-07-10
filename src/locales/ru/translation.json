@@ -492,6 +492,10 @@
       "customModelId": "Пользовательский ID модели",
       "customModelPlaceholder": "Введите ID модели или имя развёртывания",
       "suggestedModels": "Рекомендуемые модели",
+      "browseModels": "Просмотреть все модели",
+      "loadingModels": "Загрузка моделей...",
+      "allModels": "Все модели в {{region}}",
+      "modelListError": "Не удалось загрузить модели.",
       "bedrock": {
         "ssoHelp": "Использует настройки SSO из AWS CLI. Убедитесь, что выполнили 'aws sso login'.",
         "keysHelp": "Введите ключи доступа AWS IAM."
