@@ -167,17 +167,19 @@ const STREAMING_PROVIDERS = {
     onSessionEnd: (cb) => window.electronAPI.onCortiSessionEnd(cb),
   },
   "tinfoil-realtime": {
+    // Partials arrive on the socket for free, and dictating into a model you
+    // can't see is worse than not dictating at all — so the overlay is always on.
     warmup: (opts) =>
       window.electronAPI.dictationRealtimeWarmup({
         ...opts,
         provider: "tinfoil-realtime",
-        preview: getSettings().showTranscriptionPreview,
+        preview: true,
       }),
     start: (opts) =>
       window.electronAPI.dictationRealtimeStart({
         ...opts,
         provider: "tinfoil-realtime",
-        preview: getSettings().showTranscriptionPreview,
+        preview: true,
       }),
     send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
     stop: () => window.electronAPI.dictationRealtimeStop(),

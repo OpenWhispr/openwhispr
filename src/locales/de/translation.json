@@ -1880,7 +1880,7 @@
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
-        "tinfoil_voxtral_mini_realtime": "Nachweisbar private Streaming-Transkription"
+        "tinfoil_voxtral": "Nachweisbar private Transkription, Streaming oder Batch"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",
