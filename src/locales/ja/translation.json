@@ -1908,10 +1908,11 @@
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
-        "bedrock_claude_sonnet_4_6": "バランス型。エージェントモードの既定モデルに最適です。",
-        "bedrock_claude_opus_4_7": "最高性能。複雑なエージェントモードのタスクに最適です。",
+        "bedrock_claude_sonnet_5": "バランス型。エージェントモードの既定モデルに最適です。",
+        "bedrock_claude_opus_4_8": "最高性能。複雑なエージェントモードのタスクに最適です。",
         "bedrock_gpt_oss_120b": "OpenAI のオープンウェイトモデル。低コストで高い推論力。",
         "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。エージェントモードに最適。",
+        "bedrock_qwen3_next_80b": "スパースなオープンウェイトモデル。高速で多言語対応。",
         "bedrock_nova_lite": "最も安価。AWS ネイティブで大量処理に最適です。",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"

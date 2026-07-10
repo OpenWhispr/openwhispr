@@ -2000,10 +2000,11 @@
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
-        "bedrock_claude_sonnet_4_6": "Balanced workhorse. Best default for Agent Mode.",
-        "bedrock_claude_opus_4_7": "Max intelligence. Best for complex Agent Mode tasks.",
+        "bedrock_claude_sonnet_5": "Balanced workhorse. Best default for Agent Mode.",
+        "bedrock_claude_opus_4_8": "Max intelligence. Best for complex Agent Mode tasks.",
         "bedrock_gpt_oss_120b": "Open-weight OpenAI model. Strong reasoning at low cost.",
         "bedrock_deepseek_v3_2": "Open-weight frontier model. Great value for Agent Mode.",
+        "bedrock_qwen3_next_80b": "Sparse open-weight model. Fast and multilingual.",
         "bedrock_nova_lite": "Cheapest option. AWS-native, ideal for high volume.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"

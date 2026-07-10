@@ -525,16 +525,16 @@
           "descriptionKey": "models.descriptions.enterprise.bedrock_claude_haiku_4_5"
         },
         {
-          "id": "us.anthropic.claude-sonnet-4-6",
-          "name": "Claude Sonnet 4.6",
+          "id": "us.anthropic.claude-sonnet-5",
+          "name": "Claude Sonnet 5",
           "description": "Balanced workhorse. Best default for Agent Mode.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_4_6"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_5"
         },
         {
-          "id": "us.anthropic.claude-opus-4-7",
-          "name": "Claude Opus 4.7",
+          "id": "us.anthropic.claude-opus-4-8",
+          "name": "Claude Opus 4.8",
           "description": "Max intelligence. Best for complex Agent Mode tasks.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_opus_4_7"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_opus_4_8"
         },
         {
           "id": "openai.gpt-oss-120b-1:0",
@@ -547,6 +547,12 @@
           "name": "DeepSeek V3.2",
           "description": "Open-weight frontier model. Great value for Agent Mode.",
           "descriptionKey": "models.descriptions.enterprise.bedrock_deepseek_v3_2"
+        },
+        {
+          "id": "qwen.qwen3-next-80b-a3b",
+          "name": "Qwen3 Next 80B",
+          "description": "Sparse open-weight model. Fast and multilingual.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_qwen3_next_80b"
         },
         {
           "id": "amazon.nova-lite-v1:0",

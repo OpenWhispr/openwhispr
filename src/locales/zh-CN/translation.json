@@ -1903,10 +1903,11 @@
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。适合文本清理。",
-        "bedrock_claude_sonnet_4_6": "均衡性能。推荐用作智能助手模式的默认模型。",
-        "bedrock_claude_opus_4_7": "最高智能。适用于复杂的智能助手模式任务。",
+        "bedrock_claude_sonnet_5": "均衡性能。推荐用作智能助手模式的默认模型。",
+        "bedrock_claude_opus_4_8": "最高智能。适用于复杂的智能助手模式任务。",
         "bedrock_gpt_oss_120b": "OpenAI 开放权重模型。低成本下的强大推理能力。",
         "bedrock_deepseek_v3_2": "开放权重前沿模型。智能助手模式的高性价比之选。",
+        "bedrock_qwen3_next_80b": "稀疏开放权重模型。快速且多语言。",
         "bedrock_nova_lite": "最便宜的选择。AWS 原生，适合高流量场景。",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
