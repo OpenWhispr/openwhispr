@@ -1910,6 +1910,8 @@
         "bedrock_claude_haiku_4_5": "Schnell und günstig. Ideal zum Bereinigen von Text.",
         "bedrock_claude_sonnet_4_6": "Ausgewogen. Empfohlener Standard für den Agent-Modus.",
         "bedrock_claude_opus_4_7": "Höchste Intelligenz. Für komplexe Aufgaben im Agent-Modus.",
+        "bedrock_gpt_oss_120b": "Offenes OpenAI-Modell. Starkes Reasoning zu geringen Kosten.",
+        "bedrock_deepseek_v3_2": "Offenes Frontier-Modell. Starker Wert für den Agent-Modus.",
         "bedrock_nova_lite": "Günstigste Option. Nativ in AWS, ideal für hohe Volumen.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"

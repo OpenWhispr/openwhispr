@@ -537,7 +537,19 @@
           "descriptionKey": "models.descriptions.enterprise.bedrock_claude_opus_4_7"
         },
         {
-          "id": "us.amazon.nova-lite-v1:0",
+          "id": "openai.gpt-oss-120b-1:0",
+          "name": "GPT-OSS 120B",
+          "description": "Open-weight OpenAI model. Strong reasoning at low cost.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_gpt_oss_120b"
+        },
+        {
+          "id": "deepseek.v3.2",
+          "name": "DeepSeek V3.2",
+          "description": "Open-weight frontier model. Great value for Agent Mode.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_deepseek_v3_2"
+        },
+        {
+          "id": "amazon.nova-lite-v1:0",
           "name": "Amazon Nova Lite",
           "description": "Cheapest option. AWS-native, ideal for high volume.",
           "descriptionKey": "models.descriptions.enterprise.bedrock_nova_lite"
