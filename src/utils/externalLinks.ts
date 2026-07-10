@@ -12,3 +12,19 @@ export function createExternalLinkHandler(url: string) {
     openExternalLink(url);
   };
 }
+
+// Tags an outbound link with OpenWhispr UTM attribution. Non-http(s) and
+// already-attributed URLs pass through unchanged so existing links can't break.
+export function withUtm(url: string, campaign = "app"): string {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return url;
+    if (u.searchParams.has("utm_source")) return url; // respect existing attribution
+    u.searchParams.set("utm_source", "openwhispr");
+    u.searchParams.set("utm_medium", "app");
+    u.searchParams.set("utm_campaign", campaign);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}

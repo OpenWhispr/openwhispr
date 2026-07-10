@@ -11,11 +11,25 @@ import { getTinfoilLanguageModel } from "./tinfoilClient";
 // APIs (fs, process, AWS credential chain) that don't work in the browser.
 // See `src/helpers/enterpriseAiProviders.js` for the main-process counterpart.
 
+// OpenRouter's reasoning control is a top-level request field the AI SDK
+// can't emit — inject it at the fetch boundary.
+const withDisabledReasoning: typeof fetch = (input, init) => {
+  if (typeof init?.body === "string") {
+    try {
+      const body = JSON.parse(init.body);
+      body.reasoning = { enabled: false };
+      init = { ...init, body: JSON.stringify(body) };
+    } catch {}
+  }
+  return fetch(input, init);
+};
+
 export async function getAIModel(
   provider: string,
   model: string,
   apiKey: string,
-  baseURL?: string
+  baseURL?: string,
+  opts?: { disableThinking?: boolean }
 ): Promise<LanguageModel> {
   switch (provider) {
     case "openai":
@@ -30,6 +44,13 @@ export async function getAIModel(
       return getTinfoilLanguageModel(apiKey, model);
     case "custom":
       return createOpenAI({ apiKey, baseURL })(model);
+    case "openrouter":
+      // OpenRouter implements Chat Completions, not the OpenAI Responses API.
+      return createOpenAI({
+        apiKey,
+        baseURL,
+        ...(opts?.disableThinking ? { fetch: withDisabledReasoning } : {}),
+      }).chat(model);
     case "local":
       return createOpenAI({ apiKey: "no-key", baseURL }).chat(model);
     default:
