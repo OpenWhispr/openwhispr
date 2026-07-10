@@ -4493,40 +4493,44 @@ class IPCHandlers {
 
     const reconnectMeetingStreams = async () => {
       if (meetingReconnecting || meetingLocalMode) return;
+
+      const options = meetingConnectionOptions;
+      const win = meetingConnectionWin;
+      if (!options || !win || win.isDestroyed()) {
+        debugLogger.error("Cannot reconnect meeting streams: missing connection context");
+        return;
+      }
+
       if (meetingReconnectCount >= MAX_MEETING_RECONNECTS) {
         debugLogger.error("Meeting reconnect limit reached", { count: meetingReconnectCount });
-        if (meetingConnectionWin && !meetingConnectionWin.isDestroyed()) {
-          meetingConnectionWin.webContents.send(
-            "meeting-transcription-error",
-            "Session reconnect limit reached. Please stop and restart the recording."
-          );
-        }
+        win.webContents.send(
+          "meeting-transcription-error",
+          "Session reconnect limit reached. Please stop and restart the recording."
+        );
         return;
       }
 
       meetingReconnecting = true;
       meetingReconnectCount++;
 
-      const options = meetingConnectionOptions;
-      const win = meetingConnectionWin;
-      if (!options || !win || win.isDestroyed()) {
-        debugLogger.error("Cannot reconnect meeting streams: missing connection context");
-        meetingReconnecting = false;
-        return;
-      }
-
       const StreamingClass =
         STREAMING_CLIENT_BY_PROVIDER[options.provider] ?? OpenAIRealtimeStreaming;
-      const systemAudioMode = getMeetingSystemAudioCapabilityMode();
 
       const oldMic = this._meetingMicStreaming;
       const oldSystem = this._meetingSystemStreaming;
 
-      this._meetingMicStreaming = new StreamingClass();
-      attachMeetingStreamingHandlers(this._meetingMicStreaming, win, "mic");
-      if (systemAudioMode !== "unsupported") {
-        this._meetingSystemStreaming = new StreamingClass();
-        attachMeetingStreamingHandlers(this._meetingSystemStreaming, win, "system");
+      // Swap fresh instances in before the token fetch so audio arriving during
+      // the swap lands in their pre-connect buffers instead of a dead socket.
+      const newMic = new StreamingClass();
+      newMic.beginConnecting?.();
+      attachMeetingStreamingHandlers(newMic, win, "mic");
+      this._meetingMicStreaming = newMic;
+      let newSystem = null;
+      if (oldSystem) {
+        newSystem = new StreamingClass();
+        newSystem.beginConnecting?.();
+        attachMeetingStreamingHandlers(newSystem, win, "system");
+        this._meetingSystemStreaming = newSystem;
       }
 
       debugLogger.info("Reconnecting meeting streams", {
@@ -4534,24 +4538,27 @@ class IPCHandlers {
         maxAttempts: MAX_MEETING_RECONNECTS,
       });
 
+      const tokenEvent = { sender: win.webContents };
       try {
         const connectOpts = {
           model: options.model,
           language: options.language,
           preconfigured: options.mode !== "byok",
+          environment: options.environment,
+          tenant: options.tenant,
+          keyterms: options.keyterms,
+          sampleRate: MEETING_STREAM_SAMPLE_RATE,
         };
 
         let pairs;
-        if (systemAudioMode !== "unsupported") {
-          const secrets = await fetchRealtimeToken(null, options, { streams: 2 });
+        if (newSystem) {
+          const secrets = await fetchRealtimeToken(tokenEvent, options, { streams: 2 });
           pairs = [
-            { streaming: this._meetingMicStreaming, secret: secrets[0] },
-            { streaming: this._meetingSystemStreaming, secret: secrets[1] },
+            { streaming: newMic, secret: secrets[0] },
+            { streaming: newSystem, secret: secrets[1] },
           ];
         } else {
-          pairs = [
-            { streaming: this._meetingMicStreaming, secret: await fetchRealtimeToken(null, options) },
-          ];
+          pairs = [{ streaming: newMic, secret: await fetchRealtimeToken(tokenEvent, options) }];
         }
 
         await Promise.all(
@@ -4559,6 +4566,14 @@ class IPCHandlers {
             streaming.connect({ apiKey: secret, token: secret, ...connectOpts })
           )
         );
+
+        if (meetingConnectionOptions !== options) {
+          // Recording stopped while the reconnect was in flight.
+          for (const { streaming } of pairs) streaming.disconnect().catch(() => {});
+          oldMic?.disconnect().catch(() => {});
+          oldSystem?.disconnect().catch(() => {});
+          return;
+        }
 
         oldMic?.disconnect().catch(() => {});
         oldSystem?.disconnect().catch(() => {});
@@ -4569,8 +4584,19 @@ class IPCHandlers {
           error: error.message,
           attempt: meetingReconnectCount,
         });
-        if (meetingConnectionWin && !meetingConnectionWin.isDestroyed()) {
-          meetingConnectionWin.webContents.send("meeting-transcription-error", error.message);
+        newMic.disconnect().catch(() => {});
+        newSystem?.disconnect().catch(() => {});
+        if (meetingConnectionOptions === options) {
+          // A proactive reconnect leaves the old connections open; restore them
+          // so transcription continues until the hard limit retries this path.
+          this._meetingMicStreaming = oldMic;
+          this._meetingSystemStreaming = oldSystem;
+          if (!win.isDestroyed()) {
+            win.webContents.send("meeting-transcription-error", error.message);
+          }
+        } else {
+          oldMic?.disconnect().catch(() => {});
+          oldSystem?.disconnect().catch(() => {});
         }
       } finally {
         meetingReconnecting = false;
