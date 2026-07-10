@@ -146,7 +146,7 @@
     "better-sqlite3": "12.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dbus-next": "^0.10.2",
+    "@homebridge/dbus-native": "^0.7.7",
     "dotenv": "^17.4.1",
     "electron-updater": "^6.6.2",
     "ffmpeg-static": "^5.2.0",
@@ -204,9 +204,6 @@
     "fast-xml-parser": "5.7.2",
     "ip-address": "10.2.0",
     "markdown-it": "14.2.0",
-    "tmp": "0.2.7",
-    "usocket": {
-      "node-gyp": "^11.4.2"
-    }
+    "tmp": "0.2.7"
   }
 }
