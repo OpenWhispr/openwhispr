@@ -68,14 +68,7 @@ class ReasoningService extends BaseReasoningService {
 
   private async getApiKey(
     provider:
-      | "openai"
-      | "anthropic"
-      | "gemini"
-      | "groq"
-      | "tinfoil"
-      | "custom"
-      | "openrouter"
-      | "corti"
+      "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "custom" | "openrouter" | "corti"
   ): Promise<string> {
     if (provider === "custom") {
       let customKey = "";
@@ -948,6 +941,7 @@ class ReasoningService extends BaseReasoningService {
       const groqKey = await window.electronAPI?.getGroqKey?.();
       const openrouterKey = await window.electronAPI?.getOpenrouterKey?.();
       const tinfoilKey = await window.electronAPI?.getTinfoilKey?.();
+      const cortiKey = await window.electronAPI?.getCortiApiKey?.();
       const localAvailable = await window.electronAPI?.checkLocalReasoningAvailable?.();
 
       logger.logReasoning("API_KEY_CHECK", {
@@ -957,6 +951,7 @@ class ReasoningService extends BaseReasoningService {
         hasGroq: !!groqKey,
         hasOpenrouter: !!openrouterKey,
         hasTinfoil: !!tinfoilKey,
+        hasCorti: !!cortiKey,
         hasLocal: !!localAvailable,
       });
 
@@ -967,6 +962,7 @@ class ReasoningService extends BaseReasoningService {
         groqKey ||
         openrouterKey ||
         tinfoilKey ||
+        cortiKey ||
         localAvailable
       );
     } catch (error) {

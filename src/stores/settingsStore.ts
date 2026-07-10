@@ -1747,14 +1747,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (noteFormatting.cloudMode !== undefined)
       s.setNoteFormattingCloudMode(noteFormatting.cloudMode);
     s.setNoteFormattingMode(mode);
-    if (dictationAgent.provider !== undefined)
-      s.setDictationAgentProvider(dictationAgent.provider);
+    if (dictationAgent.provider !== undefined) s.setDictationAgentProvider(dictationAgent.provider);
     if (dictationAgent.model !== undefined) s.setDictationAgentModel(dictationAgent.model);
     if (dictationAgent.cloudMode !== undefined)
       s.setDictationAgentCloudMode(dictationAgent.cloudMode);
     s.setDictationAgentMode(mode);
-    if (chatIntelligence.provider !== undefined)
-      s.setChatAgentProvider(chatIntelligence.provider);
+    if (chatIntelligence.provider !== undefined) s.setChatAgentProvider(chatIntelligence.provider);
     if (chatIntelligence.model !== undefined) s.setChatAgentModel(chatIntelligence.model);
     if (chatIntelligence.cloudMode !== undefined)
       s.setChatAgentCloudMode(chatIntelligence.cloudMode);

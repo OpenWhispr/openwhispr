@@ -27,7 +27,11 @@ export function buildReasoningScopePatches(settings, mode) {
 
 // Onboarding "use Corti everywhere" payloads. `reasoning` is null outside the EU
 // region or when the provider/model is missing; useCleanupModel is forced true so routing sticks.
-export function buildCortiOnboardingPayloads(transcriptionProvider, reasoningProvider, environment) {
+export function buildCortiOnboardingPayloads(
+  transcriptionProvider,
+  reasoningProvider,
+  environment
+) {
   const transcription = {
     useLocalWhisper: false,
     cloudTranscriptionMode: "byok",

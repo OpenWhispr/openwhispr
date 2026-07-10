@@ -44,7 +44,8 @@ export async function getAIModel(
     case "tinfoil":
       return getTinfoilLanguageModel(apiKey, model);
     case "corti":
-      return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.CORTI_MODELS_BASE })(model);
+      // Corti's gateway is Chat Completions-compatible, not the OpenAI Responses API.
+      return createOpenAI({ apiKey, baseURL: API_ENDPOINTS.CORTI_MODELS_BASE }).chat(model);
     case "custom":
       return createOpenAI({ apiKey, baseURL })(model);
     case "openrouter":

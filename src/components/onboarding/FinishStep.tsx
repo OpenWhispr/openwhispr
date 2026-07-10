@@ -136,7 +136,7 @@ export default function FinishStep({
             <p className="text-xs text-muted-foreground/70">
               {t("onboarding.finish.corti.regionHint")}
             </p>
-            {cortiEnvironment === "eu" && (
+            {cortiEnvironment === "eu" && cortiApiKey.trim() && (
               <p className="text-xs text-muted-foreground/70">
                 {t("onboarding.finish.corti.llmHint")}
               </p>
