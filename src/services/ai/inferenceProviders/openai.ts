@@ -198,7 +198,7 @@ export const openaiProvider: InferenceProvider = {
               )
             );
 
-          const apiConfig = getOpenAiApiConfig(model);
+          const apiConfig = getOpenAiApiConfig(model, resolvedProvider);
           const requestBody: Record<string, unknown> = { model };
 
           if (type === "responses") {

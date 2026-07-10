@@ -453,7 +453,9 @@
       "searchPlaceholder": "搜索模型…",
       "selectedGroup": "已选择",
       "otherGroup": "其他",
-      "noSearchResults": "没有与“{{query}}”匹配的模型"
+      "noSearchResults": "没有与“{{query}}”匹配的模型",
+      "selectModelHint": "尚未选择模型 — 请从下方列表中选择一个。",
+      "keyRequiredHint": "推理需要 API 密钥 — 请添加密钥以使用此提供商。"
     },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
@@ -1017,7 +1019,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "服务商",
       "run": "运行测试",
-      "customEndpoint": "自定义端点"
+      "customEndpoint": "自定义端点",
+      "apiKeyMissing": "未配置 {{provider}} API 密钥，请在 AI 模型设置中添加。"
     },
     "view": {
       "customPrompt": "自定义提示词",

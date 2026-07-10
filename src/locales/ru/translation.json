@@ -453,7 +453,9 @@
       "searchPlaceholder": "Поиск моделей…",
       "selectedGroup": "Выбрано",
       "otherGroup": "Другое",
-      "noSearchResults": "Нет моделей по запросу «{{query}}»"
+      "noSearchResults": "Нет моделей по запросу «{{query}}»",
+      "selectModelHint": "Модель ещё не выбрана — выберите её из списка ниже.",
+      "keyRequiredHint": "Для инференса требуется API-ключ — добавьте его, чтобы использовать этого провайдера."
     },
     "getApiKey": "Получить API-ключ ->",
     "selectModel": "Выберите модель",
@@ -1017,7 +1019,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Провайдер",
       "run": "Запустить тест",
-      "customEndpoint": "Пользовательская конечная точка"
+      "customEndpoint": "Пользовательская конечная точка",
+      "apiKeyMissing": "API-ключ {{provider}} не настроен. Добавьте его в настройках ИИ-моделей."
     },
     "view": {
       "customPrompt": "Пользовательский промпт",

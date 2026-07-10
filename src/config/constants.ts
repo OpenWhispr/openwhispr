@@ -94,6 +94,9 @@ export const MODEL_CONSTRAINTS = {
   INFERENCE_TIMEOUT: 30000, // 30 seconds default (configurable)
 } as const;
 
+// List length above which pickers switch to a searchable variant.
+export const LIST_SEARCH_THRESHOLD = 12;
+
 // Token Limits
 export const TOKEN_LIMITS = {
   MIN_TOKENS: 512,

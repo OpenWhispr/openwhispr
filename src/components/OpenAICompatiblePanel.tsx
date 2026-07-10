@@ -286,6 +286,9 @@ export default function OpenAICompatiblePanel({
           label=""
           helpText={apiKeyRequired ? "" : t("reasoning.custom.apiKeyHelp")}
         />
+        {apiKeyRequired && !apiKey?.trim() && (
+          <p className="text-xs text-warning">{t("reasoning.custom.keyRequiredHint")}</p>
+        )}
       </div>
 
       <div className="space-y-2 pt-3">
@@ -335,6 +338,9 @@ export default function OpenAICompatiblePanel({
             {modelsError && <p className="text-xs text-destructive">{modelsError}</p>}
             {!modelsLoading && !modelsError && modelOptions.length === 0 && (
               <p className="text-xs text-warning">{t("reasoning.custom.noModels")}</p>
+            )}
+            {!modelsLoading && displayedModels.length > 0 && !model && (
+              <p className="text-xs text-warning">{t("reasoning.custom.selectModelHint")}</p>
             )}
           </>
         )}

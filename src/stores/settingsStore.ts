@@ -2018,6 +2018,21 @@ export async function initializeSettings(): Promise<void> {
       for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {
         localStorage.removeItem(key);
       }
+
+      // Users who configured OpenRouter through the Custom tab keep their key
+      // in the shared custom slot — seed the dedicated slot from it once.
+      if (!openrouter && customRx) {
+        const hydrated = useSettingsStore.getState();
+        const usesOpenRouterViaCustom = (Object.keys(INFERENCE_SCOPES) as InferenceScope[]).some(
+          (scope) => {
+            const cfg = selectResolvedLLMConfig(hydrated, scope);
+            return cfg.provider === "custom" && (cfg.cloudBaseUrl || "").includes("openrouter.ai");
+          }
+        );
+        if (usesOpenRouterViaCustom) {
+          hydrated.setOpenrouterApiKey(customRx);
+        }
+      }
     } catch (err) {
       logger.warn(
         "Failed to hydrate secrets from main process",

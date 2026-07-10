@@ -5,10 +5,11 @@ import { Search } from "lucide-react";
 import { Input } from "./input";
 import { ModelCard, type ModelCardOption } from "./ModelCardList";
 import { getRemoteProviderIcon } from "../../utils/providerIcons";
+import { LIST_SEARCH_THRESHOLD } from "../../config/constants";
 
 // Above this count, OpenAICompatiblePanel switches from the plain list to this
-// searchable/grouped/virtualized variant. Mirrors LanguageSelector's threshold.
-export const MODEL_SEARCH_THRESHOLD = 12;
+// searchable/grouped/virtualized variant.
+export const MODEL_SEARCH_THRESHOLD = LIST_SEARCH_THRESHOLD;
 
 const OTHER_GROUP = "__other";
 const SELECTED_GROUP = "__selected";
@@ -22,14 +23,23 @@ function providerPrefix(value: string): string | null {
   return slash > 0 ? value.slice(0, slash) : null;
 }
 
+function matchesQuery(model: ModelCardOption, normalizedQuery: string): boolean {
+  return (
+    model.value.toLowerCase().includes(normalizedQuery) ||
+    model.label.toLowerCase().includes(normalizedQuery) ||
+    (model.description?.toLowerCase().includes(normalizedQuery) ?? false)
+  );
+}
+
 // Resolve the provider icon from the "provider/" prefix. Group rows drop the
 // prefix from the label (the header already names the provider); the pinned
 // "Selected" row keeps the full id so its provider stays identifiable.
 function toDisplayOption(model: ModelCardOption, stripPrefix: boolean): ModelCardOption {
   const prefix = providerPrefix(model.value);
   if (!prefix) return model;
-  const { icon, invertInDark } = getRemoteProviderIcon(prefix);
-  const label = (stripPrefix && model.value.slice(prefix.length + 1)) || model.label;
+  const name = model.value.slice(prefix.length + 1);
+  const { icon, invertInDark } = getRemoteProviderIcon(prefix, name);
+  const label = (stripPrefix && name) || model.label;
   return { ...model, label, icon, invertInDark };
 }
 
@@ -62,14 +72,7 @@ export default function SearchableModelList({
     for (const model of models) {
       if (model.value === selectedModel) continue; // pinned separately
       if (seen.has(model.value)) continue;
-      if (
-        normalizedQuery &&
-        !model.value.toLowerCase().includes(normalizedQuery) &&
-        !model.label.toLowerCase().includes(normalizedQuery) &&
-        !(model.description?.toLowerCase().includes(normalizedQuery) ?? false)
-      ) {
-        continue;
-      }
+      if (normalizedQuery && !matchesQuery(model, normalizedQuery)) continue;
       seen.add(model.value);
       const prefix = providerPrefix(model.value);
       const key = prefix ? prefix.replace(/^~/, "").toLowerCase() : OTHER_GROUP;
@@ -129,10 +132,11 @@ export default function SearchableModelList({
     virtualizer.scrollToOffset(0);
   }, [normalizedQuery, virtualizer]);
 
-  // Rows can also rebuild without a query change (model list refetch).
+  // Rows also rebuild without a query change (list refetch, selection moving
+  // into the pinned group) — indexes shift, so drop the cursor entirely.
   useEffect(() => {
-    if (activeIndex >= rows.length) setActiveIndex(-1);
-  }, [rows.length, activeIndex]);
+    setActiveIndex(-1);
+  }, [models, selectedModel]);
 
   const moveActive = (direction: 1 | -1) => {
     const step = (from: number) => {
@@ -166,7 +170,8 @@ export default function SearchableModelList({
 
   const activeRow = activeIndex >= 0 ? rows[activeIndex] : undefined;
   const activeId = activeRow?.type === "model" ? `${listboxId}-${activeRow.data.value}` : undefined;
-  const showEmpty = normalizedQuery.length > 0 && matchCount === 0;
+  const selectedMatches = !!selectedOption && matchesQuery(selectedOption, normalizedQuery);
+  const showEmpty = normalizedQuery.length > 0 && matchCount === 0 && !selectedMatches;
 
   return (
     <div className="space-y-2">

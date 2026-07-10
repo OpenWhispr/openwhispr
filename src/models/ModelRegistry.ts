@@ -437,7 +437,7 @@ export interface OpenAiApiConfig {
   supportsTemperature: boolean;
 }
 
-export function getOpenAiApiConfig(modelId: string): OpenAiApiConfig {
+export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiApiConfig {
   const model = getCloudModel(modelId);
   if (model?.tokenParam) {
     return {
@@ -446,9 +446,10 @@ export function getOpenAiApiConfig(modelId: string): OpenAiApiConfig {
     };
   }
 
-  // Vendor-prefixed ids (openai/gpt-4o, anthropic/claude-…) come from OpenRouter
-  // or custom endpoints, which speak standard Chat Completions.
-  if (modelId.includes("/")) {
+  // OpenRouter's vendor-prefixed ids (openai/gpt-4o, anthropic/claude-…) speak
+  // standard Chat Completions. Scoped to the provider so vendor-prefixed ids on
+  // custom endpoints keep the request shape they had before OpenRouter landed.
+  if (provider === "openrouter" && modelId.includes("/")) {
     return { tokenParam: "max_tokens", supportsTemperature: true };
   }
 

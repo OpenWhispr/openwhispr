@@ -20,7 +20,7 @@ import { REASONING_PROVIDERS, toReasoningModel } from "../models/ModelRegistry";
 import { useTinfoilModels } from "../hooks/useTinfoilModels";
 import { pickDefaultTinfoilModel } from "../models/tinfoilModels";
 import { modelRegistry } from "../models/ModelRegistry";
-import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
+import { getRemoteProviderIcon } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -376,14 +376,14 @@ export default function ReasoningModelSelector({
   }, []);
 
   const openaiModelOptions = useMemo<CloudModelOption[]>(() => {
-    const iconUrl = getProviderIcon("openai");
+    const { icon, invertInDark } = getRemoteProviderIcon("openai");
     return REASONING_PROVIDERS.openai.models.map((model) => ({
       ...model,
       description: model.descriptionKey
         ? t(model.descriptionKey, { defaultValue: model.description })
         : model.description,
-      icon: iconUrl,
-      invertInDark: true,
+      icon,
+      invertInDark,
     }));
   }, [t]);
 
@@ -391,8 +391,7 @@ export default function ReasoningModelSelector({
     if (selectedCloudProvider === "openai") return openaiModelOptions;
     if (selectedCloudProvider === "custom" || selectedCloudProvider === OPENROUTER_TAB) return [];
 
-    const iconUrl = getProviderIcon(selectedCloudProvider);
-    const invertInDark = isMonochromeProvider(selectedCloudProvider);
+    const { icon: iconUrl, invertInDark } = getRemoteProviderIcon(selectedCloudProvider);
 
     const models =
       selectedCloudProvider === "tinfoil"
@@ -447,8 +446,12 @@ export default function ReasoningModelSelector({
   }, [loadDownloadedModels]);
 
   const selectDefaultModelForProvider = (provider: string) => {
-    // Custom/OpenRouter use a dynamically fetched model list — don't preset one.
-    if (provider === "custom" || provider === OPENROUTER_TAB) return;
+    // Custom/OpenRouter fetch their model list dynamically — clear instead of
+    // presetting so another provider's model id can't persist under this one.
+    if (provider === "custom" || provider === OPENROUTER_TAB) {
+      setReasoningModel("");
+      return;
+    }
 
     if (provider === "tinfoil") {
       const defaultModel = pickDefaultTinfoilModel(tinfoilModels);
@@ -550,6 +553,7 @@ export default function ReasoningModelSelector({
           <div>
             {selectedCloudProvider === OPENROUTER_TAB ? (
               <OpenAICompatiblePanel
+                key={OPENROUTER_TAB}
                 baseUrl={API_ENDPOINTS.OPENROUTER_BASE}
                 setBaseUrl={() => {}}
                 apiKey={openrouterApiKey}
@@ -562,6 +566,7 @@ export default function ReasoningModelSelector({
               />
             ) : selectedCloudProvider === "custom" ? (
               <OpenAICompatiblePanel
+                key="custom"
                 baseUrl={cloudReasoningBaseUrl}
                 setBaseUrl={setCloudReasoningBaseUrl}
                 apiKey={customReasoningApiKey}

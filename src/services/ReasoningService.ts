@@ -127,12 +127,16 @@ class ReasoningService extends BaseReasoningService {
     }
 
     if (!apiKey) {
-      const errorMsg = `${getProviderDisplayName(provider)} API key not configured`;
+      const displayName = getProviderDisplayName(provider);
+      const errorMsg = `${displayName} API key not configured`;
       logger.logReasoning(`${provider.toUpperCase()}_KEY_MISSING`, {
         provider,
         error: errorMsg,
       });
-      throw new Error(errorMsg);
+      const error = new Error(errorMsg) as Error & { code: string; provider: string };
+      error.code = "API_KEY_MISSING";
+      error.provider = displayName;
+      throw error;
     }
 
     return apiKey;
@@ -410,7 +414,7 @@ class ReasoningService extends BaseReasoningService {
       }
     }
 
-    const apiConfig = getOpenAiApiConfig(model);
+    const apiConfig = getOpenAiApiConfig(model, provider);
     const useOldTokenParam = isLocalProvider || isLanCleanup || provider === "groq";
 
     const requestBody: Record<string, unknown> = {
@@ -617,10 +621,15 @@ class ReasoningService extends BaseReasoningService {
             : undefined;
     }
     const aiProvider = isLocalProvider || isLanCleanup ? "local" : provider;
+    // OpenRouter ids are never in the local registry, so the supportsThinking
+    // exemption below can't apply — honor the toggle directly.
+    const openrouterDisableThinking = provider === "openrouter" && config.disableThinking === true;
     // Resolving a Tinfoil model refreshes the registry, so read model config after it.
-    const aiModel = await getAIModel(aiProvider, model, apiKey, baseURL);
+    const aiModel = await getAIModel(aiProvider, model, apiKey, baseURL, {
+      disableThinking: openrouterDisableThinking,
+    });
 
-    const apiConfig = getOpenAiApiConfig(model);
+    const apiConfig = getOpenAiApiConfig(model, provider);
     const modelDef = getCloudModel(model);
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
     const needsGroqDisableThinking =

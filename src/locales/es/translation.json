@@ -453,7 +453,9 @@
       "searchPlaceholder": "Buscar modelos…",
       "selectedGroup": "Seleccionado",
       "otherGroup": "Otros",
-      "noSearchResults": "Ningún modelo coincide con \"{{query}}\""
+      "noSearchResults": "Ningún modelo coincide con \"{{query}}\"",
+      "selectModelHint": "Aún no hay un modelo seleccionado — elige uno de la lista de abajo.",
+      "keyRequiredHint": "Se requiere una clave API para la inferencia — agrega una para usar este proveedor."
     },
     "getApiKey": "Obtener clave API ->",
     "selectModel": "Seleccionar modelo",
@@ -1065,7 +1067,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Proveedor",
       "run": "Ejecutar prueba",
-      "customEndpoint": "Endpoint personalizado"
+      "customEndpoint": "Endpoint personalizado",
+      "apiKeyMissing": "La clave API de {{provider}} no está configurada. Agrégala en la configuración de Modelos de IA."
     },
     "view": {
       "customPrompt": "Prompt personalizado",

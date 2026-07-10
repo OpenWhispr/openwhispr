@@ -453,7 +453,9 @@
       "searchPlaceholder": "モデルを検索…",
       "selectedGroup": "選択中",
       "otherGroup": "その他",
-      "noSearchResults": "「{{query}}」に一致するモデルはありません"
+      "noSearchResults": "「{{query}}」に一致するモデルはありません",
+      "selectModelHint": "モデルが未選択です — 下のリストから選択してください。",
+      "keyRequiredHint": "推論には API キーが必要です — このプロバイダーを使用するには追加してください。"
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
@@ -1017,7 +1019,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "プロバイダー",
       "run": "テスト実行",
-      "customEndpoint": "カスタムエンドポイント"
+      "customEndpoint": "カスタムエンドポイント",
+      "apiKeyMissing": "{{provider}} の API キーが未設定です。AI モデル設定で追加してください。"
     },
     "view": {
       "customPrompt": "カスタムプロンプト",
