@@ -657,9 +657,8 @@ class ReasoningService extends BaseReasoningService {
 
     const useTemperature = isLocalProvider || isLanCleanup || apiConfig.supportsTemperature;
 
-    // cancelActiveStream() aborts this controller, which streamText propagates
-    // into the model's doStream — including the enterprise IPC proxy, so the
-    // main-process provider request is cancelled too.
+    // cancelActiveStream() aborts this controller; streamText propagates it
+    // into doStream, cancelling the enterprise IPC proxy's request in main.
     const abortController = new AbortController();
     this.streamAbortController = abortController;
 

@@ -2932,9 +2932,8 @@ class IPCHandlers {
       }
     );
 
-    // Streams a LanguageModel doStream call for the renderer's enterprise chat
-    // model shim (src/services/ai/enterpriseChatModel.ts): parts are relayed
-    // verbatim over enterprise-stream-part, ending with {done} or {error}.
+    // Runs doStream for the renderer's enterprise chat model shim; parts are
+    // relayed verbatim over enterprise-stream-part, ending with {done}/{error}.
     this.enterpriseStreamAborts = new Map();
     ipcMain.handle("enterprise-stream-start", async (event, payload) => {
       const {
@@ -2952,8 +2951,8 @@ class IPCHandlers {
       const abortController = new AbortController();
       this.enterpriseStreamAborts.set(streamId, abortController);
       // isDestroyed() stays false across reload/navigation, which wipes the
-      // renderer-side listeners — abort so the provider request isn't billed
-      // for a generation nobody is receiving.
+      // renderer listeners — abort so the provider request isn't billed for
+      // a generation nobody receives.
       const abortOnGone = (_event, _url, isInPlace, isMainFrame) => {
         if (isMainFrame && !isInPlace) abortController.abort();
       };
@@ -3016,9 +3015,8 @@ class IPCHandlers {
       this.enterpriseStreamAborts.delete(streamId);
     });
 
-    // Lists the text models the user's account actually serves in the selected
-    // region, resolved to invocable IDs (bare on-demand IDs or geo-scoped
-    // inference profile IDs).
+    // Lists the text models the account serves in the selected region,
+    // resolved to invocable IDs (bare on-demand or geo-scoped profile IDs).
     ipcMain.handle("bedrock-list-models", async (event, config) => {
       const { mapEnterpriseError } = require("./enterpriseProviderErrors");
       try {

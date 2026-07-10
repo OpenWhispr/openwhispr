@@ -189,7 +189,6 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
     store.setBedrockRegion(region);
     const adjusted = adjustBedrockModelForRegion(reasoningModel, region);
     if (adjusted !== reasoningModel) setReasoningModel(adjusted);
-    // The catalog is region-specific; refresh it if it's open.
     if (catalog.status !== "idle") void loadCatalog(region);
   };
 

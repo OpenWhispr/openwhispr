@@ -11,8 +11,8 @@ import { getEnterpriseCallSettings } from "./enterpriseSettings";
 // streamText and tool execution in the renderer while proxying doStream over
 // IPC: main runs the provider stream and relays each part verbatim.
 
-// Structured-clone whitelist: abortSignal and any future non-serializable
-// fields must not cross the IPC boundary.
+// Structured-clone whitelist — abortSignal and other non-serializable call
+// options must not cross the IPC boundary.
 const SERIALIZABLE_OPTION_KEYS = [
   "prompt",
   "maxOutputTokens",
@@ -94,14 +94,13 @@ export function createEnterpriseChatModel(
             api.enterpriseStreamCancel?.(streamId);
           });
 
-          api
-            .enterpriseStreamStart!({
-              streamId,
-              provider,
-              modelId,
-              config,
-              options: pickSerializableOptions(options),
-            })
+          api.enterpriseStreamStart!({
+            streamId,
+            provider,
+            modelId,
+            config,
+            options: pickSerializableOptions(options),
+          })
             .then((result) => {
               if (result && !result.success) fail(result.error || "Enterprise stream failed");
             })

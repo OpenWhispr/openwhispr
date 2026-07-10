@@ -1,8 +1,6 @@
-// Normalizes Bedrock control-plane listings into invocable picker options.
-// On-demand models are invoked by their bare foundation-model ID; models that
-// only support INFERENCE_PROFILE must be invoked through a geo-scoped
-// cross-region inference profile (us./eu./apac. prefix), so we resolve the
-// profile ID that the target region actually serves.
+// On-demand models are invoked by their bare foundation-model ID;
+// INFERENCE_PROFILE-only models must go through the geo-scoped cross-region
+// profile (us./eu./apac.) that the target region actually serves.
 
 function profileIdByModelId(inferenceProfileSummaries) {
   const map = new Map();
