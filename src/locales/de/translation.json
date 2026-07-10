@@ -535,6 +535,10 @@
       "clientSecret": "Client-Secret",
       "environment": "Datenregion",
       "tenant": "Tenant"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
+      "docsLink": "Zur Dokumentation"
     }
   },
   "hooks": {
@@ -1880,7 +1884,7 @@
         "mistral_voxtral_mini_latest": "Schnelle mehrsprachige Transkription",
         "corti_transcribe": "Medizinische Transkription in klinischer Qualität",
         "xai_grok_stt": "Hochpräzise Spracherkennung von xAI",
-        "tinfoil_voxtral": "Nachweisbar private Transkription, Streaming oder Batch"
+        "tinfoil_voxtral": "Nachweisbar private Transkription"
       },
       "cloud": {
         "openai_gpt_5_2": "Starkes Reasoning-Modell",

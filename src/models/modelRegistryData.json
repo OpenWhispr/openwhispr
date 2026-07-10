@@ -228,7 +228,7 @@
         {
           "id": "voxtral-mini-4b-realtime",
           "name": "Voxtral",
-          "description": "Verifiably private transcription, streaming or batch",
+          "description": "Verifiably private transcription",
           "descriptionKey": "models.descriptions.transcription.tinfoil_voxtral",
           "streaming": true
         }

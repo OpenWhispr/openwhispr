@@ -535,6 +535,10 @@
       "clientSecret": "Secreto de cliente",
       "environment": "Región de datos",
       "tenant": "Tenant"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil transmite con Voxtral Mini 4B y procesa por lotes con Voxtral Small 24B.",
+      "docsLink": "Leer la documentación"
     }
   },
   "hooks": {
@@ -1928,7 +1932,7 @@
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
         "corti_transcribe": "Transcripción médica de nivel clínico",
         "xai_grok_stt": "Reconocimiento de voz de alta precisión por xAI",
-        "tinfoil_voxtral": "Transcripción verificablemente privada, en streaming o por lotes"
+        "tinfoil_voxtral": "Transcripción verificablemente privada"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",
