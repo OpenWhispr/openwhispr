@@ -538,8 +538,7 @@
     },
     "tinfoil": {
       "transportNote": "Tinfoil transmite con Voxtral Mini 4B y procesa por lotes con Voxtral Small 24B.",
-      "docsPrefix": "Lee su",
-      "docsLink": "documentación"
+      "docsLink": "Ver la documentación"
     }
   },
   "hooks": {

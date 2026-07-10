@@ -538,8 +538,7 @@
     },
     "tinfoil": {
       "transportNote": "Tinfoil streamt mit Voxtral Mini 4B und verarbeitet Batches mit Voxtral Small 24B.",
-      "docsPrefix": "Lies ihre",
-      "docsLink": "Dokumentation"
+      "docsLink": "Zur Dokumentation"
     }
   },
   "hooks": {

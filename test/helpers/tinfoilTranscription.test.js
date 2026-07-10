@@ -115,3 +115,35 @@ test("other failures carry the status and body", async () => {
     message: "Tinfoil API Error: 404 The model does not exist.",
   });
 });
+
+test("429 surfaces as PROVIDER_RATE_LIMITED, 5xx as SERVER_ERROR", async () => {
+  const rateLimited = loadTranscription(async () => ({
+    ok: false,
+    status: 429,
+    text: async () => "slow down",
+  }));
+  await assert.rejects(() => rateLimited.transcribeWithTinfoil(AUDIO), {
+    code: "PROVIDER_RATE_LIMITED",
+  });
+
+  const serverError = loadTranscription(async () => ({
+    ok: false,
+    status: 503,
+    text: async () => "unavailable",
+  }));
+  await assert.rejects(() => serverError.transcribeWithTinfoil(AUDIO), { code: "SERVER_ERROR" });
+});
+
+test("forwards the dictionary prompt, and omits it when blank", async () => {
+  let form;
+  const { transcribeWithTinfoil } = loadTranscription(async (_path, init) => {
+    form = init.body;
+    return okResponse("x");
+  });
+
+  await transcribeWithTinfoil({ ...AUDIO, prompt: "Qdrant, Voxtral" });
+  assert.equal(form.get("prompt"), "Qdrant, Voxtral");
+
+  await transcribeWithTinfoil({ ...AUDIO, prompt: "   " });
+  assert.equal(form.get("prompt"), null);
+});

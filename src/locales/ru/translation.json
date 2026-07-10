@@ -538,8 +538,7 @@
     },
     "tinfoil": {
       "transportNote": "Tinfoil использует Voxtral Mini 4B для потоковой обработки и Voxtral Small 24B для пакетной.",
-      "docsPrefix": "Читайте их",
-      "docsLink": "документацию"
+      "docsLink": "Открыть документацию"
     }
   },
   "hooks": {

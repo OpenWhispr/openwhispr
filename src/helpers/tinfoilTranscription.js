@@ -4,11 +4,8 @@ const { tinfoilSecureFetch } = require("./tinfoilSecureClient");
 
 const TINFOIL_TRANSCRIPTION_PATH = "/v1/audio/transcriptions";
 
-/**
- * "Voxtral" is one choice in the picker, but Tinfoil serves it as two models:
- * voxtral-mini-4b-realtime streams over /v1/realtime, and this one handles every
- * path that can't stream — retry, audio upload, and fallbacks out of a session.
- */
+// "Voxtral" is one picker choice but two Tinfoil models: the realtime one streams
+// over /v1/realtime; this batch model handles every non-streaming path.
 function getBatchModel() {
   const provider = (modelRegistryData.transcriptionProviders || []).find((p) => p.id === "tinfoil");
   const model = provider?.batchModel;
@@ -18,12 +15,16 @@ function getBatchModel() {
   return model;
 }
 
-/**
- * Batch transcription over the attested transport. Shares the one SecureClient
- * with realtime dictation and the model catalog, so the enclave is verified once
- * per session and the API key travels per-request.
- */
-async function transcribeWithTinfoil({ audioBuffer, fileName, contentType, language, apiKey }) {
+// Batch transcription over the attested transport, sharing the per-session
+// SecureClient with realtime dictation so the enclave is verified once.
+async function transcribeWithTinfoil({
+  audioBuffer,
+  fileName,
+  contentType,
+  language,
+  prompt,
+  apiKey,
+}) {
   if (!apiKey?.trim()) {
     const error = new Error("Tinfoil API key not configured. Add your key in Settings.");
     error.code = "API_KEY_MISSING";
@@ -36,6 +37,9 @@ async function transcribeWithTinfoil({ audioBuffer, fileName, contentType, langu
   formData.append("model", model);
   if (language && language !== "auto") {
     formData.append("language", language);
+  }
+  if (prompt?.trim()) {
+    formData.append("prompt", prompt.trim());
   }
 
   debugLogger.debug("Tinfoil batch transcription starting", { model, language }, "transcription");
@@ -53,7 +57,14 @@ async function transcribeWithTinfoil({ audioBuffer, fileName, contentType, langu
   }
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    throw new Error(`Tinfoil API Error: ${response.status} ${errorText}`.trim());
+    const error = new Error(`Tinfoil API Error: ${response.status} ${errorText}`.trim());
+    if (response.status === 429) {
+      error.code = "PROVIDER_RATE_LIMITED";
+      error.messageKey = "hooks.audioRecording.errorDescriptions.providerRateLimited";
+    } else if (response.status >= 500) {
+      error.code = "SERVER_ERROR";
+    }
+    throw error;
   }
 
   const data = await response.json();

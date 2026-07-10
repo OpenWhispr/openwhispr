@@ -1040,7 +1040,10 @@ declare global {
       proxyTinfoilTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language?: string;
-      }) => Promise<{ text: string; model: string }>;
+        prompt?: string;
+      }) => Promise<
+        { text: string; model: string } | { error: string; code?: string; messageKey?: string }
+      >;
 
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;

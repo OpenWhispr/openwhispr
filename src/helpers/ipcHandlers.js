@@ -2751,15 +2751,25 @@ class IPCHandlers {
     });
 
     // Enclave attestation is Node-only, so batch transcription is proxied through main.
-    ipcMain.handle("proxy-tinfoil-transcription", async (event, { audioBuffer, language }) => {
-      return transcribeWithTinfoil({
-        audioBuffer: Buffer.from(audioBuffer),
-        fileName: "audio.webm",
-        contentType: "audio/webm",
-        language,
-        apiKey: this.environmentManager.getTinfoilKey(),
-      });
-    });
+    ipcMain.handle(
+      "proxy-tinfoil-transcription",
+      async (event, { audioBuffer, language, prompt }) => {
+        try {
+          return await transcribeWithTinfoil({
+            audioBuffer: Buffer.from(audioBuffer),
+            fileName: "audio.webm",
+            contentType: "audio/webm",
+            language,
+            prompt,
+            apiKey: this.environmentManager.getTinfoilKey(),
+          });
+        } catch (error) {
+          // ipcMain.handle keeps only the message when a promise rejects, dropping
+          // custom props — return the code so the renderer can rebuild the error.
+          return { error: error.message, code: error.code, messageKey: error.messageKey };
+        }
+      }
+    );
 
     ipcMain.handle("get-custom-transcription-key", async () => {
       return this.environmentManager.getCustomTranscriptionKey();

@@ -538,8 +538,7 @@
     },
     "tinfoil": {
       "transportNote": "Tinfoil はストリーミングに Voxtral Mini 4B を、バッチ処理に Voxtral Small 24B を使用します。",
-      "docsPrefix": "詳しくは Tinfoil の",
-      "docsLink": "ドキュメント"
+      "docsLink": "ドキュメントを見る"
     }
   },
   "hooks": {
