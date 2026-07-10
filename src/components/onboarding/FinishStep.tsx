@@ -6,7 +6,7 @@ import ApiKeyInput from "../ui/ApiKeyInput";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { getTranscriptionProviders, modelRegistry } from "../../models/ModelRegistry";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { buildCortiOnboardingPayloads } from "../../helpers/cleanupRouting";
+import { buildCortiOnboardingPayloads } from "../../helpers/reasoningRouting";
 import { USE_CASE_IDS } from "./useCases";
 
 const CORTI_SIGNUP_URL =
@@ -29,7 +29,7 @@ export default function FinishStep({
   const setCloudTranscriptionForAllScopes = useSettingsStore(
     (s) => s.setCloudTranscriptionForAllScopes
   );
-  const setCleanupForAllScopes = useSettingsStore((s) => s.setCleanupForAllScopes);
+  const setCloudReasoningForAllScopes = useSettingsStore((s) => s.setCloudReasoningForAllScopes);
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
@@ -47,17 +47,15 @@ export default function FinishStep({
     cortiClientId.trim().length > 0 && cortiClientSecret.trim().length > 0;
 
   const startWithCorti = () => {
-    // Route cleanup to the Corti reasoning provider too so PHI never leaves
-    // Corti. Skip cleanup routing if the reasoning entry is absent (Part 1 not
-    // shipped) rather than writing an undefined model.
+    // Route all four LLM scopes to Corti too so PHI never leaves Corti; skip
+    // reasoning routing if the Corti reasoning entry is absent (Part 1 not shipped).
     const reasoningProvider = modelRegistry.getCloudProviders().find((p) => p.id === "corti");
-    const { transcription, cleanup } = buildCortiOnboardingPayloads(
+    const { transcription, reasoning } = buildCortiOnboardingPayloads(
       cortiProvider,
-      reasoningProvider,
-      cortiEnvironment
+      reasoningProvider
     );
     setCloudTranscriptionForAllScopes(transcription);
-    if (cleanup) setCleanupForAllScopes(cleanup);
+    if (reasoning) setCloudReasoningForAllScopes(reasoning);
     onFinish(false);
   };
 
@@ -130,9 +128,7 @@ export default function FinishStep({
               {t("onboarding.finish.corti.regionHint")}
             </p>
             <p className="text-xs text-muted-foreground/70">
-              {cortiEnvironment === "eu"
-                ? t("onboarding.finish.corti.cleanupEuHint")
-                : t("onboarding.finish.corti.cleanupUsHint")}
+              {t("onboarding.finish.corti.llmHint")}
             </p>
           </div>
         </div>

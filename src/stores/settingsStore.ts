@@ -8,7 +8,7 @@ import whisperVadConstants from "../constants/whisperVad.json";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
-import { deriveCleanupMode, buildCleanupScopePatches } from "../helpers/cleanupRouting";
+import { deriveReasoningMode, buildReasoningScopePatches } from "../helpers/reasoningRouting";
 import {
   INFERENCE_SCOPES,
   type InferenceScope,
@@ -670,7 +670,7 @@ export interface SettingsState
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
   setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => void;
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => void;
-  setCleanupForAllScopes: (settings: Partial<CleanupSettings>) => void;
+  setCloudReasoningForAllScopes: (settings: Partial<CleanupSettings>) => void;
   updateApiKeys: (keys: Partial<ApiKeySettings>) => void;
   updateChatAgentSettings: (settings: Partial<ChatAgentSettings>) => void;
 }
@@ -1711,24 +1711,40 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
 
   // Apply a cleanup config to dictation, then mirror its cloud routing to the
-  // note-formatting scope — used when onboarding routes cleanup to one provider
-  // so PHI never reaches a second LLM (e.g. Corti for medical providers).
-  setCleanupForAllScopes: (settings: Partial<CleanupSettings>) => {
+  // other three LLM scopes — used when onboarding routes every reasoning scope to
+  // one provider so PHI never reaches a second LLM (e.g. Corti for medical providers).
+  setCloudReasoningForAllScopes: (settings: Partial<CleanupSettings>) => {
     const s = useSettingsStore.getState();
     // Derive the mode from the incoming patch (falling back to current state) so
     // the helper patches are the single source of truth for every scope's mode.
-    const mode = deriveCleanupMode(
+    const mode = deriveReasoningMode(
       settings.cleanupCloudMode ?? s.cleanupCloudMode,
       settings.cleanupProvider ?? s.cleanupProvider
     );
-    const { dictationCleanup, noteFormatting } = buildCleanupScopePatches(settings, mode);
+    const { dictationCleanup, noteFormatting, dictationAgent, chatIntelligence } =
+      buildReasoningScopePatches(settings, mode);
     s.updateCleanupSettings(dictationCleanup);
     s.setCleanupMode(dictationCleanup.cleanupMode);
+    // Each Settings tab selects on its own mode field, so set the mode for every
+    // scope even when the routing fields are absent — otherwise the tab keeps
+    // showing the previous provider despite the new cloud routing.
     if (noteFormatting.provider !== undefined) s.setNoteFormattingProvider(noteFormatting.provider);
     if (noteFormatting.model !== undefined) s.setNoteFormattingModel(noteFormatting.model);
     if (noteFormatting.cloudMode !== undefined)
       s.setNoteFormattingCloudMode(noteFormatting.cloudMode);
     s.setNoteFormattingMode(mode);
+    if (dictationAgent.provider !== undefined)
+      s.setDictationAgentProvider(dictationAgent.provider);
+    if (dictationAgent.model !== undefined) s.setDictationAgentModel(dictationAgent.model);
+    if (dictationAgent.cloudMode !== undefined)
+      s.setDictationAgentCloudMode(dictationAgent.cloudMode);
+    s.setDictationAgentMode(mode);
+    if (chatIntelligence.provider !== undefined)
+      s.setChatAgentProvider(chatIntelligence.provider);
+    if (chatIntelligence.model !== undefined) s.setChatAgentModel(chatIntelligence.model);
+    if (chatIntelligence.cloudMode !== undefined)
+      s.setChatAgentCloudMode(chatIntelligence.cloudMode);
+    s.setChatAgentMode(mode);
   },
 
   updateApiKeys: (keys: Partial<ApiKeySettings>) => {
