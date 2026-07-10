@@ -538,7 +538,8 @@
     },
     "tinfoil": {
       "transportNote": "Tinfoil 流式转录使用 Voxtral Mini 4B，批量转录使用 Voxtral Small 24B。",
-      "docsLink": "查看文档"
+      "docsPrefix": "阅读他们的",
+      "docsLink": "文档"
     }
   },
   "hooks": {

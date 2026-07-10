@@ -1032,6 +1032,7 @@ export default function TranscriptionModelPicker({
                   {selectedCloudProvider === "tinfoil" && (
                     <p className="text-xs text-muted-foreground/70">
                       {t("transcription.tinfoil.transportNote")}{" "}
+                      {t("transcription.tinfoil.docsPrefix")}{" "}
                       <a
                         href={TINFOIL_AUDIO_DOCS_URL}
                         onClick={createExternalLinkHandler(TINFOIL_AUDIO_DOCS_URL)}
