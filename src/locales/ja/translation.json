@@ -449,7 +449,13 @@
       "noModels": "モデルが見つかりません。エンドポイント URL を確認してください。",
       "providerName": "カスタム",
       "ownerLabel": "提供元: {{owner}}",
-      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。"
+      "unableToLoadModels": "エンドポイントからモデルを読み込めませんでした。",
+      "searchPlaceholder": "モデルを検索…",
+      "selectedGroup": "選択中",
+      "otherGroup": "その他",
+      "noSearchResults": "「{{query}}」に一致するモデルはありません",
+      "selectModelHint": "モデルが未選択です — 下のリストから選択してください。",
+      "keyRequiredHint": "推論には API キーが必要です — このプロバイダーを使用するには追加してください。"
     },
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
@@ -498,6 +504,11 @@
         "adcHelp": "Application Default Credentials を使用します。次を実行してください: gcloud auth application-default login",
         "apikeyHelp": "Google AI Studio で取得した Vertex AI Express Mode の API キー。"
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "モデルが利用できません",
+      "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
+      "refreshingModels": "モデルを更新しています…"
     }
   },
   "transcription": {
@@ -1008,7 +1019,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "プロバイダー",
       "run": "テスト実行",
-      "customEndpoint": "カスタムエンドポイント"
+      "customEndpoint": "カスタムエンドポイント",
+      "apiKeyMissing": "{{provider}} の API キーが未設定です。AI モデル設定で追加してください。"
     },
     "view": {
       "customPrompt": "カスタムプロンプト",
@@ -1845,6 +1857,7 @@
   },
   "models": {
     "learnMore": "詳細を見る",
+    "noneAvailable": "利用可能なモデルがありません",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",

@@ -449,7 +449,13 @@
       "noModels": "Модели не найдены. Проверьте URL конечной точки.",
       "providerName": "Пользовательский",
       "ownerLabel": "Автор: {{owner}}",
-      "unableToLoadModels": "Не удалось загрузить модели с конечной точки."
+      "unableToLoadModels": "Не удалось загрузить модели с конечной точки.",
+      "searchPlaceholder": "Поиск моделей…",
+      "selectedGroup": "Выбрано",
+      "otherGroup": "Другое",
+      "noSearchResults": "Нет моделей по запросу «{{query}}»",
+      "selectModelHint": "Модель ещё не выбрана — выберите её из списка ниже.",
+      "keyRequiredHint": "Для инференса требуется API-ключ — добавьте его, чтобы использовать этого провайдера."
     },
     "getApiKey": "Получить API-ключ ->",
     "selectModel": "Выберите модель",
@@ -498,6 +504,11 @@
         "adcHelp": "Использует Application Default Credentials. Выполните: gcloud auth application-default login",
         "apikeyHelp": "API-ключ Vertex AI Express Mode из Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Модель больше недоступна",
+      "modelRetired": "Tinfoil прекратил поддержку {{from}}. Выполнен переход на {{to}}.",
+      "refreshingModels": "Обновление моделей…"
     }
   },
   "transcription": {
@@ -1008,7 +1019,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Провайдер",
       "run": "Запустить тест",
-      "customEndpoint": "Пользовательская конечная точка"
+      "customEndpoint": "Пользовательская конечная точка",
+      "apiKeyMissing": "API-ключ {{provider}} не настроен. Добавьте его в настройках ИИ-моделей."
     },
     "view": {
       "customPrompt": "Пользовательский промпт",
@@ -1845,6 +1857,7 @@
   },
   "models": {
     "learnMore": "Подробнее",
+    "noneAvailable": "Нет доступных моделей",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Быстрое многоязычное распознавание с автоопределением языка (25 языков)",

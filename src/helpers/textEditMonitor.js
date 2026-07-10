@@ -11,17 +11,13 @@ const INITIAL_QUERY_RETRY_DELAY_MS = 300;
 const ACTIVATE_CONFIRM_RETRIES = 6; // Poll the frontmost app until activation lands
 const ACTIVATE_CONFIRM_DELAY_MS = 25;
 
-// AppleScript to enable AXEnhancedUserInterface on the target app.
-// Chromium-based apps (Chrome, Electron, VS Code, Slack, etc.) don't build their
-// accessibility tree until an assistive technology announces itself via this attribute.
-// This is the same technique Grammarly uses on macOS.
-const MACOS_AX_ENABLE_SCRIPT = (pid) =>
-  `tell application "System Events"\n` +
-  `\tset targetProc to first application process whose unix id is ${pid}\n` +
-  `\ttry\n` +
-  `\t\tset value of attribute "AXEnhancedUserInterface" of targetProc to true\n` +
-  `\tend try\n` +
-  `end tell`;
+// Monitoring is strictly read-only: never write AXEnhancedUserInterface (or any
+// AX attribute) on the target app to force its accessibility tree. Flipping that
+// flag switches the whole process into screen-reader mode for its lifetime and
+// blurs the focused editor in some Chromium apps (Claude Desktop, claude.ai),
+// so every dictation after the first pasted into a field that no longer had
+// keyboard focus. Modern Chromium builds the tree on demand when our
+// reads arrive; where it doesn't, we skip auto-learn for that paste instead.
 
 // Returns the character before the cursor for smart-spacing. Output protocol:
 //   "OK:X"   — preceding char is X
@@ -362,26 +358,6 @@ class TextEditMonitor extends EventEmitter {
   }
 
   /**
-   * macOS: tell the target app that an assistive technology is present.
-   * This causes Chromium/Electron apps to build their accessibility tree.
-   */
-  _enableAccessibility(pid) {
-    return new Promise((resolve) => {
-      const script = MACOS_AX_ENABLE_SCRIPT(pid);
-      execFile("osascript", ["-e", script], { timeout: 3000 }, (err) => {
-        if (err) {
-          debugLogger.debug("[TextEditMonitor] macOS: AXEnhancedUserInterface failed", {
-            error: err.message,
-          });
-        } else {
-          debugLogger.debug("[TextEditMonitor] macOS: AXEnhancedUserInterface enabled", { pid });
-        }
-        resolve();
-      });
-    });
-  }
-
-  /**
    * macOS: use the native Swift AXObserver binary for event-based text monitoring.
    * Falls back to osascript polling if the binary fails to start.
    */
@@ -396,9 +372,6 @@ class TextEditMonitor extends EventEmitter {
       targetPid,
       textPreview: originalText.substring(0, 80),
     });
-
-    await this._enableAccessibility(targetPid);
-    if (this.currentOriginalText === null) return;
 
     await new Promise((r) => setTimeout(r, INITIAL_QUERY_DELAY_MS));
     if (this.currentOriginalText === null) return;
@@ -488,15 +461,11 @@ class TextEditMonitor extends EventEmitter {
       textPreview: originalText.substring(0, 80),
     });
 
-    // Enable accessibility on the target app first (needed for Chromium/Electron apps),
-    // then delay before querying to let the paste keystroke be processed.
-    this._enableAccessibility(targetPid).then(() => {
-      if (this.currentOriginalText === null) return; // guard against stopMonitoring()
-      setTimeout(
-        () => this._queryInitialValue(targetPid, originalText, timeoutMs),
-        INITIAL_QUERY_DELAY_MS
-      );
-    });
+    // Delay before querying to let the paste keystroke be processed.
+    setTimeout(
+      () => this._queryInitialValue(targetPid, originalText, timeoutMs),
+      INITIAL_QUERY_DELAY_MS
+    );
   }
 
   /**

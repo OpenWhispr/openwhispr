@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { BYOK_API_KEYS } = require("../config/secretKeys");
 const tokenStore = require("./tokenStore");
 const { classifyAndLog } = require("./networkErrors");
 const GnomeShortcutManager = require("./gnomeShortcut");
@@ -15,6 +16,7 @@ const CortiStreaming = require("./cortiStreaming");
 const OpenAIRealtimeStreaming = require("./openaiRealtimeStreaming");
 const { getCortiToken } = require("./cortiAuth");
 const { createTinfoilRealtimeSocket } = require("./tinfoilSecureClient");
+const { getTinfoilChatModels } = require("./tinfoilCatalog");
 const AudioStorageManager = require("./audioStorage");
 
 // Tinfoil's only realtime STT model — fallback when the renderer omits one.
@@ -822,13 +824,12 @@ class IPCHandlers {
       return this.windowManager.resizeMainWindow(sizeKey);
     });
 
-    ipcMain.handle("get-openai-key", async (event) => {
-      return this.environmentManager.getOpenAIKey();
-    });
-
-    ipcMain.handle("save-openai-key", async (event, key) => {
-      return this.environmentManager.saveOpenAIKey(key);
-    });
+    // Uniform BYOK key channels (get-<base>-key / save-<base>-key) from the
+    // shared manifest — adding a provider needs no handler here.
+    for (const k of BYOK_API_KEYS) {
+      ipcMain.handle(`get-${k.base}-key`, () => this.environmentManager[k.get]());
+      ipcMain.handle(`save-${k.base}-key`, (event, key) => this.environmentManager[k.save](key));
+    }
 
     ipcMain.handle("db-save-transcription", async (event, text, rawText, options) => {
       const result = this.databaseManager.saveTranscription(text, rawText, options);
@@ -2497,6 +2498,10 @@ class IPCHandlers {
 
     ipcMain.handle("open-external", async (event, url) => {
       try {
+        const { protocol } = new URL(url);
+        if (!["http:", "https:", "mailto:"].includes(protocol)) {
+          return { success: false, error: `Blocked URL scheme: ${protocol}` };
+        }
         await shell.openExternal(url);
         return { success: true };
       } catch (error) {
@@ -2631,34 +2636,6 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("get-anthropic-key", async (event) => {
-      return this.environmentManager.getAnthropicKey();
-    });
-
-    ipcMain.handle("get-gemini-key", async (event) => {
-      return this.environmentManager.getGeminiKey();
-    });
-
-    ipcMain.handle("save-gemini-key", async (event, key) => {
-      return this.environmentManager.saveGeminiKey(key);
-    });
-
-    ipcMain.handle("get-groq-key", async (event) => {
-      return this.environmentManager.getGroqKey();
-    });
-
-    ipcMain.handle("save-groq-key", async (event, key) => {
-      return this.environmentManager.saveGroqKey(key);
-    });
-
-    ipcMain.handle("get-xai-key", async () => {
-      return this.environmentManager.getXaiKey();
-    });
-
-    ipcMain.handle("save-xai-key", async (event, key) => {
-      return this.environmentManager.saveXaiKey(key);
-    });
-
     ipcMain.handle(
       "proxy-xai-transcription",
       async (event, { audioBuffer, language, keyterms }) => {
@@ -2694,14 +2671,6 @@ class IPCHandlers {
         return await response.json();
       }
     );
-
-    ipcMain.handle("get-mistral-key", async () => {
-      return this.environmentManager.getMistralKey();
-    });
-
-    ipcMain.handle("save-mistral-key", async (event, key) => {
-      return this.environmentManager.saveMistralKey(key);
-    });
 
     ipcMain.handle(
       "proxy-mistral-transcription",
@@ -2778,12 +2747,8 @@ class IPCHandlers {
       }
     );
 
-    ipcMain.handle("get-tinfoil-key", async () => {
-      return this.environmentManager.getTinfoilKey();
-    });
-
-    ipcMain.handle("save-tinfoil-key", async (event, key) => {
-      return this.environmentManager.saveTinfoilKey(key);
+    ipcMain.handle("get-tinfoil-chat-models", async () => {
+      return getTinfoilChatModels();
     });
 
     ipcMain.handle("get-custom-transcription-key", async () => {
@@ -2989,10 +2954,6 @@ class IPCHandlers {
 
     ipcMain.handle("save-activation-mode", async (event, mode) => {
       return this.environmentManager.saveActivationMode(mode);
-    });
-
-    ipcMain.handle("save-anthropic-key", async (event, key) => {
-      return this.environmentManager.saveAnthropicKey(key);
     });
 
     ipcMain.handle("get-ui-language", async () => {

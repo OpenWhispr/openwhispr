@@ -1,5 +1,25 @@
 const { contextBridge, ipcRenderer, webUtils } = require("electron");
 
+// BYOK API-key bridges, built once instead of hand-listed per key. Sandboxed
+// preloads can't require local modules, so the {base, get, save} tuples are
+// inlined here; keep them in sync with the BYOK_API_KEYS manifest in
+// src/config/secretKeys.js (the main process derives its plumbing from that).
+const BYOK_KEY_BRIDGES = [
+  { base: "openai", get: "getOpenAIKey", save: "saveOpenAIKey" },
+  { base: "anthropic", get: "getAnthropicKey", save: "saveAnthropicKey" },
+  { base: "gemini", get: "getGeminiKey", save: "saveGeminiKey" },
+  { base: "groq", get: "getGroqKey", save: "saveGroqKey" },
+  { base: "xai", get: "getXaiKey", save: "saveXaiKey" },
+  { base: "mistral", get: "getMistralKey", save: "saveMistralKey" },
+  { base: "openrouter", get: "getOpenrouterKey", save: "saveOpenrouterKey" },
+  { base: "tinfoil", get: "getTinfoilKey", save: "saveTinfoilKey" },
+];
+const secretKeyApi = {};
+for (const k of BYOK_KEY_BRIDGES) {
+  secretKeyApi[k.get] = () => ipcRenderer.invoke(`get-${k.base}-key`);
+  secretKeyApi[k.save] = (key) => ipcRenderer.invoke(`save-${k.base}-key`, key);
+}
+
 /**
  * Helper to register an IPC listener and return a cleanup function.
  * Ensures renderer code can easily remove listeners to avoid leaks.
@@ -191,9 +211,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("transcription-updated", listener);
   },
 
-  // Environment variables
-  getOpenAIKey: () => ipcRenderer.invoke("get-openai-key"),
-  saveOpenAIKey: (key) => ipcRenderer.invoke("save-openai-key", key),
+  // BYOK API keys (get/save for every provider in the secretKeys manifest)
+  ...secretKeyApi,
 
   // Clipboard functions
   checkAccessibilityPermission: (silent) =>
@@ -348,29 +367,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   modelCancelDownload: (modelId) => ipcRenderer.invoke("model-cancel-download", modelId),
   onModelDownloadProgress: registerListener("model-download-progress"),
 
-  // Anthropic API
-  getAnthropicKey: () => ipcRenderer.invoke("get-anthropic-key"),
-  saveAnthropicKey: (key) => ipcRenderer.invoke("save-anthropic-key", key),
   getUiLanguage: () => ipcRenderer.invoke("get-ui-language"),
   saveUiLanguage: (language) => ipcRenderer.invoke("save-ui-language", language),
   setUiLanguage: (language) => ipcRenderer.invoke("set-ui-language", language),
 
-  // Gemini API
-  getGeminiKey: () => ipcRenderer.invoke("get-gemini-key"),
-  saveGeminiKey: (key) => ipcRenderer.invoke("save-gemini-key", key),
-
-  // Groq API
-  getGroqKey: () => ipcRenderer.invoke("get-groq-key"),
-  saveGroqKey: (key) => ipcRenderer.invoke("save-groq-key", key),
-
-  // xAI API
-  getXaiKey: () => ipcRenderer.invoke("get-xai-key"),
-  saveXaiKey: (key) => ipcRenderer.invoke("save-xai-key", key),
+  // xAI / Mistral transcription proxies (keys handled by the manifest bridge)
   proxyXaiTranscription: (data) => ipcRenderer.invoke("proxy-xai-transcription", data),
-
-  // Mistral API
-  getMistralKey: () => ipcRenderer.invoke("get-mistral-key"),
-  saveMistralKey: (key) => ipcRenderer.invoke("save-mistral-key", key),
   proxyMistralTranscription: (data) => ipcRenderer.invoke("proxy-mistral-transcription", data),
 
   // Corti API
@@ -379,8 +381,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getCortiClientSecret: () => ipcRenderer.invoke("get-corti-client-secret"),
   saveCortiClientSecret: (key) => ipcRenderer.invoke("save-corti-client-secret", key),
   proxyCortiTranscription: (data) => ipcRenderer.invoke("proxy-corti-transcription", data),
-  getTinfoilKey: () => ipcRenderer.invoke("get-tinfoil-key"),
-  saveTinfoilKey: (key) => ipcRenderer.invoke("save-tinfoil-key", key),
+  getTinfoilChatModels: () => ipcRenderer.invoke("get-tinfoil-chat-models"),
 
   // Custom endpoint API keys
   getCustomTranscriptionKey: () => ipcRenderer.invoke("get-custom-transcription-key"),

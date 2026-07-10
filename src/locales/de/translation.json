@@ -449,7 +449,13 @@
       "noModels": "Keine Modelle zurückgegeben. Prüfen Sie die Endpoint-URL.",
       "providerName": "Benutzerdefiniert",
       "ownerLabel": "Anbieter: {{owner}}",
-      "unableToLoadModels": "Modelle konnten nicht vom Endpoint geladen werden."
+      "unableToLoadModels": "Modelle konnten nicht vom Endpoint geladen werden.",
+      "searchPlaceholder": "Modelle suchen…",
+      "selectedGroup": "Ausgewählt",
+      "otherGroup": "Sonstige",
+      "noSearchResults": "Keine Modelle für „{{query}}“",
+      "selectModelHint": "Noch kein Modell ausgewählt — wählen Sie eines aus der Liste unten.",
+      "keyRequiredHint": "Für die Inferenz ist ein API-Schlüssel erforderlich — fügen Sie einen hinzu, um diesen Anbieter zu nutzen."
     },
     "getApiKey": "API-Schlüssel holen ->",
     "selectModel": "Modell auswählen",
@@ -498,6 +504,11 @@
         "adcHelp": "Verwendet Application Default Credentials. Führen Sie aus: gcloud auth application-default login",
         "apikeyHelp": "API-Schlüssel für Vertex AI Express Mode aus Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Modell nicht mehr verfügbar",
+      "modelRetired": "Tinfoil hat {{from}} eingestellt. Zu {{to}} gewechselt.",
+      "refreshingModels": "Modelle werden aktualisiert…"
     }
   },
   "transcription": {
@@ -1008,7 +1019,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Anbieter",
       "run": "Test ausführen",
-      "customEndpoint": "Benutzerdefinierter Endpoint"
+      "customEndpoint": "Benutzerdefinierter Endpoint",
+      "apiKeyMissing": "{{provider}} API-Schlüssel nicht konfiguriert. Fügen Sie ihn in den KI-Modelle-Einstellungen hinzu."
     },
     "view": {
       "customPrompt": "Benutzerdefinierter Prompt",
@@ -1845,6 +1857,7 @@
   },
   "models": {
     "learnMore": "Mehr erfahren",
+    "noneAvailable": "Keine Modelle verfügbar",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Schnelle mehrsprachige ASR mit automatischer Spracherkennung (25 Sprachen)",

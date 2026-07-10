@@ -1,3 +1,5 @@
+import type { TinfoilCatalogModel } from "../models/tinfoilModels";
+
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
@@ -999,6 +1001,8 @@ declare global {
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;
+      getOpenrouterKey: () => Promise<string | null>;
+      saveOpenrouterKey: (key: string) => Promise<void>;
 
       // xAI API key management
       getXaiKey?: () => Promise<string | null>;
@@ -1032,6 +1036,7 @@ declare global {
       }) => Promise<{ text: string }>;
       getTinfoilKey?: () => Promise<string | null>;
       saveTinfoilKey?: (key: string) => Promise<void>;
+      getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;
 
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;

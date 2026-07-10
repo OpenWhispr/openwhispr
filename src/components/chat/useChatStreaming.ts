@@ -106,6 +106,7 @@ export function useChatStreaming({
         "anthropic",
         "gemini",
         "tinfoil",
+        "openrouter",
       ].includes(settings.chatAgentProvider);
       const localModelCanUseTool =
         isLocalProvider && estimateModelSizeB(settings.chatAgentModel) >= LOCAL_TOOL_MIN_PARAMS_B;

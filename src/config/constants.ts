@@ -77,6 +77,7 @@ export const API_ENDPOINTS = {
   GROQ_BASE: "https://api.groq.com/openai/v1",
   XAI_BASE: "https://api.x.ai/v1",
   MISTRAL_BASE: "https://api.mistral.ai/v1",
+  OPENROUTER_BASE: "https://openrouter.ai/api/v1",
   TRANSCRIPTION_BASE: DEFAULT_TRANSCRIPTION_BASE,
   TRANSCRIPTION: buildApiUrl(DEFAULT_TRANSCRIPTION_BASE, "/audio/transcriptions"),
 } as const;
@@ -92,6 +93,9 @@ export const MODEL_CONSTRAINTS = {
   MODEL_TEST_TIMEOUT: 5000, // 5 seconds for model validation
   INFERENCE_TIMEOUT: 30000, // 30 seconds default (configurable)
 } as const;
+
+// List length above which pickers switch to a searchable variant.
+export const LIST_SEARCH_THRESHOLD = 12;
 
 // Token Limits
 export const TOKEN_LIMITS = {

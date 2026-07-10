@@ -449,7 +449,13 @@
       "noModels": "未返回任何模型，请检查端点 URL。",
       "providerName": "自定义",
       "ownerLabel": "所有者：{{owner}}",
-      "unableToLoadModels": "无法从端点加载模型。"
+      "unableToLoadModels": "无法从端点加载模型。",
+      "searchPlaceholder": "搜索模型…",
+      "selectedGroup": "已选择",
+      "otherGroup": "其他",
+      "noSearchResults": "没有与“{{query}}”匹配的模型",
+      "selectModelHint": "尚未选择模型 — 请从下方列表中选择一个。",
+      "keyRequiredHint": "推理需要 API 密钥 — 请添加密钥以使用此提供商。"
     },
     "getApiKey": "获取你的 API Key ->",
     "selectModel": "选择模型",
@@ -498,6 +504,11 @@
         "adcHelp": "使用 Application Default Credentials。请执行：gcloud auth application-default login",
         "apikeyHelp": "从 Google AI Studio 获取的 Vertex AI Express Mode API 密钥。"
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "模型已不可用",
+      "modelRetired": "Tinfoil 已停用 {{from}}，已切换至 {{to}}。",
+      "refreshingModels": "正在刷新模型…"
     }
   },
   "transcription": {
@@ -1008,7 +1019,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "服务商",
       "run": "运行测试",
-      "customEndpoint": "自定义端点"
+      "customEndpoint": "自定义端点",
+      "apiKeyMissing": "未配置 {{provider}} API 密钥，请在 AI 模型设置中添加。"
     },
     "view": {
       "customPrompt": "自定义提示词",
@@ -1840,6 +1852,7 @@
   },
   "models": {
     "learnMore": "了解更多",
+    "noneAvailable": "没有可用的模型",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多语言语音识别，自动语言检测（25 种语言）",

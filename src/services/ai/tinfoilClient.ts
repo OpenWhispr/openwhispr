@@ -1,5 +1,6 @@
 import type { LanguageModel } from "ai";
 import type { TinfoilAI } from "tinfoil";
+import { refreshTinfoilModels } from "../../models/tinfoilModels";
 
 type TinfoilModule = typeof import("tinfoil");
 type TinfoilAISDKProvider = Awaited<ReturnType<TinfoilModule["createTinfoilAI"]>>;
@@ -28,8 +29,14 @@ function normalizeApiKey(apiKey: string): string {
   return key;
 }
 
+/** Tinfoil adds and retires models often; sync the registry in the background. */
+function syncTinfoilCatalog(): void {
+  void refreshTinfoilModels().catch(() => {});
+}
+
 export async function getTinfoilChatClient(apiKey: string): Promise<TinfoilAI> {
   const key = normalizeApiKey(apiKey);
+  syncTinfoilCatalog();
   const cached = chatClientCache.get(key);
   if (cached) return cached;
 
@@ -50,6 +57,7 @@ export async function getTinfoilChatClient(apiKey: string): Promise<TinfoilAI> {
 
 async function getTinfoilAISDKProvider(apiKey: string): Promise<TinfoilAISDKProvider> {
   const key = normalizeApiKey(apiKey);
+  syncTinfoilCatalog();
   const cached = aiSdkProviderCache.get(key);
   if (cached) return cached;
 

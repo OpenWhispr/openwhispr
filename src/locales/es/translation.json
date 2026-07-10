@@ -449,7 +449,13 @@
       "noModels": "No se devolvieron modelos. Revisa la URL del endpoint.",
       "providerName": "Personalizado",
       "ownerLabel": "Propietario: {{owner}}",
-      "unableToLoadModels": "No se pudieron cargar modelos desde el endpoint."
+      "unableToLoadModels": "No se pudieron cargar modelos desde el endpoint.",
+      "searchPlaceholder": "Buscar modelos…",
+      "selectedGroup": "Seleccionado",
+      "otherGroup": "Otros",
+      "noSearchResults": "Ningún modelo coincide con \"{{query}}\"",
+      "selectModelHint": "Aún no hay un modelo seleccionado — elige uno de la lista de abajo.",
+      "keyRequiredHint": "Se requiere una clave API para la inferencia — agrega una para usar este proveedor."
     },
     "getApiKey": "Obtener clave API ->",
     "selectModel": "Seleccionar modelo",
@@ -498,6 +504,11 @@
         "adcHelp": "Usa Application Default Credentials. Ejecuta: gcloud auth application-default login",
         "apikeyHelp": "Clave API de Vertex AI Express Mode obtenida en Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Modelo ya no disponible",
+      "modelRetired": "Tinfoil retiró {{from}}. Se cambió a {{to}}.",
+      "refreshingModels": "Actualizando modelos…"
     }
   },
   "transcription": {
@@ -1056,7 +1067,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Proveedor",
       "run": "Ejecutar prueba",
-      "customEndpoint": "Endpoint personalizado"
+      "customEndpoint": "Endpoint personalizado",
+      "apiKeyMissing": "La clave API de {{provider}} no está configurada. Agrégala en la configuración de Modelos de IA."
     },
     "view": {
       "customPrompt": "Prompt personalizado",
@@ -1893,6 +1905,7 @@
   },
   "models": {
     "learnMore": "Más información",
+    "noneAvailable": "No hay modelos disponibles",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilingüe rápido con detección automática de idioma (25 idiomas)",

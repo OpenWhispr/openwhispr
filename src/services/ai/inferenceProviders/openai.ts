@@ -124,6 +124,7 @@ export const openaiProvider: InferenceProvider = {
   async call({ text, model, agentName, config, ctx }) {
     const resolvedProvider = config.provider || getSettings().cleanupProvider || "";
     const isCustomProvider = resolvedProvider === "custom";
+    const isOpenRouter = resolvedProvider === "openrouter";
 
     logger.logReasoning("OPENAI_START", {
       model,
@@ -132,7 +133,9 @@ export const openaiProvider: InferenceProvider = {
     });
 
     const overrideKey = isCustomProvider ? config.customApiKey?.trim() : "";
-    const apiKey = overrideKey || (await ctx.getApiKey(isCustomProvider ? "custom" : "openai"));
+    const apiKey =
+      overrideKey ||
+      (await ctx.getApiKey(isCustomProvider ? "custom" : isOpenRouter ? "openrouter" : "openai"));
 
     logger.logReasoning("OPENAI_API_KEY", {
       hasApiKey: !!apiKey,
@@ -146,9 +149,17 @@ export const openaiProvider: InferenceProvider = {
       { role: "user", content: userContent },
     ];
 
-    const openAiBase = config.baseUrl?.trim() || getConfiguredOpenAIBase();
-    await detectServerType(openAiBase);
-    const endpointCandidates = getEndpointCandidates(openAiBase);
+    const openAiBase = isOpenRouter
+      ? API_ENDPOINTS.OPENROUTER_BASE
+      : config.baseUrl?.trim() || getConfiguredOpenAIBase();
+    // OpenRouter speaks Chat Completions only — no /responses probe needed.
+    let endpointCandidates: Array<{ url: string; type: "responses" | "chat" }>;
+    if (isOpenRouter) {
+      endpointCandidates = [{ url: buildApiUrl(openAiBase, "/chat/completions"), type: "chat" }];
+    } else {
+      await detectServerType(openAiBase);
+      endpointCandidates = getEndpointCandidates(openAiBase);
+    }
     const isCustomEndpoint = openAiBase !== API_ENDPOINTS.OPENAI_BASE;
 
     logger.logReasoning("OPENAI_ENDPOINTS", {
@@ -187,7 +198,7 @@ export const openaiProvider: InferenceProvider = {
               )
             );
 
-          const apiConfig = getOpenAiApiConfig(model);
+          const apiConfig = getOpenAiApiConfig(model, resolvedProvider);
           const requestBody: Record<string, unknown> = { model };
 
           if (type === "responses") {
