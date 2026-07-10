@@ -88,6 +88,8 @@ export interface RunActionOptions {
   isCloudMode: boolean;
   modelId: string;
   isMeetingNote?: boolean;
+  /** Opt-in so enhancement never renames a note the user has titled. */
+  allowTitleGeneration?: boolean;
 }
 
 export interface RunActionLabels {
@@ -150,7 +152,7 @@ export function runBackgroundAction(
       if (cancelledFlags.get(noteId)) return;
 
       let title: string | undefined;
-      if (getSettings().autoGenerateNoteTitle) {
+      if (options.allowTitleGeneration && getSettings().autoGenerateNoteTitle) {
         const generated = await generateNoteTitle(enhanced, modelId, providerOverrides);
         if (generated) title = generated;
       }
