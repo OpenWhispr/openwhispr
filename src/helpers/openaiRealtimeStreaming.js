@@ -252,10 +252,12 @@ class OpenAIRealtimeStreaming {
         case "error": {
           const errCode = event.error?.code;
           const errMsg = event.error?.message || "OpenAI Realtime error";
-          if (errCode === "session_expired") {
+          // Only consumers that attach onSessionExpired (meetings) get the
+          // reconnect path; others (dictation) keep the onError/onSessionEnd flow.
+          if (errCode === "session_expired" && this.onSessionExpired) {
             debugLogger.warn("OpenAI Realtime session expired", { message: errMsg });
             this._sessionExpired = true;
-            this.onSessionExpired?.();
+            this.onSessionExpired();
             break;
           }
           const isEmptyBuffer =

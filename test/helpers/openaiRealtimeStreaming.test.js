@@ -243,6 +243,25 @@ test("session_expired error fires onSessionExpired instead of onError and sets t
   assert.equal(streaming._sessionExpired, true);
 });
 
+test("session_expired without an onSessionExpired handler falls through to onError (dictation path)", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  let errorMessage = null;
+  streaming.onError = (err) => {
+    errorMessage = err.message;
+  };
+
+  streaming.handleMessage(
+    JSON.stringify({
+      type: "error",
+      error: { code: "session_expired", message: "Your session hit the maximum duration." },
+    })
+  );
+
+  assert.equal(errorMessage, "Your session hit the maximum duration.");
+  assert.equal(streaming._sessionExpired, false);
+});
+
 test("non-session_expired error fires onError normally", async () => {
   const OpenAIRealtimeStreaming = (await load()).default;
   const streaming = new OpenAIRealtimeStreaming();
