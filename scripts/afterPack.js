@@ -10,8 +10,8 @@
 //    user flags from ~/.config/open-whispr-flags.conf, and falls back to
 //    --no-sandbox where the Chromium sandbox cannot work (AppImage/tar.gz
 //    on distros that restrict unprivileged user namespaces).
-// 3. Fails the build if required binaries (ffmpeg-static, ps-list vendor exe)
-//    are missing from app.asar.unpacked/.
+// 3. Fails the build if required binaries (ffmpeg-static, ps-list vendor exe,
+//    onnx worker script) are missing from app.asar.unpacked/.
 
 const fs = require("fs");
 const path = require("path");
@@ -203,11 +203,8 @@ function verifyMeetingAecHelper(context) {
 }
 
 function verifyUnpackedBinaries(context) {
-  const unpackedModulesDir = path.join(
-    resolveResourcesDir(context),
-    "app.asar.unpacked",
-    "node_modules"
-  );
+  const unpackedDir = path.join(resolveResourcesDir(context), "app.asar.unpacked");
+  const unpackedModulesDir = path.join(unpackedDir, "node_modules");
 
   const isWindows = context.electronPlatformName === "win32";
 
@@ -219,6 +216,13 @@ function verifyUnpackedBinaries(context) {
   if (!fs.existsSync(ffmpegPath)) {
     throw new Error(
       `afterPack: missing ${ffmpegPath} — ffmpeg-static was not unpacked from app.asar (asarUnpack/packaging failure); the packed app cannot spawn FFmpeg`
+    );
+  }
+
+  const onnxWorkerPath = path.join(unpackedDir, "src", "workers", "onnxWorker.js");
+  if (!fs.existsSync(onnxWorkerPath)) {
+    throw new Error(
+      `afterPack: missing ${onnxWorkerPath} — src/workers was not unpacked from app.asar (asarUnpack/packaging failure); the ONNX utility process would crash-loop in the packed app`
     );
   }
 
