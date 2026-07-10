@@ -134,8 +134,6 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
   const store = useSettingsStore();
   const suggestedModels = useSuggestedModels("bedrock");
 
-  // Cross-region inference profiles are geo-scoped, so suggested model IDs
-  // must carry the prefix matching the selected region (us./eu./apac.).
   const regionModels = useMemo(
     () =>
       suggestedModels.map((m) => ({
