@@ -144,6 +144,12 @@ class KDEShortcutManager {
 
     try {
       this.bus = dbusModule.sessionBus();
+      // Without a listener, async socket errors (e.g. a stale
+      // DBUS_SESSION_BUS_ADDRESS) crash the process as an unhandled
+      // "error" event — sessionBus() returns before connecting.
+      this.bus.connection.on("error", (err) => {
+        debugLogger.log("[KDEShortcut] D-Bus connection error:", err.message);
+      });
       this.kglobalaccel = await new Promise((resolve, reject) => {
         this.bus
           .getService("org.kde.kglobalaccel")
@@ -248,7 +254,9 @@ class KDEShortcutManager {
       // Pre-registration conflict check via low-level D-Bus call
       try {
         const dbusModule = getDBus();
-        const reply = await new Promise((resolve, reject) => {
+        // The invoke callback receives the unwrapped first return value (the
+        // aas list of owner actionIds), not a message object with a body.
+        const owners = await new Promise((resolve, reject) => {
           this.bus.invoke(
             {
               type: dbusModule.messageType.methodCall,
@@ -265,7 +273,6 @@ class KDEShortcutManager {
             }
           );
         });
-        const owners = reply.body?.[0];
         if (Array.isArray(owners) && owners.length > 0) {
           const otherOwners = owners.filter(
             (aid) => Array.isArray(aid) && aid[0] !== COMPONENT_NAME

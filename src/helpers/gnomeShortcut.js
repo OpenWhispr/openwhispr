@@ -136,6 +136,12 @@ class GnomeShortcutManager {
 
     try {
       this.bus = dbusModule.sessionBus();
+      // Without a listener, async socket errors (e.g. a stale
+      // DBUS_SESSION_BUS_ADDRESS) crash the process as an unhandled
+      // "error" event — sessionBus() returns before connecting.
+      this.bus.connection.on("error", (err) => {
+        debugLogger.log("[GnomeShortcut] D-Bus connection error:", err.message);
+      });
       this.bus.requestName(DBUS_SERVICE_NAME, 0);
       this.bus.exportInterface(
         {
