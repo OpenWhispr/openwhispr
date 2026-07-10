@@ -15,3 +15,6 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Run tests
         run: npm test
+        env:
+          # keeps require("electron") from throwing when postinstall was skipped
+          ELECTRON_OVERRIDE_DIST_PATH: /tmp
