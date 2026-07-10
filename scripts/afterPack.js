@@ -10,6 +10,8 @@
 //    user flags from ~/.config/open-whispr-flags.conf, and falls back to
 //    --no-sandbox where the Chromium sandbox cannot work (AppImage/tar.gz
 //    on distros that restrict unprivileged user namespaces).
+// 3. Fails the build if required binaries (ffmpeg-static, ps-list vendor exe)
+//    are missing from app.asar.unpacked/.
 
 const fs = require("fs");
 const path = require("path");
@@ -200,6 +202,43 @@ function verifyMeetingAecHelper(context) {
   }
 }
 
+function verifyUnpackedBinaries(context) {
+  const unpackedModulesDir = path.join(
+    resolveResourcesDir(context),
+    "app.asar.unpacked",
+    "node_modules"
+  );
+
+  const isWindows = context.electronPlatformName === "win32";
+
+  const ffmpegPath = path.join(
+    unpackedModulesDir,
+    "ffmpeg-static",
+    isWindows ? "ffmpeg.exe" : "ffmpeg"
+  );
+  if (!fs.existsSync(ffmpegPath)) {
+    throw new Error(
+      `afterPack: missing ${ffmpegPath} — ffmpeg-static was not unpacked from app.asar (asarUnpack/packaging failure); the packed app cannot spawn FFmpeg`
+    );
+  }
+
+  // electron-builder strips *.exe from node_modules on non-Windows targets,
+  // so the ps-list vendor executable only exists in Windows builds.
+  if (isWindows) {
+    const psListVendorDir = path.join(unpackedModulesDir, "ps-list", "vendor");
+    const hasFastlist =
+      fs.existsSync(psListVendorDir) &&
+      fs.readdirSync(psListVendorDir).some((name) => /^fastlist-.*\.exe$/.test(name));
+    if (!hasFastlist) {
+      throw new Error(
+        `afterPack: no fastlist-*.exe in ${psListVendorDir} — ps-list vendor executable was not unpacked from app.asar (asarUnpack/packaging failure); Windows process detection would break`
+      );
+    }
+  }
+
+  console.log("  afterPack: verified unpacked bundled binaries");
+}
+
 // ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
@@ -208,5 +247,6 @@ exports.default = async function (context) {
   stripOnnxruntimeBinaries(context);
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
+  verifyUnpackedBinaries(context);
   registerMacResourceBinariesForSigning(context);
 };
