@@ -5,6 +5,7 @@ const GnomeShortcutManager = require("./gnomeShortcut");
 const HyprlandShortcutManager = require("./hyprlandShortcut");
 const KDEShortcutManager = require("./kdeShortcut");
 const { i18nMain } = require("./i18nMain");
+const { parseHotkeyList } = require("./hotkeyList");
 
 // Delay to ensure localStorage is accessible after window load
 const HOTKEY_REGISTRATION_DELAY_MS = 1000;
@@ -82,9 +83,11 @@ const SUGGESTED_HOTKEYS = {
 class HotkeyManager extends EventEmitter {
   constructor() {
     super();
+    // Each slot holds a list of hotkeys (#936). `accelerators` mirrors `hotkeys`
+    // index-for-index (null for native-listener entries).
     this.slots = new Map();
     const defaultDictation = process.platform === "darwin" ? "GLOBE" : "Control+Super";
-    this.slots.set("dictation", { hotkey: defaultDictation, callback: null, accelerator: null });
+    this.slots.set("dictation", { hotkeys: [defaultDictation], callback: null, accelerators: [] });
     this.isInitialized = false;
     this.isListeningMode = false;
     this.gnomeManager = null;
@@ -95,14 +98,26 @@ class HotkeyManager extends EventEmitter {
     this.useKDE = false;
   }
 
-  // Backward-compatible property accessors
+  // Ensure a slot exists and return it (slots always use the list shape).
+  _ensureSlot(slotName) {
+    let slot = this.slots.get(slotName);
+    if (!slot) {
+      slot = { hotkeys: [], callback: null, accelerators: [] };
+      this.slots.set(slotName, slot);
+    }
+    if (!Array.isArray(slot.hotkeys)) slot.hotkeys = [];
+    if (!Array.isArray(slot.accelerators)) slot.accelerators = [];
+    return slot;
+  }
+
+  // Primary (first) dictation hotkey; setting it replaces the whole list.
   get currentHotkey() {
-    return this.slots.get("dictation")?.hotkey ?? null;
+    return this.slots.get("dictation")?.hotkeys?.[0] ?? null;
   }
 
   set currentHotkey(value) {
-    const slot = this.slots.get("dictation") || { hotkey: null, callback: null, accelerator: null };
-    slot.hotkey = value;
+    const slot = this._ensureSlot("dictation");
+    slot.hotkeys = value ? [value] : [];
     this.slots.set("dictation", slot);
   }
 
@@ -111,7 +126,7 @@ class HotkeyManager extends EventEmitter {
   }
 
   set hotkeyCallback(value) {
-    const slot = this.slots.get("dictation") || { hotkey: null, callback: null, accelerator: null };
+    const slot = this._ensureSlot("dictation");
     slot.callback = value;
     this.slots.set("dictation", slot);
   }
@@ -167,8 +182,28 @@ class HotkeyManager extends EventEmitter {
     return suggestions.filter((s) => s !== failedHotkey).slice(0, 3);
   }
 
-  async registerSlot(slotName, hotkey, callback) {
-    this.unregisterSlot(slotName);
+  async registerSlot(slotName, hotkeyInput, callback, options) {
+    const hotkeys = parseHotkeyList(hotkeyInput);
+    if (hotkeys.length === 0) {
+      return {
+        success: false,
+        error: i18nMain.t("hotkey.errors.registrationFailed", {
+          hotkey: String(hotkeyInput ?? ""),
+        }),
+      };
+    }
+    // GNOME/KDE/Hyprland bind one accelerator per slot, so they use the primary
+    // (first) hotkey; the globalShortcut path below registers the whole list.
+    const hotkey = hotkeys[0];
+    if (
+      hotkeys.length > 1 &&
+      ((this.useGnome && GNOME_NATIVE_SLOTS.has(slotName)) ||
+        (this.useKDE && slotName !== "cancel"))
+    ) {
+      debugLogger.log(
+        `[HotkeyManager] Slot "${slotName}" has ${hotkeys.length} hotkeys but this Linux desktop backend only applies the primary ("${hotkey}")`
+      );
+    }
 
     // On GNOME (X11 or Wayland), route named slots through native gsettings
     if (this.useGnome && this.gnomeManager && GNOME_NATIVE_SLOTS.has(slotName)) {
@@ -182,6 +217,8 @@ class HotkeyManager extends EventEmitter {
           error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
         };
       }
+
+      this.unregisterSlot(slotName);
 
       if (slotName === "agent") {
         this.gnomeManager.setAgentCallback(callback);
@@ -202,10 +239,10 @@ class HotkeyManager extends EventEmitter {
         };
       }
 
-      const slot = this.slots.get(slotName) || { hotkey: null, callback: null, accelerator: null };
-      slot.hotkey = hotkey;
+      const slot = this._ensureSlot(slotName);
+      slot.hotkeys = [hotkey];
       slot.callback = callback;
-      slot.accelerator = null;
+      slot.accelerators = [];
       this.slots.set(slotName, slot);
 
       debugLogger.log(
@@ -218,6 +255,8 @@ class HotkeyManager extends EventEmitter {
     // Temporary slots like "cancel" stay on globalShortcut to avoid stale
     // KGlobalAccel registrations after crash (Escape would stop working system-wide).
     if (this.useKDE && this.kdeManager && slotName !== "cancel") {
+      this.unregisterSlot(slotName);
+
       if (slotName === "agent") {
         this.kdeManager.setAgentCallback(callback);
       }
@@ -234,19 +273,19 @@ class HotkeyManager extends EventEmitter {
         return { success: false, error: reason };
       }
 
-      const slot = this.slots.get(slotName) || { hotkey: null, callback: null, accelerator: null };
-      slot.hotkey = hotkey;
+      const slot = this._ensureSlot(slotName);
+      slot.hotkeys = [hotkey];
       slot.callback = callback;
-      slot.accelerator = null;
+      slot.accelerators = [];
       this.slots.set(slotName, slot);
 
       debugLogger.log(`[HotkeyManager] KDE slot "${slotName}" set to "${hotkey}"`);
       return { success: true, hotkey };
     }
 
-    const result = this.setupShortcuts(hotkey, callback, slotName);
+    const result = this.setupShortcuts(hotkeys, callback, slotName, options);
     if (result.success) {
-      const slot = this.slots.get(slotName) || {};
+      const slot = this._ensureSlot(slotName);
       slot.callback = callback;
       this.slots.set(slotName, slot);
     }
@@ -255,7 +294,7 @@ class HotkeyManager extends EventEmitter {
 
   unregisterSlot(slotName) {
     const slot = this.slots.get(slotName);
-    if (!slot || !slot.hotkey) return;
+    if (!slot || !(slot.hotkeys && slot.hotkeys.length)) return;
 
     // On KDE (X11 or Wayland), persistent slots are managed via KGlobalAccel
     if (this.useKDE && this.kdeManager && slotName !== "cancel") {
@@ -265,8 +304,8 @@ class HotkeyManager extends EventEmitter {
           err.message
         );
       });
-      slot.hotkey = null;
-      slot.accelerator = null;
+      slot.hotkeys = [];
+      slot.accelerators = [];
       return;
     }
 
@@ -278,31 +317,54 @@ class HotkeyManager extends EventEmitter {
           err.message
         );
       });
-      slot.hotkey = null;
-      slot.accelerator = null;
+      slot.hotkeys = [];
+      slot.accelerators = [];
       return;
     }
 
-    const hk = slot.hotkey;
-    if (
-      !isGlobeLikeHotkey(hk) &&
-      !isMouseButtonHotkey(hk) &&
-      !isRightSideModifier(hk) &&
-      !isModifierOnlyHotkey(hk)
-    ) {
-      const accel = normalizeToAccelerator(hk);
-      try {
-        globalShortcut.unregister(accel);
-      } catch {
-        // already unregistered
+    for (const hk of slot.hotkeys || []) {
+      if (
+        !isGlobeLikeHotkey(hk) &&
+        !isMouseButtonHotkey(hk) &&
+        !isRightSideModifier(hk) &&
+        !isModifierOnlyHotkey(hk)
+      ) {
+        const accel = normalizeToAccelerator(hk);
+        try {
+          globalShortcut.unregister(accel);
+        } catch {
+          // already unregistered
+        }
       }
     }
-    slot.hotkey = null;
-    slot.accelerator = null;
+    slot.hotkeys = [];
+    slot.accelerators = [];
   }
 
+  // Primary (first) hotkey for a slot — back-compat for callers that expect a
+  // single value (display, GNOME/KDE native paths).
   getSlotHotkey(slotName) {
-    return this.slots.get(slotName)?.hotkey ?? null;
+    return this.slots.get(slotName)?.hotkeys?.[0] ?? null;
+  }
+
+  // Full list of hotkeys bound to a slot.
+  getSlotHotkeys(slotName) {
+    return [...(this.slots.get(slotName)?.hotkeys ?? [])];
+  }
+
+  // True if `key` is one of the hotkeys bound to `slotName`.
+  slotHasHotkey(slotName, key) {
+    if (!key) return false;
+    return (this.slots.get(slotName)?.hotkeys ?? []).includes(key);
+  }
+
+  // Name of the slot that owns `key`, or null. First match wins.
+  findSlotByHotkey(key) {
+    if (!key) return null;
+    for (const [slotName, slot] of this.slots) {
+      if ((slot.hotkeys ?? []).includes(key)) return slotName;
+    }
+    return null;
   }
 
   /**
@@ -311,165 +373,195 @@ class HotkeyManager extends EventEmitter {
    * register through globalShortcut, and in push-to-talk mode dictation also needs
    * raw key-down/key-up events. Only the dictation slot supports push-to-talk;
    * every other slot is tap-to-toggle. Globe/mouse hotkeys are macOS-only.
+   * Each slot may bind several hotkeys, so we evaluate every one.
    */
   getNativeListenerKeys(activationMode) {
     const keys = [];
     for (const [slotName, slot] of this.slots) {
-      const hotkey = slot.hotkey;
-      if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
-      const pushToTalk = slotName === "dictation" && activationMode === "push";
-      if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
-        keys.push(hotkey);
+      for (const hotkey of slot.hotkeys ?? []) {
+        if (!hotkey || isGlobeLikeHotkey(hotkey) || isMouseButtonHotkey(hotkey)) continue;
+        const pushToTalk = slotName === "dictation" && activationMode === "push";
+        if (pushToTalk || isModifierOnlyHotkey(hotkey) || isRightSideModifier(hotkey)) {
+          keys.push(hotkey);
+        }
       }
     }
     return keys;
   }
 
-  setupShortcuts(hotkey = "Control+Super", callback, slotName = "dictation") {
-    if (!callback) {
-      throw new Error(i18nMain.t("hotkey.errors.callbackRequired"));
-    }
-
-    const slot = this.slots.get(slotName) || { hotkey: null, callback: null, accelerator: null };
-    this.slots.set(slotName, slot);
-
-    debugLogger.log(`[HotkeyManager] Setting up hotkey: "${hotkey}" for slot "${slotName}"`);
-    debugLogger.log(`[HotkeyManager] Platform: ${process.platform}, Arch: ${process.arch}`);
-    debugLogger.log(`[HotkeyManager] Current hotkey for slot: "${slot.hotkey}"`);
-
-    const checkAccelerator = normalizeToAccelerator(hotkey);
-    if (
-      hotkey === slot.hotkey &&
-      !isGlobeLikeHotkey(hotkey) &&
-      !isMouseButtonHotkey(hotkey) &&
-      !isRightSideModifier(hotkey) &&
-      !isModifierOnlyHotkey(hotkey) &&
-      globalShortcut.isRegistered(checkAccelerator)
-    ) {
-      debugLogger.log(
-        `[HotkeyManager] Hotkey "${hotkey}" is already registered for slot "${slotName}", no change needed`
-      );
-      return { success: true, hotkey };
-    }
-
-    const previousHotkey = slot.hotkey;
-
-    // Unregister the previous hotkey for this slot (skip native-listener-only hotkeys)
-    if (
-      previousHotkey &&
-      !isGlobeLikeHotkey(previousHotkey) &&
-      !isMouseButtonHotkey(previousHotkey) &&
-      !isRightSideModifier(previousHotkey) &&
-      !isModifierOnlyHotkey(previousHotkey)
-    ) {
-      const prevAccelerator = normalizeToAccelerator(previousHotkey);
-      try {
-        debugLogger.log(`[HotkeyManager] Unregistering previous hotkey: "${prevAccelerator}"`);
-        globalShortcut.unregister(prevAccelerator);
-      } catch (error) {
-        debugLogger.warn(
-          `[HotkeyManager] Skipping previous hotkey unregister for non-accelerator "${prevAccelerator}": ${error.message}`
-        );
-      }
-    }
-
+  // Register one hotkey without mutating any slot. `accelerator` is null for
+  // hotkeys handled by native listeners.
+  _registerSingleHotkey(hotkey, callback) {
     try {
-      const conflict = this._findSlotConflict(slotName, hotkey);
-      if (conflict) return conflict;
-
       if (isMouseButtonHotkey(hotkey)) {
         if (process.platform !== "darwin") {
-          return {
-            success: false,
-            error: i18nMain.t("hotkey.errors.mouseButtonOnlyMac"),
-          };
+          return { success: false, hotkey, error: i18nMain.t("hotkey.errors.mouseButtonOnlyMac") };
         }
-        slot.hotkey = hotkey;
-        slot.accelerator = null;
         debugLogger.log(
           `[HotkeyManager] Mouse button "${hotkey}" set - using macOS native listener`
         );
-        return { success: true, hotkey };
+        return { success: true, hotkey, accelerator: null };
       }
 
       if (isGlobeLikeHotkey(hotkey)) {
         if (process.platform !== "darwin") {
           debugLogger.log("[HotkeyManager] GLOBE key rejected - not on macOS");
-          return {
-            success: false,
-            error: i18nMain.t("hotkey.errors.globeOnlyMac"),
-          };
+          return { success: false, hotkey, error: i18nMain.t("hotkey.errors.globeOnlyMac") };
         }
-        slot.hotkey = hotkey;
-        slot.accelerator = null;
         debugLogger.log(`[HotkeyManager] GLOBE/Fn key "${hotkey}" set successfully`);
-        return { success: true, hotkey };
+        return { success: true, hotkey, accelerator: null };
       }
 
       if (isRightSideModifier(hotkey)) {
-        slot.hotkey = hotkey;
-        slot.accelerator = null;
         debugLogger.log(
           `[HotkeyManager] Right-side modifier "${hotkey}" set - using native listener`
         );
-        return { success: true, hotkey };
+        return { success: true, hotkey, accelerator: null };
       }
 
       if (isModifierOnlyHotkey(hotkey) && process.platform === "win32") {
-        slot.hotkey = hotkey;
-        slot.accelerator = null;
         debugLogger.log(
           `[HotkeyManager] Modifier-only "${hotkey}" set - using Windows native listener`
         );
-        return { success: true, hotkey };
+        return { success: true, hotkey, accelerator: null };
       }
 
       const accelerator = normalizeToAccelerator(hotkey);
-
-      const alreadyRegistered = globalShortcut.isRegistered(accelerator);
-      debugLogger.log(
-        `[HotkeyManager] Is "${accelerator}" already registered? ${alreadyRegistered}`
-      );
-
       if (process.platform === "linux") {
         globalShortcut.unregister(accelerator);
       }
 
-      const success = globalShortcut.register(accelerator, callback);
+      // Pass the triggering hotkey so shared callbacks act on the one that fired.
+      const success = globalShortcut.register(accelerator, () => callback(hotkey));
       debugLogger.log(`[HotkeyManager] Registration result for "${hotkey}": ${success}`);
-
       if (success) {
-        slot.hotkey = hotkey;
-        slot.accelerator = accelerator;
-        debugLogger.log(`[HotkeyManager] Hotkey "${hotkey}" registered successfully`);
-        return { success: true, hotkey };
-      } else {
-        const failureInfo = this.getFailureReason(accelerator);
-        debugLogger.error("Failed to register hotkey", { error: hotkey, ...failureInfo }, "hotkey");
-        debugLogger.log(`[HotkeyManager] Registration failed:`, failureInfo);
-
-        this._restorePreviousHotkey(previousHotkey, callback);
-
-        let errorMessage = failureInfo.message;
-        if (failureInfo.suggestions.length > 0) {
-          errorMessage += ` ${i18nMain.t("hotkey.errors.trySuggestions", {
-            suggestions: failureInfo.suggestions.join(", "),
-          })}`;
-        }
-
-        return {
-          success: false,
-          error: errorMessage,
-          reason: failureInfo.reason,
-          suggestions: failureInfo.suggestions,
-        };
+        return { success: true, hotkey, accelerator };
       }
+
+      const failureInfo = this.getFailureReason(accelerator);
+      debugLogger.error("Failed to register hotkey", { error: hotkey, ...failureInfo }, "hotkey");
+      return {
+        success: false,
+        hotkey,
+        error: failureInfo.message,
+        reason: failureInfo.reason,
+        suggestions: failureInfo.suggestions,
+      };
     } catch (error) {
-      debugLogger.error("Error setting up shortcuts", { error: error.message }, "hotkey");
-      debugLogger.log(`[HotkeyManager] Exception during registration:`, error.message);
-      this._restorePreviousHotkey(previousHotkey, callback);
-      return { success: false, error: error.message };
+      debugLogger.error("Error setting up shortcut", { error: error.message }, "hotkey");
+      return { success: false, hotkey, error: error.message };
     }
+  }
+
+  /**
+   * Register a slot's hotkey list (string, comma-separated string, or array).
+   * Default is best-effort: succeeds if at least one hotkey registers, with
+   * individual failures in `result.failures`. `atomic: true` rolls the whole
+   * slot back to its previous bindings on any failure.
+   */
+  setupShortcuts(
+    hotkeyInput = "Control+Super",
+    callback,
+    slotName = "dictation",
+    { atomic = false } = {}
+  ) {
+    if (!callback) {
+      throw new Error(i18nMain.t("hotkey.errors.callbackRequired"));
+    }
+
+    const slot = this._ensureSlot(slotName);
+    const desired = parseHotkeyList(hotkeyInput);
+
+    debugLogger.log(
+      `[HotkeyManager] Setting up hotkeys: "${desired.join(", ")}" for slot "${slotName}"`
+    );
+    debugLogger.log(`[HotkeyManager] Platform: ${process.platform}, Arch: ${process.arch}`);
+    debugLogger.log(
+      `[HotkeyManager] Current hotkeys for slot: "${(slot.hotkeys || []).join(", ")}"`
+    );
+
+    if (desired.length === 0) {
+      return {
+        success: false,
+        error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey: "" }),
+      };
+    }
+
+    // Reject if any desired hotkey conflicts with another slot before tearing
+    // down this slot's current registration.
+    for (const hotkey of desired) {
+      const conflict = this._findSlotConflict(slotName, hotkey);
+      if (conflict) return conflict;
+    }
+
+    const previousHotkeys = [...(slot.hotkeys || [])];
+    const previousAccelerators = [...(slot.accelerators || [])];
+
+    // Unregister this slot's previous globalShortcut accelerators.
+    for (const prevAccel of previousAccelerators) {
+      if (!prevAccel) continue;
+      try {
+        debugLogger.log(`[HotkeyManager] Unregistering previous accelerator: "${prevAccel}"`);
+        globalShortcut.unregister(prevAccel);
+      } catch (error) {
+        debugLogger.warn(
+          `[HotkeyManager] Skipping previous unregister for "${prevAccel}": ${error.message}`
+        );
+      }
+    }
+
+    const registeredHotkeys = [];
+    const registeredAccelerators = [];
+    const failures = [];
+    for (const hotkey of desired) {
+      const res = this._registerSingleHotkey(hotkey, callback);
+      if (res.success) {
+        registeredHotkeys.push(res.hotkey);
+        registeredAccelerators.push(res.accelerator ?? null);
+      } else {
+        failures.push(res);
+      }
+    }
+
+    if (registeredHotkeys.length === 0 || (atomic && failures.length > 0)) {
+      // Roll back: unregister anything we just registered, then restore the
+      // previous bindings so the slot keeps working.
+      registeredAccelerators.forEach((accel) => {
+        if (!accel) return;
+        try {
+          globalShortcut.unregister(accel);
+        } catch {
+          // already unregistered
+        }
+      });
+      this._restorePreviousHotkeys(previousHotkeys, previousAccelerators, callback);
+      slot.hotkeys = previousHotkeys;
+      slot.accelerators = previousAccelerators;
+
+      const failureInfo = failures[0] || {};
+      let errorMessage =
+        failureInfo.error || i18nMain.t("hotkey.errors.registrationFailed", { hotkey: desired[0] });
+      const suggestions = failureInfo.suggestions || [];
+      if (suggestions.length > 0) {
+        errorMessage += ` ${i18nMain.t("hotkey.errors.trySuggestions", {
+          suggestions: suggestions.join(", "),
+        })}`;
+      }
+      return { success: false, error: errorMessage, reason: failureInfo.reason, suggestions };
+    }
+
+    slot.hotkeys = registeredHotkeys;
+    slot.accelerators = registeredAccelerators;
+    slot.callback = callback;
+    debugLogger.log(
+      `[HotkeyManager] Slot "${slotName}" registered: "${registeredHotkeys.join(", ")}"`
+    );
+
+    const result = { success: true, hotkey: registeredHotkeys[0], hotkeys: registeredHotkeys };
+    if (failures.length > 0) {
+      result.failures = failures.map((f) => ({ hotkey: f.hotkey, error: f.error }));
+    }
+    return result;
   }
 
   _findSlotConflict(slotName, hotkey) {
@@ -483,8 +575,10 @@ class HotkeyManager extends EventEmitter {
 
     for (const [otherSlotName, otherSlot] of this.slots) {
       if (otherSlotName === slotName) continue;
+      const otherHotkeys = otherSlot.hotkeys || [];
+      const otherAccelerators = otherSlot.accelerators || [];
       const match =
-        otherSlot.hotkey === hotkey || (accelerator && otherSlot.accelerator === accelerator);
+        otherHotkeys.includes(hotkey) || (accelerator && otherAccelerators.includes(accelerator));
       if (match) {
         debugLogger.warn(
           `[HotkeyManager] Hotkey "${hotkey}" conflicts with slot "${otherSlotName}"`
@@ -503,31 +597,27 @@ class HotkeyManager extends EventEmitter {
     return null;
   }
 
-  _restorePreviousHotkey(previousHotkey, callback) {
-    if (
-      !previousHotkey ||
-      isGlobeLikeHotkey(previousHotkey) ||
-      isMouseButtonHotkey(previousHotkey) ||
-      isRightSideModifier(previousHotkey) ||
-      isModifierOnlyHotkey(previousHotkey)
-    ) {
-      return;
-    }
-    const prevAccel = normalizeToAccelerator(previousHotkey);
-    try {
-      const restored = globalShortcut.register(prevAccel, callback);
-      if (restored) {
-        debugLogger.log(
-          `[HotkeyManager] Restored previous hotkey "${previousHotkey}" after failed registration`
+  _restorePreviousHotkeys(previousHotkeys, previousAccelerators, callback) {
+    (previousHotkeys || []).forEach((previousHotkey, i) => {
+      // Native-listener entries (null accelerator) are re-armed by
+      // reconcileNativeKeyListeners instead.
+      const prevAccel = previousAccelerators?.[i];
+      if (!prevAccel) return;
+      try {
+        const restored = globalShortcut.register(prevAccel, () => callback(previousHotkey));
+        if (restored) {
+          debugLogger.log(
+            `[HotkeyManager] Restored previous hotkey "${previousHotkey}" after failed registration`
+          );
+        } else {
+          debugLogger.warn(`[HotkeyManager] Could not restore previous hotkey "${previousHotkey}"`);
+        }
+      } catch (err) {
+        debugLogger.warn(
+          `[HotkeyManager] Exception restoring previous hotkey "${previousHotkey}": ${err.message}`
         );
-      } else {
-        debugLogger.warn(`[HotkeyManager] Could not restore previous hotkey "${previousHotkey}"`);
       }
-    } catch (err) {
-      debugLogger.warn(
-        `[HotkeyManager] Exception restoring previous hotkey "${previousHotkey}": ${err.message}`
-      );
-    }
+    });
   }
 
   async initializeGnomeShortcuts(callback) {
@@ -637,7 +727,8 @@ class HotkeyManager extends EventEmitter {
       if (gnomeOk) {
         const registerGnomeHotkey = async () => {
           try {
-            const hotkey = await this.getSavedHotkey();
+            // DE backends bind one accelerator per slot — use the primary hotkey.
+            const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
             const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
 
             const success = await this.gnomeManager.registerKeybinding(gnomeHotkey);
@@ -682,7 +773,8 @@ class HotkeyManager extends EventEmitter {
       if (hyprlandOk) {
         const registerHyprlandHotkey = async () => {
           try {
-            const hotkey = await this.getSavedHotkey();
+            // DE backends bind one accelerator per slot — use the primary hotkey.
+            const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
 
             const success = await this.hyprlandManager.registerKeybinding(hotkey);
             if (success) {
@@ -724,7 +816,8 @@ class HotkeyManager extends EventEmitter {
       if (kdeOk) {
         const registerKDEHotkey = async () => {
           try {
-            const hotkey = await this.getSavedHotkey();
+            // DE backends bind one accelerator per slot — use the primary hotkey.
+            const hotkey = parseHotkeyList(await this.getSavedHotkey())[0] || DEFAULT_HOTKEY;
             const result = await this.kdeManager.registerKeybinding(hotkey, "dictation", callback);
             if (result === true) {
               this.currentHotkey = hotkey;
@@ -778,6 +871,7 @@ class HotkeyManager extends EventEmitter {
     if (envHotkey) {
       const result = this.setupShortcuts(envHotkey, callback);
       if (result.success) {
+        this._notifyStartupRegistration(envHotkey, result);
         debugLogger.log(`[HotkeyManager] Hotkey "${envHotkey}" registered from env`);
       } else {
         debugLogger.log(`[HotkeyManager] Env hotkey "${envHotkey}" failed, waiting for page`);
@@ -823,7 +917,7 @@ class HotkeyManager extends EventEmitter {
       if (savedHotkey && savedHotkey.trim() !== "") {
         const result = this.setupShortcuts(savedHotkey, callback);
         if (result.success) {
-          this.notifyActiveHotkey(savedHotkey);
+          this._notifyStartupRegistration(savedHotkey, result);
           debugLogger.log(`[HotkeyManager] Restored saved hotkey: "${savedHotkey}"`);
           return;
         }
@@ -1002,6 +1096,14 @@ class HotkeyManager extends EventEmitter {
     }
   }
 
+  // Tell the renderer which hotkeys actually registered and which failed.
+  _notifyStartupRegistration(requestedHotkey, result) {
+    this.notifyActiveHotkey(result.hotkeys ? result.hotkeys.join(",") : requestedHotkey);
+    for (const failure of result.failures || []) {
+      this.notifyHotkeyFailure(failure.hotkey, failure);
+    }
+  }
+
   notifyHotkeyFallback(originalHotkey, fallbackHotkey) {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send("hotkey-fallback-used", {
@@ -1021,43 +1123,43 @@ class HotkeyManager extends EventEmitter {
     }
   }
 
-  async updateHotkey(hotkey, callback) {
+  async updateHotkey(hotkeyInput, callback) {
     if (!callback) {
       throw new Error("Callback function is required for hotkey update");
     }
 
     try {
-      const conflict = this._findSlotConflict("dictation", hotkey);
-      if (conflict) {
-        return { success: false, message: conflict.error, reason: conflict.reason };
+      const hotkeys = parseHotkeyList(hotkeyInput);
+      if (hotkeys.length === 0) {
+        return {
+          success: false,
+          message: i18nMain.t("hotkey.errors.registrationFailed", { hotkey: "" }),
+        };
       }
+      const hotkeyStr = hotkeys.join(",");
+      // DE backends bind one accelerator per slot; extras stay in storage.
+      const primary = hotkeys[0];
 
-      if (isMouseButtonHotkey(hotkey)) {
-        const result = this.setupShortcuts(hotkey, callback);
-        if (result.success) {
-          const saved = await this.saveHotkeyToRenderer(hotkey);
-          if (!saved) {
-            debugLogger.warn(
-              "[HotkeyManager] Mouse button hotkey set but failed to persist to localStorage"
-            );
-          }
-          return { success: true, message: `Hotkey updated to: ${hotkey}` };
+      for (const hotkey of hotkeys) {
+        const conflict = this._findSlotConflict("dictation", hotkey);
+        if (conflict) {
+          return { success: false, message: conflict.error, reason: conflict.reason };
         }
-        return { success: false, message: result.error };
       }
 
       if (this.useGnome && this.gnomeManager) {
-        debugLogger.log(`[HotkeyManager] Updating GNOME hotkey to "${hotkey}"`);
-        const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(hotkey);
+        debugLogger.log(`[HotkeyManager] Updating GNOME hotkey to "${primary}"`);
+        const gnomeHotkey = GnomeShortcutManager.convertToGnomeFormat(primary);
         const success = await this.gnomeManager.updateKeybinding(gnomeHotkey);
         if (!success) {
           return {
             success: false,
-            message: `Failed to update GNOME hotkey to "${hotkey}". Check the format is valid.`,
+            message: i18nMain.t("hotkey.errors.updateFailedCheckFormat", { hotkey: primary }),
           };
         }
-        this.currentHotkey = hotkey;
-        const saved = await this.saveHotkeyToRenderer(hotkey);
+        this.currentHotkey = primary;
+        this.notifyActiveHotkey(primary);
+        const saved = await this.saveHotkeyToRenderer(hotkeyStr);
         if (!saved) {
           debugLogger.warn(
             "[HotkeyManager] GNOME hotkey registered but failed to persist to localStorage"
@@ -1065,21 +1167,22 @@ class HotkeyManager extends EventEmitter {
         }
         return {
           success: true,
-          message: `Hotkey updated to: ${hotkey} (via GNOME native shortcut)`,
+          message: `Hotkey updated to: ${primary} (via GNOME native shortcut)`,
         };
       }
 
       if (this.useHyprland && this.hyprlandManager) {
-        debugLogger.log(`[HotkeyManager] Updating Hyprland hotkey to "${hotkey}"`);
-        const success = await this.hyprlandManager.updateKeybinding(hotkey);
+        debugLogger.log(`[HotkeyManager] Updating Hyprland hotkey to "${primary}"`);
+        const success = await this.hyprlandManager.updateKeybinding(primary);
         if (!success) {
           return {
             success: false,
-            message: `Failed to update Hyprland hotkey to "${hotkey}". Check the format is valid.`,
+            message: i18nMain.t("hotkey.errors.updateFailedCheckFormat", { hotkey: primary }),
           };
         }
-        this.currentHotkey = hotkey;
-        const saved = await this.saveHotkeyToRenderer(hotkey);
+        this.currentHotkey = primary;
+        this.notifyActiveHotkey(primary);
+        const saved = await this.saveHotkeyToRenderer(hotkeyStr);
         if (!saved) {
           debugLogger.warn(
             "[HotkeyManager] Hyprland hotkey registered but failed to persist to localStorage"
@@ -1087,15 +1190,15 @@ class HotkeyManager extends EventEmitter {
         }
         return {
           success: true,
-          message: `Hotkey updated to: ${hotkey} (via Hyprland native shortcut)`,
+          message: `Hotkey updated to: ${primary} (via Hyprland native shortcut)`,
         };
       }
 
       if (this.useKDE && this.kdeManager) {
-        debugLogger.log(`[HotkeyManager] Updating KDE hotkey to "${hotkey}"`);
+        debugLogger.log(`[HotkeyManager] Updating KDE hotkey to "${primary}"`);
         const previousHotkey = this.currentHotkey;
         await this.kdeManager.unregisterKeybinding("dictation");
-        const result = await this.kdeManager.registerKeybinding(hotkey, "dictation", callback);
+        const result = await this.kdeManager.registerKeybinding(primary, "dictation", callback);
         if (result !== true) {
           if (previousHotkey) {
             const restored = await this.kdeManager.registerKeybinding(
@@ -1108,12 +1211,13 @@ class HotkeyManager extends EventEmitter {
             }
           }
           const reason =
-            KDE_FAILURE_REASONS[result]?.(hotkey) ||
-            i18nMain.t("hotkey.errors.registrationFailed", { hotkey });
+            KDE_FAILURE_REASONS[result]?.(primary) ||
+            i18nMain.t("hotkey.errors.registrationFailed", { hotkey: primary });
           return { success: false, message: reason };
         }
-        this.currentHotkey = hotkey;
-        const saved = await this.saveHotkeyToRenderer(hotkey);
+        this.currentHotkey = primary;
+        this.notifyActiveHotkey(primary);
+        const saved = await this.saveHotkeyToRenderer(hotkeyStr);
         if (!saved) {
           debugLogger.warn(
             "[HotkeyManager] KDE hotkey registered but failed to persist to localStorage"
@@ -1121,19 +1225,20 @@ class HotkeyManager extends EventEmitter {
         }
         return {
           success: true,
-          message: `Hotkey updated to: ${hotkey} (via KDE D-Bus shortcut)`,
+          message: `Hotkey updated to: ${primary} (via KDE D-Bus shortcut)`,
         };
       }
 
-      const result = this.setupShortcuts(hotkey, callback);
+      const result = this.setupShortcuts(hotkeys, callback, "dictation", { atomic: true });
       if (result.success) {
-        const saved = await this.saveHotkeyToRenderer(hotkey);
+        this.notifyActiveHotkey(hotkeyStr);
+        const saved = await this.saveHotkeyToRenderer(hotkeyStr);
         if (!saved) {
           debugLogger.warn(
             "[HotkeyManager] Hotkey registered but failed to persist to localStorage"
           );
         }
-        return { success: true, message: `Hotkey updated to: ${hotkey}` };
+        return { success: true, message: `Hotkey updated to: ${hotkeyStr}` };
       } else {
         return {
           success: false,
@@ -1195,8 +1300,8 @@ class HotkeyManager extends EventEmitter {
     for (const slotName of this.slots.keys()) {
       const slot = this.slots.get(slotName);
       if (slot) {
-        slot.hotkey = null;
-        slot.accelerator = null;
+        slot.hotkeys = [];
+        slot.accelerators = [];
       }
     }
     globalShortcut.unregisterAll();
