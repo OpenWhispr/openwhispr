@@ -8,6 +8,7 @@ import TestConnectionButton from "./TestConnectionButton";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
+import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 
 interface EnterpriseProviderConfigProps {
   provider: "bedrock" | "azure" | "vertex";
@@ -133,6 +134,23 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
   const store = useSettingsStore();
   const suggestedModels = useSuggestedModels("bedrock");
 
+  // Cross-region inference profiles are geo-scoped, so suggested model IDs
+  // must carry the prefix matching the selected region (us./eu./apac.).
+  const regionModels = useMemo(
+    () =>
+      suggestedModels.map((m) => ({
+        ...m,
+        value: adjustBedrockModelForRegion(m.value, store.bedrockRegion),
+      })),
+    [suggestedModels, store.bedrockRegion]
+  );
+
+  const handleRegionChange = (region: string) => {
+    store.setBedrockRegion(region);
+    const adjusted = adjustBedrockModelForRegion(reasoningModel, region);
+    if (adjusted !== reasoningModel) setReasoningModel(adjusted);
+  };
+
   const getTestConfig = () => ({
     bedrockRegion: store.bedrockRegion,
     bedrockProfile: store.bedrockAuthMode === "sso" ? store.bedrockProfile : "",
@@ -227,7 +245,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
         <FieldLabel>{t("reasoning.enterprise.region", { defaultValue: "Region" })}</FieldLabel>
         <select
           value={store.bedrockRegion}
-          onChange={(e) => store.setBedrockRegion(e.target.value)}
+          onChange={(e) => handleRegionChange(e.target.value)}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         >
           {BEDROCK_REGIONS.map((r) => (
@@ -238,13 +256,13 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
         </select>
       </div>
 
-      {suggestedModels.length > 0 && (
+      {regionModels.length > 0 && (
         <div className="space-y-1.5">
           <FieldLabel>
             {t("reasoning.enterprise.suggestedModels", { defaultValue: "Suggested Models" })}
           </FieldLabel>
           <ModelCardList
-            models={suggestedModels}
+            models={regionModels}
             selectedModel={reasoningModel}
             onModelSelect={setReasoningModel}
             colorScheme="purple"
