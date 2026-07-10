@@ -614,7 +614,7 @@ export interface SettingsState
 
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
-  setVoiceAgentKey: (key: string) => void;
+  setVoiceAgentKey: (key: string) => Promise<boolean>;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
@@ -660,7 +660,7 @@ export interface SettingsState
 
   setChatAgentModel: (value: string) => void;
   setChatAgentProvider: (value: string) => void;
-  setChatAgentKey: (key: string) => void;
+  setChatAgentKey: (key: string) => Promise<boolean>;
   setChatAgentCloudMode: (value: string) => void;
   setChatAgentMode: (mode: InferenceMode) => void;
   setChatAgentCloudBaseUrl: (value: string) => void;
@@ -695,6 +695,7 @@ function createBooleanSetter(key: string) {
 
 // Setter for hotkeys that must be registered with the main process before
 // being persisted. Rolls back to the previous key if registration fails.
+// Resolves to false on failure so optimistic UIs (HotkeyListInput) can revert.
 function createRegisteredHotkeySetter(
   key: "chatAgentKey" | "voiceAgentKey",
   label: string,
@@ -702,10 +703,10 @@ function createRegisteredHotkeySetter(
     ((hotkey: string) => Promise<{ success: boolean; message: string }>) | undefined,
   fallbackSave?: (hotkey: string) => void
 ) {
-  return (hotkey: string) => {
+  return async (hotkey: string): Promise<boolean> => {
     if (!isBrowser) {
       useSettingsStore.setState({ [key]: hotkey });
-      return;
+      return true;
     }
 
     const registerFn = getRegisterFn();
@@ -713,34 +714,31 @@ function createRegisteredHotkeySetter(
       localStorage.setItem(key, hotkey);
       useSettingsStore.setState({ [key]: hotkey });
       fallbackSave?.(hotkey);
-      return;
+      return true;
     }
 
     const previousKey = useSettingsStore.getState()[key];
 
-    void registerFn(hotkey)
-      .then((result) => {
-        if (!result?.success) {
-          localStorage.setItem(key, previousKey);
-          useSettingsStore.setState({ [key]: previousKey });
-          logger.warn(
-            `Failed to update ${label}`,
-            { hotkey, message: result?.message },
-            "settings"
-          );
-          return;
-        }
+    try {
+      const result = await registerFn(hotkey);
+      if (!result?.success) {
+        localStorage.setItem(key, previousKey);
+        useSettingsStore.setState({ [key]: previousKey });
+        logger.warn(`Failed to update ${label}`, { hotkey, message: result?.message }, "settings");
+        return false;
+      }
 
-        localStorage.setItem(key, hotkey);
-        useSettingsStore.setState({ [key]: hotkey });
-      })
-      .catch((error) => {
-        logger.warn(
-          `Failed to update ${label}`,
-          { hotkey, error: error instanceof Error ? error.message : String(error) },
-          "settings"
-        );
-      });
+      localStorage.setItem(key, hotkey);
+      useSettingsStore.setState({ [key]: hotkey });
+      return true;
+    } catch (error) {
+      logger.warn(
+        `Failed to update ${label}`,
+        { hotkey, error: error instanceof Error ? error.message : String(error) },
+        "settings"
+      );
+      return false;
+    }
   };
 }
 
@@ -929,6 +927,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   vertexApiKey: "",
 
   dictationKey: readString("dictationKey", ""),
+  activeDictationKey: null,
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
@@ -2059,12 +2058,13 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Show the active hotkey in UI (zustand only, not localStorage).
+    // Track what is actually registered, separately from the editable
+    // dictationKey preference so partial registrations never get persisted.
     // May return constructor default during early startup; corrected by dictation-key-active event later.
     try {
       const activeKey = await window.electronAPI?.getActiveDictationKey?.();
       if (activeKey) {
-        useSettingsStore.setState({ dictationKey: activeKey });
+        useSettingsStore.setState({ activeDictationKey: activeKey });
       }
     } catch (err) {
       logger.warn(
@@ -2317,9 +2317,9 @@ export async function initializeSettings(): Promise<void> {
     }
   });
 
-  // Active hotkey updates from backend — zustand only, not localStorage.
+  // Active hotkey updates from backend — display state, never persisted.
   window.electronAPI?.onDictationKeyActive?.((key: string) => {
-    useSettingsStore.setState({ dictationKey: key });
+    useSettingsStore.setState({ activeDictationKey: key });
   });
 
   // Sync settings pushed from main process (e.g., hotkey changed in control panel)

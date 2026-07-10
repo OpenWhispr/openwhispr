@@ -4,6 +4,7 @@ import { MeetingNotificationCard } from "../MeetingNotificationCard";
 import { HotkeyInput } from "../ui/HotkeyInput";
 import { useHotkeyRegistration } from "../../hooks/useHotkeyRegistration";
 import { validateHotkeyForSlot } from "../../utils/hotkeyValidation";
+import { parseHotkeyList, serializeHotkeyList } from "../../utils/hotkeys";
 
 interface MeetingSetupStepProps {
   meetingKey: string;
@@ -74,9 +75,12 @@ export default function MeetingSetupStep({
           </p>
         </div>
         <HotkeyInput
-          value={meetingKey}
+          value={parseHotkeyList(meetingKey)[0] ?? ""}
           onChange={async (newHotkey) => {
-            await registerMeetingHotkey(newHotkey);
+            // Edits the primary meeting hotkey; extra bindings are preserved.
+            await registerMeetingHotkey(
+              serializeHotkeyList([newHotkey, ...parseHotkeyList(meetingKey).slice(1)])
+            );
           }}
           disabled={isRegistering}
           validate={validateMeetingHotkey}

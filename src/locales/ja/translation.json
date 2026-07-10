@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" は別のアプリケーションで既に登録されています。",
       "osReserved": "\"{{hotkey}}\" はデスクトップ環境で予約されている可能性があります。",
       "registrationFailed": "\"{{hotkey}}\" を登録できませんでした。別のアプリケーションで使用されている可能性があります。",
+      "updateFailedCheckFormat": "「{{hotkey}}」へのホットキーの更新に失敗しました。形式が正しいか確認してください。",
       "trySuggestions": "お試しください: {{suggestions}}",
       "slotConflict": "このホットキーは既に{{slot}}で使用されています。"
     }
@@ -927,7 +928,9 @@
     "recording": "記録中",
     "tryShortcut": "Ctrl+Shift+K をお試しください",
     "tryShortcutMac": "⌘⇧K をお試しください",
-    "remove": "ホットキーを削除"
+    "remove": "ホットキーを削除",
+    "addAnother": "ホットキーをもう1つ追加",
+    "duplicate": "すでに追加されています"
   },
   "languageSelector": {
     "noLanguagesFound": "言語が見つかりません",
