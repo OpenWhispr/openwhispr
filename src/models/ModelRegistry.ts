@@ -68,6 +68,8 @@ export interface TranscriptionProviderData {
   name: string;
   baseUrl: string;
   models: TranscriptionModelDefinition[];
+  /** Allows for a stream/batch split */
+  batchModel?: string;
 }
 
 export interface WhisperModelInfo {
@@ -399,6 +401,10 @@ export function getTranscriptionProvider(
 export function getTranscriptionModels(providerId: string): TranscriptionModelDefinition[] {
   const provider = getTranscriptionProvider(providerId);
   return provider?.models || [];
+}
+
+export function getBatchTranscriptionModel(providerId: string): string | undefined {
+  return getTranscriptionProvider(providerId)?.batchModel;
 }
 
 export function getDefaultTranscriptionModel(providerId: string): string {

@@ -543,6 +543,10 @@
       "apiKey": "API Key",
       "environment": "資料區域",
       "tenant": "租戶"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil 串流轉錄使用 Voxtral Mini 4B，批次轉錄使用 Voxtral Small 24B。",
+      "docsLink": "查看文件"
     }
   },
   "hooks": {
@@ -1885,7 +1889,7 @@
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
         "corti_transcribe": "臨床級醫療轉錄",
         "xai_grok_stt": "xAI 高精度語音辨識",
-        "tinfoil_voxtral_mini_realtime": "可驗證的私密串流轉錄"
+        "tinfoil_voxtral": "可驗證的私密轉錄"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",

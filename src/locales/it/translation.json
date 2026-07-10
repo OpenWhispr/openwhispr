@@ -543,6 +543,10 @@
       "apiKey": "Chiave API",
       "environment": "Regione dei dati",
       "tenant": "Tenant"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil trasmette con Voxtral Mini 4B ed elabora i batch con Voxtral Small 24B.",
+      "docsLink": "Leggi la documentazione"
     }
   },
   "hooks": {
@@ -1890,7 +1894,7 @@
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
         "corti_transcribe": "Trascrizione medica di livello clinico",
         "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",
-        "tinfoil_voxtral_mini_realtime": "Trascrizione in streaming verificabilmente privata"
+        "tinfoil_voxtral": "Trascrizione verificabilmente privata"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",

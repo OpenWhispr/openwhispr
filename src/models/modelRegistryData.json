@@ -223,12 +223,13 @@
       "id": "tinfoil",
       "name": "Tinfoil",
       "baseUrl": "https://inference.tinfoil.sh/v1",
+      "batchModel": "voxtral-small-24b",
       "models": [
         {
           "id": "voxtral-mini-4b-realtime",
-          "name": "Voxtral Mini Realtime",
-          "description": "Verifiably private streaming transcription",
-          "descriptionKey": "models.descriptions.transcription.tinfoil_voxtral_mini_realtime",
+          "name": "Voxtral",
+          "description": "Verifiably private transcription",
+          "descriptionKey": "models.descriptions.transcription.tinfoil_voxtral",
           "streaming": true
         }
       ]

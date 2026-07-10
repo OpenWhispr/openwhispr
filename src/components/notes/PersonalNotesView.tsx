@@ -58,6 +58,7 @@ import { MEETINGS_FOLDER_NAME, findDefaultFolder } from "./shared";
 import logger from "../../utils/logger";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import { serializeTranscriptSegments } from "../../utils/transcriptSpeakerState";
+import { resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   useNotes,
   useActiveNoteId,
@@ -232,7 +233,7 @@ export default function PersonalNotesView({
       folderId: note?.folder_id ?? null,
       seedSegments,
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: note?.expected_speaker_count ?? null,
+      expectedCount: resolveExpectedSpeakerCount(note),
     });
   }, [notes]);
 
@@ -521,7 +522,7 @@ export default function PersonalNotesView({
       folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
       seedSegments,
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: note?.expected_speaker_count ?? null,
+      expectedCount: resolveExpectedSpeakerCount(note),
     });
     onMeetingRecordingRequestHandled?.();
   }, [meetingRecordingRequest, activeNoteId, notes, onMeetingRecordingRequestHandled]);

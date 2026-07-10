@@ -23,12 +23,13 @@ import {
   isCloudCleanupMode,
   isCloudDictationAgentMode,
 } from "../stores/settingsStore";
-import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { getBatchTranscriptionModel, getTranscriptionProvider } from "../models/ModelRegistry";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isSelfHostedTranscription,
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
+import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
 import { detectAgentName } from "../config/agentDetection";
 import { resolveDictationRouteKind, resolveDictationAgentReachability } from "./dictationRouting";
 import { resolvePrompt } from "../config/prompts";
@@ -171,13 +172,13 @@ const STREAMING_PROVIDERS = {
       window.electronAPI.dictationRealtimeWarmup({
         ...opts,
         provider: "tinfoil-realtime",
-        preview: getSettings().showTranscriptionPreview,
+        preview: true,
       }),
     start: (opts) =>
       window.electronAPI.dictationRealtimeStart({
         ...opts,
         provider: "tinfoil-realtime",
-        preview: getSettings().showTranscriptionPreview,
+        preview: true,
       }),
     send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
     stop: () => window.electronAPI.dictationRealtimeStop(),
@@ -1694,6 +1695,41 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       const apiKey = await this.getAPIKey();
       const optimizedAudio = audioBlob;
 
+      // Dispatch before endpoint resolution (which defaults to OpenAI and would leak
+      // the key). Self-hosted wins, so a leftover "tinfoil" provider isn't diverted here.
+      if (provider === "tinfoil" && !isSelfHostedTranscription(apiSettings)) {
+        if (!window.electronAPI?.proxyTinfoilTranscription) {
+          throw new Error("Tinfoil transcription is unavailable in this window");
+        }
+        const dictionaryPrompt = this.getCustomDictionaryPrompt();
+        const apiCallStart = performance.now();
+        const result = await window.electronAPI.proxyTinfoilTranscription({
+          audioBuffer: await optimizedAudio.arrayBuffer(),
+          language,
+          prompt: dictionaryPrompt || undefined,
+        });
+        if (result?.error) {
+          const err = new Error(result.error);
+          if (result.code) err.code = result.code;
+          if (result.messageKey) err.messageKey = result.messageKey;
+          throw err;
+        }
+        const proxyText = result?.text;
+        if (!proxyText?.trim()) {
+          throw new Error("No text transcribed - Tinfoil response was empty");
+        }
+        if (this.isDictionaryEcho(proxyText)) {
+          throw new Error("No audio detected");
+        }
+        timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+        const reasoningStart = performance.now();
+        const text = await this.processTranscription(proxyText, "tinfoil");
+        timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+        const source = (await this.isReasoningAvailable()) ? "tinfoil-reasoned" : "tinfoil";
+        return { success: true, text, rawText: proxyText, source, timings };
+      }
+
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
       const mimeType = optimizedAudio.type || "audio/webm";
@@ -2101,6 +2137,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return trimmedModel || "whisper-1";
       }
 
+      if (provider === "tinfoil") {
+        return getBatchTranscriptionModel("tinfoil");
+      }
+
       // Validate model matches provider to handle settings migration
       if (trimmedModel) {
         const isGroqModel = trimmedModel.startsWith("whisper-large-v3");
@@ -2137,6 +2177,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   getTranscriptionEndpoint(deploymentName = "") {
     const s = getSettings();
     const currentProvider = s.cloudTranscriptionProvider || "openai";
+
+    // Backstop against the OpenAI-default leak: Tinfoil goes through the main-process
+    // proxy, never here — except self-hosted, which resolves its remote URL below.
+    if (currentProvider === "tinfoil" && !isSelfHostedTranscription(s)) {
+      throw new Error("Tinfoil transcription must go through the attested main-process proxy");
+    }
+
     const currentBaseUrl = s.cloudTranscriptionBaseUrl || "";
     const transcriptionMode = s.transcriptionMode || "";
     const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
@@ -3087,28 +3134,39 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     }
 
-    // If streaming produced no text, fall back to batch transcription
-    // (batch fallback records usage server-side via /api/transcribe)
+    // If streaming produced no text, fall back to batch — routed so BYOK audio
+    // and cloud audio never cross over (see resolveStreamingFallbackTarget).
     let usedBatchFallback = false;
     let batchWarning = null;
     if (!finalText && durationSeconds > 2 && fallbackBlob?.size > 0) {
-      logger.info(
-        "Streaming produced no text, falling back to batch transcription",
-        { durationSeconds, blobSize: fallbackBlob.size },
-        "streaming"
-      );
-      try {
-        const batchResult = await this.processWithOpenWhisprCloud(fallbackBlob, {
-          durationSeconds,
-        });
-        if (batchResult?.text) {
-          finalText = batchResult.text;
-          usedBatchFallback = true;
-          batchWarning = batchResult.warning || null;
-          logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
+      const target = resolveStreamingFallbackTarget(getSettings());
+      if (target === "skip") {
+        logger.warn(
+          "Skipping batch fallback: OpenWhispr Cloud session signed out",
+          {},
+          "streaming"
+        );
+      } else {
+        logger.info(
+          "Streaming produced no text, falling back to batch transcription",
+          { durationSeconds, blobSize: fallbackBlob.size, target },
+          "streaming"
+        );
+        try {
+          // Cloud records usage server-side via /api/transcribe; BYOK has no metering.
+          const batchResult =
+            target === "cloud"
+              ? await this.processWithOpenWhisprCloud(fallbackBlob, { durationSeconds })
+              : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds });
+          if (batchResult?.text) {
+            finalText = batchResult.text;
+            usedBatchFallback = true;
+            batchWarning = batchResult.warning || null;
+            logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
+          }
+        } catch (fallbackErr) {
+          logger.error("Batch fallback failed", { error: fallbackErr.message }, "streaming");
         }
-      } catch (fallbackErr) {
-        logger.error("Batch fallback failed", { error: fallbackErr.message }, "streaming");
       }
     }
 

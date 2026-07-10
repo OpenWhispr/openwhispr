@@ -26,6 +26,7 @@ import {
 } from "../utils/modelPickerStyles";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getRemoteProviderIcon } from "../utils/providerIcons";
+import { createExternalLinkHandler } from "../utils/externalLinks";
 import { API_ENDPOINTS, normalizeBaseUrl } from "../config/constants";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
 import { getCachedPlatform } from "../utils/platform";
@@ -275,6 +276,8 @@ const PROVIDER_CREDENTIALS: Record<
 };
 
 const VALID_CLOUD_PROVIDER_IDS = CLOUD_PROVIDER_TABS.map((p) => p.id);
+
+const TINFOIL_AUDIO_DOCS_URL = "https://docs.tinfoil.sh/models/audio";
 
 const LOCAL_PROVIDER_TABS: Array<{ id: string; name: string; disabled?: boolean }> = [
   { id: "whisper", name: "OpenAI" },
@@ -1026,6 +1029,18 @@ export default function TranscriptionModelPicker({
                     onModelSelect={onCloudModelSelect}
                     colorScheme="purple"
                   />
+                  {selectedCloudProvider === "tinfoil" && (
+                    <p className="text-xs text-muted-foreground/70">
+                      {t("transcription.tinfoil.transportNote")}{" "}
+                      <a
+                        href={TINFOIL_AUDIO_DOCS_URL}
+                        onClick={createExternalLinkHandler(TINFOIL_AUDIO_DOCS_URL)}
+                        className="text-primary/70 hover:text-primary transition-colors"
+                      >
+                        {t("transcription.tinfoil.docsLink")}
+                      </a>
+                    </p>
+                  )}
                 </div>
               </div>
             )}
