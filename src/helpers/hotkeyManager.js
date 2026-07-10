@@ -187,12 +187,17 @@ class HotkeyManager extends EventEmitter {
     return suggestions.filter((s) => s !== failedHotkey).slice(0, 3);
   }
 
-  async registerSlot(slotName, hotkeyInput, callback) {
+  async registerSlot(slotName, hotkeyInput, callback, options) {
     this.unregisterSlot(slotName);
 
     const hotkeys = parseHotkeyList(hotkeyInput);
     if (hotkeys.length === 0) {
-      return { success: false, error: i18nMain.t("hotkey.errors.callbackRequired") };
+      return {
+        success: false,
+        error: i18nMain.t("hotkey.errors.registrationFailed", {
+          hotkey: String(hotkeyInput ?? ""),
+        }),
+      };
     }
     // GNOME/KDE/Hyprland bind one accelerator per slot, so they use the primary
     // (first) hotkey; the globalShortcut path below registers the whole list.
@@ -281,7 +286,7 @@ class HotkeyManager extends EventEmitter {
       return { success: true, hotkey };
     }
 
-    const result = this.setupShortcuts(hotkeys, callback, slotName);
+    const result = this.setupShortcuts(hotkeys, callback, slotName, options);
     if (result.success) {
       const slot = this._ensureSlot(slotName);
       slot.callback = callback;
@@ -432,7 +437,10 @@ class HotkeyManager extends EventEmitter {
         globalShortcut.unregister(accelerator);
       }
 
-      const success = globalShortcut.register(accelerator, callback);
+      // Pass the triggering hotkey so shared callbacks (e.g. dictation's
+      // push-to-talk dispatcher) can act on the hotkey that actually fired
+      // instead of assuming the slot's primary.
+      const success = globalShortcut.register(accelerator, () => callback(hotkey));
       debugLogger.log(`[HotkeyManager] Registration result for "${hotkey}": ${success}`);
       if (success) {
         return { success: true, hotkey, accelerator };
@@ -456,10 +464,19 @@ class HotkeyManager extends EventEmitter {
   /**
    * Register a slot's full hotkey list via globalShortcut / native listeners.
    * Accepts a single hotkey string, a comma-separated string, or an array.
-   * Succeeds if at least one hotkey registers; any individual failures are
-   * reported in `result.failures`.
+   *
+   * By default (startup restore) registration is best-effort: it succeeds if at
+   * least one hotkey registers and reports individual failures in
+   * `result.failures`. With `atomic: true` (interactive updates) any failure
+   * rolls the whole slot back to its previous bindings and returns the failure,
+   * so the UI never shows a partially-applied list.
    */
-  setupShortcuts(hotkeyInput = "Control+Super", callback, slotName = "dictation") {
+  setupShortcuts(
+    hotkeyInput = "Control+Super",
+    callback,
+    slotName = "dictation",
+    { atomic = false } = {}
+  ) {
     if (!callback) {
       throw new Error(i18nMain.t("hotkey.errors.callbackRequired"));
     }
@@ -518,8 +535,17 @@ class HotkeyManager extends EventEmitter {
       }
     }
 
-    if (registeredHotkeys.length === 0) {
-      // Nothing registered — restore the previous bindings so the slot keeps working.
+    if (registeredHotkeys.length === 0 || (atomic && failures.length > 0)) {
+      // Roll back: unregister anything we just registered, then restore the
+      // previous bindings so the slot keeps working.
+      registeredAccelerators.forEach((accel) => {
+        if (!accel) return;
+        try {
+          globalShortcut.unregister(accel);
+        } catch {
+          // already unregistered
+        }
+      });
       this._restorePreviousHotkeys(previousHotkeys, previousAccelerators, callback);
       slot.hotkeys = previousHotkeys;
       slot.accelerators = previousAccelerators;
@@ -591,7 +617,7 @@ class HotkeyManager extends EventEmitter {
       const prevAccel = previousAccelerators?.[i];
       if (!prevAccel) return;
       try {
-        const restored = globalShortcut.register(prevAccel, callback);
+        const restored = globalShortcut.register(prevAccel, () => callback(previousHotkey));
         if (restored) {
           debugLogger.log(
             `[HotkeyManager] Restored previous hotkey "${previousHotkey}" after failed registration`
@@ -858,6 +884,7 @@ class HotkeyManager extends EventEmitter {
     if (envHotkey) {
       const result = this.setupShortcuts(envHotkey, callback);
       if (result.success) {
+        this._notifyStartupRegistration(envHotkey, result);
         debugLogger.log(`[HotkeyManager] Hotkey "${envHotkey}" registered from env`);
       } else {
         debugLogger.log(`[HotkeyManager] Env hotkey "${envHotkey}" failed, waiting for page`);
@@ -903,7 +930,7 @@ class HotkeyManager extends EventEmitter {
       if (savedHotkey && savedHotkey.trim() !== "") {
         const result = this.setupShortcuts(savedHotkey, callback);
         if (result.success) {
-          this.notifyActiveHotkey(savedHotkey);
+          this._notifyStartupRegistration(savedHotkey, result);
           debugLogger.log(`[HotkeyManager] Restored saved hotkey: "${savedHotkey}"`);
           return;
         }
@@ -1082,6 +1109,15 @@ class HotkeyManager extends EventEmitter {
     }
   }
 
+  // After a (possibly partial) startup registration, tell the renderer which
+  // hotkeys are actually active and surface any entries that failed to register.
+  _notifyStartupRegistration(requestedHotkey, result) {
+    this.notifyActiveHotkey(result.hotkeys ? result.hotkeys.join(",") : requestedHotkey);
+    for (const failure of result.failures || []) {
+      this.notifyHotkeyFailure(failure.hotkey, failure);
+    }
+  }
+
   notifyHotkeyFallback(originalHotkey, fallbackHotkey) {
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
       this.mainWindow.webContents.send("hotkey-fallback-used", {
@@ -1207,7 +1243,7 @@ class HotkeyManager extends EventEmitter {
         };
       }
 
-      const result = this.setupShortcuts(hotkeys, callback);
+      const result = this.setupShortcuts(hotkeys, callback, "dictation", { atomic: true });
       if (result.success) {
         const saved = await this.saveHotkeyToRenderer(hotkeyStr);
         if (!saved) {

@@ -44,3 +44,21 @@ test("round-trips parse -> serialize -> parse", () => {
   assert.equal(once, "GLOBE,Control+Shift+R,MouseButton4");
   assert.deepEqual(parseHotkeyList(once), ["GLOBE", "Control+Shift+R", "MouseButton4"]);
 });
+
+test("keeps a legacy comma-key hotkey intact (the comma is the key, not a separator)", () => {
+  assert.deepEqual(parseHotkeyList("Control+,"), ["Control+,"]);
+  assert.deepEqual(parseHotkeyList("Command+Shift+,"), ["Command+Shift+,"]);
+});
+
+test("parses comma-key hotkeys inside a list", () => {
+  assert.deepEqual(parseHotkeyList("GLOBE,Control+,"), ["GLOBE", "Control+,"]);
+  assert.deepEqual(parseHotkeyList("Control+,,F8"), ["Control+,", "F8"]);
+  assert.deepEqual(parseHotkeyList(["Control+,", "F8"]), ["Control+,", "F8"]);
+});
+
+test("round-trips lists containing comma-key hotkeys", () => {
+  const list = ["Control+,", "F8", "GLOBE"];
+  const serialized = serializeHotkeyList(list);
+  assert.equal(serialized, "Control+,,F8,GLOBE");
+  assert.deepEqual(parseHotkeyList(serialized), list);
+});

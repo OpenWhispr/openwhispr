@@ -613,7 +613,7 @@ export interface SettingsState
 
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
-  setVoiceAgentKey: (key: string) => void;
+  setVoiceAgentKey: (key: string) => Promise<boolean>;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
@@ -659,7 +659,7 @@ export interface SettingsState
 
   setChatAgentModel: (value: string) => void;
   setChatAgentProvider: (value: string) => void;
-  setChatAgentKey: (key: string) => void;
+  setChatAgentKey: (key: string) => Promise<boolean>;
   setChatAgentCloudMode: (value: string) => void;
   setChatAgentMode: (mode: InferenceMode) => void;
   setChatAgentCloudBaseUrl: (value: string) => void;
@@ -689,6 +689,7 @@ function createBooleanSetter(key: string) {
 
 // Setter for hotkeys that must be registered with the main process before
 // being persisted. Rolls back to the previous key if registration fails.
+// Resolves to false on failure so optimistic UIs (HotkeyListInput) can revert.
 function createRegisteredHotkeySetter(
   key: "chatAgentKey" | "voiceAgentKey",
   label: string,
@@ -696,10 +697,10 @@ function createRegisteredHotkeySetter(
     ((hotkey: string) => Promise<{ success: boolean; message: string }>) | undefined,
   fallbackSave?: (hotkey: string) => void
 ) {
-  return (hotkey: string) => {
+  return async (hotkey: string): Promise<boolean> => {
     if (!isBrowser) {
       useSettingsStore.setState({ [key]: hotkey });
-      return;
+      return true;
     }
 
     const registerFn = getRegisterFn();
@@ -707,34 +708,31 @@ function createRegisteredHotkeySetter(
       localStorage.setItem(key, hotkey);
       useSettingsStore.setState({ [key]: hotkey });
       fallbackSave?.(hotkey);
-      return;
+      return true;
     }
 
     const previousKey = useSettingsStore.getState()[key];
 
-    void registerFn(hotkey)
-      .then((result) => {
-        if (!result?.success) {
-          localStorage.setItem(key, previousKey);
-          useSettingsStore.setState({ [key]: previousKey });
-          logger.warn(
-            `Failed to update ${label}`,
-            { hotkey, message: result?.message },
-            "settings"
-          );
-          return;
-        }
+    try {
+      const result = await registerFn(hotkey);
+      if (!result?.success) {
+        localStorage.setItem(key, previousKey);
+        useSettingsStore.setState({ [key]: previousKey });
+        logger.warn(`Failed to update ${label}`, { hotkey, message: result?.message }, "settings");
+        return false;
+      }
 
-        localStorage.setItem(key, hotkey);
-        useSettingsStore.setState({ [key]: hotkey });
-      })
-      .catch((error) => {
-        logger.warn(
-          `Failed to update ${label}`,
-          { hotkey, error: error instanceof Error ? error.message : String(error) },
-          "settings"
-        );
-      });
+      localStorage.setItem(key, hotkey);
+      useSettingsStore.setState({ [key]: hotkey });
+      return true;
+    } catch (error) {
+      logger.warn(
+        `Failed to update ${label}`,
+        { hotkey, error: error instanceof Error ? error.message : String(error) },
+        "settings"
+      );
+      return false;
+    }
   };
 }
 

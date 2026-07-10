@@ -11,16 +11,24 @@ export function isGlobeLikeHotkey(hotkey: string): boolean {
 
 /**
  * A slot can be bound to several hotkeys (issue #936), stored as a
- * comma-separated string. Hotkey accelerators never contain a comma, so this is
- * unambiguous and backward compatible with single-value entries. Parses into a
- * clean list: trimmed, de-duplicated, empties removed, order preserved.
+ * comma-separated string — backward compatible with single-value entries.
+ * The comma KEY itself is a valid hotkey key (e.g. "Control+,"), so a split
+ * segment ending in "+" lost its comma key to the split (no accelerator
+ * legitimately ends with "+") and gets it restored. Parses into a clean list:
+ * trimmed, de-duplicated, empties removed, order preserved.
+ *
+ * Keep in sync with the main-process twin in src/helpers/hotkeyList.js.
  */
 export function parseHotkeyList(value?: string | null): string[] {
   if (!value) return [];
+  const raw = value.split(",");
   const seen = new Set<string>();
   const result: string[] = [];
-  for (const part of value.split(",")) {
-    const hotkey = part.trim();
+  for (let i = 0; i < raw.length; i++) {
+    let hotkey = raw[i].trim();
+    if (hotkey.endsWith("+") && i < raw.length - 1) {
+      hotkey += ",";
+    }
     if (!hotkey || seen.has(hotkey)) continue;
     seen.add(hotkey);
     result.push(hotkey);
@@ -81,6 +89,17 @@ export function formatHotkeyLabel(hotkey?: string | null): string {
   const platform = getPlatform();
   const resolvedHotkey = hotkey && hotkey.trim() !== "" ? hotkey : getDefaultHotkey();
   return formatHotkeyLabelForPlatform(resolvedHotkey, platform);
+}
+
+/**
+ * Label for a hotkey *list* value (comma-separated, issue #936): each entry
+ * formatted individually and joined with " / ". Falls back to the platform
+ * default label when the list is empty, matching formatHotkeyLabel.
+ */
+export function formatHotkeyListLabel(value?: string | null): string {
+  const list = parseHotkeyList(value);
+  if (list.length === 0) return formatHotkeyLabel(value);
+  return list.map((hotkey) => formatHotkeyLabel(hotkey)).join(" / ");
 }
 
 export function formatHotkeyLabelForPlatform(hotkey: string, platform: Platform): string {

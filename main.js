@@ -914,7 +914,9 @@ async function startApp() {
 
   ipcMain.handle("register-meeting-hotkey", async (_event, hotkey) => {
     if (hotkey) {
-      const result = await hotkeyManager.registerSlot("meeting", hotkey, meetingHotkeyCallback);
+      const result = await hotkeyManager.registerSlot("meeting", hotkey, meetingHotkeyCallback, {
+        atomic: true,
+      });
       windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         environmentManager.saveMeetingKey(hotkey);

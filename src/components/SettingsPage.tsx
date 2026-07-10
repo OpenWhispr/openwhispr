@@ -956,6 +956,22 @@ export default function SettingsPage({
     registerFn: meetingRegisterFn,
   });
 
+  // Agent hotkey setters resolve to false when main-process registration fails;
+  // surface it and return the result so HotkeyListInput rolls the row back.
+  const commitAgentHotkey = useCallback(
+    async (setter: (key: string) => Promise<boolean>, key: string) => {
+      const ok = await setter(key);
+      if (!ok) {
+        showAlertDialog({
+          title: t("hooks.hotkeyRegistration.titles.notRegistered"),
+          description: t("hooks.hotkeyRegistration.errors.failedToRegister"),
+        });
+      }
+      return ok;
+    },
+    [showAlertDialog, t]
+  );
+
   const validateDictationHotkey = useCallback(
     (hotkey: string) =>
       validateHotkeyForSlot(
@@ -3270,8 +3286,8 @@ EOF`,
                 <SettingsPanelRow>
                   <HotkeyListInput
                     value={voiceAgentKey}
-                    onChange={setVoiceAgentKey}
-                    onClear={() => setVoiceAgentKey("")}
+                    onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
+                    onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
                     validate={validateVoiceAgentHotkey}
                   />
                 </SettingsPanelRow>
@@ -3338,8 +3354,8 @@ EOF`,
                 <SettingsPanelRow>
                   <HotkeyListInput
                     value={chatAgentKey}
-                    onChange={setChatAgentKey}
-                    onClear={() => setChatAgentKey("")}
+                    onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
+                    onClear={() => commitAgentHotkey(setChatAgentKey, "")}
                     validate={validateChatAgentHotkey}
                   />
                 </SettingsPanelRow>

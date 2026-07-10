@@ -2390,7 +2390,7 @@ class IPCHandlers {
                 `[IPC] Re-registering globalShortcut "${accelerator}" after capture mode`
               );
               const callback = this.windowManager.createHotkeyCallback();
-              const registered = globalShortcut.register(accelerator, callback);
+              const registered = globalShortcut.register(accelerator, () => callback(hk));
               if (!registered) {
                 debugLogger.warn(
                   `[IPC] Failed to re-register globalShortcut "${accelerator}" after capture mode`
@@ -2988,7 +2988,10 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-active-dictation-key", async () => {
-      return this.windowManager?.hotkeyManager?.currentHotkey ?? null;
+      // Full active list (comma-separated) — returning only the primary would
+      // make the renderer's startup sync truncate a multi-hotkey slot (#936).
+      const hotkeys = this.windowManager?.hotkeyManager?.getSlotHotkeys?.("dictation") ?? [];
+      return hotkeys.length > 0 ? hotkeys.join(",") : null;
     });
 
     ipcMain.handle("get-effective-default-hotkey", async () => {
@@ -7556,7 +7559,9 @@ class IPCHandlers {
         return { success: true, message: "Agent hotkey cleared" };
       }
 
-      const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback);
+      const result = await hotkeyManager.registerSlot("agent", hotkey, agentCallback, {
+        atomic: true,
+      });
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveAgentKey?.(hotkey);
@@ -7583,7 +7588,9 @@ class IPCHandlers {
         return { success: true, message: "Voice agent hotkey cleared" };
       }
 
-      const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback);
+      const result = await hotkeyManager.registerSlot("voiceAgent", hotkey, voiceAgentCallback, {
+        atomic: true,
+      });
       this.windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         this.environmentManager.saveVoiceAgentKey?.(hotkey);

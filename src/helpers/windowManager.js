@@ -218,13 +218,16 @@ class WindowManager {
     let lastToggleTime = 0;
     const DEBOUNCE_MS = 150;
 
-    return async () => {
+    // `triggeredHotkey` is supplied by globalShortcut registrations (the slot
+    // may bind several hotkeys, issue #936); native-shortcut backends invoke the
+    // callback bare, where the slot's primary hotkey is the one that fired.
+    return async (triggeredHotkey) => {
       if (this.hotkeyManager.isInListeningMode()) {
         return;
       }
 
       const activationMode = this.getActivationMode();
-      const currentHotkey = this.hotkeyManager.getCurrentHotkey?.();
+      const currentHotkey = triggeredHotkey || this.hotkeyManager.getCurrentHotkey?.();
 
       if (
         process.platform === "darwin" &&

@@ -912,7 +912,7 @@
     "tryShortcut": "Ctrl+Shift+K をお試しください",
     "tryShortcutMac": "⌘⇧K をお試しください",
     "remove": "ホットキーを削除",
-    "addAnother": "ホットキーを追加",
+    "addAnother": "ホットキーをもう1つ追加",
     "duplicate": "すでに追加されています",
     "add": "ホットキーを追加"
   },
