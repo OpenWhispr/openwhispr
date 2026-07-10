@@ -60,11 +60,12 @@ test("fan-out with partial settings only mirrors the provided routing fields", a
   }
 });
 
-test("onboarding payloads route both transcription and reasoning to corti", async () => {
+test("onboarding payloads route both transcription and reasoning to corti in the eu region", async () => {
   const { buildCortiOnboardingPayloads } = await load();
   const { transcription, reasoning } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
-    { id: "corti", models: [{ id: "corti-s1-instant" }, { id: "corti-s1" }] }
+    { id: "corti", models: [{ id: "corti-s1-instant" }, { id: "corti-s1" }] },
+    "eu"
   );
 
   assert.deepEqual(transcription, {
@@ -85,16 +86,40 @@ test("onboarding forces cleanup enabled on the corti path", async () => {
   const { buildCortiOnboardingPayloads } = await load();
   const { reasoning } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
-    { id: "corti", models: [{ id: "corti-s1-instant" }] }
+    { id: "corti", models: [{ id: "corti-s1-instant" }] },
+    "eu"
   );
   assert.equal(reasoning.useCleanupModel, true);
+});
+
+test("us data region yields no reasoning payload", async () => {
+  const { buildCortiOnboardingPayloads } = await load();
+  const { transcription, reasoning } = buildCortiOnboardingPayloads(
+    { id: "corti", models: [{ id: "corti-transcribe" }] },
+    { id: "corti", models: [{ id: "corti-s1-instant" }] },
+    "us"
+  );
+
+  assert.equal(reasoning, null);
+  assert.equal(transcription.cloudTranscriptionProvider, "corti");
+});
+
+test("undefined data region yields no reasoning payload", async () => {
+  const { buildCortiOnboardingPayloads } = await load();
+  const { reasoning } = buildCortiOnboardingPayloads(
+    { id: "corti", models: [{ id: "corti-transcribe" }] },
+    { id: "corti", models: [{ id: "corti-s1-instant" }] },
+    undefined
+  );
+  assert.equal(reasoning, null);
 });
 
 test("missing corti reasoning provider yields no reasoning payload", async () => {
   const { buildCortiOnboardingPayloads } = await load();
   const { transcription, reasoning } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
-    undefined
+    undefined,
+    "eu"
   );
 
   assert.equal(reasoning, null);
@@ -105,12 +130,8 @@ test("corti reasoning provider with empty models yields no reasoning payload", a
   const { buildCortiOnboardingPayloads } = await load();
   const { reasoning } = buildCortiOnboardingPayloads(
     { id: "corti", models: [{ id: "corti-transcribe" }] },
-    { id: "corti", models: [] }
+    { id: "corti", models: [] },
+    "eu"
   );
   assert.equal(reasoning, null);
-});
-
-test("buildCortiOnboardingPayloads takes no environment argument", async () => {
-  const { buildCortiOnboardingPayloads } = await load();
-  assert.equal(buildCortiOnboardingPayloads.length, 2);
 });

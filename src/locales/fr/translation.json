@@ -523,6 +523,7 @@
     "corti": {
       "clientId": "ID client",
       "clientSecret": "Secret client",
+      "apiKey": "Clé API",
       "environment": "Région des données",
       "tenant": "Tenant"
     }

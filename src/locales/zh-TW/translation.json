@@ -523,6 +523,7 @@
     "corti": {
       "clientId": "用戶端 ID",
       "clientSecret": "用戶端密鑰",
+      "apiKey": "API Key",
       "environment": "資料區域",
       "tenant": "租戶"
     }

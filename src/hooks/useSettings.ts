@@ -68,6 +68,7 @@ export interface ApiKeySettings {
   mistralApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
+  cortiApiKey: string;
   tinfoilApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;

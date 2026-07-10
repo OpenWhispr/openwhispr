@@ -322,10 +322,8 @@ export default function ReasoningModelSelector({
   const setGroqApiKey = useSettingsStore((s) => s.setGroqApiKey);
   const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
   const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
-  const cortiClientId = useSettingsStore((s) => s.cortiClientId);
-  const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
-  const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
-  const setCortiClientSecret = useSettingsStore((s) => s.setCortiClientSecret);
+  const cortiApiKey = useSettingsStore((s) => s.cortiApiKey);
+  const setCortiApiKey = useSettingsStore((s) => s.setCortiApiKey);
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">(mode || "cloud");
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");
@@ -673,22 +671,11 @@ export default function ReasoningModelSelector({
                     </div>
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-foreground">
-                        {t("transcription.corti.clientId")}
+                        {t("transcription.corti.apiKey")}
                       </label>
                       <ApiKeyInput
-                        apiKey={cortiClientId}
-                        setApiKey={setCortiClientId}
-                        label=""
-                        helpText=""
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-medium text-foreground">
-                        {t("transcription.corti.clientSecret")}
-                      </label>
-                      <ApiKeyInput
-                        apiKey={cortiClientSecret}
-                        setApiKey={setCortiClientSecret}
+                        apiKey={cortiApiKey}
+                        setApiKey={setCortiApiKey}
                         label=""
                         helpText=""
                       />

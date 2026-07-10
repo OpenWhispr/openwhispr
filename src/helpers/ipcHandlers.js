@@ -2757,6 +2757,14 @@ class IPCHandlers {
       return this.environmentManager.saveCortiClientSecret(key);
     });
 
+    ipcMain.handle("get-corti-api-key", async () => {
+      return this.environmentManager.getCortiApiKey();
+    });
+
+    ipcMain.handle("save-corti-api-key", async (event, key) => {
+      return this.environmentManager.saveCortiApiKey(key);
+    });
+
     ipcMain.handle(
       "proxy-corti-transcription",
       async (event, { audioBuffer, language, environment, tenant }) => {

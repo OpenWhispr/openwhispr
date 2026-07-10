@@ -18,19 +18,6 @@ import { getConfiguredOpenAIBase } from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
 
-// Corti Models gateway bearer: base64 of the credential template documented in
-// its OpenAPI spec, with only the client id/secret substituted.
-function buildCortiBearer(clientId: string, clientSecret: string): string {
-  if (!clientId || !clientSecret) {
-    throw new Error("Corti API key not configured");
-  }
-  try {
-    return btoa(`base:client_credentials:${clientId}:${clientSecret}`);
-  } catch {
-    throw new Error("Corti credentials contain invalid characters");
-  }
-}
-
 export type AgentStreamChunk =
   | { type: "content"; text: string }
   | { type: "tool_calls"; calls: Array<{ id: string; name: string; arguments: string }> }
@@ -79,23 +66,6 @@ class ReasoningService extends BaseReasoningService {
   private async getApiKey(
     provider: "openai" | "anthropic" | "gemini" | "groq" | "tinfoil" | "corti" | "custom"
   ): Promise<string> {
-    if (provider === "corti") {
-      const cached = this.apiKeyCache.get(provider);
-      if (cached) return cached;
-
-      let clientId = "";
-      let clientSecret = "";
-      try {
-        clientId = (await window.electronAPI?.getCortiClientId?.()) || "";
-        clientSecret = (await window.electronAPI?.getCortiClientSecret?.()) || "";
-      } catch (err) {
-        logger.logReasoning("CORTI_KEY_FETCH_ERROR", { error: (err as Error)?.message });
-      }
-      const bearer = buildCortiBearer(clientId.trim(), clientSecret.trim());
-      this.apiKeyCache.set(provider, bearer);
-      return bearer;
-    }
-
     if (provider === "custom") {
       let customKey = "";
       try {
@@ -133,6 +103,7 @@ class ReasoningService extends BaseReasoningService {
           gemini: () => window.electronAPI.getGeminiKey(),
           groq: () => window.electronAPI.getGroqKey(),
           tinfoil: () => window.electronAPI.getTinfoilKey?.(),
+          corti: () => window.electronAPI.getCortiApiKey?.(),
         };
         apiKey = (await keyGetters[provider]()) ?? undefined;
 

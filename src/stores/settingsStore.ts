@@ -572,6 +572,7 @@ export interface SettingsState
   setMistralApiKey: (key: string) => void;
   setCortiClientId: (key: string) => void;
   setCortiClientSecret: (key: string) => void;
+  setCortiApiKey: (key: string) => void;
   setTinfoilApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
@@ -764,6 +765,7 @@ const SECRET_IPC_SAVERS = {
   mistral: "saveMistralKey",
   cortiClientId: "saveCortiClientId",
   cortiClientSecret: "saveCortiClientSecret",
+  cortiApiKey: "saveCortiApiKey",
   tinfoil: "saveTinfoilKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
@@ -804,6 +806,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "mistralApiKey",
   "cortiClientId",
   "cortiClientSecret",
+  "cortiApiKey",
   "tinfoilApiKey",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
@@ -885,6 +888,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   mistralApiKey: "",
   cortiClientId: "",
   cortiClientSecret: "",
+  cortiApiKey: "",
   tinfoilApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
@@ -1325,6 +1329,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     debouncedSaveSecret("cortiClientSecret", key);
     invalidateApiKeyCaches("corti");
   },
+  setCortiApiKey: (key: string) => {
+    set({ cortiApiKey: key });
+    debouncedSaveSecret("cortiApiKey", key);
+    invalidateApiKeyCaches("corti");
+  },
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
   setTinfoilApiKey: (key: string) => {
@@ -1757,6 +1766,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
+    if (keys.cortiApiKey !== undefined) s.setCortiApiKey(keys.cortiApiKey);
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
@@ -2006,6 +2016,7 @@ export async function initializeSettings(): Promise<void> {
         mistral,
         cortiClientId,
         cortiClientSecret,
+        cortiApiKey,
         tinfoil,
         customTx,
         customRx,
@@ -2023,6 +2034,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getMistralKey?.(),
         window.electronAPI.getCortiClientId?.(),
         window.electronAPI.getCortiClientSecret?.(),
+        window.electronAPI.getCortiApiKey?.(),
         window.electronAPI.getTinfoilKey?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
         window.electronAPI.getCleanupCustomKey?.(),
@@ -2042,6 +2054,7 @@ export async function initializeSettings(): Promise<void> {
         mistralApiKey: mistral || "",
         cortiClientId: cortiClientId || "",
         cortiClientSecret: cortiClientSecret || "",
+        cortiApiKey: cortiApiKey || "",
         tinfoilApiKey: tinfoil || "",
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",

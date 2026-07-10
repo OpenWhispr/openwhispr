@@ -378,6 +378,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveCortiClientId: (key) => ipcRenderer.invoke("save-corti-client-id", key),
   getCortiClientSecret: () => ipcRenderer.invoke("get-corti-client-secret"),
   saveCortiClientSecret: (key) => ipcRenderer.invoke("save-corti-client-secret", key),
+  getCortiApiKey: () => ipcRenderer.invoke("get-corti-api-key"),
+  saveCortiApiKey: (key) => ipcRenderer.invoke("save-corti-api-key", key),
   proxyCortiTranscription: (data) => ipcRenderer.invoke("proxy-corti-transcription", data),
   getTinfoilKey: () => ipcRenderer.invoke("get-tinfoil-key"),
   saveTinfoilKey: (key) => ipcRenderer.invoke("save-tinfoil-key", key),

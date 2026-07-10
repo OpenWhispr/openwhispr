@@ -1024,6 +1024,8 @@ declare global {
       saveCortiClientId?: (key: string) => Promise<void>;
       getCortiClientSecret?: () => Promise<string | null>;
       saveCortiClientSecret?: (key: string) => Promise<void>;
+      getCortiApiKey?: () => Promise<string | null>;
+      saveCortiApiKey?: (key: string) => Promise<void>;
       proxyCortiTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language: string;

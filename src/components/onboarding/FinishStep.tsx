@@ -34,6 +34,8 @@ export default function FinishStep({
   const setCortiClientId = useSettingsStore((s) => s.setCortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
   const setCortiClientSecret = useSettingsStore((s) => s.setCortiClientSecret);
+  const cortiApiKey = useSettingsStore((s) => s.cortiApiKey);
+  const setCortiApiKey = useSettingsStore((s) => s.setCortiApiKey);
   const cortiEnvironment = useSettingsStore((s) => s.cortiEnvironment);
   const setCortiEnvironment = useSettingsStore((s) => s.setCortiEnvironment);
 
@@ -47,15 +49,16 @@ export default function FinishStep({
     cortiClientId.trim().length > 0 && cortiClientSecret.trim().length > 0;
 
   const startWithCorti = () => {
-    // Route all four LLM scopes to Corti too so PHI never leaves Corti; skip
-    // reasoning routing if the Corti reasoning entry is absent (Part 1 not shipped).
+    // Route all four LLM scopes to Corti too so PHI never leaves Corti. No LLM
+    // routing when the Corti registry entry or model is missing, or outside the EU region.
     const reasoningProvider = modelRegistry.getCloudProviders().find((p) => p.id === "corti");
     const { transcription, reasoning } = buildCortiOnboardingPayloads(
       cortiProvider,
-      reasoningProvider
+      reasoningProvider,
+      cortiEnvironment
     );
     setCloudTranscriptionForAllScopes(transcription);
-    if (reasoning) setCloudReasoningForAllScopes(reasoning);
+    if (reasoning && cortiApiKey.trim()) setCloudReasoningForAllScopes(reasoning);
     onFinish(false);
   };
 
@@ -113,6 +116,12 @@ export default function FinishStep({
           </div>
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-foreground">
+              {t("transcription.corti.apiKey")}
+            </label>
+            <ApiKeyInput apiKey={cortiApiKey} setApiKey={setCortiApiKey} label="" helpText="" />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">
               {t("transcription.corti.environment")}
             </label>
             <Select value={cortiEnvironment} onValueChange={setCortiEnvironment}>
@@ -127,9 +136,11 @@ export default function FinishStep({
             <p className="text-xs text-muted-foreground/70">
               {t("onboarding.finish.corti.regionHint")}
             </p>
-            <p className="text-xs text-muted-foreground/70">
-              {t("onboarding.finish.corti.llmHint")}
-            </p>
+            {cortiEnvironment === "eu" && (
+              <p className="text-xs text-muted-foreground/70">
+                {t("onboarding.finish.corti.llmHint")}
+              </p>
+            )}
           </div>
         </div>
 
