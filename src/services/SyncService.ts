@@ -9,6 +9,7 @@ import { ConversationsService } from "./ConversationsService.js";
 import { FoldersService } from "./FoldersService.js";
 import { TranscriptionsService } from "./TranscriptionsService.js";
 import { DictionaryService } from "./DictionaryService.js";
+import { SnippetService, type CloudSnippetEntry } from "./SnippetService.js";
 import { CloudApiError } from "./cloudApi.js";
 
 function isHttpStatus(err: unknown, status: number): boolean {
@@ -19,6 +20,17 @@ const PUSH_DEBOUNCE_MS = 2000;
 const BATCH_SIZE = 50;
 const TRANSCRIPTION_BATCH_SIZE = 100;
 const DICTIONARY_BATCH_SIZE = 200;
+const SNIPPET_BATCH_SIZE = 200;
+// Minimum gap between auto syncs, measured from the last completed pass in
+// any window (the stamp lives in shared localStorage).
+const AUTO_SYNC_THROTTLE_MS = 20000;
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+// Web Lock name serializing syncAll() across windows (each renderer has its
+// own SyncService instance, but localStorage and the local DB are shared).
+const SYNC_ALL_LOCK = "openwhispr-sync-all";
+// localStorage keys gating canSync(); a change in another window means sync
+// may have just become possible (sign-in, subscription, backup enabled).
+const CAN_SYNC_KEYS = ["isSignedIn", "cloudBackupEnabled", "isSubscribed"];
 
 // SQLite `datetime('now')` yields "YYYY-MM-DD HH:MM:SS" (no T, no millis, no Z);
 // the cloud sends ISO 8601 "YYYY-MM-DDTHH:MM:SS.sssZ". Normalize both to
@@ -33,7 +45,10 @@ function normalizeTimestamp(value: string | null | undefined): string {
 
 class SyncService {
   private syncing = false;
+  private syncAllPending = false;
+  private autoSyncStarted = false;
   private dictionaryDirty = false;
+  private snippetsDirty = false;
   private pushTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   canSync(): boolean {
@@ -44,26 +59,89 @@ class SyncService {
     );
   }
 
-  async syncAll(): Promise<void> {
-    if (this.syncing || !this.canSync()) return;
+  // lastSyncedAt is written only when a syncAll() pass completes, and
+  // localStorage is shared across windows, so it doubles as the global
+  // "last completed sync" stamp for throttling.
+  private lastCompletedSyncAt(): number {
+    const iso = localStorage.getItem("lastSyncedAt");
+    return iso ? Date.parse(iso) : 0;
+  }
+
+  // Runs in every window for the whole session; the throttle and Web Lock
+  // dedupe across windows.
+  startAutoSync(): void {
+    if (this.autoSyncStarted) return;
+    this.autoSyncStarted = true;
+
+    this.requestSyncAll("start");
+    window.addEventListener("focus", () => this.requestSyncAll("focus"));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        this.requestSyncAll("focus");
+      }
+    });
+    window.addEventListener("online", () => this.requestSyncAll("online"));
+    // storage events fire only in the windows that didn't write the change,
+    // which is exactly where a first sync is still needed.
+    window.addEventListener("storage", (e) => {
+      if (e.key && CAN_SYNC_KEYS.includes(e.key)) {
+        this.requestSyncAll("start");
+      }
+    });
+    setInterval(() => this.requestSyncAll("interval"), AUTO_SYNC_INTERVAL_MS);
+  }
+
+  async syncAll(waitForLock = false): Promise<void> {
+    if (!this.canSync()) return;
+    // A pass already running may have synced past the data this request covers,
+    // so flag a re-run instead of dropping it.
+    if (this.syncing) {
+      this.syncAllPending = true;
+      return;
+    }
     this.syncing = true;
     try {
-      await this.syncFolders();
-      await this.syncNotes();
-      await this.syncConversations();
-      await this.syncTranscriptions();
-      // Edits during the awaits above set dictionaryDirty (syncing is already
-      // true), so re-run until clean rather than stalling until the next trigger.
-      do {
-        this.dictionaryDirty = false;
-        await this.syncDictionary();
-      } while (this.dictionaryDirty);
-      localStorage.setItem("lastSyncedAt", new Date().toISOString());
+      // Ambient passes skip when another window holds the lock — that pass
+      // reads the same local DB and cloud state, so it covers this request.
+      // Manual passes wait so a user action is never silently dropped.
+      await navigator.locks.request(SYNC_ALL_LOCK, { ifAvailable: !waitForLock }, async (lock) => {
+        if (!lock) return;
+        await this.syncFolders();
+        await this.syncNotes();
+        await this.syncConversations();
+        await this.syncTranscriptions();
+        // Edits during the awaits above set dictionaryDirty (syncing is already
+        // true), so re-run until clean rather than stalling until the next trigger.
+        do {
+          this.dictionaryDirty = false;
+          await this.syncDictionary();
+        } while (this.dictionaryDirty);
+        do {
+          this.snippetsDirty = false;
+          await this.syncSnippets();
+        } while (this.snippetsDirty);
+        localStorage.setItem("lastSyncedAt", new Date().toISOString());
+      });
     } catch (err) {
       console.error("Sync failed:", err);
     } finally {
       this.syncing = false;
     }
+    if (this.syncAllPending) {
+      this.syncAllPending = false;
+      await this.syncAll();
+    }
+  }
+
+  requestSyncAll(reason: "start" | "focus" | "interval" | "online" | "manual"): void {
+    if (!this.canSync()) return;
+    if (
+      reason !== "manual" &&
+      (this.syncing || Date.now() - this.lastCompletedSyncAt() < AUTO_SYNC_THROTTLE_MS)
+    ) {
+      return;
+    }
+    void this.syncAll(reason === "manual");
   }
 
   async syncDictionaryNow(): Promise<void> {
@@ -82,6 +160,25 @@ class SyncService {
       } while (this.dictionaryDirty);
     } catch (err) {
       console.error("Dictionary sync failed:", err);
+    } finally {
+      this.syncing = false;
+    }
+  }
+
+  async syncSnippetsNow(): Promise<void> {
+    if (!this.canSync()) return;
+    if (this.syncing) {
+      this.snippetsDirty = true;
+      return;
+    }
+    this.syncing = true;
+    try {
+      do {
+        this.snippetsDirty = false;
+        await this.syncSnippets();
+      } while (this.snippetsDirty);
+    } catch (err) {
+      console.error("Snippets sync failed:", err);
     } finally {
       this.syncing = false;
     }
@@ -229,9 +326,42 @@ class SyncService {
   }
 
   private async syncFolders(): Promise<void> {
+    await this.adoptDefaultFolders();
     await this.pushPendingFolders();
     await this.pushFolderDeletes();
     await this.pullFolders();
+  }
+
+  // Each platform seeds "Personal"/"Meetings" with its own random
+  // client_folder_id, so the second device to sync would register them as
+  // new folders and collide with the cloud's per-user unique folder name.
+  // Before the first push, adopt the cloud identity of any same-named
+  // default folder so both platforms converge on a single folder.
+  private async adoptDefaultFolders(): Promise<void> {
+    const pending = (await window.electronAPI.getPendingFolders?.()) ?? [];
+    const unlinkedDefaults = pending.filter((f) => f.is_default && !f.cloud_id);
+    if (unlinkedDefaults.length === 0) return;
+
+    try {
+      const { folders: cloudFolders } = await FoldersService.list();
+      const cloudByName = new Map(
+        cloudFolders
+          .filter((f) => f.is_default && !f.deleted_at)
+          .map((f) => [f.name.toLowerCase(), f])
+      );
+      for (const local of unlinkedDefaults) {
+        const match = cloudByName.get(local.name.toLowerCase());
+        if (!match) continue;
+        await window.electronAPI.adoptFolderIdentity?.(
+          local.id,
+          match.client_folder_id ?? local.client_folder_id,
+          match.id,
+          match.updated_at
+        );
+      }
+    } catch (err) {
+      console.error("Default folder adoption failed:", err);
+    }
   }
 
   private async pushFolderDeletes(): Promise<void> {
@@ -273,9 +403,30 @@ class SyncService {
             sort_order: f.sort_order,
           }))
         );
-        for (const cloudFolder of created) {
-          const local = fresh.find((f) => f.client_folder_id === cloudFolder.client_folder_id);
-          if (local) await window.electronAPI.markFolderSynced?.(local.id, cloudFolder.id);
+        // created preserves input order; the cloud may return an existing
+        // folder with a different client_folder_id when a same-named
+        // default already exists there — adopt its identity in that case.
+        if (created.length !== fresh.length) {
+          console.error(
+            `Folder batch create returned ${created.length} folders for ${fresh.length} inputs; skipping identity adoption`
+          );
+          return;
+        }
+        for (const [i, cloudFolder] of created.entries()) {
+          const local = fresh[i];
+          if (
+            cloudFolder.client_folder_id &&
+            cloudFolder.client_folder_id !== local.client_folder_id
+          ) {
+            await window.electronAPI.adoptFolderIdentity?.(
+              local.id,
+              cloudFolder.client_folder_id,
+              cloudFolder.id,
+              cloudFolder.updated_at
+            );
+          } else {
+            await window.electronAPI.markFolderSynced?.(local.id, cloudFolder.id);
+          }
         }
       } catch (err) {
         console.error("Folder batch create failed:", err);
@@ -297,6 +448,25 @@ class SyncService {
         if (cloudFolder.deleted_at) {
           if (local) await window.electronAPI.hardDeleteFolder?.(local.id);
           continue;
+        }
+
+        // A default folder created on another platform arrives with an
+        // unknown client_folder_id; inserting it would violate the local
+        // unique folder name. Match it by name and adopt its identity.
+        if (!local && cloudFolder.is_default) {
+          const allFolders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
+          const nameMatch = allFolders.find(
+            (f) => f.is_default && f.name.toLowerCase() === cloudFolder.name.toLowerCase()
+          );
+          if (nameMatch) {
+            await window.electronAPI.adoptFolderIdentity?.(
+              nameMatch.id,
+              cloudFolder.client_folder_id ?? nameMatch.client_folder_id,
+              cloudFolder.id,
+              cloudFolder.updated_at
+            );
+            continue;
+          }
         }
 
         if (local?.deleted_at) continue;
@@ -807,6 +977,203 @@ class SyncService {
       if (changed) await window.electronAPI.broadcastDictionaryUpdated?.();
     } catch (err) {
       console.error("Dictionary pull failed:", err);
+    }
+  }
+
+  private async syncSnippets(): Promise<void> {
+    const api = window.electronAPI;
+    const required = [
+      "getPendingSnippets",
+      "getPendingSnippetDeletes",
+      "getSnippetForCloudMerge",
+      "upsertSnippetFromCloud",
+      "markSnippetSynced",
+      "hardDeleteSnippet",
+      "clearSnippetCloudId",
+      "broadcastSnippetsUpdated",
+    ] as const;
+    const missing = required.filter((name) => typeof api[name] !== "function");
+    if (missing.length > 0) {
+      throw new Error(`Snippet IPC bindings missing — preload out of date: ${missing.join(", ")}`);
+    }
+
+    await this.pushPendingSnippets();
+    await this.pushSnippetDeletes();
+    await this.pullSnippets();
+  }
+
+  private async pushPendingSnippets(): Promise<void> {
+    const pending = (await window.electronAPI.getPendingSnippets?.()) ?? [];
+    if (pending.length === 0) return;
+
+    const updates = pending.filter((e) => e.cloud_id);
+    const creates = pending.filter((e) => !e.cloud_id);
+
+    for (const entry of updates) {
+      try {
+        const server = await SnippetService.update(entry.cloud_id!, {
+          trigger: entry.trigger,
+          replacement: entry.replacement,
+        });
+        await window.electronAPI.markSnippetSynced?.(
+          entry.id,
+          server.id,
+          server.updated_at,
+          entry.trigger,
+          entry.replacement
+        );
+      } catch (err) {
+        if (isHttpStatus(err, 404)) {
+          // Cloud row purged elsewhere — drop the stale cloud_id so the next push
+          // re-creates it via batchCreate.
+          await window.electronAPI.clearSnippetCloudId?.(entry.id);
+        } else if (isHttpStatus(err, 409)) {
+          // Another snippet already holds this trigger, so the server keeps
+          // rejecting the rename. Mark synced to stop re-pushing the doomed PATCH.
+          await window.electronAPI.markSnippetSynced?.(
+            entry.id,
+            entry.cloud_id!,
+            undefined,
+            entry.trigger,
+            entry.replacement
+          );
+        } else {
+          console.error("Snippet update sync failed:", err);
+        }
+      }
+    }
+
+    for (let i = 0; i < creates.length; i += SNIPPET_BATCH_SIZE) {
+      const chunk = creates.slice(i, i + SNIPPET_BATCH_SIZE);
+      try {
+        const { created } = await SnippetService.batchCreate(
+          chunk.map((e) => ({
+            client_snippet_id: e.client_snippet_id,
+            trigger: e.trigger,
+            replacement: e.replacement,
+            created_at: e.created_at,
+            updated_at: e.updated_at,
+          }))
+        );
+        const byClientId = new Map(created.map((c) => [c.client_snippet_id, c]));
+        let unmatched = 0;
+        for (const local of chunk) {
+          const server = byClientId.get(local.client_snippet_id);
+          if (!server) {
+            unmatched += 1;
+            continue;
+          }
+          const result = await window.electronAPI.markSnippetSynced?.(
+            local.id,
+            server.id,
+            server.updated_at,
+            local.trigger,
+            local.replacement
+          );
+          if (result && result.changes === 0) {
+            try {
+              await SnippetService.delete(server.id);
+            } catch (deleteErr) {
+              console.error("Snippet orphan cleanup failed:", deleteErr);
+            }
+          }
+        }
+        if (unmatched > 0) {
+          console.warn(
+            `Snippet batch-create: ${unmatched}/${chunk.length} rows had no matching server response`
+          );
+        }
+      } catch (err) {
+        console.error("Snippet batch create failed:", err);
+      }
+    }
+  }
+
+  private async pushSnippetDeletes(): Promise<void> {
+    const deletes = (await window.electronAPI.getPendingSnippetDeletes?.()) ?? [];
+    for (const entry of deletes) {
+      if (!entry.cloud_id) continue;
+      try {
+        await SnippetService.delete(entry.cloud_id);
+        await window.electronAPI.hardDeleteSnippet?.(entry.id);
+      } catch (err) {
+        if (isHttpStatus(err, 404)) {
+          await window.electronAPI.hardDeleteSnippet?.(entry.id);
+        } else {
+          console.error("Snippet delete sync failed:", err);
+        }
+      }
+    }
+  }
+
+  private async pullSnippets(): Promise<void> {
+    try {
+      const since = localStorage.getItem("lastSyncedAt.snippets") ?? undefined;
+      const sinceId = localStorage.getItem("lastSyncedAt.snippets.id") ?? undefined;
+      let changed = false;
+
+      let cursor: string | undefined = since;
+      let cursorId: string | undefined = sinceId;
+      let maxUpdatedAt = normalizeTimestamp(since);
+      let maxId = sinceId ?? "";
+      const cursorField: keyof Pick<CloudSnippetEntry, "created_at" | "updated_at"> = since
+        ? "updated_at"
+        : "created_at";
+
+      while (true) {
+        const { entries, hasMore } = since
+          ? await SnippetService.listDelta(cursor, SNIPPET_BATCH_SIZE, cursorId)
+          : await SnippetService.listSnapshot(cursor, SNIPPET_BATCH_SIZE, cursorId);
+        if (entries.length === 0) break;
+
+        for (const cloudEntry of entries) {
+          const cloudTs = normalizeTimestamp(cloudEntry.updated_at);
+          const local = await window.electronAPI.getSnippetForCloudMerge?.(
+            cloudEntry as unknown as Record<string, unknown>
+          );
+
+          if (cloudTs > maxUpdatedAt) {
+            maxUpdatedAt = cloudTs;
+            maxId = cloudEntry.id;
+          } else if (cloudTs === maxUpdatedAt && cloudEntry.id > maxId) {
+            maxId = cloudEntry.id;
+          }
+
+          if (cloudEntry.deleted_at) {
+            if (local && !(local.sync_status === "pending" && !local.cloud_id)) {
+              await window.electronAPI.hardDeleteSnippet?.(local.id);
+              changed = true;
+            }
+            continue;
+          }
+
+          const localTs = local ? normalizeTimestamp(local.updated_at) : "";
+          const shouldApply =
+            !local ||
+            cloudTs > localTs ||
+            (local.sync_status !== "pending" &&
+              (!local.cloud_id || local.cloud_id !== cloudEntry.id));
+          if (shouldApply) {
+            await window.electronAPI.upsertSnippetFromCloud?.(
+              cloudEntry as unknown as Record<string, unknown>
+            );
+            changed = true;
+          }
+        }
+
+        if (!hasMore) break;
+        const last = entries[entries.length - 1];
+        const nextCursor = last[cursorField];
+        if (nextCursor === cursor && last.id === cursorId) break;
+        cursor = nextCursor;
+        cursorId = last.id;
+      }
+
+      if (maxUpdatedAt) localStorage.setItem("lastSyncedAt.snippets", maxUpdatedAt);
+      if (maxId) localStorage.setItem("lastSyncedAt.snippets.id", maxId);
+      if (changed) await window.electronAPI.broadcastSnippetsUpdated?.();
+    } catch (err) {
+      console.error("Snippet pull failed:", err);
     }
   }
 

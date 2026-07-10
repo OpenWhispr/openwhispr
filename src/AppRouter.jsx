@@ -57,6 +57,14 @@ function MainApp() {
         import("./components/OnboardingFlow.tsx").catch(() => {});
       }
     }
+
+    // Sync runs in every non-agent window, so tray-only sessions where the
+    // control panel is never opened still stay fresh.
+    if (!isAgentPanel) {
+      import("./services/SyncService.js")
+        .then(({ syncService }) => syncService.startAutoSync())
+        .catch(() => {});
+    }
   }, [isAgentPanel, isControlPanel]);
 
   useEffect(() => {

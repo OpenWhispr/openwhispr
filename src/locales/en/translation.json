@@ -542,6 +542,10 @@
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."
       },
+      "partialTranscription": {
+        "title": "Partial Transcription",
+        "description": "Part of the recording couldn't be transcribed."
+      },
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
         "offline": "You're offline. Cloud transcription requires an internet connection.",
@@ -726,6 +730,11 @@
       "ready": "Ready",
       "welcomeBack": "Welcome back",
       "welcomeBackName": "Welcome back, {{name}}"
+    },
+    "sso": {
+      "continueWithSSO": "Sign in with SSO",
+      "emailRequired": "Enter your work email to use SSO.",
+      "failed": "Single sign-on failed. Please try again."
     },
     "social": {
       "completeInBrowser": "Complete sign-in in your browser",
@@ -1952,7 +1961,8 @@
         "groq_whisper_large_v3_turbo": "216x real-time speed",
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
         "corti_transcribe": "Clinical-grade medical transcription",
-        "xai_grok_stt": "High-accuracy speech recognition by xAI"
+        "xai_grok_stt": "High-accuracy speech recognition by xAI",
+        "tinfoil_voxtral_mini_realtime": "Verifiably private streaming transcription"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -1983,7 +1993,13 @@
         "anthropic_claude_opus_4_8": "Most capable Claude model",
         "anthropic_claude_opus_4_7": "Powerful Opus model",
         "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_5": "Earlier Opus model",
+        "tinfoil_deepseek_v4_pro": "Private long-context reasoning in secure enclaves, 800K context",
+        "tinfoil_glm_5_2": "Private agentic engineering model in secure enclaves, 384K context",
+        "tinfoil_kimi_k2_6": "Private long-horizon coding and multimodal model, 256K context",
+        "tinfoil_gemma4_31b": "Private multilingual reasoning model with tool calling, 256K context",
+        "tinfoil_gpt_oss_120b": "Private open-weight reasoning model with tool use, 131K context",
+        "tinfoil_llama3_3_70b": "Private conversational model with tool calling, 128K context"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
@@ -2281,6 +2297,7 @@
       "transcribingProvider": "Transcribing via {{provider}}...",
       "cancelTranscription": "Cancel transcription",
       "transcriptionComplete": "Transcription complete",
+      "partialWarning": "Part of the audio couldn't be transcribed.",
       "openNote": "Open Note",
       "uploadAnother": "Upload Another",
       "retry": "Retry",

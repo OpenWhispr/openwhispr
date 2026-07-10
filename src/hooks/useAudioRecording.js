@@ -18,6 +18,7 @@ export const useAudioRecording = (toast, options = {}) => {
   const audioManagerRef = useRef(null);
   const startLockRef = useRef(false);
   const stopLockRef = useRef(false);
+  const wasRecordingRef = useRef(false);
   const { onToggle } = options;
 
   const performStartRecording = useCallback(async ({ voiceAgentRequested = false } = {}) => {
@@ -43,7 +44,9 @@ export const useAudioRecording = (toast, options = {}) => {
         ? await audioManagerRef.current.startStreamingRecording()
         : await audioManagerRef.current.startRecording();
 
-      if (didStart) {
+      // A quick tap can end the recording inside the start call itself (deferred
+      // streaming stop) — don't pause media for a recording that already ended. See #1060.
+      if (didStart && audioManagerRef.current.getState().isRecording) {
         if (getSettings().pauseMediaOnDictation) {
           window.electronAPI?.pauseMediaPlayback?.();
         }
@@ -90,7 +93,14 @@ export const useAudioRecording = (toast, options = {}) => {
 
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming }) => {
-        if (!isRecording) window.electronAPI?.unregisterCancelHotkey?.();
+        if (!isRecording) {
+          window.electronAPI?.unregisterCancelHotkey?.();
+          // Resume media the instant recording ends, not after transcription.
+          if (wasRecordingRef.current && getSettings().pauseMediaOnDictation) {
+            window.electronAPI?.resumeMediaPlayback?.();
+          }
+        }
+        wasRecordingRef.current = isRecording;
         setIsRecording(isRecording);
         setIsProcessing(isProcessing);
         setIsStreaming(isStreaming ?? false);
@@ -118,10 +128,6 @@ export const useAudioRecording = (toast, options = {}) => {
         setPartialTranscript(text);
       },
       onTranscriptionComplete: async (result) => {
-        if (getSettings().pauseMediaOnDictation) {
-          window.electronAPI?.resumeMediaPlayback?.();
-        }
-
         if (result.success) {
           const transcribedText = result.text?.trim();
 
@@ -139,6 +145,14 @@ export const useAudioRecording = (toast, options = {}) => {
 
           setTranscript(result.text);
           window.electronAPI?.completeDictationPreview?.({ text: result.text });
+
+          if (result.warning) {
+            toast({
+              title: t("hooks.audioRecording.partialTranscription.title"),
+              description: t("hooks.audioRecording.partialTranscription.description"),
+              variant: "default",
+            });
+          }
 
           const isStreaming = result.source?.includes("streaming");
           const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();

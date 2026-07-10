@@ -7,9 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixes
+
+- **Dictating into Claude Desktop and claude.ai no longer breaks after the first paste.** The auto-learn correction monitor used to force the `AXEnhancedUserInterface` accessibility flag onto the app it pasted into. On some Chromium apps (Claude Desktop, claude.ai in any browser) that flag permanently blurs the message composer, so every dictation after the first pasted into a field that no longer had keyboard focus. Monitoring is now strictly read-only: apps that expose their accessibility tree keep auto-learn working as before, and apps that don't simply skip correction learning for that paste. Restart the affected app once after updating to clear the stuck flag.
+- **No more Windows Firewall prompt for local Parakeet transcription.** The bundled sherpa-onnx server only serves OpenWhispr itself over `127.0.0.1`, but the upstream binary has no loopback-only bind option, so Windows raised an "allow public and private networks" prompt when it started. All-users installs now register a scoped inbound block rule for the server binary: the prompt is gone, the port is closed to the network, and transcription is unaffected because Windows never filters loopback traffic. The rule is removed on uninstall. (#1090)
+
+## [1.7.4] - 2026-07-07
+
+A feature-and-hardening release on top of 1.7.3: Tinfoil confidential inference for both transcription and AI reasoning, Azure AI Foundry / Azure OpenAI speech-to-text, native Windows system-audio capture for meeting notes, enterprise SSO in onboarding, cross-device Snippets sync, ambient sync that now runs even in tray-only sessions, and a broad stack of fixes across cleanup routing, clipboard, media playback, hotkeys, local GPU transcription, macOS paste, updates, and Linux packaging — plus SOC 2 dependency remediation.
+
 ### Transcription
 
-- **Azure AI Foundry / Azure OpenAI speech-to-text.** The custom transcription provider now recognizes Azure endpoints (`*.cognitiveservices.azure.com`, `*.openai.azure.com`, `*.services.ai.azure.com`) and builds the deployment-style URL Azure requires (`/openai/deployments/{model}/audio/transcriptions?api-version=...`) instead of the plain OpenAI `{base}/audio/transcriptions` shape, which returned `404 DeploymentNotFound`. Auth now uses Azure's `api-key` header on Azure hosts. Enter your resource endpoint as the URL and your exact deployment name in the Model field; `api-version` defaults to a transcribe-capable preview and can be overridden by appending `?api-version=...` to the endpoint.
+- **Tinfoil — confidential cloud transcription (BYOK).** New bring-your-own-key provider built on Tinfoil's attested secure enclaves for private cloud speech-to-text in both dictation and uploaded audio. The client verifies enclave attestation before every request and connects over an enclave host assigned dynamically at runtime. (#944)
+- **Azure AI Foundry / Azure OpenAI speech-to-text.** The custom transcription provider now recognizes Azure endpoints (`*.cognitiveservices.azure.com`, `*.openai.azure.com`, `*.services.ai.azure.com`) and builds the deployment-style URL Azure requires (`/openai/deployments/{model}/audio/transcriptions?api-version=...`) instead of the plain OpenAI `{base}/audio/transcriptions` shape, which returned `404 DeploymentNotFound`. Auth now uses Azure's `api-key` header on Azure hosts. Enter your resource endpoint as the URL and your exact deployment name in the Model field; `api-version` defaults to a transcribe-capable preview and can be overridden by appending `?api-version=...` to the endpoint. (#997)
+- **Configurable self-hosted model.** Self-hosted / local transcription endpoints can now specify which model to request instead of being pinned to a fixed default. (#1043)
+- **Hardened realtime dictation streaming.** The realtime streaming connection is more resilient, and 16 kHz capture is now linearly upsampled to the 24 kHz OpenAI's realtime API requires — fixing outright BYOK connection rejections (`invalid_request_error: integer_below_min_value`) and a 1.5× speed mismatch on cloud sessions pinned to 24 kHz. (#1044)
+- **Local GPU model reloads after sleep.** Waking the machine no longer leaves the on-device GPU transcription model in a broken state; it's reloaded automatically. (#1032)
+- **Multi-GPU device selected by UUID.** The local transcription server now pins its GPU by stable UUID instead of a numeric index, so it keeps using the intended device across reboots and driver reordering on multi-GPU machines. (#1018)
+- **Empty recordings no longer crash transcription.** A zero-length recording is handled gracefully instead of taking down the transcription pipeline. (#891)
+- **Bundled VAD model in packaged builds.** The `ggml-silero` voice-activity-detection model is now copied into the packaged app, so production builds run local transcription with VAD instead of logging "model not found" and running without it. (#1000)
+
+### Reasoning & models
+
+- **Tinfoil — confidential AI inference (BYOK).** Tinfoil is also available as a private reasoning/agent provider, with six chat models (reasoning-capable ones expose a disable-thinking toggle, matching Groq) verified against enclave attestation before each request. (#875)
+- **Hardened dictation cleanup and wake-word routing.** The cleanup prompt was rewritten to reliably transform — not reply to — transcripts: transcripts are framed in `<transcript>` tags with a trailing output anchor, cleanup runs deterministically at temperature 0, and cloud cleanup requests now pin `promptMode: "cleanup"` so the server can't flip them to the action prompt when the dictation agent is off. Agent routing now requires the agent to be genuinely addressed (at the start of a dictation, after a greeting cue, or opening a new sentence) instead of firing on any mention of the agent's name anywhere in the transcript. (#1073)
+- **Bundled llama.cpp updated to b9763** for local LLM inference. (#995)
+
+### Meeting notes
+
+- **Native Windows system-audio capture.** Windows previously captured meeting audio only through Chromium's display-media loopback, which hears just the default output device — so a meeting playing to a non-default device produced silent notes with no error. A new native WASAPI process-loopback helper hears every application on every output device while excluding OpenWhispr's own process tree, and transparently falls back to the Chromium loopback path on Windows versions without process-loopback support (< 10 2004). (#960)
+
+### Sync
+
+- **Ambient sync now runs in tray-only sessions.** Auto-sync scheduling (initial pass, window focus/visibility, network reconnect, and a 5-minute interval) moved out of the Control Panel and into `SyncService`, so a start-minimized session that never opens the panel still pushes dictations up and pulls changes from other devices down. Passes are serialized across windows with a Web Lock and share a single throttle window; manual syncs wait for the lock instead of being dropped. (#1070, #1072)
+- **Snippets sync across devices.** Your spoken-trigger Snippets now sync across signed-in devices, matching the cross-device custom-dictionary sync added in 1.7.3. (#1037)
+- **Default folders link to existing cloud folders** instead of registering duplicates, so signing in on a new device no longer creates a second copy of your built-in folders. (#1086)
+
+### Dictation & snippets
+
+- **Snippets match triggers containing Turkish İ and ı.** Trigger matching used `toLowerCase()`, whose lowercase form of İ (U+0130) is "i" plus a combining dot, so a snippet like "İmza" never matched the transcript — and the regex `/i` flag case-folds neither İ nor dotless ı (U+0131). Triggers and matches are now folded to a canonical key, the pattern matches İ/ı explicitly, and the transcript is NFC-normalized, so "imza", "İmza", "İMZA" — and "Işık"/"IŞIK" for an "ışık" trigger — all expand the same snippet. (#1050)
+
+### Onboarding & sign-in
+
+- **Enterprise SSO sign-in.** Onboarding now offers "Sign in with SSO" alongside social and email/password: it reuses your typed work email, opens the external browser to the SSO flow, and returns via the `openwhispr://` callback. (#1034)
+- **API-key drafts are saved on click-outside instead of discarded.** Typing a key and clicking the next field used to silently revert it to empty — worst for Corti BYOK users pasting a client ID and then clicking the client-secret field during onboarding. Click-outside now commits the draft; Escape and the ✕ button still cancel. (#1039)
+
+### Clipboard & paste
+
+- **Rich clipboard formats preserved on restore.** After auto-paste restores your previous clipboard, RTF and other rich formats survive instead of being flattened to plain text. (#1020)
+- **Faster macOS clipboard restore.** Removed an unnecessary delay when restoring the clipboard after pasting on macOS. (#1038)
+- **Reliable target-app focus before pasting on macOS.** The paste keystroke is delivered session-wide, so it only lands in the right field when the captured target app is frontmost. The target is now located by scanning running applications (the previous lookup returned `nil` under JXA, so activation silently no-op'd and #668's fix never ran), an already-frontmost Chromium/Electron app is left alone to avoid dropping its text field's focus, and the voice-agent hotkeys now capture the target PID so their paste can refocus too — all with no added latency. (#1000)
+
+### Audio & media
+
+- **Mic retries on the default device when the pinned one is stale.** If a previously selected `deviceId` no longer resolves, recording falls back to the system default microphone instead of failing. (#978)
+- **Media playback resumes when recording stops, not after transcription** — so paused music or video comes back the moment you finish speaking rather than after the transcript is processed. (#1030)
+- **No media pause for a recording that already ended.** A quick tap during streaming-recording startup could pause media with nothing left to resume it (and play cues out of order); post-start side effects are now gated on the recording still being active. (#1061)
+
+### Hotkeys
+
+- **Modifier-only hotkeys work simultaneously on Windows/Linux.** The native low-level key listener was a singleton hardwired to the dictation slot, so only one modifier-only hotkey (dictation, voice agent, agent, or meeting) worked per session. It's now a multiplexer that watches one hook process per key and routes key-tagged events to the right slot, mirroring macOS — and it skips the listener entirely on GNOME/KDE/Hyprland, where shortcuts arrive via D-Bus. (#1001)
+
+### Linux
+
+- **Fall back to `--no-sandbox` when user namespaces are restricted**, so the app still launches on hardened kernels that disable unprivileged user namespaces. (#1042)
+- **RPM installable on openSUSE.** Fixed packaging so the `.rpm` installs there. (#1014)
+
+### Updates
+
+- **No crash on the first "Install & Restart" click after an update.** The manual `app.emit("before-quit")` passed no event object, so `event.preventDefault()` threw and the first click did nothing (the second only "worked" because the crash had left the app in a shutting-down state). Pre-quit cleanup now hooks the correct `before-quit-for-update` event on Electron's native `autoUpdater` — fixing stalled macOS installs — and shuts sidecars down on the update path. (#1012)
+
+### Security & dependencies
+
+- **Cleared all critical/high dependency alerts** (form-data, tar, undici, ws) as part of SOC 2 Type 2 secure-code remediation — 1 critical + 10 high Dependabot alerts resolved, no source changes. (#1051)
+- **Restored lockfile integrity hashes and added a CI guard.** Regenerated `package-lock.json` on Node 24 so all 967 package entries carry `resolved` + `integrity` fields (up from 53), restoring tamper verification for `npm ci`, and added a `lockfile-lint` workflow to keep it that way. (#1069)
 
 ## [1.7.3] - 2026-06-23
 

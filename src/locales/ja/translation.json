@@ -542,6 +542,10 @@
         "title": "音声が検出されませんでした",
         "description": "録音に音声が含まれていませんでした。もう一度お試しください。"
       },
+      "partialTranscription": {
+        "title": "部分的な文字起こし",
+        "description": "録音の一部を文字起こしできませんでした。"
+      },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
@@ -727,6 +731,11 @@
       "ready": "準備完了",
       "welcomeBack": "おかえりなさい",
       "welcomeBackName": "おかえりなさい、{{name}} さん"
+    },
+    "sso": {
+      "continueWithSSO": "SSO でサインイン",
+      "emailRequired": "SSO を使用するには勤務先のメールアドレスを入力してください。",
+      "failed": "シングルサインオンに失敗しました。もう一度お試しください。"
     },
     "social": {
       "completeInBrowser": "ブラウザでサインインを完了してください",
@@ -1860,7 +1869,8 @@
         "groq_whisper_large_v3": "Large v3 モデル、高速かつ高精度",
         "mistral_voxtral_mini_latest": "高速多言語文字起こし",
         "corti_transcribe": "臨床グレードの医療文字起こし",
-        "xai_grok_stt": "xAIによる高精度音声認識"
+        "xai_grok_stt": "xAIによる高精度音声認識",
+        "tinfoil_voxtral_mini_realtime": "検証可能なプライベート・ストリーミング文字起こし"
       },
       "cloud": {
         "openai_gpt_5_2": "強力な推論モデル",
@@ -1891,7 +1901,13 @@
         "anthropic_claude_opus_4_8": "最も高性能な Claude モデル",
         "anthropic_claude_opus_4_7": "高性能な Opus モデル",
         "anthropic_claude_opus_4_6": "前世代の Opus、100 万トークンコンテキスト",
-        "anthropic_claude_opus_4_5": "旧世代の Opus モデル"
+        "anthropic_claude_opus_4_5": "旧世代の Opus モデル",
+        "tinfoil_deepseek_v4_pro": "セキュアエンクレーブ内のプライベート長文脈推論、800K コンテキスト",
+        "tinfoil_glm_5_2": "セキュアエンクレーブ内のプライベート・エージェント型エンジニアリングモデル、384K コンテキスト",
+        "tinfoil_kimi_k2_6": "プライベートな長期コーディング・マルチモーダルモデル、256K コンテキスト",
+        "tinfoil_gemma4_31b": "ツール呼び出し対応のプライベート多言語推論モデル、256K コンテキスト",
+        "tinfoil_gpt_oss_120b": "ツール使用対応のプライベート・オープンウェイト推論モデル、131K コンテキスト",
+        "tinfoil_llama3_3_70b": "ツール呼び出し対応のプライベート会話モデル、128K コンテキスト"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "高速で低コスト。テキスト整形に最適です。",
@@ -2065,6 +2081,7 @@
       "transcribingProvider": "{{provider}} で文字起こし中...",
       "cancelTranscription": "文字起こしをキャンセル",
       "transcriptionComplete": "文字起こし完了",
+      "partialWarning": "音声の一部を文字起こしできませんでした。",
       "openNote": "ノートを開く",
       "uploadAnother": "別のファイルをアップロード",
       "retry": "再試行",

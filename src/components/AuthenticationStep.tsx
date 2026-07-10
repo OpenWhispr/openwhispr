@@ -5,6 +5,7 @@ import {
   authClient,
   AUTH_URL,
   signInWithSocial,
+  signInWithSSO,
   updateLastSignInTime,
   type SocialProvider,
 } from "../lib/auth";
@@ -80,6 +81,7 @@ export default function AuthenticationStep({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [isSocialLoading, setIsSocialLoading] = useState<SocialProvider | null>(null);
+  const [isSSOLoading, setIsSSOLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [oauthProtocolRegistered, setOauthProtocolRegistered] = useState(true);
@@ -101,13 +103,14 @@ export default function AuthenticationStep({
   }, [isLoaded, isSignedIn, user, onAuthComplete]);
 
   useEffect(() => {
-    if (isSocialLoading === null) return;
+    if (isSocialLoading === null && !isSSOLoading) return;
 
     let timeout: ReturnType<typeof setTimeout>;
 
     const handleFocus = () => {
       timeout = setTimeout(() => {
         setIsSocialLoading(null);
+        setIsSSOLoading(false);
       }, 1000);
     };
 
@@ -116,7 +119,7 @@ export default function AuthenticationStep({
       window.removeEventListener("focus", handleFocus);
       clearTimeout(timeout);
     };
-  }, [isSocialLoading]);
+  }, [isSocialLoading, isSSOLoading]);
 
   const handleSocialSignIn = useCallback(
     async (provider: SocialProvider) => {
@@ -137,6 +140,22 @@ export default function AuthenticationStep({
     },
     [t]
   );
+
+  const handleSSOSignIn = useCallback(async () => {
+    if (!email.trim()) {
+      setError(t("auth.sso.emailRequired"));
+      return;
+    }
+    setIsSSOLoading(true);
+    setError(null);
+
+    const result = await signInWithSSO(email.trim());
+
+    if (result.error) {
+      setError(result.error.message || t("auth.sso.failed"));
+      setIsSSOLoading(false);
+    }
+  }, [email, t]);
 
   const handleEmailContinue = useCallback(async () => {
     if (!email.trim() || !authClient) return;
@@ -483,7 +502,9 @@ export default function AuthenticationStep({
           type="button"
           variant="social"
           onClick={() => handleSocialSignIn("apple")}
-          disabled={isSocialLoading !== null || isCheckingEmail || !oauthProtocolRegistered}
+          disabled={
+            isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
+          }
           title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
           className="w-full h-9"
         >
@@ -507,7 +528,9 @@ export default function AuthenticationStep({
         type="button"
         variant="social"
         onClick={() => handleSocialSignIn("google")}
-        disabled={isSocialLoading !== null || isCheckingEmail || !oauthProtocolRegistered}
+        disabled={
+          isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
+        }
         title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
         className="w-full h-9"
       >
@@ -530,7 +553,9 @@ export default function AuthenticationStep({
         type="button"
         variant="social"
         onClick={() => handleSocialSignIn("microsoft")}
-        disabled={isSocialLoading !== null || isCheckingEmail || !oauthProtocolRegistered}
+        disabled={
+          isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
+        }
         title={!oauthProtocolRegistered ? t("auth.social.protocolUnavailable") : undefined}
         className="w-full h-9"
       >
@@ -577,12 +602,12 @@ export default function AuthenticationStep({
           onChange={(e) => setEmail(e.target.value)}
           className="h-9 text-sm"
           required
-          disabled={isSocialLoading !== null || isCheckingEmail}
+          disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
         />
         <Button
           type="submit"
           variant="outline"
-          disabled={!email.trim() || isSocialLoading !== null || isCheckingEmail}
+          disabled={!email.trim() || isSocialLoading !== null || isCheckingEmail || isSSOLoading}
           className="w-full h-9"
         >
           {isCheckingEmail ? (
@@ -595,6 +620,24 @@ export default function AuthenticationStep({
           )}
         </Button>
       </form>
+
+      <button
+        type="button"
+        onClick={handleSSOSignIn}
+        disabled={
+          isSocialLoading !== null || isCheckingEmail || isSSOLoading || !oauthProtocolRegistered
+        }
+        className="w-full text-center text-xs text-muted-foreground/85 hover:text-foreground transition-colors py-1.5 rounded hover:bg-muted/30 disabled:opacity-50 disabled:pointer-events-none flex items-center justify-center gap-1.5"
+      >
+        {isSSOLoading ? (
+          <>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            {t("auth.social.completeInBrowser")}
+          </>
+        ) : (
+          t("auth.sso.continueWithSSO")
+        )}
+      </button>
 
       {error && (
         <div className="px-3 py-2 rounded-md bg-destructive/5 border border-destructive/20 flex items-center gap-2">
@@ -610,7 +653,7 @@ export default function AuthenticationStep({
           size="sm"
           onClick={onContinueWithoutAccount}
           className="w-full font-normal text-muted-foreground/85 hover:text-foreground hover:bg-muted/30"
-          disabled={isSocialLoading !== null || isCheckingEmail}
+          disabled={isSocialLoading !== null || isCheckingEmail || isSSOLoading}
         >
           {t("auth.emailStep.continueWithoutAccount")}
         </Button>

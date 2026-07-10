@@ -13,6 +13,7 @@ const SECRET_KEYS = [
   "GROQ_API_KEY",
   "XAI_API_KEY",
   "MISTRAL_API_KEY",
+  "TINFOIL_API_KEY",
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "CORTI_CLIENT_ID",
@@ -50,8 +51,8 @@ const PERSISTED_KEYS = [
   "UI_LANGUAGE",
   "WHISPER_CUDA_ENABLED",
   "WHISPER_THREADS",
-  "TRANSCRIPTION_GPU_INDEX",
-  "INTELLIGENCE_GPU_INDEX",
+  "TRANSCRIPTION_GPU_UUID",
+  "INTELLIGENCE_GPU_UUID",
   "BEDROCK_REGION",
   "BEDROCK_PROFILE",
   "AZURE_OPENAI_ENDPOINT",
@@ -311,6 +312,14 @@ class EnvironmentManager {
 
   saveMistralKey(key) {
     return this._saveKey("MISTRAL_API_KEY", key);
+  }
+
+  getTinfoilKey() {
+    return this._getKey("TINFOIL_API_KEY");
+  }
+
+  saveTinfoilKey(key) {
+    return this._saveKey("TINFOIL_API_KEY", key);
   }
 
   getAssemblyAIKey() {

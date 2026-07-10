@@ -542,6 +542,10 @@
         "title": "未偵測到音訊",
         "description": "錄音中未偵測到聲音。請再試一次。"
       },
+      "partialTranscription": {
+        "title": "部分轉錄",
+        "description": "部分錄音內容無法轉錄。"
+      },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
@@ -726,6 +730,11 @@
       "ready": "準備就緒",
       "welcomeBack": "歡迎回來",
       "welcomeBackName": "歡迎回來，{{name}}"
+    },
+    "sso": {
+      "continueWithSSO": "使用 SSO 登入",
+      "emailRequired": "輸入您的工作電子郵件以使用 SSO。",
+      "failed": "單一登入失敗，請再試一次。"
     },
     "social": {
       "completeInBrowser": "請在瀏覽器中完成登入",
@@ -1381,9 +1390,9 @@
         "linuxPttSetupTitle": "按住說話需要設定",
         "linuxPttSetupDescription": "您的使用者需要存取鍵盤輸入裝置的權限。",
         "linuxPttSetupNote": "執行指令後，請登出並重新登入。",
-        "hyprlandConfigWriteWarningTitle": "Hyprland 鍵綁定不會持久保存",
-        "hyprlandConfigWriteWarningDescription": "OpenWhispr 無法寫入 {{path}}，因此鍵綁定不會在 Hyprland 設定重新載入後保留。請確認該檔案存在且可寫入。",
-        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 會占用所選快捷鍵。OpenWhispr 註冊快捷鍵時，任何使用相同組合鍵的既有 Hyprland 綁定都會被解除。"
+        "hyprlandConfigWriteWarningTitle": "Hyprland 按鍵綁定不會保留",
+        "hyprlandConfigWriteWarningDescription": "OpenWhispr 無法寫入 {{path}}，因此重新載入 Hyprland 設定後按鍵綁定不會保留。請確認該檔案存在且可寫入。",
+        "hyprlandUnbindDescription": "在 Hyprland 上，OpenWhispr 會佔用所選快捷鍵。當 OpenWhispr 註冊該快捷鍵時，任何使用相同按鍵組合的既有 Hyprland 綁定都會被解除。"
       },
       "meetingHotkey": {
         "title": "會議模式快捷鍵",
@@ -1855,7 +1864,8 @@
         "groq_whisper_large_v3": "Large v3 模型，快速且精準",
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
         "corti_transcribe": "臨床級醫療轉錄",
-        "xai_grok_stt": "xAI 高精度語音辨識"
+        "xai_grok_stt": "xAI 高精度語音辨識",
+        "tinfoil_voxtral_mini_realtime": "可驗證的私密串流轉錄"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",
@@ -1886,7 +1896,13 @@
         "anthropic_claude_opus_4_8": "最強大的 Claude 模型",
         "anthropic_claude_opus_4_7": "強大的 Opus 模型",
         "anthropic_claude_opus_4_6": "上一代 Opus 模型，1M 上下文",
-        "anthropic_claude_opus_4_5": "較早的 Opus 模型"
+        "anthropic_claude_opus_4_5": "較早的 Opus 模型",
+        "tinfoil_deepseek_v4_pro": "安全飛地中的私密長上下文推理，800K 上下文",
+        "tinfoil_glm_5_2": "安全飛地中的私密智能體工程模型，384K 上下文",
+        "tinfoil_kimi_k2_6": "私密長程編碼與多模態模型，256K 上下文",
+        "tinfoil_gemma4_31b": "支援工具呼叫的私密多語言推理模型，256K 上下文",
+        "tinfoil_gpt_oss_120b": "支援工具使用的私密開放權重推理模型，131K 上下文",
+        "tinfoil_llama3_3_70b": "支援工具呼叫的私密對話模型，128K 上下文"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",
@@ -2077,6 +2093,7 @@
       "transcribingProvider": "透過 {{provider}} 轉錄中...",
       "cancelTranscription": "取消轉錄",
       "transcriptionComplete": "轉錄完成",
+      "partialWarning": "部分音訊內容無法轉錄。",
       "openNote": "開啟筆記",
       "uploadAnother": "上傳另一個",
       "retry": "重試",

@@ -218,6 +218,20 @@
           "streaming": true
         }
       ]
+    },
+    {
+      "id": "tinfoil",
+      "name": "Tinfoil",
+      "baseUrl": "https://inference.tinfoil.sh/v1",
+      "models": [
+        {
+          "id": "voxtral-mini-4b-realtime",
+          "name": "Voxtral Mini Realtime",
+          "description": "Verifiably private streaming transcription",
+          "descriptionKey": "models.descriptions.transcription.tinfoil_voxtral_mini_realtime",
+          "streaming": true
+        }
+      ]
     }
   ],
   "cloudProviders": [
@@ -435,6 +449,65 @@
           "name": "Kimi K2 0905",
           "description": "Moonshot AI's 1T MoE, 256K context",
           "descriptionKey": "models.descriptions.cloud.groq_kimi_k2_0905"
+        }
+      ]
+    },
+    {
+      "id": "tinfoil",
+      "name": "Tinfoil",
+      "models": [
+        {
+          "id": "deepseek-v4-pro",
+          "name": "DeepSeek V4 Pro",
+          "description": "Private long-context reasoning in secure enclaves, 800K context",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "descriptionKey": "models.descriptions.cloud.tinfoil_deepseek_v4_pro",
+          "supportsThinking": true
+        },
+        {
+          "id": "glm-5-2",
+          "name": "GLM-5.2",
+          "description": "Private agentic engineering model in secure enclaves, 384K context",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "descriptionKey": "models.descriptions.cloud.tinfoil_glm_5_2",
+          "supportsThinking": true
+        },
+        {
+          "id": "kimi-k2-6",
+          "name": "Kimi K2.6",
+          "description": "Private long-horizon coding and multimodal model, 256K context",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "descriptionKey": "models.descriptions.cloud.tinfoil_kimi_k2_6",
+          "supportsThinking": true
+        },
+        {
+          "id": "gemma4-31b",
+          "name": "Gemma 4 31B",
+          "description": "Private multilingual reasoning model with tool calling, 256K context",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "descriptionKey": "models.descriptions.cloud.tinfoil_gemma4_31b",
+          "supportsThinking": true
+        },
+        {
+          "id": "gpt-oss-120b",
+          "name": "GPT-OSS 120B",
+          "description": "Private open-weight reasoning model with tool use, 131K context",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "descriptionKey": "models.descriptions.cloud.tinfoil_gpt_oss_120b",
+          "supportsThinking": true
+        },
+        {
+          "id": "llama3-3-70b",
+          "name": "Llama 3.3 70B",
+          "description": "Private conversational model with tool calling, 128K context",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "descriptionKey": "models.descriptions.cloud.tinfoil_llama3_3_70b"
         }
       ]
     }

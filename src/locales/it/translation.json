@@ -542,6 +542,10 @@
         "title": "Nessun audio rilevato",
         "description": "La registrazione non contiene audio rilevabile. Riprova."
       },
+      "partialTranscription": {
+        "title": "Trascrizione parziale",
+        "description": "Non è stato possibile trascrivere una parte della registrazione."
+      },
       "errorDescriptions": {
         "sessionExpired": "La tua sessione OpenWhispr Cloud non è disponibile. Effettua di nuovo l'accesso dalle Impostazioni.",
         "offline": "Sei offline. La trascrizione cloud richiede una connessione Internet.",
@@ -727,6 +731,11 @@
       "ready": "Pronto",
       "welcomeBack": "Bentornato",
       "welcomeBackName": "Bentornato, {{name}}"
+    },
+    "sso": {
+      "continueWithSSO": "Accedi con SSO",
+      "emailRequired": "Inserisci la tua email di lavoro per usare l’SSO.",
+      "failed": "Accesso SSO non riuscito. Riprova."
     },
     "social": {
       "completeInBrowser": "Completa l'accesso nel browser",
@@ -1386,7 +1395,7 @@
         "linuxPttSetupTitle": "Tieni premuto per parlare richiede configurazione",
         "linuxPttSetupDescription": "Il tuo utente ha bisogno di accesso ai dispositivi di input della tastiera.",
         "linuxPttSetupNote": "Dopo aver eseguito il comando, esci e riaccedi.",
-        "hyprlandConfigWriteWarningTitle": "Le scorciatoie di Hyprland non saranno persistenti",
+        "hyprlandConfigWriteWarningTitle": "Le scorciatoie di Hyprland non verranno mantenute",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr non può scrivere in {{path}}, quindi le scorciatoie non sopravvivranno a un ricaricamento della configurazione di Hyprland. Assicurati che il file esista e sia scrivibile.",
         "hyprlandUnbindDescription": "Su Hyprland, OpenWhispr riserva la scorciatoia selezionata. Qualsiasi associazione Hyprland esistente che usa la stessa combinazione di tasti verrà rimossa quando OpenWhispr registra la sua scorciatoia."
       },
@@ -1860,7 +1869,8 @@
         "groq_whisper_large_v3": "Modello Large v3, veloce e preciso",
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
         "corti_transcribe": "Trascrizione medica di livello clinico",
-        "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI"
+        "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",
+        "tinfoil_voxtral_mini_realtime": "Trascrizione in streaming verificabilmente privata"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",
@@ -1891,7 +1901,13 @@
         "anthropic_claude_opus_4_8": "Modello Claude più capace",
         "anthropic_claude_opus_4_7": "Modello Opus potente",
         "anthropic_claude_opus_4_6": "Generazione Opus precedente, contesto da 1M",
-        "anthropic_claude_opus_4_5": "Modello Opus meno recente"
+        "anthropic_claude_opus_4_5": "Modello Opus meno recente",
+        "tinfoil_deepseek_v4_pro": "Ragionamento privato a contesto lungo in enclave sicure, contesto 800K",
+        "tinfoil_glm_5_2": "Modello privato di ingegneria agentica in enclave sicure, contesto 384K",
+        "tinfoil_kimi_k2_6": "Modello privato di coding a lungo termine e multimodale, contesto 256K",
+        "tinfoil_gemma4_31b": "Modello privato di ragionamento multilingue con chiamata di strumenti, contesto 256K",
+        "tinfoil_gpt_oss_120b": "Modello privato di ragionamento open-weight con uso di strumenti, contesto 131K",
+        "tinfoil_llama3_3_70b": "Modello privato conversazionale con chiamata di strumenti, contesto 128K"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Veloce ed economico. Ideale per ripulire il testo.",
@@ -2082,6 +2098,7 @@
       "transcribingProvider": "Trascrizione tramite {{provider}}...",
       "cancelTranscription": "Annulla trascrizione",
       "transcriptionComplete": "Trascrizione completata",
+      "partialWarning": "Non è stato possibile trascrivere una parte dell'audio.",
       "openNote": "Apri nota",
       "uploadAnother": "Carica un altro",
       "retry": "Riprova",

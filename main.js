@@ -284,6 +284,7 @@ const MeetingProcessDetector = require("./src/helpers/meetingProcessDetector");
 const AudioActivityDetector = require("./src/helpers/audioActivityDetector");
 const AudioTapManager = require("./src/helpers/audioTapManager");
 const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager");
+const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
@@ -312,12 +313,15 @@ let googleCalendarManager = null;
 let meetingDetectionEngine = null;
 let audioTapManager = null;
 let linuxPortalAudioManager = null;
+let windowsLoopbackAudioManager = null;
 let meetingAecManager = null;
 let qdrantManager = null;
 let ipcHandlers = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
+const WHISPER_WAKE_REWARM_DELAY_MS = 3000;
+let wakeRewarmTimer = null;
 
 function parseAuthBridgePort() {
   const raw = (process.env.OPENWHISPR_AUTH_BRIDGE_PORT || "").trim();
@@ -406,6 +410,10 @@ function initializeCoreManagers() {
   textEditMonitor = new TextEditMonitor();
   audioTapManager = new AudioTapManager();
   linuxPortalAudioManager = new LinuxPortalAudioManager();
+  windowsLoopbackAudioManager = new WindowsLoopbackAudioManager();
+  // Warm the capability cache off the hot path so the first meeting start
+  // doesn't pay the probe spawn. No-ops on non-Windows.
+  windowsLoopbackAudioManager.getCapability().catch(() => {});
   cleanupOrphanedLinuxRestoreToken();
   meetingAecManager = new MeetingAecManager();
   windowManager.textEditMonitor = textEditMonitor;
@@ -430,6 +438,7 @@ function initializeCoreManagers() {
     meetingDetectionEngine,
     audioTapManager,
     linuxPortalAudioManager,
+    windowsLoopbackAudioManager,
     meetingAecManager,
     getTrayManager: () => trayManager,
     oauthProtocolRegistered: protocolRegistered,
@@ -932,6 +941,14 @@ async function startApp() {
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
     }
+    // Sleep evicts the local GPU model from VRAM; reload it once the driver settles. See #766.
+    if (wakeRewarmTimer) clearTimeout(wakeRewarmTimer);
+    wakeRewarmTimer = setTimeout(() => {
+      wakeRewarmTimer = null;
+      whisperManager?.onWakeFromSleep().catch((err) => {
+        debugLogger.debug("whisper wake re-warm error (non-fatal)", { error: err.message });
+      });
+    }, WHISPER_WAKE_REWARM_DELAY_MS);
   });
 
   // Non-blocking server pre-warming
@@ -1472,9 +1489,21 @@ if (gotSingleInstanceLock) {
     .then(() => {
       if (process.platform === "win32") {
         session.defaultSession.setDisplayMediaRequestHandler((_request, callback) => {
-          desktopCapturer.getSources({ types: ["screen"] }).then((sources) => {
-            callback({ video: sources[0], audio: "loopback" });
-          });
+          // Only the loopback audio track is used; the video source is
+          // discarded by the renderer, so skip thumbnail generation.
+          desktopCapturer
+            .getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } })
+            .then((sources) => {
+              if (sources.length > 0) {
+                callback({ video: sources[0], audio: "loopback" });
+              } else {
+                callback(null);
+              }
+            })
+            .catch((error) => {
+              console.error("Display media request failed:", error);
+              callback(null);
+            });
         });
       }
 
@@ -1545,6 +1574,13 @@ if (gotSingleInstanceLock) {
   app.on("before-quit", (event) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
+    if (updateManager && updateManager.isQuittingForUpdate) {
+      // Quit must proceed for the installer to run, so no preventDefault;
+      // sidecar shutdown is best-effort (the reaper cleans up orphans on relaunch).
+      performSyncTeardown();
+      sidecarRegistry.shutdownAll().catch(() => {});
+      return;
+    }
     event.preventDefault();
     performSyncTeardown();
     sidecarRegistry.shutdownAll().finally(() => app.exit(0));
@@ -1552,6 +1588,10 @@ if (gotSingleInstanceLock) {
 }
 
 function performSyncTeardown() {
+  if (wakeRewarmTimer) {
+    clearTimeout(wakeRewarmTimer);
+    wakeRewarmTimer = null;
+  }
   if (authBridgeServer) {
     authBridgeServer.close();
     authBridgeServer = null;
@@ -1578,6 +1618,7 @@ function performSyncTeardown() {
   if (googleCalendarManager) googleCalendarManager.stop();
   if (audioTapManager) audioTapManager.stop().catch(() => {});
   if (linuxPortalAudioManager) linuxPortalAudioManager.stop().catch(() => {});
+  if (windowsLoopbackAudioManager) windowsLoopbackAudioManager.stop().catch(() => {});
   if (meetingAecManager) meetingAecManager.stop().catch(() => {});
   if (ipcHandlers) ipcHandlers._cleanupTextEditMonitor();
   if (textEditMonitor) textEditMonitor.stopMonitoring();

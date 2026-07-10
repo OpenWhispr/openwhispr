@@ -1,11 +1,16 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const { EventEmitter } = require("node:events");
+const childProcess = require("node:child_process");
 
 const fakeClipboard = {
   text: "",
   html: "",
+  rtf: "",
+  image: null,
   formats: ["text/plain"],
+  writes: [],
   availableFormats() {
     return this.formats;
   },
@@ -14,41 +19,129 @@ const fakeClipboard = {
   },
   writeText(text) {
     this.text = text;
+    this.html = "";
+    this.rtf = "";
+    this.image = null;
+    this.formats = ["text/plain"];
+    this.writes.push(["writeText", text]);
   },
   readHTML() {
     return this.html;
   },
+  readRTF() {
+    return this.rtf;
+  },
   write(payload) {
-    this.text = payload.text;
-    this.html = payload.html;
+    this.text = payload.text || "";
+    this.html = payload.html || "";
+    this.rtf = payload.rtf || "";
+    this.image = payload.image || null;
+    this.formats = [];
+    if (Object.hasOwn(payload, "text")) this.formats.push("text/plain");
+    if (Object.hasOwn(payload, "html")) this.formats.push("text/html");
+    if (Object.hasOwn(payload, "rtf")) this.formats.push("text/rtf");
+    if (Object.hasOwn(payload, "image")) this.formats.push("image/png");
+    this.writes.push(["write", payload]);
   },
   readImage() {
-    return { isEmpty: () => true };
+    return this.image || emptyImage;
   },
-  writeImage() {},
+  writeImage(image) {
+    this.text = "";
+    this.html = "";
+    this.rtf = "";
+    this.image = image;
+    this.formats = image && !image.isEmpty() ? ["image/png"] : [];
+    this.writes.push(["writeImage", image]);
+  },
 };
+
+const emptyImage = { isEmpty: () => true };
+const nonEmptyImage = { isEmpty: () => false };
+
+const clipboardModulePath = require.resolve("../../src/helpers/clipboard");
 
 const originalLoad = Module._load;
-Module._load = function loadWithElectronMock(request, parent, isMain) {
-  if (request === "electron") {
-    return {
-      clipboard: fakeClipboard,
-      systemPreferences: {
-        isTrustedAccessibilityClient: () => true,
-      },
-    };
+
+function loadClipboardManager({ spawn } = {}) {
+  delete require.cache[clipboardModulePath];
+
+  Module._load = function loadWithMocks(request, parent, isMain) {
+    if (request === "electron") {
+      return {
+        clipboard: fakeClipboard,
+        systemPreferences: {
+          isTrustedAccessibilityClient: () => true,
+        },
+      };
+    }
+    if (request === "child_process" && spawn) {
+      return { ...childProcess, spawn };
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+
+  try {
+    return require("../../src/helpers/clipboard");
+  } finally {
+    Module._load = originalLoad;
   }
-  return originalLoad.call(this, request, parent, isMain);
-};
-
-const ClipboardManager = require("../../src/helpers/clipboard");
-Module._load = originalLoad;
-
-function resetClipboard() {
-  fakeClipboard.text = "";
-  fakeClipboard.html = "";
-  fakeClipboard.formats = ["text/plain"];
 }
+
+const ClipboardManager = loadClipboardManager();
+
+function createSuccessfulSpawn(calls) {
+  return function successfulSpawn(command, args = []) {
+    calls.push({ command, args });
+    const pasteProcess = new EventEmitter();
+    pasteProcess.stderr = new EventEmitter();
+    pasteProcess.stdout = new EventEmitter();
+    process.nextTick(() => pasteProcess.emit("close", 0));
+    return pasteProcess;
+  };
+}
+
+function resetClipboard({
+  text = "",
+  html = "",
+  rtf = "",
+  image = null,
+  formats = ["text/plain"],
+} = {}) {
+  fakeClipboard.text = text;
+  fakeClipboard.html = html;
+  fakeClipboard.rtf = rtf;
+  fakeClipboard.image = image;
+  fakeClipboard.formats = formats;
+  fakeClipboard.writes = [];
+}
+
+test("restore preserves rich clipboard formats atomically", () => {
+  resetClipboard({
+    formats: ["text/html", "text/rtf", "text/plain", "image/png"],
+    text: "plain before",
+    html: "<b>html before</b>",
+    rtf: "{\\rtf1 before}",
+    image: nonEmptyImage,
+  });
+  const manager = new ClipboardManager();
+
+  const snapshot = manager._saveClipboard();
+  fakeClipboard.writeText("dictated text");
+  manager._restoreClipboard(snapshot);
+
+  assert.deepEqual([...fakeClipboard.availableFormats()].sort(), [
+    "image/png",
+    "text/html",
+    "text/plain",
+    "text/rtf",
+  ]);
+  assert.equal(fakeClipboard.text, "plain before");
+  assert.equal(fakeClipboard.html, "<b>html before</b>");
+  assert.equal(fakeClipboard.rtf, "{\\rtf1 before}");
+  assert.equal(fakeClipboard.image, nonEmptyImage);
+  assert.equal(fakeClipboard.writes.at(-1)[0], "write");
+});
 
 test("restore runs when clipboard still contains the pasted text", async () => {
   resetClipboard();
@@ -103,4 +196,66 @@ test("pasteText waits for prior clipboard restoration before starting the next p
   releaseFirstRestore();
   await secondPaste;
   assert.deepEqual(events, ["start:first", "end:first", "start:second", "end:second"]);
+});
+
+test("pasteMacOS restores clipboard after the short macOS delay on successful fast paste", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  const originalClipboard = { type: "text", data: "previous clipboard" };
+  let restoreCall;
+
+  manager.resolveFastPasteBinary = () => "/tmp/openwhispr-fast-paste";
+  manager._restoreClipboardAfterDelay = (original, options) => {
+    restoreCall = { original, options };
+    return Promise.resolve();
+  };
+
+  const result = await manager.pasteMacOS(originalClipboard, {
+    expectedClipboardText: "dictated text",
+    fromStreaming: true,
+  });
+  await result.restoreComplete;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].command, "/tmp/openwhispr-fast-paste");
+  assert.equal(restoreCall.original, originalClipboard);
+  assert.deepEqual(restoreCall.options, {
+    delayMs: 450,
+    expectedText: "dictated text",
+  });
+});
+
+test("pasteMacOSWithOsascript fallback uses the short macOS restore delay", async () => {
+  const spawnCalls = [];
+  const TestClipboardManager = loadClipboardManager({
+    spawn: createSuccessfulSpawn(spawnCalls),
+  });
+  const manager = new TestClipboardManager();
+  const originalClipboard = { type: "text", data: "previous clipboard" };
+  let restoreCall;
+
+  manager._restoreClipboardAfterDelay = (original, options) => {
+    restoreCall = { original, options };
+    return Promise.resolve();
+  };
+
+  const result = await manager.pasteMacOSWithOsascript(originalClipboard, {
+    expectedClipboardText: "dictated text",
+  });
+  await result.restoreComplete;
+
+  assert.equal(spawnCalls.length, 1);
+  assert.equal(spawnCalls[0].command, "osascript");
+  assert.deepEqual(spawnCalls[0].args, [
+    "-e",
+    'tell application "System Events" to key code 9 using command down',
+  ]);
+  assert.equal(restoreCall.original, originalClipboard);
+  assert.deepEqual(restoreCall.options, {
+    delayMs: 450,
+    expectedText: "dictated text",
+  });
 });

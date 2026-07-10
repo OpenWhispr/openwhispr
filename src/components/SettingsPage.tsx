@@ -213,6 +213,8 @@ interface TranscriptionSectionProps {
   setTranscriptionMode: (mode: InferenceMode) => void;
   remoteTranscriptionUrl: string;
   setRemoteTranscriptionUrl: (url: string) => void;
+  remoteTranscriptionModel: string;
+  setRemoteTranscriptionModel: (model: string) => void;
   showTranscriptionPreview: boolean;
   setShowTranscriptionPreview: (value: boolean) => void;
   toast: (opts: {
@@ -222,6 +224,9 @@ interface TranscriptionSectionProps {
     duration?: number;
   }) => void;
 }
+
+// Providers that forward the live-preview flag (see STREAMING_PROVIDERS in audioManager.js).
+const CLOUD_PREVIEW_PROVIDERS = new Set(["tinfoil"]);
 
 function TranscriptionSection({
   isSignedIn,
@@ -247,6 +252,8 @@ function TranscriptionSection({
   setTranscriptionMode,
   remoteTranscriptionUrl,
   setRemoteTranscriptionUrl,
+  remoteTranscriptionModel,
+  setRemoteTranscriptionModel,
   showTranscriptionPreview,
   setShowTranscriptionPreview,
   toast,
@@ -366,7 +373,12 @@ function TranscriptionSection({
         onSelect={handleTranscriptionModeSelect}
       />
 
-      {transcriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+      {transcriptionMode === "providers" && (
+        <>
+          {renderTranscriptionPicker("cloud")}
+          {CLOUD_PREVIEW_PROVIDERS.has(cloudTranscriptionProvider) && renderPreviewToggle()}
+        </>
+      )}
       {transcriptionMode === "local" && (
         <>
           {renderTranscriptionPicker("local")}
@@ -379,6 +391,8 @@ function TranscriptionSection({
           service="transcription"
           url={remoteTranscriptionUrl}
           onUrlChange={setRemoteTranscriptionUrl}
+          model={remoteTranscriptionModel}
+          onModelChange={setRemoteTranscriptionModel}
         />
       )}
 
@@ -609,17 +623,17 @@ function LlmsTabs({
 function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligence" }) {
   const { t } = useTranslation();
   const [gpus, setGpus] = useState<GpuDevice[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState("0");
+  const [selectedUuid, setSelectedUuid] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     Promise.all([
       window.electronAPI?.listGpus?.() ?? Promise.resolve([]),
-      window.electronAPI?.getGpuDeviceIndex?.(purpose) ?? Promise.resolve("0"),
+      window.electronAPI?.getGpuDeviceIndex?.(purpose) ?? Promise.resolve(""),
     ])
-      .then(([gpuList, idx]) => {
+      .then(([gpuList, savedUuid]) => {
         setGpus(gpuList);
-        setSelectedIndex(idx);
+        setSelectedUuid(savedUuid || gpuList[0]?.uuid || "");
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -637,16 +651,16 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
         <SettingsPanelRow>
           <div className="relative w-full">
             <select
-              value={selectedIndex}
+              value={selectedUuid}
               onChange={async (e) => {
-                const idx = e.target.value;
-                setSelectedIndex(idx);
-                await window.electronAPI?.setGpuDeviceIndex?.(purpose, Number(idx));
+                const uuid = e.target.value;
+                setSelectedUuid(uuid);
+                await window.electronAPI?.setGpuDeviceIndex?.(purpose, uuid);
               }}
               className="w-full appearance-none rounded-md border border-border bg-background px-3 pr-10 py-2 text-sm"
             >
               {gpus.map((gpu) => (
-                <option key={gpu.index} value={String(gpu.index)}>
+                <option key={gpu.uuid} value={gpu.uuid}>
                   GPU {gpu.index}: {gpu.name} ({Math.round(gpu.vramMb / 1024)}GB)
                 </option>
               ))}
@@ -727,6 +741,8 @@ export default function SettingsPage({
     setTranscriptionMode,
     remoteTranscriptionUrl,
     setRemoteTranscriptionUrl,
+    remoteTranscriptionModel,
+    setRemoteTranscriptionModel,
     notificationsEnabled,
     setNotificationsEnabled,
     notifyMeetingDetection,
@@ -3360,7 +3376,7 @@ EOF`,
                             setCloudBackupEnabled(v);
                             if (v) {
                               startMigration().catch(console.error);
-                              syncService.syncAll().catch(console.error);
+                              syncService.requestSyncAll("manual");
                             }
                           }}
                         />
@@ -3951,6 +3967,8 @@ EOF`,
                   setTranscriptionMode={setTranscriptionMode}
                   remoteTranscriptionUrl={remoteTranscriptionUrl}
                   setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                  remoteTranscriptionModel={remoteTranscriptionModel}
+                  setRemoteTranscriptionModel={setRemoteTranscriptionModel}
                   showTranscriptionPreview={showTranscriptionPreview}
                   setShowTranscriptionPreview={setShowTranscriptionPreview}
                   toast={toast}

@@ -542,6 +542,10 @@
         "title": "No se detectó audio",
         "description": "La grabación no contiene audio detectable. Inténtalo de nuevo."
       },
+      "partialTranscription": {
+        "title": "Transcripción parcial",
+        "description": "No se pudo transcribir una parte de la grabación."
+      },
       "errorDescriptions": {
         "sessionExpired": "Tu sesión de OpenWhispr Cloud no está disponible. Vuelve a iniciar sesión desde Ajustes.",
         "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
@@ -726,6 +730,11 @@
       "ready": "Listo",
       "welcomeBack": "Bienvenido de nuevo",
       "welcomeBackName": "Bienvenido de nuevo, {{name}}"
+    },
+    "sso": {
+      "continueWithSSO": "Iniciar sesión con SSO",
+      "emailRequired": "Introduce tu correo del trabajo para usar SSO.",
+      "failed": "Error al iniciar sesión con SSO. Inténtalo de nuevo."
     },
     "social": {
       "completeInBrowser": "Completa el inicio de sesión en tu navegador",
@@ -1436,7 +1445,7 @@
         "linuxPttSetupNote": "Después de ejecutar el comando, cierra sesión y vuelve a iniciarla.",
         "hyprlandConfigWriteWarningTitle": "Los atajos de Hyprland no se conservarán",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr no puede escribir en {{path}}, así que los atajos no sobrevivirán a una recarga de la configuración de Hyprland. Asegúrate de que el archivo exista y se pueda escribir.",
-        "hyprlandUnbindDescription": "En Hyprland, OpenWhispr reclama el atajo seleccionado. Cualquier atajo existente de Hyprland que use la misma combinación de teclas se desvinculará cuando OpenWhispr registre su atajo."
+        "hyprlandUnbindDescription": "En Hyprland, OpenWhispr reserva el atajo seleccionado. Cualquier atajo existente de Hyprland que use la misma combinación de teclas se desvinculará cuando OpenWhispr registre su atajo."
       },
       "meetingHotkey": {
         "title": "Atajo modo reunión",
@@ -1908,7 +1917,8 @@
         "groq_whisper_large_v3_turbo": "Velocidad 216x en tiempo real",
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
         "corti_transcribe": "Transcripción médica de nivel clínico",
-        "xai_grok_stt": "Reconocimiento de voz de alta precisión por xAI"
+        "xai_grok_stt": "Reconocimiento de voz de alta precisión por xAI",
+        "tinfoil_voxtral_mini_realtime": "Transcripción en streaming verificablemente privada"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",
@@ -1939,7 +1949,13 @@
         "anthropic_claude_opus_4_8": "Modelo Claude más capaz",
         "anthropic_claude_opus_4_7": "Modelo Opus potente",
         "anthropic_claude_opus_4_6": "Generación anterior de Opus, contexto de 1M",
-        "anthropic_claude_opus_4_5": "Modelo Opus anterior"
+        "anthropic_claude_opus_4_5": "Modelo Opus anterior",
+        "tinfoil_deepseek_v4_pro": "Razonamiento privado de contexto largo en enclaves seguros, contexto de 800K",
+        "tinfoil_glm_5_2": "Modelo privado de ingeniería agéntica en enclaves seguros, contexto de 384K",
+        "tinfoil_kimi_k2_6": "Modelo privado de codificación a largo plazo y multimodal, contexto de 256K",
+        "tinfoil_gemma4_31b": "Modelo privado de razonamiento multilingüe con llamada a herramientas, contexto de 256K",
+        "tinfoil_gpt_oss_120b": "Modelo privado de razonamiento de pesos abiertos con uso de herramientas, contexto de 131K",
+        "tinfoil_llama3_3_70b": "Modelo privado conversacional con llamada a herramientas, contexto de 128K"
       },
       "enterprise": {
         "bedrock_claude_haiku_4_5": "Rápido y económico. Ideal para limpiar texto.",
@@ -2130,6 +2146,7 @@
       "transcribingProvider": "Transcribiendo con {{provider}}...",
       "cancelTranscription": "Cancelar transcripción",
       "transcriptionComplete": "Transcripción completada",
+      "partialWarning": "No se pudo transcribir una parte del audio.",
       "openNote": "Abrir nota",
       "uploadAnother": "Subir otro",
       "retry": "Reintentar",

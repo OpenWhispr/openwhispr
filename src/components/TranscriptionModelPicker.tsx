@@ -205,6 +205,7 @@ const CLOUD_PROVIDER_TABS = [
   { id: "xai", name: "xAI" },
   { id: "mistral", name: "Mistral" },
   { id: "corti", name: "Corti" },
+  { id: "tinfoil", name: "Tinfoil" },
   { id: "custom", name: "Custom" },
 ];
 
@@ -217,7 +218,8 @@ interface ProviderCredentialField {
     | "cortiClientId"
     | "cortiClientSecret"
     | "cortiEnvironment"
-    | "cortiTenant";
+    | "cortiTenant"
+    | "tinfoilApiKey";
   input: "secret" | "text" | "select";
   labelKey?: string;
   placeholder?: string;
@@ -265,6 +267,10 @@ const PROVIDER_CREDENTIALS: Record<
         placeholder: "base",
       },
     ],
+  },
+  tinfoil: {
+    consoleUrl: "https://tinfoil.sh/inference?utm_source=referral&utm_campaign=openwhispr",
+    fields: [{ key: "tinfoilApiKey", input: "secret" }],
   },
 };
 
@@ -346,6 +352,8 @@ export default function TranscriptionModelPicker({
   const setCortiEnvironment = useSettingsStore((s) => s.setCortiEnvironment);
   const cortiTenant = useSettingsStore((s) => s.cortiTenant);
   const setCortiTenant = useSettingsStore((s) => s.setCortiTenant);
+  const tinfoilApiKey = useSettingsStore((s) => s.tinfoilApiKey);
+  const setTinfoilApiKey = useSettingsStore((s) => s.setTinfoilApiKey);
   const customTranscriptionApiKey = useSettingsStore((s) => s.customTranscriptionApiKey);
   const setCustomTranscriptionApiKey = useSettingsStore((s) => s.setCustomTranscriptionApiKey);
   const effectiveLocal = mode === "local" ? true : mode === "cloud" ? false : useLocalWhisper;
@@ -714,6 +722,7 @@ export default function TranscriptionModelPicker({
     cortiClientSecret,
     cortiEnvironment,
     cortiTenant,
+    tinfoilApiKey,
   };
   const credentialSetters: Record<ProviderCredentialField["key"], (value: string) => void> = {
     openaiApiKey: setOpenaiApiKey,
@@ -724,6 +733,7 @@ export default function TranscriptionModelPicker({
     cortiClientSecret: setCortiClientSecret,
     cortiEnvironment: setCortiEnvironment,
     cortiTenant: setCortiTenant,
+    tinfoilApiKey: setTinfoilApiKey,
   };
 
   const cloudModelOptions = useMemo(() => {

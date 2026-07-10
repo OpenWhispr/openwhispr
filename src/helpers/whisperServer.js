@@ -176,6 +176,7 @@ class WhisperServerManager extends EventEmitter {
     this.useCuda = false;
     this.vadSignature = "vad:off";
     this.threadSignature = "threads:default";
+    this.lastStartOptions = {};
   }
 
   getFFmpegPath() {
@@ -372,6 +373,10 @@ class WhisperServerManager extends EventEmitter {
   async start(modelPath, options = {}) {
     if (this.startupPromise) return this.startupPromise;
 
+    // Remember the options so a wake re-warm can reload with the same VAD/thread
+    // signature and survive start()'s no-op guard on the next dictation. See #766.
+    this.lastStartOptions = { ...options };
+
     const threadResolution = resolveWhisperThreads(options);
     const nextThreadSignature = getThreadSignature(threadResolution);
     const nextVadSignature = getVadSignature(options);
@@ -427,8 +432,12 @@ class WhisperServerManager extends EventEmitter {
     const serverBinaryDir = path.dirname(serverBinary);
     spawnEnv.PATH = serverBinaryDir + pathSep + (process.env.PATH || "");
 
-    if (usingCuda && process.env.TRANSCRIPTION_GPU_INDEX) {
-      spawnEnv.CUDA_VISIBLE_DEVICES = process.env.TRANSCRIPTION_GPU_INDEX;
+    // Select GPU by UUID + PCI_BUS_ID order so the device is unambiguous. See #531.
+    if (usingCuda) {
+      spawnEnv.CUDA_DEVICE_ORDER = "PCI_BUS_ID";
+      if (process.env.TRANSCRIPTION_GPU_UUID) {
+        spawnEnv.CUDA_VISIBLE_DEVICES = process.env.TRANSCRIPTION_GPU_UUID;
+      }
     }
 
     const args = buildWhisperServerArgs({

@@ -208,8 +208,10 @@ class LlamaServerManager {
       env.PATH = binDir + (env.PATH ? `;${env.PATH}` : "");
     }
 
-    if (process.env.INTELLIGENCE_GPU_INDEX) {
-      env.CUDA_VISIBLE_DEVICES = process.env.INTELLIGENCE_GPU_INDEX;
+    // Select GPU by UUID + PCI_BUS_ID order so the device is unambiguous. See #531.
+    env.CUDA_DEVICE_ORDER = "PCI_BUS_ID";
+    if (process.env.INTELLIGENCE_GPU_UUID) {
+      env.CUDA_VISIBLE_DEVICES = process.env.INTELLIGENCE_GPU_UUID;
     }
 
     // Disable llama.cpp auto-fit memory probing (adds ~70s to startup). Set via env
