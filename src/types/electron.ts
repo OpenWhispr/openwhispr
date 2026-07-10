@@ -875,6 +875,27 @@ declare global {
         agentName: string | null,
         config: any
       ) => Promise<{ success: boolean; text?: string; error?: string; retryable?: boolean }>;
+      enterpriseStreamStart?: (payload: {
+        streamId: string;
+        provider: string;
+        modelId: string;
+        config: Record<string, string>;
+        options: Record<string, unknown>;
+      }) => Promise<{ success: boolean; error?: string }>;
+      enterpriseStreamCancel?: (streamId: string) => Promise<void>;
+      onEnterpriseStreamPart?: (
+        callback: (payload: {
+          streamId: string;
+          part?: unknown;
+          done?: boolean;
+          error?: string;
+        }) => void
+      ) => () => void;
+      listBedrockModels?: (config: Record<string, string>) => Promise<{
+        success: boolean;
+        models?: Array<{ value: string; label: string; vendor: string }>;
+        error?: string;
+      }>;
 
       // llama.cpp management
       llamaCppCheck: () => Promise<{ isInstalled: boolean; version?: string }>;

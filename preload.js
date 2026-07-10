@@ -443,6 +443,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Node-only SDKs (AWS/Azure/Google credential providers) can resolve.
   processEnterpriseReasoning: (text, modelId, agentName, config) =>
     ipcRenderer.invoke("process-enterprise-reasoning", text, modelId, agentName, config),
+  enterpriseStreamStart: (payload) => ipcRenderer.invoke("enterprise-stream-start", payload),
+  enterpriseStreamCancel: (streamId) => ipcRenderer.invoke("enterprise-stream-cancel", streamId),
+  onEnterpriseStreamPart: registerListener(
+    "enterprise-stream-part",
+    (callback) => (_event, payload) => callback(payload)
+  ),
+  listBedrockModels: (config) => ipcRenderer.invoke("bedrock-list-models", config),
 
   // llama.cpp
   llamaCppCheck: () => ipcRenderer.invoke("llama-cpp-check"),

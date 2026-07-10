@@ -5,6 +5,7 @@ import {
   type EnterpriseProvider as EnterpriseProviderId,
 } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
+import { getEnterpriseCallSettings } from "../enterpriseSettings";
 import { wrapCleanupTranscript } from "../../../config/prompts";
 import logger from "../../../utils/logger";
 
@@ -25,9 +26,6 @@ export const enterpriseProvider: InferenceProvider = {
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
-    const s = getSettings();
-    const apiKey =
-      enterpriseId === "azure" ? s.azureApiKey : enterpriseId === "vertex" ? s.vertexApiKey : "";
     const { supportsTemperature } = getOpenAiApiConfig(model);
 
     const startTime = Date.now();
@@ -39,17 +37,8 @@ export const enterpriseProvider: InferenceProvider = {
         ...config,
         systemPrompt,
         provider: enterpriseId,
-        apiKey,
         supportsTemperature,
-        bedrockRegion: s.bedrockRegion,
-        bedrockProfile: s.bedrockProfile,
-        bedrockAccessKeyId: s.bedrockAccessKeyId,
-        bedrockSecretAccessKey: s.bedrockSecretAccessKey,
-        bedrockSessionToken: s.bedrockSessionToken,
-        azureEndpoint: s.azureEndpoint,
-        azureApiVersion: s.azureApiVersion,
-        vertexProject: s.vertexProject,
-        vertexLocation: s.vertexLocation,
+        ...getEnterpriseCallSettings(enterpriseId),
       }
     );
 

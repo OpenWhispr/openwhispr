@@ -2932,6 +2932,130 @@ class IPCHandlers {
       }
     );
 
+    // Streams a LanguageModel doStream call for the renderer's enterprise chat
+    // model shim (src/services/ai/enterpriseChatModel.ts): parts are relayed
+    // verbatim over enterprise-stream-part, ending with {done} or {error}.
+    this.enterpriseStreamAborts = new Map();
+    ipcMain.handle("enterprise-stream-start", async (event, payload) => {
+      const {
+        isEnterpriseProvider,
+        mapEnterpriseError,
+        pickEnterpriseConfig,
+        validateEnterpriseEndpoint,
+      } = require("./enterpriseProviderErrors");
+      const { streamId, provider, modelId, config, options } = payload || {};
+      const send = (message) => {
+        if (!event.sender.isDestroyed()) {
+          event.sender.send("enterprise-stream-part", { streamId, ...message });
+        }
+      };
+      const abortController = new AbortController();
+      this.enterpriseStreamAborts.set(streamId, abortController);
+      try {
+        if (!streamId || !isEnterpriseProvider(provider)) {
+          throw new Error(`Unsupported enterprise provider: ${provider}`);
+        }
+        if (!modelId) {
+          throw new Error("No model specified for enterprise streaming");
+        }
+        validateEnterpriseEndpoint(config?.azureEndpoint);
+
+        const { getEnterpriseAIModel } = require("./enterpriseAiProviders");
+        const model = getEnterpriseAIModel(
+          provider,
+          modelId,
+          config?.apiKey || "",
+          pickEnterpriseConfig(config || {})
+        );
+
+        const { stream } = await model.doStream({
+          ...options,
+          abortSignal: abortController.signal,
+        });
+        const reader = stream.getReader();
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (event.sender.isDestroyed()) {
+              abortController.abort();
+              break;
+            }
+            send({ part: value });
+          }
+        } finally {
+          reader.releaseLock();
+        }
+        send({ done: true });
+        return { success: true };
+      } catch (err) {
+        debugLogger.error("Enterprise stream error:", err);
+        const mapped = mapEnterpriseError(provider, err, config || {});
+        send({ error: mapped.message });
+        return { success: false, error: mapped.message };
+      } finally {
+        this.enterpriseStreamAborts.delete(streamId);
+      }
+    });
+
+    ipcMain.handle("enterprise-stream-cancel", async (event, streamId) => {
+      this.enterpriseStreamAborts.get(streamId)?.abort();
+      this.enterpriseStreamAborts.delete(streamId);
+    });
+
+    // Lists the text models the user's account actually serves in the selected
+    // region, resolved to invocable IDs (bare on-demand IDs or geo-scoped
+    // inference profile IDs).
+    ipcMain.handle("bedrock-list-models", async (event, config) => {
+      const { mapEnterpriseError } = require("./enterpriseProviderErrors");
+      try {
+        const {
+          BedrockClient,
+          ListFoundationModelsCommand,
+          paginateListInferenceProfiles,
+        } = require("@aws-sdk/client-bedrock");
+        const { normalizeBedrockCatalog } = require("./bedrockCatalog");
+
+        const region = config?.bedrockRegion || "us-east-1";
+        let credentials;
+        if (config?.bedrockProfile) {
+          const { fromNodeProviderChain } = require("@aws-sdk/credential-providers");
+          credentials = fromNodeProviderChain({ profile: config.bedrockProfile });
+        } else if (config?.bedrockAccessKeyId && config?.bedrockSecretAccessKey) {
+          credentials = {
+            accessKeyId: config.bedrockAccessKeyId,
+            secretAccessKey: config.bedrockSecretAccessKey,
+            sessionToken: config.bedrockSessionToken || undefined,
+          };
+        }
+        const client = new BedrockClient({ region, ...(credentials ? { credentials } : {}) });
+
+        const [foundationModels, profileSummaries] = await Promise.all([
+          client.send(new ListFoundationModelsCommand({ byOutputModality: "TEXT" })),
+          (async () => {
+            const summaries = [];
+            const paginator = paginateListInferenceProfiles(
+              { client },
+              { typeEquals: "SYSTEM_DEFINED" }
+            );
+            for await (const page of paginator) {
+              summaries.push(...(page.inferenceProfileSummaries || []));
+            }
+            return summaries;
+          })(),
+        ]);
+
+        return {
+          success: true,
+          models: normalizeBedrockCatalog(foundationModels.modelSummaries, profileSummaries),
+        };
+      } catch (err) {
+        debugLogger.error("Bedrock model listing error:", err);
+        const mapped = mapEnterpriseError("bedrock", err, config || {});
+        return { success: false, error: mapped.message };
+      }
+    });
+
     ipcMain.handle("get-dictation-key", async () => {
       return this.environmentManager.getDictationKey();
     });

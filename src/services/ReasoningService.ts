@@ -4,6 +4,7 @@ import {
   getOpenAiApiConfig,
   getProviderDisplayName,
   isEnterpriseProvider,
+  type EnterpriseProvider,
 } from "../models/ModelRegistry";
 import { BaseReasoningService, ReasoningConfig } from "./BaseReasoningService";
 import { SecureCache } from "../utils/SecureCache";
@@ -14,6 +15,7 @@ import { getSettings, isCloudCleanupMode } from "../stores/settingsStore";
 import { wrapCleanupTranscript } from "../config/prompts";
 import { streamText, stepCountIs } from "ai";
 import { getAIModel } from "./ai/providers";
+import { createEnterpriseChatModel } from "./ai/enterpriseChatModel";
 import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders";
 import { getConfiguredOpenAIBase } from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
@@ -565,12 +567,7 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig & { systemPrompt: string },
     tools?: Record<string, import("ai").Tool>
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-    if (isEnterpriseProvider(provider)) {
-      throw new Error(
-        "Agent Mode is not yet supported with enterprise providers (Bedrock/Azure/Vertex). " +
-          "Switch to Cloud or Local for Agent Mode, or use this provider for text cleanup only."
-      );
-    }
+    const isEnterprise = isEnterpriseProvider(provider);
 
     const cloudProviders = [
       "openai",
@@ -581,11 +578,11 @@ class ReasoningService extends BaseReasoningService {
       "custom",
       "openrouter",
     ];
-    const isLocalProvider = !cloudProviders.includes(provider);
+    const isLocalProvider = !isEnterprise && !cloudProviders.includes(provider);
 
     const settings = getSettings();
     const lanOverride = config.lanUrl?.trim();
-    const isLanCleanup = !!lanOverride || this.isLanCleanupMode();
+    const isLanCleanup = !isEnterprise && (!!lanOverride || this.isLanCleanupMode());
 
     if ((isLocalProvider || isLanCleanup) && !tools) {
       const contentGen = this.processTextStreaming(messages, model, provider, config);
@@ -599,7 +596,10 @@ class ReasoningService extends BaseReasoningService {
     let apiKey = "";
     let baseURL: string | undefined;
 
-    if (isLanCleanup) {
+    if (isEnterprise) {
+      // Enterprise SDKs run in the main process; the model below proxies
+      // doStream over IPC, so no key or base URL is resolved here.
+    } else if (isLanCleanup) {
       const rawUrl = lanOverride || settings.cleanupRemoteUrl.trim();
       baseURL = ensureV1Suffix(rawUrl);
     } else if (isLocalProvider) {
@@ -625,9 +625,11 @@ class ReasoningService extends BaseReasoningService {
     // exemption below can't apply — honor the toggle directly.
     const openrouterDisableThinking = provider === "openrouter" && config.disableThinking === true;
     // Resolving a Tinfoil model refreshes the registry, so read model config after it.
-    const aiModel = await getAIModel(aiProvider, model, apiKey, baseURL, {
-      disableThinking: openrouterDisableThinking,
-    });
+    const aiModel = isEnterprise
+      ? createEnterpriseChatModel(provider as EnterpriseProvider, model)
+      : await getAIModel(aiProvider, model, apiKey, baseURL, {
+          disableThinking: openrouterDisableThinking,
+        });
 
     const apiConfig = getOpenAiApiConfig(model, provider);
     const modelDef = getCloudModel(model);
