@@ -126,6 +126,7 @@
     "pttUnavailable": "プッシュトゥトークのネイティブリスナーが利用できません"
   },
   "common": {
+    "retry": "再試行",
     "back": "戻る",
     "next": "次へ",
     "complete": "完了",
@@ -1930,7 +1931,6 @@
         "bedrock_gpt_oss_120b": "OpenAI のオープンウェイトモデル。低コストで高い推論力。",
         "bedrock_deepseek_v3_2": "オープンウェイトのフロンティアモデル。エージェントモードに最適。",
         "bedrock_qwen3_next_80b": "スパースなオープンウェイトモデル。高速で多言語対応。",
-        "bedrock_nova_lite": "最も安価。AWS ネイティブで大量処理に最適です。",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },

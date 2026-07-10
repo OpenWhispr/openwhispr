@@ -126,6 +126,7 @@
     "pttUnavailable": "Нативный слушатель Push-to-Talk недоступен"
   },
   "common": {
+    "retry": "Повторить",
     "back": "Назад",
     "next": "Далее",
     "complete": "Готово",
@@ -1930,7 +1931,6 @@
         "bedrock_gpt_oss_120b": "Открытая модель OpenAI. Сильные рассуждения по низкой цене.",
         "bedrock_deepseek_v3_2": "Открытая передовая модель. Отличный выбор для режима агента.",
         "bedrock_qwen3_next_80b": "Разреженная открытая модель. Быстрая и многоязычная.",
-        "bedrock_nova_lite": "Самая дешёвая. Нативная для AWS, идеальна для больших объёмов.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },

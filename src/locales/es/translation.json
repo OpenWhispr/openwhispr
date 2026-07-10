@@ -126,6 +126,7 @@
     "pttUnavailable": "El módulo nativo de Push-to-Talk no está disponible"
   },
   "common": {
+    "retry": "Reintentar",
     "back": "Atrás",
     "next": "Siguiente",
     "complete": "Completar",
@@ -1978,7 +1979,6 @@
         "bedrock_gpt_oss_120b": "Modelo abierto de OpenAI. Gran razonamiento a bajo costo.",
         "bedrock_deepseek_v3_2": "Modelo frontera de pesos abiertos. Gran valor para el Modo Agente.",
         "bedrock_qwen3_next_80b": "Modelo abierto disperso. Rápido y multilingüe.",
-        "bedrock_nova_lite": "La opción más económica. Nativo de AWS, ideal para alto volumen.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },

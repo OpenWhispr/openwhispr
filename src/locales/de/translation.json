@@ -126,6 +126,7 @@
     "pttUnavailable": "Der native Push-to-Talk-Listener ist nicht verfügbar"
   },
   "common": {
+    "retry": "Erneut versuchen",
     "back": "Zurück",
     "next": "Weiter",
     "complete": "Fertig",
@@ -1930,7 +1931,6 @@
         "bedrock_gpt_oss_120b": "Offenes OpenAI-Modell. Starkes Reasoning zu geringen Kosten.",
         "bedrock_deepseek_v3_2": "Offenes Frontier-Modell. Starker Wert für den Agent-Modus.",
         "bedrock_qwen3_next_80b": "Sparsames offenes Modell. Schnell und mehrsprachig.",
-        "bedrock_nova_lite": "Günstigste Option. Nativ in AWS, ideal für hohe Volumen.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },

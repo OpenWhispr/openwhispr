@@ -126,6 +126,7 @@
     "pttUnavailable": "按住說話原生監聽程式無法使用"
   },
   "common": {
+    "retry": "重試",
     "back": "返回",
     "next": "下一步",
     "complete": "完成",
@@ -1925,7 +1926,6 @@
         "bedrock_gpt_oss_120b": "OpenAI 開放權重模型。低成本下的強大推理能力。",
         "bedrock_deepseek_v3_2": "開放權重前沿模型。智慧助手模式的高性價比之選。",
         "bedrock_qwen3_next_80b": "稀疏開放權重模型。快速且多語言。",
-        "bedrock_nova_lite": "最便宜的選擇。AWS 原生，適合高流量場景。",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },

@@ -126,6 +126,7 @@
     "pttUnavailable": "Push-to-Talk native listener not available"
   },
   "common": {
+    "retry": "Retry",
     "back": "Back",
     "next": "Next",
     "complete": "Complete",
@@ -2022,7 +2023,6 @@
         "bedrock_gpt_oss_120b": "Open-weight OpenAI model. Strong reasoning at low cost.",
         "bedrock_deepseek_v3_2": "Open-weight frontier model. Great value for Agent Mode.",
         "bedrock_qwen3_next_80b": "Sparse open-weight model. Fast and multilingual.",
-        "bedrock_nova_lite": "Cheapest option. AWS-native, ideal for high volume.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },

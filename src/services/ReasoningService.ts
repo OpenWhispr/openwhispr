@@ -567,7 +567,10 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig & { systemPrompt: string },
     tools?: Record<string, import("ai").Tool>
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-    const isEnterprise = isEnterpriseProvider(provider);
+    const lanOverride = config.lanUrl?.trim();
+    // An explicit self-hosted URL is the caller's declared route — it must win
+    // even when a stale enterprise provider id is left in the scope's settings.
+    const isEnterprise = !lanOverride && isEnterpriseProvider(provider);
 
     const cloudProviders = [
       "openai",
@@ -581,7 +584,6 @@ class ReasoningService extends BaseReasoningService {
     const isLocalProvider = !isEnterprise && !cloudProviders.includes(provider);
 
     const settings = getSettings();
-    const lanOverride = config.lanUrl?.trim();
     const isLanCleanup = !isEnterprise && (!!lanOverride || this.isLanCleanupMode());
 
     if ((isLocalProvider || isLanCleanup) && !tools) {
@@ -655,6 +657,12 @@ class ReasoningService extends BaseReasoningService {
 
     const useTemperature = isLocalProvider || isLanCleanup || apiConfig.supportsTemperature;
 
+    // cancelActiveStream() aborts this controller, which streamText propagates
+    // into the model's doStream — including the enterprise IPC proxy, so the
+    // main-process provider request is cancelled too.
+    const abortController = new AbortController();
+    this.streamAbortController = abortController;
+
     const result = streamText({
       model: aiModel,
       messages: messages.map((m) => ({
@@ -663,37 +671,50 @@ class ReasoningService extends BaseReasoningService {
       })),
       tools: tools || undefined,
       stopWhen: stepCountIs(tools ? ReasoningService.MAX_TOOL_STEPS : 1),
+      abortSignal: abortController.signal,
       ...(useTemperature ? { temperature: config.temperature ?? 0.3 } : {}),
       maxOutputTokens: config.maxTokens || 4096,
       ...(hasProviderOptions ? { providerOptions } : {}),
     });
 
-    for await (const chunk of result.fullStream) {
-      if (chunk.type === "text-delta") {
-        yield { type: "content", text: chunk.text };
-      } else if (chunk.type === "tool-call") {
-        yield {
-          type: "tool_calls",
-          calls: [
-            {
-              id: chunk.toolCallId,
-              name: chunk.toolName,
-              arguments: JSON.stringify(chunk.input),
-            },
-          ],
-        };
-      } else if (chunk.type === "tool-result") {
-        const output = chunk.output;
-        const displayText =
-          typeof output === "string" ? output : output?.error ? String(output.error) : "Done";
-        yield {
-          type: "tool_result",
-          callId: chunk.toolCallId,
-          toolName: chunk.toolName,
-          displayText,
-        };
-      } else if (chunk.type === "finish") {
-        yield { type: "done", finishReason: chunk.finishReason };
+    try {
+      for await (const chunk of result.fullStream) {
+        if (chunk.type === "text-delta") {
+          yield { type: "content", text: chunk.text };
+        } else if (chunk.type === "tool-call") {
+          yield {
+            type: "tool_calls",
+            calls: [
+              {
+                id: chunk.toolCallId,
+                name: chunk.toolName,
+                arguments: JSON.stringify(chunk.input),
+              },
+            ],
+          };
+        } else if (chunk.type === "tool-result") {
+          const output = chunk.output;
+          const displayText =
+            typeof output === "string" ? output : output?.error ? String(output.error) : "Done";
+          yield {
+            type: "tool_result",
+            callId: chunk.toolCallId,
+            toolName: chunk.toolName,
+            displayText,
+          };
+        } else if (chunk.type === "finish") {
+          yield { type: "done", finishReason: chunk.finishReason };
+        }
+      }
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        yield { type: "done", finishReason: "stop" };
+        return;
+      }
+      throw error;
+    } finally {
+      if (this.streamAbortController === abortController) {
+        this.streamAbortController = null;
       }
     }
   }

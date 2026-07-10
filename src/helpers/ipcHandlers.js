@@ -2951,6 +2951,15 @@ class IPCHandlers {
       };
       const abortController = new AbortController();
       this.enterpriseStreamAborts.set(streamId, abortController);
+      // isDestroyed() stays false across reload/navigation, which wipes the
+      // renderer-side listeners — abort so the provider request isn't billed
+      // for a generation nobody is receiving.
+      const abortOnGone = (_event, _url, isInPlace, isMainFrame) => {
+        if (isMainFrame && !isInPlace) abortController.abort();
+      };
+      const abortOnDestroyed = () => abortController.abort();
+      event.sender.on("did-start-navigation", abortOnGone);
+      event.sender.once("destroyed", abortOnDestroyed);
       try {
         if (!streamId || !isEnterpriseProvider(provider)) {
           throw new Error(`Unsupported enterprise provider: ${provider}`);
@@ -2995,6 +3004,10 @@ class IPCHandlers {
         return { success: false, error: mapped.message };
       } finally {
         this.enterpriseStreamAborts.delete(streamId);
+        if (!event.sender.isDestroyed()) {
+          event.sender.removeListener("did-start-navigation", abortOnGone);
+          event.sender.removeListener("destroyed", abortOnDestroyed);
+        }
       }
     });
 

@@ -38,7 +38,9 @@ function toDisplayOption(model: ModelCardOption, stripPrefix: boolean): ModelCar
   const prefix = providerPrefix(model.value);
   if (!prefix) {
     if (!model.group || model.icon) return model;
-    const { icon, invertInDark } = getRemoteProviderIcon(model.group.toLowerCase(), model.value);
+    // Vendor names like "Mistral AI" or "Z.AI" → icon slugs like "mistralai".
+    const groupSlug = model.group.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const { icon, invertInDark } = getRemoteProviderIcon(groupSlug, model.value);
     return { ...model, icon, invertInDark };
   }
   const name = model.value.slice(prefix.length + 1);

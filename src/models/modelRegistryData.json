@@ -536,12 +536,6 @@
           "name": "Qwen3 Next 80B",
           "description": "Sparse open-weight model. Fast and multilingual.",
           "descriptionKey": "models.descriptions.enterprise.bedrock_qwen3_next_80b"
-        },
-        {
-          "id": "amazon.nova-lite-v1:0",
-          "name": "Amazon Nova Lite",
-          "description": "Cheapest option. AWS-native, ideal for high volume.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_nova_lite"
         }
       ]
     },

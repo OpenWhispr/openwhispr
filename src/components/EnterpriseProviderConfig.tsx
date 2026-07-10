@@ -329,8 +329,10 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
             variant="outline"
             size="sm"
             className="w-full"
-            disabled={catalog.status === "loading"}
-            onClick={() => loadCatalog(store.bedrockRegion)}
+            aria-busy={catalog.status === "loading"}
+            onClick={() => {
+              if (catalog.status !== "loading") void loadCatalog(store.bedrockRegion);
+            }}
           >
             {catalog.status === "loading" ? (
               <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
@@ -345,7 +347,9 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
           </Button>
           {catalog.status === "error" && (
             <FieldHint>
-              <span className="text-destructive">{catalog.error}</span>
+              <span role="alert" className="text-destructive">
+                {catalog.error}
+              </span>
             </FieldHint>
           )}
         </div>
