@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
+      "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",
       "slotConflict": "This hotkey is already used for {{slot}}."
     }
@@ -1012,8 +1013,7 @@
     "tryShortcutMac": "Try ⌘⇧K",
     "remove": "Remove hotkey",
     "addAnother": "Add another hotkey",
-    "duplicate": "Already added",
-    "add": "Add hotkey"
+    "duplicate": "Already added"
   },
   "languageSelector": {
     "noLanguagesFound": "No languages found",

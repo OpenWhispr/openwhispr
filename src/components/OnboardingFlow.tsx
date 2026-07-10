@@ -129,8 +129,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
 
-  // Onboarding edits only the *primary* dictation hotkey; any additional
-  // bindings (#936) are preserved via withExtraDictationHotkeys below.
+  // Onboarding edits only the primary dictation hotkey; extra bindings are
+  // preserved via withExtraDictationHotkeys.
   const [hotkey, setHotkey] = useState(
     () => parseHotkeyList(dictationKey)[0] || getDefaultHotkey()
   );
@@ -842,7 +842,9 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                 serializeHotkeyList([newHotkey, ...parseHotkeyList(voiceAgentKey).slice(1)])
               )
             }
-            onClear={() => setVoiceAgentKey("")}
+            onClear={() =>
+              setVoiceAgentKey(serializeHotkeyList(parseHotkeyList(voiceAgentKey).slice(1)))
+            }
             variant="hero"
             validate={validateVoiceAgentHotkey}
           />

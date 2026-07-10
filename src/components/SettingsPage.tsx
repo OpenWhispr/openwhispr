@@ -946,28 +946,35 @@ export default function SettingsPage({
     return result ?? { success: false, message: "Electron API unavailable" };
   }, []);
 
-  const { registerHotkey: registerMeetingHotkey } = useHotkeyRegistration({
-    onSuccess: (registeredHotkey) => {
-      setMeetingKey(registeredHotkey);
-    },
-    showSuccessToast: false,
-    showErrorToast: true,
-    showAlert: showAlertDialog,
-    registerFn: meetingRegisterFn,
-  });
+  const { registerHotkey: registerMeetingHotkey, isRegistering: isMeetingHotkeyRegistering } =
+    useHotkeyRegistration({
+      onSuccess: (registeredHotkey) => {
+        setMeetingKey(registeredHotkey);
+      },
+      showSuccessToast: false,
+      showErrorToast: true,
+      showAlert: showAlertDialog,
+      registerFn: meetingRegisterFn,
+    });
 
   // Agent hotkey setters resolve to false when main-process registration fails;
   // surface it and return the result so HotkeyListInput rolls the row back.
+  const [isAgentHotkeyCommitting, setIsAgentHotkeyCommitting] = useState(false);
   const commitAgentHotkey = useCallback(
     async (setter: (key: string) => Promise<boolean>, key: string) => {
-      const ok = await setter(key);
-      if (!ok) {
-        showAlertDialog({
-          title: t("hooks.hotkeyRegistration.titles.notRegistered"),
-          description: t("hooks.hotkeyRegistration.errors.failedToRegister"),
-        });
+      setIsAgentHotkeyCommitting(true);
+      try {
+        const ok = await setter(key);
+        if (!ok) {
+          showAlertDialog({
+            title: t("hooks.hotkeyRegistration.titles.notRegistered"),
+            description: t("hooks.hotkeyRegistration.errors.failedToRegister"),
+          });
+        }
+        return ok;
+      } finally {
+        setIsAgentHotkeyCommitting(false);
       }
-      return ok;
     },
     [showAlertDialog, t]
   );
@@ -3241,6 +3248,8 @@ EOF`,
                     value={dictationKey}
                     onChange={(list) => registerHotkey(list)}
                     validate={validateDictationHotkey}
+                    disabled={isHotkeyRegistering}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                     required
                     footerEnd={
                       effectiveDefaultHotkey &&
@@ -3289,6 +3298,8 @@ EOF`,
                     onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
                     onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
                     validate={validateVoiceAgentHotkey}
+                    disabled={isAgentHotkeyCommitting}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -3310,6 +3321,8 @@ EOF`,
                       setMeetingKey("");
                     }}
                     validate={validateMeetingHotkey}
+                    disabled={isMeetingHotkeyRegistering}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
                 <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/40 dark:border-white/5">
@@ -3357,6 +3370,8 @@ EOF`,
                     onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
                     onClear={() => commitAgentHotkey(setChatAgentKey, "")}
                     validate={validateChatAgentHotkey}
+                    disabled={isAgentHotkeyCommitting}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>

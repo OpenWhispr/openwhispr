@@ -91,6 +91,7 @@
       "alreadyRegistered": "«{{hotkey}}» уже зарегистрирована другим приложением.",
       "osReserved": "«{{hotkey}}» может быть зарезервирована вашей операционной системой.",
       "registrationFailed": "Не удалось зарегистрировать «{{hotkey}}». Возможно, она используется другим приложением.",
+      "updateFailedCheckFormat": "Не удалось обновить горячую клавишу на «{{hotkey}}». Проверьте правильность формата.",
       "trySuggestions": "Попробуйте: {{suggestions}}",
       "slotConflict": "Эта горячая клавиша уже используется для {{slot}}."
     }
@@ -923,9 +924,8 @@
     "tryShortcut": "Попробуйте Ctrl+Shift+K",
     "tryShortcutMac": "Попробуйте ⌘⇧K",
     "remove": "Удалить горячую клавишу",
-    "addAnother": "Добавить ещё хоткей",
-    "duplicate": "Уже добавлен",
-    "add": "Добавить хоткей"
+    "addAnother": "Добавить ещё одну горячую клавишу",
+    "duplicate": "Уже добавлена"
   },
   "languageSelector": {
     "noLanguagesFound": "Языки не найдены",

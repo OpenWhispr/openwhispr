@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
+      "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
       "trySuggestions": "試試看：{{suggestions}}",
       "slotConflict": "此快捷鍵已用於{{slot}}。"
     }
@@ -924,8 +925,7 @@
     "tryShortcutMac": "試試 ⌘⇧K",
     "remove": "移除快捷鍵",
     "addAnother": "新增其他快捷鍵",
-    "duplicate": "已新增",
-    "add": "新增快捷鍵"
+    "duplicate": "已新增"
   },
   "languageSelector": {
     "noLanguagesFound": "找不到語言",

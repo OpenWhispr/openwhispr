@@ -1,15 +1,7 @@
-// Shared parsing/serialization for hotkey *lists*.
-//
-// A single slot (dictation, agent, voiceAgent, meeting) can be bound to more
-// than one hotkey so the user can trigger the same action from different
-// keyboards (issue #936). Hotkeys are stored as a comma-separated string, which
-// stays backward compatible with the historical single-value `.env` /
-// localStorage entries: a legacy value with no comma simply parses to a
-// one-element list.
-//
-// The comma KEY itself is a valid hotkey key (e.g. "Control+,"), so a split
-// segment ending in "+" means the split consumed a comma key, not a separator —
-// no accelerator legitimately ends with "+". Parsing restores that comma.
+// Parsing/serialization for hotkey lists (#936), stored as comma-separated
+// strings — backward compatible with legacy single-value entries. The comma
+// KEY is itself a valid hotkey (e.g. "Control+,"): no accelerator legitimately
+// ends with "+", so a split segment ending in "+" gets its comma restored.
 //
 // Keep in sync with the renderer twin in src/utils/hotkeys.ts.
 
@@ -17,9 +9,7 @@ const HOTKEY_LIST_SEPARATOR = ",";
 
 /**
  * Normalize a stored hotkey value (string, comma-separated string, or array)
- * into a clean array of hotkey strings: trimmed, de-duplicated, empties removed,
- * original order preserved. Comma-key hotkeys (e.g. "Control+,") survive the
- * round-trip.
+ * into a clean array: trimmed, de-duplicated, empties removed, order preserved.
  *
  * @param {string|string[]|null|undefined} value
  * @returns {string[]}
@@ -57,7 +47,6 @@ function serializeHotkeyList(value) {
 }
 
 module.exports = {
-  HOTKEY_LIST_SEPARATOR,
   parseHotkeyList,
   serializeHotkeyList,
 };

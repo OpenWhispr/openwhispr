@@ -2292,15 +2292,17 @@ class IPCHandlers {
       return await this.windowManager.updateHotkey(hotkey);
     });
 
-    ipcMain.handle("set-hotkey-listening-mode", async (event, enabled, newHotkey = null) => {
+    ipcMain.handle("set-hotkey-listening-mode", async (event, enabled) => {
       if (this._hotkeyCaptureMode === enabled) return { success: true, skipped: true };
       this._hotkeyCaptureMode = enabled;
       this.windowManager.setHotkeyListeningMode(enabled);
       ipcMain.emit("hotkey-listening-mode-changed", null, enabled);
       const hotkeyManager = this.windowManager.hotkeyManager;
 
-      // When exiting capture mode with a new hotkey, use that to avoid reading stale state
-      const effectiveHotkey = !enabled && newHotkey ? newHotkey : hotkeyManager.getCurrentHotkey();
+      // Restore from slot state only. A freshly captured hotkey is registered by
+      // its own update IPC (invoked before this one); re-binding it here would
+      // overwrite the primary on DE backends or leak untracked registrations.
+      const effectiveHotkey = hotkeyManager.getCurrentHotkey();
 
       const {
         isGlobeLikeHotkey,
@@ -2320,9 +2322,8 @@ class IPCHandlers {
         // Dictation is always active; meeting and agent may or may not be set.
         const allSlots = hotkeyManager.slots;
         for (const [slot, info] of allSlots) {
-          // A slot may bind several hotkeys (issue #936); unregister every
-          // globalShortcut accelerator it owns (native-listener entries have a
-          // null accelerator and are handled by stopping the key listeners below).
+          // Native-listener entries (null accelerator) are handled by stopping
+          // the key listeners below.
           for (const accel of info?.accelerators || []) {
             if (!accel) continue;
             debugLogger.log(
@@ -2376,14 +2377,8 @@ class IPCHandlers {
         if (!usesNativePath) {
           const { globalShortcut } = require("electron");
           // Re-register every globalShortcut-backed dictation hotkey (the slot
-          // may hold several). Include a freshly captured hotkey that may not be
-          // in the slot yet, mirroring the previous effectiveHotkey behavior.
-          const dictationHotkeys = hotkeyManager.getSlotHotkeys("dictation");
-          const toRegister =
-            newHotkey && !dictationHotkeys.includes(newHotkey)
-              ? [...dictationHotkeys, newHotkey]
-              : dictationHotkeys;
-          for (const hk of toRegister) {
+          // may hold several).
+          for (const hk of hotkeyManager.getSlotHotkeys("dictation")) {
             if (!hk || usesNativeListener(hk)) continue;
             const accelerator = hk.startsWith("Fn+") ? hk.slice(3) : hk;
             if (!globalShortcut.isRegistered(accelerator)) {
@@ -2411,10 +2406,7 @@ class IPCHandlers {
           debugLogger.log(
             `[IPC] Re-registering GNOME keybinding "${gnomeHotkey}" after capture mode`
           );
-          const success = await hotkeyManager.gnomeManager.registerKeybinding(gnomeHotkey);
-          if (success) {
-            hotkeyManager.currentHotkey = effectiveHotkey;
-          }
+          await hotkeyManager.gnomeManager.registerKeybinding(gnomeHotkey);
         }
 
         // On Hyprland Wayland, re-register the keybinding with the effective hotkey
@@ -2422,10 +2414,7 @@ class IPCHandlers {
           debugLogger.log(
             `[IPC] Re-registering Hyprland keybinding "${effectiveHotkey}" after capture mode`
           );
-          const success = await hotkeyManager.hyprlandManager.registerKeybinding(effectiveHotkey);
-          if (success) {
-            hotkeyManager.currentHotkey = effectiveHotkey;
-          }
+          await hotkeyManager.hyprlandManager.registerKeybinding(effectiveHotkey);
         }
 
         // On KDE (X11 or Wayland), re-register the keybinding with the effective hotkey
@@ -2439,9 +2428,7 @@ class IPCHandlers {
             "dictation",
             callback
           );
-          if (result === true) {
-            hotkeyManager.currentHotkey = effectiveHotkey;
-          } else {
+          if (result !== true) {
             debugLogger.warn(
               `[IPC] Failed to re-register KDE keybinding "${effectiveHotkey}" after capture mode`,
               { result }
@@ -2953,8 +2940,6 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-active-dictation-key", async () => {
-      // Full active list (comma-separated) — returning only the primary would
-      // make the renderer's startup sync truncate a multi-hotkey slot (#936).
       const hotkeys = this.windowManager?.hotkeyManager?.getSlotHotkeys?.("dictation") ?? [];
       return hotkeys.length > 0 ? hotkeys.join(",") : null;
     });

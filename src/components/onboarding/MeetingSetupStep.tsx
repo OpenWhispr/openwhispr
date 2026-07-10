@@ -77,7 +77,7 @@ export default function MeetingSetupStep({
         <HotkeyInput
           value={parseHotkeyList(meetingKey)[0] ?? ""}
           onChange={async (newHotkey) => {
-            // Onboarding edits the primary meeting hotkey; keep extra bindings (#936).
+            // Edits the primary meeting hotkey; extra bindings are preserved.
             await registerMeetingHotkey(
               serializeHotkeyList([newHotkey, ...parseHotkeyList(meetingKey).slice(1)])
             );

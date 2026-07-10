@@ -83,11 +83,8 @@ const SUGGESTED_HOTKEYS = {
 class HotkeyManager extends EventEmitter {
   constructor() {
     super();
-    // Each slot holds a *list* of hotkeys (issue #936): the same action can be
-    // triggered from more than one key/combo, e.g. GLOBE on a laptop keyboard
-    // and Control+Shift+R on an external one. `accelerators` mirrors `hotkeys`
-    // index-for-index, holding the globalShortcut accelerator for entries
-    // registered through globalShortcut (null for native-listener entries).
+    // Each slot holds a list of hotkeys (#936). `accelerators` mirrors `hotkeys`
+    // index-for-index (null for native-listener entries).
     this.slots = new Map();
     const defaultDictation = process.platform === "darwin" ? "GLOBE" : "Control+Super";
     this.slots.set("dictation", { hotkeys: [defaultDictation], callback: null, accelerators: [] });
@@ -113,9 +110,7 @@ class HotkeyManager extends EventEmitter {
     return slot;
   }
 
-  // Backward-compatible property accessors. `currentHotkey` exposes the *primary*
-  // (first) dictation hotkey for display / legacy callers; setting it replaces
-  // the whole dictation list with a single hotkey.
+  // Primary (first) dictation hotkey; setting it replaces the whole list.
   get currentHotkey() {
     return this.slots.get("dictation")?.hotkeys?.[0] ?? null;
   }
@@ -188,8 +183,6 @@ class HotkeyManager extends EventEmitter {
   }
 
   async registerSlot(slotName, hotkeyInput, callback, options) {
-    this.unregisterSlot(slotName);
-
     const hotkeys = parseHotkeyList(hotkeyInput);
     if (hotkeys.length === 0) {
       return {
@@ -224,6 +217,8 @@ class HotkeyManager extends EventEmitter {
           error: i18nMain.t("hotkey.errors.registrationFailed", { hotkey }),
         };
       }
+
+      this.unregisterSlot(slotName);
 
       if (slotName === "agent") {
         this.gnomeManager.setAgentCallback(callback);
@@ -260,6 +255,8 @@ class HotkeyManager extends EventEmitter {
     // Temporary slots like "cancel" stay on globalShortcut to avoid stale
     // KGlobalAccel registrations after crash (Escape would stop working system-wide).
     if (this.useKDE && this.kdeManager && slotName !== "cancel") {
+      this.unregisterSlot(slotName);
+
       if (slotName === "agent") {
         this.kdeManager.setAgentCallback(callback);
       }
@@ -392,11 +389,8 @@ class HotkeyManager extends EventEmitter {
     return keys;
   }
 
-  /**
-   * Register a single hotkey, returning a classification result WITHOUT mutating
-   * any slot. `accelerator` is the globalShortcut accelerator (null for hotkeys
-   * handled by native listeners). The caller assembles the slot's hotkey list.
-   */
+  // Register one hotkey without mutating any slot. `accelerator` is null for
+  // hotkeys handled by native listeners.
   _registerSingleHotkey(hotkey, callback) {
     try {
       if (isMouseButtonHotkey(hotkey)) {
@@ -437,9 +431,7 @@ class HotkeyManager extends EventEmitter {
         globalShortcut.unregister(accelerator);
       }
 
-      // Pass the triggering hotkey so shared callbacks (e.g. dictation's
-      // push-to-talk dispatcher) can act on the hotkey that actually fired
-      // instead of assuming the slot's primary.
+      // Pass the triggering hotkey so shared callbacks act on the one that fired.
       const success = globalShortcut.register(accelerator, () => callback(hotkey));
       debugLogger.log(`[HotkeyManager] Registration result for "${hotkey}": ${success}`);
       if (success) {
@@ -462,14 +454,10 @@ class HotkeyManager extends EventEmitter {
   }
 
   /**
-   * Register a slot's full hotkey list via globalShortcut / native listeners.
-   * Accepts a single hotkey string, a comma-separated string, or an array.
-   *
-   * By default (startup restore) registration is best-effort: it succeeds if at
-   * least one hotkey registers and reports individual failures in
-   * `result.failures`. With `atomic: true` (interactive updates) any failure
-   * rolls the whole slot back to its previous bindings and returns the failure,
-   * so the UI never shows a partially-applied list.
+   * Register a slot's hotkey list (string, comma-separated string, or array).
+   * Default is best-effort: succeeds if at least one hotkey registers, with
+   * individual failures in `result.failures`. `atomic: true` rolls the whole
+   * slot back to its previous bindings on any failure.
    */
   setupShortcuts(
     hotkeyInput = "Control+Super",
@@ -611,9 +599,8 @@ class HotkeyManager extends EventEmitter {
 
   _restorePreviousHotkeys(previousHotkeys, previousAccelerators, callback) {
     (previousHotkeys || []).forEach((previousHotkey, i) => {
-      // Only globalShortcut entries (those that had an accelerator) need
-      // re-registering; native-listener entries (accelerator null) are restored
-      // by reconcileNativeKeyListeners.
+      // Native-listener entries (null accelerator) are re-armed by
+      // reconcileNativeKeyListeners instead.
       const prevAccel = previousAccelerators?.[i];
       if (!prevAccel) return;
       try {
@@ -1109,8 +1096,7 @@ class HotkeyManager extends EventEmitter {
     }
   }
 
-  // After a (possibly partial) startup registration, tell the renderer which
-  // hotkeys are actually active and surface any entries that failed to register.
+  // Tell the renderer which hotkeys actually registered and which failed.
   _notifyStartupRegistration(requestedHotkey, result) {
     this.notifyActiveHotkey(result.hotkeys ? result.hotkeys.join(",") : requestedHotkey);
     for (const failure of result.failures || []) {
@@ -1150,11 +1136,8 @@ class HotkeyManager extends EventEmitter {
           message: i18nMain.t("hotkey.errors.registrationFailed", { hotkey: "" }),
         };
       }
-      // The canonical comma-separated string persisted to storage.
       const hotkeyStr = hotkeys.join(",");
-      // GNOME/KDE/Hyprland bind one accelerator per slot, so they apply the
-      // primary (first) hotkey; the rest stay in storage for the globalShortcut
-      // path and for backends that gain multi-binding support later.
+      // DE backends bind one accelerator per slot; extras stay in storage.
       const primary = hotkeys[0];
 
       for (const hotkey of hotkeys) {
@@ -1171,10 +1154,11 @@ class HotkeyManager extends EventEmitter {
         if (!success) {
           return {
             success: false,
-            message: `Failed to update GNOME hotkey to "${primary}". Check the format is valid.`,
+            message: i18nMain.t("hotkey.errors.updateFailedCheckFormat", { hotkey: primary }),
           };
         }
         this.currentHotkey = primary;
+        this.notifyActiveHotkey(primary);
         const saved = await this.saveHotkeyToRenderer(hotkeyStr);
         if (!saved) {
           debugLogger.warn(
@@ -1193,10 +1177,11 @@ class HotkeyManager extends EventEmitter {
         if (!success) {
           return {
             success: false,
-            message: `Failed to update Hyprland hotkey to "${primary}". Check the format is valid.`,
+            message: i18nMain.t("hotkey.errors.updateFailedCheckFormat", { hotkey: primary }),
           };
         }
         this.currentHotkey = primary;
+        this.notifyActiveHotkey(primary);
         const saved = await this.saveHotkeyToRenderer(hotkeyStr);
         if (!saved) {
           debugLogger.warn(
@@ -1231,6 +1216,7 @@ class HotkeyManager extends EventEmitter {
           return { success: false, message: reason };
         }
         this.currentHotkey = primary;
+        this.notifyActiveHotkey(primary);
         const saved = await this.saveHotkeyToRenderer(hotkeyStr);
         if (!saved) {
           debugLogger.warn(
@@ -1245,6 +1231,7 @@ class HotkeyManager extends EventEmitter {
 
       const result = this.setupShortcuts(hotkeys, callback, "dictation", { atomic: true });
       if (result.success) {
+        this.notifyActiveHotkey(hotkeyStr);
         const saved = await this.saveHotkeyToRenderer(hotkeyStr);
         if (!saved) {
           debugLogger.warn(

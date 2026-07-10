@@ -1151,6 +1151,7 @@ async function startApp() {
     let rightModDownTime = 0;
     let rightModIsRecording = false;
     let rightModLastStopTime = 0;
+    let rightModActiveKey = null;
 
     globeKeyManager.on("right-modifier-down", async (modifier) => {
       // Check agent and voice agent slots for right-modifier
@@ -1167,10 +1168,12 @@ async function startApp() {
       const activationMode = windowManager.getActivationMode();
       if (textEditMonitor) textEditMonitor.captureTargetPid();
       if (activationMode === "push") {
+        if (rightModActiveKey && rightModActiveKey !== modifier) return;
         const now = Date.now();
         if (now - rightModLastStopTime < POST_STOP_COOLDOWN_MS) return;
         windowManager.showDictationPanel();
         const pressTime = now;
+        rightModActiveKey = modifier;
         rightModDownTime = pressTime;
         rightModIsRecording = false;
         setTimeout(() => {
@@ -1189,7 +1192,8 @@ async function startApp() {
         if (!isLiveWindow(windowManager.mainWindow)) return;
 
         const activationMode = windowManager.getActivationMode();
-        if (activationMode === "push") {
+        if (activationMode === "push" && (!rightModActiveKey || rightModActiveKey === modifier)) {
+          rightModActiveKey = null;
           rightModDownTime = 0;
           rightModLastStopTime = Date.now();
           if (rightModIsRecording) {
@@ -1227,6 +1231,7 @@ async function startApp() {
     let mouseButtonDownTime = 0;
     let mouseButtonIsRecording = false;
     let mouseButtonLastStopTime = 0;
+    let mouseButtonActiveButton = null;
 
     globeKeyManager.on("mouse-button-down", async (button) => {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
@@ -1246,10 +1251,12 @@ async function startApp() {
       if (textEditMonitor) textEditMonitor.captureTargetPid();
 
       if (activationMode === "push") {
+        if (mouseButtonActiveButton && mouseButtonActiveButton !== button) return;
         const now = Date.now();
         if (now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS) return;
         windowManager.showDictationPanel();
         const pressTime = now;
+        mouseButtonActiveButton = button;
         mouseButtonDownTime = pressTime;
         mouseButtonIsRecording = false;
         setTimeout(() => {
@@ -1271,7 +1278,11 @@ async function startApp() {
       if (!isLiveWindow(windowManager.mainWindow)) return;
 
       const activationMode = windowManager.getActivationMode();
-      if (activationMode === "push") {
+      if (
+        activationMode === "push" &&
+        (!mouseButtonActiveButton || mouseButtonActiveButton === button)
+      ) {
+        mouseButtonActiveButton = null;
         mouseButtonDownTime = 0;
         mouseButtonLastStopTime = Date.now();
         if (mouseButtonIsRecording) {
@@ -1349,7 +1360,7 @@ async function startApp() {
       if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {
-          windowManager.startWindowsPushToTalk();
+          windowManager.startWindowsPushToTalk(key);
         } else {
           windowManager.sendToggleDictation();
         }
@@ -1368,12 +1379,12 @@ async function startApp() {
     const dispatchNativeKeyUp = (key) => {
       if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
       if (windowManager.winPushState?.active) {
-        windowManager.handleWindowsPushKeyUp();
+        windowManager.handleWindowsPushKeyUp(key);
       } else if (
         isLiveWindow(windowManager.mainWindow) &&
         windowManager.getActivationMode() === "push"
       ) {
-        windowManager.handleWindowsPushKeyUp();
+        windowManager.handleWindowsPushKeyUp(key);
       }
     };
 

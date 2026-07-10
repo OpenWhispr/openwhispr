@@ -927,6 +927,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   vertexApiKey: "",
 
   dictationKey: readString("dictationKey", ""),
+  activeDictationKey: null,
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
@@ -2057,12 +2058,13 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Show the active hotkey in UI (zustand only, not localStorage).
+    // Track what is actually registered, separately from the editable
+    // dictationKey preference so partial registrations never get persisted.
     // May return constructor default during early startup; corrected by dictation-key-active event later.
     try {
       const activeKey = await window.electronAPI?.getActiveDictationKey?.();
       if (activeKey) {
-        useSettingsStore.setState({ dictationKey: activeKey });
+        useSettingsStore.setState({ activeDictationKey: activeKey });
       }
     } catch (err) {
       logger.warn(
@@ -2315,9 +2317,9 @@ export async function initializeSettings(): Promise<void> {
     }
   });
 
-  // Active hotkey updates from backend — zustand only, not localStorage.
+  // Active hotkey updates from backend — display state, never persisted.
   window.electronAPI?.onDictationKeyActive?.((key: string) => {
-    useSettingsStore.setState({ dictationKey: key });
+    useSettingsStore.setState({ activeDictationKey: key });
   });
 
   // Sync settings pushed from main process (e.g., hotkey changed in control panel)

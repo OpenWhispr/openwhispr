@@ -10,12 +10,10 @@ export function isGlobeLikeHotkey(hotkey: string): boolean {
 }
 
 /**
- * A slot can be bound to several hotkeys (issue #936), stored as a
- * comma-separated string — backward compatible with single-value entries.
- * The comma KEY itself is a valid hotkey key (e.g. "Control+,"), so a split
- * segment ending in "+" lost its comma key to the split (no accelerator
- * legitimately ends with "+") and gets it restored. Parses into a clean list:
- * trimmed, de-duplicated, empties removed, order preserved.
+ * Parse a comma-separated hotkey list (a legacy single value is a one-item
+ * list): trimmed, de-duplicated, empties removed, order preserved. The comma
+ * KEY is itself a valid hotkey (e.g. "Control+,"): no accelerator legitimately
+ * ends with "+", so a split segment ending in "+" gets its comma restored.
  *
  * Keep in sync with the main-process twin in src/helpers/hotkeyList.js.
  */
@@ -92,9 +90,8 @@ export function formatHotkeyLabel(hotkey?: string | null): string {
 }
 
 /**
- * Label for a hotkey *list* value (comma-separated, issue #936): each entry
- * formatted individually and joined with " / ". Falls back to the platform
- * default label when the list is empty, matching formatHotkeyLabel.
+ * Label for a comma-separated hotkey list: entries formatted individually and
+ * joined with " / "; empty lists fall back like formatHotkeyLabel.
  */
 export function formatHotkeyListLabel(value?: string | null): string {
   const list = parseHotkeyList(value);
