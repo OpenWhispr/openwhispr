@@ -484,6 +484,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       try {
         this._silenceCtx = new AudioContext();
+        if (this._silenceCtx.state === "suspended") {
+          // Not awaited — resume() can hang when the output device is wedged.
+          this._silenceCtx.resume().catch(() => {});
+        }
         this._silenceAnalyser = this._silenceCtx.createAnalyser();
         this._silenceAnalyser.fftSize = 2048;
         const sourceNode = this._silenceCtx.createMediaStreamSource(micStream);
@@ -491,6 +495,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._localSpeechGateState = createLocalSpeechGateState();
         const dataArray = new Uint8Array(this._silenceAnalyser.fftSize);
         this._silenceInterval = setInterval(() => {
+          // A stalled context reads flat silence; recording no windows fails the gate open.
+          if (this._silenceCtx?.state !== "running") return;
           this._silenceAnalyser.getByteTimeDomainData(dataArray);
           let sum = 0;
           let peak = 0;
@@ -522,13 +528,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       };
 
       this.mediaRecorder.onstop = async () => {
-        if (this._silenceInterval) {
-          clearInterval(this._silenceInterval);
-          this._silenceInterval = null;
-        }
-        this._silenceCtx?.close().catch(() => {});
-        this._silenceCtx = null;
-        this._silenceAnalyser = null;
+        this.teardownSpeechGate();
 
         this.cleanupPreview({ showCleanup: this.shouldShowPreviewCleanupState() });
 
@@ -658,9 +658,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return false;
   }
 
+  teardownSpeechGate() {
+    if (this._silenceInterval) {
+      clearInterval(this._silenceInterval);
+      this._silenceInterval = null;
+    }
+    this._silenceCtx?.close().catch(() => {});
+    this._silenceCtx = null;
+    this._silenceAnalyser = null;
+  }
+
   cancelRecording() {
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
       this.mediaRecorder.onstop = () => {
+        this.teardownSpeechGate();
+        this._localSpeechGateState = null;
+
         const durationSeconds = this.recordingStartTime
           ? (Date.now() - this.recordingStartTime) / 1000
           : null;
