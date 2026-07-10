@@ -9,6 +9,8 @@ class UpdateManager {
     this.lastUpdateInfo = null;
     this.isInstalling = false;
     this.isDownloading = false;
+    this.isQuittingForUpdate = false;
+    this.handleBeforeQuitForUpdate = null;
     this.eventListeners = [];
     this.updateCheckInterval = null;
     this.windowManager = null;
@@ -142,6 +144,17 @@ class UpdateManager {
       autoUpdater.on(event, handler);
       this.eventListeners.push({ event, handler });
     });
+
+    // electron-updater and Squirrel.Mac emit this on Electron's native
+    // autoUpdater (before any windows close), not on the electron-updater instance.
+    this.handleBeforeQuitForUpdate = () => {
+      this.isQuittingForUpdate = true;
+      if (this.windowManager) {
+        this.windowManager.isQuitting = true;
+        this.windowManager.hotkeyManager.unregisterAll();
+      }
+    };
+    require("electron").autoUpdater.on("before-quit-for-update", this.handleBeforeQuitForUpdate);
   }
 
   notifyRenderers(channel, data) {
@@ -254,15 +267,6 @@ class UpdateManager {
       this.isInstalling = true;
       console.log("🔄 Installing update and restarting...");
 
-      const { app, BrowserWindow } = require("electron");
-
-      // Set windowManager.isQuitting before removing close listeners
-      app.emit("before-quit");
-      app.removeAllListeners("window-all-closed");
-      BrowserWindow.getAllWindows().forEach((win) => {
-        win.removeAllListeners("close");
-      });
-
       const isSilent = process.platform === "win32";
       autoUpdater.quitAndInstall(isSilent, true);
 
@@ -334,6 +338,13 @@ class UpdateManager {
       autoUpdater.removeListener(event, handler);
     });
     this.eventListeners = [];
+    if (this.handleBeforeQuitForUpdate) {
+      require("electron").autoUpdater.removeListener(
+        "before-quit-for-update",
+        this.handleBeforeQuitForUpdate
+      );
+      this.handleBeforeQuitForUpdate = null;
+    }
   }
 }
 

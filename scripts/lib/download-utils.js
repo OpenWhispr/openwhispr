@@ -320,9 +320,12 @@ function setExecutable(filePath) {
 }
 
 function cleanupFiles(binDir, prefix, keepPrefix) {
+  // Never delete shared libraries; only platform binaries. The b9763 split ships
+  // llama-server-impl.dll, which shares the "llama-server" prefix and must survive.
+  const isLibrary = (f) => /\.(dll|dylib)$/i.test(f) || /\.so(\.\d+)*$/.test(f);
   const files = fs.readdirSync(binDir).filter((f) => f.startsWith(prefix));
   files.forEach((file) => {
-    if (!file.startsWith(keepPrefix)) {
+    if (!file.startsWith(keepPrefix) && !isLibrary(file)) {
       const filePath = path.join(binDir, file);
       console.log(`Removing old binary: ${file}`);
       fs.unlinkSync(filePath);

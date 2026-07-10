@@ -62,7 +62,7 @@ export default function ShareNoteDialog({ open, onOpenChange, note }: ShareNoteD
   const showDomainOption = ownerDomain && !isPersonalEmailDomain(ownerDomain);
 
   const share = cached?.share ?? null;
-  const invitations = cached?.invitations ?? [];
+  const invitations = useMemo(() => cached?.invitations ?? [], [cached?.invitations]);
 
   // Load share state once per open. The dialog is the only place that reads
   // share settings — invalidating on close keeps the cache scoped.

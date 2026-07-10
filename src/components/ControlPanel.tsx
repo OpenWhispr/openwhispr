@@ -14,6 +14,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useUsage } from "../hooks/useUsage";
 import {
   useTranscriptions,
+  useShowDiscarded,
   initializeTranscriptions,
   removeTranscription as removeFromStore,
   updateTranscription as updateInStore,
@@ -42,10 +43,11 @@ import { fetchProviders as fetchStreamingProviders } from "../stores/streamingPr
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import { syncService } from "../services/SyncService.js";
-import AcceptInvitationModal, {
+import AcceptInvitationModal from "./AcceptInvitationModal";
+import {
   consumePendingInvitationToken,
   clearPendingInvitationToken,
-} from "./AcceptInvitationModal";
+} from "../utils/pendingInvitationToken";
 import { WORKSPACES_ENABLED } from "../lib/features";
 
 const platform = getCachedPlatform();
@@ -59,22 +61,30 @@ const IntegrationsView = React.lazy(() => import("./IntegrationsView"));
 const ChatView = React.lazy(() => import("./chat/ChatView"));
 const CommandSearch = React.lazy(() => import("./CommandSearch"));
 
-export default function ControlPanel() {
+interface ControlPanelProps {
+  /** Open the settings modal at this section on mount (e.g. after onboarding). */
+  initialSettingsSection?: string;
+}
+
+export default function ControlPanel({ initialSettingsSection }: ControlPanelProps = {}) {
   const { t } = useTranslation();
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
-  const [showSettings, setShowSettings] = useState(false);
+  const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPostMigration, setShowPostMigration] = useState(false);
   const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
   const hasShownUpgradePrompt = useRef(false);
-  const [settingsSection, setSettingsSection] = useState<string | undefined>();
+  const [settingsSection, setSettingsSection] = useState<string | undefined>(
+    initialSettingsSection
+  );
   const [aiCTADismissed, setAiCTADismissed] = useState(
     () => localStorage.getItem("aiCTADismissed") === "true"
   );
   const [showReferrals, setShowReferrals] = useState(false);
   const [invitationToken, setInvitationToken] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const showDiscarded = useShowDiscarded();
   const [showCloudMigrationBanner, setShowCloudMigrationBanner] = useState(false);
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
   const isMeetingMode = useIsMeetingMode();
@@ -130,11 +140,11 @@ export default function ControlPanel() {
     hideAlertDialog,
   } = useDialogs();
 
-  useEffect(() => {
-    (async () => {
+  const loadTranscriptions = useCallback(
+    async (includeDiscarded?: boolean) => {
       try {
         setIsLoading(true);
-        await initializeTranscriptions();
+        await initializeTranscriptions(undefined, includeDiscarded);
       } catch {
         showAlertDialog({
           title: t("controlPanel.history.couldNotLoadTitle"),
@@ -143,8 +153,13 @@ export default function ControlPanel() {
       } finally {
         setIsLoading(false);
       }
-    })();
-  }, [showAlertDialog, t]);
+    },
+    [showAlertDialog, t]
+  );
+
+  useEffect(() => {
+    loadTranscriptions();
+  }, [loadTranscriptions]);
 
   useEffect(() => {
     const { noteFilesEnabled, noteFilesPath } = useSettingsStore.getState();
@@ -360,10 +375,6 @@ export default function ControlPanel() {
   }, [toast, t]);
 
   useEffect(() => {
-    syncService.syncAll().catch(console.error);
-  }, []);
-
-  useEffect(() => {
     fetchStreamingProviders();
   }, []);
 
@@ -407,7 +418,7 @@ export default function ControlPanel() {
             const result = await window.electronAPI.deleteTranscription(id);
             if (result.success) {
               removeFromStore(id);
-              syncService.syncAll().catch(console.error);
+              syncService.requestSyncAll("manual");
             } else {
               showAlertDialog({
                 title: t("controlPanel.history.couldNotDeleteTitle"),
@@ -436,7 +447,7 @@ export default function ControlPanel() {
           const result = await window.electronAPI.clearTranscriptions();
           if (result.success) {
             clearStore();
-            syncService.syncAll().catch(console.error);
+            syncService.requestSyncAll("manual");
             toast({
               title: t("controlPanel.history.clearAllSuccess"),
               variant: "success",
@@ -480,7 +491,7 @@ export default function ControlPanel() {
   );
 
   const retryTranscription = useCallback(
-    async (id: number) => {
+    async (id: number, options?: { isRecover?: boolean }) => {
       try {
         const s = useSettingsStore.getState();
         const result = await window.electronAPI.retryTranscription(id, {
@@ -535,7 +546,13 @@ export default function ControlPanel() {
           }
 
           updateInStore(finalTranscription);
-          toast({ title: t("controlPanel.history.retrySuccess") });
+          toast({
+            title: t(
+              options?.isRecover
+                ? "controlPanel.history.discarded.recovered"
+                : "controlPanel.history.retrySuccess"
+            ),
+          });
         } else {
           toast({
             title: t("controlPanel.history.retryError"),
@@ -552,6 +569,10 @@ export default function ControlPanel() {
     },
     [toast, t, useCleanupModel]
   );
+
+  const toggleShowDiscarded = useCallback(() => {
+    loadTranscriptions(!showDiscarded);
+  }, [loadTranscriptions, showDiscarded]);
 
   const handleUpdateClick = async () => {
     if (updateStatus.updateDownloaded) {
@@ -875,6 +896,8 @@ export default function ControlPanel() {
                 clearAllTranscriptions={clearAllTranscriptions}
                 onShowAudioInFolder={showAudioInFolder}
                 onRetryTranscription={retryTranscription}
+                showDiscarded={showDiscarded}
+                onToggleDiscarded={toggleShowDiscarded}
                 onOpenSettings={(section) => {
                   setSettingsSection(section);
                   setShowSettings(true);

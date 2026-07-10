@@ -33,6 +33,7 @@ import {
   MessageSquare,
   FileAudio,
   Wand2,
+  Upload,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
@@ -40,6 +41,7 @@ import MicPermissionWarning from "./ui/MicPermissionWarning";
 import MicrophoneSettings from "./ui/MicrophoneSettings";
 import PermissionCard from "./ui/PermissionCard";
 import PasteToolsInfo from "./ui/PasteToolsInfo";
+import NixOsPasteInfo from "./ui/NixOsPasteInfo";
 import TranscriptionModelPicker from "./TranscriptionModelPicker";
 import SelfHostedPanel from "./SelfHostedPanel";
 import {
@@ -65,6 +67,7 @@ import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
+import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
@@ -78,6 +81,7 @@ import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
+import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
@@ -165,13 +169,22 @@ function SettingsPanelRow({
   );
 }
 
-function SectionHeader({ title, description }: { title: string; description?: string }) {
+function SectionHeader({
+  title,
+  description,
+  note,
+}: {
+  title: string;
+  description?: string;
+  note?: string;
+}) {
   return (
     <div className="mb-3">
       <h3 className="text-xs font-semibold text-foreground tracking-tight">{title}</h3>
       {description && (
         <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
       )}
+      {note && <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{note}</p>}
     </div>
   );
 }
@@ -200,6 +213,8 @@ interface TranscriptionSectionProps {
   setTranscriptionMode: (mode: InferenceMode) => void;
   remoteTranscriptionUrl: string;
   setRemoteTranscriptionUrl: (url: string) => void;
+  remoteTranscriptionModel: string;
+  setRemoteTranscriptionModel: (model: string) => void;
   showTranscriptionPreview: boolean;
   setShowTranscriptionPreview: (value: boolean) => void;
   toast: (opts: {
@@ -209,6 +224,9 @@ interface TranscriptionSectionProps {
     duration?: number;
   }) => void;
 }
+
+// Providers that forward the live-preview flag (see STREAMING_PROVIDERS in audioManager.js).
+const CLOUD_PREVIEW_PROVIDERS = new Set(["tinfoil"]);
 
 function TranscriptionSection({
   isSignedIn,
@@ -234,6 +252,8 @@ function TranscriptionSection({
   setTranscriptionMode,
   remoteTranscriptionUrl,
   setRemoteTranscriptionUrl,
+  remoteTranscriptionModel,
+  setRemoteTranscriptionModel,
   showTranscriptionPreview,
   setShowTranscriptionPreview,
   toast,
@@ -353,7 +373,12 @@ function TranscriptionSection({
         onSelect={handleTranscriptionModeSelect}
       />
 
-      {transcriptionMode === "providers" && renderTranscriptionPicker("cloud")}
+      {transcriptionMode === "providers" && (
+        <>
+          {renderTranscriptionPicker("cloud")}
+          {CLOUD_PREVIEW_PROVIDERS.has(cloudTranscriptionProvider) && renderPreviewToggle()}
+        </>
+      )}
       {transcriptionMode === "local" && (
         <>
           {renderTranscriptionPicker("local")}
@@ -366,6 +391,8 @@ function TranscriptionSection({
           service="transcription"
           url={remoteTranscriptionUrl}
           onUrlChange={setRemoteTranscriptionUrl}
+          model={remoteTranscriptionModel}
+          onModelChange={setRemoteTranscriptionModel}
         />
       )}
 
@@ -451,10 +478,10 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
   );
 }
 
-type SpeechTab = "dictation" | "noteRecording";
+type SpeechTab = "dictation" | "noteRecording" | "upload";
 type LlmTab = "dictationCleanup" | "dictationAgent" | "noteFormatting" | "chatIntelligence";
 
-const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording"];
+const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording", "upload"];
 const LLM_TABS: LlmTab[] = [
   "dictationCleanup",
   "dictationAgent",
@@ -502,10 +529,12 @@ function SpeechToTextTabs({
   initialTab,
   renderDictation,
   renderNoteRecording,
+  renderUpload,
 }: {
   initialTab?: SpeechTab;
   renderDictation: () => React.ReactNode;
   renderNoteRecording: () => React.ReactNode;
+  renderUpload: () => React.ReactNode;
 }) {
   const { t } = useTranslation();
   const [tab, setTab] = useSubTab<SpeechTab>("settings.speechToTextTab", SPEECH_TABS, initialTab);
@@ -513,6 +542,7 @@ function SpeechToTextTabs({
   const subTabs = [
     { id: "dictation", name: t("settingsPage.speechToText.tabs.dictation") },
     { id: "noteRecording", name: t("settingsPage.speechToText.tabs.noteRecording") },
+    { id: "upload", name: t("settingsPage.speechToText.tabs.upload") },
   ];
 
   return (
@@ -528,6 +558,8 @@ function SpeechToTextTabs({
         renderIcon={(id) =>
           id === "dictation" ? (
             <Mic className="w-3.5 h-3.5" />
+          ) : id === "upload" ? (
+            <Upload className="w-3.5 h-3.5" />
           ) : (
             <FileAudio className="w-3.5 h-3.5" />
           )
@@ -535,6 +567,7 @@ function SpeechToTextTabs({
       />
       <TabPanel active={tab === "dictation"}>{renderDictation()}</TabPanel>
       <TabPanel active={tab === "noteRecording"}>{renderNoteRecording()}</TabPanel>
+      <TabPanel active={tab === "upload"}>{renderUpload()}</TabPanel>
     </div>
   );
 }
@@ -590,17 +623,17 @@ function LlmsTabs({
 function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligence" }) {
   const { t } = useTranslation();
   const [gpus, setGpus] = useState<GpuDevice[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState("0");
+  const [selectedUuid, setSelectedUuid] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     Promise.all([
       window.electronAPI?.listGpus?.() ?? Promise.resolve([]),
-      window.electronAPI?.getGpuDeviceIndex?.(purpose) ?? Promise.resolve("0"),
+      window.electronAPI?.getGpuDeviceIndex?.(purpose) ?? Promise.resolve(""),
     ])
-      .then(([gpuList, idx]) => {
+      .then(([gpuList, savedUuid]) => {
         setGpus(gpuList);
-        setSelectedIndex(idx);
+        setSelectedUuid(savedUuid || gpuList[0]?.uuid || "");
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -618,16 +651,16 @@ function GpuDeviceSelector({ purpose }: { purpose: "transcription" | "intelligen
         <SettingsPanelRow>
           <div className="relative w-full">
             <select
-              value={selectedIndex}
+              value={selectedUuid}
               onChange={async (e) => {
-                const idx = e.target.value;
-                setSelectedIndex(idx);
-                await window.electronAPI?.setGpuDeviceIndex?.(purpose, Number(idx));
+                const uuid = e.target.value;
+                setSelectedUuid(uuid);
+                await window.electronAPI?.setGpuDeviceIndex?.(purpose, uuid);
               }}
               className="w-full appearance-none rounded-md border border-border bg-background px-3 pr-10 py-2 text-sm"
             >
               {gpus.map((gpu) => (
-                <option key={gpu.index} value={String(gpu.index)}>
+                <option key={gpu.uuid} value={gpu.uuid}>
                   GPU {gpu.index}: {gpu.name} ({Math.round(gpu.vramMb / 1024)}GB)
                 </option>
               ))}
@@ -708,6 +741,8 @@ export default function SettingsPage({
     setTranscriptionMode,
     remoteTranscriptionUrl,
     setRemoteTranscriptionUrl,
+    remoteTranscriptionModel,
+    setRemoteTranscriptionModel,
     notificationsEnabled,
     setNotificationsEnabled,
     notifyMeetingDetection,
@@ -740,6 +775,8 @@ export default function SettingsPage({
     setAudioRetentionDays,
     dataRetentionEnabled,
     setDataRetentionEnabled,
+    saveDiscardedTranscriptions,
+    setSaveDiscardedTranscriptions,
     customDictionary,
     setCustomDictionary,
     noteFilesEnabled,
@@ -768,8 +805,8 @@ export default function SettingsPage({
 
   const chatAgentKey = useSettingsStore((s) => s.chatAgentKey);
   const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
-  const meetingAudioDetection = useSettingsStore((s) => s.meetingAudioDetection);
-  const setMeetingAudioDetection = useSettingsStore((s) => s.setMeetingAudioDetection);
+  const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
+  const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
 
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -861,6 +898,7 @@ export default function SettingsPage({
     isKde?: boolean;
     hasXclip?: boolean;
     hasXsel?: boolean;
+    isNixOS?: boolean;
   } | null>(null);
   const [ydotoolGuideKey, setYdotoolGuideKey] = useState<string | null>(null);
 
@@ -926,10 +964,11 @@ export default function SettingsPage({
         {
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [meetingKey, chatAgentKey, t]
+    [meetingKey, chatAgentKey, voiceAgentKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -939,26 +978,43 @@ export default function SettingsPage({
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [dictationKey, chatAgentKey, t]
+    [dictationKey, chatAgentKey, voiceAgentKey, t]
   );
 
-  const validateAgentHotkey = useCallback(
+  const validateChatAgentHotkey = useCallback(
     (hotkey: string) =>
       validateHotkeyForSlot(
         hotkey,
         {
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [dictationKey, meetingKey, t]
+    [dictationKey, meetingKey, voiceAgentKey, t]
   );
 
-  const [isUsingNativeShortcut, setIsUsingNativeShortcut] = useState(false);
+  const validateVoiceAgentHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+          "agentMode.settings.hotkey": chatAgentKey,
+        },
+        t
+      ),
+    [dictationKey, meetingKey, chatAgentKey, t]
+  );
+
+  const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
+    useHotkeyModeInfo("settings");
   const [effectiveDefaultHotkey, setEffectiveDefaultHotkey] = useState<string | null>(null);
   const [linuxPttAvailable, setLinuxPttAvailable] = useState(true);
 
@@ -1073,18 +1129,13 @@ export default function SettingsPage({
   }, [checkWhisperInstallation, getAppVersion]);
 
   useEffect(() => {
-    const checkHotkeyMode = async () => {
-      try {
-        const info = await window.electronAPI?.getHotkeyModeInfo();
-        if (info?.isUsingNativeShortcut) {
-          setIsUsingNativeShortcut(true);
-          if (!info.supportsPushToTalk) {
-            setActivationMode("tap");
-          }
-        }
-      } catch (error) {
-        logger.error("Failed to check hotkey mode", error, "settings");
-      }
+    if (isUsingNativeShortcut && !supportsPushToTalk) {
+      setActivationMode("tap");
+    }
+  }, [isUsingNativeShortcut, supportsPushToTalk, setActivationMode]);
+
+  useEffect(() => {
+    const loadEffectiveDefaultHotkey = async () => {
       try {
         const key = await window.electronAPI?.getEffectiveDefaultHotkey?.();
         if (key) setEffectiveDefaultHotkey(key);
@@ -1092,8 +1143,8 @@ export default function SettingsPage({
         logger.error("Failed to get effective default hotkey", error, "settings");
       }
     };
-    checkHotkeyMode();
-  }, [setActivationMode]);
+    loadEffectiveDefaultHotkey();
+  }, []);
 
   useEffect(() => {
     const cleanup = window.electronAPI?.onLinuxPttPermissionDenied?.(() => {
@@ -2435,32 +2486,6 @@ export default function SettingsPage({
               </SettingsPanel>
             </div>
 
-            {/* Meeting Detection */}
-            <div>
-              <SectionHeader
-                title={t("calendar.detection.title")}
-                description={t("calendar.detection.description")}
-              />
-              <SettingsPanel>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("calendar.detection.audioDetection")}
-                    description={t("calendar.detection.audioDescription")}
-                  >
-                    <Toggle
-                      checked={meetingAudioDetection}
-                      onChange={(value) => {
-                        setMeetingAudioDetection(value);
-                        window.electronAPI?.meetingDetectionSetPreferences?.({
-                          audioDetection: value,
-                        });
-                      }}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
-              </SettingsPanel>
-            </div>
-
             {/* Clipboard */}
             <div>
               <SectionHeader title={t("settingsPage.general.clipboard.title")} />
@@ -2708,6 +2733,11 @@ export default function SettingsPage({
                   })}
                 />
                 {(() => {
+                  if (ydotoolStatus.isNixOS) {
+                    return (
+                      <NixOsPasteInfo status={ydotoolStatus} onRecheck={refreshYdotoolStatus} />
+                    );
+                  }
                   const checks = [
                     {
                       key: "hasYdotool",
@@ -3170,11 +3200,25 @@ EOF`,
       case "hotkeys":
         return (
           <div className="space-y-6">
+            {isUsingHyprland && hyprlandConfigStatus && !hyprlandConfigStatus.canWrite && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>
+                  {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningTitle")}
+                </AlertTitle>
+                <AlertDescription>
+                  {t("settingsPage.general.hotkey.hyprlandConfigWriteWarningDescription", {
+                    path: hyprlandConfigStatus.path,
+                  })}
+                </AlertDescription>
+              </Alert>
+            )}
             {/* Dictation Hotkey */}
             <div>
               <SectionHeader
                 title={t("settingsPage.general.hotkey.title")}
                 description={t("settingsPage.general.hotkey.description")}
+                note={isUsingHyprland && t("settingsPage.general.hotkey.hyprlandUnbindDescription")}
               />
               <SettingsPanel>
                 <SettingsPanelRow>
@@ -3203,15 +3247,35 @@ EOF`,
 
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
                   <SettingsPanelRow>
-                    <p className="text-xs font-medium text-muted-foreground/80 mb-2">
-                      {t("settingsPage.general.hotkey.activationMode")}
-                    </p>
-                    <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-muted-foreground/80">
+                        {t("settingsPage.general.hotkey.activationMode")}
+                      </span>
+                      <ActivationModeSelector value={activationMode} onChange={setActivationMode} />
+                    </div>
                     {getCachedPlatform() === "linux" && activationMode === "push" && (
                       <LinuxPttSetupInfo isAvailable={linuxPttAvailable} />
                     )}
                   </SettingsPanelRow>
                 )}
+              </SettingsPanel>
+            </div>
+
+            {/* Voice Agent Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.voiceAgentHotkey.title")}
+                description={t("settingsPage.general.voiceAgentHotkey.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyInput
+                    value={voiceAgentKey}
+                    onChange={setVoiceAgentKey}
+                    onClear={() => setVoiceAgentKey("")}
+                    validate={validateVoiceAgentHotkey}
+                  />
+                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
@@ -3228,21 +3292,13 @@ EOF`,
                     onChange={async (newHotkey) => {
                       await registerMeetingHotkey(newHotkey);
                     }}
+                    onClear={async () => {
+                      await window.electronAPI?.registerMeetingHotkey?.("");
+                      setMeetingKey("");
+                    }}
                     disabled={isMeetingHotkeyRegistering}
                     validate={validateMeetingHotkey}
                   />
-                  {meetingKey && (
-                    <button
-                      onClick={async () => {
-                        await window.electronAPI?.registerMeetingHotkey?.("");
-                        setMeetingKey("");
-                      }}
-                      disabled={isMeetingHotkeyRegistering}
-                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
-                    >
-                      {t("settingsPage.general.meetingHotkey.clear")}
-                    </button>
-                  )}
                 </SettingsPanelRow>
                 <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/40 dark:border-white/5">
                   <span className="text-xs text-muted-foreground/80">
@@ -3276,7 +3332,7 @@ EOF`,
               </SettingsPanel>
             </div>
 
-            {/* Agent Hotkey */}
+            {/* Chat Agent Hotkey */}
             <div>
               <SectionHeader
                 title={t("agentMode.settings.hotkey")}
@@ -3287,16 +3343,9 @@ EOF`,
                   <HotkeyInput
                     value={chatAgentKey}
                     onChange={setChatAgentKey}
-                    validate={validateAgentHotkey}
+                    onClear={() => setChatAgentKey("")}
+                    validate={validateChatAgentHotkey}
                   />
-                  {chatAgentKey && (
-                    <button
-                      onClick={() => setChatAgentKey("")}
-                      className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
-                    >
-                      {t("agentMode.settings.clearHotkey")}
-                    </button>
-                  )}
                 </SettingsPanelRow>
               </SettingsPanel>
             </div>
@@ -3331,7 +3380,7 @@ EOF`,
                             setCloudBackupEnabled(v);
                             if (v) {
                               startMigration().catch(console.error);
-                              syncService.syncAll().catch(console.error);
+                              syncService.requestSyncAll("manual");
                             }
                           }}
                         />
@@ -3479,6 +3528,18 @@ EOF`,
                     description={t("settingsPage.privacy.dataRetentionDescription")}
                   >
                     <Toggle checked={dataRetentionEnabled} onChange={setDataRetentionEnabled} />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settingsPage.privacy.saveDiscarded")}
+                    description={t("settingsPage.privacy.saveDiscardedDescription")}
+                  >
+                    <Toggle
+                      checked={saveDiscardedTranscriptions}
+                      disabled={!dataRetentionEnabled || audioRetentionDays === 0}
+                      onChange={setSaveDiscardedTranscriptions}
+                    />
                   </SettingsRow>
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -3910,6 +3971,8 @@ EOF`,
                   setTranscriptionMode={setTranscriptionMode}
                   remoteTranscriptionUrl={remoteTranscriptionUrl}
                   setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                  remoteTranscriptionModel={remoteTranscriptionModel}
+                  setRemoteTranscriptionModel={setRemoteTranscriptionModel}
                   showTranscriptionPreview={showTranscriptionPreview}
                   setShowTranscriptionPreview={setShowTranscriptionPreview}
                   toast={toast}
@@ -3925,6 +3988,11 @@ EOF`,
                 {transcriptionMode === "local" &&
                   localTranscriptionProvider !== "nvidia" &&
                   renderWhisperVadSettings()}
+              </div>
+            )}
+            renderUpload={() => (
+              <div className="space-y-6">
+                <UploadTranscriptionPanel />
               </div>
             )}
           />

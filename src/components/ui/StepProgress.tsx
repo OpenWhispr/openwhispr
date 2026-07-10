@@ -14,7 +14,7 @@ interface StepProgressProps {
 
 export default function StepProgress({ steps, currentStep, className = "" }: StepProgressProps) {
   return (
-    <div className={`flex items-center justify-center gap-0.5 ${className}`}>
+    <div className={`flex items-center justify-center gap-0.5 whitespace-nowrap ${className}`}>
       {steps.map((step, index) => {
         const Icon = step.icon;
         const isActive = index === currentStep;

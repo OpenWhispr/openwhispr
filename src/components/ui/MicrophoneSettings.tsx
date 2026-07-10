@@ -48,11 +48,16 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
     setError(null);
 
     try {
-      // Request permission first to get device labels
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
+      // Acquiring the mic just to read labels interrupts other audio (pauses
+      // music on macOS), so only do it when labels are missing (no permission yet).
+      let allDevices = await navigator.mediaDevices.enumerateDevices();
+      const hasLabels = allDevices.some((d) => d.kind === "audioinput" && d.label);
+      if (!hasLabels) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((track) => track.stop());
+        allDevices = await navigator.mediaDevices.enumerateDevices();
+      }
 
-      const allDevices = await navigator.mediaDevices.enumerateDevices();
       const audioInputs = allDevices
         .filter((d) => d.kind === "audioinput")
         .map((d) => ({

@@ -39,6 +39,7 @@ function MainApp() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [needsReauth, setNeedsReauth] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [postOnboardingSettingsSection, setPostOnboardingSettingsSection] = useState(undefined);
 
   const isAgentPanel = window.location.search.includes("agent=true");
   const isControlPanel =
@@ -55,6 +56,14 @@ function MainApp() {
       if (!localStorage.getItem("onboardingCompleted")) {
         import("./components/OnboardingFlow.tsx").catch(() => {});
       }
+    }
+
+    // Sync runs in every non-agent window, so tray-only sessions where the
+    // control panel is never opened still stay fresh.
+    if (!isAgentPanel) {
+      import("./services/SyncService.js")
+        .then(({ syncService }) => syncService.startAutoSync())
+        .catch(() => {});
     }
   }, [isAgentPanel, isControlPanel]);
 
@@ -84,17 +93,18 @@ function MainApp() {
     }
 
     if (isDictationPanel && !resolved) {
-      const rawStep = parseInt(localStorage.getItem("onboardingCurrentStep") || "0");
-      const currentStep = Math.max(0, Math.min(rawStep, 5));
-      if (currentStep < 4) {
-        window.electronAPI?.hideWindow?.();
-      }
+      // Keep the dictation overlay hidden during onboarding — OnboardingFlow
+      // shows it explicitly when the user reaches the activation step.
+      window.electronAPI?.hideWindow?.();
     }
 
     setIsLoading(false);
   }, [authLoaded, isControlPanel, isDictationPanel, isGracePeriodOnly, isSignedIn]);
 
-  const handleOnboardingComplete = () => {
+  const handleOnboardingComplete = (options) => {
+    if (options?.openSettings) {
+      setPostOnboardingSettingsSection("transcription");
+    }
     setShowOnboarding(false);
     localStorage.setItem("onboardingCompleted", "true");
   };
@@ -158,7 +168,7 @@ function MainApp() {
 
   return isControlPanel ? (
     <Suspense fallback={<LoadingFallback />}>
-      <ControlPanel />
+      <ControlPanel initialSettingsSection={postOnboardingSettingsSection} />
     </Suspense>
   ) : (
     <App />

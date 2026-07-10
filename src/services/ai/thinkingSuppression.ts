@@ -15,6 +15,18 @@ function usesOllamaDialect(providerKey: string): boolean {
 }
 
 function suppressThinking(requestBody: Record<string, unknown>, providerKey: string): void {
+  if (providerKey === "gemini") {
+    requestBody.reasoning_effort = "minimal";
+    return;
+  }
+
+  // OpenRouter forwards unknown params to upstream backends, which may reject
+  // them — use its native reasoning control instead.
+  if (providerKey === "openrouter") {
+    requestBody.reasoning = { enabled: false };
+    return;
+  }
+
   if (usesOllamaDialect(providerKey)) {
     requestBody.think = false;
   } else {

@@ -1,13 +1,17 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Loader2, Search } from "lucide-react";
+import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import ApiKeyInput from "./ui/ApiKeyInput";
-import ModelCardList from "./ui/ModelCardList";
+import ModelCardList, { type ModelCardOption } from "./ui/ModelCardList";
+import SearchableModelList from "./ui/SearchableModelList";
 import CustomModelInput from "./ui/CustomModelInput";
 import TestConnectionButton from "./TestConnectionButton";
 import { REASONING_PROVIDERS } from "../models/ModelRegistry";
 import { useSettingsStore } from "../stores/settingsStore";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
+import { adjustBedrockModelForRegion } from "../utils/bedrockRegions";
 
 interface EnterpriseProviderConfigProps {
   provider: "bedrock" | "azure" | "vertex";
@@ -128,17 +132,68 @@ function useSuggestedModels(provider: "bedrock" | "vertex") {
   }, [t, provider]);
 }
 
+type BedrockCatalogState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; error: string }
+  | { status: "loaded"; models: ModelCardOption[] };
+
 function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProviderConfigProps) {
   const { t } = useTranslation();
   const store = useSettingsStore();
   const suggestedModels = useSuggestedModels("bedrock");
+  const [catalog, setCatalog] = useState<BedrockCatalogState>({ status: "idle" });
+  const catalogRequestRef = useRef(0);
 
-  const getTestConfig = () => ({
+  const regionModels = useMemo(
+    () =>
+      suggestedModels.map((m) => ({
+        ...m,
+        value: adjustBedrockModelForRegion(m.value, store.bedrockRegion),
+      })),
+    [suggestedModels, store.bedrockRegion]
+  );
+
+  const getConnectionConfig = () => ({
     bedrockRegion: store.bedrockRegion,
     bedrockProfile: store.bedrockAuthMode === "sso" ? store.bedrockProfile : "",
     bedrockAccessKeyId: store.bedrockAuthMode === "keys" ? store.bedrockAccessKeyId : "",
     bedrockSecretAccessKey: store.bedrockAuthMode === "keys" ? store.bedrockSecretAccessKey : "",
     bedrockSessionToken: store.bedrockAuthMode === "keys" ? store.bedrockSessionToken : "",
+  });
+
+  const loadCatalog = async (region: string) => {
+    const requestId = ++catalogRequestRef.current;
+    setCatalog({ status: "loading" });
+    const result = await window.electronAPI?.listBedrockModels?.({
+      ...getConnectionConfig(),
+      bedrockRegion: region,
+    });
+    if (requestId !== catalogRequestRef.current) return;
+    if (result?.success && result.models) {
+      setCatalog({
+        status: "loaded",
+        models: result.models.map((m) => ({ value: m.value, label: m.label, group: m.vendor })),
+      });
+    } else {
+      setCatalog({
+        status: "error",
+        error:
+          result?.error ||
+          t("reasoning.enterprise.modelListError", { defaultValue: "Could not load models." }),
+      });
+    }
+  };
+
+  const handleRegionChange = (region: string) => {
+    store.setBedrockRegion(region);
+    const adjusted = adjustBedrockModelForRegion(reasoningModel, region);
+    if (adjusted !== reasoningModel) setReasoningModel(adjusted);
+    if (catalog.status !== "idle") void loadCatalog(region);
+  };
+
+  const getTestConfig = () => ({
+    ...getConnectionConfig(),
     model: reasoningModel,
   });
 
@@ -227,7 +282,7 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
         <FieldLabel>{t("reasoning.enterprise.region", { defaultValue: "Region" })}</FieldLabel>
         <select
           value={store.bedrockRegion}
-          onChange={(e) => store.setBedrockRegion(e.target.value)}
+          onChange={(e) => handleRegionChange(e.target.value)}
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
         >
           {BEDROCK_REGIONS.map((r) => (
@@ -238,17 +293,64 @@ function BedrockConfig({ reasoningModel, setReasoningModel }: EnterpriseProvider
         </select>
       </div>
 
-      {suggestedModels.length > 0 && (
+      {regionModels.length > 0 && (
         <div className="space-y-1.5">
           <FieldLabel>
             {t("reasoning.enterprise.suggestedModels", { defaultValue: "Suggested Models" })}
           </FieldLabel>
           <ModelCardList
-            models={suggestedModels}
+            models={regionModels}
             selectedModel={reasoningModel}
             onModelSelect={setReasoningModel}
             colorScheme="purple"
           />
+        </div>
+      )}
+
+      {catalog.status === "loaded" ? (
+        <div className="space-y-1.5">
+          <FieldLabel>
+            {t("reasoning.enterprise.allModels", {
+              defaultValue: "All Models in {{region}}",
+              region: store.bedrockRegion,
+            })}
+          </FieldLabel>
+          <SearchableModelList
+            models={catalog.models}
+            selectedModel={reasoningModel}
+            onModelSelect={setReasoningModel}
+          />
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full"
+            aria-busy={catalog.status === "loading"}
+            onClick={() => {
+              if (catalog.status !== "loading") void loadCatalog(store.bedrockRegion);
+            }}
+          >
+            {catalog.status === "loading" ? (
+              <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Search className="w-3.5 h-3.5 mr-1.5" />
+            )}
+            {catalog.status === "loading"
+              ? t("reasoning.enterprise.loadingModels", { defaultValue: "Fetching models..." })
+              : catalog.status === "error"
+                ? t("common.retry", { defaultValue: "Retry" })
+                : t("reasoning.enterprise.browseModels", { defaultValue: "Browse all models" })}
+          </Button>
+          {catalog.status === "error" && (
+            <FieldHint>
+              <span role="alert" className="text-destructive">
+                {catalog.error}
+              </span>
+            </FieldHint>
+          )}
         </div>
       )}
 

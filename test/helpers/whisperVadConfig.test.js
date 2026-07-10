@@ -2,9 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 test("sanitizeWhisperVadConfig applies defaults and clamps invalid values", async () => {
-  const { DEFAULT_WHISPER_VAD_CONFIG, sanitizeWhisperVadConfig } = await import(
-    "../../src/helpers/whisperVadConfig.js"
-  );
+  const { DEFAULT_WHISPER_VAD_CONFIG, sanitizeWhisperVadConfig } =
+    await import("../../src/helpers/whisperVadConfig.js");
 
   const cfg = sanitizeWhisperVadConfig({
     threshold: 99,
