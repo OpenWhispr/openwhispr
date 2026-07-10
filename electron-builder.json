@@ -240,7 +240,7 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "include": "resources/nsis/cleanup-models.nsh"
+    "include": "resources/nsis/installer.nsh"
   },
   "dmg": {
     "title": "OpenWhispr",

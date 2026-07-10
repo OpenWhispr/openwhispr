@@ -502,6 +502,11 @@
         "adcHelp": "Application Default Credentials を使用します。次を実行してください: gcloud auth application-default login",
         "apikeyHelp": "Google AI Studio で取得した Vertex AI Express Mode の API キー。"
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "モデルが利用できません",
+      "modelRetired": "Tinfoil は {{from}} を提供終了しました。{{to}} に切り替えました。",
+      "refreshingModels": "モデルを更新しています…"
     }
   },
   "transcription": {
@@ -545,6 +550,10 @@
       "noAudio": {
         "title": "音声が検出されませんでした",
         "description": "録音に音声が含まれていませんでした。もう一度お試しください。"
+      },
+      "partialTranscription": {
+        "title": "部分的な文字起こし",
+        "description": "録音の一部を文字起こしできませんでした。"
       },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
@@ -2079,6 +2088,7 @@
       "transcribingProvider": "{{provider}} で文字起こし中...",
       "cancelTranscription": "文字起こしをキャンセル",
       "transcriptionComplete": "文字起こし完了",
+      "partialWarning": "音声の一部を文字起こしできませんでした。",
       "openNote": "ノートを開く",
       "uploadAnother": "別のファイルをアップロード",
       "retry": "再試行",

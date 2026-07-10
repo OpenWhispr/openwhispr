@@ -146,6 +146,14 @@ export const useAudioRecording = (toast, options = {}) => {
           setTranscript(result.text);
           window.electronAPI?.completeDictationPreview?.({ text: result.text });
 
+          if (result.warning) {
+            toast({
+              title: t("hooks.audioRecording.partialTranscription.title"),
+              description: t("hooks.audioRecording.partialTranscription.description"),
+              variant: "default",
+            });
+          }
+
           const isStreaming = result.source?.includes("streaming");
           const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
 

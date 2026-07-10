@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import reasoningService from "../services/ReasoningService";
-import { getSettings } from "./settingsStore";
+import { getSettings, selectResolvedNoteFormatting } from "./settingsStore";
 import { appendDictionarySuffix } from "../config/prompts";
 import { generateNoteTitle } from "../utils/generateTitle";
 import type { ActionItem } from "../types/electron";
@@ -123,7 +123,18 @@ export function runBackgroundAction(
     try {
       const basePrompt = options.isMeetingNote ? MEETING_SYSTEM_PROMPT : BASE_SYSTEM_PROMPT;
       const settings = getSettings();
-      const provider = options.isCloudMode ? "openwhispr" : undefined;
+      const noteFormatting = selectResolvedNoteFormatting(settings);
+      const provider = options.isCloudMode
+        ? "openwhispr"
+        : noteFormatting.mode === "providers"
+          ? noteFormatting.provider || undefined
+          : undefined;
+      const isCustom = provider === "custom";
+      const providerOverrides = {
+        provider,
+        baseUrl: isCustom ? noteFormatting.cloudBaseUrl || undefined : undefined,
+        customApiKey: isCustom ? settings.noteFormattingCustomApiKey || undefined : undefined,
+      };
       const systemPrompt = appendDictionarySuffix(
         basePrompt + action.prompt,
         options.isMeetingNote ? settings.customDictionary : undefined,
@@ -133,14 +144,14 @@ export function runBackgroundAction(
         systemPrompt,
         temperature: 0.3,
         disableThinking: settings.noteFormattingDisableThinking,
-        provider,
+        ...providerOverrides,
       });
 
       if (cancelledFlags.get(noteId)) return;
 
       let title: string | undefined;
       if (getSettings().autoGenerateNoteTitle) {
-        const generated = await generateNoteTitle(enhanced, modelId, provider);
+        const generated = await generateNoteTitle(enhanced, modelId, providerOverrides);
         if (generated) title = generated;
       }
 

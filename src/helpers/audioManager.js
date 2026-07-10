@@ -1637,6 +1637,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       wordsUsed: result.wordsUsed,
       wordsRemaining: result.wordsRemaining,
       clientTranscriptionId: result.clientTranscriptionId,
+      ...(result.warning ? { warning: result.warning } : {}),
     };
   }
 
@@ -3076,6 +3077,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // If streaming produced no text, fall back to batch transcription
     // (batch fallback records usage server-side via /api/transcribe)
     let usedBatchFallback = false;
+    let batchWarning = null;
     if (!finalText && durationSeconds > 2 && fallbackBlob?.size > 0) {
       logger.info(
         "Streaming produced no text, falling back to batch transcription",
@@ -3089,6 +3091,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         if (batchResult?.text) {
           finalText = batchResult.text;
           usedBatchFallback = true;
+          batchWarning = batchResult.warning || null;
           logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
         }
       } catch (fallbackErr) {
@@ -3111,6 +3114,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         text: finalText,
         rawText: finalText,
         source: `${this.getStreamingProviderName()}-streaming`,
+        ...(batchWarning ? { warning: batchWarning } : {}),
       });
 
       if (!usedBatchFallback) {

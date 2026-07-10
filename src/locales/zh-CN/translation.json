@@ -502,6 +502,11 @@
         "adcHelp": "使用 Application Default Credentials。请执行：gcloud auth application-default login",
         "apikeyHelp": "从 Google AI Studio 获取的 Vertex AI Express Mode API 密钥。"
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "模型已不可用",
+      "modelRetired": "Tinfoil 已停用 {{from}}，已切换至 {{to}}。",
+      "refreshingModels": "正在刷新模型…"
     }
   },
   "transcription": {
@@ -545,6 +550,10 @@
       "noAudio": {
         "title": "未检测到音频",
         "description": "录音中未检测到音频，请重试。"
+      },
+      "partialTranscription": {
+        "title": "部分转录",
+        "description": "部分录音内容无法转录。"
       },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 会话不可用。请到「设置」中重新登录。",
@@ -2091,6 +2100,7 @@
       "transcribingProvider": "正在通过 {{provider}} 转录...",
       "cancelTranscription": "取消转录",
       "transcriptionComplete": "转录完成",
+      "partialWarning": "部分音频内容无法转录。",
       "openNote": "打开笔记",
       "uploadAnother": "上传另一个",
       "retry": "重试",

@@ -76,6 +76,7 @@ class QdrantManager {
       "  host: 127.0.0.1",
       `  http_port: ${this.port}`,
       `  grpc_port: ${this.port + 1}`,
+      "log_level: warn",
       "",
     ].join("\n");
 

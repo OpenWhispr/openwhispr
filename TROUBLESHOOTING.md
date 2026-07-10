@@ -189,6 +189,10 @@ Right-click OpenWhispr → Run as administrator (or set permanently in Propertie
 
 Allow OpenWhispr through Windows Firewall when using cloud transcription providers.
 
+**Firewall prompt for sherpa-onnx (local Parakeet transcription):**
+
+Windows may ask whether to allow `sherpa-onnx-ws-win32-x64` on public and private networks the first time local Parakeet transcription starts. The bundled sherpa-onnx server only serves OpenWhispr itself over `127.0.0.1`, but it has no loopback-only bind option, so Windows sees it listening on all interfaces. Either choice is safe — Windows never filters loopback traffic, so transcription works even if you click Cancel. All-users installs register a firewall rule that blocks outside access and suppresses the prompt entirely; per-user and portable builds may still see it once.
+
 **Complete reset (after uninstalling):**
 
 ```batch

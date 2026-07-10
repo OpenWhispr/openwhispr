@@ -616,11 +616,11 @@ class ReasoningService extends BaseReasoningService {
             ? config.baseUrl?.trim() || getConfiguredOpenAIBase()
             : undefined;
     }
-    const apiConfig = getOpenAiApiConfig(model);
-
     const aiProvider = isLocalProvider || isLanCleanup ? "local" : provider;
+    // Resolving a Tinfoil model refreshes the registry, so read model config after it.
     const aiModel = await getAIModel(aiProvider, model, apiKey, baseURL);
 
+    const apiConfig = getOpenAiApiConfig(model);
     const modelDef = getCloudModel(model);
     const userSuppressesThinking = config.disableThinking === true && !!modelDef?.supportsThinking;
     const needsGroqDisableThinking =

@@ -502,6 +502,11 @@
         "adcHelp": "Uses Application Default Credentials. Run: gcloud auth application-default login",
         "apikeyHelp": "Vertex AI Express Mode API key from Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Model no longer available",
+      "modelRetired": "Tinfoil retired {{from}}. Switched to {{to}}.",
+      "refreshingModels": "Refreshing models…"
     }
   },
   "transcription": {
@@ -545,6 +550,10 @@
       "noAudio": {
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."
+      },
+      "partialTranscription": {
+        "title": "Partial Transcription",
+        "description": "Part of the recording couldn't be transcribed."
       },
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
@@ -2295,6 +2304,7 @@
       "transcribingProvider": "Transcribing via {{provider}}...",
       "cancelTranscription": "Cancel transcription",
       "transcriptionComplete": "Transcription complete",
+      "partialWarning": "Part of the audio couldn't be transcribed.",
       "openNote": "Open Note",
       "uploadAnother": "Upload Another",
       "retry": "Retry",

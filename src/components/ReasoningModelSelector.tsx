@@ -16,7 +16,9 @@ import { ProviderTabs } from "./ui/ProviderTabs";
 import OpenAICompatiblePanel from "./OpenAICompatiblePanel";
 import { API_ENDPOINTS } from "../config/constants";
 import logger from "../utils/logger";
-import { REASONING_PROVIDERS } from "../models/ModelRegistry";
+import { REASONING_PROVIDERS, toReasoningModel } from "../models/ModelRegistry";
+import { useTinfoilModels } from "../hooks/useTinfoilModels";
+import { pickDefaultTinfoilModel } from "../models/tinfoilModels";
 import { modelRegistry } from "../models/ModelRegistry";
 import { getProviderIcon, isMonochromeProvider } from "../utils/providerIcons";
 import { GetApiKeyLink } from "./ui/GetApiKeyLink";
@@ -338,6 +340,11 @@ export default function ReasoningModelSelector({
   const [selectedMode, setSelectedMode] = useState<"cloud" | "local">(mode || "cloud");
   const [selectedCloudProvider, setSelectedCloudProvider] = useState("openai");
   const [selectedLocalProvider, setSelectedLocalProvider] = useState("qwen");
+  const {
+    models: tinfoilModels,
+    loading: tinfoilModelsLoading,
+    error: tinfoilModelsError,
+  } = useTinfoilModels(selectedCloudProvider === "tinfoil");
 
   const effectiveMode = mode || selectedMode;
 
@@ -384,12 +391,17 @@ export default function ReasoningModelSelector({
     if (selectedCloudProvider === "openai") return openaiModelOptions;
     if (selectedCloudProvider === "custom" || selectedCloudProvider === OPENROUTER_TAB) return [];
 
-    const provider = REASONING_PROVIDERS[selectedCloudProvider as keyof typeof REASONING_PROVIDERS];
-    if (!provider?.models) return [];
-
     const iconUrl = getProviderIcon(selectedCloudProvider);
     const invertInDark = isMonochromeProvider(selectedCloudProvider);
-    return provider.models.map((model) => ({
+
+    const models =
+      selectedCloudProvider === "tinfoil"
+        ? tinfoilModels.map(toReasoningModel)
+        : REASONING_PROVIDERS[selectedCloudProvider as keyof typeof REASONING_PROVIDERS]?.models;
+
+    if (!models) return [];
+
+    return models.map((model) => ({
       ...model,
       description: model.descriptionKey
         ? t(model.descriptionKey, { defaultValue: model.description })
@@ -397,7 +409,7 @@ export default function ReasoningModelSelector({
       icon: iconUrl,
       invertInDark,
     }));
-  }, [selectedCloudProvider, openaiModelOptions, t]);
+  }, [selectedCloudProvider, openaiModelOptions, tinfoilModels, t]);
 
   useEffect(() => {
     const localProviderIds = localProviders.map((p) => p.id);
@@ -434,6 +446,22 @@ export default function ReasoningModelSelector({
     loadDownloadedModels();
   }, [loadDownloadedModels]);
 
+  const selectDefaultModelForProvider = (provider: string) => {
+    // Custom/OpenRouter use a dynamically fetched model list — don't preset one.
+    if (provider === "custom" || provider === OPENROUTER_TAB) return;
+
+    if (provider === "tinfoil") {
+      const defaultModel = pickDefaultTinfoilModel(tinfoilModels);
+      if (defaultModel) setReasoningModel(defaultModel.id);
+      return;
+    }
+
+    const providerData = REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS];
+    if (providerData?.models?.length > 0) {
+      setReasoningModel(providerData.models[0].value);
+    }
+  };
+
   const handleModeChange = async (newMode: "cloud" | "local") => {
     setSelectedMode(newMode);
     setReasoningModeProp?.(newMode === "local" ? "local" : "providers");
@@ -441,15 +469,7 @@ export default function ReasoningModelSelector({
     if (newMode === "cloud") {
       window.electronAPI?.llamaServerStop?.();
       setLocalReasoningProvider(selectedCloudProvider);
-
-      // Custom/OpenRouter use a dynamically fetched model list — don't preset one.
-      if (selectedCloudProvider === "custom" || selectedCloudProvider === OPENROUTER_TAB) return;
-
-      const providerData =
-        REASONING_PROVIDERS[selectedCloudProvider as keyof typeof REASONING_PROVIDERS];
-      if (providerData?.models?.length > 0) {
-        setReasoningModel(providerData.models[0].value);
-      }
+      selectDefaultModelForProvider(selectedCloudProvider);
     } else {
       setLocalReasoningProvider(selectedLocalProvider);
       const downloaded = await loadDownloadedModels();
@@ -469,14 +489,7 @@ export default function ReasoningModelSelector({
   const handleCloudProviderChange = (provider: string) => {
     setSelectedCloudProvider(provider);
     setLocalReasoningProvider(provider);
-
-    // Custom/OpenRouter use a dynamically fetched model list — don't preset one.
-    if (provider === "custom" || provider === OPENROUTER_TAB) return;
-
-    const providerData = REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS];
-    if (providerData?.models?.length > 0) {
-      setReasoningModel(providerData.models[0].value);
-    }
+    selectDefaultModelForProvider(provider);
   };
 
   const handleLocalProviderChange = async (providerId: string) => {
@@ -643,6 +656,20 @@ export default function ReasoningModelSelector({
                     selectedModel={reasoningModel}
                     onModelSelect={setReasoningModel}
                   />
+                  {selectedCloudProvider === "tinfoil" && (
+                    <>
+                      {tinfoilModelsLoading && (
+                        <p className="text-xs text-muted-foreground">
+                          {t("reasoning.tinfoil.refreshingModels")}
+                        </p>
+                      )}
+                      {!tinfoilModelsLoading && tinfoilModelsError && (
+                        <p className="text-xs text-destructive">
+                          {t("reasoning.custom.unableToLoadModels")}
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
               </>
             )}

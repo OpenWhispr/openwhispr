@@ -326,9 +326,42 @@ class SyncService {
   }
 
   private async syncFolders(): Promise<void> {
+    await this.adoptDefaultFolders();
     await this.pushPendingFolders();
     await this.pushFolderDeletes();
     await this.pullFolders();
+  }
+
+  // Each platform seeds "Personal"/"Meetings" with its own random
+  // client_folder_id, so the second device to sync would register them as
+  // new folders and collide with the cloud's per-user unique folder name.
+  // Before the first push, adopt the cloud identity of any same-named
+  // default folder so both platforms converge on a single folder.
+  private async adoptDefaultFolders(): Promise<void> {
+    const pending = (await window.electronAPI.getPendingFolders?.()) ?? [];
+    const unlinkedDefaults = pending.filter((f) => f.is_default && !f.cloud_id);
+    if (unlinkedDefaults.length === 0) return;
+
+    try {
+      const { folders: cloudFolders } = await FoldersService.list();
+      const cloudByName = new Map(
+        cloudFolders
+          .filter((f) => f.is_default && !f.deleted_at)
+          .map((f) => [f.name.toLowerCase(), f])
+      );
+      for (const local of unlinkedDefaults) {
+        const match = cloudByName.get(local.name.toLowerCase());
+        if (!match) continue;
+        await window.electronAPI.adoptFolderIdentity?.(
+          local.id,
+          match.client_folder_id ?? local.client_folder_id,
+          match.id,
+          match.updated_at
+        );
+      }
+    } catch (err) {
+      console.error("Default folder adoption failed:", err);
+    }
   }
 
   private async pushFolderDeletes(): Promise<void> {
@@ -370,9 +403,30 @@ class SyncService {
             sort_order: f.sort_order,
           }))
         );
-        for (const cloudFolder of created) {
-          const local = fresh.find((f) => f.client_folder_id === cloudFolder.client_folder_id);
-          if (local) await window.electronAPI.markFolderSynced?.(local.id, cloudFolder.id);
+        // created preserves input order; the cloud may return an existing
+        // folder with a different client_folder_id when a same-named
+        // default already exists there — adopt its identity in that case.
+        if (created.length !== fresh.length) {
+          console.error(
+            `Folder batch create returned ${created.length} folders for ${fresh.length} inputs; skipping identity adoption`
+          );
+          return;
+        }
+        for (const [i, cloudFolder] of created.entries()) {
+          const local = fresh[i];
+          if (
+            cloudFolder.client_folder_id &&
+            cloudFolder.client_folder_id !== local.client_folder_id
+          ) {
+            await window.electronAPI.adoptFolderIdentity?.(
+              local.id,
+              cloudFolder.client_folder_id,
+              cloudFolder.id,
+              cloudFolder.updated_at
+            );
+          } else {
+            await window.electronAPI.markFolderSynced?.(local.id, cloudFolder.id);
+          }
         }
       } catch (err) {
         console.error("Folder batch create failed:", err);
@@ -394,6 +448,25 @@ class SyncService {
         if (cloudFolder.deleted_at) {
           if (local) await window.electronAPI.hardDeleteFolder?.(local.id);
           continue;
+        }
+
+        // A default folder created on another platform arrives with an
+        // unknown client_folder_id; inserting it would violate the local
+        // unique folder name. Match it by name and adopt its identity.
+        if (!local && cloudFolder.is_default) {
+          const allFolders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
+          const nameMatch = allFolders.find(
+            (f) => f.is_default && f.name.toLowerCase() === cloudFolder.name.toLowerCase()
+          );
+          if (nameMatch) {
+            await window.electronAPI.adoptFolderIdentity?.(
+              nameMatch.id,
+              cloudFolder.client_folder_id ?? nameMatch.client_folder_id,
+              cloudFolder.id,
+              cloudFolder.updated_at
+            );
+            continue;
+          }
         }
 
         if (local?.deleted_at) continue;

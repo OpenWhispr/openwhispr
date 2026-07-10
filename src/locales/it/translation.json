@@ -502,6 +502,11 @@
         "adcHelp": "Usa Application Default Credentials. Esegui: gcloud auth application-default login",
         "apikeyHelp": "Chiave API Vertex AI Express Mode da Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Modello non più disponibile",
+      "modelRetired": "Tinfoil ha ritirato {{from}}. Passato a {{to}}.",
+      "refreshingModels": "Aggiornamento dei modelli…"
     }
   },
   "transcription": {
@@ -545,6 +550,10 @@
       "noAudio": {
         "title": "Nessun audio rilevato",
         "description": "La registrazione non contiene audio rilevabile. Riprova."
+      },
+      "partialTranscription": {
+        "title": "Trascrizione parziale",
+        "description": "Non è stato possibile trascrivere una parte della registrazione."
       },
       "errorDescriptions": {
         "sessionExpired": "La tua sessione OpenWhispr Cloud non è disponibile. Effettua di nuovo l'accesso dalle Impostazioni.",
@@ -2096,6 +2105,7 @@
       "transcribingProvider": "Trascrizione tramite {{provider}}...",
       "cancelTranscription": "Annulla trascrizione",
       "transcriptionComplete": "Trascrizione completata",
+      "partialWarning": "Non è stato possibile trascrivere una parte dell'audio.",
       "openNote": "Apri nota",
       "uploadAnother": "Carica un altro",
       "retry": "Riprova",

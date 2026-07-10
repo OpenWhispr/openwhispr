@@ -1,4 +1,5 @@
 import reasoningService from "../services/ReasoningService";
+import type { ReasoningConfig } from "../services/BaseReasoningService";
 import { getSettings } from "../stores/settingsStore";
 
 const TITLE_SYSTEM_PROMPT =
@@ -7,14 +8,14 @@ const TITLE_SYSTEM_PROMPT =
 export async function generateNoteTitle(
   text: string,
   modelId: string,
-  provider?: string
+  config?: Pick<ReasoningConfig, "provider" | "baseUrl" | "customApiKey">
 ): Promise<string> {
   try {
     const raw = await reasoningService.processText(text.slice(0, 2000), modelId, null, {
       systemPrompt: TITLE_SYSTEM_PROMPT,
       temperature: 0.3,
       disableThinking: getSettings().noteFormattingDisableThinking,
-      provider,
+      ...config,
     });
     const cleaned = raw.trim().replace(/^["']|["']$/g, "");
     return cleaned.length > 0 && cleaned.length < 100 ? cleaned : "";
