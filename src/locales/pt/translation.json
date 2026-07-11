@@ -6,7 +6,13 @@
       "uiLabel": "Idioma da interface",
       "uiDescription": "Escolha o idioma usado na interface do OpenWhispr",
       "transcriptionLabel": "Idioma de transcrição",
-      "transcriptionDescription": "Escolha o idioma que você fala para maior precisão"
+      "transcriptionDescription": "Escolha o idioma que você fala para maior precisão",
+      "translationTargetsLabel": "Idiomas de tradução",
+      "translationTargetsDescription": "Salve até {{count}} idiomas e escolha o destino ativo",
+      "addTranslationTarget": "Adicionar idioma de tradução",
+      "activeTranslationTarget": "Idioma de tradução ativo",
+      "active": "Ativo",
+      "removeTranslationTarget": "Remover {{language}}"
     },
     "noteFiles": {
       "title": "Salvar notas como arquivos",
@@ -374,6 +380,7 @@
       "audioNotFound": "Arquivo de áudio não encontrado ou expirado",
       "noAiProcessing": "Nenhum processamento de IA foi aplicado a esta transcrição",
       "rawTranscript": "Transcrição bruta",
+      "translationTarget": "Traduzido para {{language}}",
       "discarded": {
         "show": "Mostrar descartadas",
         "hide": "Ocultar descartadas",
@@ -537,7 +544,8 @@
         "sessionExpired": "Sessão expirada",
         "offline": "Sem conexão",
         "dailyLimitReached": "Limite diário atingido",
-        "providerRateLimited": "Limite de taxa do provedor"
+        "providerRateLimited": "Limite de taxa do provedor",
+        "translationFailed": "Falha na tradução"
       },
       "fallback": {
         "title": "Modo de fallback",
@@ -551,11 +559,16 @@
         "title": "Transcrição parcial",
         "description": "Não foi possível transcrever parte da gravação."
       },
+      "translationUnavailable": {
+        "title": "A tradução não está configurada",
+        "description": "Escolha um provedor e um modelo de IA em Modelos de linguagem antes de usar o atalho de tradução."
+      },
       "errorDescriptions": {
         "sessionExpired": "Sua sessão do OpenWhispr Cloud está indisponível. Entre novamente nas Configurações.",
         "offline": "Você está offline. A transcrição na nuvem exige conexão com a internet.",
         "dailyLimitReached": "Você atingiu o limite de transcrições de hoje. Tente novamente amanhã ou faça upgrade do seu plano.",
-        "providerRateLimited": "Seu provedor de transcrição limitou a solicitação. Aguarde um momento e tente novamente."
+        "providerRateLimited": "Seu provedor de transcrição limitou a solicitação. Aguarde um momento e tente novamente.",
+        "translationFailed": "Sua fala foi transcrita, mas não pôde ser traduzida. Nada foi colado. Tente novamente ou verifique seu provedor de IA."
       }
     },
     "clipboard": {
@@ -1414,6 +1427,10 @@
       "voiceAgentHotkey": {
         "title": "Atalho do agente de voz",
         "description": "Diga o que você precisa — seu agente de IA escreve o resultado, não suas palavras"
+      },
+      "translationHotkey": {
+        "title": "Atalho de tradução",
+        "description": "Dite e insira texto no idioma de tradução ativo"
       },
       "microphone": {
         "description": "Selecione qual dispositivo de entrada usar para ditado",

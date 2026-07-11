@@ -6,7 +6,13 @@
       "uiLabel": "界面语言",
       "uiDescription": "选择 OpenWhispr 界面使用的语言",
       "transcriptionLabel": "转录语言",
-      "transcriptionDescription": "选择你说话的语言，以提高转录准确率"
+      "transcriptionDescription": "选择你说话的语言，以提高转录准确率",
+      "translationTargetsLabel": "翻译目标语言",
+      "translationTargetsDescription": "最多保存 {{count}} 种语言，并选择当前目标语言",
+      "addTranslationTarget": "添加翻译目标语言",
+      "activeTranslationTarget": "当前翻译目标语言",
+      "active": "当前",
+      "removeTranslationTarget": "移除{{language}}"
     },
     "noteFiles": {
       "title": "将笔记保存为文件",
@@ -395,6 +401,7 @@
       "audioNotFound": "音频文件未找到或已过期",
       "noAiProcessing": "此转录未应用 AI 处理",
       "rawTranscript": "原始转录",
+      "translationTarget": "已翻译为{{language}}",
       "discarded": {
         "show": "显示已放弃",
         "hide": "隐藏已放弃",
@@ -558,7 +565,8 @@
         "sessionExpired": "会话已过期",
         "offline": "你已离线",
         "dailyLimitReached": "已达到每日上限",
-        "providerRateLimited": "服务商速率限制"
+        "providerRateLimited": "服务商速率限制",
+        "translationFailed": "翻译失败"
       },
       "fallback": {
         "title": "回退模式",
@@ -572,11 +580,16 @@
         "title": "部分转录",
         "description": "部分录音内容无法转录。"
       },
+      "translationUnavailable": {
+        "title": "尚未配置翻译",
+        "description": "使用翻译快捷键前，请先在语言模型中选择 AI 提供商和模型。"
+      },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 会话不可用。请到「设置」中重新登录。",
         "offline": "你目前离线。云端转录需要互联网连接。",
         "dailyLimitReached": "已达今日转录上限。请明天再试或升级你的套餐。",
-        "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。"
+        "providerRateLimited": "你的转录服务商限制了请求频率。请稍候再试。",
+        "translationFailed": "语音已转录，但无法翻译。未粘贴任何内容。请重试或检查 AI 提供商。"
       }
     },
     "clipboard": {
@@ -1430,6 +1443,10 @@
       "voiceAgentHotkey": {
         "title": "语音助手快捷键",
         "description": "说出你的需求，AI 助手会输入结果，而不是你说的原话"
+      },
+      "translationHotkey": {
+        "title": "翻译快捷键",
+        "description": "听写并以当前翻译目标语言插入文本"
       },
       "microphone": {
         "description": "选择用于听写的输入设备",

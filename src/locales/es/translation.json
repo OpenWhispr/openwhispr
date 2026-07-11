@@ -6,7 +6,13 @@
       "uiLabel": "Idioma de la interfaz",
       "uiDescription": "Elige el idioma usado en la interfaz de OpenWhispr",
       "transcriptionLabel": "Idioma de transcripción",
-      "transcriptionDescription": "Elige el idioma que hablas para mejorar la precisión"
+      "transcriptionDescription": "Elige el idioma que hablas para mejorar la precisión",
+      "translationTargetsLabel": "Idiomas de traducción",
+      "translationTargetsDescription": "Guarda hasta {{count}} idiomas y elige el destino activo",
+      "addTranslationTarget": "Añadir idioma de traducción",
+      "activeTranslationTarget": "Idioma de traducción activo",
+      "active": "Activo",
+      "removeTranslationTarget": "Eliminar {{language}}"
     },
     "noteFiles": {
       "title": "Guardar notas como archivos",
@@ -403,7 +409,8 @@
       "retryError": "Error al volver a transcribir",
       "audioNotFound": "Archivo de audio no encontrado o expirado",
       "noAiProcessing": "No se aplicó procesamiento de IA a esta transcripción",
-      "rawTranscript": "Transcripción sin procesar"
+      "rawTranscript": "Transcripción sin procesar",
+      "translationTarget": "Traducido a {{language}}"
     },
     "cloudMigration": {
       "title": "Bienvenido a OpenWhispr Cloud",
@@ -558,7 +565,8 @@
         "sessionExpired": "Sesión expirada",
         "offline": "Sin conexión",
         "dailyLimitReached": "Límite diario alcanzado",
-        "providerRateLimited": "Límite de tasa del proveedor"
+        "providerRateLimited": "Límite de tasa del proveedor",
+        "translationFailed": "Error de traducción"
       },
       "fallback": {
         "title": "Modo de respaldo",
@@ -572,11 +580,16 @@
         "title": "Transcripción parcial",
         "description": "No se pudo transcribir una parte de la grabación."
       },
+      "translationUnavailable": {
+        "title": "La traducción no está configurada",
+        "description": "Elige un proveedor y un modelo de IA en Modelos de lenguaje antes de usar el atajo de traducción."
+      },
       "errorDescriptions": {
         "sessionExpired": "Tu sesión de OpenWhispr Cloud no está disponible. Vuelve a iniciar sesión desde Ajustes.",
         "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
         "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan.",
-        "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo."
+        "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo.",
+        "translationFailed": "Tu voz se transcribió, pero no se pudo traducir. No se pegó nada. Inténtalo de nuevo o revisa tu proveedor de IA."
       }
     },
     "clipboard": {
@@ -1483,6 +1496,10 @@
       "voiceAgentHotkey": {
         "title": "Atajo del agente de voz",
         "description": "Di lo que necesitas y tu agente de IA escribe el resultado, no tus palabras"
+      },
+      "translationHotkey": {
+        "title": "Atajo de traducción",
+        "description": "Dicta e inserta texto en el idioma de traducción activo"
       },
       "microphone": {
         "description": "Selecciona qué dispositivo de entrada usar para dictado",

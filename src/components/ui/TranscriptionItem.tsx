@@ -19,6 +19,7 @@ import type {
 import { cn } from "../lib/utils";
 import { getCachedPlatform } from "../../utils/platform";
 import { formatMmSs } from "../../utils/formatDuration";
+import { getTranslationLanguageName } from "../../utils/translationMode";
 
 const platform = getCachedPlatform();
 
@@ -167,9 +168,18 @@ export default function TranscriptionItem({
             </span>
           </div>
         ) : (
-          <p className="flex-1 min-w-0 text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
-            {item.text}
-          </p>
+          <div className="flex-1 min-w-0">
+            {item.translation_target && (
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-0.5">
+                {t("controlPanel.history.translationTarget", {
+                  language: getTranslationLanguageName(item.translation_target),
+                })}
+              </p>
+            )}
+            <p className="text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
+              {item.text}
+            </p>
+          </div>
         )}
 
         <div

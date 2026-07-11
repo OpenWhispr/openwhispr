@@ -6,7 +6,13 @@
       "uiLabel": "Sprache der Oberfläche",
       "uiDescription": "Wählen Sie die Sprache für die OpenWhispr-Oberfläche",
       "transcriptionLabel": "Transkriptionssprache",
-      "transcriptionDescription": "Wählen Sie die Sprache, die Sie sprechen, für genauere Transkription"
+      "transcriptionDescription": "Wählen Sie die Sprache, die Sie sprechen, für genauere Transkription",
+      "translationTargetsLabel": "Übersetzungsziele",
+      "translationTargetsDescription": "Speichern Sie bis zu {{count}} Sprachen und wählen Sie das aktive Ziel",
+      "addTranslationTarget": "Übersetzungsziel hinzufügen",
+      "activeTranslationTarget": "Aktives Übersetzungsziel",
+      "active": "Aktiv",
+      "removeTranslationTarget": "{{language}} entfernen"
     },
     "noteFiles": {
       "title": "Notizen als Dateien speichern",
@@ -395,6 +401,7 @@
       "audioNotFound": "Audiodatei nicht gefunden oder abgelaufen",
       "noAiProcessing": "Auf diese Transkription wurde keine KI-Verarbeitung angewendet",
       "rawTranscript": "Rohtranskript",
+      "translationTarget": "Übersetzt ins {{language}}",
       "discarded": {
         "show": "Verworfene anzeigen",
         "hide": "Verworfene ausblenden",
@@ -558,7 +565,8 @@
         "sessionExpired": "Sitzung abgelaufen",
         "offline": "Sie sind offline",
         "dailyLimitReached": "Tägliches Limit erreicht",
-        "providerRateLimited": "Anbieter-Ratenlimit erreicht"
+        "providerRateLimited": "Anbieter-Ratenlimit erreicht",
+        "translationFailed": "Übersetzung fehlgeschlagen"
       },
       "fallback": {
         "title": "Fallback-Modus",
@@ -572,11 +580,16 @@
         "title": "Unvollständige Transkription",
         "description": "Ein Teil der Aufnahme konnte nicht transkribiert werden."
       },
+      "translationUnavailable": {
+        "title": "Übersetzung ist nicht eingerichtet",
+        "description": "Wählen Sie unter Sprachmodelle einen KI-Anbieter und ein Modell, bevor Sie den Übersetzungs-Hotkey verwenden."
+      },
       "errorDescriptions": {
         "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
         "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
         "dailyLimitReached": "Du hast dein heutiges Transkriptionslimit erreicht. Versuch es morgen erneut oder upgrade deinen Plan.",
-        "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut."
+        "providerRateLimited": "Dein Transkriptionsanbieter hat die Anfrage begrenzt. Warte kurz und versuch es erneut.",
+        "translationFailed": "Ihre Sprache wurde transkribiert, konnte aber nicht übersetzt werden. Es wurde nichts eingefügt. Versuchen Sie es erneut oder prüfen Sie Ihren KI-Anbieter."
       }
     },
     "clipboard": {
@@ -1435,6 +1448,10 @@
       "voiceAgentHotkey": {
         "title": "Sprachagent-Hotkey",
         "description": "Sagen Sie, was Sie brauchen — Ihr KI-Agent schreibt das Ergebnis, nicht Ihre Worte"
+      },
+      "translationHotkey": {
+        "title": "Übersetzungs-Hotkey",
+        "description": "Diktieren und Text in der aktiven Übersetzungssprache einfügen"
       },
       "microphone": {
         "description": "Wählen Sie das Eingabegerät für das Diktat",

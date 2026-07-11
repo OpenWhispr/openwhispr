@@ -6,7 +6,13 @@
       "uiLabel": "介面語言",
       "uiDescription": "選擇 OpenWhispr 介面使用的語言",
       "transcriptionLabel": "轉錄語言",
-      "transcriptionDescription": "選擇你說話的語言，以提高轉錄準確度"
+      "transcriptionDescription": "選擇你說話的語言，以提高轉錄準確度",
+      "translationTargetsLabel": "翻譯目標語言",
+      "translationTargetsDescription": "最多儲存 {{count}} 種語言，並選擇目前目標語言",
+      "addTranslationTarget": "新增翻譯目標語言",
+      "activeTranslationTarget": "目前翻譯目標語言",
+      "active": "目前",
+      "removeTranslationTarget": "移除{{language}}"
     },
     "noteFiles": {
       "title": "將筆記儲存為檔案",
@@ -395,6 +401,7 @@
       "audioNotFound": "找不到音訊檔案或檔案已過期",
       "noAiProcessing": "此轉錄未套用 AI 處理",
       "rawTranscript": "原始轉錄",
+      "translationTarget": "已翻譯為{{language}}",
       "discarded": {
         "show": "顯示已捨棄",
         "hide": "隱藏已捨棄",
@@ -558,7 +565,8 @@
         "sessionExpired": "工作階段已過期",
         "offline": "你目前離線",
         "dailyLimitReached": "已達每日上限",
-        "providerRateLimited": "服務商速率限制"
+        "providerRateLimited": "服務商速率限制",
+        "translationFailed": "翻譯失敗"
       },
       "fallback": {
         "title": "備援模式",
@@ -572,11 +580,16 @@
         "title": "部分轉錄",
         "description": "部分錄音內容無法轉錄。"
       },
+      "translationUnavailable": {
+        "title": "尚未設定翻譯",
+        "description": "使用翻譯快速鍵前，請先在語言模型中選擇 AI 提供者和模型。"
+      },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
         "offline": "你目前離線。雲端轉錄需要網際網路連線。",
         "dailyLimitReached": "已達今日的轉錄上限。請明天再試或升級你的方案。",
-        "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。"
+        "providerRateLimited": "你的轉錄服務商限制了請求頻率。請稍候再試。",
+        "translationFailed": "語音已轉錄，但無法翻譯。未貼上任何內容。請重試或檢查 AI 提供者。"
       }
     },
     "clipboard": {
@@ -1430,6 +1443,10 @@
       "voiceAgentHotkey": {
         "title": "語音助手快捷鍵",
         "description": "說出你的需求，AI 助手會輸入結果，而不是你說的原話"
+      },
+      "translationHotkey": {
+        "title": "翻譯快速鍵",
+        "description": "聽寫並以目前翻譯目標語言插入文字"
       },
       "microphone": {
         "description": "選擇用於語音輸入的輸入裝置",

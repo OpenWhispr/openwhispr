@@ -48,6 +48,7 @@ export interface HotkeySettings {
   activeDictationKey: string | null;
   meetingKey: string;
   voiceAgentKey: string;
+  translationKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
   activationMode: "tap" | "push";
 }
@@ -256,6 +257,7 @@ function useSettingsInternal() {
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
     voiceAgentKey: store.voiceAgentKey,
+    translationKey: store.translationKey,
     meetingHotkeyLayoutMode: store.meetingHotkeyLayoutMode,
     setMeetingHotkeyLayoutMode: store.setMeetingHotkeyLayoutMode,
     theme: store.theme,

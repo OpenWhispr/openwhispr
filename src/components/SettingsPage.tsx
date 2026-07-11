@@ -34,6 +34,7 @@ import {
   FileAudio,
   Wand2,
   Upload,
+  Plus,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
@@ -83,6 +84,11 @@ import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
+import {
+  MAX_TRANSLATION_TARGETS,
+  TRANSLATION_LANGUAGE_OPTIONS,
+  getTranslationLanguageName,
+} from "../utils/translationMode";
 import { Skeleton } from "./ui/skeleton";
 import { Progress } from "./ui/progress";
 import { useToast } from "./ui/useToast";
@@ -799,6 +805,37 @@ export default function SettingsPage({
   const setChatAgentKey = useSettingsStore((s) => s.setChatAgentKey);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
+  const translationKey = useSettingsStore((s) => s.translationKey);
+  const setTranslationKey = useSettingsStore((s) => s.setTranslationKey);
+  const translationTargets = useSettingsStore((s) => s.translationTargets);
+  const setTranslationTargets = useSettingsStore((s) => s.setTranslationTargets);
+  const translationTarget = useSettingsStore((s) => s.translationTarget);
+  const setTranslationTarget = useSettingsStore((s) => s.setTranslationTarget);
+  const [translationTargetDraft, setTranslationTargetDraft] = useState("fr");
+
+  const addTranslationTarget = useCallback(() => {
+    if (
+      translationTargets.includes(translationTargetDraft) ||
+      translationTargets.length >= MAX_TRANSLATION_TARGETS
+    ) {
+      return;
+    }
+    const nextTargets = [...translationTargets, translationTargetDraft];
+    setTranslationTargets(nextTargets);
+    setTranslationTarget(translationTargetDraft);
+    const nextAvailable = TRANSLATION_LANGUAGE_OPTIONS.find(
+      ({ value }) => !nextTargets.includes(value)
+    );
+    if (nextAvailable) setTranslationTargetDraft(nextAvailable.value);
+  }, [setTranslationTarget, setTranslationTargets, translationTargetDraft, translationTargets]);
+
+  const removeTranslationTarget = useCallback(
+    (target: string) => {
+      if (translationTargets.length <= 1) return;
+      setTranslationTargets(translationTargets.filter((value) => value !== target));
+    },
+    [setTranslationTargets, translationTargets]
+  );
 
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -979,10 +1016,11 @@ export default function SettingsPage({
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [meetingKey, chatAgentKey, voiceAgentKey, t]
+    [meetingKey, chatAgentKey, voiceAgentKey, translationKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -993,10 +1031,11 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, chatAgentKey, voiceAgentKey, t]
+    [dictationKey, chatAgentKey, voiceAgentKey, translationKey, t]
   );
 
   const validateChatAgentHotkey = useCallback(
@@ -1007,10 +1046,11 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, voiceAgentKey, t]
+    [dictationKey, meetingKey, voiceAgentKey, translationKey, t]
   );
 
   const validateVoiceAgentHotkey = useCallback(
@@ -1021,10 +1061,26 @@ export default function SettingsPage({
           "settingsPage.general.hotkey.title": dictationKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.translationHotkey.title": translationKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, t]
+    [dictationKey, meetingKey, chatAgentKey, translationKey, t]
+  );
+
+  const validateTranslationHotkey = useCallback(
+    (hotkey: string) =>
+      validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+          "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+        },
+        t
+      ),
+    [dictationKey, meetingKey, chatAgentKey, voiceAgentKey, t]
   );
 
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
@@ -2657,6 +2713,84 @@ export default function SettingsPage({
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label={t("settings.language.translationTargetsLabel")}
+                    description={t("settings.language.translationTargetsDescription", {
+                      count: MAX_TRANSLATION_TARGETS,
+                    })}
+                  >
+                    <div className="w-64 space-y-2">
+                      <div className="flex items-center gap-1.5">
+                        <LanguageSelector
+                          value={translationTargetDraft}
+                          onChange={setTranslationTargetDraft}
+                          options={TRANSLATION_LANGUAGE_OPTIONS}
+                          className="min-w-0 flex-1"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={addTranslationTarget}
+                          disabled={
+                            translationTargets.includes(translationTargetDraft) ||
+                            translationTargets.length >= MAX_TRANSLATION_TARGETS
+                          }
+                          className="h-7 px-2"
+                          aria-label={t("settings.language.addTranslationTarget")}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                      <div
+                        role="radiogroup"
+                        aria-label={t("settings.language.activeTranslationTarget")}
+                        className="divide-y divide-border/40 border-y border-border/40"
+                      >
+                        {translationTargets.map((target) => {
+                          const option = TRANSLATION_LANGUAGE_OPTIONS.find(
+                            ({ value }) => value === target
+                          );
+                          const language = getTranslationLanguageName(target);
+                          const isActive = target === translationTarget;
+                          return (
+                            <div key={target} className="flex h-8 items-center gap-1.5">
+                              <button
+                                type="button"
+                                role="radio"
+                                aria-checked={isActive}
+                                onClick={() => setTranslationTarget(target)}
+                                className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs text-foreground"
+                              >
+                                <span aria-hidden="true">{option?.flag}</span>
+                                <span className="truncate">{language}</span>
+                                {isActive && (
+                                  <span className="ml-auto text-[10px] text-primary">
+                                    {t("settings.language.active")}
+                                  </span>
+                                )}
+                              </button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => removeTranslationTarget(target)}
+                                disabled={translationTargets.length === 1}
+                                className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                aria-label={t("settings.language.removeTranslationTarget", {
+                                  language,
+                                })}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </SettingsRow>
+                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 
@@ -3290,6 +3424,26 @@ EOF`,
                     onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
                     onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
                     validate={validateVoiceAgentHotkey}
+                    disabled={isAgentHotkeyCommitting}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                  />
+                </SettingsPanelRow>
+              </SettingsPanel>
+            </div>
+
+            {/* Translation Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.translationHotkey.title")}
+                description={t("settingsPage.general.translationHotkey.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyListInput
+                    value={translationKey}
+                    onChange={(list) => commitAgentHotkey(setTranslationKey, list)}
+                    onClear={() => commitAgentHotkey(setTranslationKey, "")}
+                    validate={validateTranslationHotkey}
                     disabled={isAgentHotkeyCommitting}
                     maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
