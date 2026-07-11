@@ -3279,29 +3279,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               ? await this.processWithOpenWhisprCloud(fallbackBlob, { durationSeconds })
               : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds });
           if (batchResult?.text) {
-            rawText = batchResult.text;
+            rawText = batchResult.rawText ?? batchResult.text;
+            finalText = batchResult.text;
             if (this.translationRequested) {
-              const route = resolveReasoningRoute(
-                rawText,
-                stSettings,
-                localStorage.getItem("agentName") || null,
-                false,
-                true
-              );
-              if (route.kind !== "translate") {
-                throw new Error("Translation reasoning is unavailable");
-              }
-              finalText = validateTranslationResult(
-                await this.processWithReasoningModel(
-                  rawText,
-                  route.model,
-                  localStorage.getItem("agentName") || null,
-                  route.config
-                )
-              );
+              finalText = validateTranslationResult(finalText);
               this.translationAppliedTarget = stSettings.translationTarget;
-            } else {
-              finalText = rawText;
             }
             translationError = null;
             usedBatchFallback = true;
