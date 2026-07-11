@@ -241,6 +241,30 @@
       "name": "OpenAI",
       "models": [
         {
+          "id": "gpt-5.6-sol",
+          "name": "GPT-5.6 Sol",
+          "description": "Flagship GPT-5.6 for complex coding, research, and agentic work, 1M context",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_sol",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "name": "GPT-5.6 Terra",
+          "description": "Balanced capability, speed, and cost for everyday work",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_terra",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "name": "GPT-5.6 Luna",
+          "description": "Fastest and lowest-cost model in the GPT-5.6 family",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_luna",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
           "id": "gpt-5.5",
           "name": "GPT-5.5",
           "description": "Frontier model for complex reasoning, 1M context",
@@ -303,6 +327,18 @@
       "name": "Anthropic",
       "models": [
         {
+          "id": "claude-fable-5",
+          "name": "Claude Fable 5",
+          "description": "Anthropic's most capable model, Mythos-class, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5"
+        },
+        {
+          "id": "claude-sonnet-5",
+          "name": "Claude Sonnet 5",
+          "description": "Fast, capable agentic model at lower cost",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5"
+        },
+        {
           "id": "claude-sonnet-4-6",
           "name": "Claude Sonnet 4.6",
           "description": "Balanced performance",
@@ -317,7 +353,7 @@
         {
           "id": "claude-opus-4-8",
           "name": "Claude Opus 4.8",
-          "description": "Most capable Claude model, 1M context",
+          "description": "Powerful Opus model tuned for honesty and reliability, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8"
         },
         {
@@ -540,6 +576,12 @@
       "name": "AWS Bedrock",
       "allowCustomModelId": true,
       "models": [
+        {
+          "id": "us.anthropic.claude-fable-5",
+          "name": "Claude Fable 5",
+          "description": "Most capable Claude model, Mythos-class. Best for the hardest Agent Mode tasks.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_fable_5"
+        },
         {
           "id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
           "name": "Claude Haiku 4.5",
