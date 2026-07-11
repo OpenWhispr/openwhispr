@@ -70,6 +70,7 @@ import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { validateHotkeyForSlot } from "../utils/hotkeyValidation";
+import { isUnsupportedRecordingCancelHotkey } from "../helpers/cancelHotkey";
 import { getPlatform, getCachedPlatform } from "../utils/platform";
 import { formatHotkeyLabel } from "../utils/hotkeys";
 import { ActivationModeSelector } from "./ui/ActivationModeSelector";
@@ -703,6 +704,7 @@ export default function SettingsPage({
     cloudTranscriptionBaseUrl,
     useCleanupModel,
     dictationKey,
+    cancelKey,
     activationMode,
     setActivationMode,
     preferBuiltInMic,
@@ -719,6 +721,7 @@ export default function SettingsPage({
     setCloudTranscriptionBaseUrl,
     setUseCleanupModel,
     setDictationKey,
+    setCancelKey,
     meetingKey,
     setMeetingKey,
     meetingHotkeyLayoutMode,
@@ -977,12 +980,32 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.meetingHotkey.title": meetingKey,
+          "settingsPage.general.cancelHotkey.title": cancelKey,
           "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [meetingKey, chatAgentKey, voiceAgentKey, t]
+    [meetingKey, cancelKey, chatAgentKey, voiceAgentKey, t]
+  );
+
+  const validateCancelHotkey = useCallback(
+    (hotkey: string) => {
+      if (isUnsupportedRecordingCancelHotkey(hotkey)) {
+        return t("settingsPage.general.cancelHotkey.unsupported");
+      }
+      return validateHotkeyForSlot(
+        hotkey,
+        {
+          "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.meetingHotkey.title": meetingKey,
+          "agentMode.settings.hotkey": chatAgentKey,
+          "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
+        },
+        t
+      );
+    },
+    [dictationKey, meetingKey, chatAgentKey, voiceAgentKey, t]
   );
 
   const validateMeetingHotkey = useCallback(
@@ -991,12 +1014,13 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.cancelHotkey.title": cancelKey,
           "agentMode.settings.hotkey": chatAgentKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [dictationKey, chatAgentKey, voiceAgentKey, t]
+    [dictationKey, cancelKey, chatAgentKey, voiceAgentKey, t]
   );
 
   const validateChatAgentHotkey = useCallback(
@@ -1005,12 +1029,13 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.cancelHotkey.title": cancelKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "settingsPage.general.voiceAgentHotkey.title": voiceAgentKey,
         },
         t
       ),
-    [dictationKey, meetingKey, voiceAgentKey, t]
+    [dictationKey, cancelKey, meetingKey, voiceAgentKey, t]
   );
 
   const validateVoiceAgentHotkey = useCallback(
@@ -1019,12 +1044,13 @@ export default function SettingsPage({
         hotkey,
         {
           "settingsPage.general.hotkey.title": dictationKey,
+          "settingsPage.general.cancelHotkey.title": cancelKey,
           "settingsPage.general.meetingHotkey.title": meetingKey,
           "agentMode.settings.hotkey": chatAgentKey,
         },
         t
       ),
-    [dictationKey, meetingKey, chatAgentKey, t]
+    [dictationKey, cancelKey, meetingKey, chatAgentKey, t]
   );
 
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
@@ -3274,6 +3300,34 @@ EOF`,
                     )}
                   </SettingsPanelRow>
                 )}
+              </SettingsPanel>
+            </div>
+
+            {/* Recording Cancel Hotkey */}
+            <div>
+              <SectionHeader
+                title={t("settingsPage.general.cancelHotkey.title")}
+                description={t("settingsPage.general.cancelHotkey.description")}
+              />
+              <SettingsPanel>
+                <SettingsPanelRow>
+                  <HotkeyListInput
+                    value={cancelKey}
+                    onChange={(list) => setCancelKey(list)}
+                    validate={validateCancelHotkey}
+                    required
+                    footerEnd={
+                      cancelKey !== "Escape" ? (
+                        <button
+                          onClick={() => setCancelKey("Escape")}
+                          className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors"
+                        >
+                          {t("settingsPage.general.cancelHotkey.reset")}
+                        </button>
+                      ) : null
+                    }
+                  />
+                </SettingsPanelRow>
               </SettingsPanel>
             </div>
 

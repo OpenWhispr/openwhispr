@@ -46,6 +46,7 @@ export interface HotkeySettings {
   /** Hotkeys actually registered by the main process (may be a subset of
    * dictationKey, e.g. primary-only on GNOME/KDE/Hyprland). Display-only. */
   activeDictationKey: string | null;
+  cancelKey: string;
   meetingKey: string;
   voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
@@ -295,6 +296,8 @@ function useSettingsInternal() {
     cleanupCustomApiKey: store.cleanupCustomApiKey,
     setCleanupCustomApiKey: store.setCleanupCustomApiKey,
     setDictationKey: store.setDictationKey,
+    cancelKey: store.cancelKey,
+    setCancelKey: store.setCancelKey,
     setMeetingKey: store.setMeetingKey,
     setVoiceAgentKey: store.setVoiceAgentKey,
     onboardingUseCases: store.onboardingUseCases,

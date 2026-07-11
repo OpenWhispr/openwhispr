@@ -572,6 +572,14 @@
         "title": "Partial Transcription",
         "description": "Part of the recording couldn't be transcribed."
       },
+      "cancelHotkeyFallback": {
+        "title": "Cancel shortcut unavailable",
+        "description": "Could not register {{hotkey}}. {{fallback}} will cancel this recording instead."
+      },
+      "cancelHotkeyUnavailable": {
+        "title": "Cancel shortcut unavailable",
+        "description": "OpenWhispr could not register a recording cancel shortcut. Use your dictation hotkey to stop instead."
+      },
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
         "offline": "You're offline. Cloud transcription requires an internet connection.",
@@ -1597,6 +1605,12 @@
         "hyprlandConfigWriteWarningTitle": "Hyprland keybinds will not persist",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr cannot write to {{path}}, so keybinds will not survive a Hyprland config reload. Make sure the file exists and is writable.",
         "hyprlandUnbindDescription": "On Hyprland, OpenWhispr claims the selected shortcut. Any existing Hyprland bind that uses the same key combination will be unbound when OpenWhispr registers its shortcut."
+      },
+      "cancelHotkey": {
+        "title": "Cancel Recording Hotkey",
+        "description": "Cancel the active recording without saving its audio",
+        "reset": "Reset to Escape",
+        "unsupported": "Globe, Fn, mouse buttons, and right-side modifiers cannot cancel recordings yet."
       },
       "meetingHotkey": {
         "title": "Meeting Mode Hotkey",

@@ -572,6 +572,14 @@
         "title": "Unvollständige Transkription",
         "description": "Ein Teil der Aufnahme konnte nicht transkribiert werden."
       },
+      "cancelHotkeyFallback": {
+        "title": "Abbrechen-Tastenkürzel nicht verfügbar",
+        "description": "{{hotkey}} konnte nicht registriert werden. Stattdessen bricht {{fallback}} diese Aufnahme ab."
+      },
+      "cancelHotkeyUnavailable": {
+        "title": "Abbrechen-Tastenkürzel nicht verfügbar",
+        "description": "OpenWhispr konnte kein Kürzel zum Abbrechen registrieren. Beende die Aufnahme mit dem Diktierkürzel."
+      },
       "errorDescriptions": {
         "sessionExpired": "Deine OpenWhispr-Cloud-Sitzung ist nicht verfügbar. Bitte melde dich erneut über die Einstellungen an.",
         "offline": "Du bist offline. Die Cloud-Transkription benötigt eine Internetverbindung.",
@@ -1424,6 +1432,12 @@
         "hyprlandConfigWriteWarningTitle": "Hyprland-Tastenkombinationen werden nicht dauerhaft gespeichert",
         "hyprlandConfigWriteWarningDescription": "OpenWhispr kann nicht in {{path}} schreiben. Deshalb bleiben Tastenkombinationen nach einem Neuladen der Hyprland-Konfiguration nicht erhalten. Stellen Sie sicher, dass die Datei existiert und beschreibbar ist.",
         "hyprlandUnbindDescription": "Unter Hyprland beansprucht OpenWhispr die ausgewählte Tastenkombination. Jede vorhandene Hyprland-Belegung mit derselben Tastenkombination wird aufgehoben, wenn OpenWhispr seine Tastenkombination registriert."
+      },
+      "cancelHotkey": {
+        "title": "Aufnahme abbrechen",
+        "description": "Die aktive Aufnahme abbrechen, ohne das Audio zu speichern",
+        "reset": "Auf Escape zurücksetzen",
+        "unsupported": "Globe, Fn, Maustasten und rechte Modifikatortasten können Aufnahmen noch nicht abbrechen."
       },
       "meetingHotkey": {
         "title": "Meeting-Modus-Hotkey",
