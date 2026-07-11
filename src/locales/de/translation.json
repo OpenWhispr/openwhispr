@@ -395,6 +395,7 @@
       "audioNotFound": "Audiodatei nicht gefunden oder abgelaufen",
       "noAiProcessing": "Auf diese Transkription wurde keine KI-Verarbeitung angewendet",
       "rawTranscript": "Rohtranskript",
+      "cleanupLevelApplied": "KI-Bereinigung: {{level}}",
       "discarded": {
         "show": "Verworfene anzeigen",
         "hide": "Verworfene ausblenden",

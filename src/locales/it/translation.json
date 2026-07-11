@@ -395,6 +395,7 @@
       "audioNotFound": "File audio non trovato o scaduto",
       "noAiProcessing": "Nessuna elaborazione IA applicata a questa trascrizione",
       "rawTranscript": "Trascrizione grezza",
+      "cleanupLevelApplied": "Pulizia IA: {{level}}",
       "discarded": {
         "show": "Mostra scartate",
         "hide": "Nascondi scartate",

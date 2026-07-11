@@ -389,6 +389,7 @@
       "failedLimitReached": "Daily limit reached",
       "failedOffline": "You're offline",
       "rawTranscript": "Raw Transcript",
+      "cleanupLevelApplied": "AI cleanup: {{level}}",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear All Transcriptions",
       "clearAllDescription": "All transcriptions and audio files will be permanently removed.",

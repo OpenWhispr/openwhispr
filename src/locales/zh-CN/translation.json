@@ -395,6 +395,7 @@
       "audioNotFound": "音频文件未找到或已过期",
       "noAiProcessing": "此转录未应用 AI 处理",
       "rawTranscript": "原始转录",
+      "cleanupLevelApplied": "AI 清理：{{level}}",
       "discarded": {
         "show": "显示已放弃",
         "hide": "隐藏已放弃",

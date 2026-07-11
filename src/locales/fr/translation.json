@@ -395,6 +395,7 @@
       "audioNotFound": "Fichier audio introuvable ou expiré",
       "noAiProcessing": "Aucun traitement IA n'a été appliqué à cette transcription",
       "rawTranscript": "Transcription brute",
+      "cleanupLevelApplied": "Nettoyage par IA : {{level}}",
       "discarded": {
         "show": "Afficher les abandonnées",
         "hide": "Masquer les abandonnées",

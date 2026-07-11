@@ -167,9 +167,20 @@ export default function TranscriptionItem({
             </span>
           </div>
         ) : (
-          <p className="flex-1 min-w-0 text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
-            {item.text}
-          </p>
+          <div className="flex-1 min-w-0">
+            {item.cleanup_level && (
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-0.5">
+                {t("controlPanel.history.cleanupLevelApplied", {
+                  level: t(
+                    `settingsPage.aiModels.cleanupLevel.options.${item.cleanup_level}.title`
+                  ),
+                })}
+              </p>
+            )}
+            <p className="text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
+              {item.text}
+            </p>
+          </div>
         )}
 
         <div

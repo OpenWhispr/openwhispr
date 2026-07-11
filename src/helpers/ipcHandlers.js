@@ -6281,9 +6281,9 @@ class IPCHandlers {
       return { success: true };
     });
 
-    ipcMain.handle("update-transcription-text", async (_event, id, text, rawText) => {
+    ipcMain.handle("update-transcription-text", async (_event, id, text, rawText, cleanupLevel) => {
       try {
-        this.databaseManager.updateTranscriptionText(id, text, rawText);
+        this.databaseManager.updateTranscriptionText(id, text, rawText, cleanupLevel);
         const updated = this.databaseManager.getTranscriptionById(id);
         return { success: true, transcription: updated };
       } catch (error) {

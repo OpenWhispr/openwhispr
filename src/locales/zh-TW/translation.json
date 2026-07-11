@@ -395,6 +395,7 @@
       "audioNotFound": "找不到音訊檔案或檔案已過期",
       "noAiProcessing": "此轉錄未套用 AI 處理",
       "rawTranscript": "原始轉錄",
+      "cleanupLevelApplied": "AI 清理：{{level}}",
       "discarded": {
         "show": "顯示已捨棄",
         "hide": "隱藏已捨棄",
