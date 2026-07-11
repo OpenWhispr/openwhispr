@@ -1340,6 +1340,23 @@
       }
     },
     "aiModels": {
+      "cleanupLevel": {
+        "title": "Nivel de limpieza",
+        "description": "Elige cuánta edición con IA se aplica a cada dictado. Si el historial está activado, la transcripción original se guarda junto al texto limpio.",
+        "customPromptOverride": "Tu instrucción de limpieza personalizada sustituye el nivel de edición seleccionado.",
+        "options": {
+          "none": {
+            "title": "Ninguna",
+            "description": "Conserva la transcripción original, incluidos los errores"
+          },
+          "light": {
+            "title": "Ligera",
+            "description": "Elimina muletillas y corrige la gramática"
+          },
+          "medium": { "title": "Media", "description": "Mejora la claridad sin perder tu voz" },
+          "high": { "title": "Alta", "description": "Reescribe para lograr brevedad y pulido" }
+        }
+      },
       "customSetup": "Configuración personalizada",
       "customSetupDescription": "Usa tu propio proveedor y clave API.",
       "description": "Corrige transcripciones, gestiona comandos y soluciona errores preservando tu tono.",

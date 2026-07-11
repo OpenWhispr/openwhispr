@@ -34,6 +34,7 @@ import {
   FileAudio,
   Wand2,
   Upload,
+  Feather,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
@@ -76,6 +77,7 @@ import { ActivationModeSelector } from "./ui/ActivationModeSelector";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
+import OptionCard from "./ui/OptionCard";
 import DeveloperSection from "./DeveloperSection";
 import ChatAgentSettings from "./settings/ChatAgentSettings";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
@@ -102,6 +104,7 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import { WORKSPACES_ENABLED } from "../lib/features";
+import type { CleanupLevel } from "../config/cleanupLevels";
 
 const formatAmount = (cents: number, currency: string) =>
   (cents / 100).toLocaleString(undefined, { style: "currency", currency });
@@ -395,7 +398,8 @@ function TranscriptionSection({
 
 interface AiModelsSectionProps {
   useCleanupModel: boolean;
-  setUseCleanupModel: (value: boolean) => void;
+  cleanupLevel: CleanupLevel;
+  setCleanupLevel: (level: CleanupLevel) => void;
   toast: (opts: {
     title: string;
     description: string;
@@ -434,8 +438,24 @@ function NoteFormattingSettings() {
   );
 }
 
-function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModelsSectionProps) {
+const CLEANUP_LEVEL_OPTIONS: Array<{
+  id: CleanupLevel;
+  icon: typeof CircleX;
+}> = [
+  { id: "none", icon: CircleX },
+  { id: "light", icon: Feather },
+  { id: "medium", icon: Wand2 },
+  { id: "high", icon: Sparkles },
+];
+
+function AiModelsSection({
+  useCleanupModel,
+  cleanupLevel,
+  setCleanupLevel,
+  toast,
+}: AiModelsSectionProps) {
   const { t } = useTranslation();
+  const hasCustomPrompt = useSettingsStore((s) => s.customPrompts.cleanup.trim().length > 0);
 
   const handleCleanupModeChange = (mode: InferenceMode) => {
     const toastKey = CLEANUP_MODE_TOAST_KEY[mode];
@@ -451,12 +471,33 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
     <div className="space-y-4">
       <SettingsPanel>
         <SettingsPanelRow>
-          <SettingsRow
-            label={t("settingsPage.aiModels.enableTextCleanup")}
-            description={t("settingsPage.aiModels.enableTextCleanupDescription")}
-          >
-            <Toggle checked={useCleanupModel} onChange={setUseCleanupModel} />
-          </SettingsRow>
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-medium text-foreground">
+                {t("settingsPage.aiModels.cleanupLevel.title")}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {t("settingsPage.aiModels.cleanupLevel.description")}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {CLEANUP_LEVEL_OPTIONS.map(({ id, icon }) => (
+                <OptionCard
+                  key={id}
+                  icon={icon}
+                  title={t(`settingsPage.aiModels.cleanupLevel.options.${id}.title`)}
+                  description={t(`settingsPage.aiModels.cleanupLevel.options.${id}.description`)}
+                  selected={cleanupLevel === id}
+                  onSelect={() => setCleanupLevel(id)}
+                />
+              ))}
+            </div>
+            {hasCustomPrompt && cleanupLevel !== "none" && (
+              <p className="text-xs text-muted-foreground">
+                {t("settingsPage.aiModels.cleanupLevel.customPromptOverride")}
+              </p>
+            )}
+          </div>
         </SettingsPanelRow>
       </SettingsPanel>
 
@@ -702,6 +743,7 @@ export default function SettingsPage({
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
     useCleanupModel,
+    cleanupLevel,
     dictationKey,
     activationMode,
     setActivationMode,
@@ -717,7 +759,7 @@ export default function SettingsPage({
     setCloudTranscriptionProvider,
     setCloudTranscriptionModel,
     setCloudTranscriptionBaseUrl,
-    setUseCleanupModel,
+    setCleanupLevel,
     setDictationKey,
     meetingKey,
     setMeetingKey,
@@ -4028,8 +4070,9 @@ EOF`,
               <div className="space-y-6">
                 <AiModelsSection
                   useCleanupModel={useCleanupModel}
-                  setUseCleanupModel={(value) => {
-                    updateCleanupSettings({ useCleanupModel: value });
+                  cleanupLevel={cleanupLevel}
+                  setCleanupLevel={(level) => {
+                    updateCleanupSettings({ cleanupLevel: level });
                   }}
                   toast={toast}
                 />

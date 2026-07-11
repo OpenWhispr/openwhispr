@@ -4,6 +4,7 @@ import logger from "../utils/logger";
 import { useLocalStorage } from "./useLocalStorage";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
 import type { Snippet } from "../utils/snippets";
+import type { CleanupLevel } from "../config/cleanupLevels";
 
 export interface TranscriptionSettings {
   uiLanguage: string;
@@ -32,6 +33,7 @@ export interface TranscriptionSettings {
 export interface CleanupSettings {
   autoGenerateNoteTitle: boolean;
   useCleanupModel: boolean;
+  cleanupLevel: CleanupLevel;
   useDictationAgent: boolean;
   cleanupModel: string;
   cleanupProvider: string;
@@ -242,6 +244,7 @@ function useSettingsInternal() {
     autoGenerateNoteTitle: store.autoGenerateNoteTitle,
     setAutoGenerateNoteTitle: store.setAutoGenerateNoteTitle,
     useCleanupModel: store.useCleanupModel,
+    cleanupLevel: store.cleanupLevel,
     useDictationAgent: store.useDictationAgent,
     cleanupModel: store.cleanupModel,
     cleanupProvider: store.cleanupProvider,
@@ -282,6 +285,7 @@ function useSettingsInternal() {
     setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,
     setUseCleanupModel: store.setUseCleanupModel,
+    setCleanupLevel: store.setCleanupLevel,
     setUseDictationAgent: store.setUseDictationAgent,
     setCleanupModel: store.setCleanupModel,
     setCleanupProvider: store.setCleanupProvider,
