@@ -10,25 +10,30 @@ const isKDEWayland =
   process.env.XDG_SESSION_TYPE === "wayland" &&
   /kde/i.test(process.env.XDG_CURRENT_DESKTOP || "");
 
-// wlroots compositors (Sway, Hyprland, river, …). Our overlays are created with
-// focusable:false, which makes Electron map them as override-redirect XWayland
-// windows. wlroots' XWayland focuses override-redirect windows on map *unless*
-// their _NET_WM_WINDOW_TYPE is in its no-focus set (notification, tooltip,
-// utility, splash, menus). TOOLBAR/NORMAL are NOT in that set, so the overlays
-// steal focus on wlroots — but not on GNOME/KDE, whose WMs honor focusable:false
-// directly. So on wlroots we map the non-interactive overlays as "notification".
-const isWlrootsWayland =
+// Compositors that need the "notification" window type to stop overlays from
+// stealing focus. Our overlays are created with focusable:false, which makes
+// Electron map them as override-redirect XWayland windows. wlroots' XWayland
+// focuses override-redirect windows on map *unless* their _NET_WM_WINDOW_TYPE is
+// in its no-focus set (notification, tooltip, utility, splash, menus).
+// TOOLBAR/NORMAL are NOT in that set, so the overlays steal focus on wlroots —
+// but not on GNOME/KDE, whose WMs honor focusable:false directly.
+//
+// This is an explicit allowlist rather than "all wlroots compositors" on
+// purpose: mapping the interactive overlays (preview copy/dismiss, meeting
+// start/dismiss) as "notification" keeps their clicks working on Sway, but on
+// Hyprland the same type makes those buttons unclickable. So we only enable the
+// remap on compositors confirmed to keep clicks working. Sway is the first;
+// add more here as they're verified.
+const isNoFocusOverlayCompositor =
   process.platform === "linux" &&
   process.env.XDG_SESSION_TYPE === "wayland" &&
-  (/sway|hyprland|wayfire|river|dwl|labwc/i.test(process.env.XDG_CURRENT_DESKTOP || "") ||
-    !!process.env.SWAYSOCK ||
-    !!process.env.HYPRLAND_INSTANCE_SIGNATURE);
+  (/sway/i.test(process.env.XDG_CURRENT_DESKTOP || "") || !!process.env.SWAYSOCK);
 
 const MAIN_OVERLAY_TYPE =
   process.platform === "darwin"
     ? "panel"
     : process.platform === "linux"
-      ? isWlrootsWayland
+      ? isNoFocusOverlayCompositor
         ? "notification"
         : isGnomeWayland || isKDEWayland
           ? "normal"
@@ -45,11 +50,13 @@ const FLOATING_OVERLAY_TYPE =
       : "normal";
 
 // Type for non-interactive, never-focus overlays (transcription preview, meeting
-// notification). On wlroots, "notification" keeps the override-redirect window
-// from stealing focus (see isWlrootsWayland above); elsewhere it matches the
-// regular floating overlay type. NOT used for the agent overlay, which needs
-// keyboard focus for chat input.
-const NOFOCUS_OVERLAY_TYPE = isWlrootsWayland ? "notification" : FLOATING_OVERLAY_TYPE;
+// notification). On the allowlisted compositors (see isNoFocusOverlayCompositor
+// above), "notification" keeps the override-redirect window from stealing focus;
+// elsewhere it matches the regular floating overlay type. NOT used for the agent
+// overlay, which needs keyboard focus for chat input.
+const NOFOCUS_OVERLAY_TYPE = isNoFocusOverlayCompositor
+  ? "notification"
+  : FLOATING_OVERLAY_TYPE;
 
 const WINDOW_SIZES = {
   BASE: { width: 96, height: 96 },
