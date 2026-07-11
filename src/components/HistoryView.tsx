@@ -26,6 +26,7 @@ interface HistoryViewProps {
   onOpenSettings: (section?: string) => void;
   onShowAudioInFolder: (id: number) => void;
   onRetryTranscription: (id: number, options?: { isRecover?: boolean }) => Promise<void>;
+  onSetAiEditApplied: (id: number, applied: boolean) => Promise<void>;
   showDiscarded: boolean;
   onToggleDiscarded: () => void;
 }
@@ -45,6 +46,7 @@ export default function HistoryView({
   onOpenSettings,
   onShowAudioInFolder,
   onRetryTranscription,
+  onSetAiEditApplied,
   showDiscarded,
   onToggleDiscarded,
 }: HistoryViewProps) {
@@ -325,6 +327,7 @@ export default function HistoryView({
                           onDelete={deleteTranscription}
                           onShowAudioInFolder={onShowAudioInFolder}
                           onRetryTranscription={onRetryTranscription}
+                          onSetAiEditApplied={onSetAiEditApplied}
                           onOpenSettings={() => onOpenSettings("transcription")}
                         />
                       ))}

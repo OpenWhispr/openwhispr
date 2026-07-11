@@ -570,6 +570,26 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     [toast, t, useCleanupModel]
   );
 
+  const setTranscriptionAiEditApplied = useCallback(
+    async (id: number, applied: boolean) => {
+      try {
+        const result = await window.electronAPI.setTranscriptionAiEditApplied(id, applied);
+        if (result.success && result.transcription) {
+          updateInStore(result.transcription);
+          return;
+        }
+        throw new Error(result.error || "AI edit state was not updated");
+      } catch {
+        toast({
+          title: t("controlPanel.history.aiEditToggleErrorTitle"),
+          description: t("controlPanel.history.aiEditToggleErrorDescription"),
+          variant: "destructive",
+        });
+      }
+    },
+    [toast, t]
+  );
+
   const toggleShowDiscarded = useCallback(() => {
     loadTranscriptions(!showDiscarded);
   }, [loadTranscriptions, showDiscarded]);
@@ -896,6 +916,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 clearAllTranscriptions={clearAllTranscriptions}
                 onShowAudioInFolder={showAudioInFolder}
                 onRetryTranscription={retryTranscription}
+                onSetAiEditApplied={setTranscriptionAiEditApplied}
                 showDiscarded={showDiscarded}
                 onToggleDiscarded={toggleShowDiscarded}
                 onOpenSettings={(section) => {
