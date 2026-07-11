@@ -88,6 +88,14 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
   - Converts Electron hotkey format to Hyprland bind format (`MODS, key`)
   - Only active on Linux + Wayland + Hyprland (detected via `HYPRLAND_INSTANCE_SIGNATURE`)
   - D-Bus transport: `@homebridge/dbus-native` (pure JavaScript, no native addons)
+- **dbusToggleService.js**: Compositor-agnostic owner of the `com.openwhispr.App`
+  session-bus service and its no-arg methods (`Toggle`, `ToggleAgent`,
+  `ToggleMeeting`, `ToggleVoiceAgent`). Started once per Linux session by
+  `hotkeyManager.ensureDbusEndpoint()`; `gnomeShortcut.js`/`hyprlandShortcut.js`
+  are keybinding registrars that `dbus-send` to it. Single source of truth for the
+  D-Bus interface — no gsettings/compositor logic. D-Bus transport:
+  `@homebridge/dbus-native`. Claims the name with `DO_NOT_QUEUE`; if another owner
+  holds it, logs and returns failure so callers fall through to normal detection.
 - **kdeShortcut.js**: KDE Wayland global shortcut integration
   - Uses D-Bus to communicate with KGlobalAccel for global hotkey registration
   - Registers hotkeys via `setShortcut`/`doRegister` D-Bus calls on the KGlobalAccel interface
@@ -496,7 +504,7 @@ On GNOME Wayland, Electron's `globalShortcut` API doesn't work due to Wayland's 
 
 1. `main.js` enables `GlobalShortcutsPortal` feature flag for Wayland
 2. `hotkeyManager.js` detects GNOME + Wayland and initializes `GnomeShortcutManager`
-3. `gnomeShortcut.js` creates D-Bus service at `com.openwhispr.App`
+3. `gnomeShortcut.js` registers gsettings keybindings that `dbus-send` to the shared `com.openwhispr.App` endpoint (owned by `dbusToggleService.js`)
 4. Shortcuts registered via `gsettings` as custom GNOME keybindings
 5. GNOME triggers `dbus-send` command which calls the D-Bus `Toggle()` method
 
@@ -526,7 +534,7 @@ On Hyprland (wlroots Wayland compositor), Electron's `globalShortcut` API and th
 
 1. `main.js` enables `GlobalShortcutsPortal` feature flag for Wayland (fallback)
 2. `hotkeyManager.js` detects Hyprland + Wayland and initializes `HyprlandShortcutManager`
-3. `hyprlandShortcut.js` creates D-Bus service at `com.openwhispr.App` (same as GNOME)
+3. `hyprlandShortcut.js` registers `hyprctl` binds that `dbus-send` to the shared `com.openwhispr.App` endpoint (owned by `dbusToggleService.js`, same as GNOME)
 4. Shortcuts registered via `hyprctl keyword bind` (runtime keybinding)
 5. Hyprland triggers `dbus-send` command which calls the D-Bus `Toggle()` method
 
@@ -551,6 +559,47 @@ On Hyprland (wlroots Wayland compositor), Electron's `globalShortcut` API and th
 
 - Push-to-talk not supported (Hyprland `bind` fires a single exec, not key-down/key-up)
 - Requires `hyprctl` on PATH (ships with Hyprland)
+
+### 15a. D-Bus endpoint (`com.openwhispr.App`) — universal on Linux
+
+The `com.openwhispr.App` D-Bus service is **desktop-agnostic** and started **once on
+every Linux session** (X11 + all Wayland compositors) by
+`hotkeyManager.ensureDbusEndpoint()`, so `dbus-send` binds work everywhere. It's
+owned by a single shared `DBusToggleService` (`src/helpers/dbusToggleService.js`),
+transport `@homebridge/dbus-native`.
+
+The bus is _just the endpoint_ — it does not decide the shortcut mechanism. Each
+desktop layers its own keybinding auto-registration on top, all routing through
+this same service:
+
+| Desktop                  | Auto-registration                                                 | Uses the bus?                            |
+| ------------------------ | ----------------------------------------------------------------- | ---------------------------------------- |
+| GNOME                    | gsettings custom-keybinding whose command is `dbus-send …Toggle*` | yes                                      |
+| Hyprland                 | `hyprctl keyword bind … dbus-send`                                | yes                                      |
+| wlroots (Sway/river/dwl) | none — user binds keys manually to `dbus-send`                    | yes (only mechanism)                     |
+| KDE                      | KGlobalAccel (native `org.kde.kglobalaccel`)                      | no (bus also available for manual binds) |
+| X11 / other              | Electron `globalShortcut`                                         | no (bus also available for manual binds) |
+
+**Behavior**:
+
+1. `initializeHotkey()` calls `ensureDbusEndpoint()` first on any Linux session,
+   bringing up the shared service (wired with the dictation callback).
+2. `GnomeShortcutManager` / `HyprlandShortcutManager` are keybinding registrars
+   only (gsettings / hyprctl); they no longer own a bus and require the shared
+   endpoint to be up.
+3. `main.js` calls `hotkeyManager.setDbusToggleCallbacks()` to wire
+   agent/voiceAgent/meeting to the shared endpoint whenever it exists.
+   `registerSlot()` additively wires secondary-slot callbacks before the
+   DE-specific registration.
+4. `useDbus` means the endpoint is the **primary** mechanism (wlroots only, via
+   `shouldAutoUseDbus()`) — it is **not** set merely because the endpoint is up,
+   otherwise `isUsingNativeShortcut()` would force tap-to-talk on X11 and break
+   push-to-talk. `isUsingNativeShortcut()` = `useGnome||useHyprland||useKDE||useDbus`.
+
+**Name ownership**: `requestName` is called with `DO_NOT_QUEUE`. Any reply other
+than `PRIMARY_OWNER`/`ALREADY_OWNER` (e.g. another instance holds it) is treated as
+failure — it logs and returns false so callers fall through to normal detection
+(the single-instance lock in `main.js` makes this unreachable in a normal install).
 
 ### 16. Meeting Detection (Event-Driven)
 
