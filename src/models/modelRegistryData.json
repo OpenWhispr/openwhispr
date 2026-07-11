@@ -59,6 +59,34 @@
       "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-speech-streaming-en-0.6b-560ms-int8-2026-04-25.tar.bz2",
       "extractDir": "sherpa-onnx-nemotron-speech-streaming-en-0.6b-560ms-int8-2026-04-25",
       "descriptionKey": "models.descriptions.parakeet.nemotron_speech_streaming_en_0_6b"
+    },
+    "nemotron-3.5-asr-streaming-0.6b": {
+      "name": "Nemotron 3.5 ASR Streaming 0.6B",
+      "description": "Multilingual streaming ASR from NVIDIA Nemotron with auto language detection (15 languages)",
+      "size": "650MB",
+      "sizeMb": 650,
+      "language": "multilingual",
+      "supportedLanguages": [
+        "en",
+        "es",
+        "fr",
+        "it",
+        "pt",
+        "nl",
+        "de",
+        "tr",
+        "ru",
+        "ar",
+        "hi",
+        "ja",
+        "ko",
+        "vi",
+        "uk"
+      ],
+      "runtime": "online",
+      "downloadUrl": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11.tar.bz2",
+      "extractDir": "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
+      "descriptionKey": "models.descriptions.parakeet.nemotron_3_5_asr_streaming_0_6b"
     }
   },
   "diarizationModels": {

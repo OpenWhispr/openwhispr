@@ -1879,7 +1879,8 @@
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "高速多言語 ASR、自動言語検出対応（25 言語）",
         "parakeet_unified_en_0_6b": "英語専用の最先端精度ASR（平均WER 5.91%）",
-        "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron の英語ストリーミング ASR"
+        "nemotron_speech_streaming_en_0_6b": "NVIDIA Nemotron の英語ストリーミング ASR",
+        "nemotron_3_5_asr_streaming_0_6b": "NVIDIA Nemotron の多言語ストリーミング ASR、自動言語検出対応（15 言語）"
       },
       "whisper": {
         "tiny": "最速、品質は低め",

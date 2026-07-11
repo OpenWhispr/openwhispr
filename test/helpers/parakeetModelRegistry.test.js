@@ -24,3 +24,21 @@ test("Nemotron sherpa model uses the streaming runtime and bundled online server
     assert.match(config.onlineOutputName, new RegExp(`^sherpa-onnx-online-ws-${platformArch}`));
   }
 });
+
+test("Nemotron 3.5 multilingual sherpa model uses the streaming runtime", () => {
+  const model = modelData.parakeetModels["nemotron-3.5-asr-streaming-0.6b"];
+
+  assert.equal(model.runtime, "online");
+  assert.equal(
+    model.extractDir,
+    "sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11"
+  );
+  assert.match(
+    model.downloadUrl,
+    /sherpa-onnx-nemotron-3\.5-asr-streaming-0\.6b-560ms-int8-2026-06-11\.tar\.bz2$/
+  );
+  assert.equal(model.language, "multilingual");
+  assert.ok(model.supportedLanguages.length >= 15);
+  assert.ok(model.supportedLanguages.includes("en"));
+  assert.ok(model.supportedLanguages.includes("ja"));
+});
