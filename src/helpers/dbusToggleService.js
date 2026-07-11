@@ -27,7 +27,9 @@ function getDBus() {
 
 // Owns the com.openwhispr.App session-bus service and its no-arg methods.
 // Toggle/ToggleAgent/ToggleMeeting/ToggleVoiceAgent/ToggleTranslation are momentary
-// (tap-to-toggle) for compositors that only fire on key press.
+// (tap-to-toggle) for compositors that only fire on key press. StartDictation/StopDictation
+// are a press/release pair for push-to-talk: bind key-press → StartDictation and
+// key-release → StopDictation (e.g. Sway `bindsym` + `bindsym --release`).
 // Compositor-agnostic: the GNOME integration and the auto-enabled endpoint on
 // wlroots Wayland (e.g. Sway) both route key events to these via dbus-send.
 // Callbacks may be supplied up front to start() or attached later via the setters;
@@ -41,6 +43,8 @@ class DBusToggleService {
       meeting: null,
       voiceAgent: null,
       translation: null,
+      startDictation: null,
+      stopDictation: null,
     };
   }
 
@@ -113,6 +117,13 @@ class DBusToggleService {
       ToggleTranslation: () => {
         if (this._callbacks.translation) this._callbacks.translation();
       },
+      // Push-to-talk: bind key-press → StartDictation, key-release → StopDictation.
+      StartDictation: () => {
+        if (this._callbacks.startDictation) this._callbacks.startDictation();
+      },
+      StopDictation: () => {
+        if (this._callbacks.stopDictation) this._callbacks.stopDictation();
+      },
     };
   }
 
@@ -125,6 +136,8 @@ class DBusToggleService {
         ToggleMeeting: ["", ""],
         ToggleVoiceAgent: ["", ""],
         ToggleTranslation: ["", ""],
+        StartDictation: ["", ""],
+        StopDictation: ["", ""],
       },
     };
   }
@@ -147,6 +160,14 @@ class DBusToggleService {
 
   setTranslationCallback(callback) {
     this._callbacks.translation = callback || null;
+  }
+
+  setStartDictationCallback(callback) {
+    this._callbacks.startDictation = callback || null;
+  }
+
+  setStopDictationCallback(callback) {
+    this._callbacks.stopDictation = callback || null;
   }
 
   close() {

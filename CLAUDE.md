@@ -596,6 +596,28 @@ this same service:
    otherwise `isUsingNativeShortcut()` would force tap-to-talk on X11 and break
    push-to-talk. `isUsingNativeShortcut()` = `useGnome||useHyprland||useKDE||useDbus`.
 
+**D-Bus methods** (service `com.openwhispr.App`, path `/com/openwhispr/App`,
+interface `com.openwhispr.App`):
+
+- Momentary (tap-to-toggle): `Toggle` (dictation), `ToggleAgent`, `ToggleMeeting`,
+  `ToggleVoiceAgent`.
+- Push-to-talk pair: `StartDictation` (key press) / `StopDictation` (key release),
+  wired in `main.js` to `windowManager.startWindowsPushToTalk()` /
+  `handleWindowsPushKeyUp()` — the same primitives the native key listener uses.
+
+Push-to-talk needs a compositor that can bind key release (Sway `bindsym
+--release`, Hyprland `bindr`); GNOME/KDE native shortcuts are press-only.
+
+Example Sway bindings:
+
+```
+# Tap-to-toggle dictation
+bindsym Super+r exec dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.Toggle
+# Push-to-talk: hold to talk, release to stop
+bindsym Super+grave           exec dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.StartDictation
+bindsym --release Super+grave exec dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.StopDictation
+```
+
 **Name ownership**: `requestName` is called with `DO_NOT_QUEUE`. Any reply other
 than `PRIMARY_OWNER`/`ALREADY_OWNER` (e.g. another instance holds it) is treated as
 failure — it logs and returns false so callers fall through to normal detection
