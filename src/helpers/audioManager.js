@@ -37,6 +37,11 @@ import { syncService } from "../services/SyncService.js";
 import { evaluateFinishedRecording } from "./recordingValidation";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
+import {
+  applyProcessedTranscript,
+  createTranscriptVersions,
+  replaceWithTranscriptionResult,
+} from "./transcriptVersions";
 
 const REASONING_CACHE_TTL = 30000; // 30 seconds
 const RECORDING_TIMESLICE_MS = 250; // flush chunks periodically so short recordings still carry audio frames. See #871.
@@ -3026,6 +3031,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
     }
 
+    let transcriptVersions = createTranscriptVersions(finalText);
+
     this.cleanupStreamingListeners();
 
     logger.info(
@@ -3068,7 +3075,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             agentName,
             route.config
           );
-          if (reasoned) finalText = reasoned;
+          transcriptVersions = applyProcessedTranscript(transcriptVersions, reasoned);
+          finalText = transcriptVersions.text;
           logger.info(
             "Streaming dictation-agent complete",
             { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },
@@ -3101,7 +3109,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           });
 
           if (reasonResult.success && reasonResult.text) {
-            finalText = reasonResult.text;
+            transcriptVersions = applyProcessedTranscript(transcriptVersions, reasonResult.text);
+            finalText = transcriptVersions.text;
           }
           usedCloudReasoning = true;
 
@@ -3122,7 +3131,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               agentName,
               route.config
             );
-            if (reasoned) finalText = reasoned;
+            transcriptVersions = applyProcessedTranscript(transcriptVersions, reasoned);
+            finalText = transcriptVersions.text;
             logger.info(
               "Streaming BYOK reasoning complete",
               { reasoningDurationMs: Math.round(performance.now() - reasoningStart) },
@@ -3164,7 +3174,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               ? await this.processWithOpenWhisprCloud(fallbackBlob, { durationSeconds })
               : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds });
           if (batchResult?.text) {
-            finalText = batchResult.text;
+            transcriptVersions = replaceWithTranscriptionResult(transcriptVersions, batchResult);
+            finalText = transcriptVersions.text;
             usedBatchFallback = true;
             batchWarning = batchResult.warning || null;
             logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
@@ -3188,7 +3199,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onTranscriptionComplete?.({
         success: true,
         text: finalText,
-        rawText: finalText,
+        rawText: transcriptVersions.rawText,
         source: `${this.getStreamingProviderName()}-streaming`,
         ...(batchWarning ? { warning: batchWarning } : {}),
       });
