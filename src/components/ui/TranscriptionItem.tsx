@@ -22,6 +22,7 @@ import type {
 import { cn } from "../lib/utils";
 import { getCachedPlatform } from "../../utils/platform";
 import { formatMmSs } from "../../utils/formatDuration";
+import { getTranslationLanguageName } from "../../utils/translationMode";
 
 const platform = getCachedPlatform();
 
@@ -206,7 +207,13 @@ export default function TranscriptionItem({
                 {t("controlPanel.history.rawTranscript")}
               </p>
             )}
-            {isAiEditApplied && item.cleanup_level && (
+            {isAiEditApplied && item.translation_target ? (
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-0.5">
+                {t("controlPanel.history.translationTarget", {
+                  language: getTranslationLanguageName(item.translation_target),
+                })}
+              </p>
+            ) : isAiEditApplied && item.cleanup_level ? (
               <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-0.5">
                 {t("controlPanel.history.cleanupLevelApplied", {
                   level: t(
@@ -214,7 +221,7 @@ export default function TranscriptionItem({
                   ),
                 })}
               </p>
-            )}
+            ) : null}
             <p className="text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
               {displayedText}
             </p>

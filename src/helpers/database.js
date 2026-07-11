@@ -14,6 +14,16 @@ function normalizeCleanupLevel(value) {
   return CLEANUP_LEVELS.has(value) ? value : null;
 }
 
+const TRANSLATION_TARGETS = new Set(
+  require("../config/languageRegistry.json")
+    .languages.map(({ code }) => code)
+    .filter((code) => code !== "auto")
+);
+
+function normalizeTranslationTarget(value) {
+  return TRANSLATION_TARGETS.has(value) ? value : null;
+}
+
 class DatabaseManager {
   constructor() {
     this.db = null;
@@ -54,6 +64,11 @@ class DatabaseManager {
       }
       try {
         this.db.exec("ALTER TABLE transcriptions ADD COLUMN cleanup_level TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE transcriptions ADD COLUMN translation_target TEXT");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
@@ -658,6 +673,7 @@ class DatabaseManager {
       errorCode = null,
       clientTranscriptionId = randomUUID(),
       cleanupLevel = null,
+      translationTarget = null,
     } = {}
   ) {
     try {
@@ -665,7 +681,7 @@ class DatabaseManager {
         throw new Error("Database not initialized");
       }
       const stmt = this.db.prepare(
-        "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, client_transcription_id, cleanup_level) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, client_transcription_id, cleanup_level, translation_target) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       );
       const result = stmt.run(
         text,
@@ -674,7 +690,8 @@ class DatabaseManager {
         errorMessage,
         errorCode,
         clientTranscriptionId,
-        normalizeCleanupLevel(cleanupLevel)
+        normalizeCleanupLevel(cleanupLevel),
+        normalizeTranslationTarget(translationTarget)
       );
 
       const fetchStmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");

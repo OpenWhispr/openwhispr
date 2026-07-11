@@ -20,11 +20,13 @@ test("tap mode watches modifier-only hotkeys for every slot", () => {
   const mgr = makeManager({
     dictation: "Control+Super",
     voiceAgent: "Control+Alt",
+    translation: "Control+Shift",
     agent: "Alt+Super",
   });
   assert.deepEqual(mgr.getNativeListenerKeys("tap").sort(), [
     "Alt+Super",
     "Control+Alt",
+    "Control+Shift",
     "Control+Super",
   ]);
 });
@@ -51,6 +53,14 @@ test("right-side modifiers use the native listener; globe/empty slots do not", (
     agent: "",
   });
   assert.deepEqual(mgr.getNativeListenerKeys("tap"), ["RightControl"]);
+});
+
+test("translation hotkeys participate in cross-slot conflict detection", () => {
+  const mgr = makeManager({ dictation: "F8", translation: "Control+Shift+T" });
+  const conflict = mgr._findSlotConflict("voiceAgent", "Control+Shift+T");
+
+  assert.equal(conflict?.reason, "slot_conflict");
+  assert.equal(conflict?.conflictSlot, "translation");
 });
 
 test("a multi-hotkey slot watches each native hotkey but leaves regular keys to globalShortcut", () => {

@@ -6,7 +6,13 @@
       "uiLabel": "Langue de l'interface",
       "uiDescription": "Choisissez la langue utilisée dans l'interface OpenWhispr",
       "transcriptionLabel": "Langue de transcription",
-      "transcriptionDescription": "Choisissez la langue que vous parlez pour une transcription plus précise"
+      "transcriptionDescription": "Choisissez la langue que vous parlez pour une transcription plus précise",
+      "translationTargetsLabel": "Langues de traduction",
+      "translationTargetsDescription": "Enregistrez jusqu’à {{count}} langues et choisissez la cible active",
+      "addTranslationTarget": "Ajouter une langue de traduction",
+      "activeTranslationTarget": "Langue de traduction active",
+      "active": "Active",
+      "removeTranslationTarget": "Supprimer {{language}}"
     },
     "noteFiles": {
       "title": "Enregistrer les notes en fichiers",
@@ -406,6 +412,7 @@
       "aiEditToggleErrorTitle": "Impossible de changer de version de la transcription",
       "aiEditToggleErrorDescription": "La transcription enregistrée n’a pas été modifiée. Réessayez.",
       "cleanupLevelApplied": "Nettoyage par IA : {{level}}",
+      "translationTarget": "Traduit en {{language}}",
       "discarded": {
         "show": "Afficher les abandonnées",
         "hide": "Masquer les abandonnées",
@@ -569,7 +576,8 @@
         "sessionExpired": "Session expirée",
         "offline": "Vous êtes hors ligne",
         "dailyLimitReached": "Limite quotidienne atteinte",
-        "providerRateLimited": "Limite de débit du fournisseur"
+        "providerRateLimited": "Limite de débit du fournisseur",
+        "translationFailed": "Échec de la traduction"
       },
       "fallback": {
         "title": "Mode de secours",
@@ -591,11 +599,16 @@
         "title": "Raccourci d’annulation indisponible",
         "description": "OpenWhispr n’a pas pu enregistrer de raccourci d’annulation. Utilisez le raccourci de dictée pour arrêter."
       },
+      "translationUnavailable": {
+        "title": "La traduction n’est pas configurée",
+        "description": "Choisissez un fournisseur et un modèle d’IA dans Modèles de langage avant d’utiliser le raccourci de traduction."
+      },
       "errorDescriptions": {
         "sessionExpired": "Votre session OpenWhispr Cloud est indisponible. Reconnectez-vous depuis Paramètres.",
         "offline": "Vous êtes hors ligne. La transcription cloud nécessite une connexion Internet.",
         "dailyLimitReached": "Vous avez atteint votre limite de transcription du jour. Réessayez demain ou améliorez votre forfait.",
-        "providerRateLimited": "Votre fournisseur de transcription a limité la requête. Patientez un instant et réessayez."
+        "providerRateLimited": "Votre fournisseur de transcription a limité la requête. Patientez un instant et réessayez.",
+        "translationFailed": "Votre voix a été transcrite, mais n’a pas pu être traduite. Rien n’a été collé. Réessayez ou vérifiez votre fournisseur d’IA."
       }
     },
     "clipboard": {
@@ -1531,6 +1544,10 @@
       "voiceAgentHotkey": {
         "title": "Raccourci de l'agent vocal",
         "description": "Dites ce que vous voulez — votre agent IA écrit le résultat, pas vos mots"
+      },
+      "translationHotkey": {
+        "title": "Raccourci de traduction",
+        "description": "Dictez et insérez le texte dans la langue de traduction active"
       },
       "microphone": {
         "description": "Sélectionnez le périphérique d'entrée à utiliser pour la dictée",

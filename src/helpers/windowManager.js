@@ -472,6 +472,11 @@ class WindowManager {
     this._sendDictationToggle("toggle-voice-agent");
   }
 
+  sendToggleTranslation() {
+    if (this.textEditMonitor) this.textEditMonitor.captureTargetPid();
+    this._sendDictationToggle("toggle-translation");
+  }
+
   sendStartDictation() {
     if (this.hotkeyManager.isInListeningMode()) {
       return;

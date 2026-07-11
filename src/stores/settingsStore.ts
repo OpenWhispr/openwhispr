@@ -32,6 +32,10 @@ import {
   normalizeCleanupLevel,
   type CleanupLevel,
 } from "../config/cleanupLevels";
+import {
+  normalizeTranslationTargets,
+  resolveActiveTranslationTarget,
+} from "../utils/translationMode";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -447,6 +451,12 @@ export interface SettingsState
   keepTranscriptionInClipboard: boolean;
   noteFilesEnabled: boolean;
   noteFilesPath: string;
+  translationTargets: string[];
+  translationTarget: string;
+  translationKey: string;
+  setTranslationTargets: (targets: string[]) => void;
+  setTranslationTarget: (target: string) => void;
+  setTranslationKey: (key: string) => Promise<boolean>;
 
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
@@ -715,7 +725,7 @@ function createBooleanSetter(key: string) {
 // being persisted. Rolls back to the previous key if registration fails.
 // Resolves to false on failure so optimistic UIs (HotkeyListInput) can revert.
 function createRegisteredHotkeySetter(
-  key: "chatAgentKey" | "voiceAgentKey",
+  key: "chatAgentKey" | "voiceAgentKey" | "translationKey",
   label: string,
   getRegisterFn: () =>
     ((hotkey: string) => Promise<{ success: boolean; message: string }>) | undefined,
@@ -960,6 +970,19 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cancelKey: readString("cancelKey", "Escape"),
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
+  ...(() => {
+    const translationTargets = normalizeTranslationTargets(
+      readStringArray("translationTargets", ["es"])
+    );
+    return {
+      translationTargets,
+      translationTarget: resolveActiveTranslationTarget(
+        translationTargets,
+        readString("translationTarget", translationTargets[0])
+      ),
+      translationKey: readString("translationKey", ""),
+    };
+  })(),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
   onboardingUseCaseNote: readString("onboardingUseCaseNote", ""),
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
@@ -1480,6 +1503,29 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "voiceAgentKey",
     "voice agent hotkey",
     () => window.electronAPI?.updateVoiceAgentHotkey
+  ),
+  setTranslationTargets: (targets: string[]) => {
+    const normalized = normalizeTranslationTargets(targets);
+    const active = resolveActiveTranslationTarget(
+      normalized,
+      useSettingsStore.getState().translationTarget
+    );
+    if (isBrowser) {
+      localStorage.setItem("translationTargets", JSON.stringify(normalized));
+      localStorage.setItem("translationTarget", active);
+    }
+    set({ translationTargets: normalized, translationTarget: active });
+  },
+  setTranslationTarget: (target: string) => {
+    const targets = normalizeTranslationTargets(useSettingsStore.getState().translationTargets);
+    const active = resolveActiveTranslationTarget(targets, target);
+    if (isBrowser) localStorage.setItem("translationTarget", active);
+    set({ translationTarget: active });
+  },
+  setTranslationKey: createRegisteredHotkeySetter(
+    "translationKey",
+    "translation hotkey",
+    () => window.electronAPI?.updateTranslationHotkey
   ),
 
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => {
@@ -2186,6 +2232,20 @@ export async function initializeSettings(): Promise<void> {
     } catch (err) {
       logger.warn(
         "Failed to sync voice agent hotkey on startup",
+        { error: (err as Error).message },
+        "settings"
+      );
+    }
+
+    // Sync translation hotkey from main process.
+    try {
+      const envKey = await window.electronAPI.getTranslationKey?.();
+      if (envKey && envKey !== state.translationKey) {
+        createStringSetter("translationKey")(envKey);
+      }
+    } catch (err) {
+      logger.warn(
+        "Failed to sync translation hotkey on startup",
         { error: (err as Error).message },
         "settings"
       );

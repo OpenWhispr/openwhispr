@@ -6,7 +6,13 @@
       "uiLabel": "Interface language",
       "uiDescription": "Choose the language used throughout OpenWhispr's interface",
       "transcriptionLabel": "Transcription language",
-      "transcriptionDescription": "Choose the language you speak for more accurate transcription"
+      "transcriptionDescription": "Choose the language you speak for more accurate transcription",
+      "translationTargetsLabel": "Translation targets",
+      "translationTargetsDescription": "Save up to {{count}} languages and choose the active target",
+      "addTranslationTarget": "Add translation target",
+      "activeTranslationTarget": "Active translation target",
+      "active": "Active",
+      "removeTranslationTarget": "Remove {{language}}"
     },
     "noteFiles": {
       "title": "Save notes as files",
@@ -400,6 +406,7 @@
       "aiEditToggleErrorTitle": "Couldn't change transcript version",
       "aiEditToggleErrorDescription": "The saved transcript was not changed. Try again.",
       "cleanupLevelApplied": "AI cleanup: {{level}}",
+      "translationTarget": "Translated to {{language}}",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear All Transcriptions",
       "clearAllDescription": "All transcriptions and audio files will be permanently removed.",
@@ -569,7 +576,8 @@
         "sessionExpired": "Session Expired",
         "offline": "You're Offline",
         "dailyLimitReached": "Daily Limit Reached",
-        "providerRateLimited": "Provider Rate Limited"
+        "providerRateLimited": "Provider Rate Limited",
+        "translationFailed": "Translation Failed"
       },
       "fallback": {
         "title": "Fallback Mode",
@@ -591,11 +599,16 @@
         "title": "Cancel shortcut unavailable",
         "description": "OpenWhispr could not register a recording cancel shortcut. Use your dictation hotkey to stop instead."
       },
+      "translationUnavailable": {
+        "title": "Translation isn't configured",
+        "description": "Choose an AI provider and model in Language Models before using the translation hotkey."
+      },
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
         "offline": "You're offline. Cloud transcription requires an internet connection.",
         "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
-        "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again."
+        "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again.",
+        "translationFailed": "Your speech was transcribed, but it couldn't be translated. Nothing was pasted. Try again or check your AI provider."
       }
     },
     "clipboard": {
@@ -1647,6 +1660,10 @@
       "voiceAgentHotkey": {
         "title": "Voice Agent Hotkey",
         "description": "Speak a request — your AI agent types the result, not your words"
+      },
+      "translationHotkey": {
+        "title": "Translation Hotkey",
+        "description": "Dictate and insert text in your active translation language"
       },
       "microphone": {
         "description": "Select which input device to use for dictation",

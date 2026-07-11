@@ -6,7 +6,13 @@
       "uiLabel": "インターフェース言語",
       "uiDescription": "OpenWhispr のインターフェースで使用する言語を選択",
       "transcriptionLabel": "文字起こし言語",
-      "transcriptionDescription": "より正確な文字起こしのために話す言語を選択"
+      "transcriptionDescription": "より正確な文字起こしのために話す言語を選択",
+      "translationTargetsLabel": "翻訳先言語",
+      "translationTargetsDescription": "最大{{count}}言語を保存し、使用する翻訳先を選択します",
+      "addTranslationTarget": "翻訳先を追加",
+      "activeTranslationTarget": "使用中の翻訳先",
+      "active": "使用中",
+      "removeTranslationTarget": "{{language}}を削除"
     },
     "noteFiles": {
       "title": "ノートをファイルとして保存",
@@ -406,6 +412,7 @@
       "aiEditToggleErrorTitle": "文字起こしのバージョンを変更できませんでした",
       "aiEditToggleErrorDescription": "保存済みの文字起こしは変更されませんでした。もう一度お試しください。",
       "cleanupLevelApplied": "AIクリーンアップ：{{level}}",
+      "translationTarget": "{{language}}に翻訳",
       "discarded": {
         "show": "破棄したものを表示",
         "hide": "破棄したものを非表示",
@@ -569,7 +576,8 @@
         "sessionExpired": "セッション期限切れ",
         "offline": "オフラインです",
         "dailyLimitReached": "1 日の上限に達しました",
-        "providerRateLimited": "プロバイダーのレート制限"
+        "providerRateLimited": "プロバイダーのレート制限",
+        "translationFailed": "翻訳に失敗しました"
       },
       "fallback": {
         "title": "フォールバックモード",
@@ -591,11 +599,16 @@
         "title": "キャンセルショートカットを使用できません",
         "description": "録音キャンセル用ショートカットを登録できませんでした。停止するにはディクテーションのショートカットを使用してください。"
       },
+      "translationUnavailable": {
+        "title": "翻訳が設定されていません",
+        "description": "翻訳ホットキーを使う前に、言語モデルでAIプロバイダーとモデルを選択してください。"
+      },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
         "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
-        "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。"
+        "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
+        "translationFailed": "音声は文字起こしされましたが、翻訳できませんでした。テキストは挿入されていません。もう一度試すか、AIプロバイダーを確認してください。"
       }
     },
     "clipboard": {
@@ -1471,6 +1484,10 @@
       "voiceAgentHotkey": {
         "title": "ボイスエージェントホットキー",
         "description": "話しかけるだけで、AIエージェントが言葉そのままではなく結果を入力します"
+      },
+      "translationHotkey": {
+        "title": "翻訳ホットキー",
+        "description": "音声入力したテキストを使用中の翻訳先言語で挿入します"
       },
       "microphone": {
         "description": "ディクテーションに使用する入力デバイスを選択",

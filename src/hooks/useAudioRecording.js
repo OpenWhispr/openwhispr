@@ -46,7 +46,7 @@ export const useAudioRecording = (toast, options = {}) => {
   }, [t, toast]);
 
   const performStartRecording = useCallback(
-    async ({ voiceAgentRequested = false } = {}) => {
+    async ({ voiceAgentRequested = false, translationRequested = false } = {}) => {
       if (startLockRef.current) return false;
       startLockRef.current = true;
       try {
@@ -55,7 +55,17 @@ export const useAudioRecording = (toast, options = {}) => {
         const currentState = audioManagerRef.current.getState();
         if (currentState.isRecording || currentState.isProcessing) return false;
 
+        if (translationRequested && !audioManagerRef.current.canTranslate()) {
+          toast({
+            title: t("hooks.audioRecording.translationUnavailable.title"),
+            description: t("hooks.audioRecording.translationUnavailable.description"),
+            variant: "destructive",
+          });
+          return false;
+        }
+
         audioManagerRef.current.setVoiceAgentRequested(voiceAgentRequested);
+        audioManagerRef.current.setTranslationRequested(translationRequested);
 
         // Retry STT config fetch if it wasn't loaded on mount (e.g. auth wasn't ready)
         if (!audioManagerRef.current.sttConfig) {
@@ -84,7 +94,7 @@ export const useAudioRecording = (toast, options = {}) => {
         startLockRef.current = false;
       }
     },
-    [registerConfiguredCancelHotkey]
+    [registerConfiguredCancelHotkey, t, toast]
   );
 
   const performStopRecording = useCallback(async () => {
@@ -245,14 +255,17 @@ export const useAudioRecording = (toast, options = {}) => {
       }
     });
 
-    const handleToggle = async ({ voiceAgentRequested = false } = {}) => {
+    const handleToggle = async ({
+      voiceAgentRequested = false,
+      translationRequested = false,
+    } = {}) => {
       if (!audioManagerRef.current) return;
       // Lazily warm the mic driver on first dictation use, not at launch. See #871.
       audioManagerRef.current.warmupMicDriver?.();
       const currentState = audioManagerRef.current.getState();
 
       if (!currentState.isRecording && !currentState.isProcessing) {
-        await performStartRecording({ voiceAgentRequested });
+        await performStartRecording({ voiceAgentRequested, translationRequested });
       } else if (currentState.isRecording) {
         await performStopRecording();
       }
@@ -274,6 +287,11 @@ export const useAudioRecording = (toast, options = {}) => {
 
     const disposeVoiceAgentToggle = window.electronAPI.onToggleVoiceAgent?.(() => {
       handleToggle({ voiceAgentRequested: true });
+      onToggle?.();
+    });
+
+    const disposeTranslationToggle = window.electronAPI.onToggleTranslation?.(() => {
+      handleToggle({ translationRequested: true });
       onToggle?.();
     });
 
@@ -304,6 +322,7 @@ export const useAudioRecording = (toast, options = {}) => {
     return () => {
       disposeToggle?.();
       disposeVoiceAgentToggle?.();
+      disposeTranslationToggle?.();
       disposeStart?.();
       disposeStop?.();
       disposeNoAudio?.();

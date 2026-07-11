@@ -6,7 +6,13 @@
       "uiLabel": "Lingua dell'interfaccia",
       "uiDescription": "Scegli la lingua usata nell'interfaccia di OpenWhispr",
       "transcriptionLabel": "Lingua di trascrizione",
-      "transcriptionDescription": "Scegli la lingua che parli per una trascrizione più accurata"
+      "transcriptionDescription": "Scegli la lingua che parli per una trascrizione più accurata",
+      "translationTargetsLabel": "Lingue di traduzione",
+      "translationTargetsDescription": "Salva fino a {{count}} lingue e scegli la destinazione attiva",
+      "addTranslationTarget": "Aggiungi lingua di traduzione",
+      "activeTranslationTarget": "Lingua di traduzione attiva",
+      "active": "Attiva",
+      "removeTranslationTarget": "Rimuovi {{language}}"
     },
     "noteFiles": {
       "title": "Salva note come file",
@@ -406,6 +412,7 @@
       "aiEditToggleErrorTitle": "Impossibile cambiare la versione della trascrizione",
       "aiEditToggleErrorDescription": "La trascrizione salvata non è stata modificata. Riprova.",
       "cleanupLevelApplied": "Pulizia IA: {{level}}",
+      "translationTarget": "Tradotto in {{language}}",
       "discarded": {
         "show": "Mostra scartate",
         "hide": "Nascondi scartate",
@@ -569,7 +576,8 @@
         "sessionExpired": "Sessione scaduta",
         "offline": "Sei offline",
         "dailyLimitReached": "Limite giornaliero raggiunto",
-        "providerRateLimited": "Limite di velocità del provider"
+        "providerRateLimited": "Limite di velocità del provider",
+        "translationFailed": "Traduzione non riuscita"
       },
       "fallback": {
         "title": "Modalità fallback",
@@ -591,11 +599,16 @@
         "title": "Scorciatoia di annullamento non disponibile",
         "description": "OpenWhispr non ha potuto registrare una scorciatoia di annullamento. Usa la scorciatoia di dettatura per interrompere."
       },
+      "translationUnavailable": {
+        "title": "La traduzione non è configurata",
+        "description": "Scegli un provider e un modello IA in Modelli linguistici prima di usare la scorciatoia di traduzione."
+      },
       "errorDescriptions": {
         "sessionExpired": "La tua sessione OpenWhispr Cloud non è disponibile. Effettua di nuovo l'accesso dalle Impostazioni.",
         "offline": "Sei offline. La trascrizione cloud richiede una connessione Internet.",
         "dailyLimitReached": "Hai raggiunto il limite di trascrizioni di oggi. Riprova domani o aggiorna il tuo piano.",
-        "providerRateLimited": "Il tuo provider di trascrizione ha limitato la richiesta. Attendi un momento e riprova."
+        "providerRateLimited": "Il tuo provider di trascrizione ha limitato la richiesta. Attendi un momento e riprova.",
+        "translationFailed": "La voce è stata trascritta, ma non è stato possibile tradurla. Non è stato incollato nulla. Riprova o controlla il provider IA."
       }
     },
     "clipboard": {
@@ -1480,6 +1493,10 @@
       "voiceAgentHotkey": {
         "title": "Scorciatoia dell'agente vocale",
         "description": "Di' cosa ti serve — il tuo agente IA scrive il risultato, non le tue parole"
+      },
+      "translationHotkey": {
+        "title": "Scorciatoia di traduzione",
+        "description": "Detta e inserisci il testo nella lingua di traduzione attiva"
       },
       "microphone": {
         "description": "Seleziona il dispositivo di ingresso da usare per la dettatura",

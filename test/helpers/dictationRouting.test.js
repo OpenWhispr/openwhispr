@@ -47,6 +47,57 @@ test("voice agent hotkey ignores the wake word state", async () => {
   );
 });
 
+test("translation hotkey takes precedence over cleanup and agent routing", async () => {
+  const { resolveDictationRouteKind } = await load();
+  assert.equal(
+    resolveDictationRouteKind({
+      cleanupReachable: true,
+      agentReachable: true,
+      translationReachable: true,
+      agentInvoked: true,
+      voiceAgentRequested: true,
+      translationRequested: true,
+    }),
+    "translate"
+  );
+});
+
+test("translation never falls back to ordinary cleanup when reasoning is unavailable", async () => {
+  const { resolveDictationRouteKind } = await load();
+  assert.equal(
+    resolveDictationRouteKind({
+      cleanupReachable: true,
+      agentReachable: true,
+      translationReachable: false,
+      agentInvoked: false,
+      voiceAgentRequested: false,
+      translationRequested: true,
+    }),
+    "skip"
+  );
+});
+
+test("translation reachability accepts cloud, self-hosted, or an explicit model", async () => {
+  const { resolveTranslationReachability } = await load();
+
+  assert.equal(
+    resolveTranslationReachability({ model: "", isCloud: true, isSelfHosted: false }),
+    true
+  );
+  assert.equal(
+    resolveTranslationReachability({ model: "", isCloud: false, isSelfHosted: true }),
+    true
+  );
+  assert.equal(
+    resolveTranslationReachability({ model: "gpt-4.1-mini", isCloud: false, isSelfHosted: false }),
+    true
+  );
+  assert.equal(
+    resolveTranslationReachability({ model: " ", isCloud: false, isSelfHosted: false }),
+    false
+  );
+});
+
 test("normal dictation with wake word routes to the agent", async () => {
   const { resolveDictationRouteKind } = await load();
 

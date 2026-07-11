@@ -12,15 +12,24 @@ export function resolveDictationAgentReachability({
   return (dictationAgentModel?.trim()?.length ?? 0) > 0;
 }
 
+export function resolveTranslationReachability({ model, isCloud, isSelfHosted }) {
+  return !!model?.trim() || isCloud || isSelfHosted;
+}
+
 // Decides which reasoning path ("agent" | "cleanup" | "skip") a finished
 // dictation takes. A recording started via the voice agent hotkey always takes
 // the agent path — no wake word needed — and never falls back to cleanup.
 export function resolveDictationRouteKind({
   cleanupReachable,
   agentReachable,
+  translationReachable = false,
   agentInvoked,
   voiceAgentRequested,
+  translationRequested = false,
 }) {
+  if (translationRequested) {
+    return translationReachable ? "translate" : "skip";
+  }
   if (voiceAgentRequested) {
     return agentReachable ? "agent" : "skip";
   }
