@@ -6296,6 +6296,23 @@ class IPCHandlers {
       }
     });
 
+    ipcMain.handle("set-transcription-ai-edit-applied", async (_event, id, applied) => {
+      try {
+        const result = this.databaseManager.setTranscriptionAiEditApplied(id, applied);
+        if (result.success && result.transcription) {
+          this.broadcastToWindows("transcription-updated", result.transcription);
+        }
+        return result;
+      } catch (error) {
+        debugLogger.error(
+          "Failed to update transcription AI edit state",
+          { id, error: error.message },
+          "database"
+        );
+        return { success: false, error: error.message };
+      }
+    });
+
     ipcMain.handle("cloud-reason", async (event, text, opts = {}) => {
       try {
         const apiUrl = getApiUrl();

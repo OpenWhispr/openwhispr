@@ -394,6 +394,7 @@
       "copyText": "Copiar texto",
       "deleteItem": "Eliminar",
       "viewRawTranscript": "Ver transcripción sin procesar",
+      "viewCleanedTranscript": "Ver transcripción limpiada con IA",
       "showInFolder": "Mostrar en Finder",
       "showInFolderWindows": "Mostrar en Explorador",
       "showInFolderLinux": "Mostrar en gestor de archivos",
@@ -403,7 +404,12 @@
       "retryError": "Error al volver a transcribir",
       "audioNotFound": "Archivo de audio no encontrado o expirado",
       "noAiProcessing": "No se aplicó procesamiento de IA a esta transcripción",
-      "rawTranscript": "Transcripción sin procesar"
+      "rawTranscript": "Transcripción sin procesar",
+      "cleanedTranscript": "Transcripción limpiada con IA",
+      "undoAiEdit": "Deshacer edición de IA",
+      "redoAiEdit": "Rehacer edición de IA",
+      "aiEditToggleErrorTitle": "No se pudo cambiar la versión de la transcripción",
+      "aiEditToggleErrorDescription": "La transcripción guardada no cambió. Inténtalo de nuevo."
     },
     "cloudMigration": {
       "title": "Bienvenido a OpenWhispr Cloud",

@@ -11,6 +11,8 @@ import {
   Loader2,
   AlertCircle,
   ArchiveRestore,
+  Undo2,
+  Redo2,
 } from "lucide-react";
 import type {
   TranscriptionItem as TranscriptionItemType,
@@ -34,6 +36,7 @@ interface TranscriptionItemProps {
   onDelete: (id: number) => void;
   onShowAudioInFolder?: (id: number) => void;
   onRetryTranscription?: (id: number, options?: { isRecover?: boolean }) => Promise<void>;
+  onSetAiEditApplied?: (id: number, applied: boolean) => Promise<void>;
   onOpenSettings?: () => void;
 }
 
@@ -43,12 +46,14 @@ export default function TranscriptionItem({
   onDelete,
   onShowAudioInFolder,
   onRetryTranscription,
+  onSetAiEditApplied,
   onOpenSettings,
 }: TranscriptionItemProps) {
   const { t, i18n } = useTranslation();
   const [isHovered, setIsHovered] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [isTogglingAiEdit, setIsTogglingAiEdit] = useState(false);
 
   const timestampSource = item.timestamp.endsWith("Z") ? item.timestamp : `${item.timestamp}Z`;
   const timestampDate = new Date(timestampSource);
@@ -76,6 +81,10 @@ export default function TranscriptionItem({
       ? formatMmSs(Math.round(item.audio_duration_ms / 1000))
       : null;
   const hasRawText = item.raw_text !== null;
+  const hasAiEdit = hasRawText && item.raw_text !== item.text;
+  const isAiEditApplied = item.ai_edit_applied !== 0;
+  const displayedText = hasAiEdit && !isAiEditApplied ? item.raw_text : item.text;
+  const comparisonText = isAiEditApplied ? item.raw_text : item.text;
   const hasAudio = item.has_audio === 1;
   const showUtilityGroup = hasRawText || hasAudio;
 
@@ -86,6 +95,16 @@ export default function TranscriptionItem({
     errorCode === "MODEL_NOT_AVAILABLE";
   const isLimitError = errorCode === "LIMIT_REACHED";
   const isOfflineError = errorCode === "OFFLINE";
+
+  const handleToggleAiEdit = async () => {
+    if (isTogglingAiEdit || !onSetAiEditApplied) return;
+    setIsTogglingAiEdit(true);
+    try {
+      await onSetAiEditApplied(item.id, !isAiEditApplied);
+    } finally {
+      setIsTogglingAiEdit(false);
+    }
+  };
 
   return (
     <div
@@ -167,9 +186,16 @@ export default function TranscriptionItem({
             </span>
           </div>
         ) : (
-          <p className="flex-1 min-w-0 text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
-            {item.text}
-          </p>
+          <div className="flex-1 min-w-0">
+            {!isAiEditApplied && hasAiEdit && (
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mb-0.5">
+                {t("controlPanel.history.rawTranscript")}
+              </p>
+            )}
+            <p className="text-foreground text-sm leading-normal wrap-break-word whitespace-pre-wrap">
+              {displayedText}
+            </p>
+          </div>
         )}
 
         <div
@@ -213,17 +239,58 @@ export default function TranscriptionItem({
             </Tooltip>
           )}
           {!isFailed && !isDiscarded && hasRawText && (
-            <Tooltip content={t("controlPanel.history.viewRawTranscript")}>
+            <Tooltip
+              content={t(
+                isAiEditApplied
+                  ? "controlPanel.history.viewRawTranscript"
+                  : "controlPanel.history.viewCleanedTranscript"
+              )}
+            >
               <Button
                 size="icon"
                 variant="ghost"
                 onClick={() => setIsExpanded(!isExpanded)}
+                aria-label={t(
+                  isAiEditApplied
+                    ? "controlPanel.history.viewRawTranscript"
+                    : "controlPanel.history.viewCleanedTranscript"
+                )}
                 className={cn(
                   "h-6 w-6 rounded-sm text-muted-foreground hover:text-primary hover:bg-primary/10",
                   isExpanded && "text-primary"
                 )}
               >
                 <FileText size={12} />
+              </Button>
+            </Tooltip>
+          )}
+          {!isFailed && !isDiscarded && hasAiEdit && onSetAiEditApplied && (
+            <Tooltip
+              content={t(
+                isAiEditApplied
+                  ? "controlPanel.history.undoAiEdit"
+                  : "controlPanel.history.redoAiEdit"
+              )}
+            >
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleToggleAiEdit}
+                disabled={isTogglingAiEdit}
+                aria-label={t(
+                  isAiEditApplied
+                    ? "controlPanel.history.undoAiEdit"
+                    : "controlPanel.history.redoAiEdit"
+                )}
+                className="h-6 w-6 rounded-sm text-muted-foreground hover:text-primary hover:bg-primary/10"
+              >
+                {isTogglingAiEdit ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : isAiEditApplied ? (
+                  <Undo2 size={12} />
+                ) : (
+                  <Redo2 size={12} />
+                )}
               </Button>
             </Tooltip>
           )}
@@ -262,7 +329,7 @@ export default function TranscriptionItem({
               <Button
                 size="icon"
                 variant="ghost"
-                onClick={() => onCopy(item.text)}
+                onClick={() => onCopy(displayedText ?? item.text)}
                 className="h-6 w-6 rounded-sm text-muted-foreground hover:text-foreground hover:bg-foreground/10"
               >
                 <Copy size={12} />
@@ -291,9 +358,15 @@ export default function TranscriptionItem({
         >
           <div className="border-t border-border/20 mt-2 pt-2">
             <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-              {t("controlPanel.history.rawTranscript")}
+              {t(
+                isAiEditApplied
+                  ? "controlPanel.history.rawTranscript"
+                  : "controlPanel.history.cleanedTranscript"
+              )}
             </span>
-            <p className="text-xs text-muted-foreground/80 leading-relaxed mt-1">{item.raw_text}</p>
+            <p className="text-xs text-muted-foreground/80 leading-relaxed mt-1">
+              {comparisonText}
+            </p>
             {item.raw_text === item.text && (
               <p className="text-[10px] text-muted-foreground/50 italic mt-1">
                 {t("controlPanel.history.noAiProcessing")}
