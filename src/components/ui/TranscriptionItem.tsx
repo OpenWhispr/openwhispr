@@ -13,6 +13,7 @@ import {
   ArchiveRestore,
   Undo2,
   Redo2,
+  WandSparkles,
 } from "lucide-react";
 import type {
   TranscriptionItem as TranscriptionItemType,
@@ -37,6 +38,7 @@ interface TranscriptionItemProps {
   onShowAudioInFolder?: (id: number) => void;
   onRetryTranscription?: (id: number, options?: { isRecover?: boolean }) => Promise<void>;
   onSetAiEditApplied?: (id: number, applied: boolean) => Promise<void>;
+  onReprocessTranscription?: (id: number, rawText: string) => Promise<void>;
   onOpenSettings?: () => void;
 }
 
@@ -47,6 +49,7 @@ export default function TranscriptionItem({
   onShowAudioInFolder,
   onRetryTranscription,
   onSetAiEditApplied,
+  onReprocessTranscription,
   onOpenSettings,
 }: TranscriptionItemProps) {
   const { t, i18n } = useTranslation();
@@ -54,6 +57,7 @@ export default function TranscriptionItem({
   const [isExpanded, setIsExpanded] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isTogglingAiEdit, setIsTogglingAiEdit] = useState(false);
+  const [isReprocessing, setIsReprocessing] = useState(false);
 
   const timestampSource = item.timestamp.endsWith("Z") ? item.timestamp : `${item.timestamp}Z`;
   const timestampDate = new Date(timestampSource);
@@ -71,6 +75,16 @@ export default function TranscriptionItem({
       await onRetryTranscription(item.id, { isRecover: item.status === "discarded" });
     } finally {
       setIsRetrying(false);
+    }
+  };
+
+  const handleReprocess = async () => {
+    if (isReprocessing || !onReprocessTranscription || item.raw_text === null) return;
+    setIsReprocessing(true);
+    try {
+      await onReprocessTranscription(item.id, item.raw_text);
+    } finally {
+      setIsReprocessing(false);
     }
   };
 
@@ -290,6 +304,24 @@ export default function TranscriptionItem({
                   <Undo2 size={12} />
                 ) : (
                   <Redo2 size={12} />
+                )}
+              </Button>
+            </Tooltip>
+          )}
+          {!isFailed && !isDiscarded && hasRawText && onReprocessTranscription && (
+            <Tooltip content={t("controlPanel.history.reprocessCleanup")}>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleReprocess}
+                disabled={isReprocessing}
+                aria-label={t("controlPanel.history.reprocessCleanup")}
+                className="h-6 w-6 rounded-sm text-muted-foreground hover:text-primary hover:bg-primary/10"
+              >
+                {isReprocessing ? (
+                  <Loader2 size={12} className="animate-spin" />
+                ) : (
+                  <WandSparkles size={12} />
                 )}
               </Button>
             </Tooltip>

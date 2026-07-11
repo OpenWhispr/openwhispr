@@ -49,6 +49,7 @@ import {
   clearPendingInvitationToken,
 } from "../utils/pendingInvitationToken";
 import { WORKSPACES_ENABLED } from "../lib/features";
+import { reprocessTranscript } from "../utils/reprocessTranscript";
 
 const platform = getCachedPlatform();
 
@@ -590,6 +591,44 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     [toast, t]
   );
 
+  const reprocessTranscription = useCallback(
+    async (id: number, rawText: string) => {
+      try {
+        const [{ default: ReasoningService }, settingsModule] = await Promise.all([
+          import("../services/ReasoningService"),
+          import("../stores/settingsStore"),
+        ]);
+        const settings = settingsModule.getSettings();
+        const model = settingsModule.getEffectiveCleanupModel();
+        const isCloud = settingsModule.isCloudCleanupMode();
+
+        if (!settings.useCleanupModel || (!model && !isCloud)) {
+          throw new Error(t("controlPanel.history.reprocessUnavailable"));
+        }
+
+        const transcription = await reprocessTranscript({
+          rawText,
+          process: (text) =>
+            ReasoningService.processText(text, model, localStorage.getItem("agentName"), {
+              disableThinking: settings.cleanupDisableThinking,
+            }),
+          persist: (processedText, sourceText) =>
+            window.electronAPI.updateTranscriptionText(id, processedText, sourceText),
+        });
+
+        updateInStore(transcription);
+        toast({ title: t("controlPanel.history.reprocessSuccess") });
+      } catch (error) {
+        toast({
+          title: t("controlPanel.history.reprocessError"),
+          description: error instanceof Error ? error.message : undefined,
+          variant: "destructive",
+        });
+      }
+    },
+    [t, toast]
+  );
+
   const toggleShowDiscarded = useCallback(() => {
     loadTranscriptions(!showDiscarded);
   }, [loadTranscriptions, showDiscarded]);
@@ -917,6 +956,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 onShowAudioInFolder={showAudioInFolder}
                 onRetryTranscription={retryTranscription}
                 onSetAiEditApplied={setTranscriptionAiEditApplied}
+                onReprocessTranscription={useCleanupModel ? reprocessTranscription : undefined}
                 showDiscarded={showDiscarded}
                 onToggleDiscarded={toggleShowDiscarded}
                 onOpenSettings={(section) => {
