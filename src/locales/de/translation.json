@@ -1300,6 +1300,26 @@
       }
     },
     "aiModels": {
+      "cleanupLevel": {
+        "title": "Bereinigungsstufe",
+        "description": "Lege fest, wie stark jedes Diktat durch KI bearbeitet wird. Wenn der Verlauf aktiviert ist, bleibt das Rohtranskript neben dem bereinigten Text erhalten.",
+        "customPromptOverride": "Deine eigene Bereinigungsanweisung hat Vorrang vor der gewählten Bearbeitungsstufe.",
+        "options": {
+          "none": {
+            "title": "Keine",
+            "description": "Rohtranskript einschließlich Fehlern beibehalten"
+          },
+          "light": {
+            "title": "Leicht",
+            "description": "Füllwörter entfernen und Grammatik korrigieren"
+          },
+          "medium": {
+            "title": "Mittel",
+            "description": "Klarheit verbessern und deinen Stil bewahren"
+          },
+          "high": { "title": "Stark", "description": "Für Kürze und Feinschliff umformulieren" }
+        }
+      },
       "customSetup": "Benutzerdefinierte Einrichtung",
       "customSetupDescription": "Verwenden Sie Ihren eigenen Anbieter und API-Schlüssel.",
       "description": "Bereinigt Transkriptionen, verarbeitet Befehle und korrigiert Fehler unter Beibehaltung Ihres Stils.",

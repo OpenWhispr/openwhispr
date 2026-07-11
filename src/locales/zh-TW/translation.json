@@ -1295,6 +1295,17 @@
       }
     },
     "aiModels": {
+      "cleanupLevel": {
+        "title": "清理層級",
+        "description": "選擇 AI 對每次聽寫的編輯程度。啟用歷史記錄時，原始轉錄會與清理後的文字一同保留。",
+        "customPromptOverride": "自訂清理提示詞會覆寫所選的編輯層級。",
+        "options": {
+          "none": { "title": "不清理", "description": "保留原始轉錄，包括錯誤" },
+          "light": { "title": "輕度", "description": "移除填充詞並修正文法" },
+          "medium": { "title": "中度", "description": "在保留表達風格的同時提升清晰度" },
+          "high": { "title": "高度", "description": "改寫為更精簡、潤飾完整的文字" }
+        }
+      },
       "customSetup": "自訂設定",
       "customSetupDescription": "使用你自己的供應商和 API Key。",
       "description": "整理轉錄文字、處理指令、修正錯誤，同時保留你的語調。",

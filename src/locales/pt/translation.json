@@ -1279,6 +1279,23 @@
       }
     },
     "aiModels": {
+      "cleanupLevel": {
+        "title": "Nível de limpeza",
+        "description": "Escolha o quanto a IA edita cada ditado. Quando o histórico está ativado, a transcrição original fica salva junto com o texto limpo.",
+        "customPromptOverride": "Seu prompt de limpeza personalizado substitui o nível de edição selecionado.",
+        "options": {
+          "none": {
+            "title": "Nenhum",
+            "description": "Manter a transcrição original, incluindo erros"
+          },
+          "light": {
+            "title": "Leve",
+            "description": "Remover vícios de linguagem e corrigir a gramática"
+          },
+          "medium": { "title": "Médio", "description": "Melhorar a clareza preservando sua voz" },
+          "high": { "title": "Alto", "description": "Reescrever com concisão e acabamento" }
+        }
+      },
       "customSetup": "Configuração personalizada",
       "customSetupDescription": "Use seu próprio provedor e chave API.",
       "description": "Limpe transcrições, processe comandos e corrija erros preservando seu tom de voz.",

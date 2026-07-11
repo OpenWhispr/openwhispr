@@ -1473,6 +1473,20 @@
       }
     },
     "aiModels": {
+      "cleanupLevel": {
+        "title": "Cleanup level",
+        "description": "Choose how much AI editing is applied to each dictation. When History is enabled, the raw transcript is kept alongside the cleaned text.",
+        "customPromptOverride": "Your custom cleanup prompt overrides the selected editing level.",
+        "options": {
+          "none": { "title": "None", "description": "Keep the raw transcript, including mistakes" },
+          "light": { "title": "Light", "description": "Remove fillers and correct grammar" },
+          "medium": {
+            "title": "Medium",
+            "description": "Improve clarity while preserving your voice"
+          },
+          "high": { "title": "High", "description": "Rewrite for brevity and polish" }
+        }
+      },
       "customSetup": "Custom Setup",
       "customSetupDescription": "Use your own provider and API key.",
       "description": "Clean up transcriptions, handle commands, and fix errors while preserving your tone.",
