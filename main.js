@@ -813,6 +813,9 @@ async function startApp() {
   ipcMain.on("activation-mode-changed", (_event, mode) => {
     windowManager.setActivationModeCache(mode);
     environmentManager.saveActivationMode(mode);
+    // Retune the low-level key listener now, not on the next unrelated
+    // hotkey change, since push mode needs it watching the dictation keys.
+    windowManager.reconcileNativeKeyListeners();
   });
 
   ipcMain.on("floating-icon-auto-hide-changed", (_event, enabled) => {
