@@ -405,6 +405,7 @@
       "redoAiEdit": "重做 AI 編輯",
       "aiEditToggleErrorTitle": "無法切換轉錄版本",
       "aiEditToggleErrorDescription": "已儲存的轉錄未變更。請再試一次。",
+      "cleanupLevelApplied": "AI 清理：{{level}}",
       "discarded": {
         "show": "顯示已捨棄",
         "hide": "隱藏已捨棄",

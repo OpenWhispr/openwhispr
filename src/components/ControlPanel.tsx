@@ -534,7 +534,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                   const updated = await window.electronAPI.updateTranscriptionText(
                     id,
                     reasonedText,
-                    rawText
+                    rawText,
+                    s.cleanupLevel === "none" ? null : s.cleanupLevel
                   );
                   if (updated.success && updated.transcription) {
                     finalTranscription = updated.transcription;
@@ -613,7 +614,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               disableThinking: settings.cleanupDisableThinking,
             }),
           persist: (processedText, sourceText) =>
-            window.electronAPI.updateTranscriptionText(id, processedText, sourceText),
+            window.electronAPI.updateTranscriptionText(
+              id,
+              processedText,
+              sourceText,
+              settings.cleanupLevel === "none" ? null : settings.cleanupLevel
+            ),
         });
 
         updateInStore(transcription);

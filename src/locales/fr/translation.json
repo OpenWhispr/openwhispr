@@ -405,6 +405,7 @@
       "redoAiEdit": "Rétablir la modification par l’IA",
       "aiEditToggleErrorTitle": "Impossible de changer de version de la transcription",
       "aiEditToggleErrorDescription": "La transcription enregistrée n’a pas été modifiée. Réessayez.",
+      "cleanupLevelApplied": "Nettoyage par IA : {{level}}",
       "discarded": {
         "show": "Afficher les abandonnées",
         "hide": "Masquer les abandonnées",

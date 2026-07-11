@@ -8,6 +8,11 @@ const { app } = require("electron");
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
 // trigger can't 400 the whole sync batch.
 const MAX_SNIPPET_TRIGGER_LENGTH = 100;
+const CLEANUP_LEVELS = new Set(["light", "medium", "high"]);
+
+function normalizeCleanupLevel(value) {
+  return CLEANUP_LEVELS.has(value) ? value : null;
+}
 
 class DatabaseManager {
   constructor() {
@@ -44,6 +49,11 @@ class DatabaseManager {
         this.db.exec(
           "ALTER TABLE transcriptions ADD COLUMN ai_edit_applied INTEGER NOT NULL DEFAULT 1"
         );
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE transcriptions ADD COLUMN cleanup_level TEXT");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
@@ -647,6 +657,7 @@ class DatabaseManager {
       errorMessage = null,
       errorCode = null,
       clientTranscriptionId = randomUUID(),
+      cleanupLevel = null,
     } = {}
   ) {
     try {
@@ -654,7 +665,7 @@ class DatabaseManager {
         throw new Error("Database not initialized");
       }
       const stmt = this.db.prepare(
-        "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, client_transcription_id) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO transcriptions (text, raw_text, status, error_message, error_code, client_transcription_id, cleanup_level) VALUES (?, ?, ?, ?, ?, ?, ?)"
       );
       const result = stmt.run(
         text,
@@ -662,7 +673,8 @@ class DatabaseManager {
         status,
         errorMessage,
         errorCode,
-        clientTranscriptionId
+        clientTranscriptionId,
+        normalizeCleanupLevel(cleanupLevel)
       );
 
       const fetchStmt = this.db.prepare("SELECT * FROM transcriptions WHERE id = ?");
@@ -747,13 +759,20 @@ class DatabaseManager {
     }
   }
 
-  updateTranscriptionText(id, text, rawText) {
+  updateTranscriptionText(id, text, rawText, cleanupLevel) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const hasCleanupLevel = cleanupLevel !== undefined;
       const stmt = this.db.prepare(
-        "UPDATE transcriptions SET text = ?, raw_text = ?, ai_edit_applied = 1 WHERE id = ?"
+        hasCleanupLevel
+          ? "UPDATE transcriptions SET text = ?, raw_text = ?, ai_edit_applied = 1, cleanup_level = ? WHERE id = ?"
+          : "UPDATE transcriptions SET text = ?, raw_text = ?, ai_edit_applied = 1 WHERE id = ?"
       );
-      stmt.run(text, rawText, id);
+      if (hasCleanupLevel) {
+        stmt.run(text, rawText, normalizeCleanupLevel(cleanupLevel), id);
+      } else {
+        stmt.run(text, rawText, id);
+      }
       return { success: true };
     } catch (error) {
       debugLogger.error("Error updating transcription text", { error: error.message }, "database");

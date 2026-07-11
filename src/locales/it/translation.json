@@ -405,6 +405,7 @@
       "redoAiEdit": "Ripeti modifica IA",
       "aiEditToggleErrorTitle": "Impossibile cambiare la versione della trascrizione",
       "aiEditToggleErrorDescription": "La trascrizione salvata non è stata modificata. Riprova.",
+      "cleanupLevelApplied": "Pulizia IA: {{level}}",
       "discarded": {
         "show": "Mostra scartate",
         "hide": "Nascondi scartate",

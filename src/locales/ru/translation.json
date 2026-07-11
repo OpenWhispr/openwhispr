@@ -405,6 +405,7 @@
       "redoAiEdit": "Вернуть правку ИИ",
       "aiEditToggleErrorTitle": "Не удалось сменить версию расшифровки",
       "aiEditToggleErrorDescription": "Сохранённая расшифровка не изменилась. Повторите попытку.",
+      "cleanupLevelApplied": "Очистка с помощью ИИ: {{level}}",
       "discarded": {
         "show": "Показать отменённые",
         "hide": "Скрыть отменённые",

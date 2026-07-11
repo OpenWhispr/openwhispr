@@ -405,6 +405,7 @@
       "redoAiEdit": "KI-Bearbeitung wiederholen",
       "aiEditToggleErrorTitle": "Transkriptversion konnte nicht geändert werden",
       "aiEditToggleErrorDescription": "Das gespeicherte Transkript wurde nicht geändert. Versuche es erneut.",
+      "cleanupLevelApplied": "KI-Bereinigung: {{level}}",
       "discarded": {
         "show": "Verworfene anzeigen",
         "hide": "Verworfene ausblenden",

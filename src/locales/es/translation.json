@@ -413,7 +413,8 @@
       "undoAiEdit": "Deshacer edición de IA",
       "redoAiEdit": "Rehacer edición de IA",
       "aiEditToggleErrorTitle": "No se pudo cambiar la versión de la transcripción",
-      "aiEditToggleErrorDescription": "La transcripción guardada no cambió. Inténtalo de nuevo."
+      "aiEditToggleErrorDescription": "La transcripción guardada no cambió. Inténtalo de nuevo.",
+      "cleanupLevelApplied": "Limpieza con IA: {{level}}"
     },
     "cloudMigration": {
       "title": "Bienvenido a OpenWhispr Cloud",

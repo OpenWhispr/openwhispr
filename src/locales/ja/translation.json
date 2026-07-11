@@ -405,6 +405,7 @@
       "redoAiEdit": "AI 編集をやり直す",
       "aiEditToggleErrorTitle": "文字起こしのバージョンを変更できませんでした",
       "aiEditToggleErrorDescription": "保存済みの文字起こしは変更されませんでした。もう一度お試しください。",
+      "cleanupLevelApplied": "AIクリーンアップ：{{level}}",
       "discarded": {
         "show": "破棄したものを表示",
         "hide": "破棄したものを非表示",

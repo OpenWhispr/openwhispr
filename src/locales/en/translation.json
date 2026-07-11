@@ -399,6 +399,7 @@
       "redoAiEdit": "Redo AI edit",
       "aiEditToggleErrorTitle": "Couldn't change transcript version",
       "aiEditToggleErrorDescription": "The saved transcript was not changed. Try again.",
+      "cleanupLevelApplied": "AI cleanup: {{level}}",
       "clearAll": "Clear all",
       "clearAllTitle": "Clear All Transcriptions",
       "clearAllDescription": "All transcriptions and audio files will be permanently removed.",

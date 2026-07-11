@@ -70,8 +70,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getAudioStorageUsage: () => ipcRenderer.invoke("get-audio-storage-usage"),
   deleteAllAudio: () => ipcRenderer.invoke("delete-all-audio"),
   retryTranscription: (id, settings) => ipcRenderer.invoke("retry-transcription", id, settings),
-  updateTranscriptionText: (id, text, rawText) =>
-    ipcRenderer.invoke("update-transcription-text", id, text, rawText),
+  updateTranscriptionText: (id, text, rawText, cleanupLevel) =>
+    ipcRenderer.invoke("update-transcription-text", id, text, rawText, cleanupLevel),
   setTranscriptionAiEditApplied: (id, applied) =>
     ipcRenderer.invoke("set-transcription-ai-edit-applied", id, applied),
   getTranscriptionById: (id) => ipcRenderer.invoke("get-transcription-by-id", id),

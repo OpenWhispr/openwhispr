@@ -384,6 +384,7 @@
       "redoAiEdit": "Refazer edição da IA",
       "aiEditToggleErrorTitle": "Não foi possível alterar a versão da transcrição",
       "aiEditToggleErrorDescription": "A transcrição salva não foi alterada. Tente novamente.",
+      "cleanupLevelApplied": "Limpeza por IA: {{level}}",
       "discarded": {
         "show": "Mostrar descartadas",
         "hide": "Ocultar descartadas",
