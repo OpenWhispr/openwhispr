@@ -615,6 +615,7 @@ export interface SettingsState
   setVertexApiKey: (key: string) => void;
 
   setDictationKey: (key: string) => void;
+  setCancelKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
   setVoiceAgentKey: (key: string) => Promise<boolean>;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
@@ -942,6 +943,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   dictationKey: readString("dictationKey", ""),
   activeDictationKey: null,
+  cancelKey: readString("cancelKey", "Escape"),
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
@@ -1438,6 +1440,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       window.electronAPI?.saveDictationKey?.(key);
     }
   },
+  setCancelKey: createStringSetter("cancelKey"),
   setMeetingKey: (key: string) => {
     if (isBrowser) localStorage.setItem("meetingKey", key);
     set({ meetingKey: key });
