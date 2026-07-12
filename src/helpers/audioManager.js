@@ -1,7 +1,7 @@
 import ReasoningService from "../services/ReasoningService";
 import { API_ENDPOINTS, buildApiUrl, normalizeBaseUrl } from "../config/constants";
 import logger from "../utils/logger";
-import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
+import { findBuiltInMicrophone } from "../utils/audioDeviceUtils";
 import {
   isSecureEndpoint,
   isAzureOpenAIEndpoint,
@@ -15,7 +15,6 @@ import {
   recordLocalSpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
-import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import {
   getSettings,
@@ -208,10 +207,14 @@ class AudioManager {
     };
     window.addEventListener("api-key-changed", this._onApiKeyChanged);
 
+    this.cachedMicDeviceId = null;
+    this.unavailableBuiltInMicDeviceId = null;
+
     // Invalidate the pinned mic device when the OS adds/removes/suspends inputs.
     // Otherwise wake-after-idle keeps requesting a stale deviceId that yields silence.
     this._onDeviceChange = () => {
       this.cachedMicDeviceId = null;
+      this.unavailableBuiltInMicDeviceId = null;
       this.micDriverWarmedUp = false;
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
@@ -231,7 +234,6 @@ class AudioManager {
     this.streamingPartialText = "";
     this.streamingTextResolve = null;
     this.streamingTextDebounce = null;
-    this.cachedMicDeviceId = null;
     this.persistentAudioContext = null;
     this.workletModuleLoaded = false;
     this.workletBlobUrl = null;
@@ -369,12 +371,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Pinned device was unavailable (Chromium rotates IDs / device unplugged); fall back to the
     // system default for this capture without discarding the saved preference. See #900.
     if (forceDefaultMic) {
-      logger.debug("Using default microphone (pinned device unavailable)", {}, "audio");
+      logger.debug("Using system-default microphone for fallback", {}, "audio");
       return { audio: noProcessing };
     }
 
     if (preferBuiltIn) {
-      if (this.cachedMicDeviceId) {
+      if (this.cachedMicDeviceId && this.cachedMicDeviceId !== this.unavailableBuiltInMicDeviceId) {
         logger.debug(
           "Using cached microphone device ID",
           { deviceId: this.cachedMicDeviceId },
@@ -384,11 +386,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       try {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const audioInputs = devices.filter((d) => d.kind === "audioinput");
-        const builtInMic = audioInputs.find((d) => isBuiltInMicrophone(d.label));
+        const builtInMic = await findBuiltInMicrophone();
 
         if (builtInMic) {
+          if (builtInMic.deviceId === this.unavailableBuiltInMicDeviceId) {
+            logger.debug(
+              "Using default microphone (preferred built-in was unavailable)",
+              {},
+              "audio"
+            );
+            return { audio: noProcessing };
+          }
           this.cachedMicDeviceId = builtInMic.deviceId;
           logger.debug(
             "Using built-in microphone (cached for next time)",
@@ -415,16 +423,45 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return { audio: noProcessing };
   }
 
+  async acquireMicrophone(constraints) {
+    const audioConstraints =
+      typeof constraints.audio === "object" && constraints.audio !== null
+        ? constraints.audio
+        : null;
+    const deviceConstraint = audioConstraints?.deviceId;
+    const pinnedDeviceId =
+      typeof deviceConstraint === "string" ? deviceConstraint : deviceConstraint?.exact;
+    const isBuiltInPreference = Boolean(pinnedDeviceId && getSettings().preferBuiltInMic);
+
+    return reacquireIfDead(
+      navigator.mediaDevices.getUserMedia(constraints),
+      () => {
+        this.cachedMicDeviceId = null;
+        return this.getAudioConstraints(true);
+      },
+      logger,
+      {
+        fallbackOnAcquisitionError: Boolean(pinnedDeviceId),
+        onFallbackSuccess: ({ reason }) => {
+          // A health failure or stale ID is stable enough to avoid retrying the same auto-picked
+          // built-in on every recording. Generic acquisition failures may be transient, and an
+          // explicit user selection must remain retryable.
+          if (isBuiltInPreference && reason !== "acquisition-error") {
+            this.unavailableBuiltInMicDeviceId = pinnedDeviceId;
+          }
+        },
+      }
+    );
+  }
+
   async cacheMicrophoneDeviceId() {
     if (this.cachedMicDeviceId) return; // Already cached
 
     if (!getSettings().preferBuiltInMic) return; // Only needed for built-in mic detection
 
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const audioInputs = devices.filter((d) => d.kind === "audioinput");
-      const builtInMic = audioInputs.find((d) => isBuiltInMicrophone(d.label));
-      if (builtInMic) {
+      const builtInMic = await findBuiltInMicrophone();
+      if (builtInMic && builtInMic.deviceId !== this.unavailableBuiltInMicDeviceId) {
         this.cachedMicDeviceId = builtInMic.deviceId;
         logger.debug("Microphone device ID pre-cached", { deviceId: builtInMic.deviceId }, "audio");
       }
@@ -450,21 +487,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async startRecording(forceDefaultMic = false) {
+  async startRecording() {
     try {
       if (this.isRecording || this.isProcessing || this.mediaRecorder?.state === "recording") {
         return false;
       }
 
-      const constraints = await this.getAudioConstraints(forceDefaultMic);
-      const micStream = await reacquireIfDead(
-        await navigator.mediaDevices.getUserMedia(constraints),
-        () => {
-          this.cachedMicDeviceId = null;
-          return this.getAudioConstraints();
-        },
-        logger
-      );
+      const constraints = await this.getAudioConstraints();
+      const micStream = await this.acquireMicrophone(constraints);
       const audioTrack = micStream.getAudioTracks()[0];
 
       if (audioTrack) {
@@ -620,17 +650,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       return true;
     } catch (error) {
-      if (isStaleDeviceError(error) && !forceDefaultMic) {
-        // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
-        logger.warn("Pinned microphone unavailable, retrying on default mic", {}, "audio");
-        this.cachedMicDeviceId = null;
-        return this.startRecording(true);
-      }
-
       let errorTitle = "Recording Error";
       let errorDescription = `Failed to access microphone: ${error.message}`;
 
-      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+      if (
+        error.name === "NotAllowedError" ||
+        error.name === "PermissionDeniedError" ||
+        error.name === "SecurityError"
+      ) {
         errorTitle = "Microphone Access Denied";
         errorDescription =
           "Please grant microphone permission in your system settings and try again.";
@@ -2648,7 +2675,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return this.persistentAudioContext;
   }
 
-  async startStreamingRecording(forceDefaultMic = false) {
+  async startStreamingRecording() {
     try {
       if (this.streamingStartInProgress) {
         return false;
@@ -2663,21 +2690,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.stopRequestedDuringStreamingStart = false;
 
       const t0 = performance.now();
-      const constraints = await this.getAudioConstraints(forceDefaultMic);
+      const constraints = await this.getAudioConstraints();
       const tConstraints = performance.now();
 
       // 1. Get mic stream (can take 10-15s on cold macOS mic driver)
-      const rawStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const stream = await this.acquireMicrophone(constraints);
       const tMedia = performance.now();
-
-      const stream = await reacquireIfDead(
-        rawStream,
-        () => {
-          this.cachedMicDeviceId = null;
-          return this.getAudioConstraints();
-        },
-        logger
-      );
       const audioTrack = stream.getAudioTracks()[0];
 
       if (audioTrack) {
@@ -2870,31 +2888,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       return true;
     } catch (error) {
-      const stopRequested = this.stopRequestedDuringStreamingStart;
       this.streamingStartInProgress = false;
       this.stopRequestedDuringStreamingStart = false;
-
-      if (isStaleDeviceError(error) && !forceDefaultMic && !stopRequested) {
-        // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
-        logger.warn(
-          "Pinned microphone unavailable, retrying streaming on default mic",
-          {},
-          "streaming"
-        );
-        this.cachedMicDeviceId = null;
-        await this.cleanupStreaming();
-        this.isRecording = false;
-        this.recordingStartTime = null;
-        this.onStateChange?.({ isRecording: false, isProcessing: false, isStreaming: false });
-        return this.startStreamingRecording(true);
-      }
 
       logger.error("Failed to start streaming recording", { error: error.message }, "streaming");
 
       let errorTitle = "Streaming Error";
       let errorDescription = `Failed to start streaming: ${error.message}`;
 
-      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+      if (
+        error.name === "NotAllowedError" ||
+        error.name === "PermissionDeniedError" ||
+        error.name === "SecurityError"
+      ) {
         errorTitle = "Microphone Access Denied";
         errorDescription =
           "Please grant microphone permission in your system settings and try again.";

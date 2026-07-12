@@ -38,3 +38,13 @@ export function isBuiltInMicrophone(label: string): boolean {
 
   return false;
 }
+
+/** Enumerates the first input matching the app's built-in microphone policy. */
+export async function findBuiltInMicrophone(
+  mediaDevices: Pick<MediaDevices, "enumerateDevices"> = navigator.mediaDevices
+): Promise<MediaDeviceInfo | undefined> {
+  const devices = await mediaDevices.enumerateDevices();
+  return devices.find(
+    (device) => device.kind === "audioinput" && isBuiltInMicrophone(device.label)
+  );
+}
