@@ -441,7 +441,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       },
       logger,
       {
-        fallbackOnAcquisitionError: Boolean(pinnedDeviceId),
+        fallbackOnAcquisitionError: isBuiltInPreference,
         onFallbackSuccess: ({ reason }) => {
           // A health failure or stale ID is stable enough to avoid retrying the same auto-picked
           // built-in on every recording. Generic acquisition failures may be transient, and an

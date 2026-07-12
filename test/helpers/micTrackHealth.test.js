@@ -267,6 +267,51 @@ test("reacquireIfDead falls back once when preferred acquisition rejects", async
   }
 });
 
+test("reacquireIfDead surfaces a generic acquisition error when fallback is disabled", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  let calls = 0;
+  const restore = stubGetUserMedia(async () => {
+    calls += 1;
+  });
+  try {
+    const preferredError = Object.assign(new Error("selected microphone is in use"), {
+      name: "NotReadableError",
+    });
+    await assert.rejects(
+      reacquireIfDead(Promise.reject(preferredError), () => ({ audio: true }), noopLogger),
+      (error) => error === preferredError
+    );
+    assert.equal(calls, 0);
+  } finally {
+    restore();
+  }
+});
+
+test("reacquireIfDead still falls back for a stale device when generic fallback is disabled", async () => {
+  const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
+  const fallback = new FakeStream(new FakeTrack());
+  let calls = 0;
+  const restore = stubGetUserMedia(async () => {
+    calls += 1;
+    return fallback;
+  });
+  try {
+    const staleDeviceError = Object.assign(new Error("saved microphone no longer exists"), {
+      name: "OverconstrainedError",
+      constraint: "deviceId",
+    });
+    const result = await reacquireIfDead(
+      Promise.reject(staleDeviceError),
+      () => ({ audio: true }),
+      noopLogger
+    );
+    assert.equal(result, fallback);
+    assert.equal(calls, 1);
+  } finally {
+    restore();
+  }
+});
+
 test("reacquireIfDead surfaces permission denial without retrying another device", async () => {
   const { reacquireIfDead } = await import("../../src/helpers/micTrackHealth.js");
   let calls = 0;
