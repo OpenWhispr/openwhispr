@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { ChevronDown, Search, X, Check } from "lucide-react";
 import registry from "../../config/languageRegistry.json";
+import { LIST_SEARCH_THRESHOLD } from "../../config/constants";
 
 export interface LanguageOption {
   value: string;
@@ -23,8 +24,6 @@ interface LanguageSelectorProps {
   className?: string;
 }
 
-const SEARCH_THRESHOLD = 12;
-
 export default function LanguageSelector({
   value,
   onChange,
@@ -33,7 +32,7 @@ export default function LanguageSelector({
 }: LanguageSelectorProps) {
   const { t } = useTranslation();
   const items = options ?? REGISTRY_OPTIONS;
-  const showSearch = items.length > SEARCH_THRESHOLD;
+  const showSearch = items.length > LIST_SEARCH_THRESHOLD;
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);

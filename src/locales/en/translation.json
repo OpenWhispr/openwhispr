@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" is already registered by another application.",
       "osReserved": "\"{{hotkey}}\" may be reserved by your desktop environment.",
       "registrationFailed": "Could not register \"{{hotkey}}\". It may be in use by another application.",
+      "updateFailedCheckFormat": "Failed to update hotkey to \"{{hotkey}}\". Check the format is valid.",
       "trySuggestions": "Try: {{suggestions}}",
       "slotConflict": "This hotkey is already used for {{slot}}."
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "Push-to-Talk native listener not available"
   },
   "common": {
+    "retry": "Retry",
     "back": "Back",
     "next": "Next",
     "complete": "Complete",
@@ -296,6 +298,7 @@
         "createAccount": "Create your Corti account",
         "creditBadge": "$50 free credit",
         "regionHint": "Choose where your audio is processed — US or EU.",
+        "llmHint": "Language model features will also run on Corti models.",
         "useCorti": "Use Corti",
         "skip": "Not now",
         "step1": "Sign up on corti.ai",
@@ -449,7 +452,13 @@
       "noModels": "No models returned. Check your endpoint URL.",
       "providerName": "Custom",
       "ownerLabel": "Owner: {{owner}}",
-      "unableToLoadModels": "Unable to load models from endpoint."
+      "unableToLoadModels": "Unable to load models from endpoint.",
+      "searchPlaceholder": "Search models…",
+      "selectedGroup": "Selected",
+      "otherGroup": "Other",
+      "noSearchResults": "No models match \"{{query}}\"",
+      "selectModelHint": "No model selected yet — choose one from the list below.",
+      "keyRequiredHint": "An API key is required for inference — add one to use this provider."
     },
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
@@ -486,6 +495,10 @@
       "customModelId": "Custom Model ID",
       "customModelPlaceholder": "Enter model ID or deployment name",
       "suggestedModels": "Suggested Models",
+      "browseModels": "Browse all models",
+      "loadingModels": "Fetching models...",
+      "allModels": "All Models in {{region}}",
+      "modelListError": "Could not load models.",
       "bedrock": {
         "ssoHelp": "Uses your AWS CLI SSO configuration. Ensure you have run 'aws sso login'.",
         "keysHelp": "Enter your AWS IAM access keys."
@@ -498,6 +511,14 @@
         "adcHelp": "Uses Application Default Credentials. Run: gcloud auth application-default login",
         "apikeyHelp": "Vertex AI Express Mode API key from Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Model no longer available",
+      "modelRetired": "Tinfoil retired {{from}}. Switched to {{to}}.",
+      "refreshingModels": "Refreshing models…"
+    },
+    "corti": {
+      "euOnly": "Corti's models are only available in the EU region."
     }
   },
   "transcription": {
@@ -522,8 +543,13 @@
     "corti": {
       "clientId": "Client ID",
       "clientSecret": "Client Secret",
+      "apiKey": "API Key",
       "environment": "Data Region",
       "tenant": "Tenant"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil streams using Voxtral Mini 4B, and batches with Voxtral Small 24B.",
+      "docsLink": "Read the docs"
     }
   },
   "hooks": {
@@ -545,6 +571,10 @@
       "noAudio": {
         "title": "No Audio Detected",
         "description": "The recording contained no detectable audio. Please try again."
+      },
+      "partialTranscription": {
+        "title": "Partial Transcription",
+        "description": "Part of the recording couldn't be transcribed."
       },
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
@@ -999,7 +1029,9 @@
     "recording": "Recording",
     "tryShortcut": "Try Ctrl+Shift+K",
     "tryShortcutMac": "Try ⌘⇧K",
-    "remove": "Remove hotkey"
+    "remove": "Remove hotkey",
+    "addAnother": "Add another hotkey",
+    "duplicate": "Already added"
   },
   "languageSelector": {
     "noLanguagesFound": "No languages found",
@@ -1096,7 +1128,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Provider",
       "run": "Run Test",
-      "customEndpoint": "Custom endpoint"
+      "customEndpoint": "Custom endpoint",
+      "apiKeyMissing": "{{provider}} API key not configured. Add it in AI Models settings."
     },
     "view": {
       "customPrompt": "Custom prompt",
@@ -1933,6 +1966,7 @@
   },
   "models": {
     "learnMore": "Learn more",
+    "noneAvailable": "No models available",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)",
@@ -1959,7 +1993,7 @@
         "mistral_voxtral_mini_latest": "Fast multilingual transcription",
         "corti_transcribe": "Clinical-grade medical transcription",
         "xai_grok_stt": "High-accuracy speech recognition by xAI",
-        "tinfoil_voxtral_mini_realtime": "Verifiably private streaming transcription"
+        "tinfoil_voxtral": "Verifiably private transcription"
       },
       "cloud": {
         "openai_gpt_5_2": "Strong reasoning model",
@@ -1968,6 +2002,8 @@
         "openai_gpt_4_1": "Strong baseline, 1M context",
         "openai_gpt_4_1_mini": "Smaller GPT-4.1 model",
         "openai_gpt_4_1_nano": "Lowest latency GPT-4.1",
+        "anthropic_claude_fable_5": "Anthropic's most capable model, Mythos-class",
+        "anthropic_claude_sonnet_5": "Fast, capable agentic model at lower cost",
         "anthropic_claude_sonnet_4_6": "Balanced performance",
         "anthropic_claude_sonnet_4_5": "Previous Sonnet generation",
         "anthropic_claude_haiku_4_5": "Fast with near-frontier intelligence",
@@ -1986,17 +2022,33 @@
         "groq_compound": "Groq's compound system, 450 T/sec",
         "groq_compound_mini": "Fast compound system, 3x lower latency",
         "groq_kimi_k2_0905": "Moonshot AI's 1T MoE, 256K context",
+        "openai_gpt_5_6_sol": "Flagship GPT-5.6 for complex coding and research",
+        "openai_gpt_5_6_terra": "Balanced GPT-5.6 for everyday work",
+        "openai_gpt_5_6_luna": "Fastest, lowest-cost GPT-5.6",
         "openai_gpt_5_5": "Frontier model for complex reasoning",
-        "anthropic_claude_opus_4_8": "Most capable Claude model",
+        "anthropic_claude_opus_4_8": "Powerful Opus model tuned for honesty and reliability",
         "anthropic_claude_opus_4_7": "Powerful Opus model",
         "anthropic_claude_opus_4_6": "Previous Opus generation, 1M context",
-        "anthropic_claude_opus_4_5": "Earlier Opus model"
+        "anthropic_claude_opus_4_5": "Earlier Opus model",
+        "tinfoil_deepseek_v4_pro": "Private long-context reasoning in secure enclaves, 800K context",
+        "tinfoil_glm_5_2": "Private agentic engineering model in secure enclaves, 384K context",
+        "tinfoil_kimi_k2_6": "Private long-horizon coding and multimodal model, 256K context",
+        "tinfoil_gemma4_31b": "Private multilingual reasoning model with tool calling, 256K context",
+        "tinfoil_gpt_oss_120b": "Private open-weight reasoning model with tool use, 131K context",
+        "tinfoil_llama3_3_70b": "Private conversational model with tool calling, 128K context",
+        "corti_corti_s1_instant": "Fast healthcare model, no reasoning trace",
+        "corti_corti_s1": "Most capable clinical model with reasoning",
+        "corti_corti_s1_mini_instant": "Compact healthcare model, fastest and lowest cost",
+        "corti_corti_s1_mini": "Compact clinical model with reasoning at half the price"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "Most capable Claude model. Best for the hardest Agent Mode tasks.",
         "bedrock_claude_haiku_4_5": "Fast and cheap. Great default for text cleanup.",
-        "bedrock_claude_sonnet_4_6": "Balanced workhorse. Best default for Agent Mode.",
-        "bedrock_claude_opus_4_7": "Max intelligence. Best for complex Agent Mode tasks.",
-        "bedrock_nova_lite": "Cheapest option. AWS-native, ideal for high volume.",
+        "bedrock_claude_sonnet_5": "Balanced workhorse. Best default for Agent Mode.",
+        "bedrock_claude_opus_4_8": "Max intelligence. Best for complex Agent Mode tasks.",
+        "bedrock_gpt_oss_120b": "Open-weight OpenAI model. Strong reasoning at low cost.",
+        "bedrock_deepseek_v3_2": "Open-weight frontier model. Great value for Agent Mode.",
+        "bedrock_qwen3_next_80b": "Sparse open-weight model. Fast and multilingual.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -2288,6 +2340,7 @@
       "transcribingProvider": "Transcribing via {{provider}}...",
       "cancelTranscription": "Cancel transcription",
       "transcriptionComplete": "Transcription complete",
+      "partialWarning": "Part of the audio couldn't be transcribed.",
       "openNote": "Open Note",
       "uploadAnother": "Upload Another",
       "retry": "Retry",

@@ -65,7 +65,7 @@ import { useUpdater } from "../hooks/useUpdater";
 
 import PromptStudio from "./ui/PromptStudio";
 import { ProviderTabs } from "./ui/ProviderTabs";
-import { HotkeyInput } from "./ui/HotkeyInput";
+import { HotkeyListInput } from "./ui/HotkeyListInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
 import { useHotkeyModeInfo } from "../hooks/useHotkeyModeInfo";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -213,6 +213,8 @@ interface TranscriptionSectionProps {
   setTranscriptionMode: (mode: InferenceMode) => void;
   remoteTranscriptionUrl: string;
   setRemoteTranscriptionUrl: (url: string) => void;
+  remoteTranscriptionModel: string;
+  setRemoteTranscriptionModel: (model: string) => void;
   showTranscriptionPreview: boolean;
   setShowTranscriptionPreview: (value: boolean) => void;
   toast: (opts: {
@@ -222,9 +224,6 @@ interface TranscriptionSectionProps {
     duration?: number;
   }) => void;
 }
-
-// Providers that forward the live-preview flag (see STREAMING_PROVIDERS in audioManager.js).
-const CLOUD_PREVIEW_PROVIDERS = new Set(["tinfoil"]);
 
 function TranscriptionSection({
   isSignedIn,
@@ -250,6 +249,8 @@ function TranscriptionSection({
   setTranscriptionMode,
   remoteTranscriptionUrl,
   setRemoteTranscriptionUrl,
+  remoteTranscriptionModel,
+  setRemoteTranscriptionModel,
   showTranscriptionPreview,
   setShowTranscriptionPreview,
   toast,
@@ -369,12 +370,7 @@ function TranscriptionSection({
         onSelect={handleTranscriptionModeSelect}
       />
 
-      {transcriptionMode === "providers" && (
-        <>
-          {renderTranscriptionPicker("cloud")}
-          {CLOUD_PREVIEW_PROVIDERS.has(cloudTranscriptionProvider) && renderPreviewToggle()}
-        </>
-      )}
+      {transcriptionMode === "providers" && renderTranscriptionPicker("cloud")}
       {transcriptionMode === "local" && (
         <>
           {renderTranscriptionPicker("local")}
@@ -387,6 +383,8 @@ function TranscriptionSection({
           service="transcription"
           url={remoteTranscriptionUrl}
           onUrlChange={setRemoteTranscriptionUrl}
+          model={remoteTranscriptionModel}
+          onModelChange={setRemoteTranscriptionModel}
         />
       )}
 
@@ -735,6 +733,8 @@ export default function SettingsPage({
     setTranscriptionMode,
     remoteTranscriptionUrl,
     setRemoteTranscriptionUrl,
+    remoteTranscriptionModel,
+    setRemoteTranscriptionModel,
     notificationsEnabled,
     setNotificationsEnabled,
     notifyMeetingDetection,
@@ -948,6 +948,28 @@ export default function SettingsPage({
       showAlert: showAlertDialog,
       registerFn: meetingRegisterFn,
     });
+
+  // Agent hotkey setters resolve to false when main-process registration fails;
+  // surface it and return the result so HotkeyListInput rolls the row back.
+  const [isAgentHotkeyCommitting, setIsAgentHotkeyCommitting] = useState(false);
+  const commitAgentHotkey = useCallback(
+    async (setter: (key: string) => Promise<boolean>, key: string) => {
+      setIsAgentHotkeyCommitting(true);
+      try {
+        const ok = await setter(key);
+        if (!ok) {
+          showAlertDialog({
+            title: t("hooks.hotkeyRegistration.titles.notRegistered"),
+            description: t("hooks.hotkeyRegistration.errors.failedToRegister"),
+          });
+        }
+        return ok;
+      } finally {
+        setIsAgentHotkeyCommitting(false);
+      }
+    },
+    [showAlertDialog, t]
+  );
 
   const validateDictationHotkey = useCallback(
     (hotkey: string) =>
@@ -3214,27 +3236,29 @@ EOF`,
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={dictationKey}
-                    onChange={async (newHotkey) => {
-                      await registerHotkey(newHotkey);
-                    }}
-                    disabled={isHotkeyRegistering}
+                    onChange={(list) => registerHotkey(list)}
                     validate={validateDictationHotkey}
+                    disabled={isHotkeyRegistering}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
+                    required
+                    footerEnd={
+                      effectiveDefaultHotkey &&
+                      dictationKey &&
+                      dictationKey !== effectiveDefaultHotkey ? (
+                        <button
+                          onClick={() => registerHotkey(effectiveDefaultHotkey)}
+                          disabled={isHotkeyRegistering}
+                          className="text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
+                        >
+                          {t("settingsPage.general.hotkey.resetToDefault", {
+                            hotkey: formatHotkeyLabel(effectiveDefaultHotkey),
+                          })}
+                        </button>
+                      ) : null
+                    }
                   />
-                  {effectiveDefaultHotkey &&
-                    dictationKey &&
-                    dictationKey !== effectiveDefaultHotkey && (
-                      <button
-                        onClick={() => registerHotkey(effectiveDefaultHotkey)}
-                        disabled={isHotkeyRegistering}
-                        className="mt-2 text-xs text-muted-foreground/70 hover:text-foreground transition-colors disabled:opacity-50"
-                      >
-                        {t("settingsPage.general.hotkey.resetToDefault", {
-                          hotkey: formatHotkeyLabel(effectiveDefaultHotkey),
-                        })}
-                      </button>
-                    )}
                 </SettingsPanelRow>
 
                 {(!isUsingNativeShortcut || getCachedPlatform() === "linux") && (
@@ -3261,11 +3285,13 @@ EOF`,
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={voiceAgentKey}
-                    onChange={setVoiceAgentKey}
-                    onClear={() => setVoiceAgentKey("")}
+                    onChange={(list) => commitAgentHotkey(setVoiceAgentKey, list)}
+                    onClear={() => commitAgentHotkey(setVoiceAgentKey, "")}
                     validate={validateVoiceAgentHotkey}
+                    disabled={isAgentHotkeyCommitting}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -3279,17 +3305,16 @@ EOF`,
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={meetingKey}
-                    onChange={async (newHotkey) => {
-                      await registerMeetingHotkey(newHotkey);
-                    }}
+                    onChange={(list) => registerMeetingHotkey(list)}
                     onClear={async () => {
                       await window.electronAPI?.registerMeetingHotkey?.("");
                       setMeetingKey("");
                     }}
-                    disabled={isMeetingHotkeyRegistering}
                     validate={validateMeetingHotkey}
+                    disabled={isMeetingHotkeyRegistering}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
                 <SettingsPanelRow className="flex items-center justify-between gap-3 border-t border-border/40 dark:border-white/5">
@@ -3332,11 +3357,13 @@ EOF`,
               />
               <SettingsPanel>
                 <SettingsPanelRow>
-                  <HotkeyInput
+                  <HotkeyListInput
                     value={chatAgentKey}
-                    onChange={setChatAgentKey}
-                    onClear={() => setChatAgentKey("")}
+                    onChange={(list) => commitAgentHotkey(setChatAgentKey, list)}
+                    onClear={() => commitAgentHotkey(setChatAgentKey, "")}
                     validate={validateChatAgentHotkey}
+                    disabled={isAgentHotkeyCommitting}
+                    maxHotkeys={isUsingNativeShortcut ? 1 : undefined}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>
@@ -3372,7 +3399,7 @@ EOF`,
                             setCloudBackupEnabled(v);
                             if (v) {
                               startMigration().catch(console.error);
-                              syncService.syncAll().catch(console.error);
+                              syncService.requestSyncAll("manual");
                             }
                           }}
                         />
@@ -3963,6 +3990,8 @@ EOF`,
                   setTranscriptionMode={setTranscriptionMode}
                   remoteTranscriptionUrl={remoteTranscriptionUrl}
                   setRemoteTranscriptionUrl={setRemoteTranscriptionUrl}
+                  remoteTranscriptionModel={remoteTranscriptionModel}
+                  setRemoteTranscriptionModel={setRemoteTranscriptionModel}
                   showTranscriptionPreview={showTranscriptionPreview}
                   setShowTranscriptionPreview={setShowTranscriptionPreview}
                   toast={toast}

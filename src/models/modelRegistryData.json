@@ -223,12 +223,13 @@
       "id": "tinfoil",
       "name": "Tinfoil",
       "baseUrl": "https://inference.tinfoil.sh/v1",
+      "batchModel": "voxtral-small-24b",
       "models": [
         {
           "id": "voxtral-mini-4b-realtime",
-          "name": "Voxtral Mini Realtime",
-          "description": "Verifiably private streaming transcription",
-          "descriptionKey": "models.descriptions.transcription.tinfoil_voxtral_mini_realtime",
+          "name": "Voxtral",
+          "description": "Verifiably private transcription",
+          "descriptionKey": "models.descriptions.transcription.tinfoil_voxtral",
           "streaming": true
         }
       ]
@@ -239,6 +240,30 @@
       "id": "openai",
       "name": "OpenAI",
       "models": [
+        {
+          "id": "gpt-5.6-sol",
+          "name": "GPT-5.6 Sol",
+          "description": "Flagship GPT-5.6 for complex coding, research, and agentic work, 1M context",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_sol",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "name": "GPT-5.6 Terra",
+          "description": "Balanced capability, speed, and cost for everyday work",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_terra",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
+        {
+          "id": "gpt-5.6-luna",
+          "name": "GPT-5.6 Luna",
+          "description": "Fastest and lowest-cost model in the GPT-5.6 family",
+          "descriptionKey": "models.descriptions.cloud.openai_gpt_5_6_luna",
+          "tokenParam": "max_completion_tokens",
+          "supportsTemperature": false
+        },
         {
           "id": "gpt-5.5",
           "name": "GPT-5.5",
@@ -302,6 +327,18 @@
       "name": "Anthropic",
       "models": [
         {
+          "id": "claude-fable-5",
+          "name": "Claude Fable 5",
+          "description": "Anthropic's most capable model, Mythos-class, 1M context",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5"
+        },
+        {
+          "id": "claude-sonnet-5",
+          "name": "Claude Sonnet 5",
+          "description": "Fast, capable agentic model at lower cost",
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5"
+        },
+        {
           "id": "claude-sonnet-4-6",
           "name": "Claude Sonnet 4.6",
           "description": "Balanced performance",
@@ -316,7 +353,7 @@
         {
           "id": "claude-opus-4-8",
           "name": "Claude Opus 4.8",
-          "description": "Most capable Claude model, 1M context",
+          "description": "Powerful Opus model tuned for honesty and reliability, 1M context",
           "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8"
         },
         {
@@ -451,6 +488,86 @@
           "descriptionKey": "models.descriptions.cloud.groq_kimi_k2_0905"
         }
       ]
+    },
+    {
+      "id": "tinfoil",
+      "name": "Tinfoil",
+      "models": [
+        {
+          "id": "kimi-k2-6",
+          "name": "Kimi K2.6",
+          "description": "Private long-horizon coding and multimodal model, 256K context",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "descriptionKey": "models.descriptions.cloud.tinfoil_kimi_k2_6",
+          "supportsThinking": true
+        },
+        {
+          "id": "glm-5-2",
+          "name": "GLM-5.2",
+          "description": "Private agentic engineering model in secure enclaves, 384K context",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "descriptionKey": "models.descriptions.cloud.tinfoil_glm_5_2",
+          "supportsThinking": true
+        },
+        {
+          "id": "gpt-oss-120b",
+          "name": "GPT-OSS 120B",
+          "description": "Private open-weight reasoning model with tool use, 131K context",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "descriptionKey": "models.descriptions.cloud.tinfoil_gpt_oss_120b",
+          "supportsThinking": true
+        },
+        {
+          "id": "gemma4-31b",
+          "name": "Gemma 4 31B",
+          "description": "Private multilingual reasoning model with tool calling, 256K context",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true,
+          "descriptionKey": "models.descriptions.cloud.tinfoil_gemma4_31b",
+          "supportsThinking": true
+        }
+      ]
+    },
+    {
+      "id": "corti",
+      "name": "Corti",
+      "models": [
+        {
+          "id": "corti-s1-instant",
+          "name": "Corti S1 Instant",
+          "description": "Fast healthcare model, no reasoning trace",
+          "descriptionKey": "models.descriptions.cloud.corti_corti_s1_instant",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true
+        },
+        {
+          "id": "corti-s1",
+          "name": "Corti S1",
+          "description": "Most capable clinical model with reasoning",
+          "descriptionKey": "models.descriptions.cloud.corti_corti_s1",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true
+        },
+        {
+          "id": "corti-s1-mini-instant",
+          "name": "Corti S1 Mini Instant",
+          "description": "Compact healthcare model, fastest and lowest cost",
+          "descriptionKey": "models.descriptions.cloud.corti_corti_s1_mini_instant",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true
+        },
+        {
+          "id": "corti-s1-mini",
+          "name": "Corti S1 Mini",
+          "description": "Compact clinical model with reasoning at half the price",
+          "descriptionKey": "models.descriptions.cloud.corti_corti_s1_mini",
+          "tokenParam": "max_tokens",
+          "supportsTemperature": true
+        }
+      ]
     }
   ],
   "enterpriseProviders": [
@@ -460,28 +577,46 @@
       "allowCustomModelId": true,
       "models": [
         {
+          "id": "us.anthropic.claude-fable-5",
+          "name": "Claude Fable 5",
+          "description": "Most capable Claude model, Mythos-class. Best for the hardest Agent Mode tasks.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_fable_5"
+        },
+        {
           "id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
           "name": "Claude Haiku 4.5",
           "description": "Fast and cheap. Great default for text cleanup.",
           "descriptionKey": "models.descriptions.enterprise.bedrock_claude_haiku_4_5"
         },
         {
-          "id": "us.anthropic.claude-sonnet-4-6",
-          "name": "Claude Sonnet 4.6",
+          "id": "us.anthropic.claude-sonnet-5",
+          "name": "Claude Sonnet 5",
           "description": "Balanced workhorse. Best default for Agent Mode.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_4_6"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_5"
         },
         {
-          "id": "us.anthropic.claude-opus-4-7",
-          "name": "Claude Opus 4.7",
+          "id": "us.anthropic.claude-opus-4-8",
+          "name": "Claude Opus 4.8",
           "description": "Max intelligence. Best for complex Agent Mode tasks.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_opus_4_7"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_opus_4_8"
         },
         {
-          "id": "us.amazon.nova-lite-v1:0",
-          "name": "Amazon Nova Lite",
-          "description": "Cheapest option. AWS-native, ideal for high volume.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_nova_lite"
+          "id": "openai.gpt-oss-120b-1:0",
+          "name": "GPT-OSS 120B",
+          "description": "Open-weight OpenAI model. Strong reasoning at low cost.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_gpt_oss_120b"
+        },
+        {
+          "id": "deepseek.v3.2",
+          "name": "DeepSeek V3.2",
+          "description": "Open-weight frontier model. Great value for Agent Mode.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_deepseek_v3_2"
+        },
+        {
+          "id": "qwen.qwen3-next-80b-a3b",
+          "name": "Qwen3 Next 80B",
+          "description": "Sparse open-weight model. Fast and multilingual.",
+          "descriptionKey": "models.descriptions.enterprise.bedrock_qwen3_next_80b"
         }
       ]
     },

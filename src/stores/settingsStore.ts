@@ -8,6 +8,7 @@ import whisperVadConstants from "../constants/whisperVad.json";
 import type { LocalTranscriptionProvider, InferenceMode, SelfHostedType } from "../types/electron";
 import type { GoogleCalendarAccount } from "../types/calendar";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
+import { deriveReasoningMode, buildReasoningScopePatches } from "../helpers/reasoningRouting";
 import {
   INFERENCE_SCOPES,
   type InferenceScope,
@@ -437,6 +438,7 @@ export interface SettingsState
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
+  remoteTranscriptionModel: string;
   cleanupMode: InferenceMode;
   cleanupRemoteUrl: string;
 
@@ -497,6 +499,7 @@ export interface SettingsState
   setTranscriptionMode: (mode: InferenceMode) => void;
   setRemoteTranscriptionType: (type: SelfHostedType) => void;
   setRemoteTranscriptionUrl: (url: string) => void;
+  setRemoteTranscriptionModel: (model: string) => void;
   setCleanupMode: (mode: InferenceMode) => void;
   setCleanupRemoteUrl: (url: string) => void;
 
@@ -567,8 +570,10 @@ export interface SettingsState
   setGroqApiKey: (key: string) => void;
   setXaiApiKey: (key: string) => void;
   setMistralApiKey: (key: string) => void;
+  setOpenrouterApiKey: (key: string) => void;
   setCortiClientId: (key: string) => void;
   setCortiClientSecret: (key: string) => void;
+  setCortiApiKey: (key: string) => void;
   setTinfoilApiKey: (key: string) => void;
   setCustomTranscriptionApiKey: (key: string) => void;
   setCleanupCustomApiKey: (key: string) => void;
@@ -611,7 +616,7 @@ export interface SettingsState
 
   setDictationKey: (key: string) => void;
   setMeetingKey: (key: string) => void;
-  setVoiceAgentKey: (key: string) => void;
+  setVoiceAgentKey: (key: string) => Promise<boolean>;
   setMeetingHotkeyLayoutMode: (mode: "side-panel" | "full-width") => void;
   setOnboardingUseCases: (useCases: string[]) => void;
   setOnboardingUseCaseNote: (note: string) => void;
@@ -657,7 +662,7 @@ export interface SettingsState
 
   setChatAgentModel: (value: string) => void;
   setChatAgentProvider: (value: string) => void;
-  setChatAgentKey: (key: string) => void;
+  setChatAgentKey: (key: string) => Promise<boolean>;
   setChatAgentCloudMode: (value: string) => void;
   setChatAgentMode: (mode: InferenceMode) => void;
   setChatAgentCloudBaseUrl: (value: string) => void;
@@ -667,6 +672,7 @@ export interface SettingsState
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
   setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => void;
   updateCleanupSettings: (settings: Partial<CleanupSettings>) => void;
+  setCloudReasoningForAllScopes: (settings: Partial<CleanupSettings>) => void;
   updateApiKeys: (keys: Partial<ApiKeySettings>) => void;
   updateChatAgentSettings: (settings: Partial<ChatAgentSettings>) => void;
 }
@@ -678,6 +684,11 @@ function createStringSetter(key: string) {
   };
 }
 
+/** Writes a string setting whose key is computed rather than known up front. */
+export function setStringSetting(key: keyof SettingsState, value: string): void {
+  createStringSetter(key)(value);
+}
+
 function createBooleanSetter(key: string) {
   return (value: boolean) => {
     if (isBrowser) localStorage.setItem(key, String(value));
@@ -687,18 +698,18 @@ function createBooleanSetter(key: string) {
 
 // Setter for hotkeys that must be registered with the main process before
 // being persisted. Rolls back to the previous key if registration fails.
+// Resolves to false on failure so optimistic UIs (HotkeyListInput) can revert.
 function createRegisteredHotkeySetter(
   key: "chatAgentKey" | "voiceAgentKey",
   label: string,
   getRegisterFn: () =>
-    | ((hotkey: string) => Promise<{ success: boolean; message: string }>)
-    | undefined,
+    ((hotkey: string) => Promise<{ success: boolean; message: string }>) | undefined,
   fallbackSave?: (hotkey: string) => void
 ) {
-  return (hotkey: string) => {
+  return async (hotkey: string): Promise<boolean> => {
     if (!isBrowser) {
       useSettingsStore.setState({ [key]: hotkey });
-      return;
+      return true;
     }
 
     const registerFn = getRegisterFn();
@@ -706,34 +717,31 @@ function createRegisteredHotkeySetter(
       localStorage.setItem(key, hotkey);
       useSettingsStore.setState({ [key]: hotkey });
       fallbackSave?.(hotkey);
-      return;
+      return true;
     }
 
     const previousKey = useSettingsStore.getState()[key];
 
-    void registerFn(hotkey)
-      .then((result) => {
-        if (!result?.success) {
-          localStorage.setItem(key, previousKey);
-          useSettingsStore.setState({ [key]: previousKey });
-          logger.warn(
-            `Failed to update ${label}`,
-            { hotkey, message: result?.message },
-            "settings"
-          );
-          return;
-        }
+    try {
+      const result = await registerFn(hotkey);
+      if (!result?.success) {
+        localStorage.setItem(key, previousKey);
+        useSettingsStore.setState({ [key]: previousKey });
+        logger.warn(`Failed to update ${label}`, { hotkey, message: result?.message }, "settings");
+        return false;
+      }
 
-        localStorage.setItem(key, hotkey);
-        useSettingsStore.setState({ [key]: hotkey });
-      })
-      .catch((error) => {
-        logger.warn(
-          `Failed to update ${label}`,
-          { hotkey, error: error instanceof Error ? error.message : String(error) },
-          "settings"
-        );
-      });
+      localStorage.setItem(key, hotkey);
+      useSettingsStore.setState({ [key]: hotkey });
+      return true;
+    } catch (error) {
+      logger.warn(
+        `Failed to update ${label}`,
+        { hotkey, error: error instanceof Error ? error.message : String(error) },
+        "settings"
+      );
+      return false;
+    }
   };
 }
 
@@ -759,8 +767,10 @@ const SECRET_IPC_SAVERS = {
   groq: "saveGroqKey",
   xai: "saveXaiKey",
   mistral: "saveMistralKey",
+  openrouter: "saveOpenrouterKey",
   cortiClientId: "saveCortiClientId",
   cortiClientSecret: "saveCortiClientSecret",
+  cortiApiKey: "saveCortiKey",
   tinfoil: "saveTinfoilKey",
   customTranscription: "saveCustomTranscriptionKey",
   cleanupCustom: "saveCleanupCustomKey",
@@ -781,8 +791,7 @@ function debouncedSaveSecret(provider: SecretProvider, key: string) {
   secretSaveTimers[provider] = setTimeout(() => {
     const api = window.electronAPI;
     const save = api?.[SECRET_IPC_SAVERS[provider]] as
-      | ((k: string) => Promise<unknown>)
-      | undefined;
+      ((k: string) => Promise<unknown>) | undefined;
     save?.(key)?.catch((err) => {
       logger.warn(
         "Failed to persist secret",
@@ -800,8 +809,10 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "groqApiKey",
   "xaiApiKey",
   "mistralApiKey",
+  "openrouterApiKey",
   "cortiClientId",
   "cortiClientSecret",
+  "cortiApiKey",
   "tinfoilApiKey",
   "customTranscriptionApiKey",
   "customReasoningApiKey",
@@ -814,7 +825,16 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
 ] as const;
 
 function invalidateApiKeyCaches(
-  provider?: "openai" | "anthropic" | "gemini" | "groq" | "mistral" | "tinfoil" | "custom"
+  provider?:
+    | "openai"
+    | "anthropic"
+    | "gemini"
+    | "groq"
+    | "mistral"
+    | "tinfoil"
+    | "custom"
+    | "openrouter"
+    | "corti"
 ) {
   if (provider) {
     if (_ReasoningService) {
@@ -830,6 +850,21 @@ function invalidateApiKeyCaches(
   }
   if (isBrowser) window.dispatchEvent(new Event("api-key-changed"));
   debouncedPersistToEnv();
+}
+
+// Uniform BYOK key setter: persist to the secure store (debounced) and clear
+// the provider's cached key. cacheProvider is omitted where there is no scoped
+// cache to clear (xai), preserving prior behavior.
+function createSecretSetter(
+  storeKey: string,
+  saver: SecretProvider,
+  cacheProvider?: Parameters<typeof invalidateApiKeyCaches>[0]
+) {
+  return (key: string) => {
+    useSettingsStore.setState({ [storeKey]: key });
+    debouncedSaveSecret(saver, key);
+    invalidateApiKeyCaches(cacheProvider);
+  };
 }
 
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
@@ -881,8 +916,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   groqApiKey: "",
   xaiApiKey: "",
   mistralApiKey: "",
+  openrouterApiKey: "",
   cortiClientId: "",
   cortiClientSecret: "",
+  cortiApiKey: "",
   tinfoilApiKey: "",
   customTranscriptionApiKey: "",
   cleanupCustomApiKey: "",
@@ -904,6 +941,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   vertexApiKey: "",
 
   dictationKey: readString("dictationKey", ""),
+  activeDictationKey: null,
   meetingKey: readString("meetingKey", ""),
   voiceAgentKey: readString("voiceAgentKey", ""),
   onboardingUseCases: readStringArray("onboardingUseCases", []),
@@ -912,8 +950,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
   activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
-    | "tap"
-    | "push",
+    "tap" | "push",
 
   preferBuiltInMic: readBoolean("preferBuiltInMic", true),
   selectedMicDeviceId: readString("selectedMicDeviceId", ""),
@@ -1002,6 +1039,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return v === "openai-compatible" ? "openai-compatible" : ("lan" as SelfHostedType);
   })(),
   remoteTranscriptionUrl: readString("remoteTranscriptionUrl", ""),
+  remoteTranscriptionModel: readString("remoteTranscriptionModel", ""),
   cleanupMode: (() => {
     const v = readString("cleanupMode", "openwhispr");
     if (
@@ -1079,6 +1117,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     type: SelfHostedType
   ) => void,
   setRemoteTranscriptionUrl: createStringSetter("remoteTranscriptionUrl"),
+  setRemoteTranscriptionModel: createStringSetter("remoteTranscriptionModel"),
   setCleanupMode: createStringSetter("cleanupMode") as (mode: InferenceMode) => void,
   setCleanupRemoteUrl: createStringSetter("cleanupRemoteUrl"),
 
@@ -1282,53 +1321,27 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
   },
 
-  setOpenaiApiKey: (key: string) => {
-    set({ openaiApiKey: key });
-    debouncedSaveSecret("openai", key);
-    invalidateApiKeyCaches("openai");
-  },
-  setAnthropicApiKey: (key: string) => {
-    set({ anthropicApiKey: key });
-    debouncedSaveSecret("anthropic", key);
-    invalidateApiKeyCaches("anthropic");
-  },
-  setGeminiApiKey: (key: string) => {
-    set({ geminiApiKey: key });
-    debouncedSaveSecret("gemini", key);
-    invalidateApiKeyCaches("gemini");
-  },
-  setGroqApiKey: (key: string) => {
-    set({ groqApiKey: key });
-    debouncedSaveSecret("groq", key);
-    invalidateApiKeyCaches("groq");
-  },
-  setXaiApiKey: (key: string) => {
-    set({ xaiApiKey: key });
-    debouncedSaveSecret("xai", key);
-    invalidateApiKeyCaches();
-  },
-  setMistralApiKey: (key: string) => {
-    set({ mistralApiKey: key });
-    debouncedSaveSecret("mistral", key);
-    invalidateApiKeyCaches("mistral");
-  },
+  setOpenaiApiKey: createSecretSetter("openaiApiKey", "openai", "openai"),
+  setAnthropicApiKey: createSecretSetter("anthropicApiKey", "anthropic", "anthropic"),
+  setGeminiApiKey: createSecretSetter("geminiApiKey", "gemini", "gemini"),
+  setGroqApiKey: createSecretSetter("groqApiKey", "groq", "groq"),
+  setXaiApiKey: createSecretSetter("xaiApiKey", "xai"),
+  setMistralApiKey: createSecretSetter("mistralApiKey", "mistral", "mistral"),
+  setOpenrouterApiKey: createSecretSetter("openrouterApiKey", "openrouter", "openrouter"),
   setCortiClientId: (key: string) => {
     set({ cortiClientId: key });
     debouncedSaveSecret("cortiClientId", key);
-    invalidateApiKeyCaches();
+    invalidateApiKeyCaches("corti");
   },
   setCortiClientSecret: (key: string) => {
     set({ cortiClientSecret: key });
     debouncedSaveSecret("cortiClientSecret", key);
-    invalidateApiKeyCaches();
+    invalidateApiKeyCaches("corti");
   },
+  setCortiApiKey: createSecretSetter("cortiApiKey", "cortiApiKey", "corti"),
   setCortiEnvironment: createStringSetter("cortiEnvironment"),
   setCortiTenant: createStringSetter("cortiTenant"),
-  setTinfoilApiKey: (key: string) => {
-    set({ tinfoilApiKey: key });
-    debouncedSaveSecret("tinfoil", key);
-    invalidateApiKeyCaches("tinfoil");
-  },
+  setTinfoilApiKey: createSecretSetter("tinfoilApiKey", "tinfoil", "tinfoil"),
   setCustomTranscriptionApiKey: (key: string) => {
     set({ customTranscriptionApiKey: key });
     debouncedSaveSecret("customTranscription", key);
@@ -1707,6 +1720,41 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (settings.cleanupCloudMode !== undefined) s.setCleanupCloudMode(settings.cleanupCloudMode);
   },
 
+  // Apply a cleanup config to dictation, then mirror its cloud routing to the
+  // other three LLM scopes — used when onboarding routes every reasoning scope to
+  // one provider so PHI never reaches a second LLM (e.g. Corti for medical providers).
+  setCloudReasoningForAllScopes: (settings: Partial<CleanupSettings>) => {
+    const s = useSettingsStore.getState();
+    // Derive the mode from the incoming patch (falling back to current state) so
+    // the helper patches are the single source of truth for every scope's mode.
+    const mode = deriveReasoningMode(
+      settings.cleanupCloudMode ?? s.cleanupCloudMode,
+      settings.cleanupProvider ?? s.cleanupProvider
+    );
+    const { dictationCleanup, noteFormatting, dictationAgent, chatIntelligence } =
+      buildReasoningScopePatches(settings, mode);
+    s.updateCleanupSettings(dictationCleanup);
+    s.setCleanupMode(dictationCleanup.cleanupMode);
+    // Each Settings tab selects on its own mode field, so set the mode for every
+    // scope even when the routing fields are absent — otherwise the tab keeps
+    // showing the previous provider despite the new cloud routing.
+    if (noteFormatting.provider !== undefined) s.setNoteFormattingProvider(noteFormatting.provider);
+    if (noteFormatting.model !== undefined) s.setNoteFormattingModel(noteFormatting.model);
+    if (noteFormatting.cloudMode !== undefined)
+      s.setNoteFormattingCloudMode(noteFormatting.cloudMode);
+    s.setNoteFormattingMode(mode);
+    if (dictationAgent.provider !== undefined) s.setDictationAgentProvider(dictationAgent.provider);
+    if (dictationAgent.model !== undefined) s.setDictationAgentModel(dictationAgent.model);
+    if (dictationAgent.cloudMode !== undefined)
+      s.setDictationAgentCloudMode(dictationAgent.cloudMode);
+    s.setDictationAgentMode(mode);
+    if (chatIntelligence.provider !== undefined) s.setChatAgentProvider(chatIntelligence.provider);
+    if (chatIntelligence.model !== undefined) s.setChatAgentModel(chatIntelligence.model);
+    if (chatIntelligence.cloudMode !== undefined)
+      s.setChatAgentCloudMode(chatIntelligence.cloudMode);
+    s.setChatAgentMode(mode);
+  },
+
   updateApiKeys: (keys: Partial<ApiKeySettings>) => {
     const s = useSettingsStore.getState();
     if (keys.openaiApiKey !== undefined) s.setOpenaiApiKey(keys.openaiApiKey);
@@ -1715,8 +1763,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (keys.groqApiKey !== undefined) s.setGroqApiKey(keys.groqApiKey);
     if (keys.xaiApiKey !== undefined) s.setXaiApiKey(keys.xaiApiKey);
     if (keys.mistralApiKey !== undefined) s.setMistralApiKey(keys.mistralApiKey);
+    if (keys.openrouterApiKey !== undefined) s.setOpenrouterApiKey(keys.openrouterApiKey);
     if (keys.cortiClientId !== undefined) s.setCortiClientId(keys.cortiClientId);
     if (keys.cortiClientSecret !== undefined) s.setCortiClientSecret(keys.cortiClientSecret);
+    if (keys.cortiApiKey !== undefined) s.setCortiApiKey(keys.cortiApiKey);
     if (keys.tinfoilApiKey !== undefined) s.setTinfoilApiKey(keys.tinfoilApiKey);
     if (keys.customTranscriptionApiKey !== undefined)
       s.setCustomTranscriptionApiKey(keys.customTranscriptionApiKey);
@@ -1964,8 +2014,10 @@ export async function initializeSettings(): Promise<void> {
         groq,
         xai,
         mistral,
+        openrouter,
         cortiClientId,
         cortiClientSecret,
+        cortiApiKey,
         tinfoil,
         customTx,
         customRx,
@@ -1981,8 +2033,10 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getGroqKey?.(),
         window.electronAPI.getXaiKey?.(),
         window.electronAPI.getMistralKey?.(),
+        window.electronAPI.getOpenrouterKey?.(),
         window.electronAPI.getCortiClientId?.(),
         window.electronAPI.getCortiClientSecret?.(),
+        window.electronAPI.getCortiKey?.(),
         window.electronAPI.getTinfoilKey?.(),
         window.electronAPI.getCustomTranscriptionKey?.(),
         window.electronAPI.getCleanupCustomKey?.(),
@@ -2000,8 +2054,10 @@ export async function initializeSettings(): Promise<void> {
         groqApiKey: groq || "",
         xaiApiKey: xai || "",
         mistralApiKey: mistral || "",
+        openrouterApiKey: openrouter || "",
         cortiClientId: cortiClientId || "",
         cortiClientSecret: cortiClientSecret || "",
+        cortiApiKey: cortiApiKey || "",
         tinfoilApiKey: tinfoil || "",
         customTranscriptionApiKey: customTx || "",
         cleanupCustomApiKey: customRx || "",
@@ -2014,6 +2070,21 @@ export async function initializeSettings(): Promise<void> {
 
       for (const key of STALE_SECRET_LOCALSTORAGE_KEYS) {
         localStorage.removeItem(key);
+      }
+
+      // Users who configured OpenRouter through the Custom tab keep their key
+      // in the shared custom slot — seed the dedicated slot from it once.
+      if (!openrouter && customRx) {
+        const hydrated = useSettingsStore.getState();
+        const usesOpenRouterViaCustom = (Object.keys(INFERENCE_SCOPES) as InferenceScope[]).some(
+          (scope) => {
+            const cfg = selectResolvedLLMConfig(hydrated, scope);
+            return cfg.provider === "custom" && (cfg.cloudBaseUrl || "").includes("openrouter.ai");
+          }
+        );
+        if (usesOpenRouterViaCustom) {
+          hydrated.setOpenrouterApiKey(customRx);
+        }
       }
     } catch (err) {
       logger.warn(
@@ -2041,12 +2112,13 @@ export async function initializeSettings(): Promise<void> {
       );
     }
 
-    // Show the active hotkey in UI (zustand only, not localStorage).
+    // Track what is actually registered, separately from the editable
+    // dictationKey preference so partial registrations never get persisted.
     // May return constructor default during early startup; corrected by dictation-key-active event later.
     try {
       const activeKey = await window.electronAPI?.getActiveDictationKey?.();
       if (activeKey) {
-        useSettingsStore.setState({ dictationKey: activeKey });
+        useSettingsStore.setState({ activeDictationKey: activeKey });
       }
     } catch (err) {
       logger.warn(
@@ -2299,9 +2371,9 @@ export async function initializeSettings(): Promise<void> {
     }
   });
 
-  // Active hotkey updates from backend — zustand only, not localStorage.
+  // Active hotkey updates from backend — display state, never persisted.
   window.electronAPI?.onDictationKeyActive?.((key: string) => {
-    useSettingsStore.setState({ dictationKey: key });
+    useSettingsStore.setState({ activeDictationKey: key });
   });
 
   // Sync settings pushed from main process (e.g., hotkey changed in control panel)

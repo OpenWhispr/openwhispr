@@ -23,8 +23,13 @@ import {
   isCloudCleanupMode,
   isCloudDictationAgentMode,
 } from "../stores/settingsStore";
-import { getTranscriptionProvider } from "../models/ModelRegistry";
+import { getBatchTranscriptionModel, getTranscriptionProvider } from "../models/ModelRegistry";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
+import {
+  isSelfHostedTranscription,
+  resolveSelfHostedTranscriptionModel,
+} from "./selfHostedTranscription";
+import { resolveStreamingFallbackTarget } from "./transcriptionFallback";
 import { detectAgentName } from "../config/agentDetection";
 import { resolveDictationRouteKind, resolveDictationAgentReachability } from "./dictationRouting";
 import { resolvePrompt } from "../config/prompts";
@@ -173,13 +178,13 @@ const STREAMING_PROVIDERS = {
       window.electronAPI.dictationRealtimeWarmup({
         ...opts,
         provider: "tinfoil-realtime",
-        preview: getSettings().showTranscriptionPreview,
+        preview: true,
       }),
     start: (opts) =>
       window.electronAPI.dictationRealtimeStart({
         ...opts,
         provider: "tinfoil-realtime",
-        preview: getSettings().showTranscriptionPreview,
+        preview: true,
       }),
     send: (buf) => window.electronAPI.dictationRealtimeSend(buf),
     stop: () => window.electronAPI.dictationRealtimeStop(),
@@ -486,6 +491,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       try {
         this._silenceCtx = new AudioContext();
+        if (this._silenceCtx.state === "suspended") {
+          // Not awaited — resume() can hang when the output device is wedged.
+          this._silenceCtx.resume().catch(() => {});
+        }
         this._silenceAnalyser = this._silenceCtx.createAnalyser();
         this._silenceAnalyser.fftSize = 2048;
         const sourceNode = this._silenceCtx.createMediaStreamSource(micStream);
@@ -493,6 +502,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._localSpeechGateState = createLocalSpeechGateState();
         const dataArray = new Uint8Array(this._silenceAnalyser.fftSize);
         this._silenceInterval = setInterval(() => {
+          // A stalled context reads flat silence; recording no windows fails the gate open.
+          if (this._silenceCtx?.state !== "running") return;
           this._silenceAnalyser.getByteTimeDomainData(dataArray);
           let sum = 0;
           let peak = 0;
@@ -524,13 +535,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       };
 
       this.mediaRecorder.onstop = async () => {
-        if (this._silenceInterval) {
-          clearInterval(this._silenceInterval);
-          this._silenceInterval = null;
-        }
-        this._silenceCtx?.close().catch(() => {});
-        this._silenceCtx = null;
-        this._silenceAnalyser = null;
+        this.teardownSpeechGate();
 
         this.cleanupPreview({ showCleanup: this.shouldShowPreviewCleanupState() });
 
@@ -660,9 +665,22 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return false;
   }
 
+  teardownSpeechGate() {
+    if (this._silenceInterval) {
+      clearInterval(this._silenceInterval);
+      this._silenceInterval = null;
+    }
+    this._silenceCtx?.close().catch(() => {});
+    this._silenceCtx = null;
+    this._silenceAnalyser = null;
+  }
+
   cancelRecording() {
     if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
       this.mediaRecorder.onstop = () => {
+        this.teardownSpeechGate();
+        this._localSpeechGateState = null;
+
         const durationSeconds = this.recordingStartTime
           ? (Date.now() - this.recordingStartTime) / 1000
           : null;
@@ -1615,6 +1633,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(processedText, {
               agentName,
+              promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(settings),
               customPrompt: this.getCustomPrompt(),
               language: settings.preferredLanguage || "auto",
@@ -1677,6 +1696,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         wordsUsed: result.wordsUsed,
         wordsRemaining: result.wordsRemaining,
         clientTranscriptionId: result.clientTranscriptionId,
+        ...(result.warning ? { warning: result.warning } : {}),
       },
       warnings
     );
@@ -1721,6 +1741,41 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       const apiKey = await this.getAPIKey();
       const optimizedAudio = audioBlob;
+
+      // Dispatch before endpoint resolution (which defaults to OpenAI and would leak
+      // the key). Self-hosted wins, so a leftover "tinfoil" provider isn't diverted here.
+      if (provider === "tinfoil" && !isSelfHostedTranscription(apiSettings)) {
+        if (!window.electronAPI?.proxyTinfoilTranscription) {
+          throw new Error("Tinfoil transcription is unavailable in this window");
+        }
+        const dictionaryPrompt = this.getCustomDictionaryPrompt();
+        const apiCallStart = performance.now();
+        const result = await window.electronAPI.proxyTinfoilTranscription({
+          audioBuffer: await optimizedAudio.arrayBuffer(),
+          language,
+          prompt: dictionaryPrompt || undefined,
+        });
+        if (result?.error) {
+          const err = new Error(result.error);
+          if (result.code) err.code = result.code;
+          if (result.messageKey) err.messageKey = result.messageKey;
+          throw err;
+        }
+        const proxyText = result?.text;
+        if (!proxyText?.trim()) {
+          throw new Error("No text transcribed - Tinfoil response was empty");
+        }
+        if (this.isDictionaryEcho(proxyText)) {
+          throw new Error("No audio detected");
+        }
+        timings.transcriptionProcessingDurationMs = Math.round(performance.now() - apiCallStart);
+        const reasoningStart = performance.now();
+        const text = await this.processTranscription(proxyText, "tinfoil");
+        timings.reasoningProcessingDurationMs = Math.round(performance.now() - reasoningStart);
+
+        const source = (await this.isReasoningAvailable()) ? "tinfoil-reasoned" : "tinfoil";
+        return { success: true, text, rawText: proxyText, source, timings };
+      }
 
       const formData = new FormData();
       // Determine the correct file extension based on the blob type
@@ -2147,12 +2202,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   getTranscriptionModel() {
     try {
       const s = getSettings();
+      const selfHostedModel = resolveSelfHostedTranscriptionModel(s);
+      if (selfHostedModel) return selfHostedModel;
       const provider = s.cloudTranscriptionProvider || "openai";
       const trimmedModel = (s.cloudTranscriptionModel || "").trim();
 
       // For custom provider, use whatever model is set (or fallback to whisper-1)
       if (provider === "custom") {
         return trimmedModel || "whisper-1";
+      }
+
+      if (provider === "tinfoil") {
+        return getBatchTranscriptionModel("tinfoil");
       }
 
       // Validate model matches provider to handle settings migration
@@ -2191,12 +2252,19 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   getTranscriptionEndpoint(deploymentName = "") {
     const s = getSettings();
     const currentProvider = s.cloudTranscriptionProvider || "openai";
+
+    // Backstop against the OpenAI-default leak: Tinfoil goes through the main-process
+    // proxy, never here — except self-hosted, which resolves its remote URL below.
+    if (currentProvider === "tinfoil" && !isSelfHostedTranscription(s)) {
+      throw new Error("Tinfoil transcription must go through the attested main-process proxy");
+    }
+
     const currentBaseUrl = s.cloudTranscriptionBaseUrl || "";
     const transcriptionMode = s.transcriptionMode || "";
     const remoteUrl = (s.remoteTranscriptionUrl || "").trim();
     const deployment = (deploymentName || "").trim();
 
-    const isSelfHosted = transcriptionMode === "self-hosted" && remoteUrl.length > 0;
+    const isSelfHosted = isSelfHostedTranscription(s);
     const isCustomEndpoint = isSelfHosted || currentProvider === "custom";
 
     if (
@@ -2512,6 +2580,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const s = getSettings();
     if (s.useLocalWhisper) return false;
 
+    // Self-hosted transcription is batch HTTP to the user's server, never cloud realtime WS.
+    if (isSelfHostedTranscription(s)) return false;
+
     // Corti (BYOK) streams over its own WSS — independent of OpenWhispr Cloud.
     if (s.cloudTranscriptionProvider === "corti" && s.cloudTranscriptionMode === "byok") {
       return !!(s.cortiClientId && s.cortiClientSecret);
@@ -2714,7 +2785,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
 
       // 2. Set up audio pipeline so frames flow the instant WebSocket is ready.
-      //    Frames sent before WebSocket connects are silently dropped by sendAudio().
+      //    Frames sent before the connection is open are buffered (bounded) by
+      //    sendAudio(), not dropped.
       const audioContext = await this.getOrCreateAudioContext();
       this.streamingAudioContext = audioContext;
       this.streamingSource = audioContext.createMediaStreamSource(stream);
@@ -3077,6 +3149,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const reasonResult = await withSessionRefresh(async () => {
             const res = await window.electronAPI.cloudReason(finalText, {
               agentName,
+              promptMode: "cleanup",
               customDictionary: getDictionaryHintWords(stSettings),
               customPrompt: this.getCustomPrompt(),
               language: stSettings.preferredLanguage || "auto",
@@ -3142,27 +3215,40 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
     }
 
-    // If streaming produced no text, fall back to batch transcription
-    // (batch fallback records usage server-side via /api/transcribe)
+    // If streaming produced no text, fall back to batch — routed so BYOK audio
+    // and cloud audio never cross over (see resolveStreamingFallbackTarget).
     let usedBatchFallback = false;
+    let batchWarning = null;
     if (!finalText && durationSeconds > 2 && fallbackBlob?.size > 0) {
-      logger.info(
-        "Streaming produced no text, falling back to batch transcription",
-        { durationSeconds, blobSize: fallbackBlob.size },
-        "streaming"
-      );
-      try {
-        const batchResult = await this.processWithOpenWhisprCloud(fallbackBlob, {
-          durationSeconds,
-        });
-        if (batchResult?.text) {
-          finalText = batchResult.text;
-          warnings = mergeTranscriptionWarnings(warnings, batchResult.warnings);
-          usedBatchFallback = true;
-          logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
+      const target = resolveStreamingFallbackTarget(getSettings());
+      if (target === "skip") {
+        logger.warn(
+          "Skipping batch fallback: OpenWhispr Cloud session signed out",
+          {},
+          "streaming"
+        );
+      } else {
+        logger.info(
+          "Streaming produced no text, falling back to batch transcription",
+          { durationSeconds, blobSize: fallbackBlob.size, target },
+          "streaming"
+        );
+        try {
+          // Cloud records usage server-side via /api/transcribe; BYOK has no metering.
+          const batchResult =
+            target === "cloud"
+              ? await this.processWithOpenWhisprCloud(fallbackBlob, { durationSeconds })
+              : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds });
+          if (batchResult?.text) {
+            finalText = batchResult.text;
+            warnings = mergeTranscriptionWarnings(warnings, batchResult.warnings);
+            usedBatchFallback = true;
+            batchWarning = batchResult.warning || null;
+            logger.info("Batch fallback succeeded", { textLength: finalText.length }, "streaming");
+          }
+        } catch (fallbackErr) {
+          logger.error("Batch fallback failed", { error: fallbackErr.message }, "streaming");
         }
-      } catch (fallbackErr) {
-        logger.error("Batch fallback failed", { error: fallbackErr.message }, "streaming");
       }
     }
 
@@ -3183,6 +3269,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             text: finalText,
             rawText: finalText,
             source: `${this.getStreamingProviderName()}-streaming`,
+            ...(batchWarning ? { warning: batchWarning } : {}),
           },
           warnings
         )
@@ -3230,7 +3317,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         "streaming"
       );
     } else {
-      // Silence: still fire callback so media playback resumes.
+      // Silence: still fire callback to dismiss the preview and show the no-audio toast.
       this.onTranscriptionComplete?.({ success: true, text: "" });
     }
 

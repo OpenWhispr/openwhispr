@@ -1,5 +1,6 @@
 import modelDataRaw from "./modelRegistryData.json";
 import { isCloudCleanupMode, getSettings } from "../stores/settingsStore";
+import { readCachedTinfoilModels } from "./tinfoilModelCache";
 
 export interface ModelDefinition {
   id: string;
@@ -67,6 +68,8 @@ export interface TranscriptionProviderData {
   name: string;
   baseUrl: string;
   models: TranscriptionModelDefinition[];
+  /** Allows for a stream/batch split */
+  batchModel?: string;
 }
 
 export interface WhisperModelInfo {
@@ -113,6 +116,18 @@ interface ModelRegistryData {
 }
 
 const modelData: ModelRegistryData = modelDataRaw as ModelRegistryData;
+
+function getTinfoilCloudProvider(): CloudProviderData | undefined {
+  return modelData.cloudProviders.find((provider) => provider.id === "tinfoil");
+}
+
+const cachedTinfoilModels = readCachedTinfoilModels().models;
+if (cachedTinfoilModels.length > 0) {
+  const tinfoilProvider = getTinfoilCloudProvider();
+  if (tinfoilProvider) {
+    tinfoilProvider.models = cachedTinfoilModels;
+  }
+}
 
 function createPromptFormatter(template: string): (text: string, systemPrompt: string) => string {
   return (text: string, systemPrompt: string) => {
@@ -221,18 +236,22 @@ export function isEnterpriseProvider(value: unknown): value is EnterpriseProvide
   return typeof value === "string" && (ENTERPRISE_PROVIDERS as readonly string[]).includes(value);
 }
 
+export function toReasoningModel(m: CloudModelDefinition): ReasoningModel {
+  return {
+    value: m.id,
+    label: m.name,
+    description: m.description,
+    descriptionKey: m.descriptionKey,
+  };
+}
+
 function buildReasoningProviders(): ReasoningProviders {
   const providers: ReasoningProviders = {};
 
   for (const cloudProvider of modelRegistry.getCloudProviders()) {
     providers[cloudProvider.id] = {
       name: cloudProvider.name,
-      models: cloudProvider.models.map((m) => ({
-        value: m.id,
-        label: m.name,
-        description: m.description,
-        descriptionKey: m.descriptionKey,
-      })),
+      models: cloudProvider.models.map(toReasoningModel),
     };
   }
 
@@ -263,6 +282,21 @@ function buildReasoningProviders(): ReasoningProviders {
 
 export const REASONING_PROVIDERS = buildReasoningProviders();
 
+export function getTinfoilModels(): CloudModelDefinition[] {
+  return getTinfoilCloudProvider()?.models ?? [];
+}
+
+export function applyTinfoilModels(models: CloudModelDefinition[]): void {
+  const provider = getTinfoilCloudProvider();
+  if (provider) {
+    provider.models = models;
+  }
+  const reasoningProvider = REASONING_PROVIDERS.tinfoil;
+  if (reasoningProvider) {
+    reasoningProvider.models = models.map(toReasoningModel);
+  }
+}
+
 export interface ReasoningModelWithProvider extends ReasoningModel {
   provider: string;
   fullLabel: string;
@@ -283,6 +317,19 @@ export function getReasoningModelLabel(modelId: string): string {
   return model?.fullLabel || modelId;
 }
 
+const NON_REGISTRY_PROVIDER_NAMES: Record<string, string> = {
+  openrouter: "OpenRouter",
+  custom: "Custom",
+};
+
+export function getProviderDisplayName(provider: string): string {
+  return (
+    REASONING_PROVIDERS[provider as keyof typeof REASONING_PROVIDERS]?.name ??
+    NON_REGISTRY_PROVIDER_NAMES[provider] ??
+    provider
+  );
+}
+
 export function getModelProvider(modelId: string): string {
   if (isCloudCleanupMode()) {
     return "openwhispr";
@@ -294,6 +341,10 @@ export function getModelProvider(modelId: string): string {
     return "custom";
   }
 
+  if (storedProvider === "openrouter") {
+    return "openrouter";
+  }
+
   if (isEnterpriseProvider(storedProvider)) {
     return storedProvider;
   }
@@ -301,6 +352,9 @@ export function getModelProvider(modelId: string): string {
   const model = getAllReasoningModels().find((m) => m.value === modelId);
 
   if (!model) {
+    // An unknown model here is one Tinfoil retired or added since our last
+    // sync — don't let the id heuristics misroute it.
+    if (storedProvider === "tinfoil") return "tinfoil";
     if (modelId.includes("claude")) return "anthropic";
     if (modelId.includes("gemini") && !modelId.includes("gemma")) return "gemini";
     if ((modelId.includes("gpt-4") || modelId.includes("gpt-5")) && !modelId.includes("gpt-oss"))
@@ -349,6 +403,10 @@ export function getTranscriptionModels(providerId: string): TranscriptionModelDe
   return provider?.models || [];
 }
 
+export function getBatchTranscriptionModel(providerId: string): string | undefined {
+  return getTranscriptionProvider(providerId)?.batchModel;
+}
+
 export function getDefaultTranscriptionModel(providerId: string): string {
   const models = getTranscriptionModels(providerId);
   return models[0]?.id || "gpt-4o-mini-transcribe";
@@ -385,13 +443,20 @@ export interface OpenAiApiConfig {
   supportsTemperature: boolean;
 }
 
-export function getOpenAiApiConfig(modelId: string): OpenAiApiConfig {
+export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiApiConfig {
   const model = getCloudModel(modelId);
   if (model?.tokenParam) {
     return {
       tokenParam: model.tokenParam,
       supportsTemperature: model.supportsTemperature ?? true,
     };
+  }
+
+  // OpenRouter's vendor-prefixed ids (openai/gpt-4o, anthropic/claude-…) speak
+  // standard Chat Completions. Scoped to the provider so vendor-prefixed ids on
+  // custom endpoints keep the request shape they had before OpenRouter landed.
+  if (provider === "openrouter" && modelId.includes("/")) {
+    return { tokenParam: "max_tokens", supportsTemperature: true };
   }
 
   // Fallback for models not in the registry (custom model IDs, etc.)

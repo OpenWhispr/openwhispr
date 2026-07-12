@@ -25,6 +25,13 @@ process.env.NODE_ENV = "test";
 
 const DatabaseManager = require("../../src/helpers/database.js");
 
+function isNativeBindingUnavailable(error) {
+  const message = String(error?.message || error);
+  return (
+    message.includes("NODE_MODULE_VERSION") || message.includes("Could not locate the bindings file")
+  );
+}
+
 function createDb(t) {
   userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-snippets-db-"));
   try {
@@ -33,8 +40,8 @@ function createDb(t) {
     probe.close();
     fs.rmSync(path.join(userDataDir, "probe.db"), { force: true });
   } catch (error) {
-    if (String(error?.message || error).includes("NODE_MODULE_VERSION")) {
-      t.skip("better-sqlite3 native binding is not compiled for this Node runtime");
+    if (isNativeBindingUnavailable(error)) {
+      t.skip("better-sqlite3 native binding is not available for this Node runtime");
       return null;
     }
     throw error;
@@ -43,8 +50,8 @@ function createDb(t) {
   try {
     return new DatabaseManager();
   } catch (error) {
-    if (String(error?.message || error).includes("NODE_MODULE_VERSION")) {
-      t.skip("better-sqlite3 native binding is not compiled for this Node runtime");
+    if (isNativeBindingUnavailable(error)) {
+      t.skip("better-sqlite3 native binding is not available for this Node runtime");
       return null;
     }
     throw error;

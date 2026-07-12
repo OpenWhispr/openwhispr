@@ -1,10 +1,10 @@
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Loader2, Sparkles, Cloud, X, Mic, Trash2, Archive } from "lucide-react";
 import TranscriptionItem from "./ui/TranscriptionItem";
 import type { TranscriptionItem as TranscriptionItemType } from "../types/electron";
-import { formatHotkeyLabel } from "../utils/hotkeys";
+import { formatHotkeyLabel, parseHotkeyList } from "../utils/hotkeys";
 import { formatDateGroup } from "../utils/dateFormatting";
 import { cn } from "./lib/utils";
 import { useUpcomingEvents } from "../hooks/useUpcomingEvents";
@@ -283,9 +283,14 @@ export default function HistoryView({
                   </h3>
                   <div className="flex items-center gap-2 text-xs text-foreground/50 dark:text-foreground/25">
                     <span>{t("controlPanel.history.press")}</span>
-                    <kbd className="inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-1 dark:bg-white/6 border border-border/50 text-xs font-mono font-medium text-foreground/60 dark:text-foreground/40">
-                      {formatHotkeyLabel(hotkey)}
-                    </kbd>
+                    {parseHotkeyList(hotkey).map((hk, index) => (
+                      <Fragment key={hk}>
+                        {index > 0 && <span className="text-foreground/30">/</span>}
+                        <kbd className="inline-flex items-center h-5 px-1.5 rounded-sm bg-surface-1 dark:bg-white/6 border border-border/50 text-xs font-mono font-medium text-foreground/60 dark:text-foreground/40">
+                          {formatHotkeyLabel(hk)}
+                        </kbd>
+                      </Fragment>
+                    ))}
                     <span>{t("controlPanel.history.toStart")}</span>
                   </div>
                 </div>

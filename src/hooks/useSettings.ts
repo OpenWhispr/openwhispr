@@ -22,6 +22,7 @@ export interface TranscriptionSettings {
   transcriptionMode: InferenceMode;
   remoteTranscriptionType: SelfHostedType;
   remoteTranscriptionUrl: string;
+  remoteTranscriptionModel: string;
   customDictionary: string[];
   snippets: Snippet[];
   assemblyAiStreaming: boolean;
@@ -42,6 +43,9 @@ export interface CleanupSettings {
 
 export interface HotkeySettings {
   dictationKey: string;
+  /** Hotkeys actually registered by the main process (may be a subset of
+   * dictationKey, e.g. primary-only on GNOME/KDE/Hyprland). Display-only. */
+  activeDictationKey: string | null;
   meetingKey: string;
   voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
@@ -65,8 +69,10 @@ export interface ApiKeySettings {
   groqApiKey: string;
   xaiApiKey: string;
   mistralApiKey: string;
+  openrouterApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
+  cortiApiKey: string;
   tinfoilApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
@@ -225,6 +231,7 @@ function useSettingsInternal() {
     transcriptionMode: store.transcriptionMode,
     remoteTranscriptionType: store.remoteTranscriptionType,
     remoteTranscriptionUrl: store.remoteTranscriptionUrl,
+    remoteTranscriptionModel: store.remoteTranscriptionModel,
     cleanupMode: store.cleanupMode,
     cleanupRemoteUrl: store.cleanupRemoteUrl,
     customDictionary: store.customDictionary,
@@ -244,6 +251,7 @@ function useSettingsInternal() {
     groqApiKey: store.groqApiKey,
     xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
+    openrouterApiKey: store.openrouterApiKey,
     tinfoilApiKey: store.tinfoilApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
@@ -269,6 +277,7 @@ function useSettingsInternal() {
     setTranscriptionMode: store.setTranscriptionMode,
     setRemoteTranscriptionType: store.setRemoteTranscriptionType,
     setRemoteTranscriptionUrl: store.setRemoteTranscriptionUrl,
+    setRemoteTranscriptionModel: store.setRemoteTranscriptionModel,
     setCleanupMode: store.setCleanupMode,
     setCleanupRemoteUrl: store.setCleanupRemoteUrl,
     setCustomDictionary: store.setCustomDictionary,

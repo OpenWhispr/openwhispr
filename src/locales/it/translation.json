@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" è già registrata da un'altra applicazione.",
       "osReserved": "\"{{hotkey}}\" potrebbe essere riservata dal sistema operativo.",
       "registrationFailed": "Impossibile registrare \"{{hotkey}}\". Potrebbe essere in uso da un'altra applicazione.",
+      "updateFailedCheckFormat": "Impossibile aggiornare la scorciatoia a \"{{hotkey}}\". Verifica che il formato sia valido.",
       "trySuggestions": "Prova: {{suggestions}}",
       "slotConflict": "Questa scorciatoia è già utilizzata per {{slot}}."
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "Il listener nativo Push-to-Talk non è disponibile"
   },
   "common": {
+    "retry": "Riprova",
     "back": "Indietro",
     "next": "Avanti",
     "complete": "Completa",
@@ -296,6 +298,7 @@
         "createAccount": "Crea il tuo account Corti",
         "creditBadge": "50 $ di credito gratuito",
         "regionHint": "Scegli dove elaborare il tuo audio — USA o UE.",
+        "llmHint": "Anche le funzioni dei modelli linguistici verranno eseguite sui modelli Corti.",
         "useCorti": "Usa Corti",
         "skip": "Non ora",
         "step1": "Registrati su corti.ai",
@@ -449,7 +452,13 @@
       "noModels": "Nessun modello restituito. Controlla l'URL dell'endpoint.",
       "providerName": "Personalizzato",
       "ownerLabel": "Proprietario: {{owner}}",
-      "unableToLoadModels": "Impossibile caricare i modelli dall'endpoint."
+      "unableToLoadModels": "Impossibile caricare i modelli dall'endpoint.",
+      "searchPlaceholder": "Cerca modelli…",
+      "selectedGroup": "Selezionato",
+      "otherGroup": "Altro",
+      "noSearchResults": "Nessun modello corrisponde a \"{{query}}\"",
+      "selectModelHint": "Nessun modello selezionato — scegline uno dall'elenco qui sotto.",
+      "keyRequiredHint": "Per l'inferenza è richiesta una chiave API — aggiungine una per usare questo provider."
     },
     "getApiKey": "Ottieni la chiave API ->",
     "selectModel": "Seleziona modello",
@@ -486,6 +495,10 @@
       "customModelId": "ID modello personalizzato",
       "customModelPlaceholder": "Inserisci un ID modello o nome di deployment",
       "suggestedModels": "Modelli suggeriti",
+      "browseModels": "Sfoglia tutti i modelli",
+      "loadingModels": "Recupero dei modelli...",
+      "allModels": "Tutti i modelli in {{region}}",
+      "modelListError": "Impossibile caricare i modelli.",
       "bedrock": {
         "ssoHelp": "Usa la tua configurazione SSO di AWS CLI. Assicurati di aver eseguito 'aws sso login'.",
         "keysHelp": "Inserisci le tue chiavi di accesso AWS IAM."
@@ -498,6 +511,14 @@
         "adcHelp": "Usa Application Default Credentials. Esegui: gcloud auth application-default login",
         "apikeyHelp": "Chiave API Vertex AI Express Mode da Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Modello non più disponibile",
+      "modelRetired": "Tinfoil ha ritirato {{from}}. Passato a {{to}}.",
+      "refreshingModels": "Aggiornamento dei modelli…"
+    },
+    "corti": {
+      "euOnly": "I modelli Corti sono disponibili solo nella regione UE."
     }
   },
   "transcription": {
@@ -522,8 +543,13 @@
     "corti": {
       "clientId": "ID client",
       "clientSecret": "Client secret",
+      "apiKey": "Chiave API",
       "environment": "Regione dei dati",
       "tenant": "Tenant"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil trasmette con Voxtral Mini 4B ed elabora i batch con Voxtral Small 24B.",
+      "docsLink": "Leggi la documentazione"
     }
   },
   "hooks": {
@@ -545,6 +571,10 @@
       "noAudio": {
         "title": "Nessun audio rilevato",
         "description": "La registrazione non contiene audio rilevabile. Riprova."
+      },
+      "partialTranscription": {
+        "title": "Trascrizione parziale",
+        "description": "Non è stato possibile trascrivere una parte della registrazione."
       },
       "errorDescriptions": {
         "sessionExpired": "La tua sessione OpenWhispr Cloud non è disponibile. Effettua di nuovo l'accesso dalle Impostazioni.",
@@ -911,7 +941,9 @@
     "recording": "Registrazione",
     "tryShortcut": "Prova Ctrl+Shift+K",
     "tryShortcutMac": "Prova ⌘⇧K",
-    "remove": "Rimuovi scorciatoia"
+    "remove": "Rimuovi scorciatoia",
+    "addAnother": "Aggiungi un'altra scorciatoia",
+    "duplicate": "Già aggiunto"
   },
   "languageSelector": {
     "noLanguagesFound": "Nessuna lingua trovata",
@@ -1008,7 +1040,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Provider",
       "run": "Esegui test",
-      "customEndpoint": "Endpoint personalizzato"
+      "customEndpoint": "Endpoint personalizzato",
+      "apiKeyMissing": "Chiave API di {{provider}} non configurata. Aggiungila nelle impostazioni Modelli IA."
     },
     "view": {
       "customPrompt": "Prompt personalizzato",
@@ -1845,6 +1878,7 @@
   },
   "models": {
     "learnMore": "Scopri di più",
+    "noneAvailable": "Nessun modello disponibile",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilingue veloce con rilevamento automatico della lingua (25 lingue)",
@@ -1867,7 +1901,7 @@
         "mistral_voxtral_mini_latest": "Trascrizione multilingue veloce",
         "corti_transcribe": "Trascrizione medica di livello clinico",
         "xai_grok_stt": "Riconoscimento vocale ad alta precisione di xAI",
-        "tinfoil_voxtral_mini_realtime": "Trascrizione in streaming verificabilmente privata"
+        "tinfoil_voxtral": "Trascrizione verificabilmente privata"
       },
       "cloud": {
         "openai_gpt_5_2": "Modello di ragionamento potente",
@@ -1876,6 +1910,8 @@
         "openai_gpt_4_1": "Base solida, contesto da 1M",
         "openai_gpt_4_1_mini": "Modello GPT-4.1 più piccolo",
         "openai_gpt_4_1_nano": "GPT-4.1 con la latenza più bassa",
+        "anthropic_claude_fable_5": "Il modello più capace di Anthropic, classe Mythos",
+        "anthropic_claude_sonnet_5": "Modello agentico veloce e capace a costo inferiore",
         "anthropic_claude_sonnet_4_6": "Prestazioni bilanciate",
         "anthropic_claude_sonnet_4_5": "Generazione Sonnet precedente",
         "anthropic_claude_haiku_4_5": "Veloce con intelligenza quasi da frontiera",
@@ -1894,17 +1930,33 @@
         "groq_compound": "Sistema compound di Groq, 450 T/sec",
         "groq_compound_mini": "Sistema compound veloce, 3x latenza ridotta",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contesto 256K",
+        "openai_gpt_5_6_sol": "GPT-5.6 di punta per programmazione e ricerca complesse",
+        "openai_gpt_5_6_terra": "GPT-5.6 bilanciato per il lavoro quotidiano",
+        "openai_gpt_5_6_luna": "Il GPT-5.6 più veloce ed economico",
         "openai_gpt_5_5": "Modello frontier per ragionamento complesso",
-        "anthropic_claude_opus_4_8": "Modello Claude più capace",
+        "anthropic_claude_opus_4_8": "Potente modello Opus orientato a onestà e affidabilità",
         "anthropic_claude_opus_4_7": "Modello Opus potente",
         "anthropic_claude_opus_4_6": "Generazione Opus precedente, contesto da 1M",
-        "anthropic_claude_opus_4_5": "Modello Opus meno recente"
+        "anthropic_claude_opus_4_5": "Modello Opus meno recente",
+        "tinfoil_deepseek_v4_pro": "Ragionamento privato a contesto lungo in enclave sicure, contesto 800K",
+        "tinfoil_glm_5_2": "Modello privato di ingegneria agentica in enclave sicure, contesto 384K",
+        "tinfoil_kimi_k2_6": "Modello privato di coding a lungo termine e multimodale, contesto 256K",
+        "tinfoil_gemma4_31b": "Modello privato di ragionamento multilingue con chiamata di strumenti, contesto 256K",
+        "tinfoil_gpt_oss_120b": "Modello privato di ragionamento open-weight con uso di strumenti, contesto 131K",
+        "tinfoil_llama3_3_70b": "Modello privato conversazionale con chiamata di strumenti, contesto 128K",
+        "corti_corti_s1_instant": "Modello sanitario veloce, senza traccia di ragionamento",
+        "corti_corti_s1": "Modello clinico più capace con ragionamento",
+        "corti_corti_s1_mini_instant": "Modello sanitario compatto, il più veloce ed economico",
+        "corti_corti_s1_mini": "Modello clinico compatto con ragionamento a metà prezzo"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "Il modello Claude più capace. Ideale per i compiti più difficili della Modalità Agente.",
         "bedrock_claude_haiku_4_5": "Veloce ed economico. Ideale per ripulire il testo.",
-        "bedrock_claude_sonnet_4_6": "Equilibrato. Scelta predefinita per la Modalità Agente.",
-        "bedrock_claude_opus_4_7": "Massima intelligenza. Per compiti complessi in Modalità Agente.",
-        "bedrock_nova_lite": "Opzione più economica. Nativo di AWS, ideale per grandi volumi.",
+        "bedrock_claude_sonnet_5": "Equilibrato. Scelta predefinita per la Modalità Agente.",
+        "bedrock_claude_opus_4_8": "Massima intelligenza. Per compiti complessi in Modalità Agente.",
+        "bedrock_gpt_oss_120b": "Modello aperto di OpenAI. Ottimo ragionamento a basso costo.",
+        "bedrock_deepseek_v3_2": "Modello frontier a pesi aperti. Ottimo valore per la Modalità Agente.",
+        "bedrock_qwen3_next_80b": "Modello aperto sparso. Veloce e multilingue.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -2089,6 +2141,7 @@
       "transcribingProvider": "Trascrizione tramite {{provider}}...",
       "cancelTranscription": "Annulla trascrizione",
       "transcriptionComplete": "Trascrizione completata",
+      "partialWarning": "Non è stato possibile trascrivere una parte dell'audio.",
       "openNote": "Apri nota",
       "uploadAnother": "Carica un altro",
       "retry": "Riprova",

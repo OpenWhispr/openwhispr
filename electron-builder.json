@@ -87,6 +87,7 @@
   ],
   "asarUnpack": [
     "**/node_modules/ffmpeg-static/**/*",
+    "**/node_modules/ps-list/**/*",
     "**/node_modules/better-sqlite3/**/*",
     "**/node_modules/onnxruntime-node/**/*",
     "**/node_modules/@napi-rs/keyring/**/*",
@@ -240,7 +241,7 @@
     "allowToChangeInstallationDirectory": true,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "include": "resources/nsis/cleanup-models.nsh"
+    "include": "resources/nsis/installer.nsh"
   },
   "dmg": {
     "title": "OpenWhispr",

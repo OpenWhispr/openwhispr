@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" 已被其他應用程式註冊。",
       "osReserved": "\"{{hotkey}}\" 可能被你的作業系統保留。",
       "registrationFailed": "無法註冊「{{hotkey}}」。可能已被其他應用程式使用。",
+      "updateFailedCheckFormat": "無法將快速鍵更新為「{{hotkey}}」。請檢查格式是否有效。",
       "trySuggestions": "試試看：{{suggestions}}",
       "slotConflict": "此快捷鍵已用於{{slot}}。"
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "按住說話原生監聽程式無法使用"
   },
   "common": {
+    "retry": "重試",
     "back": "返回",
     "next": "下一步",
     "complete": "完成",
@@ -296,6 +298,7 @@
         "createAccount": "建立你的 Corti 帳戶",
         "creditBadge": "50 美元免費額度",
         "regionHint": "選擇音訊處理地區 — 美國或歐盟。",
+        "llmHint": "語言模型功能也會在 Corti 模型上執行。",
         "useCorti": "使用 Corti",
         "skip": "暫時不用",
         "step1": "在 corti.ai 註冊",
@@ -449,7 +452,13 @@
       "noModels": "沒有取得任何模型。請檢查端點 URL。",
       "providerName": "自訂",
       "ownerLabel": "擁有者：{{owner}}",
-      "unableToLoadModels": "無法從端點載入模型。"
+      "unableToLoadModels": "無法從端點載入模型。",
+      "searchPlaceholder": "搜尋模型…",
+      "selectedGroup": "已選擇",
+      "otherGroup": "其他",
+      "noSearchResults": "沒有與「{{query}}」相符的模型",
+      "selectModelHint": "尚未選擇模型 — 請從下方清單中選擇一個。",
+      "keyRequiredHint": "推論需要 API 金鑰 — 請新增金鑰以使用此供應商。"
     },
     "getApiKey": "取得 API Key ->",
     "selectModel": "選擇模型",
@@ -486,6 +495,10 @@
       "customModelId": "自訂模型 ID",
       "customModelPlaceholder": "輸入模型 ID 或部署名稱",
       "suggestedModels": "建議模型",
+      "browseModels": "瀏覽全部模型",
+      "loadingModels": "正在取得模型...",
+      "allModels": "{{region}} 的全部模型",
+      "modelListError": "無法載入模型。",
       "bedrock": {
         "ssoHelp": "使用你的 AWS CLI SSO 設定。請確保已執行 'aws sso login'。",
         "keysHelp": "輸入你的 AWS IAM 存取金鑰。"
@@ -498,6 +511,14 @@
         "adcHelp": "使用 Application Default Credentials。請執行：gcloud auth application-default login",
         "apikeyHelp": "從 Google AI Studio 取得的 Vertex AI Express Mode API 金鑰。"
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "模型已無法使用",
+      "modelRetired": "Tinfoil 已停用 {{from}}，已切換至 {{to}}。",
+      "refreshingModels": "正在重新整理模型…"
+    },
+    "corti": {
+      "euOnly": "Corti 模型僅在歐盟地區可用。"
     }
   },
   "transcription": {
@@ -522,8 +543,13 @@
     "corti": {
       "clientId": "用戶端 ID",
       "clientSecret": "用戶端密鑰",
+      "apiKey": "API Key",
       "environment": "資料區域",
       "tenant": "租戶"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil 串流轉錄使用 Voxtral Mini 4B，批次轉錄使用 Voxtral Small 24B。",
+      "docsLink": "查看文件"
     }
   },
   "hooks": {
@@ -545,6 +571,10 @@
       "noAudio": {
         "title": "未偵測到音訊",
         "description": "錄音中未偵測到聲音。請再試一次。"
+      },
+      "partialTranscription": {
+        "title": "部分轉錄",
+        "description": "部分錄音內容無法轉錄。"
       },
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud 工作階段無法使用。請至「設定」重新登入。",
@@ -911,7 +941,9 @@
     "recording": "記錄中",
     "tryShortcut": "試試 Ctrl+Shift+K",
     "tryShortcutMac": "試試 ⌘⇧K",
-    "remove": "移除快捷鍵"
+    "remove": "移除快捷鍵",
+    "addAnother": "新增其他快捷鍵",
+    "duplicate": "已新增"
   },
   "languageSelector": {
     "noLanguagesFound": "找不到語言",
@@ -1008,7 +1040,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "供應商",
       "run": "執行測試",
-      "customEndpoint": "自訂端點"
+      "customEndpoint": "自訂端點",
+      "apiKeyMissing": "未設定 {{provider}} API 金鑰。請在 AI 模型設定中新增。"
     },
     "view": {
       "customPrompt": "自訂提示詞",
@@ -1840,6 +1873,7 @@
   },
   "models": {
     "learnMore": "瞭解更多",
+    "noneAvailable": "沒有可用的模型",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "快速多語言 ASR，自動語言偵測（25 種語言）",
@@ -1862,7 +1896,7 @@
         "mistral_voxtral_mini_latest": "快速多語言轉錄",
         "corti_transcribe": "臨床級醫療轉錄",
         "xai_grok_stt": "xAI 高精度語音辨識",
-        "tinfoil_voxtral_mini_realtime": "可驗證的私密串流轉錄"
+        "tinfoil_voxtral": "可驗證的私密轉錄"
       },
       "cloud": {
         "openai_gpt_5_2": "強大的推理模型",
@@ -1871,6 +1905,8 @@
         "openai_gpt_4_1": "穩健基礎，1M 上下文",
         "openai_gpt_4_1_mini": "較小的 GPT-4.1 模型",
         "openai_gpt_4_1_nano": "最低延遲的 GPT-4.1",
+        "anthropic_claude_fable_5": "Anthropic 最強大的模型，Mythos 級",
+        "anthropic_claude_sonnet_5": "快速且強大的智慧代理模型，成本更低",
         "anthropic_claude_sonnet_4_6": "均衡表現",
         "anthropic_claude_sonnet_4_5": "上一代 Sonnet 模型",
         "anthropic_claude_haiku_4_5": "快速且接近頂尖智慧",
@@ -1889,17 +1925,33 @@
         "groq_compound": "Groq Compound 系統，450 T/sec",
         "groq_compound_mini": "快速 Compound 系統，3x 更低延遲",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE，256K 上下文",
+        "openai_gpt_5_6_sol": "旗艦 GPT-5.6，適用於複雜編碼與研究",
+        "openai_gpt_5_6_terra": "均衡的 GPT-5.6，適合日常工作",
+        "openai_gpt_5_6_luna": "速度最快、成本最低的 GPT-5.6",
         "openai_gpt_5_5": "複雜推理前沿模型",
-        "anthropic_claude_opus_4_8": "最強大的 Claude 模型",
+        "anthropic_claude_opus_4_8": "強大的 Opus 模型，注重誠實與可靠",
         "anthropic_claude_opus_4_7": "強大的 Opus 模型",
         "anthropic_claude_opus_4_6": "上一代 Opus 模型，1M 上下文",
-        "anthropic_claude_opus_4_5": "較早的 Opus 模型"
+        "anthropic_claude_opus_4_5": "較早的 Opus 模型",
+        "tinfoil_deepseek_v4_pro": "安全飛地中的私密長上下文推理，800K 上下文",
+        "tinfoil_glm_5_2": "安全飛地中的私密智能體工程模型，384K 上下文",
+        "tinfoil_kimi_k2_6": "私密長程編碼與多模態模型，256K 上下文",
+        "tinfoil_gemma4_31b": "支援工具呼叫的私密多語言推理模型，256K 上下文",
+        "tinfoil_gpt_oss_120b": "支援工具使用的私密開放權重推理模型，131K 上下文",
+        "tinfoil_llama3_3_70b": "支援工具呼叫的私密對話模型，128K 上下文",
+        "corti_corti_s1_instant": "快速醫療模型，無推理過程",
+        "corti_corti_s1": "功能最強的臨床模型，帶推理",
+        "corti_corti_s1_mini_instant": "精簡型醫療模型，最快且成本最低",
+        "corti_corti_s1_mini": "精簡型臨床模型，半價提供推理"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "最強大的 Claude 模型。最適合最具挑戰性的智慧助手模式任務。",
         "bedrock_claude_haiku_4_5": "快速且低成本。適合文字清理。",
-        "bedrock_claude_sonnet_4_6": "均衡效能。建議作為智慧助手模式的預設模型。",
-        "bedrock_claude_opus_4_7": "最高智能。適用於複雜的智慧助手模式任務。",
-        "bedrock_nova_lite": "最便宜的選擇。AWS 原生，適合高流量場景。",
+        "bedrock_claude_sonnet_5": "均衡效能。建議作為智慧助手模式的預設模型。",
+        "bedrock_claude_opus_4_8": "最高智能。適用於複雜的智慧助手模式任務。",
+        "bedrock_gpt_oss_120b": "OpenAI 開放權重模型。低成本下的強大推理能力。",
+        "bedrock_deepseek_v3_2": "開放權重前沿模型。智慧助手模式的高性價比之選。",
+        "bedrock_qwen3_next_80b": "稀疏開放權重模型。快速且多語言。",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -2084,6 +2136,7 @@
       "transcribingProvider": "透過 {{provider}} 轉錄中...",
       "cancelTranscription": "取消轉錄",
       "transcriptionComplete": "轉錄完成",
+      "partialWarning": "部分音訊內容無法轉錄。",
       "openNote": "開啟筆記",
       "uploadAnother": "上傳另一個",
       "retry": "重試",

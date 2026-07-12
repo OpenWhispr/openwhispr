@@ -58,6 +58,7 @@ import { MEETINGS_FOLDER_NAME, findDefaultFolder } from "./shared";
 import logger from "../../utils/logger";
 import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import { serializeTranscriptSegments } from "../../utils/transcriptSpeakerState";
+import { resolveExpectedSpeakerCount } from "../../utils/participants";
 import {
   useNotes,
   useActiveNoteId,
@@ -232,7 +233,7 @@ export default function PersonalNotesView({
       folderId: note?.folder_id ?? null,
       seedSegments,
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: note?.expected_speaker_count ?? null,
+      expectedCount: resolveExpectedSpeakerCount(note),
     });
   }, [notes]);
 
@@ -480,11 +481,20 @@ export default function PersonalNotesView({
     runAction,
   } = useActionProcessing(activeNoteId ?? null);
 
+  // The realtime transcript outlives its recording — only use it for the note it was recorded on.
+  const activeNoteRawTranscript =
+    (recordingNoteId === activeNote?.id ? realtimeTranscript : "") || activeNote?.transcript || "";
+
   const isEnhancementStale = useMemo(() => {
     if (!activeNote?.enhanced_content || !activeNote?.enhanced_at_content_hash) return false;
-    const currentHash = makeContentHash(localContent);
+    const currentHash = makeContentHash(`${localContent}\n${activeNoteRawTranscript}`);
     return currentHash !== activeNote.enhanced_at_content_hash;
-  }, [activeNote?.enhanced_content, activeNote?.enhanced_at_content_hash, localContent]);
+  }, [
+    activeNote?.enhanced_content,
+    activeNote?.enhanced_at_content_hash,
+    localContent,
+    activeNoteRawTranscript,
+  ]);
 
   const handleExportNote = useCallback(
     async (format: "md" | "txt") => {
@@ -512,7 +522,7 @@ export default function PersonalNotesView({
       folderId: note?.folder_id ?? meetingRecordingRequest.folderId ?? null,
       seedSegments,
       diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
-      expectedCount: note?.expected_speaker_count ?? null,
+      expectedCount: resolveExpectedSpeakerCount(note),
     });
     onMeetingRecordingRequestHandled?.();
   }, [meetingRecordingRequest, activeNoteId, notes, onMeetingRecordingRequestHandled]);
@@ -971,15 +981,14 @@ export default function PersonalNotesView({
                 <ActionPicker
                   onRunAction={(action) => {
                     if (!editorNote) return;
-                    const rawTranscript = realtimeTranscript || editorNote.transcript;
                     const noteContent = editorNote.content;
                     const hasNotes = !!noteContent.trim();
-                    if (!hasNotes && !rawTranscript) return;
+                    if (!hasNotes && !activeNoteRawTranscript) return;
 
                     let formattedTranscript = "";
                     let isMeetingNote = false;
-                    if (rawTranscript) {
-                      const segments = parseTranscriptSegments(rawTranscript);
+                    if (activeNoteRawTranscript) {
+                      const segments = parseTranscriptSegments(activeNoteRawTranscript);
                       if (segments.length > 0) {
                         isMeetingNote = true;
                         formattedTranscript = segments
@@ -990,7 +999,7 @@ export default function PersonalNotesView({
                           .join("\n");
                       }
                       if (!formattedTranscript) {
-                        formattedTranscript = rawTranscript;
+                        formattedTranscript = activeNoteRawTranscript;
                       }
                     }
 
@@ -1000,11 +1009,19 @@ export default function PersonalNotesView({
                     ]
                       .filter(Boolean)
                       .join("\n\n");
-                    runAction(action, parts, makeContentHash(noteContent), {
-                      isCloudMode,
-                      modelId: effectiveModelId,
-                      isMeetingNote,
-                    });
+                    runAction(
+                      action,
+                      parts,
+                      makeContentHash(`${noteContent}\n${activeNoteRawTranscript}`),
+                      {
+                        isCloudMode,
+                        modelId: effectiveModelId,
+                        isMeetingNote,
+                        allowTitleGeneration:
+                          !editorNote.title.trim() ||
+                          editorNote.title === t("notes.list.untitledNote"),
+                      }
+                    );
                   }}
                   onManageActions={() => setShowActionManager(true)}
                   disabled={

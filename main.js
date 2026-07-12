@@ -320,6 +320,8 @@ let ipcHandlers = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
 let authBridgeServer = null;
+const WHISPER_WAKE_REWARM_DELAY_MS = 3000;
+let wakeRewarmTimer = null;
 
 function parseAuthBridgePort() {
   const raw = (process.env.OPENWHISPR_AUTH_BRIDGE_PORT || "").trim();
@@ -912,7 +914,9 @@ async function startApp() {
 
   ipcMain.handle("register-meeting-hotkey", async (_event, hotkey) => {
     if (hotkey) {
-      const result = await hotkeyManager.registerSlot("meeting", hotkey, meetingHotkeyCallback);
+      const result = await hotkeyManager.registerSlot("meeting", hotkey, meetingHotkeyCallback, {
+        atomic: true,
+      });
       windowManager.reconcileNativeKeyListeners();
       if (result.success) {
         environmentManager.saveMeetingKey(hotkey);
@@ -939,6 +943,14 @@ async function startApp() {
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
     }
+    // Sleep evicts the local GPU model from VRAM; reload it once the driver settles. See #766.
+    if (wakeRewarmTimer) clearTimeout(wakeRewarmTimer);
+    wakeRewarmTimer = setTimeout(() => {
+      wakeRewarmTimer = null;
+      whisperManager?.onWakeFromSleep().catch((err) => {
+        debugLogger.debug("whisper wake re-warm error (non-fatal)", { error: err.message });
+      });
+    }, WHISPER_WAKE_REWARM_DELAY_MS);
   });
 
   // Non-blocking server pre-warming
@@ -1056,8 +1068,9 @@ async function startApp() {
         windowManager.controlPanelWindow.webContents.send("globe-key-pressed");
       }
 
-      // Handle dictation if Globe/Fn is the current hotkey
-      if (isGlobeLikeHotkey(currentHotkey)) {
+      // Handle dictation if Globe/Fn is one of the dictation hotkeys
+      const dictationUsesGlobe = hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey);
+      if (dictationUsesGlobe) {
         if (mainWindowLive) {
           // Capture target app PID BEFORE showing the overlay
           if (textEditMonitor) textEditMonitor.captureTargetPid();
@@ -1088,17 +1101,17 @@ async function startApp() {
       }
 
       // Check agent and voice agent slots for Globe/Fn key
-      const agentHotkey = hotkeyManager.getSlotHotkey("agent");
-      const voiceAgentHotkey = hotkeyManager.getSlotHotkey("voiceAgent");
-      const agentUsesGlobe = !!agentHotkey && isGlobeLikeHotkey(agentHotkey);
-      const voiceAgentUsesGlobe = !!voiceAgentHotkey && isGlobeLikeHotkey(voiceAgentHotkey);
+      const agentUsesGlobe = hotkeyManager.getSlotHotkeys("agent").some(isGlobeLikeHotkey);
+      const voiceAgentUsesGlobe = hotkeyManager
+        .getSlotHotkeys("voiceAgent")
+        .some(isGlobeLikeHotkey);
       if (agentUsesGlobe) {
         windowManager.toggleAgentOverlay();
       }
       if (voiceAgentUsesGlobe) {
         windowManager.sendToggleVoiceAgent();
       }
-      if (!agentUsesGlobe && !voiceAgentUsesGlobe && !isGlobeLikeHotkey(currentHotkey)) {
+      if (!agentUsesGlobe && !voiceAgentUsesGlobe && !dictationUsesGlobe) {
         debugLogger?.debug("[Globe] Ignored — hotkey is not GLOBE", { currentHotkey });
       }
     });
@@ -1111,7 +1124,7 @@ async function startApp() {
         windowManager.controlPanelWindow.webContents.send("globe-key-released");
       }
 
-      if (hotkeyManager.getCurrentHotkey && isGlobeLikeHotkey(hotkeyManager.getCurrentHotkey())) {
+      if (hotkeyManager.getSlotHotkeys("dictation").some(isGlobeLikeHotkey)) {
         const activationMode = windowManager.getActivationMode();
         if (activationMode === "push") {
           globeKeyDownTime = 0;
@@ -1138,28 +1151,29 @@ async function startApp() {
     let rightModDownTime = 0;
     let rightModIsRecording = false;
     let rightModLastStopTime = 0;
+    let rightModActiveKey = null;
 
     globeKeyManager.on("right-modifier-down", async (modifier) => {
-      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
-
       // Check agent and voice agent slots for right-modifier
-      if (hotkeyManager.getSlotHotkey("agent") === modifier) {
+      if (hotkeyManager.slotHasHotkey("agent", modifier)) {
         windowManager.toggleAgentOverlay();
       }
-      if (hotkeyManager.getSlotHotkey("voiceAgent") === modifier) {
+      if (hotkeyManager.slotHasHotkey("voiceAgent", modifier)) {
         windowManager.sendToggleVoiceAgent();
       }
 
-      if (currentHotkey !== modifier) return;
+      if (!hotkeyManager.slotHasHotkey("dictation", modifier)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
 
       const activationMode = windowManager.getActivationMode();
       if (textEditMonitor) textEditMonitor.captureTargetPid();
       if (activationMode === "push") {
+        if (rightModActiveKey && rightModActiveKey !== modifier) return;
         const now = Date.now();
         if (now - rightModLastStopTime < POST_STOP_COOLDOWN_MS) return;
         windowManager.showDictationPanel();
         const pressTime = now;
+        rightModActiveKey = modifier;
         rightModDownTime = pressTime;
         rightModIsRecording = false;
         setTimeout(() => {
@@ -1174,13 +1188,12 @@ async function startApp() {
     });
 
     globeKeyManager.on("right-modifier-up", async (modifier) => {
-      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
-
-      if (currentHotkey === modifier) {
+      if (hotkeyManager.slotHasHotkey("dictation", modifier)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
 
         const activationMode = windowManager.getActivationMode();
-        if (activationMode === "push") {
+        if (activationMode === "push" && (!rightModActiveKey || rightModActiveKey === modifier)) {
+          rightModActiveKey = null;
           rightModDownTime = 0;
           rightModLastStopTime = Date.now();
           if (rightModIsRecording) {
@@ -1206,14 +1219,11 @@ async function startApp() {
 
     const syncSuppressedMouseButtons = () => {
       const buttons = [];
-      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
-      if (isMouseButtonHotkey(currentHotkey)) buttons.push(currentHotkey);
-
-      for (const slotName of ["agent", "voiceAgent"]) {
-        const slotHotkey = hotkeyManager.getSlotHotkey(slotName);
-        if (isMouseButtonHotkey(slotHotkey)) buttons.push(slotHotkey);
+      for (const slotName of ["dictation", "agent", "voiceAgent"]) {
+        for (const hotkey of hotkeyManager.getSlotHotkeys(slotName)) {
+          if (isMouseButtonHotkey(hotkey)) buttons.push(hotkey);
+        }
       }
-
       globeKeyManager.setSuppressedMouseButtons(buttons);
     };
 
@@ -1221,31 +1231,32 @@ async function startApp() {
     let mouseButtonDownTime = 0;
     let mouseButtonIsRecording = false;
     let mouseButtonLastStopTime = 0;
+    let mouseButtonActiveButton = null;
 
     globeKeyManager.on("mouse-button-down", async (button) => {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
 
-      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
-
-      if (hotkeyManager.getSlotHotkey("agent") === button) {
+      if (hotkeyManager.slotHasHotkey("agent", button)) {
         windowManager.toggleAgentOverlay();
       }
-      if (hotkeyManager.getSlotHotkey("voiceAgent") === button) {
+      if (hotkeyManager.slotHasHotkey("voiceAgent", button)) {
         windowManager.sendToggleVoiceAgent();
       }
 
-      if (currentHotkey !== button) return;
+      if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
 
       const activationMode = windowManager.getActivationMode();
       if (textEditMonitor) textEditMonitor.captureTargetPid();
 
       if (activationMode === "push") {
+        if (mouseButtonActiveButton && mouseButtonActiveButton !== button) return;
         const now = Date.now();
         if (now - mouseButtonLastStopTime < POST_STOP_COOLDOWN_MS) return;
         windowManager.showDictationPanel();
         const pressTime = now;
+        mouseButtonActiveButton = button;
         mouseButtonDownTime = pressTime;
         mouseButtonIsRecording = false;
         setTimeout(() => {
@@ -1263,12 +1274,15 @@ async function startApp() {
       if (hotkeyManager.isInListeningMode && hotkeyManager.isInListeningMode()) return;
       if (!isMouseButtonHotkey(button)) return;
 
-      const currentHotkey = hotkeyManager.getCurrentHotkey && hotkeyManager.getCurrentHotkey();
-      if (currentHotkey !== button) return;
+      if (!hotkeyManager.slotHasHotkey("dictation", button)) return;
       if (!isLiveWindow(windowManager.mainWindow)) return;
 
       const activationMode = windowManager.getActivationMode();
-      if (activationMode === "push") {
+      if (
+        activationMode === "push" &&
+        (!mouseButtonActiveButton || mouseButtonActiveButton === button)
+      ) {
+        mouseButtonActiveButton = null;
         mouseButtonDownTime = 0;
         mouseButtonLastStopTime = Date.now();
         if (mouseButtonIsRecording) {
@@ -1343,34 +1357,34 @@ async function startApp() {
     // Dictation supports push-to-talk and needs the overlay window; agent/meeting
     // drive other windows (matching their globalShortcut callbacks and macOS).
     const dispatchNativeKeyDown = (key) => {
-      if (key === hotkeyManager.getCurrentHotkey()) {
+      if (hotkeyManager.slotHasHotkey("dictation", key)) {
         if (!isLiveWindow(windowManager.mainWindow)) return;
         if (windowManager.getActivationMode() === "push") {
-          windowManager.startWindowsPushToTalk();
+          windowManager.startWindowsPushToTalk(key);
         } else {
           windowManager.sendToggleDictation();
         }
         return;
       }
-      if (key === hotkeyManager.getSlotHotkey("voiceAgent")) {
+      if (hotkeyManager.slotHasHotkey("voiceAgent", key)) {
         windowManager.sendToggleVoiceAgent();
-      } else if (key === hotkeyManager.getSlotHotkey("agent")) {
+      } else if (hotkeyManager.slotHasHotkey("agent", key)) {
         if (!hotkeyManager.isInListeningMode()) windowManager.toggleAgentOverlay();
-      } else if (key === hotkeyManager.getSlotHotkey("meeting")) {
+      } else if (hotkeyManager.slotHasHotkey("meeting", key)) {
         if (!hotkeyManager.isInListeningMode()) meetingDetectionEngine?.startManualMeeting();
       }
     };
 
     // Only dictation drives push-to-talk, so only its key-up matters.
     const dispatchNativeKeyUp = (key) => {
-      if (key !== hotkeyManager.getCurrentHotkey()) return;
+      if (!hotkeyManager.slotHasHotkey("dictation", key)) return;
       if (windowManager.winPushState?.active) {
-        windowManager.handleWindowsPushKeyUp();
+        windowManager.handleWindowsPushKeyUp(key);
       } else if (
         isLiveWindow(windowManager.mainWindow) &&
         windowManager.getActivationMode() === "push"
       ) {
-        windowManager.handleWindowsPushKeyUp();
+        windowManager.handleWindowsPushKeyUp(key);
       }
     };
 
@@ -1587,6 +1601,10 @@ if (gotSingleInstanceLock) {
 }
 
 function performSyncTeardown() {
+  if (wakeRewarmTimer) {
+    clearTimeout(wakeRewarmTimer);
+    wakeRewarmTimer = null;
+  }
   if (authBridgeServer) {
     authBridgeServer.close();
     authBridgeServer = null;
