@@ -56,7 +56,7 @@ export async function getAIModel(
         ...(opts?.disableThinking ? { fetch: withDisabledReasoning } : {}),
       }).chat(model);
     case "local":
-      return createOpenAI({ apiKey: "no-key", baseURL }).chat(model);
+      return createOpenAI({ apiKey: apiKey || "no-key", baseURL }).chat(model);
     default:
       throw new Error(`Unsupported AI SDK provider for renderer: ${provider}`);
   }

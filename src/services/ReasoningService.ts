@@ -20,6 +20,7 @@ import { PROVIDER_REGISTRY, type ProviderContext } from "./ai/inferenceProviders
 import { getConfiguredOpenAIBase } from "./ai/openaiBase";
 import { applyThinkingSuppression } from "./ai/thinkingSuppression";
 import { clearTinfoilClientCache } from "./ai/tinfoilClient";
+import { resolveChatRoute } from "../helpers/chatRouting";
 
 export type AgentStreamChunk =
   | { type: "content"; text: string }
@@ -359,29 +360,21 @@ class ReasoningService extends BaseReasoningService {
     provider: string,
     config: ReasoningConfig & { systemPrompt: string }
   ): AsyncGenerator<string, void, unknown> {
-    const cloudProviders = [
-      "openai",
-      "groq",
-      "gemini",
-      "anthropic",
-      "tinfoil",
-      "custom",
-      "openrouter",
-      "corti",
-    ];
-    const isLocalProvider = !cloudProviders.includes(provider);
-
-    const settings = getSettings();
-    const lanOverride = config.lanUrl?.trim();
-    const isLanCleanup = !!lanOverride || this.isLanCleanupMode();
+    const route = resolveChatRoute({
+      provider,
+      lanUrl: config.lanUrl,
+      customApiKey: config.customApiKey,
+    });
+    const isLocalProvider = route.kind === "local";
+    const isLanChat = route.kind === "self-hosted";
 
     let endpoint: string;
     let apiKey = "";
 
-    if (isLanCleanup) {
-      const rawUrl = lanOverride || settings.cleanupRemoteUrl.trim();
-      const baseUrl = ensureV1Suffix(rawUrl);
+    if (isLanChat) {
+      const baseUrl = ensureV1Suffix(route.baseUrl);
       endpoint = buildApiUrl(baseUrl, "/chat/completions");
+      apiKey = route.apiKey;
     } else if (isLocalProvider) {
       const serverResult = await window.electronAPI.llamaServerStart(model);
       if (!serverResult.success || !serverResult.port) {
@@ -423,7 +416,7 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const apiConfig = getOpenAiApiConfig(model, provider);
-    const useOldTokenParam = isLocalProvider || isLanCleanup || provider === "groq";
+    const useOldTokenParam = isLocalProvider || isLanChat || provider === "groq";
 
     const requestBody: Record<string, unknown> = {
       model,
@@ -450,7 +443,7 @@ class ReasoningService extends BaseReasoningService {
       model,
       provider,
       isLocal: isLocalProvider,
-      isLan: !!isLanCleanup,
+      isLan: isLanChat,
       messageCount: messages.length,
     });
 
@@ -527,7 +520,7 @@ class ReasoningService extends BaseReasoningService {
             if (!content) continue;
 
             const stripThinking =
-              (isLocalProvider || isLanCleanup) && config.disableThinking !== false;
+              (isLocalProvider || isLanChat) && config.disableThinking !== false;
             if (stripThinking) {
               if (insideThinkBlock) {
                 const endIdx = content.indexOf("</think>");
@@ -573,27 +566,17 @@ class ReasoningService extends BaseReasoningService {
     config: ReasoningConfig & { systemPrompt: string },
     tools?: Record<string, import("ai").Tool>
   ): AsyncGenerator<AgentStreamChunk, void, unknown> {
-    const lanOverride = config.lanUrl?.trim();
-    // An explicit self-hosted URL is the caller's declared route — it must win
-    // even when a stale enterprise provider id is left in the scope's settings.
-    const isEnterprise = !lanOverride && isEnterpriseProvider(provider);
+    const route = resolveChatRoute({
+      provider,
+      lanUrl: config.lanUrl,
+      customApiKey: config.customApiKey,
+      isEnterpriseProvider: isEnterpriseProvider(provider),
+    });
+    const isEnterprise = route.kind === "enterprise";
+    const isLocalProvider = route.kind === "local";
+    const isLanChat = route.kind === "self-hosted";
 
-    const cloudProviders = [
-      "openai",
-      "groq",
-      "gemini",
-      "anthropic",
-      "tinfoil",
-      "custom",
-      "openrouter",
-      "corti",
-    ];
-    const isLocalProvider = !isEnterprise && !cloudProviders.includes(provider);
-
-    const settings = getSettings();
-    const isLanCleanup = !isEnterprise && (!!lanOverride || this.isLanCleanupMode());
-
-    if ((isLocalProvider || isLanCleanup) && !tools) {
+    if ((isLocalProvider || isLanChat) && !tools) {
       const contentGen = this.processTextStreaming(messages, model, provider, config);
       for await (const text of contentGen) {
         yield { type: "content", text };
@@ -608,9 +591,9 @@ class ReasoningService extends BaseReasoningService {
     if (isEnterprise) {
       // Enterprise SDKs run in the main process; the model below proxies
       // doStream over IPC, so no key or base URL is resolved here.
-    } else if (isLanCleanup) {
-      const rawUrl = lanOverride || settings.cleanupRemoteUrl.trim();
-      baseURL = ensureV1Suffix(rawUrl);
+    } else if (isLanChat) {
+      apiKey = route.apiKey;
+      baseURL = ensureV1Suffix(route.baseUrl);
     } else if (isLocalProvider) {
       const serverResult = await window.electronAPI.llamaServerStart(model);
       if (!serverResult.success || !serverResult.port) {
@@ -629,7 +612,7 @@ class ReasoningService extends BaseReasoningService {
             ? config.baseUrl?.trim() || getConfiguredOpenAIBase()
             : undefined;
     }
-    const aiProvider = isLocalProvider || isLanCleanup ? "local" : provider;
+    const aiProvider = isLocalProvider || isLanChat ? "local" : provider;
     // OpenRouter ids are never in the local registry, so the supportsThinking
     // exemption below can't apply — honor the toggle directly.
     const openrouterDisableThinking = provider === "openrouter" && config.disableThinking === true;
@@ -662,7 +645,7 @@ class ReasoningService extends BaseReasoningService {
       messageCount: messages.length,
     });
 
-    const useTemperature = isLocalProvider || isLanCleanup || apiConfig.supportsTemperature;
+    const useTemperature = isLocalProvider || isLanChat || apiConfig.supportsTemperature;
 
     // cancelActiveStream() aborts this controller; streamText propagates it
     // into doStream, cancelling the enterprise IPC proxy's request in main.
