@@ -30,6 +30,7 @@ import {
 } from "../../stores/settingsStore";
 import { generateNoteTitle } from "../../utils/generateTitle";
 import { getBaseLanguageCode } from "../../utils/languageSupport";
+import { usageReportingService, countWords } from "../../services/UsageReportingService";
 
 type UploadState = "idle" | "selected" | "transcribing" | "complete" | "error";
 
@@ -402,6 +403,17 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         setProgress(100);
         setResult(res.text);
         setPartialWarning(!!res.warning);
+
+        if (!isOpenWhisprCloud) {
+          // Cloud uploads are metered server-side by /api/transcribe; local and
+          // BYOK word counts are client-reported (gated inside the service).
+          void usageReportingService.report({
+            feature: "upload",
+            mode: useLocalWhisper ? "local" : "byok",
+            wordCount: countWords(res.text),
+            clientEventId: crypto.randomUUID(),
+          });
+        }
 
         const textFallback = res.text.trim().split(/\s+/).slice(0, 6).join(" ");
         const fallbackTitle =

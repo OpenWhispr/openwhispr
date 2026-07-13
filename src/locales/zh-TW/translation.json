@@ -1627,6 +1627,8 @@
       "title": "隱私權",
       "usageAnalytics": "使用分析",
       "usageAnalyticsDescription": "分享匿名的效能指標，協助我們改善 OpenWhispr。我們絕不會傳送轉錄內容——只有計時和錯誤資料。",
+      "workspaceUsageReporting": "工作區使用情況回報",
+      "workspaceUsageReportingDescription": "您的工作區管理員可以查看您的字數統計和功能使用情況——絕不會看到轉錄內容或音訊。",
       "dataRetention": "資料保留",
       "dataRetentionDescription": "將轉錄和音訊本地儲存至歷史記錄。停用後，轉錄內容會被貼上但不會被儲存。",
       "hoursAgo": "{{count}}小時前",

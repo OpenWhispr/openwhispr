@@ -1632,6 +1632,8 @@
       "title": "Datenschutz",
       "usageAnalytics": "Nutzungsanalysen",
       "usageAnalyticsDescription": "Helfen Sie uns, OpenWhispr zu verbessern, indem Sie anonyme Leistungsdaten teilen. Wir senden niemals Transkriptionsinhalte – nur Timing- und Fehlerdaten.",
+      "workspaceUsageReporting": "Workspace-Nutzungsberichte",
+      "workspaceUsageReportingDescription": "Ihr Workspace-Administrator kann Ihre Wortzahlen und Funktionsnutzung sehen – niemals Transkriptionsinhalte oder Audio.",
       "dataRetention": "Datenaufbewahrung",
       "dataRetentionDescription": "Transkriptionen und Audio lokal im Verlauf speichern. Wenn deaktiviert, werden Transkriptionen eingefügt, aber nicht gespeichert.",
       "hoursAgo": "vor {{count}} Std.",

@@ -34,6 +34,7 @@ import { detectAgentName } from "../config/agentDetection";
 import { resolveDictationRouteKind, resolveDictationAgentReachability } from "./dictationRouting";
 import { resolvePrompt } from "../config/prompts";
 import { syncService } from "../services/SyncService.js";
+import { usageReportingService, countWords } from "../services/UsageReportingService.js";
 import { evaluateFinishedRecording } from "./recordingValidation";
 import { matchesDictionaryPrompt } from "../utils/dictionaryEchoFilter.js";
 import { getDictionaryHintWords } from "../utils/snippets";
@@ -809,6 +810,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       if (result?.source === "openwhispr") {
         window.dispatchEvent(new Event("usage-changed"));
+      } else if (result?.text) {
+        // Cloud dictation is metered server-side by /api/transcribe; local and
+        // BYOK word counts are client-reported (gated inside the service).
+        void usageReportingService.report({
+          feature: "dictation",
+          mode: ["local", "local-parakeet", "local-fallback"].includes(result.source)
+            ? "local"
+            : "byok",
+          wordCount: countWords(result.rawText || result.text),
+          ...(metadata.durationSeconds
+            ? { audioDurationMs: Math.round(metadata.durationSeconds * 1000) }
+            : {}),
+          clientEventId: crypto.randomUUID(),
+        });
       }
 
       const roundTripDurationMs = Math.round(performance.now() - pipelineStart);
@@ -1544,6 +1559,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const audioFormat = audioBlob.type;
     const opts = {};
     if (language) opts.language = language;
+    if (metadata.durationSeconds != null) opts.durationSeconds = metadata.durationSeconds;
     const cleanupCloudMode = settings.cleanupCloudMode || "openwhispr";
     if (settings.useCleanupModel && !this.skipReasoning && cleanupCloudMode === "openwhispr") {
       opts.sendLogs = "false";
@@ -3041,7 +3057,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     const streamingSttProcessingMs = Math.round(tTerminate - t0);
     const streamingAudioBytesSent = stopResult?.audioBytesSent || 0;
     const streamingSttLanguage = getBaseLanguageCode(stSettings.preferredLanguage) || undefined;
-    const streamingSttWordCount = finalText ? finalText.split(/\s+/).filter(Boolean).length : 0;
+    const streamingSttWordCount = finalText ? countWords(finalText) : 0;
 
     let usedCloudReasoning = false;
     if (finalText && !this.skipReasoning) {
@@ -3189,6 +3205,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       });
 
       if (!usedBatchFallback) {
+        // This session's usage is recorded via /api/streaming-usage with an
+        // idempotent clientEventId; the streaming path never goes through
+        // usageReportingService.report(), so it can't double-report.
+        const streamingUsageEventId = crypto.randomUUID();
         (async () => {
           try {
             await withSessionRefresh(async () => {
@@ -3204,6 +3224,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   audioSizeBytes: streamingAudioBytesSent || undefined,
                   audioFormat: "linear16",
                   clientTotalMs,
+                  feature: "dictation",
+                  clientEventId: streamingUsageEventId,
                 }
               );
               if (!res.success) {

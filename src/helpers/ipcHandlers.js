@@ -219,6 +219,7 @@ async function chunkedCloudTranscribe({
   apiUrl,
   authHeader,
   multipartFields = {},
+  clientEventIdBase = null,
   onProgress,
   concurrencyLimit = CLOUD_CHUNK_CONCURRENCY,
   segmentDuration = CLOUD_CHUNK_SEGMENT_SECONDS,
@@ -253,11 +254,14 @@ async function chunkedCloudTranscribe({
     const transcribeChunk = async (index) => {
       const chunkBuffer = fs.readFileSync(chunkPaths[index]);
       const chunkName = path.basename(chunkPaths[index]);
+      // Deterministic per-chunk usage-event id so chunk retries never double-count.
       const { body, boundary } = buildMultipartBody(
         chunkBuffer,
         chunkName,
         "audio/mpeg",
-        multipartFields
+        clientEventIdBase
+          ? { ...multipartFields, clientEventId: `${clientEventIdBase}:${index}` }
+          : multipartFields
       );
       const url = new URL(`${apiUrl}/api/transcribe`);
 
@@ -3833,11 +3837,16 @@ class IPCHandlers {
 
     // Bearer auth is preferred. Cookie fallback covers the brief window before
     // main.js's startup migration bridge runs (or if it failed for this user).
+    // x-openwhispr-version rides along on every authenticated cloud API call —
+    // the server records it as user_daily_activity.client_version and
+    // usage_events.app_version. Added only alongside credentials so the
+    // `Object.keys(authHeader).length` not-authenticated checks stay valid.
     const getAuthHeaderFromWindow = async (win) => {
+      const versionHeader = { "x-openwhispr-version": app.getVersion() };
       const token = tokenStore.get();
-      if (token) return { Authorization: `Bearer ${token}` };
+      if (token) return { Authorization: `Bearer ${token}`, ...versionHeader };
       const cookieHeader = win ? await getSessionCookiesFromWindow(win) : "";
-      return cookieHeader ? { Cookie: cookieHeader } : {};
+      return cookieHeader ? { Cookie: cookieHeader, ...versionHeader } : {};
     };
 
     const getAuthHeader = async (event) => {
@@ -3865,6 +3874,7 @@ class IPCHandlers {
           language: opts.language,
           prompt: opts.prompt,
           sendLogs: opts.sendLogs,
+          feature: "dictation",
           clientType: "desktop",
           appVersion: app.getVersion(),
           clientVersion: app.getVersion(),
@@ -3875,11 +3885,14 @@ class IPCHandlers {
         debugLogger.debug("Cloud transcribe request", { audioSize: audioData.length }, "cloud-api");
 
         if (audioData.length > CLOUD_INLINE_LIMIT) {
+          // audioDurationSeconds is omitted on chunked requests — sending the
+          // whole recording's duration with every chunk would multiply it.
           const { text, responses, lastResponse, warning } = await chunkedCloudTranscribe({
             buffer: audioData,
             apiUrl,
             authHeader,
             multipartFields,
+            clientEventIdBase: clientTranscriptionId,
           });
           const sum = (field) => responses.reduce((s, r) => s + (r?.[field] || 0), 0);
           return {
@@ -3900,12 +3913,11 @@ class IPCHandlers {
           };
         }
 
-        const { body, boundary } = buildMultipartBody(
-          audioData,
-          "audio.webm",
-          "audio/webm",
-          multipartFields
-        );
+        const { body, boundary } = buildMultipartBody(audioData, "audio.webm", "audio/webm", {
+          ...multipartFields,
+          clientEventId: `${clientTranscriptionId}:0`,
+          audioDurationSeconds: opts.durationSeconds != null ? String(opts.durationSeconds) : null,
+        });
         const url = new URL(`${apiUrl}/api/transcribe`);
         const data = await postMultipart(url, body, boundary, authHeader);
 
@@ -4002,6 +4014,7 @@ class IPCHandlers {
               if (apiUrl) {
                 const multipartFields = {
                   language,
+                  feature: "dictation",
                   clientType: "desktop",
                   appVersion: app.getVersion(),
                   sessionId: this.sessionId,
@@ -6548,6 +6561,8 @@ class IPCHandlers {
               audioFormat: opts.audioFormat,
               clientTotalMs: opts.clientTotalMs,
               sendLogs: opts.sendLogs,
+              feature: opts.feature,
+              clientEventId: opts.clientEventId,
             }),
           });
 
@@ -6835,8 +6850,14 @@ class IPCHandlers {
         const authHeader = await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
+        // Id base for per-chunk usage-event ids only. Deliberately NOT sent as
+        // a clientTranscriptionId multipart field: that would make chunked
+        // uploads UPSERT into one transcription row (last-chunk-wins) on the
+        // server instead of one row per chunk.
+        const clientTranscriptionId = crypto.randomUUID();
         const multipartFields = {
           source: "file_upload",
+          feature: "upload",
           clientType: "desktop",
           appVersion: app.getVersion(),
           clientVersion: app.getVersion(),
@@ -6855,6 +6876,7 @@ class IPCHandlers {
             apiUrl,
             authHeader,
             multipartFields,
+            clientEventIdBase: clientTranscriptionId,
             onProgress: (payload) => event.sender.send("upload-transcription-progress", payload),
           });
           return { success: true, text, ...(warning ? { warning } : {}) };
@@ -6865,12 +6887,10 @@ class IPCHandlers {
         const contentType = AUDIO_MIME_TYPES[ext] || "audio/mpeg";
         const fileName = path.basename(filePath);
 
-        const { body, boundary } = buildMultipartBody(
-          audioBuffer,
-          fileName,
-          contentType,
-          multipartFields
-        );
+        const { body, boundary } = buildMultipartBody(audioBuffer, fileName, contentType, {
+          ...multipartFields,
+          clientEventId: `${clientTranscriptionId}:0`,
+        });
         const url = new URL(`${apiUrl}/api/transcribe`);
         const data = await postMultipart(url, body, boundary, authHeader);
         const result = interpretTranscribeResponse(data);

@@ -97,6 +97,7 @@ import { cn } from "./lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { startMigration, useMigration } from "../stores/noteStore.js";
 import { syncService } from "../services/SyncService.js";
+import { usageReportingService } from "../services/UsageReportingService.js";
 import { formatBytes } from "../utils/formatBytes";
 import { useSettingsStore } from "../stores/settingsStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
@@ -1267,6 +1268,22 @@ export default function SettingsPage({
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
   const { isSignedIn, isLoaded, user } = useAuth();
+  const [workspaceUsageReportingActive, setWorkspaceUsageReportingActive] = useState(false);
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      setWorkspaceUsageReportingActive(false);
+      return;
+    }
+    let cancelled = false;
+    usageReportingService.isWorkspaceReportingActive().then((active) => {
+      if (!cancelled) setWorkspaceUsageReportingActive(active);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn]);
+
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isOpeningBilling, setIsOpeningBilling] = useState(false);
@@ -3472,6 +3489,18 @@ EOF`,
                     <Toggle checked={telemetryEnabled} onChange={setTelemetryEnabled} />
                   </SettingsRow>
                 </SettingsPanelRow>
+                {workspaceUsageReportingActive && (
+                  <SettingsPanelRow>
+                    <div>
+                      <p className="text-xs font-medium text-foreground">
+                        {t("settingsPage.privacy.workspaceUsageReporting")}
+                      </p>
+                      <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">
+                        {t("settingsPage.privacy.workspaceUsageReportingDescription")}
+                      </p>
+                    </div>
+                  </SettingsPanelRow>
+                )}
               </SettingsPanel>
             </div>
 

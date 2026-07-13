@@ -1632,6 +1632,8 @@
       "title": "プライバシー",
       "usageAnalytics": "使用状況の分析",
       "usageAnalyticsDescription": "匿名のパフォーマンスデータを共有して OpenWhispr の改善にご協力ください。文字起こしの内容は送信されません。タイミングとエラーデータのみです。",
+      "workspaceUsageReporting": "ワークスペースの使用状況レポート",
+      "workspaceUsageReportingDescription": "ワークスペースの管理者は単語数と機能の使用状況を確認できます。文字起こしの内容や音声が共有されることはありません。",
       "dataRetention": "データ保持",
       "dataRetentionDescription": "文字起こしと音声を履歴にローカル保存します。無効にすると、文字起こしは貼り付けられますが保存されません。",
       "hoursAgo": "{{count}}時間前",

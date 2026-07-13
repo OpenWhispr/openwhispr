@@ -1805,6 +1805,8 @@
       "title": "Privacy",
       "usageAnalytics": "Usage analytics",
       "usageAnalyticsDescription": "Help us improve OpenWhispr by sharing anonymous performance metrics. We never send transcription content — only timing and error data.",
+      "workspaceUsageReporting": "Workspace usage reporting",
+      "workspaceUsageReportingDescription": "Your workspace admin can see your word counts and feature usage — never transcript text or audio.",
       "audioRetention": "Audio Retention",
       "audioRetentionDescription": "Store audio recordings locally for re-transcription and download. Files are automatically deleted after the retention period.",
       "audioRetentionDisabled": "Disabled",

@@ -1680,6 +1680,8 @@
       "title": "Privacidad",
       "usageAnalytics": "Analíticas de uso",
       "usageAnalyticsDescription": "Ayúdanos a mejorar OpenWhispr compartiendo métricas de rendimiento anónimas. Nunca enviamos contenido de transcripciones, solo datos de tiempo y errores.",
+      "workspaceUsageReporting": "Informes de uso del espacio de trabajo",
+      "workspaceUsageReportingDescription": "El administrador de tu espacio de trabajo puede ver tu recuento de palabras y el uso de funciones — nunca el texto de las transcripciones ni el audio.",
       "dataRetention": "Retención de datos",
       "dataRetentionDescription": "Almacenar transcripciones y audio localmente en tu historial. Cuando está desactivado, las transcripciones se pegan pero no se guardan.",
       "hoursAgo": "hace {{count}}h",

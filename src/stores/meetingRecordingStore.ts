@@ -21,6 +21,11 @@ import {
   type TranscriptSpeakerLockSource,
   type TranscriptSpeakerStatus,
 } from "../utils/transcriptSpeakerState";
+import {
+  usageReportingService,
+  countWords,
+  type UsageMode,
+} from "../services/UsageReportingService";
 
 export interface TranscriptSegment {
   id: string;
@@ -417,6 +422,14 @@ let systemPartialSpeakerIdValue: string | null = null;
 let recentSystemSpeaker: RecentSystemSpeaker | null = null;
 let speakerLocks: Map<string, string> = new Map();
 let pushConfigTimeout: ReturnType<typeof setTimeout> | null = null;
+// Usage-reporting snapshot for the active session; the id doubles as the
+// idempotent clientEventId for /api/usage-events (one event per session).
+let sessionUsage: {
+  clientEventId: string;
+  startedAt: number;
+  mode: UsageMode;
+  seedWordCount: number;
+} | null = null;
 
 export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   isRecording: false,
@@ -759,9 +772,22 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
     const { initialSystemAudioStrategy, initialDisplayCaptureStrategy, systemCapturePromise } =
       prepareMeetingSystemAudioCapture(initialSystemAudioAccess);
 
+    const transcriptionOptions = getMeetingTranscriptionOptions();
+    sessionUsage = {
+      clientEventId: crypto.randomUUID(),
+      startedAt: Date.now(),
+      mode:
+        transcriptionOptions.provider === "local"
+          ? "local"
+          : transcriptionOptions.mode === "byok"
+            ? "byok"
+            : "cloud",
+      seedWordCount: countWords(buildTranscriptText(seed)),
+    };
+
     const [startResult, micResult, initialSystemCaptureResult] = await Promise.all([
       window.electronAPI?.meetingTranscriptionStart?.({
-        ...getMeetingTranscriptionOptions(),
+        ...transcriptionOptions,
         noteId: args.noteId ?? null,
       }),
       getMeetingMicConstraints().then(async (constraints) => {
@@ -810,6 +836,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
       stopMediaStream(micResult);
       stopMediaStream(systemCaptureResult.stream);
       isStartingFlag = false;
+      sessionUsage = null;
       return;
     }
 
@@ -828,6 +855,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
       stopMediaStream(systemCaptureResult.stream);
       isRecordingFlag = false;
       isStartingFlag = false;
+      sessionUsage = null;
       return;
     }
 
@@ -866,6 +894,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
       await window.electronAPI?.meetingTranscriptionStop?.();
       isRecordingFlag = false;
       isStartingFlag = false;
+      sessionUsage = null;
       return;
     }
 
@@ -1135,6 +1164,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
         "meeting"
       );
       isStartingFlag = false;
+      sessionUsage = null;
       await cleanup();
       return;
     }
@@ -1176,6 +1206,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<void> {
     });
     isRecordingFlag = false;
     isStartingFlag = false;
+    sessionUsage = null;
     await cleanup();
   }
 }
@@ -1191,6 +1222,9 @@ export async function stopRecording(): Promise<StopRecordingResult> {
 
   isRecordingFlag = false;
   isStartingFlag = false;
+  // Snapshot before meetingTranscriptionStop() — its result replaces the
+  // transcript, which for resumed recordings would drop the seeded words.
+  const totalWords = countWords(useMeetingRecordingStore.getState().transcript);
   useMeetingRecordingStore.setState({ isRecording: false, isTranscribing: false });
 
   await cleanup();
@@ -1210,6 +1244,24 @@ export async function stopRecording(): Promise<StopRecordingResult> {
   } catch (err) {
     useMeetingRecordingStore.setState({ error: (err as Error).message });
     logger.error("Meeting transcription stop failed", { error: (err as Error).message }, "meeting");
+  }
+
+  const usage = sessionUsage;
+  sessionUsage = null;
+  if (usage) {
+    // Meetings report in every mode — the server never meters meeting words,
+    // even for cloud minted-token sessions. Seed words belong to an earlier
+    // session (resumed recording) and are excluded.
+    const sessionWordCount = Math.max(0, totalWords - usage.seedWordCount);
+    if (sessionWordCount > 0) {
+      void usageReportingService.report({
+        feature: "meeting",
+        mode: usage.mode,
+        wordCount: sessionWordCount,
+        audioDurationMs: Date.now() - usage.startedAt,
+        clientEventId: usage.clientEventId,
+      });
+    }
   }
 
   useMeetingRecordingStore.setState({

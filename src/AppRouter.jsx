@@ -64,6 +64,9 @@ function MainApp() {
       import("./services/SyncService.js")
         .then(({ syncService }) => syncService.startAutoSync())
         .catch(() => {});
+      import("./services/UsageReportingService.js")
+        .then(({ usageReportingService }) => usageReportingService.start())
+        .catch(() => {});
     }
   }, [isAgentPanel, isControlPanel]);
 
