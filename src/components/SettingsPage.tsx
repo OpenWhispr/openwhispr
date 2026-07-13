@@ -105,6 +105,7 @@ import { useWorkspaceStore } from "../stores/workspaceStore";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
 import WorkspaceSection from "./settings/WorkspaceSection";
 import WorkspaceBillingOverview from "./settings/WorkspaceBillingOverview";
+import ProfileSection from "./settings/ProfileSection";
 import { formatAmount } from "../utils/formatAmount";
 
 export type SettingsSectionType =
@@ -1334,7 +1335,7 @@ export default function SettingsPage({
     });
   }, [isRemovingModels, cachePathHint, showConfirmDialog, showAlertDialog, t]);
 
-  const { isSignedIn, isLoaded, user } = useAuth();
+  const { isSignedIn, isLoaded, user, refetch } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [isOpeningBilling, setIsOpeningBilling] = useState(false);
@@ -1661,6 +1662,14 @@ export default function SettingsPage({
                     </div>
                   </SettingsPanelRow>
                 </SettingsPanel>
+
+                <ProfileSection
+                  name={user.name || ""}
+                  email={user.email}
+                  onSessionRefresh={() => {
+                    void refetch();
+                  }}
+                />
 
                 <SettingsPanel>
                   <SettingsPanelRow>

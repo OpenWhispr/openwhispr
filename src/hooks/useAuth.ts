@@ -58,7 +58,7 @@ async function loadAccountDependencies() {
 
 export function useAuth() {
   const useSession = authClient?.useSession ?? useStaticSession;
-  const { data: ambientSession, isPending, error: sessionError } = useSession();
+  const { data: ambientSession, isPending, error: sessionError, refetch } = useSession();
   const accountRevision = useSyncExternalStore(
     subscribeAccountScope,
     getAccountScopeRevision,
@@ -225,5 +225,6 @@ export function useAuth() {
     isLoaded,
     session: sessionIsBound && accountScopePresentable ? ambientSession : null,
     user: isSignedIn ? ambientUser : null,
+    refetch,
   };
 }
