@@ -1316,6 +1316,53 @@
         "successDescription": "Tu cuenta y todos los datos han sido eliminados. La aplicación se recargará ahora.",
         "failedTitle": "Error al eliminar",
         "failedDescription": "Algo salió mal al eliminar tu cuenta. Es posible que tus datos locales se hayan eliminado parcialmente. Inténtalo de nuevo."
+      },
+      "profile": {
+        "name": {
+          "label": "Nombre visible",
+          "placeholder": "Tu nombre",
+          "save": "Guardar",
+          "saving": "Guardando...",
+          "saved": "Nombre visible actualizado",
+          "error": "No se pudo actualizar tu nombre"
+        },
+        "email": {
+          "label": "Correo electrónico",
+          "change": "Cambiar",
+          "dialogTitle": "Cambiar correo electrónico",
+          "dialogDescription": "Introduce la nueva dirección de correo para tu cuenta.",
+          "newLabel": "Nuevo correo electrónico",
+          "newPlaceholder": "tu@ejemplo.com",
+          "submit": "Enviar enlace de confirmación",
+          "sending": "Enviando...",
+          "cancel": "Cancelar",
+          "sentTitle": "Revisa tu bandeja de entrada",
+          "sentDescription": "Enviamos un enlace de confirmación. El cambio se aplicará cuando lo confirmes.",
+          "close": "Cerrar"
+        },
+        "password": {
+          "label": "Contraseña",
+          "description": "Cambia la contraseña que usas para iniciar sesión.",
+          "change": "Cambiar contraseña",
+          "dialogTitle": "Cambiar contraseña",
+          "dialogDescription": "Introduce tu contraseña actual y elige una nueva.",
+          "currentLabel": "Contraseña actual",
+          "newLabel": "Nueva contraseña",
+          "confirmLabel": "Confirmar nueva contraseña",
+          "minLength": "La contraseña debe tener al menos 8 caracteres",
+          "mismatch": "Las contraseñas no coinciden",
+          "revokeOthers": "Cerrar sesión en otros dispositivos",
+          "submit": "Actualizar contraseña",
+          "saving": "Actualizando...",
+          "cancel": "Cancelar",
+          "saved": "Contraseña actualizada"
+        },
+        "errors": {
+          "invalidPassword": "Tu contraseña actual es incorrecta.",
+          "passwordTooShort": "La contraseña debe tener al menos 8 caracteres.",
+          "passwordTooLong": "La contraseña es demasiado larga.",          "noPassword": "Esta cuenta no tiene una contraseña configurada.",
+          "generic": "Algo salió mal. Inténtalo de nuevo."
+        }
       }
     },
     "agentConfig": {

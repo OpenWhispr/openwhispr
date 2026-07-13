@@ -231,3 +231,69 @@ export async function requestPasswordReset(email: string): Promise<{ error?: Err
     return { error: error instanceof Error ? error : new Error("Failed to send reset email") };
   }
 }
+
+export interface AuthActionError extends Error {
+  code?: string;
+}
+
+function toAuthActionError(source: unknown, fallbackMessage: string): AuthActionError {
+  if (source instanceof Error) return source as AuthActionError;
+  if (source && typeof source === "object") {
+    const record = source as { message?: string; code?: string };
+    const error: AuthActionError = new Error(record.message || fallbackMessage);
+    if (record.code) error.code = record.code;
+    return error;
+  }
+  return new Error(fallbackMessage);
+}
+
+export async function updateDisplayName(name: string): Promise<{ error?: AuthActionError }> {
+  try {
+    const { error } = await authClient.updateUser({ name: name.trim() });
+    if (error) return { error: toAuthActionError(error, "Failed to update name") };
+    return {};
+  } catch (error) {
+    return { error: toAuthActionError(error, "Failed to update name") };
+  }
+}
+
+export async function requestEmailChange(newEmail: string): Promise<{ error?: AuthActionError }> {
+  try {
+    const { error } = await authClient.changeEmail({
+      newEmail: newEmail.trim(),
+      callbackURL: "https://openwhispr.com",
+    });
+    if (error) return { error: toAuthActionError(error, "Failed to change email") };
+    return {};
+  } catch (error) {
+    return { error: toAuthActionError(error, "Failed to change email") };
+  }
+}
+
+export async function changePassword(params: {
+  currentPassword: string;
+  newPassword: string;
+  revokeOtherSessions: boolean;
+}): Promise<{ error?: AuthActionError }> {
+  try {
+    const { error } = await authClient.changePassword({
+      currentPassword: params.currentPassword,
+      newPassword: params.newPassword,
+      revokeOtherSessions: params.revokeOtherSessions,
+    });
+    if (error) return { error: toAuthActionError(error, "Failed to change password") };
+    return {};
+  } catch (error) {
+    return { error: toAuthActionError(error, "Failed to change password") };
+  }
+}
+
+export async function hasCredentialAccount(): Promise<boolean> {
+  try {
+    const { data, error } = await authClient.listAccounts();
+    if (error || !data) return true;
+    return data.some((account) => account.providerId === "credential");
+  } catch {
+    return true;
+  }
+}

@@ -12,7 +12,7 @@ const useStaticSession = () => ({
 
 export function useAuth() {
   const useSession = authClient?.useSession ?? useStaticSession;
-  const { data: session, isPending } = useSession();
+  const { data: session, isPending, refetch } = useSession();
   const user = session?.user ?? null;
   const rawIsSignedIn = Boolean(user);
   const gracePeriodActive = isWithinGracePeriod();
@@ -41,5 +41,6 @@ export function useAuth() {
     isLoaded: !isPending,
     session,
     user,
+    refetch,
   };
 }

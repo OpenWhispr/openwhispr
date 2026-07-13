@@ -1263,6 +1263,53 @@
         "successDescription": "您的账户和所有数据已被删除。应用将立即重新加载。",
         "failedTitle": "删除失败",
         "failedDescription": "删除您的账户时出错。您的本地数据可能已被部分删除。请重试。"
+      },
+      "profile": {
+        "name": {
+          "label": "显示名称",
+          "placeholder": "您的姓名",
+          "save": "保存",
+          "saving": "保存中...",
+          "saved": "显示名称已更新",
+          "error": "无法更新您的姓名"
+        },
+        "email": {
+          "label": "邮箱",
+          "change": "更改",
+          "dialogTitle": "更改邮箱",
+          "dialogDescription": "输入您账户的新邮箱地址。",
+          "newLabel": "新邮箱",
+          "newPlaceholder": "you@example.com",
+          "submit": "发送确认链接",
+          "sending": "正在发送...",
+          "cancel": "取消",
+          "sentTitle": "查看您的收件箱",
+          "sentDescription": "我们已发送确认链接。确认后更改即会生效。",
+          "close": "关闭"
+        },
+        "password": {
+          "label": "密码",
+          "description": "更改您用于登录的密码。",
+          "change": "更改密码",
+          "dialogTitle": "更改密码",
+          "dialogDescription": "输入您的当前密码并设置新密码。",
+          "currentLabel": "当前密码",
+          "newLabel": "新密码",
+          "confirmLabel": "确认新密码",
+          "minLength": "密码至少需要 8 个字符",
+          "mismatch": "两次输入的密码不一致",
+          "revokeOthers": "在其他设备上退出登录",
+          "submit": "更新密码",
+          "saving": "更新中...",
+          "cancel": "取消",
+          "saved": "密码已更新"
+        },
+        "errors": {
+          "invalidPassword": "您的当前密码不正确。",
+          "passwordTooShort": "密码至少需要 8 个字符。",
+          "passwordTooLong": "密码过长。",          "noPassword": "此账户未设置密码。",
+          "generic": "出了点问题，请重试。"
+        }
       }
     },
     "agentConfig": {
