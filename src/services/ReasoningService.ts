@@ -1,4 +1,5 @@
 import {
+  getAnthropicApiConfig,
   getModelProvider,
   getCloudModel,
   getOpenAiApiConfig,
@@ -662,7 +663,12 @@ class ReasoningService extends BaseReasoningService {
       messageCount: messages.length,
     });
 
-    const useTemperature = isLocalProvider || isLanCleanup || apiConfig.supportsTemperature;
+    const useTemperature =
+      isLocalProvider ||
+      isLanCleanup ||
+      (provider === "anthropic"
+        ? getAnthropicApiConfig(model).supportsTemperature
+        : apiConfig.supportsTemperature);
 
     // cancelActiveStream() aborts this controller; streamText propagates it
     // into doStream, cancelling the enterprise IPC proxy's request in main.

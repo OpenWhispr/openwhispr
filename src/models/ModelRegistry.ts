@@ -479,6 +479,14 @@ export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiAp
   return { tokenParam: "max_completion_tokens", supportsTemperature: false };
 }
 
+export interface AnthropicApiConfig {
+  supportsTemperature: boolean;
+}
+
+export function getAnthropicApiConfig(modelId: string): AnthropicApiConfig {
+  return { supportsTemperature: getCloudModel(modelId)?.supportsTemperature };
+}
+
 export function getParakeetModels(): ParakeetModelsMap {
   return modelData.parakeetModels;
 }

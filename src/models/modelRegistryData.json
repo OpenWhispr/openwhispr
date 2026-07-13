@@ -330,55 +330,64 @@
           "id": "claude-fable-5",
           "name": "Claude Fable 5",
           "description": "Anthropic's most capable model, Mythos-class, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5",
+          "supportsTemperature": false
         },
         {
           "id": "claude-sonnet-5",
           "name": "Claude Sonnet 5",
           "description": "Fast, capable agentic model at lower cost",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5",
+          "supportsTemperature": false
         },
         {
           "id": "claude-sonnet-4-6",
           "name": "Claude Sonnet 4.6",
           "description": "Balanced performance",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6",
+          "supportsTemperature": true
         },
         {
           "id": "claude-haiku-4-5",
           "name": "Claude Haiku 4.5",
           "description": "Fast with near-frontier intelligence",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5",
+          "supportsTemperature": true
         },
         {
           "id": "claude-opus-4-8",
           "name": "Claude Opus 4.8",
           "description": "Powerful Opus model tuned for honesty and reliability, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8",
+          "supportsTemperature": false
         },
         {
           "id": "claude-opus-4-7",
           "name": "Claude Opus 4.7",
           "description": "Powerful Opus model, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7",
+          "supportsTemperature": false
         },
         {
           "id": "claude-opus-4-6",
           "name": "Claude Opus 4.6",
           "description": "Previous Opus generation, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6",
+          "supportsTemperature": true
         },
         {
           "id": "claude-sonnet-4-5",
           "name": "Claude Sonnet 4.5",
           "description": "Previous Sonnet generation",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5",
+          "supportsTemperature": true
         },
         {
           "id": "claude-opus-4-5",
           "name": "Claude Opus 4.5",
           "description": "Earlier Opus model",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5",
+          "supportsTemperature": true
         }
       ]
     },
