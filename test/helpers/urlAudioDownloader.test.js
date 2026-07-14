@@ -496,6 +496,7 @@ function makeFakeProxyRequest() {
   req.followRedirectCalled = false;
   req.abort = () => { req.abortCalled = true; };
   req.followRedirect = () => { req.followRedirectCalled = true; };
+  req.setHeader = () => {};
   req.end = () => {};
   return req;
 }

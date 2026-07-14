@@ -2,8 +2,9 @@ const https = require("https");
 const http = require("http");
 const dns = require("dns");
 const { isIP } = require("net");
-// Namespaced (not destructured) so tests can monkeypatch childProcess.spawn. See T2.
+// Namespaced (not destructured) so tests can monkeypatch childProcess.spawn.
 const childProcess = require("child_process");
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -23,24 +24,28 @@ const STALL_TIMEOUT_MS = 30_000;
 const CONNECT_TIMEOUT_MS = 30_000;
 const MAX_DOWNLOAD_BYTES = 500 * 1024 * 1024;
 const MAX_REDIRECTS = 3;
-// Reject absurdly long videos before downloading. See L1.
+// Reject absurdly long videos before downloading.
 const MAX_DURATION_SECONDS = 6 * 60 * 60;
+const USER_AGENT = "OpenWhispr/1.0";
 
 // Writable yt-dlp cache, seeded from the read-only bundle so the binary can
-// self-update (the bundled copy is read-only / inside the signed bundle). See T2.
+// self-update (the bundled copy is read-only / inside the signed bundle).
 // OPENWHISPR_YTDLP_CACHE_DIR overrides the location (relocate it, or isolate it in tests).
 const YT_DLP_CACHE_DIR =
   process.env.OPENWHISPR_YTDLP_CACHE_DIR ||
   path.join(os.homedir(), ".cache", "openwhispr", "yt-dlp");
 const YT_DLP_UPDATE_THROTTLE_MS = 24 * 60 * 60 * 1000;
-// Bound the -U self-update so a stalled GitHub request can never hang a download
-// or wedge the single-flight flag. Overridable via options.timeoutMs for tests. See T2.
+// Bound the self-update so a stalled GitHub request can never hang a download
+// or wedge the single-flight flag. Overridable via options.timeoutMs for tests.
 const UPDATE_TIMEOUT_MS = 120_000;
+// Absolute ceilings on yt-dlp runs so a wedged process can never hang a queue item.
+const YT_DLP_METADATA_TIMEOUT_MS = 2 * 60 * 1000;
+const YT_DLP_EXTRACTION_TIMEOUT_MS = 30 * 60 * 1000;
 let ytDlpUpdateInFlight = false;
 let ytDlpBusyCount = 0;
 
 // Decode the IPv4 embedded in the trailing 32 bits of a NAT64 (64:ff9b::/96) address.
-// Handles "::" compression; returns dotted IPv4 or null. See L3.
+// Handles "::" compression; returns dotted IPv4 or null.
 function nat64EmbeddedV4(lowerAddr) {
   const parts = lowerAddr.split("::");
   const head = parts[0].split(":").filter(Boolean);
@@ -76,8 +81,8 @@ function isPrivateIp(ip) {
   }
   if (isIP(ip) === 6) {
     const lower = ip.toLowerCase();
-    // NAT64 well-known prefix embeds an IPv4 in the trailing 32 bits. See L3.
-    // Match zero-padded first hextet too ("0064:ff9b" == "64:ff9b"). See T4.
+    // NAT64 well-known prefix embeds an IPv4 in the trailing 32 bits.
+    // Match zero-padded first hextet too ("0064:ff9b" == "64:ff9b").
     if (isNat64Prefix(lower)) {
       const dottedTail = lower.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
       if (dottedTail) return isPrivateIp(dottedTail[1]);
@@ -86,7 +91,8 @@ function isPrivateIp(ip) {
       return false;
     }
     if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
-    if (lower.startsWith("fe80")) return true;
+    // Link-local is fe80::/10 (fe80–febf), not just the literal fe80 hextet.
+    if (/^fe[89ab]/.test(lower)) return true;
     if (lower.startsWith("ff")) return true;
     const v4mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
     if (v4mapped) return isPrivateIp(v4mapped[1]);
@@ -100,7 +106,7 @@ function isPrivateIp(ip) {
       return isPrivateIp(dotted);
     }
     // Fully-expanded / zero-padded v4-mapped form "<all-zero groups>:ffff:HHHH:HHHH"
-    // (e.g. "0:0:0:0:0:ffff:7f00:1"). The leading [0:]+ ensures only zeros precede ffff. See T4.
+    // (e.g. "0:0:0:0:0:ffff:7f00:1"). The leading [0:]+ ensures only zeros precede ffff.
     const v4mappedExpanded = lower.match(/^[0:]+:ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
     if (v4mappedExpanded) {
       const hi = parseInt(v4mappedExpanded[1], 16);
@@ -108,7 +114,7 @@ function isPrivateIp(ip) {
       const dotted = `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`;
       return isPrivateIp(dotted);
     }
-    // Same expanded form but with a dotted IPv4 tail (e.g. "0:0:0:0:0:ffff:127.0.0.1"). See T4.
+    // Same expanded form but with a dotted IPv4 tail (e.g. "0:0:0:0:0:ffff:127.0.0.1").
     const v4mappedExpandedDotted = lower.match(/^[0:]+:ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
     if (v4mappedExpandedDotted) {
       return isPrivateIp(v4mappedExpandedDotted[1]);
@@ -119,7 +125,7 @@ function isPrivateIp(ip) {
 }
 
 // True when the first two hextets are the NAT64 well-known prefix 64:ff9b,
-// tolerating zero-padding ("0064:ff9b"). See T4.
+// tolerating zero-padding ("0064:ff9b").
 function isNat64Prefix(lower) {
   const head = lower.split("::")[0].split(":");
   if (head.length < 2) return false;
@@ -128,7 +134,7 @@ function isNat64Prefix(lower) {
   return h0 === "64" && h1 === "ff9b";
 }
 
-// Unified accept gate for HEAD and GET so the two stages can never disagree. See L2.
+// Unified accept gate for HEAD and GET so the two stages can never disagree.
 function isAcceptableAudioContentType(contentType) {
   const ct = (contentType || "").toLowerCase();
   return ct.startsWith("audio/") || ct.startsWith("video/");
@@ -136,7 +142,7 @@ function isAcceptableAudioContentType(contentType) {
 
 // autoSelectFamily/Happy Eyeballs (default on Node 18+) calls lookup with
 // { all: true }, so dns.lookup yields an ARRAY of { address, family }. Reject if
-// ANY resolved entry is private; forward the original value unchanged on success. See T1.
+// ANY resolved entry is private; forward the original value unchanged on success.
 function ssrfSafeLookup(hostname, options, callback) {
   dns.lookup(hostname, options, (err, address, family) => {
     if (err) return callback(err);
@@ -241,9 +247,13 @@ function createStallChecker(onStall) {
   };
 }
 
-// Resolve the bundled yt-dlp sidecar binary. Mirrors whisper.js resolution. See J2.
+function ytDlpBinaryName() {
+  return `yt-dlp-${process.platform}-${process.arch}${process.platform === "win32" ? ".exe" : ""}`;
+}
+
+// Resolve the bundled yt-dlp sidecar binary. Mirrors whisper.js resolution.
 function resolveYtDlpPath() {
-  const name = `yt-dlp-${process.platform}-${process.arch}${process.platform === "win32" ? ".exe" : ""}`;
+  const name = ytDlpBinaryName();
   const candidates = [];
   if (process.resourcesPath) {
     candidates.push(path.join(process.resourcesPath, "bin", name));
@@ -252,17 +262,40 @@ function resolveYtDlpPath() {
   return candidates.find((p) => fs.existsSync(p)) || null;
 }
 
-function ytDlpBinaryName() {
-  return `yt-dlp-${process.platform}-${process.arch}${process.platform === "win32" ? ".exe" : ""}`;
-}
-
-// Path to the writable (self-updating) yt-dlp copy. Same basename as the bundle. See T2.
+// Path to the writable (self-updating) yt-dlp copy. Same basename as the bundle.
 function getCacheYtDlpPath() {
   return path.join(YT_DLP_CACHE_DIR, ytDlpBinaryName());
 }
 
+function sha256File(p) {
+  return crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex");
+}
+
+// Trust anchors: the signed app bundle (seed) and yt-dlp's SUMS-verified self-update.
+function recordCacheChecksum() {
+  try {
+    const cachePath = getCacheYtDlpPath();
+    fs.writeFileSync(`${cachePath}.sha256`, sha256File(cachePath));
+  } catch (e) {
+    debugLogger.warn("Failed to record yt-dlp cache checksum", { error: e.message });
+  }
+}
+
+// The cache dir is user-writable; verify before executing. Mismatch discards the
+// copy so the next download re-seeds from the signed bundle.
+function cacheChecksumValid(cachePath) {
+  try {
+    const expected = fs.readFileSync(`${cachePath}.sha256`, "utf8").trim();
+    if (expected && expected === sha256File(cachePath)) return true;
+  } catch {}
+  try { fs.unlinkSync(cachePath); } catch {}
+  try { fs.unlinkSync(`${cachePath}.sha256`); } catch {}
+  debugLogger.warn("yt-dlp cache failed checksum verification; discarded", { cachePath });
+  return false;
+}
+
 // Best-effort: copy the bundled binary into the writable cache on first use.
-// Never throws — callers fall back to the bundled copy. See T2.
+// Never throws — callers fall back to the bundled copy.
 function seedYtDlpFromBundle() {
   let tempPath;
   try {
@@ -270,13 +303,15 @@ function seedYtDlpFromBundle() {
     if (fs.existsSync(cachePath)) return;
     const bundled = resolveYtDlpPath();
     if (!bundled) return;
-    fs.mkdirSync(YT_DLP_CACHE_DIR, { recursive: true });
+    fs.mkdirSync(YT_DLP_CACHE_DIR, { recursive: true, mode: 0o700 });
+    try { fs.chmodSync(YT_DLP_CACHE_DIR, 0o700); } catch {}
     // Atomic seed: copy to a temp path, chmod, then rename so a crash mid-copy
-    // can never leave a truncated cache binary that would fail to spawn. See T2.
+    // can never leave a truncated cache binary that would fail to spawn.
     tempPath = `${cachePath}.tmp-${process.pid}`;
     fs.copyFileSync(bundled, tempPath);
     fs.chmodSync(tempPath, 0o755);
     fs.renameSync(tempPath, cachePath);
+    recordCacheChecksum();
   } catch (e) {
     if (tempPath) { try { fs.unlinkSync(tempPath); } catch {} }
     debugLogger.warn("Failed to seed yt-dlp from bundle", { error: e.message });
@@ -293,33 +328,35 @@ function isExecutableFile(p) {
   }
 }
 
-// Prefer the self-updating cache copy; fall back to the bundled binary; null if neither. See T2.
+// Checksum-verified cache copy, else bundled binary, else null. During an update
+// swap, use the bundle so we never spawn a half-replaced file.
 function resolveYtDlpBinary() {
+  if (ytDlpUpdateInFlight) return resolveYtDlpPath();
   const cachePath = getCacheYtDlpPath();
-  if (fs.existsSync(cachePath) && isExecutableFile(cachePath)) {
+  if (fs.existsSync(cachePath) && isExecutableFile(cachePath) && cacheChecksumValid(cachePath)) {
     return cachePath;
   }
   return resolveYtDlpPath();
 }
 
-// Wrap runYtDlp so maybeUpdateYtDlp can skip while a download holds the binary. See T2.
-async function runYtDlpTracked(binaryPath, args, abortSignal) {
+// Wrap runYtDlp so maybeUpdateYtDlp can skip while a download holds the binary.
+async function runYtDlpTracked(binaryPath, args, abortSignal, timeoutMs) {
   ytDlpBusyCount += 1;
   try {
-    return await runYtDlp(binaryPath, args, abortSignal);
+    return await runYtDlp(binaryPath, args, abortSignal, timeoutMs);
   } finally {
     ytDlpBusyCount -= 1;
   }
 }
 
 // Throttled, single-flight, best-effort background self-update of the CACHE copy
-// only (never the bundled binary). Never throws/rejects to the caller. See T2.
+// only (never the bundled binary). Never throws/rejects to the caller.
 function maybeUpdateYtDlp({ force, abortSignal, timeoutMs } = {}) {
   return new Promise((resolve) => {
     const stampPath = path.join(YT_DLP_CACHE_DIR, ".last-update");
     const touchStamp = () => {
       try {
-        fs.mkdirSync(YT_DLP_CACHE_DIR, { recursive: true });
+        fs.mkdirSync(YT_DLP_CACHE_DIR, { recursive: true, mode: 0o700 });
         fs.writeFileSync(stampPath, String(Date.now()));
       } catch {}
     };
@@ -342,7 +379,9 @@ function maybeUpdateYtDlp({ force, abortSignal, timeoutMs } = {}) {
       ytDlpUpdateInFlight = true;
       let child;
       try {
-        child = childProcess.spawn(cacheBinary, ["-U"], { windowsHide: true });
+        // Nightly: upstream calls stable "prone to external breakage"; the updater
+        // self-verifies against the release's SHA2-256SUMS.
+        child = childProcess.spawn(cacheBinary, ["--update-to", "nightly"], { windowsHide: true });
       } catch (e) {
         ytDlpUpdateInFlight = false;
         debugLogger.warn("yt-dlp self-update failed to start", { error: e.message });
@@ -353,14 +392,14 @@ function maybeUpdateYtDlp({ force, abortSignal, timeoutMs } = {}) {
       if (child.stdout) child.stdout.on("data", () => {});
       if (child.stderr) child.stderr.on("data", () => {});
 
-      // Bounded kill timer so a stalled -U network request can never hang. See T2.
+      // Bounded kill timer so a stalled -U network request can never hang.
       const limit = typeof timeoutMs === "number" ? timeoutMs : UPDATE_TIMEOUT_MS;
       let killTimer = null;
       let onAbort = null;
 
       let done = false;
       // Always clears the timer/listener, resets the in-flight flag, stamps the
-      // throttle, and resolves — never rejects (best-effort contract). See T2.
+      // throttle, and resolves — never rejects (best-effort contract).
       const finish = (errMessage) => {
         if (done) return;
         done = true;
@@ -390,7 +429,10 @@ function maybeUpdateYtDlp({ force, abortSignal, timeoutMs } = {}) {
       }
 
       child.on("error", (err) => finish(err.message));
-      child.on("close", () => finish(null));
+      child.on("close", () => {
+        recordCacheChecksum();
+        finish(null);
+      });
     } catch (e) {
       ytDlpUpdateInFlight = false;
       debugLogger.warn("yt-dlp self-update unexpected error", { error: e.message });
@@ -400,7 +442,7 @@ function maybeUpdateYtDlp({ force, abortSignal, timeoutMs } = {}) {
 }
 
 // Resolve the OS/corporate proxy for a target URL via Electron. Returns a proxy
-// URL string (e.g. "http://host:port") or null for DIRECT / when unavailable. See J1.
+// URL string (e.g. "http://host:port") or null for DIRECT / when unavailable.
 async function resolveProxyForUrl(targetUrl) {
   let session;
   try {
@@ -451,7 +493,7 @@ function deriveTitleAndExt(urlPath) {
 }
 
 // Reject hostnames that resolve (or already are) a private/internal address.
-// Defense-in-depth pre-flight for the proxy path. See J1.
+// Defense-in-depth pre-flight for the proxy path.
 function assertPublicHost(hostname) {
   return new Promise((resolve, reject) => {
     const raw = hostname.replace(/^\[|\]$/g, "");
@@ -481,17 +523,30 @@ function assertPublicHost(hostname) {
   });
 }
 
-// Spawn the yt-dlp sidecar, capture stdout/stderr, honor abort. See J2.
-function runYtDlp(binaryPath, args, abortSignal) {
+// yt-dlp needs an external JS runtime for YouTube player challenges. Reuse the
+// app's Electron binary in Node mode; the env var is inherited by yt-dlp's child.
+function jsRuntimeSpawnConfig() {
+  return {
+    args: ["--js-runtimes", `node:${process.execPath}`],
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
+  };
+}
+
+// Spawn the yt-dlp sidecar, capture stdout/stderr, honor abort and a hard timeout.
+function runYtDlp(binaryPath, args, abortSignal, timeoutMs) {
   return new Promise((resolve, reject) => {
     if (abortSignal?.aborted) {
       reject(Object.assign(new Error("Download cancelled"), { code: "DOWNLOAD_CANCELLED" }));
       return;
     }
 
+    const runtime = jsRuntimeSpawnConfig();
     let child;
     try {
-      child = childProcess.spawn(binaryPath, args, { windowsHide: true });
+      child = childProcess.spawn(binaryPath, [...runtime.args, ...args], {
+        windowsHide: true,
+        env: runtime.env,
+      });
     } catch (e) {
       reject(Object.assign(new Error(e.message || "Failed to start yt-dlp"), { code: "DOWNLOAD_FAILED" }));
       return;
@@ -500,6 +555,7 @@ function runYtDlp(binaryPath, args, abortSignal) {
     let stdout = "";
     let stderr = "";
     let aborted = false;
+    let timedOut = false;
 
     const onAbort = () => {
       aborted = true;
@@ -507,18 +563,34 @@ function runYtDlp(binaryPath, args, abortSignal) {
     };
     if (abortSignal) abortSignal.addEventListener("abort", onAbort, { once: true });
 
+    const killTimer = timeoutMs
+      ? setTimeout(() => {
+          timedOut = true;
+          try { child.kill("SIGKILL"); } catch {}
+        }, timeoutMs)
+      : null;
+
     child.stdout.on("data", (d) => { stdout += d.toString(); });
     child.stderr.on("data", (d) => { stderr += d.toString(); });
 
-    child.on("error", (err) => {
+    const cleanup = () => {
+      if (killTimer) clearTimeout(killTimer);
       if (abortSignal) abortSignal.removeEventListener("abort", onAbort);
+    };
+
+    child.on("error", (err) => {
+      cleanup();
       reject(Object.assign(new Error(err.message || "yt-dlp failed to run"), { code: "DOWNLOAD_FAILED" }));
     });
 
     child.on("close", (code) => {
-      if (abortSignal) abortSignal.removeEventListener("abort", onAbort);
+      cleanup();
       if (aborted || abortSignal?.aborted) {
         reject(Object.assign(new Error("Download cancelled"), { code: "DOWNLOAD_CANCELLED" }));
+        return;
+      }
+      if (timedOut) {
+        reject(Object.assign(new Error("yt-dlp timed out"), { code: "DOWNLOAD_FAILED", stderr }));
         return;
       }
       if (code !== 0) {
@@ -534,14 +606,36 @@ function runYtDlp(binaryPath, args, abortSignal) {
 }
 
 // Heuristic: yt-dlp stderr/message that smells like a stale extractor (YouTube
-// changed its player and a newer yt-dlp is needed). Drives the self-heal retry. See T2.
+// changed its player and a newer yt-dlp is needed). Drives the self-heal retry.
 function looksLikeStaleExtractor(message) {
   return /unable to extract|nsig|signature|player|sig extraction|failed to extract|update yt-dlp|confirm.*latest version|please report/i.test(
     message || ""
   );
 }
 
-// Remove any temp artifacts produced for a given base path. Best-effort. See T2.
+// YouTube refusing this network/IP (bot checks, 403s, login walls) — transient,
+// hits even fully-updated clients.
+function looksLikeYouTubeBlock(message) {
+  return /sign in to confirm|not a bot|login_required|http error 403|403 forbidden|sabr/i.test(
+    message || ""
+  );
+}
+
+// Single self-heal retry: on stale-extractor failures, force-update and retry once.
+async function runYtDlpWithSelfHeal(binary, args, abortSignal, timeoutMs, onBeforeRetry) {
+  try {
+    return await runYtDlpTracked(binary, args, abortSignal, timeoutMs);
+  } catch (e) {
+    if (e.code === "DOWNLOAD_CANCELLED") throw e;
+    const text = `${e.message || ""} ${e.stderr || ""}`;
+    if (!looksLikeStaleExtractor(text)) throw e;
+    onBeforeRetry?.();
+    await maybeUpdateYtDlp({ force: true, abortSignal });
+    return runYtDlpTracked(resolveYtDlpBinary() || binary, args, abortSignal, timeoutMs);
+  }
+}
+
+// Remove any temp artifacts produced for a given base path. Best-effort.
 function cleanupTempArtifacts(tempBase) {
   try {
     const tempDir = getSafeTempDir();
@@ -607,7 +701,7 @@ async function downloadYouTube(url, onProgress, abortSignal) {
     throw err;
   }
 
-  // yt-dlp's -x post-processor needs ffmpeg, which is not on PATH in packaged builds. See B2.
+  // yt-dlp's -x post-processor needs ffmpeg, which is not on PATH in packaged builds.
   const ffmpegPath = getFFmpegPath();
   if (!ffmpegPath) {
     const err = new Error("FFmpeg not found — required for YouTube audio extraction");
@@ -639,22 +733,30 @@ async function downloadYouTube(url, onProgress, abortSignal) {
 
   const sanitizedUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-  // Route yt-dlp through the OS proxy when one is configured. See J1.
+  // Route yt-dlp through the OS proxy when one is configured.
   const proxyUrl = await resolveProxyForUrl("https://www.youtube.com/");
   const proxyArgs = proxyUrl ? ["--proxy", proxyUrl] : [];
 
   let info;
   try {
-    const { stdout } = await runYtDlpTracked(
+    // Stale-extractor failures usually surface here, so this step self-heals too.
+    const { stdout } = await runYtDlpWithSelfHeal(
       binary,
       [...proxyArgs, "--dump-single-json", "--no-warnings", sanitizedUrl],
-      abortSignal
+      abortSignal,
+      YT_DLP_METADATA_TIMEOUT_MS
     );
     info = JSON.parse(stdout);
   } catch (e) {
     if (e.code === "DOWNLOAD_CANCELLED" || abortSignal?.aborted) {
       const err = new Error("Download cancelled");
       err.code = "DOWNLOAD_CANCELLED";
+      throw err;
+    }
+    const text = `${e.message || ""} ${e.stderr || ""}`;
+    if (looksLikeYouTubeBlock(text)) {
+      const err = new Error("YouTube is temporarily blocking downloads from your network. Try again later.");
+      err.code = "YOUTUBE_BLOCKED";
       throw err;
     }
     const err = new Error(e.message || "Video unavailable");
@@ -671,7 +773,7 @@ async function downloadYouTube(url, onProgress, abortSignal) {
   const title = info.title || `youtube-${videoId}`;
   const durationSeconds = info.duration || null;
 
-  // Reject absurdly long videos before downloading. See L1.
+  // Reject absurdly long videos before downloading.
   if (durationSeconds && durationSeconds > MAX_DURATION_SECONDS) {
     const err = new Error("Video is too long to download. Maximum length is 6 hours.");
     err.code = "FILE_TOO_LARGE";
@@ -700,34 +802,26 @@ async function downloadYouTube(url, onProgress, abortSignal) {
   ];
 
   try {
-    // Extract with a single self-heal retry: if it looks like a stale extractor,
-    // force-update the cache copy and retry once with the refreshed binary. See T2.
-    let retried = false;
-    let extractionBinary = binary;
-    while (true) {
-      try {
-        await runYtDlpTracked(extractionBinary, extractionArgs, abortSignal);
-        break;
-      } catch (e) {
-        if (e.code === "DOWNLOAD_CANCELLED") throw e;
-        const text = `${e.message || ""} ${e.stderr || ""}`;
-        const userError = e.code === "PLAYLIST_URL" || e.code === "VIDEO_UNAVAILABLE";
-        if (!retried && !userError && looksLikeStaleExtractor(text)) {
-          retried = true;
-          cleanupTempArtifacts(tempBase);
-          await maybeUpdateYtDlp({ force: true, abortSignal });
-          const binary2 = resolveYtDlpBinary();
-          if (binary2) extractionBinary = binary2;
-          continue;
-        }
-        throw e;
-      }
+    // The metadata step may have self-healed the cache copy; pick up the fresh binary.
+    const { stdout: extractionOut } = await runYtDlpWithSelfHeal(
+      resolveYtDlpBinary() || binary,
+      extractionArgs,
+      abortSignal,
+      YT_DLP_EXTRACTION_TIMEOUT_MS,
+      () => cleanupTempArtifacts(tempBase)
+    );
+
+    // --max-filesize makes yt-dlp skip the file and exit 0 with no output.
+    if (/larger than max-filesize/i.test(extractionOut)) {
+      const err = new Error("File too large. Maximum download size is 500 MB.");
+      err.code = "FILE_TOO_LARGE";
+      throw err;
     }
 
     const tempPath = selectYtDlpOutput(getSafeTempDir(), path.basename(tempBase));
     const sizeBytes = fs.statSync(tempPath).size;
 
-    // --max-filesize doesn't enforce for unknown-size streams; re-check after the fact. See T3.
+    // --max-filesize doesn't enforce for unknown-size streams; re-check after the fact.
     if (sizeBytes > MAX_DOWNLOAD_BYTES) {
       try { fs.unlinkSync(tempPath); } catch {}
       const err = new Error("File too large. Maximum download size is 500 MB.");
@@ -735,7 +829,7 @@ async function downloadYouTube(url, onProgress, abortSignal) {
       throw err;
     }
 
-    // Throttled background self-update for next time (never awaited). See T2.
+    // Throttled background self-update for next time (never awaited).
     maybeUpdateYtDlp();
 
     onProgress?.({ stage: "ready", percent: 100, title });
@@ -744,6 +838,12 @@ async function downloadYouTube(url, onProgress, abortSignal) {
   } catch (e) {
     cleanupTempArtifacts(tempBase);
     if (e.code === "DOWNLOAD_CANCELLED" || e.code === "PLAYLIST_URL") throw e;
+    const text = `${e.message || ""} ${e.stderr || ""}`;
+    if (looksLikeYouTubeBlock(text)) {
+      const err = new Error("YouTube is temporarily blocking downloads from your network. Try again later.");
+      err.code = "YOUTUBE_BLOCKED";
+      throw err;
+    }
     const err = new Error(e.stderr || e.message || "Download failed");
     err.code = e.code || "DOWNLOAD_FAILED";
     throw err;
@@ -753,7 +853,12 @@ async function downloadYouTube(url, onProgress, abortSignal) {
 function httpRequest(parsed, options) {
   const mod = parsed.protocol === "https:" ? https : http;
   return new Promise((resolve, reject) => {
-    const req = mod.request(parsed, { timeout: CONNECT_TIMEOUT_MS, ...options }, resolve);
+    // UA-less requests get bot-walled by common CDN fronts.
+    const req = mod.request(
+      parsed,
+      { timeout: CONNECT_TIMEOUT_MS, headers: { "User-Agent": USER_AGENT }, ...options },
+      resolve
+    );
     req.on("error", reject);
     req.on("timeout", () => {
       req.destroy();
@@ -787,18 +892,20 @@ function streamToFile(response, tempPath, { contentLength, title, onProgress, ab
       if (settled) return;
       settled = true;
       stall.clear();
+      if (abortSignal) abortSignal.removeEventListener("abort", onAbort);
       cleanupFile();
       reject(err);
     };
 
+    // React to cancel even while stalled (no data events arriving).
+    const onAbort = () => {
+      try { abort(); } catch {}
+      bail(Object.assign(new Error("Download cancelled"), { code: "DOWNLOAD_CANCELLED" }));
+    };
+    if (abortSignal) abortSignal.addEventListener("abort", onAbort, { once: true });
+
     response.on("data", (chunk) => {
       if (settled) return;
-
-      if (abortSignal?.aborted) {
-        try { abort(); } catch {}
-        bail(Object.assign(new Error("Download cancelled"), { code: "DOWNLOAD_CANCELLED" }));
-        return;
-      }
 
       stall.touch();
       downloaded += chunk.length;
@@ -829,6 +936,7 @@ function streamToFile(response, tempPath, { contentLength, title, onProgress, ab
       if (settled) return;
       settled = true;
       stall.clear();
+      if (abortSignal) abortSignal.removeEventListener("abort", onAbort);
       try {
         const sizeBytes = fs.statSync(tempPath).size;
         resolve(sizeBytes);
@@ -855,7 +963,7 @@ const REDIRECT_RESTART = "REDIRECT_RESTART";
 // automatically). For defense-in-depth we still pre-flight the target hostname and
 // re-validate each redirect hop against private IPs. With a proxy the corporate
 // egress policy is the primary SSRF control; net.request does not accept a
-// per-request lookup, leaving a narrow DNS-rebinding TOCTOU residual. See J1.
+// per-request lookup, leaving a narrow DNS-rebinding TOCTOU residual.
 async function downloadViaProxy(url, onProgress, abortSignal, redirectCount = 0) {
   const net = getElectronNet();
 
@@ -871,6 +979,7 @@ async function downloadViaProxy(url, onProgress, abortSignal, redirectCount = 0)
     let request;
     try {
       request = net.request({ url, method: "GET", redirect: "manual" });
+      request.setHeader("User-Agent", USER_AGENT);
     } catch (e) {
       reject(Object.assign(new Error(e.message || "Download failed"), { code: "DOWNLOAD_FAILED" }));
       return;
@@ -1006,58 +1115,68 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
 
   // When the OS has a proxy configured, raw node-https would bypass it. Route through
   // Electron net.request instead; keep the airtight node-https + ssrfSafeLookup path
-  // as the default for the common no-proxy case. See J1.
+  // as the default for the common no-proxy case.
   const proxyUrl = await resolveProxyForUrl(url);
   if (proxyUrl) {
     return downloadViaProxy(url, onProgress, abortSignal, redirectCount);
   }
 
+  // Servers may refuse HEAD (GET-only presigned URLs, 405s): non-2xx or transport
+  // failures fall through to the GET, which is fully re-validated anyway.
   let headParsed = parsed;
   let headRedirects = 0;
-  let headResponse;
-  while (true) {
-    headResponse = await httpRequest(headParsed, { method: "HEAD", lookup: ssrfSafeLookup });
-    headResponse.resume();
-    if (headResponse.statusCode >= 300 && headResponse.statusCode < 400 && headResponse.headers.location) {
-      // Cumulative redirect bound across alternating GET+HEAD hops. See L3.
-      if (redirectCount + ++headRedirects > MAX_REDIRECTS) {
-        const err = new Error("Too many redirects");
-        err.code = "DOWNLOAD_FAILED";
-        throw err;
+  let headResponse = null;
+  try {
+    while (true) {
+      headResponse = await httpRequest(headParsed, { method: "HEAD", lookup: ssrfSafeLookup });
+      headResponse.resume();
+      if (headResponse.statusCode >= 300 && headResponse.statusCode < 400 && headResponse.headers.location) {
+        // Cumulative redirect bound across alternating GET+HEAD hops.
+        if (redirectCount + ++headRedirects > MAX_REDIRECTS) {
+          const err = new Error("Too many redirects");
+          err.code = "DOWNLOAD_FAILED";
+          throw err;
+        }
+        const nextUrl = new URL(headResponse.headers.location, headParsed.href);
+        if (nextUrl.protocol !== "https:") {
+          const err = new Error("Only HTTPS URLs are supported for direct downloads");
+          err.code = "INVALID_URL";
+          throw err;
+        }
+        const nextRawHost = nextUrl.hostname.replace(/^\[|\]$/g, "");
+        if (isIP(nextRawHost) && isPrivateIp(nextRawHost)) {
+          const err = new Error("Direct downloads from private/internal addresses are not allowed");
+          err.code = "SSRF_BLOCKED";
+          throw err;
+        }
+        headParsed = nextUrl;
+        continue;
       }
-      const nextUrl = new URL(headResponse.headers.location, headParsed.href);
-      if (nextUrl.protocol !== "https:") {
-        const err = new Error("Only HTTPS URLs are supported for direct downloads");
-        err.code = "INVALID_URL";
-        throw err;
-      }
-      const nextRawHost = nextUrl.hostname.replace(/^\[|\]$/g, "");
-      if (isIP(nextRawHost) && isPrivateIp(nextRawHost)) {
-        const err = new Error("Direct downloads from private/internal addresses are not allowed");
-        err.code = "SSRF_BLOCKED";
-        throw err;
-      }
-      headParsed = nextUrl;
-      continue;
+      break;
     }
-    break;
+  } catch (e) {
+    if (e.code === "SSRF_BLOCKED" || e.code === "INVALID_URL" || e.code === "DOWNLOAD_FAILED") throw e;
+    headResponse = null;
   }
 
-  const contentType = (headResponse.headers["content-type"] || "").toLowerCase();
-  if (!isAcceptableAudioContentType(contentType)) {
-    const err = new Error(`URL does not point to an audio file (content-type: ${contentType})`);
-    err.code = "CONTENT_TYPE_INVALID";
-    throw err;
-  }
+  let contentLength = null;
+  if (headResponse && headResponse.statusCode >= 200 && headResponse.statusCode < 300) {
+    const contentType = (headResponse.headers["content-type"] || "").toLowerCase();
+    if (!isAcceptableAudioContentType(contentType)) {
+      const err = new Error(`URL does not point to an audio file (content-type: ${contentType})`);
+      err.code = "CONTENT_TYPE_INVALID";
+      throw err;
+    }
 
-  const contentLength = headResponse.headers["content-length"]
-    ? Number(headResponse.headers["content-length"])
-    : null;
+    contentLength = headResponse.headers["content-length"]
+      ? Number(headResponse.headers["content-length"])
+      : null;
 
-  if (contentLength && contentLength > MAX_DOWNLOAD_BYTES) {
-    const err = new Error("File too large. Maximum download size is 500 MB.");
-    err.code = "FILE_TOO_LARGE";
-    throw err;
+    if (contentLength && contentLength > MAX_DOWNLOAD_BYTES) {
+      const err = new Error("File too large. Maximum download size is 500 MB.");
+      err.code = "FILE_TOO_LARGE";
+      throw err;
+    }
   }
 
   const { title, ext } = deriveTitleAndExt(headParsed.pathname);
@@ -1091,6 +1210,16 @@ async function downloadDirect(url, onProgress, abortSignal, redirectCount = 0) {
     const err = new Error(`URL does not point to an audio file (content-type: ${getContentType})`);
     err.code = "CONTENT_TYPE_INVALID";
     throw err;
+  }
+
+  if (contentLength == null && response.headers["content-length"]) {
+    contentLength = Number(response.headers["content-length"]);
+    if (contentLength > MAX_DOWNLOAD_BYTES) {
+      response.destroy();
+      const err = new Error("File too large. Maximum download size is 500 MB.");
+      err.code = "FILE_TOO_LARGE";
+      throw err;
+    }
   }
 
   const sizeBytes = await streamToFile(response, tempPath, {
@@ -1127,7 +1256,7 @@ module.exports = {
   resolveYtDlpPath,
   maybeUpdateYtDlp,
   downloadViaProxy,
-  // Test-only seam: lets the regression test confirm the single-flight flag is cleared. See T2.
+  // Test-only seam: lets the regression test confirm the single-flight flag is cleared.
   _isYtDlpUpdateInFlight: () => ytDlpUpdateInFlight,
   // Test-only seam: injects a fake electron net for downloadViaProxy tests.
   _setElectronNetForTests: (net) => { electronNetOverride = net; },
