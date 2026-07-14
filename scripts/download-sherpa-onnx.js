@@ -37,7 +37,8 @@ const BINARIES = {
     libPattern: "*.dylib",
   },
   "win32-x64": {
-    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared.tar.bz2`,
+    // Since 1.13.4 the Windows assets carry an MSVC runtime/build-type suffix
+    archiveName: `sherpa-onnx-v${SHERPA_ONNX_VERSION}-win-x64-shared-MD-Release.tar.bz2`,
     binaryPath: "sherpa-onnx-offline-websocket-server.exe",
     outputName: "sherpa-onnx-ws-win32-x64.exe",
     onlineBinaryPath: "sherpa-onnx-online-websocket-server.exe",
@@ -59,6 +60,14 @@ const BINARIES = {
 };
 
 const BIN_DIR = path.join(__dirname, "..", "resources", "bin");
+
+const VERSIONED_LIB_PATTERN = /^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/;
+
+// Upstream 1.13.4 ships an invalid arm64 signature on libonnxruntime; dyld SIGKILLs unsigned loads.
+function adhocSign(filePath, platformArch) {
+  if (process.platform !== "darwin" || !platformArch.startsWith("darwin")) return;
+  execFileSync("codesign", ["--force", "--sign", "-", filePath], { stdio: "ignore" });
+}
 
 function getDownloadUrl(archiveName) {
   return `${GITHUB_RELEASE_URL}/${archiveName}`;
@@ -117,8 +126,10 @@ function copyBinary(extractDir, binaryName, outputPath, platformArch) {
     return false;
   }
 
+  fs.rmSync(outputPath, { force: true });
   fs.copyFileSync(foundPath, outputPath);
   setExecutable(outputPath);
+  adhocSign(outputPath, platformArch);
   console.log(`  ${platformArch}: Extracted to ${path.basename(outputPath)}`);
   return true;
 }
@@ -188,15 +199,16 @@ async function downloadBinary(platformArch, config, isForce = false) {
         const libName = path.basename(libPath);
         const destPath = path.join(BIN_DIR, libName);
 
-        // Detect versioned dylib pattern: libFoo.X.Y.Z.dylib
-        const versionMatch = libName.match(/^(lib.+?)\.(\d+\.\d+\.\d+)\.(dylib|so|dll)$/);
+        const versionMatch = libName.match(VERSIONED_LIB_PATTERN);
         if (versionMatch) {
-          const baseName = `${versionMatch[1]}.${versionMatch[3]}`; // e.g. libonnxruntime.dylib
-          versionedLibs.set(baseName, libName);
+          versionedLibs.set(`${versionMatch[1]}.${versionMatch[3]}`, libName);
         }
 
+        // rm first: copying onto an existing symlink would write through it
+        fs.rmSync(destPath, { force: true });
         fs.copyFileSync(libPath, destPath);
         setExecutable(destPath);
+        adhocSign(destPath, platformArch);
         copiedLibraries.push(libName);
         console.log(`  ${platformArch}: Copied library ${libName}`);
       }
@@ -205,15 +217,16 @@ async function downloadBinary(platformArch, config, isForce = false) {
       if (process.platform !== "win32") {
         for (const [baseName, versionedName] of versionedLibs) {
           const basePath = path.join(BIN_DIR, baseName);
-          const versionedPath = path.join(BIN_DIR, versionedName);
-          if (
-            fs.existsSync(basePath) &&
-            fs.existsSync(versionedPath) &&
-            !fs.lstatSync(basePath).isSymbolicLink()
-          ) {
-            fs.unlinkSync(basePath);
-            fs.symlinkSync(versionedName, basePath);
-            console.log(`  ${platformArch}: Symlinked ${baseName} -> ${versionedName}`);
+          fs.rmSync(basePath, { force: true });
+          fs.symlinkSync(versionedName, basePath);
+          console.log(`  ${platformArch}: Symlinked ${baseName} -> ${versionedName}`);
+
+          for (const file of fs.readdirSync(BIN_DIR)) {
+            const match = file.match(VERSIONED_LIB_PATTERN);
+            if (match && `${match[1]}.${match[3]}` === baseName && file !== versionedName) {
+              fs.unlinkSync(path.join(BIN_DIR, file));
+              console.log(`  ${platformArch}: Removed stale ${file}`);
+            }
           }
         }
       }
