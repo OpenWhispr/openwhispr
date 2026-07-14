@@ -462,7 +462,7 @@ class ReasoningService extends BaseReasoningService {
       }
     }
 
-    applyThinkingSuppression(requestBody, model, isLanCleanup ? "lan" : provider, config);
+    applyThinkingSuppression(requestBody, model, isLanChat ? "lan" : provider, config);
 
     logger.logReasoning("AGENT_STREAM_REQUEST", {
       endpoint,
