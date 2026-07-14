@@ -7,13 +7,17 @@
  * Uses IAudioSessionManager2 to enumerate and monitor capture sessions.
  * Supports --exclude-pid to ignore OpenWhispr's own microphone usage.
  *
- * Compile with: cl /O2 windows-mic-listener.c /Fe:windows-mic-listener.exe ole32.lib oleaut32.lib
- * Or with MinGW: gcc -O2 windows-mic-listener.c -o windows-mic-listener.exe -lole32 -loleaut32
+ * Compile with: cl /O2 windows-mic-listener.c /Fe:windows-mic-listener.exe ole32.lib oleaut32.lib user32.lib
+ * Or with MinGW: gcc -O2 windows-mic-listener.c -o windows-mic-listener.exe -lole32 -loleaut32 -luser32
  */
 
 #define WIN32_LEAN_AND_MEAN
 #define COBJMACROS
 #define CINTERFACE
+
+#ifdef _MSC_VER
+#pragma comment(lib, "user32.lib")
+#endif
 
 #include <windows.h>
 #include <initguid.h>
@@ -22,6 +26,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* The SDK declares these IIDs via MIDL_INTERFACE for C++ __uuidof only —
+ * no import library defines them and <initguid.h> skips them in C — so
+ * they must be defined in-source to link. */
+DEFINE_GUID(CLSID_MMDeviceEnumerator,
+    0xbcde0395, 0xe52f, 0x467c, 0x8e, 0x3d, 0xc4, 0x57, 0x92, 0x91, 0x69, 0x2e);
+DEFINE_GUID(IID_IMMDeviceEnumerator,
+    0xa95664d2, 0x9614, 0x4f35, 0xa7, 0x46, 0xde, 0x8d, 0xb6, 0x36, 0x17, 0xe6);
+DEFINE_GUID(IID_IAudioSessionManager2,
+    0x77aa99a0, 0x1bd6, 0x484f, 0x8b, 0xc7, 0x2c, 0x65, 0x4c, 0x9a, 0x9b, 0x6f);
+DEFINE_GUID(IID_IAudioSessionControl2,
+    0xbfb7ff88, 0x7239, 0x4fc9, 0x8f, 0xa2, 0x07, 0xc9, 0x50, 0xbe, 0x9c, 0x6d);
+DEFINE_GUID(IID_IAudioSessionEvents,
+    0x24918acc, 0x64b3, 0x37c1, 0x8c, 0xa9, 0x74, 0xa6, 0x6e, 0x99, 0x57, 0xa8);
+DEFINE_GUID(IID_IAudioSessionNotification,
+    0x641dd20b, 0x4d41, 0x49cc, 0xab, 0xa3, 0x17, 0x4b, 0x94, 0x77, 0xbb, 0x08);
 
 static DWORD g_excludePid = 0;
 static volatile BOOL g_running = TRUE;
