@@ -1,9 +1,9 @@
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
-const { spawn } = require("child_process");
 const { pipeline } = require("stream/promises");
 const debugLogger = require("./debugLogger");
+const { runSystemTar } = require("./systemTar");
 const {
   downloadFile,
   createDownloadSignal,
@@ -449,29 +449,7 @@ class ParakeetManager {
   }
 
   _runSystemTar(archivePath, extractDir) {
-    return new Promise((resolve, reject) => {
-      const tarProcess = spawn("tar", ["-xjf", archivePath, "-C", extractDir], {
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-
-      let stderr = "";
-
-      tarProcess.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      tarProcess.on("close", (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`tar extraction failed with code ${code}: ${stderr}`));
-        }
-      });
-
-      tarProcess.on("error", (err) => {
-        reject(new Error(`Failed to start tar process: ${err.message}`));
-      });
-    });
+    return runSystemTar(archivePath, extractDir);
   }
 
   async cancelDownload() {

@@ -3,6 +3,7 @@ const fsPromises = require("fs").promises;
 const path = require("path");
 const { spawn } = require("child_process");
 const debugLogger = require("./debugLogger");
+const { runSystemTar } = require("./systemTar");
 const { downloadFile, createDownloadSignal, checkDiskSpace } = require("./downloadUtils");
 const { resolveBinaryPath, gracefulStopProcess } = require("../utils/serverUtils");
 const { getModelsDirForService } = require("./modelDirUtils");
@@ -264,34 +265,7 @@ class DiarizationManager {
   }
 
   _runSystemTar(archivePath, destDir) {
-    return new Promise((resolve, reject) => {
-      // Use relative paths from archive dir as cwd so neither -f nor -C args
-      // contain Windows drive letter colons (GNU tar treats C: as remote host)
-      const cwd = path.dirname(archivePath);
-      const tarProcess = spawn(
-        "tar",
-        ["-xjf", path.basename(archivePath), "-C", path.relative(cwd, destDir)],
-        { stdio: ["ignore", "pipe", "pipe"], cwd }
-      );
-
-      let stderr = "";
-
-      tarProcess.stderr.on("data", (data) => {
-        stderr += data.toString();
-      });
-
-      tarProcess.on("close", (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`tar extraction failed with code ${code}: ${stderr}`));
-        }
-      });
-
-      tarProcess.on("error", (err) => {
-        reject(new Error(`Failed to start tar process: ${err.message}`));
-      });
-    });
+    return runSystemTar(archivePath, destDir);
   }
 
   async cancelDownload() {
