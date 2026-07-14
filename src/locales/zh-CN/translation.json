@@ -1977,7 +1977,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Google 最新多模态模型，强大推理能力",
         "gemma_gemma_4_e2b_it_q4_k_m": "Google 紧凑型 Gemma 4，快速高效",
         "gemma_gemma_3_12b_it_q4_k_m": "Google 中型模型，强推理能力",
-        "gemma_gemma_3_1b_it_q4_k_m": "超快谷歌模型，最适合短听写清理"
+        "gemma_gemma_3_1b_it_q4_k_m": "超快谷歌模型，最适合短听写清理",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Liquid AI 高效端侧模型，指令遵循出色",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AI 的 MoE 模型，仅 1.5B 激活参数即可实现高质量",
+        "liquidai_lfm2_2_6b_q4_k_m": "更高质量清理的均衡 LFM2 模型",
+        "liquidai_lfm2_5_350m_q8_0": "超轻量模型，快速清理听写文本",
+        "liquidai_lfm2_5_230m_q8_0": "微型模型，低配硬件也能即时清理"
       },
       "diarization": {
         "segmentation": "用于说话人分离的语音边界检测",
