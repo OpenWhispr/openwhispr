@@ -1966,7 +1966,9 @@
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Fast multilingual ASR with auto language detection (25 languages)",
-        "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)"
+        "parakeet_unified_en_0_6b": "English-only ASR with state-of-the-art accuracy (5.91% avg WER)",
+        "nemotron_speech_streaming_en_0_6b": "English streaming ASR from NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "Multilingual streaming ASR from NVIDIA Nemotron with auto language detection (15 languages)"
       },
       "diarization": {
         "segmentation": "Speech boundary detection for speaker diarization",
@@ -2074,7 +2076,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Google's latest multimodal, strong reasoning",
         "gemma_gemma_4_e2b_it_q4_k_m": "Google's compact Gemma 4, fast and efficient",
         "gemma_gemma_3_12b_it_q4_k_m": "Google's mid-range model, strong reasoning",
-        "gemma_gemma_3_1b_it_q4_k_m": "Ultra-fast Google model, best for short dictation cleanup"
+        "gemma_gemma_3_1b_it_q4_k_m": "Ultra-fast Google model, best for short dictation cleanup",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Liquid AI's efficient on-device model, excellent instruction following",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "Liquid AI's MoE, high quality with only 1.5B active params",
+        "liquidai_lfm2_2_6b_q4_k_m": "Balanced LFM2 for higher quality cleanup",
+        "liquidai_lfm2_5_350m_q8_0": "Ultra-light model for fast dictation cleanup",
+        "liquidai_lfm2_5_230m_q8_0": "Tiny model, instant cleanup on modest hardware"
       }
     }
   },
