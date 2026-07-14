@@ -174,7 +174,12 @@ export const useAudioRecording = (toast, options = {}) => {
               "streaming"
             );
           } else if (keepTranscriptionInClipboard) {
-            await navigator.clipboard.writeText(result.text);
+            // Route through the main process (write-clipboard IPC) rather than the
+            // renderer Clipboard API: navigator.clipboard.writeText requires the
+            // window to be focused, which it isn't during dictation, so on native
+            // Wayland (e.g. Sway) the write is silently rejected. The main-process
+            // path uses wl-copy and works regardless of focus.
+            await window.electronAPI?.writeClipboard?.(result.text);
           }
 
           audioManagerRef.current.saveTranscription(result.text, result.rawText ?? result.text, {
