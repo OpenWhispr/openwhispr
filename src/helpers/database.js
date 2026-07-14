@@ -41,6 +41,13 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
       try {
+        this.db.exec(
+          "ALTER TABLE transcriptions ADD COLUMN ai_edit_applied INTEGER NOT NULL DEFAULT 1"
+        );
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
         this.db.exec("ALTER TABLE transcriptions ADD COLUMN has_audio INTEGER NOT NULL DEFAULT 0");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
@@ -743,11 +750,32 @@ class DatabaseManager {
   updateTranscriptionText(id, text, rawText) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const stmt = this.db.prepare("UPDATE transcriptions SET text = ?, raw_text = ? WHERE id = ?");
+      const stmt = this.db.prepare(
+        "UPDATE transcriptions SET text = ?, raw_text = ?, ai_edit_applied = 1 WHERE id = ?"
+      );
       stmt.run(text, rawText, id);
       return { success: true };
     } catch (error) {
       debugLogger.error("Error updating transcription text", { error: error.message }, "database");
+      throw error;
+    }
+  }
+
+  setTranscriptionAiEditApplied(id, applied) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const stmt = this.db.prepare(
+        "UPDATE transcriptions SET ai_edit_applied = ? WHERE id = ? AND raw_text IS NOT NULL AND status = 'completed' AND deleted_at IS NULL"
+      );
+      const result = stmt.run(applied ? 1 : 0, id);
+      if (result.changes === 0) return { success: false, transcription: null };
+      return { success: true, transcription: this.getTranscriptionById(id) };
+    } catch (error) {
+      debugLogger.error(
+        "Error updating transcription AI edit state",
+        { error: error.message },
+        "database"
+      );
       throw error;
     }
   }

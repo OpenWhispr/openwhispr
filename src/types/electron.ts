@@ -26,6 +26,7 @@ export interface TranscriptionItem {
   id: number;
   text: string;
   raw_text: string | null;
+  ai_edit_applied?: 0 | 1;
   timestamp: string;
   created_at: string;
   has_audio: number;
@@ -580,6 +581,10 @@ declare global {
         id: number,
         text: string,
         rawText: string
+      ) => Promise<{ success: boolean; transcription?: TranscriptionItem; error?: string }>;
+      setTranscriptionAiEditApplied: (
+        id: number,
+        applied: boolean
       ) => Promise<{ success: boolean; transcription?: TranscriptionItem; error?: string }>;
 
       // Dictionary operations
