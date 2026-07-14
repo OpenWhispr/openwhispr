@@ -40,6 +40,7 @@ class ModelManager {
     this.downloadProgress = new Map();
     this.activeDownloads = new Map();
     this.activeRequests = new Map(); // Track HTTP requests for cancellation
+    this.downloadLifecycleVersion = 0;
     this.serverManager = new LlamaServerManager();
     this.currentServerModelId = null;
     this._initialized = false;
@@ -102,29 +103,46 @@ class ModelManager {
   async getAllModels() {
     this.ensureInitialized();
     try {
-      const models = [];
+      const modelEntries = [];
 
       for (const provider of getLocalProviders()) {
         for (const model of provider.models) {
           const modelPath = path.join(this.modelsDir, model.fileName);
-          const isDownloaded = await this.checkModelValid(modelPath);
-          const progress = this.downloadProgress.get(model.id);
-
-          models.push({
-            ...model,
-            providerId: provider.id,
-            providerName: provider.name,
-            isDownloaded,
-            isDownloading: this.activeDownloads.has(model.id),
-            downloadProgress: progress?.progress || 0,
-            downloadedSize: progress?.downloadedSize || 0,
-            totalSize: progress?.totalSize || 0,
-            path: isDownloaded ? modelPath : null,
-          });
+          modelEntries.push({ model, provider, modelPath });
         }
       }
 
-      return models;
+      let downloadedStates = [];
+
+      // A download can finish between checking the final file and reading the
+      // in-memory active state. Retry when that lifecycle changes so callers
+      // never receive the impossible "not downloaded and not downloading" gap.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const lifecycleVersion = this.downloadLifecycleVersion;
+        downloadedStates = await Promise.all(
+          modelEntries.map(({ modelPath }) => this.checkModelValid(modelPath))
+        );
+        if (lifecycleVersion === this.downloadLifecycleVersion) break;
+      }
+
+      // Read volatile download state only after all asynchronous filesystem checks
+      // finish so every model belongs to the same main-process snapshot.
+      return modelEntries.map(({ model, provider, modelPath }, index) => {
+        const progress = this.downloadProgress.get(model.id);
+        const isDownloaded = downloadedStates[index];
+
+        return {
+          ...model,
+          providerId: provider.id,
+          providerName: provider.name,
+          isDownloaded,
+          isDownloading: this.activeDownloads.has(model.id),
+          downloadProgress: progress?.progress || 0,
+          downloadedSize: progress?.downloadedSize || 0,
+          totalSize: progress?.totalSize || 0,
+          path: isDownloaded ? modelPath : null,
+        };
+      });
     } catch (error) {
       console.error("[ModelManager] Error getting all models:", error);
       throw error;
@@ -186,13 +204,16 @@ class ModelManager {
       return modelPath;
     }
 
-    if (this.activeDownloads.get(modelId)) {
-      throw new ModelError("Model is already being downloaded", "DOWNLOAD_IN_PROGRESS", {
+    if (this.activeDownloads.size > 0) {
+      const activeModelId = this.activeDownloads.keys().next().value;
+      throw new ModelError("A model is already being downloaded", "DOWNLOAD_IN_PROGRESS", {
         modelId,
+        activeModelId,
       });
     }
 
     this.activeDownloads.set(modelId, true);
+    this.downloadLifecycleVersion += 1;
     const { signal, abort } = createDownloadSignal();
     this.activeRequests.set(modelId, { abort });
 
@@ -257,7 +278,9 @@ class ModelManager {
       }
       throw error;
     } finally {
-      this.activeDownloads.delete(modelId);
+      if (this.activeDownloads.delete(modelId)) {
+        this.downloadLifecycleVersion += 1;
+      }
       this.activeRequests.delete(modelId);
       this.downloadProgress.delete(modelId);
     }
@@ -271,9 +294,8 @@ class ModelManager {
   cancelDownload(modelId) {
     const entry = this.activeRequests.get(modelId);
     if (entry) {
-      this.activeDownloads.delete(modelId);
-      this.activeRequests.delete(modelId);
-      this.downloadProgress.delete(modelId);
+      // Keep the guard and status visible until downloadModel's finally block
+      // has finished cleaning up the writer and its temporary file.
       entry.abort();
       return true;
     }

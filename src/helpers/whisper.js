@@ -5,6 +5,7 @@ const debugLogger = require("./debugLogger");
 const {
   downloadFile,
   createDownloadSignal,
+  createDownloadInProgressError,
   validateFileSize,
   cleanupStaleDownloads,
   checkDiskSpace,
@@ -503,8 +504,6 @@ class WhisperManager {
     const modelPath = this.getModelPath(modelName);
     const modelsDir = this.getModelsDir();
 
-    await fsPromises.mkdir(modelsDir, { recursive: true });
-
     if (fs.existsSync(modelPath)) {
       const stats = await fsPromises.stat(modelPath);
       return {
@@ -517,23 +516,41 @@ class WhisperManager {
       };
     }
 
-    const spaceCheck = await checkDiskSpace(modelsDir, modelConfig.size * 1.2);
-    if (!spaceCheck.ok) {
-      throw new Error(
-        `Not enough disk space to download model. Need ~${Math.round((modelConfig.size * 1.2) / 1_000_000)}MB, ` +
-          `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
-      );
+    if (this.currentDownloadProcess) {
+      throw createDownloadInProgressError(modelName, this.currentDownloadProcess.model);
     }
 
     const { signal, abort } = createDownloadSignal();
-    this.currentDownloadProcess = { abort };
+    const downloadProcess = {
+      abort,
+      model: modelName,
+      phase: "progress",
+      percentage: 0,
+      downloadedBytes: 0,
+      totalBytes: 0,
+    };
+    this.currentDownloadProcess = downloadProcess;
 
     try {
+      await fsPromises.mkdir(modelsDir, { recursive: true });
+
+      const spaceCheck = await checkDiskSpace(modelsDir, modelConfig.size * 1.2);
+      if (!spaceCheck.ok) {
+        throw new Error(
+          `Not enough disk space to download model. Need ~${Math.round((modelConfig.size * 1.2) / 1_000_000)}MB, ` +
+            `only ${Math.round(spaceCheck.availableBytes / 1_000_000)}MB available.`
+        );
+      }
+
       await downloadFile(modelConfig.url, modelPath, {
         timeout: 600000,
         signal,
         expectedSize: modelConfig.size,
         onProgress: (downloadedBytes, totalBytes) => {
+          downloadProcess.percentage =
+            totalBytes > 0 ? Math.round((downloadedBytes / totalBytes) * 100) : 0;
+          downloadProcess.downloadedBytes = downloadedBytes;
+          downloadProcess.totalBytes = totalBytes;
           if (progressCallback) {
             progressCallback({
               type: "progress",
@@ -564,18 +581,21 @@ class WhisperManager {
       };
     } catch (error) {
       if (error.isAbort) {
-        throw new Error("Download interrupted by user");
+        throw Object.assign(new Error("Download interrupted by user"), {
+          code: "DOWNLOAD_CANCELLED",
+        });
       }
       throw error;
     } finally {
-      this.currentDownloadProcess = null;
+      if (this.currentDownloadProcess === downloadProcess) {
+        this.currentDownloadProcess = null;
+      }
     }
   }
 
   async cancelDownload() {
     if (this.currentDownloadProcess) {
       this.currentDownloadProcess.abort();
-      this.currentDownloadProcess = null;
       return { success: true, message: "Download cancelled" };
     }
     return { success: false, error: "No active download to cancel" };
@@ -583,6 +603,14 @@ class WhisperManager {
 
   async checkModelStatus(modelName) {
     const modelPath = this.getModelPath(modelName);
+    const activeDownload = this.currentDownloadProcess?.model === modelName;
+    const downloadStatus = {
+      isDownloading: activeDownload,
+      isInstalling: false,
+      downloadProgress: activeDownload ? this.currentDownloadProcess.percentage : 0,
+      downloadedBytes: activeDownload ? this.currentDownloadProcess.downloadedBytes : 0,
+      totalBytes: activeDownload ? this.currentDownloadProcess.totalBytes : 0,
+    };
 
     if (fs.existsSync(modelPath)) {
       const stats = await fsPromises.stat(modelPath);
@@ -593,10 +621,11 @@ class WhisperManager {
         size_bytes: stats.size,
         size_mb: Math.round(stats.size / (1024 * 1024)),
         success: true,
+        ...downloadStatus,
       };
     }
 
-    return { model: modelName, downloaded: false, success: true };
+    return { model: modelName, downloaded: false, success: true, ...downloadStatus };
   }
 
   async listWhisperModels() {

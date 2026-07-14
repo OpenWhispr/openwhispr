@@ -272,18 +272,12 @@ class ModelManager {
     const allModels = modelRegistry.getAllModels();
 
     return Promise.all(
-      allModels.map(async (model) => {
-        const progress = this.downloadProgress.get(model.id);
-
-        return {
-          ...model,
-          isDownloaded: await this.isModelDownloaded(model.id),
-          downloadProgress: progress?.progress || 0,
-          downloadedSize: progress?.downloadedSize || 0,
-          totalSize: progress?.totalSize || 0,
-          isDownloading: this.activeDownloads.has(model.id),
-        };
-      })
+      allModels.map(async (model) => ({
+        ...model,
+        isDownloaded: await this.isModelDownloaded(model.id),
+        downloadProgress: this.downloadProgress.get(model.id)?.progress || 0,
+        isDownloading: this.activeDownloads.has(model.id),
+      }))
     );
   }
 }

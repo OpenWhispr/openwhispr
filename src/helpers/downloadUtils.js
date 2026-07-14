@@ -359,6 +359,13 @@ function createDownloadSignal() {
   };
 }
 
+function createDownloadInProgressError(model, activeModel) {
+  return Object.assign(new Error("A model is already being downloaded"), {
+    code: "DOWNLOAD_IN_PROGRESS",
+    details: { model, activeModel },
+  });
+}
+
 async function validateFileSize(filePath, expectedSizeBytes, tolerancePercent = 10) {
   const stats = await fsPromises.stat(filePath);
   const minSize = expectedSizeBytes * (1 - tolerancePercent / 100);
@@ -498,6 +505,7 @@ module.exports = {
   downloadFile,
   fetchJson,
   createDownloadSignal,
+  createDownloadInProgressError,
   validateFileSize,
   cleanupStaleDownloads,
   checkDiskSpace,

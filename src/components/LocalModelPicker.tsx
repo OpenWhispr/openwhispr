@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ProviderTabs } from "./ui/ProviderTabs";
 import { DownloadProgressBar } from "./ui/DownloadProgressBar";
@@ -53,11 +53,14 @@ export default function LocalModelPicker({
 }: LocalModelPickerProps) {
   const { t } = useTranslation();
   const [downloadedModels, setDownloadedModels] = useState<Set<string>>(new Set());
+  const loadDownloadedModelsRequestRef = useRef(0);
 
   const { confirmDialog, showConfirmDialog, hideConfirmDialog } = useDialogs();
   const styles = useMemo(() => MODEL_PICKER_COLORS[colorScheme], [colorScheme]);
 
   const loadDownloadedModels = useCallback(async () => {
+    const requestId = ++loadDownloadedModelsRequestRef.current;
+
     try {
       let downloaded = new Set<string>();
       if (modelType === "whisper") {
@@ -88,27 +91,30 @@ export default function LocalModelPicker({
           );
         }
       }
-      setDownloadedModels(downloaded);
-      return downloaded;
+      if (requestId === loadDownloadedModelsRequestRef.current) {
+        setDownloadedModels(downloaded);
+        return downloaded;
+      }
+      return null;
     } catch (error) {
       console.error("Failed to load downloaded models:", error);
-      return new Set<string>();
+      return null;
     }
   }, [modelType]);
 
   useEffect(() => {
     const initAndValidate = async () => {
       const downloaded = await loadDownloadedModels();
-      if (selectedModel && !downloaded.has(selectedModel)) {
+      if (downloaded && selectedModel && !downloaded.has(selectedModel)) {
         onModelSelect("");
       }
     };
     initAndValidate();
   }, [loadDownloadedModels, selectedModel, onModelSelect]);
 
-  const handleDownloadComplete = useCallback(() => {
-    loadDownloadedModels();
-    onDownloadComplete?.();
+  const handleDownloadComplete = useCallback(async () => {
+    await loadDownloadedModels();
+    await onDownloadComplete?.();
   }, [loadDownloadedModels, onDownloadComplete]);
 
   const {
@@ -119,6 +125,7 @@ export default function LocalModelPicker({
     isDownloadingModel,
     cancelDownload,
     isCancelling,
+    isInstalling,
   } = useModelDownload({
     modelType,
     onDownloadComplete: handleDownloadComplete,
@@ -152,8 +159,14 @@ export default function LocalModelPicker({
 
     const modelName = models.find((m) => m.id === downloadingModel)?.name || downloadingModel;
 
-    return <DownloadProgressBar modelName={modelName} progress={downloadProgress} />;
-  }, [downloadingModel, downloadProgress, models]);
+    return (
+      <DownloadProgressBar
+        modelName={modelName}
+        progress={downloadProgress}
+        isInstalling={isInstalling}
+      />
+    );
+  }, [downloadingModel, downloadProgress, isInstalling, models]);
 
   return (
     <div className={className}>
@@ -188,6 +201,7 @@ export default function LocalModelPicker({
           onDelete={handleDelete}
           onCancelDownload={cancelDownload}
           isCancelling={isCancelling}
+          isInstalling={isInstalling}
           colorScheme={colorScheme}
         />
       </div>

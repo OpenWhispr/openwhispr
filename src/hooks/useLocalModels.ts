@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
 import { ModelDefinition } from "../models/ModelRegistry";
-import type { LocalLLMDownloadProgressEvent } from "../types/electron";
 import "../types/electron";
 
 interface ModelWithStatus extends ModelDefinition {
@@ -9,13 +8,18 @@ interface ModelWithStatus extends ModelDefinition {
   downloadProgress: number;
 }
 
+interface LLMDownloadProgressEvent {
+  modelId: string;
+  progress: number;
+  downloadedSize: number;
+  totalSize: number;
+}
+
 export function useLocalModels() {
   const [models, setModels] = useState<ModelWithStatus[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [progressMap, setProgressMap] = useState<Map<string, LocalLLMDownloadProgressEvent>>(
-    new Map()
-  );
+  const [progressMap, setProgressMap] = useState<Map<string, LLMDownloadProgressEvent>>(new Map());
 
   const loadModels = useCallback(async () => {
     try {
@@ -34,28 +38,7 @@ export function useLocalModels() {
   useEffect(() => {
     loadModels();
 
-    const handleProgress = (_event: any, data: LocalLLMDownloadProgressEvent) => {
-      if (data.type === "complete") {
-        setProgressMap((prev) => {
-          const next = new Map(prev);
-          next.delete(data.modelId);
-          return next;
-        });
-        void loadModels();
-        return;
-      }
-
-      if (data.type === "error") {
-        setProgressMap((prev) => {
-          const next = new Map(prev);
-          next.delete(data.modelId);
-          return next;
-        });
-        setError(data.error || "Failed to download model");
-        void loadModels();
-        return;
-      }
-
+    const handleProgress = (_event: any, data: LLMDownloadProgressEvent) => {
       setProgressMap((prev) => new Map(prev).set(data.modelId, data));
     };
 

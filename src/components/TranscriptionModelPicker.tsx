@@ -49,6 +49,7 @@ interface LocalModelCardProps {
   isDownloaded: boolean;
   isDownloading: boolean;
   isCancelling: boolean;
+  isInstalling: boolean;
   recommended?: boolean;
   provider: string;
   languageLabel?: string;
@@ -69,6 +70,7 @@ function LocalModelCard({
   isDownloaded,
   isDownloading,
   isCancelling,
+  isInstalling,
   recommended,
   provider,
   languageLabel,
@@ -153,7 +155,7 @@ function LocalModelCard({
                 e.stopPropagation();
                 onCancel();
               }}
-              disabled={isCancelling}
+              disabled={isCancelling || isInstalling}
               size="sm"
               variant="outline"
               className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
@@ -380,8 +382,8 @@ export default function TranscriptionModelPicker({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- sync prop→state: only re-run when the prop changes
   }, [selectedLocalProvider]);
-  const isLoadingRef = useRef(false);
-  const isLoadingParakeetRef = useRef(false);
+  const localModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const parakeetModelsLoadQueueRef = useRef<Promise<void>>(Promise.resolve());
   const loadLocalModelsRef = useRef<(() => Promise<void>) | null>(null);
   const loadParakeetModelsRef = useRef<(() => Promise<void>) | null>(null);
   const ensureValidCloudSelectionRef = useRef<(() => void) | null>(null);
@@ -423,39 +425,41 @@ export default function TranscriptionModelPicker({
     }
   }, []);
 
-  const loadLocalModels = useCallback(async () => {
-    if (isLoadingRef.current) return;
-    isLoadingRef.current = true;
-
-    try {
-      const result = await window.electronAPI?.listWhisperModels();
-      if (result?.success) {
-        setLocalModels(result.models);
-        validateAndSelectModel(result.models);
+  const loadLocalModels = useCallback(() => {
+    const load = async () => {
+      try {
+        const result = await window.electronAPI?.listWhisperModels();
+        if (result?.success) {
+          setLocalModels(result.models);
+          validateAndSelectModel(result.models);
+        }
+      } catch (error) {
+        logger.error("Failed to load models", { error }, "models");
+        setLocalModels([]);
       }
-    } catch (error) {
-      logger.error("Failed to load models", { error }, "models");
-      setLocalModels([]);
-    } finally {
-      isLoadingRef.current = false;
-    }
+    };
+
+    const queuedLoad = localModelsLoadQueueRef.current.then(load);
+    localModelsLoadQueueRef.current = queuedLoad;
+    return queuedLoad;
   }, [validateAndSelectModel]);
 
-  const loadParakeetModels = useCallback(async () => {
-    if (isLoadingParakeetRef.current) return;
-    isLoadingParakeetRef.current = true;
-
-    try {
-      const result = await window.electronAPI?.listParakeetModels();
-      if (result?.success) {
-        setParakeetModels(result.models);
+  const loadParakeetModels = useCallback(() => {
+    const load = async () => {
+      try {
+        const result = await window.electronAPI?.listParakeetModels();
+        if (result?.success) {
+          setParakeetModels(result.models);
+        }
+      } catch (error) {
+        logger.error("Failed to load Parakeet models", { error }, "models");
+        setParakeetModels([]);
       }
-    } catch (error) {
-      logger.error("Failed to load Parakeet models", { error }, "models");
-      setParakeetModels([]);
-    } finally {
-      isLoadingParakeetRef.current = false;
-    }
+    };
+
+    const queuedLoad = parakeetModelsLoadQueueRef.current.then(load);
+    parakeetModelsLoadQueueRef.current = queuedLoad;
+    return queuedLoad;
   }, []);
 
   const ensureValidCloudSelection = useCallback(() => {
@@ -823,6 +827,7 @@ export default function TranscriptionModelPicker({
               isDownloaded={model.downloaded ?? false}
               isDownloading={isDownloadingModel(modelId)}
               isCancelling={isCancelling}
+              isInstalling={isInstalling}
               recommended={info.recommended}
               provider="whisper"
               onSelect={() => handleWhisperModelSelect(modelId)}
@@ -897,6 +902,7 @@ export default function TranscriptionModelPicker({
               isDownloaded={model.downloaded ?? false}
               isDownloading={isDownloadingParakeetModel(modelId)}
               isCancelling={isCancellingParakeet}
+              isInstalling={isInstallingParakeet}
               recommended={info.recommended}
               provider="nvidia"
               onSelect={() => handleParakeetModelSelect(modelId)}

@@ -55,6 +55,7 @@ interface ModelCardProps {
   onDelete?: (modelId: string) => void;
   onCancelDownload?: () => void;
   isCancelling?: boolean;
+  isInstalling?: boolean;
 }
 
 export function ModelCard({
@@ -67,6 +68,7 @@ export function ModelCard({
   onDelete,
   onCancelDownload,
   isCancelling = false,
+  isInstalling = false,
 }: ModelCardProps) {
   const { t } = useTranslation();
   const styles = COLOR_CONFIG[colorScheme];
@@ -194,7 +196,7 @@ export function ModelCard({
                     e.stopPropagation();
                     onCancelDownload?.();
                   }}
-                  disabled={isCancelling}
+                  disabled={isCancelling || isInstalling}
                   size="sm"
                   variant="outline"
                   className="h-6 px-2.5 text-xs text-destructive border-destructive/25 hover:bg-destructive/8"
@@ -236,6 +238,7 @@ interface ModelCardListProps {
   onDelete?: (modelId: string) => void;
   onCancelDownload?: () => void;
   isCancelling?: boolean;
+  isInstalling?: boolean;
 }
 
 export default function ModelCardList({
@@ -249,6 +252,7 @@ export default function ModelCardList({
   onDelete,
   onCancelDownload,
   isCancelling = false,
+  isInstalling = false,
 }: ModelCardListProps) {
   const { t } = useTranslation();
 
@@ -270,6 +274,7 @@ export default function ModelCardList({
           onDelete={onDelete}
           onCancelDownload={onCancelDownload}
           isCancelling={isCancelling}
+          isInstalling={isInstalling}
         />
       ))}
     </div>

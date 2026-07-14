@@ -264,6 +264,11 @@ export interface WhisperModelResult {
   size_mb?: number;
   error?: string;
   code?: string;
+  isDownloading?: boolean;
+  isInstalling?: boolean;
+  downloadProgress?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
 }
 
 export interface WhisperModelDeleteResult {
@@ -276,7 +281,7 @@ export interface WhisperModelDeleteResult {
 
 export interface WhisperModelsListResult {
   success: boolean;
-  models: Array<{ model: string; downloaded: boolean; size_mb?: number }>;
+  models: WhisperModelResult[];
   cache_dir: string;
 }
 
@@ -300,11 +305,7 @@ export interface AudioDiagnosticsResult {
 
 export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
 export type SystemAudioStrategy =
-  | "native"
-  | "loopback"
-  | "pipewire-loopback"
-  | "wasapi-loopback"
-  | "unsupported";
+  "native" | "loopback" | "pipewire-loopback" | "wasapi-loopback" | "unsupported";
 
 export interface SystemAudioAccessResult {
   granted: boolean;
@@ -378,6 +379,11 @@ export interface ParakeetModelResult {
   size_mb?: number;
   error?: string;
   code?: string;
+  isDownloading?: boolean;
+  isInstalling?: boolean;
+  downloadProgress?: number;
+  downloadedBytes?: number;
+  totalBytes?: number;
 }
 
 export interface ParakeetModelDeleteResult {
@@ -391,7 +397,7 @@ export interface ParakeetModelDeleteResult {
 
 export interface ParakeetModelsListResult {
   success: boolean;
-  models: Array<{ model: string; downloaded: boolean; size_mb?: number }>;
+  models: ParakeetModelResult[];
   cache_dir: string;
 }
 
@@ -856,6 +862,7 @@ declare global {
         success: boolean;
         message?: string;
         error?: string;
+        code?: string;
       }>;
       getParakeetDiagnostics: () => Promise<ParakeetDiagnosticsResult>;
 
