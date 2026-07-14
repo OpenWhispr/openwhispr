@@ -11,7 +11,7 @@ test("empty / whitespace title is regenerable", async () => {
   assert.equal(isRegenerableNoteTitle(null, LABELS), true);
 });
 
-test('builtin English placeholders are regenerable regardless of locale labels', async () => {
+test("builtin English placeholders are regenerable regardless of locale labels", async () => {
   const { isRegenerableNoteTitle } = await load();
   assert.equal(isRegenerableNoteTitle("Untitled Note", []), true);
   assert.equal(isRegenerableNoteTitle("New note", []), true);

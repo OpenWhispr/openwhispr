@@ -277,11 +277,8 @@ class ReasoningService extends BaseReasoningService {
     }
 
     const choice = response.choices[0];
-    // Strip <think>...</think> reasoning when thinking is disabled (default),
-    // matching the streaming path and the local GGUF bridge. Without this,
-    // self-hosted reasoning models leak reasoning into the note and their
-    // verbose output blows past generateNoteTitle's length cap, silently
-    // suppressing generated note titles.
+    // Reasoning models leak <think> blocks into non-streamed output; strip them
+    // unless the user explicitly enabled thinking (same default as streaming).
     const rawContent = choice.message?.content?.trim() || "";
     const responseText =
       config.disableThinking !== false ? stripThinkingTags(rawContent) : rawContent;

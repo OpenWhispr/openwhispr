@@ -2434,6 +2434,7 @@
       },
       "errors": {
         "noModel": "No AI model selected. Configure one in Settings.",
+        "noEndpoint": "No self-hosted server URL set. Configure one in Settings.",
         "actionFailed": "Action failed"
       }
     },

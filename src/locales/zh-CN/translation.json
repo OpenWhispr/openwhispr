@@ -2214,6 +2214,7 @@
       },
       "errors": {
         "noModel": "未选择 AI 模型。请在设置中配置。",
+        "noEndpoint": "未设置自托管服务器 URL。请在设置中配置。",
         "actionFailed": "操作失败"
       }
     },
