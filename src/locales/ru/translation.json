@@ -91,6 +91,7 @@
       "alreadyRegistered": "«{{hotkey}}» уже зарегистрирована другим приложением.",
       "osReserved": "«{{hotkey}}» может быть зарезервирована вашей операционной системой.",
       "registrationFailed": "Не удалось зарегистрировать «{{hotkey}}». Возможно, она используется другим приложением.",
+      "updateFailedCheckFormat": "Не удалось обновить горячую клавишу на «{{hotkey}}». Проверьте правильность формата.",
       "trySuggestions": "Попробуйте: {{suggestions}}",
       "slotConflict": "Эта горячая клавиша уже используется для {{slot}}."
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "Нативный слушатель Push-to-Talk недоступен"
   },
   "common": {
+    "retry": "Повторить",
     "back": "Назад",
     "next": "Далее",
     "complete": "Готово",
@@ -296,6 +298,7 @@
         "createAccount": "Создать аккаунт Corti",
         "creditBadge": "50 $ бесплатных кредитов",
         "regionHint": "Выберите, где обрабатывать ваше аудио — США или ЕС.",
+        "llmHint": "Функции языковых моделей также будут выполняться на моделях Corti.",
         "useCorti": "Использовать Corti",
         "skip": "Не сейчас",
         "step1": "Зарегистрируйтесь на corti.ai",
@@ -449,7 +452,13 @@
       "noModels": "Модели не найдены. Проверьте URL конечной точки.",
       "providerName": "Пользовательский",
       "ownerLabel": "Автор: {{owner}}",
-      "unableToLoadModels": "Не удалось загрузить модели с конечной точки."
+      "unableToLoadModels": "Не удалось загрузить модели с конечной точки.",
+      "searchPlaceholder": "Поиск моделей…",
+      "selectedGroup": "Выбрано",
+      "otherGroup": "Другое",
+      "noSearchResults": "Нет моделей по запросу «{{query}}»",
+      "selectModelHint": "Модель ещё не выбрана — выберите её из списка ниже.",
+      "keyRequiredHint": "Для инференса требуется API-ключ — добавьте его, чтобы использовать этого провайдера."
     },
     "getApiKey": "Получить API-ключ ->",
     "selectModel": "Выберите модель",
@@ -486,6 +495,10 @@
       "customModelId": "Пользовательский ID модели",
       "customModelPlaceholder": "Введите ID модели или имя развёртывания",
       "suggestedModels": "Рекомендуемые модели",
+      "browseModels": "Просмотреть все модели",
+      "loadingModels": "Загрузка моделей...",
+      "allModels": "Все модели в {{region}}",
+      "modelListError": "Не удалось загрузить модели.",
       "bedrock": {
         "ssoHelp": "Использует настройки SSO из AWS CLI. Убедитесь, что выполнили 'aws sso login'.",
         "keysHelp": "Введите ключи доступа AWS IAM."
@@ -498,6 +511,14 @@
         "adcHelp": "Использует Application Default Credentials. Выполните: gcloud auth application-default login",
         "apikeyHelp": "API-ключ Vertex AI Express Mode из Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Модель больше недоступна",
+      "modelRetired": "Tinfoil прекратил поддержку {{from}}. Выполнен переход на {{to}}.",
+      "refreshingModels": "Обновление моделей…"
+    },
+    "corti": {
+      "euOnly": "Модели Corti доступны только в регионе ЕС."
     }
   },
   "transcription": {
@@ -522,8 +543,13 @@
     "corti": {
       "clientId": "ID клиента",
       "clientSecret": "Секрет клиента",
+      "apiKey": "API-ключ",
       "environment": "Регион данных",
       "tenant": "Тенант"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil использует Voxtral Mini 4B для потоковой обработки и Voxtral Small 24B для пакетной.",
+      "docsLink": "Открыть документацию"
     }
   },
   "hooks": {
@@ -911,7 +937,9 @@
     "recording": "Запись",
     "tryShortcut": "Попробуйте Ctrl+Shift+K",
     "tryShortcutMac": "Попробуйте ⌘⇧K",
-    "remove": "Удалить горячую клавишу"
+    "remove": "Удалить горячую клавишу",
+    "addAnother": "Добавить ещё одну горячую клавишу",
+    "duplicate": "Уже добавлена"
   },
   "languageSelector": {
     "noLanguagesFound": "Языки не найдены",
@@ -1008,7 +1036,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Провайдер",
       "run": "Запустить тест",
-      "customEndpoint": "Пользовательская конечная точка"
+      "customEndpoint": "Пользовательская конечная точка",
+      "apiKeyMissing": "API-ключ {{provider}} не настроен. Добавьте его в настройках ИИ-моделей."
     },
     "view": {
       "customPrompt": "Пользовательский промпт",
@@ -1845,10 +1874,13 @@
   },
   "models": {
     "learnMore": "Подробнее",
+    "noneAvailable": "Нет доступных моделей",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "Быстрое многоязычное распознавание с автоопределением языка (25 языков)",
-        "parakeet_unified_en_0_6b": "ASR только для английского с передовой точностью (средний WER 5,91%)"
+        "parakeet_unified_en_0_6b": "ASR только для английского с передовой точностью (средний WER 5,91%)",
+        "nemotron_speech_streaming_en_0_6b": "Потоковое распознавание английской речи от NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "Многоязычное потоковое распознавание речи от NVIDIA Nemotron с автоопределением языка (15 языков)"
       },
       "whisper": {
         "tiny": "Самый быстрый, низкое качество",
@@ -1867,7 +1899,7 @@
         "mistral_voxtral_mini_latest": "Быстрая многоязычная транскрипция",
         "corti_transcribe": "Медицинская транскрипция клинического уровня",
         "xai_grok_stt": "Высокоточное распознавание речи от xAI",
-        "tinfoil_voxtral_mini_realtime": "Проверяемо приватная потоковая транскрипция"
+        "tinfoil_voxtral": "Проверяемо приватная транскрипция"
       },
       "cloud": {
         "openai_gpt_5_2": "Сильная модель рассуждения",
@@ -1876,6 +1908,8 @@
         "openai_gpt_4_1": "Надёжная базовая модель, контекст 1M",
         "openai_gpt_4_1_mini": "Компактная версия GPT-4.1",
         "openai_gpt_4_1_nano": "Минимальная задержка GPT-4.1",
+        "anthropic_claude_fable_5": "Самая мощная модель Anthropic, класс Mythos",
+        "anthropic_claude_sonnet_5": "Быстрая и мощная агентная модель по низкой цене",
         "anthropic_claude_sonnet_4_6": "Сбалансированная производительность",
         "anthropic_claude_sonnet_4_5": "Предыдущее поколение Sonnet",
         "anthropic_claude_haiku_4_5": "Быстрая с почти передовым интеллектом",
@@ -1894,8 +1928,11 @@
         "groq_compound": "Система Compound от Groq, 450 т/с",
         "groq_compound_mini": "Быстрая система Compound, 3x ниже задержка",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, контекст 256K",
+        "openai_gpt_5_6_sol": "Флагманская GPT-5.6 для сложного программирования и исследований",
+        "openai_gpt_5_6_terra": "Сбалансированная GPT-5.6 для повседневной работы",
+        "openai_gpt_5_6_luna": "Самая быстрая и недорогая GPT-5.6",
         "openai_gpt_5_5": "Фронтирная модель для сложного рассуждения",
-        "anthropic_claude_opus_4_8": "Самая мощная модель Claude",
+        "anthropic_claude_opus_4_8": "Мощная модель Opus с упором на честность и надёжность",
         "anthropic_claude_opus_4_7": "Мощная модель Opus",
         "anthropic_claude_opus_4_6": "Предыдущее поколение Opus, контекст 1M",
         "anthropic_claude_opus_4_5": "Более ранняя модель Opus",
@@ -1904,13 +1941,20 @@
         "tinfoil_kimi_k2_6": "Приватная модель для длительного кодинга и мультимодальности, контекст 256K",
         "tinfoil_gemma4_31b": "Приватная многоязычная модель рассуждений с вызовом инструментов, контекст 256K",
         "tinfoil_gpt_oss_120b": "Приватная модель рассуждений с открытыми весами и использованием инструментов, контекст 131K",
-        "tinfoil_llama3_3_70b": "Приватная разговорная модель с вызовом инструментов, контекст 128K"
+        "tinfoil_llama3_3_70b": "Приватная разговорная модель с вызовом инструментов, контекст 128K",
+        "corti_corti_s1_instant": "Быстрая медицинская модель, без цепочки рассуждений",
+        "corti_corti_s1": "Самая мощная клиническая модель с рассуждением",
+        "corti_corti_s1_mini_instant": "Компактная медицинская модель, самая быстрая и дешёвая",
+        "corti_corti_s1_mini": "Компактная клиническая модель с рассуждением за полцены"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "Самая мощная модель Claude. Лучше всего для самых сложных задач режима агента.",
         "bedrock_claude_haiku_4_5": "Быстрая и дешёвая. Отлично подходит для очистки текста.",
-        "bedrock_claude_sonnet_4_6": "Сбалансированная. Лучший выбор для режима агента.",
-        "bedrock_claude_opus_4_7": "Максимальный интеллект. Для сложных задач в режиме агента.",
-        "bedrock_nova_lite": "Самая дешёвая. Нативная для AWS, идеальна для больших объёмов.",
+        "bedrock_claude_sonnet_5": "Сбалансированная. Лучший выбор для режима агента.",
+        "bedrock_claude_opus_4_8": "Максимальный интеллект. Для сложных задач в режиме агента.",
+        "bedrock_gpt_oss_120b": "Открытая модель OpenAI. Сильные рассуждения по низкой цене.",
+        "bedrock_deepseek_v3_2": "Открытая передовая модель. Отличный выбор для режима агента.",
+        "bedrock_qwen3_next_80b": "Разреженная открытая модель. Быстрая и многоязычная.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -1940,7 +1984,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Новейшая мультимодальная модель Google, продвинутое рассуждение",
         "gemma_gemma_4_e2b_it_q4_k_m": "Компактная Gemma 4 от Google, быстрая и эффективная",
         "gemma_gemma_3_12b_it_q4_k_m": "Средняя модель Google, сильное рассуждение",
-        "gemma_gemma_3_1b_it_q4_k_m": "Сверхбыстрая модель Google, лучшая для очистки коротких диктовок"
+        "gemma_gemma_3_1b_it_q4_k_m": "Сверхбыстрая модель Google, лучшая для очистки коротких диктовок",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Эффективная локальная модель Liquid AI, отлично следует инструкциям",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE от Liquid AI: высокое качество при 1,5B активных параметров",
+        "liquidai_lfm2_2_6b_q4_k_m": "Сбалансированная LFM2 для более качественной обработки",
+        "liquidai_lfm2_5_350m_q8_0": "Сверхлёгкая модель для быстрой очистки диктовки",
+        "liquidai_lfm2_5_230m_q8_0": "Крошечная модель, мгновенная очистка на слабом железе"
       },
       "diarization": {
         "segmentation": "Обнаружение границ речи для идентификации говорящих",
@@ -2170,6 +2219,7 @@
       },
       "errors": {
         "noModel": "Модель ИИ не выбрана. Настройте её в разделе Настройки.",
+        "noEndpoint": "URL собственного сервера не задан. Настройте его в разделе Настройки.",
         "actionFailed": "Действие не выполнено"
       }
     },

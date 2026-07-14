@@ -33,7 +33,14 @@ import LanguageSelector from "./ui/LanguageSelector";
 import AuthenticationStep from "./AuthenticationStep";
 import EmailVerificationStep from "./EmailVerificationStep";
 import { setAgentName as saveAgentName } from "../utils/agentName";
-import { formatHotkeyLabel, getDefaultHotkey, isGlobeLikeHotkey } from "../utils/hotkeys";
+import {
+  formatHotkeyLabel,
+  formatHotkeyListLabel,
+  getDefaultHotkey,
+  isGlobeLikeHotkey,
+  parseHotkeyList,
+  serializeHotkeyList,
+} from "../utils/hotkeys";
 import { useAuth } from "../hooks/useAuth";
 import { HotkeyInput } from "./ui/HotkeyInput";
 import { useHotkeyRegistration } from "../hooks/useHotkeyRegistration";
@@ -122,7 +129,11 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const cortiClientId = useSettingsStore((s) => s.cortiClientId);
   const cortiClientSecret = useSettingsStore((s) => s.cortiClientSecret);
 
-  const [hotkey, setHotkey] = useState(dictationKey || getDefaultHotkey());
+  // Onboarding edits only the primary dictation hotkey; extra bindings are
+  // preserved via withExtraDictationHotkeys.
+  const [hotkey, setHotkey] = useState(
+    () => parseHotkeyList(dictationKey)[0] || getDefaultHotkey()
+  );
   const [agentName, setAgentName] = useState("OpenWhispr");
   const [skipAuth, setSkipAuth] = useState(false);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
@@ -130,7 +141,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const { isUsingNativeShortcut, isUsingHyprland, hyprlandConfigStatus, supportsPushToTalk } =
     useHotkeyModeInfo("onboarding");
   const readableHotkey = formatHotkeyLabel(hotkey);
-  const readableVoiceAgentKey = formatHotkeyLabel(voiceAgentKey);
+  const readableVoiceAgentKey = formatHotkeyListLabel(voiceAgentKey);
   const { alertDialog, confirmDialog, showAlertDialog, hideAlertDialog, hideConfirmDialog } =
     useDialogs();
   const [connectivityDialog, setConnectivityDialog] = useState<{
@@ -141,9 +152,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const autoRegisterInFlightRef = useRef(false);
   const hotkeyStepInitializedRef = useRef(false);
 
+  // Replace the primary dictation hotkey while keeping additional bindings intact.
+  const withExtraDictationHotkeys = useCallback(
+    (primary: string) => serializeHotkeyList([primary, ...parseHotkeyList(dictationKey).slice(1)]),
+    [dictationKey]
+  );
+
   const { registerHotkey, isRegistering: isHotkeyRegistering } = useHotkeyRegistration({
     onSuccess: (registeredHotkey) => {
-      setHotkey(registeredHotkey);
+      setHotkey(parseHotkeyList(registeredHotkey)[0] || registeredHotkey);
       setDictationKey(registeredHotkey);
     },
     showSuccessToast: false,
@@ -157,8 +174,12 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
 
   const validateVoiceAgentHotkey = useCallback(
     (newHotkey: string) =>
-      validateHotkeyForSlot(newHotkey, { "settingsPage.general.hotkey.title": hotkey }, t),
-    [hotkey, t]
+      validateHotkeyForSlot(
+        newHotkey,
+        { "settingsPage.general.hotkey.title": withExtraDictationHotkeys(hotkey) },
+        t
+      ),
+    [hotkey, withExtraDictationHotkeys, t]
   );
 
   const permissionsHook = usePermissions(showAlertDialog);
@@ -281,7 +302,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
         // Check if backend already registered a hotkey (e.g., KDE D-Bus fallback)
         const backendKey = localStorage.getItem("dictationKey");
         if (backendKey && backendKey.trim() !== "") {
-          setHotkey(backendKey);
+          setHotkey(parseHotkeyList(backendKey)[0] || backendKey);
           setDictationKey(backendKey);
           return;
         }
@@ -319,7 +340,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     }
 
     try {
-      const result = await window.electronAPI.updateHotkey(hotkey);
+      const result = await window.electronAPI.updateHotkey(withExtraDictationHotkeys(hotkey));
       if (result && !result.success) {
         showAlertDialog({
           title: t("onboarding.hotkey.couldNotRegisterTitle"),
@@ -336,14 +357,14 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
       });
       return false;
     }
-  }, [hotkey, showAlertDialog, t]);
+  }, [hotkey, withExtraDictationHotkeys, showAlertDialog, t]);
 
   const saveSettings = useCallback(async () => {
     const hotkeyRegistered = await ensureHotkeyRegistered();
     if (!hotkeyRegistered) {
       return false;
     }
-    setDictationKey(hotkey);
+    setDictationKey(withExtraDictationHotkeys(hotkey));
     saveAgentName(agentName);
 
     const skippedAuth = skipAuth;
@@ -372,6 +393,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     return true;
   }, [
     hotkey,
+    withExtraDictationHotkeys,
     agentName,
     setDictationKey,
     ensureHotkeyRegistered,
@@ -745,7 +767,7 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
           <HotkeyInput
             value={hotkey}
             onChange={async (newHotkey) => {
-              const success = await registerHotkey(newHotkey);
+              const success = await registerHotkey(withExtraDictationHotkeys(newHotkey));
               if (success) {
                 setHotkey(newHotkey);
               }
@@ -814,9 +836,15 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
             </span>
           </div>
           <HotkeyInput
-            value={voiceAgentKey}
-            onChange={setVoiceAgentKey}
-            onClear={() => setVoiceAgentKey("")}
+            value={parseHotkeyList(voiceAgentKey)[0] ?? ""}
+            onChange={(newHotkey) =>
+              setVoiceAgentKey(
+                serializeHotkeyList([newHotkey, ...parseHotkeyList(voiceAgentKey).slice(1)])
+              )
+            }
+            onClear={() =>
+              setVoiceAgentKey(serializeHotkeyList(parseHotkeyList(voiceAgentKey).slice(1)))
+            }
             variant="hero"
             validate={validateVoiceAgentHotkey}
           />

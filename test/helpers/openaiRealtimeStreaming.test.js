@@ -21,6 +21,18 @@ function makeFakeSocket(readyState) {
   return socket;
 }
 
+async function connectPreconfigured(streaming, socket) {
+  const connected = streaming.connect({
+    apiKey: "key",
+    preconfigured: true,
+    createSocket: async () => socket,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+  await connected;
+}
+
 test("sendAudio buffers frames arriving before the socket exists (token-fetch window)", async () => {
   const OpenAIRealtimeStreaming = (await load()).default;
   const streaming = new OpenAIRealtimeStreaming();
@@ -203,4 +215,306 @@ test("keep-alive stays alive when a pong is received between pings", (t) => {
 
     assert.equal(terminated, false);
   })();
+});
+
+// -- session expiry (60-minute OpenAI Realtime session limit) --
+
+test("session_expired error fires onSessionExpired instead of onError and sets the flag", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  let expiredCalled = false;
+  let errorCalled = false;
+  streaming.onSessionExpired = () => {
+    expiredCalled = true;
+  };
+  streaming.onError = () => {
+    errorCalled = true;
+  };
+
+  streaming.handleMessage(
+    JSON.stringify({
+      type: "error",
+      error: { code: "session_expired", message: "Your session hit the maximum duration." },
+    })
+  );
+
+  assert.equal(expiredCalled, true);
+  assert.equal(errorCalled, false);
+  assert.equal(streaming._sessionExpired, true);
+});
+
+test("session_expired without an onSessionExpired handler falls through to onError (dictation path)", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  let errorMessage = null;
+  streaming.onError = (err) => {
+    errorMessage = err.message;
+  };
+
+  streaming.handleMessage(
+    JSON.stringify({
+      type: "error",
+      error: { code: "session_expired", message: "Your session hit the maximum duration." },
+    })
+  );
+
+  assert.equal(errorMessage, "Your session hit the maximum duration.");
+  assert.equal(streaming._sessionExpired, false);
+});
+
+test("non-session_expired error fires onError normally", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  let errorMsg = null;
+  streaming.onError = (err) => {
+    errorMsg = err.message;
+  };
+
+  streaming.handleMessage(
+    JSON.stringify({
+      type: "error",
+      error: { code: "server_error", message: "something broke" },
+    })
+  );
+
+  assert.equal(errorMsg, "something broke");
+});
+
+test("empty buffer error is not treated as session expiry", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  let expiredCalled = false;
+  let errorCalled = false;
+  streaming.onSessionExpired = () => {
+    expiredCalled = true;
+  };
+  streaming.onError = () => {
+    errorCalled = true;
+  };
+
+  streaming.handleMessage(
+    JSON.stringify({
+      type: "error",
+      error: { code: "input_audio_buffer_commit_empty", message: "buffer too small" },
+    })
+  );
+
+  assert.equal(expiredCalled, false);
+  assert.equal(errorCalled, true);
+});
+
+test("close after session_expired does not fire onSessionEnd (reconnect owns the session)", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  const socket = makeFakeSocket(WS.CONNECTING);
+  await connectPreconfigured(streaming, socket);
+
+  let sessionEndCalled = false;
+  streaming.onSessionEnd = () => {
+    sessionEndCalled = true;
+  };
+  streaming.onSessionExpired = () => {};
+
+  socket.emit(
+    "message",
+    JSON.stringify({ type: "error", error: { code: "session_expired", message: "expired" } })
+  );
+  socket.emit("close", 1000, Buffer.from(""));
+
+  assert.equal(sessionEndCalled, false);
+});
+
+test("connect() resets _sessionExpired left over from a previous session", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  streaming._sessionExpired = true;
+
+  const socket = makeFakeSocket(WS.CONNECTING);
+  const connected = streaming.connect({
+    apiKey: "key",
+    preconfigured: true,
+    createSocket: async () => socket,
+  });
+  assert.equal(streaming._sessionExpired, false, "flag must reset synchronously in connect()");
+
+  await new Promise((resolve) => setImmediate(resolve));
+  socket.readyState = WS.OPEN;
+  socket.emit("message", JSON.stringify({ type: "session.created" }));
+  await connected;
+  streaming.cleanup();
+});
+
+// -- proactive session timer (fires before the 60-minute limit) --
+
+test("session timer fires onSessionExpired at the pre-empt deadline while connected", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  return (async () => {
+    const OpenAIRealtimeStreaming = (await load()).default;
+    const streaming = new OpenAIRealtimeStreaming();
+    streaming.isConnected = true;
+    let expiredCalls = 0;
+    streaming.onSessionExpired = () => {
+      expiredCalls += 1;
+    };
+
+    streaming._startSessionTimer();
+
+    t.mock.timers.tick(55 * 60 * 1000 - 1);
+    assert.equal(expiredCalls, 0);
+    t.mock.timers.tick(1);
+    assert.equal(expiredCalls, 1);
+  })();
+});
+
+test("cleanup() clears the session timer so a stopped session never requests a reconnect", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  return (async () => {
+    const OpenAIRealtimeStreaming = (await load()).default;
+    const streaming = new OpenAIRealtimeStreaming();
+    streaming.isConnected = true;
+    let expiredCalls = 0;
+    streaming.onSessionExpired = () => {
+      expiredCalls += 1;
+    };
+
+    streaming._startSessionTimer();
+    streaming.cleanup();
+    assert.equal(streaming._sessionTimer, null);
+
+    t.mock.timers.tick(55 * 60 * 1000);
+    assert.equal(expiredCalls, 0);
+  })();
+});
+
+// -- reconnect flow: audio accounting across the session boundary --
+
+test("zero audio loss during reactive reconnect (session_expired at 60min)", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const CHUNK = Buffer.alloc(480);
+
+  // Phase 1: old instance streaming normally.
+  const old = new OpenAIRealtimeStreaming();
+  old.isConnected = true;
+  old.ws = makeFakeSocket(WS.OPEN);
+  for (let i = 0; i < 100; i++) old.sendAudio(CHUNK);
+  assert.equal(old.ws.sent.length, 100, "all chunks sent to old ws");
+  const oldSent = old.ws.sent;
+
+  // Phase 2: session_expired fires, server closes the old ws.
+  let expiredFired = false;
+  old.onSessionExpired = () => {
+    expiredFired = true;
+  };
+  old.handleMessage(
+    JSON.stringify({ type: "error", error: { code: "session_expired", message: "60 minutes" } })
+  );
+  assert.equal(expiredFired, true);
+  old.cleanup();
+  assert.equal(
+    old.sendAudio(CHUNK),
+    false,
+    "dead instance drops audio, but the swap already happened"
+  );
+
+  // Phase 3: reconnect swaps in a fresh instance before the token fetch;
+  // beginConnecting() arms the pre-connect buffer for the fetch window.
+  const fresh = new OpenAIRealtimeStreaming();
+  fresh.beginConnecting();
+  for (let i = 0; i < 50; i++) fresh.sendAudio(CHUNK);
+  assert.equal(fresh.coldStartBuffer.length, 50, "pre-connect buffer caught all chunks");
+  assert.equal(fresh.coldStartBufferSize, 50 * 480);
+
+  // Phase 4: token received, socket still connecting.
+  fresh.ws = makeFakeSocket(WS.CONNECTING);
+  for (let i = 0; i < 20; i++) fresh.sendAudio(CHUNK);
+  assert.equal(fresh.coldStartBuffer.length, 70, "buffer holds pre-connect + connecting chunks");
+
+  // Phase 5: socket opens, next sendAudio flushes everything.
+  fresh.ws = makeFakeSocket(WS.OPEN);
+  fresh.sendAudio(CHUNK);
+  assert.equal(fresh.coldStartBuffer.length, 0, "buffer flushed");
+  assert.equal(fresh.ws.sent.length, 71, "all buffered + live chunks sent to new ws");
+
+  assert.equal(oldSent.length + fresh.ws.sent.length, 171, "zero chunks dropped");
+});
+
+test("zero audio loss during proactive reconnect (timer before the limit)", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const CHUNK = Buffer.alloc(480);
+
+  // Old instance still alive while the reconnect fetches a token.
+  const old = new OpenAIRealtimeStreaming();
+  old.isConnected = true;
+  old.ws = makeFakeSocket(WS.OPEN);
+  for (let i = 0; i < 100; i++) old.sendAudio(CHUNK);
+
+  // Audio dispatched between the timer firing and the instance swap still
+  // reaches the old, healthy connection.
+  for (let i = 0; i < 10; i++) old.sendAudio(CHUNK);
+  assert.equal(old.ws.sent.length, 110, "audio still flows to old instance during token fetch");
+
+  // References swapped; new instance buffers until its socket opens.
+  const fresh = new OpenAIRealtimeStreaming();
+  fresh.beginConnecting();
+  for (let i = 0; i < 30; i++) fresh.sendAudio(CHUNK);
+  assert.equal(fresh.coldStartBuffer.length, 30);
+
+  fresh.ws = makeFakeSocket(WS.OPEN);
+  fresh.sendAudio(CHUNK);
+  assert.equal(fresh.ws.sent.length, 31, "30 flushed + 1 live");
+  assert.equal(fresh.coldStartBuffer.length, 0);
+
+  assert.equal(old.ws.sent.length + fresh.ws.sent.length, 141, "zero chunks dropped");
+});
+
+test("concurrent session_expired from mic and system streams only reconnects once", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+
+  // Mirrors the meetingReconnecting guard in ipcHandlers.
+  let reconnectCalls = 0;
+  let reconnecting = false;
+  const guardedReconnect = () => {
+    if (reconnecting) return;
+    reconnecting = true;
+    reconnectCalls++;
+  };
+
+  const mic = new OpenAIRealtimeStreaming();
+  const system = new OpenAIRealtimeStreaming();
+  mic.onSessionExpired = guardedReconnect;
+  system.onSessionExpired = guardedReconnect;
+
+  const expiredEvent = JSON.stringify({
+    type: "error",
+    error: { code: "session_expired", message: "expired" },
+  });
+  mic.handleMessage(expiredEvent);
+  system.handleMessage(expiredEvent);
+
+  assert.equal(reconnectCalls, 1, "reconnect called exactly once despite two streams expiring");
+});
+
+test("completedSegments accumulate across turns", async () => {
+  const OpenAIRealtimeStreaming = (await load()).default;
+  const streaming = new OpenAIRealtimeStreaming();
+  let lastFull = "";
+  streaming.onFinalTranscript = (text) => {
+    lastFull = text;
+  };
+
+  streaming.handleMessage(
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "Hello world",
+    })
+  );
+  streaming.handleMessage(
+    JSON.stringify({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "How are you",
+    })
+  );
+
+  assert.equal(streaming.completedSegments.length, 2);
+  assert.equal(lastFull, "Hello world How are you");
 });

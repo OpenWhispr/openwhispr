@@ -5,15 +5,10 @@ const { app } = require("electron");
 const debugLogger = require("./debugLogger");
 const { normalizeUiLanguage } = require("./i18nMain");
 const secretCrypto = require("./secretCrypto");
+const { BYOK_API_KEYS } = require("../config/secretKeys");
 
 const SECRET_KEYS = [
-  "OPENAI_API_KEY",
-  "ANTHROPIC_API_KEY",
-  "GEMINI_API_KEY",
-  "GROQ_API_KEY",
-  "XAI_API_KEY",
-  "MISTRAL_API_KEY",
-  "TINFOIL_API_KEY",
+  ...BYOK_API_KEYS.map((k) => k.env),
   "ASSEMBLYAI_API_KEY",
   "DEEPGRAM_API_KEY",
   "CORTI_CLIENT_ID",
@@ -266,62 +261,6 @@ class EnvironmentManager {
     return { success: true };
   }
 
-  getOpenAIKey() {
-    return this._getKey("OPENAI_API_KEY");
-  }
-
-  saveOpenAIKey(key) {
-    return this._saveKey("OPENAI_API_KEY", key);
-  }
-
-  getAnthropicKey() {
-    return this._getKey("ANTHROPIC_API_KEY");
-  }
-
-  saveAnthropicKey(key) {
-    return this._saveKey("ANTHROPIC_API_KEY", key);
-  }
-
-  getGeminiKey() {
-    return this._getKey("GEMINI_API_KEY");
-  }
-
-  saveGeminiKey(key) {
-    return this._saveKey("GEMINI_API_KEY", key);
-  }
-
-  getGroqKey() {
-    return this._getKey("GROQ_API_KEY");
-  }
-
-  saveGroqKey(key) {
-    return this._saveKey("GROQ_API_KEY", key);
-  }
-
-  getXaiKey() {
-    return this._getKey("XAI_API_KEY");
-  }
-
-  saveXaiKey(key) {
-    return this._saveKey("XAI_API_KEY", key);
-  }
-
-  getMistralKey() {
-    return this._getKey("MISTRAL_API_KEY");
-  }
-
-  saveMistralKey(key) {
-    return this._saveKey("MISTRAL_API_KEY", key);
-  }
-
-  getTinfoilKey() {
-    return this._getKey("TINFOIL_API_KEY");
-  }
-
-  saveTinfoilKey(key) {
-    return this._saveKey("TINFOIL_API_KEY", key);
-  }
-
   getAssemblyAIKey() {
     return this._getKey("ASSEMBLYAI_API_KEY");
   }
@@ -553,6 +492,17 @@ class EnvironmentManager {
     require("dotenv").config({ path: envPath });
     return { success: true, path: envPath };
   }
+}
+
+// Generate the uniform BYOK key accessors (getOpenAIKey/saveOpenAIKey/…) from
+// the shared manifest so each provider is defined in exactly one place.
+for (const k of BYOK_API_KEYS) {
+  EnvironmentManager.prototype[k.get] = function () {
+    return this._getKey(k.env);
+  };
+  EnvironmentManager.prototype[k.save] = function (key) {
+    return this._saveKey(k.env, key);
+  };
 }
 
 module.exports = EnvironmentManager;

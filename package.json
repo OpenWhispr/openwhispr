@@ -1,6 +1,6 @@
 {
   "name": "open-whispr",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "description": "A desktop dictation application using whisper.cpp for speech-to-text transcription",
   "main": "main.js",
   "private": true,
@@ -20,11 +20,11 @@
     "compile:mic-listener": "node scripts/build-macos-mic-listener.js",
     "compile:audio-tap": "node scripts/build-macos-audio-tap.js",
     "compile:native": "npm run compile:globe && npm run compile:fast-paste && npm run compile:winkeys && npm run compile:linuxkeys && npm run compile:winpaste && npm run compile:linux-paste && npm run compile:linux-system-audio && npm run compile:text-monitor && npm run compile:media-remote && npm run compile:mic-listener && npm run compile:audio-tap",
-    "prestart": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:qdrant && npm run download:embedding-model && npm run download:whisper-vad-model",
+    "prestart": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:sherpa-onnx && npm run download:qdrant && npm run download:embedding-model && npm run download:whisper-vad-model",
     "start": "electron .",
-    "predev": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:qdrant && npm run download:embedding-model && npm run download:whisper-vad-model",
+    "predev": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:sherpa-onnx && npm run download:qdrant && npm run download:embedding-model && npm run download:whisper-vad-model",
     "dev": "concurrently -k -r \"npm:dev:renderer\" \"npm:dev:main\"",
-    "predev:main": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:qdrant && npm run download:embedding-model && npm run download:whisper-vad-model",
+    "predev:main": "npm run compile:native && npm run download:meeting-aec-helper && npm run download:sherpa-onnx && npm run download:qdrant && npm run download:embedding-model && npm run download:whisper-vad-model",
     "dev:main": "cross-env NODE_ENV=development node scripts/run-electron.js --dev",
     "dev:renderer": "cd src && vite",
     "prebuild": "npm run compile:native && npm run download:whisper-cpp && npm run download:llama-server && npm run download:sherpa-onnx && npm run download:qdrant && npm run download:meeting-aec-helper && npm run download:whisper-vad-model && npm run download:embedding-model -- --for-build && npm run download:diarization-models -- --output-dir resources/bin/diarization-models",
@@ -70,6 +70,7 @@
     "format": "npm run format:js",
     "format:check": "eslint . && cd src && eslint . && prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "lint": "eslint . && cd src && eslint .",
+    "test": "node --test \"test/helpers/*.test.js\"",
     "typecheck": "cd src && tsc --noEmit",
     "quality-check": "npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",
@@ -120,6 +121,8 @@
     "@ai-sdk/google-vertex": "^4.0.108",
     "@ai-sdk/groq": "^3.0.29",
     "@ai-sdk/openai": "^3.0.41",
+    "@ai-sdk/provider": "^3.0.14",
+    "@aws-sdk/client-bedrock": "^3.1085.0",
     "@aws-sdk/credential-providers": "^3.1029.0",
     "@better-auth/sso": "1.6.19",
     "@napi-rs/keyring": "^1.3.0",
@@ -145,7 +148,7 @@
     "better-sqlite3": "12.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "dbus-next": "^0.10.2",
+    "@homebridge/dbus-native": "^0.7.7",
     "dotenv": "^17.4.1",
     "electron-updater": "^6.6.2",
     "ffmpeg-static": "^5.2.0",
@@ -203,9 +206,6 @@
     "fast-xml-parser": "5.7.2",
     "ip-address": "10.2.0",
     "markdown-it": "14.2.0",
-    "tmp": "0.2.7",
-    "usocket": {
-      "node-gyp": "^11.4.2"
-    }
+    "tmp": "0.2.7"
   }
 }

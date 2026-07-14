@@ -43,6 +43,9 @@ export interface CleanupSettings {
 
 export interface HotkeySettings {
   dictationKey: string;
+  /** Hotkeys actually registered by the main process (may be a subset of
+   * dictationKey, e.g. primary-only on GNOME/KDE/Hyprland). Display-only. */
+  activeDictationKey: string | null;
   meetingKey: string;
   voiceAgentKey: string;
   meetingHotkeyLayoutMode: "side-panel" | "full-width";
@@ -57,6 +60,7 @@ export interface OnboardingSettings {
 export interface MicrophoneSettings {
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
+  selectedMicDeviceLabel: string;
 }
 
 export interface ApiKeySettings {
@@ -66,8 +70,10 @@ export interface ApiKeySettings {
   groqApiKey: string;
   xaiApiKey: string;
   mistralApiKey: string;
+  openrouterApiKey: string;
   cortiClientId: string;
   cortiClientSecret: string;
+  cortiApiKey: string;
   tinfoilApiKey: string;
   customTranscriptionApiKey: string;
   cleanupCustomApiKey: string;
@@ -246,6 +252,7 @@ function useSettingsInternal() {
     groqApiKey: store.groqApiKey,
     xaiApiKey: store.xaiApiKey,
     mistralApiKey: store.mistralApiKey,
+    openrouterApiKey: store.openrouterApiKey,
     tinfoilApiKey: store.tinfoilApiKey,
     dictationKey: store.dictationKey,
     meetingKey: store.meetingKey,
@@ -318,8 +325,9 @@ function useSettingsInternal() {
     setPanelStartPosition: store.setPanelStartPosition,
     preferBuiltInMic: store.preferBuiltInMic,
     selectedMicDeviceId: store.selectedMicDeviceId,
+    selectedMicDeviceLabel: store.selectedMicDeviceLabel,
     setPreferBuiltInMic: store.setPreferBuiltInMic,
-    setSelectedMicDeviceId: store.setSelectedMicDeviceId,
+    setSelectedMicDevice: store.setSelectedMicDevice,
     autoLearnCorrections,
     setAutoLearnCorrections,
     showTranscriptionPreview: store.showTranscriptionPreview,

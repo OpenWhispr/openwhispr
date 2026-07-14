@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { isBuiltInMicrophone } from "../utils/audioDeviceUtils";
+import { reconcileSavedMicSelection } from "../helpers/micSelectionRecovery";
 import { getBaseLanguageCode } from "../utils/languageSupport";
 import type { SystemAudioAccessResult, SystemAudioStrategy } from "../types/electron";
 import {
@@ -295,7 +296,7 @@ export const primeMeetingWorklet = () => {
 };
 
 const getMeetingMicConstraints = async (): Promise<MediaStreamConstraints> => {
-  const { preferBuiltInMic, selectedMicDeviceId } = getSettings();
+  const { preferBuiltInMic, selectedMicDeviceId, selectedMicDeviceLabel } = getSettings();
 
   if (preferBuiltInMic) {
     try {
@@ -322,9 +323,26 @@ const getMeetingMicConstraints = async (): Promise<MediaStreamConstraints> => {
   }
 
   if (selectedMicDeviceId && selectedMicDeviceId !== "default") {
+    let resolvedDeviceId = selectedMicDeviceId;
+
+    try {
+      const reconciled = await reconcileSavedMicSelection(
+        selectedMicDeviceId,
+        selectedMicDeviceLabel,
+        "meeting"
+      );
+      resolvedDeviceId = reconciled.deviceId;
+    } catch (err) {
+      logger.debug(
+        "Failed to reconcile selected microphone for meeting transcription",
+        { error: (err as Error).message },
+        "meeting"
+      );
+    }
+
     return {
       audio: {
-        deviceId: { exact: selectedMicDeviceId },
+        deviceId: { exact: resolvedDeviceId },
         ...MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
       },
     };

@@ -91,6 +91,7 @@
       "alreadyRegistered": "\"{{hotkey}}\" ya está registrada por otra aplicación.",
       "osReserved": "\"{{hotkey}}\" puede estar reservada por tu entorno de escritorio.",
       "registrationFailed": "No se pudo registrar \"{{hotkey}}\". Puede estar en uso por otra aplicación.",
+      "updateFailedCheckFormat": "No se pudo actualizar el atajo a \"{{hotkey}}\". Comprueba que el formato sea válido.",
       "trySuggestions": "Prueba: {{suggestions}}",
       "slotConflict": "Este atajo ya está asignado a {{slot}}."
     }
@@ -126,6 +127,7 @@
     "pttUnavailable": "El módulo nativo de Push-to-Talk no está disponible"
   },
   "common": {
+    "retry": "Reintentar",
     "back": "Atrás",
     "next": "Siguiente",
     "complete": "Completar",
@@ -296,6 +298,7 @@
         "createAccount": "Crea tu cuenta de Corti",
         "creditBadge": "50 $ de crédito gratis",
         "regionHint": "Elige dónde se procesa tu audio: EE. UU. o UE.",
+        "llmHint": "Las funciones de modelos de lenguaje también se ejecutarán en los modelos de Corti.",
         "useCorti": "Usar Corti",
         "skip": "Ahora no",
         "step1": "Regístrate en corti.ai",
@@ -449,7 +452,13 @@
       "noModels": "No se devolvieron modelos. Revisa la URL del endpoint.",
       "providerName": "Personalizado",
       "ownerLabel": "Propietario: {{owner}}",
-      "unableToLoadModels": "No se pudieron cargar modelos desde el endpoint."
+      "unableToLoadModels": "No se pudieron cargar modelos desde el endpoint.",
+      "searchPlaceholder": "Buscar modelos…",
+      "selectedGroup": "Seleccionado",
+      "otherGroup": "Otros",
+      "noSearchResults": "Ningún modelo coincide con \"{{query}}\"",
+      "selectModelHint": "Aún no hay un modelo seleccionado — elige uno de la lista de abajo.",
+      "keyRequiredHint": "Se requiere una clave API para la inferencia — agrega una para usar este proveedor."
     },
     "getApiKey": "Obtener clave API ->",
     "selectModel": "Seleccionar modelo",
@@ -486,6 +495,10 @@
       "customModelId": "ID de modelo personalizado",
       "customModelPlaceholder": "Introduce un ID de modelo o nombre de deployment",
       "suggestedModels": "Modelos sugeridos",
+      "browseModels": "Explorar todos los modelos",
+      "loadingModels": "Obteniendo modelos...",
+      "allModels": "Todos los modelos en {{region}}",
+      "modelListError": "No se pudieron cargar los modelos.",
       "bedrock": {
         "ssoHelp": "Usa tu configuración SSO de AWS CLI. Asegúrate de haber ejecutado 'aws sso login'.",
         "keysHelp": "Introduce tus claves de acceso de AWS IAM."
@@ -498,6 +511,14 @@
         "adcHelp": "Usa Application Default Credentials. Ejecuta: gcloud auth application-default login",
         "apikeyHelp": "Clave API de Vertex AI Express Mode obtenida en Google AI Studio."
       }
+    },
+    "tinfoil": {
+      "modelRetiredTitle": "Modelo ya no disponible",
+      "modelRetired": "Tinfoil retiró {{from}}. Se cambió a {{to}}.",
+      "refreshingModels": "Actualizando modelos…"
+    },
+    "corti": {
+      "euOnly": "Los modelos de Corti solo están disponibles en la región de la UE."
     }
   },
   "transcription": {
@@ -522,8 +543,13 @@
     "corti": {
       "clientId": "ID de cliente",
       "clientSecret": "Secreto de cliente",
+      "apiKey": "Clave API",
       "environment": "Región de datos",
       "tenant": "Tenant"
+    },
+    "tinfoil": {
+      "transportNote": "Tinfoil transmite con Voxtral Mini 4B y procesa por lotes con Voxtral Small 24B.",
+      "docsLink": "Ver la documentación"
     }
   },
   "hooks": {
@@ -959,7 +985,9 @@
     "recording": "Grabando",
     "tryShortcut": "Prueba Ctrl+Shift+K",
     "tryShortcutMac": "Prueba ⌘⇧K",
-    "remove": "Eliminar atajo"
+    "remove": "Eliminar atajo",
+    "addAnother": "Añadir otro atajo",
+    "duplicate": "Ya añadido"
   },
   "languageSelector": {
     "noLanguagesFound": "No se encontraron idiomas",
@@ -1056,7 +1084,8 @@
       "openwhisprCloud": "OpenWhispr Cloud",
       "providerLabel": "Proveedor",
       "run": "Ejecutar prueba",
-      "customEndpoint": "Endpoint personalizado"
+      "customEndpoint": "Endpoint personalizado",
+      "apiKeyMissing": "La clave API de {{provider}} no está configurada. Agrégala en la configuración de Modelos de IA."
     },
     "view": {
       "customPrompt": "Prompt personalizado",
@@ -1893,10 +1922,13 @@
   },
   "models": {
     "learnMore": "Más información",
+    "noneAvailable": "No hay modelos disponibles",
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilingüe rápido con detección automática de idioma (25 idiomas)",
-        "parakeet_unified_en_0_6b": "ASR solo en inglés con precisión de vanguardia (5,91% WER promedio)"
+        "parakeet_unified_en_0_6b": "ASR solo en inglés con precisión de vanguardia (5,91% WER promedio)",
+        "nemotron_speech_streaming_en_0_6b": "ASR en inglés por streaming de NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "ASR multilingüe por streaming de NVIDIA Nemotron con detección automática de idioma (15 idiomas)"
       },
       "whisper": {
         "tiny": "El más rápido, menor calidad",
@@ -1915,7 +1947,7 @@
         "mistral_voxtral_mini_latest": "Transcripción multilingüe rápida",
         "corti_transcribe": "Transcripción médica de nivel clínico",
         "xai_grok_stt": "Reconocimiento de voz de alta precisión por xAI",
-        "tinfoil_voxtral_mini_realtime": "Transcripción en streaming verificablemente privada"
+        "tinfoil_voxtral": "Transcripción verificablemente privada"
       },
       "cloud": {
         "openai_gpt_5_2": "Modelo fuerte de razonamiento",
@@ -1924,6 +1956,8 @@
         "openai_gpt_4_1": "Base sólida, contexto de 1M",
         "openai_gpt_4_1_mini": "Modelo GPT-4.1 más pequeño",
         "openai_gpt_4_1_nano": "GPT-4.1 de menor latencia",
+        "anthropic_claude_fable_5": "El modelo más capaz de Anthropic, clase Mythos",
+        "anthropic_claude_sonnet_5": "Modelo agéntico rápido y capaz a menor costo",
         "anthropic_claude_sonnet_4_6": "Rendimiento equilibrado",
         "anthropic_claude_sonnet_4_5": "Generación anterior de Sonnet",
         "anthropic_claude_haiku_4_5": "Rápido con inteligencia cercana a la frontera",
@@ -1942,8 +1976,11 @@
         "groq_compound": "Sistema compound de Groq, 450 T/seg",
         "groq_compound_mini": "Sistema compound rápido, 3x menor latencia",
         "groq_kimi_k2_0905": "Moonshot AI 1T MoE, contexto 256K",
+        "openai_gpt_5_6_sol": "GPT-5.6 insignia para programación e investigación complejas",
+        "openai_gpt_5_6_terra": "GPT-5.6 equilibrado para el trabajo diario",
+        "openai_gpt_5_6_luna": "El GPT-5.6 más rápido y económico",
         "openai_gpt_5_5": "Modelo frontier para razonamiento complejo",
-        "anthropic_claude_opus_4_8": "Modelo Claude más capaz",
+        "anthropic_claude_opus_4_8": "Potente modelo Opus enfocado en honestidad y fiabilidad",
         "anthropic_claude_opus_4_7": "Modelo Opus potente",
         "anthropic_claude_opus_4_6": "Generación anterior de Opus, contexto de 1M",
         "anthropic_claude_opus_4_5": "Modelo Opus anterior",
@@ -1952,13 +1989,20 @@
         "tinfoil_kimi_k2_6": "Modelo privado de codificación a largo plazo y multimodal, contexto de 256K",
         "tinfoil_gemma4_31b": "Modelo privado de razonamiento multilingüe con llamada a herramientas, contexto de 256K",
         "tinfoil_gpt_oss_120b": "Modelo privado de razonamiento de pesos abiertos con uso de herramientas, contexto de 131K",
-        "tinfoil_llama3_3_70b": "Modelo privado conversacional con llamada a herramientas, contexto de 128K"
+        "tinfoil_llama3_3_70b": "Modelo privado conversacional con llamada a herramientas, contexto de 128K",
+        "corti_corti_s1_instant": "Modelo sanitario rápido, sin traza de razonamiento",
+        "corti_corti_s1": "Modelo clínico más capaz con razonamiento",
+        "corti_corti_s1_mini_instant": "Modelo sanitario compacto, el más rápido y económico",
+        "corti_corti_s1_mini": "Modelo clínico compacto con razonamiento a mitad de precio"
       },
       "enterprise": {
+        "bedrock_claude_fable_5": "El modelo Claude más capaz. Ideal para las tareas más difíciles del Modo Agente.",
         "bedrock_claude_haiku_4_5": "Rápido y económico. Ideal para limpiar texto.",
-        "bedrock_claude_sonnet_4_6": "Equilibrado. Opción por defecto para el Modo Agente.",
-        "bedrock_claude_opus_4_7": "Máxima inteligencia. Para tareas complejas del Modo Agente.",
-        "bedrock_nova_lite": "La opción más económica. Nativo de AWS, ideal para alto volumen.",
+        "bedrock_claude_sonnet_5": "Equilibrado. Opción por defecto para el Modo Agente.",
+        "bedrock_claude_opus_4_8": "Máxima inteligencia. Para tareas complejas del Modo Agente.",
+        "bedrock_gpt_oss_120b": "Modelo abierto de OpenAI. Gran razonamiento a bajo costo.",
+        "bedrock_deepseek_v3_2": "Modelo frontera de pesos abiertos. Gran valor para el Modo Agente.",
+        "bedrock_qwen3_next_80b": "Modelo abierto disperso. Rápido y multilingüe.",
         "vertex_gemini_2_5_flash": "Fast multimodal model via Vertex",
         "vertex_gemini_2_5_pro": "Advanced reasoning via Vertex"
       },
@@ -1988,7 +2032,12 @@
         "gemma_gemma_4_e4b_it_q4_k_m": "Último multimodal de Google, razonamiento avanzado",
         "gemma_gemma_4_e2b_it_q4_k_m": "Gemma 4 compacto de Google, rápido y eficiente",
         "gemma_gemma_3_12b_it_q4_k_m": "Modelo de gama media de Google, razonamiento sólido",
-        "gemma_gemma_3_1b_it_q4_k_m": "Modelo Google ultrarrápido, ideal para limpieza de dictado corto"
+        "gemma_gemma_3_1b_it_q4_k_m": "Modelo Google ultrarrápido, ideal para limpieza de dictado corto",
+        "liquidai_lfm2_5_1_2b_instruct_q4_k_m": "Modelo eficiente de Liquid AI, excelente seguimiento de instrucciones",
+        "liquidai_lfm2_5_8b_a1b_q4_k_m": "MoE de Liquid AI, alta calidad con solo 1.5B parámetros activos",
+        "liquidai_lfm2_2_6b_q4_k_m": "LFM2 equilibrado para una limpieza de mayor calidad",
+        "liquidai_lfm2_5_350m_q8_0": "Modelo ultraligero para limpieza rápida de dictado",
+        "liquidai_lfm2_5_230m_q8_0": "Modelo diminuto, limpieza instantánea en hardware modesto"
       },
       "diarization": {
         "segmentation": "Detección de límites del habla para la identificación de hablantes",
@@ -2218,6 +2267,7 @@
       },
       "errors": {
         "noModel": "No hay modelo de IA seleccionado. Configura uno en Ajustes.",
+        "noEndpoint": "No hay URL del servidor autoalojado configurada. Configura una en Ajustes.",
         "actionFailed": "La acción falló"
       }
     },

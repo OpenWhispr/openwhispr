@@ -30,16 +30,7 @@ const DOUBLE_TALK_EXPLAINED = 0.3;
 const DOUBLE_TALK_RESIDUAL = 0.2;
 const DOUBLE_TALK_MIC_TO_SYSTEM_RATIO = 1.16;
 
-function pcm16BufferToFloat32(buffer) {
-  const input = new Int16Array(buffer.buffer, buffer.byteOffset, buffer.length / 2);
-  const output = new Float32Array(input.length);
-
-  for (let i = 0; i < input.length; i += 1) {
-    output[i] = input[i] / 32768;
-  }
-
-  return output;
-}
+const { pcm16ToFloat32 } = require("../utils/audioUtils");
 
 function computeRms(samples) {
   if (!samples.length) {
@@ -70,7 +61,7 @@ class MeetingEchoLeakDetector {
       return;
     }
 
-    const samples = pcm16BufferToFloat32(buffer);
+    const samples = pcm16ToFloat32(buffer);
     if (!samples.length) {
       return;
     }
@@ -90,7 +81,7 @@ class MeetingEchoLeakDetector {
       return null;
     }
 
-    const samples = pcm16BufferToFloat32(buffer);
+    const samples = pcm16ToFloat32(buffer);
     if (!samples.length) {
       return null;
     }

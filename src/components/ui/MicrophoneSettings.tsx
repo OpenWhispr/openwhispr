@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Button } from "./button";
 import { RefreshCw, Mic } from "lucide-react";
 import { isBuiltInMicrophone } from "../../utils/audioDeviceUtils";
+import { resolveMicDeviceSelection } from "../../helpers/micDeviceSelection";
 
 interface AudioDevice {
   deviceId: string;
@@ -16,13 +17,15 @@ interface AudioDevice {
 interface MicrophoneSettingsProps {
   preferBuiltInMic: boolean;
   selectedMicDeviceId: string;
+  selectedMicDeviceLabel: string;
   onPreferBuiltInChange: (value: boolean) => void;
-  onDeviceSelect: (deviceId: string) => void;
+  onDeviceSelect: (deviceId: string, label: string) => void;
 }
 
 export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
   preferBuiltInMic,
   selectedMicDeviceId,
+  selectedMicDeviceLabel,
   onPreferBuiltInChange,
   onDeviceSelect,
 }) => {
@@ -34,14 +37,16 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
   // Use refs to access current values without triggering re-renders
   const preferBuiltInRef = useRef(preferBuiltInMic);
   const selectedDeviceRef = useRef(selectedMicDeviceId);
+  const selectedDeviceLabelRef = useRef(selectedMicDeviceLabel);
   const onDeviceSelectRef = useRef(onDeviceSelect);
 
   // Keep refs in sync
   useEffect(() => {
     preferBuiltInRef.current = preferBuiltInMic;
     selectedDeviceRef.current = selectedMicDeviceId;
+    selectedDeviceLabelRef.current = selectedMicDeviceLabel;
     onDeviceSelectRef.current = onDeviceSelect;
-  }, [preferBuiltInMic, selectedMicDeviceId, onDeviceSelect]);
+  }, [preferBuiltInMic, selectedMicDeviceId, selectedMicDeviceLabel, onDeviceSelect]);
 
   const loadDevices = useCallback(async () => {
     setIsLoading(true);
@@ -68,9 +73,24 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
 
       setDevices(audioInputs);
 
+      const resolvedSelection = resolveMicDeviceSelection(
+        audioInputs,
+        selectedDeviceRef.current,
+        selectedDeviceLabelRef.current
+      );
+      if (
+        resolvedSelection.device &&
+        (resolvedSelection.status === "remapped" || !selectedDeviceLabelRef.current)
+      ) {
+        onDeviceSelectRef.current(
+          resolvedSelection.device.deviceId,
+          resolvedSelection.device.label
+        );
+      }
+
       // If no device is selected and not preferring built-in, select the first device
       if (!preferBuiltInRef.current && !selectedDeviceRef.current && audioInputs.length > 0) {
-        onDeviceSelectRef.current(audioInputs[0].deviceId);
+        onDeviceSelectRef.current(audioInputs[0].deviceId, audioInputs[0].label);
       }
     } catch {
       setError(t("microphoneSettings.errors.unableToAccess"));
@@ -143,7 +163,14 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
           ) : (
             <Select
               value={selectedMicDeviceId || "default"}
-              onValueChange={(value) => onDeviceSelect(value === "default" ? "" : value)}
+              onValueChange={(value) => {
+                if (value === "default") {
+                  onDeviceSelect("", "");
+                  return;
+                }
+                const device = devices.find((candidate) => candidate.deviceId === value);
+                onDeviceSelect(value, device?.label || "");
+              }}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder={t("microphoneSettings.selectPlaceholder")}>

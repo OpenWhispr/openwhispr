@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const { randomUUID } = require("crypto");
 const debugLogger = require("./debugLogger");
+const { buildNoteSearchQuery } = require("./noteSearch");
 const { app } = require("electron");
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
@@ -1491,6 +1492,11 @@ class DatabaseManager {
         }
       }
       if (fields.length === 0) return { success: false };
+      // Re-queue for cloud sync on any local edit, so post-sync field changes aren't
+      // left local-only and overwritten by a later pull.
+      if (!("sync_status" in updates)) {
+        fields.push("sync_status = 'pending'");
+      }
       fields.push("updated_at = CURRENT_TIMESTAMP");
       values.push(id);
       const stmt = this.db.prepare(`UPDATE notes SET ${fields.join(", ")} WHERE id = ?`);
@@ -2092,11 +2098,8 @@ class DatabaseManager {
   searchNotes(query, limit = 50) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const term = query
-        .trim()
-        .replace(/[^\w\s]/g, " ")
-        .trim();
-      if (!term) return [];
+      const ftsQuery = buildNoteSearchQuery(query);
+      if (!ftsQuery) return [];
       return this.db
         .prepare(
           `
@@ -2108,7 +2111,7 @@ class DatabaseManager {
         LIMIT ?
       `
         )
-        .all(term + "*", limit);
+        .all(ftsQuery, limit);
     } catch (error) {
       debugLogger.error("Error searching notes", { error: error.message }, "database");
       throw error;
@@ -2685,10 +2688,10 @@ class DatabaseManager {
           enhanced_at_content_hash = excluded.enhanced_at_content_hash,
           transcript = excluded.transcript,
           folder_id = excluded.folder_id,
-          participants = excluded.participants,
-          calendar_event_id = excluded.calendar_event_id,
-          diarization_enabled = excluded.diarization_enabled,
-          expected_speaker_count = excluded.expected_speaker_count,
+          participants = COALESCE(excluded.participants, participants),
+          calendar_event_id = COALESCE(excluded.calendar_event_id, calendar_event_id),
+          diarization_enabled = COALESCE(excluded.diarization_enabled, diarization_enabled),
+          expected_speaker_count = COALESCE(excluded.expected_speaker_count, expected_speaker_count),
           sync_status = 'synced',
           updated_at = excluded.updated_at
       `);

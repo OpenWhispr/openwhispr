@@ -41,7 +41,7 @@ OpenWhispr turns your voice into text, notes, and actions from your desktop. Pre
 ## Features
 
 - **Voice dictation** — global hotkey to dictate into any app with automatic pasting
-- **AI agent** — talk to GPT-5, Claude, Gemini, Groq, Tinfoil, or local models with a named voice assistant
+- **AI agent** — talk to GPT-5, Claude, Gemini, Groq, Tinfoil, OpenRouter, or local models with a named voice assistant
 - **Voice agent hotkey** — dedicated hotkey that sends your dictation straight to your AI agent as a command, no wake word needed and no cleanup pass
 - **Meeting transcription** — auto-detect Zoom, Teams, and FaceTime calls with live speaker diarization, voice fingerprinting, and Google Calendar integration
 - **Local speaker diarization** — on-device speaker labelling with voice fingerprint recognition across meetings, no cloud required

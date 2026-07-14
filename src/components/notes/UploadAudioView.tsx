@@ -21,7 +21,7 @@ import { useUsage } from "../../hooks/useUsage";
 import { useSettings } from "../../hooks/useSettings";
 import { useStartOnboarding } from "../../hooks/useStartOnboarding";
 import { withSessionRefresh } from "../../lib/auth";
-import { getAllReasoningModels } from "../../models/ModelRegistry";
+import { getAllReasoningModels, getBatchTranscriptionModel } from "../../models/ModelRegistry";
 import {
   useSettingsStore,
   selectIsCloudCleanupMode,
@@ -84,8 +84,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const usage = useUsage();
   const isProUser = usage?.isSubscribed || usage?.isTrial;
 
-  const { openaiApiKey, groqApiKey, xaiApiKey, mistralApiKey, customTranscriptionApiKey } =
-    useSettings();
+  const {
+    openaiApiKey,
+    groqApiKey,
+    xaiApiKey,
+    mistralApiKey,
+    tinfoilApiKey,
+    customTranscriptionApiKey,
+  } = useSettings();
 
   const {
     useLocalWhisper,
@@ -187,7 +193,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   ? xaiApiKey
                   : cloudTranscriptionProvider === "mistral"
                     ? mistralApiKey
-                    : customTranscriptionApiKey;
+                    : cloudTranscriptionProvider === "tinfoil"
+                      ? tinfoilApiKey
+                      : customTranscriptionApiKey;
           if (!cancelled) setProviderReady(!!key);
         }
         return;
@@ -220,6 +228,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     groqApiKey,
     xaiApiKey,
     mistralApiKey,
+    tinfoilApiKey,
     customTranscriptionApiKey,
     cortiClientId,
     cortiClientSecret,
@@ -236,7 +245,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       cloudTranscriptionProvider === "custom"
         ? t("notes.upload.custom")
         : cloudTranscriptionProvider.charAt(0).toUpperCase() + cloudTranscriptionProvider.slice(1);
-    return `${name} · ${cloudTranscriptionModel}`;
+    const model = getBatchTranscriptionModel(cloudTranscriptionProvider) ?? cloudTranscriptionModel;
+    return `${name} · ${model}`;
   };
 
   const getActiveApiKey = (): string => {
@@ -249,6 +259,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return xaiApiKey;
       case "mistral":
         return mistralApiKey;
+      case "tinfoil":
+        return tinfoilApiKey;
       case "custom":
         return customTranscriptionApiKey || "";
       default:

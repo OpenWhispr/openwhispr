@@ -84,10 +84,10 @@ let dbus = null;
 function getDBus() {
   if (dbus) return dbus;
   try {
-    dbus = require("dbus-next");
+    dbus = require("@homebridge/dbus-native");
     return dbus;
   } catch (err) {
-    debugLogger.log("[HyprlandShortcut] Failed to load dbus-next:", err.message);
+    debugLogger.log("[HyprlandShortcut] Failed to load dbus-native:", err.message);
     return null;
   }
 }
@@ -143,45 +143,40 @@ class HyprlandShortcutManager {
 
     try {
       this.bus = dbusModule.sessionBus();
-      await this.bus.requestName(DBUS_SERVICE_NAME, 0);
-
-      const InterfaceClass = this._createInterfaceClass(dbusModule, callback);
-      const iface = new InterfaceClass();
-      this.bus.export(DBUS_OBJECT_PATH, iface);
+      // Without a listener, async socket errors (e.g. a stale
+      // DBUS_SESSION_BUS_ADDRESS) crash the process as an unhandled
+      // "error" event — sessionBus() returns before connecting.
+      this.bus.connection.on("error", (err) => {
+        debugLogger.log("[HyprlandShortcut] D-Bus connection error:", err.message);
+      });
+      this.bus.requestName(DBUS_SERVICE_NAME, 0);
+      this.bus.exportInterface(
+        {
+          Toggle: () => {
+            if (this.callback) {
+              this.callback();
+            }
+          },
+        },
+        DBUS_OBJECT_PATH,
+        {
+          name: DBUS_INTERFACE,
+          methods: {
+            Toggle: ["", ""],
+          },
+        }
+      );
 
       debugLogger.log("[HyprlandShortcut] D-Bus service initialized successfully");
       return true;
     } catch (err) {
       debugLogger.log("[HyprlandShortcut] Failed to initialize D-Bus service:", err.message);
       if (this.bus) {
-        this.bus.disconnect();
+        this.bus.connection.end();
         this.bus = null;
       }
       return false;
     }
-  }
-
-  _createInterfaceClass(dbusModule, callback) {
-    class OpenWhisprInterface extends dbusModule.interface.Interface {
-      constructor() {
-        super(DBUS_INTERFACE);
-        this._callback = callback;
-      }
-
-      Toggle() {
-        if (this._callback) {
-          this._callback();
-        }
-      }
-    }
-
-    OpenWhisprInterface.configureMembers({
-      methods: {
-        Toggle: { inSignature: "", outSignature: "" },
-      },
-    });
-
-    return OpenWhisprInterface;
   }
 
   static isValidHotkey(hotkey) {
@@ -471,7 +466,7 @@ class HyprlandShortcutManager {
    */
   close() {
     if (this.bus) {
-      this.bus.disconnect();
+      this.bus.connection.end();
       this.bus = null;
     }
   }
