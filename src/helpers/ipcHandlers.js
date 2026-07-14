@@ -5508,9 +5508,7 @@ class IPCHandlers {
     let dictationPreviewLanguage = null;
     let dictationPreviewSessionActive = false;
     let dictationPreviewChunkCount = 0;
-    // Persistent stream to the sherpa-onnx online server; set only for
-    // online-runtime models (Nemotron). When active it replaces the
-    // 1.5s buffered-chunk transcription path.
+    // Online-runtime models stream here instead of the 1.5s chunked path.
     let dictationPreviewStream = null;
     // Bumped on every reset so async preview work can detect a stale session.
     let dictationPreviewGen = 0;
@@ -6237,14 +6235,11 @@ class IPCHandlers {
               }
             },
           });
-          // The preview may have been dismissed or restarted while the
-          // streaming server was warming up.
           if (gen !== dictationPreviewGen) {
             stream.abort();
             return { success: true };
           }
           dictationPreviewStream = stream;
-          // Feed audio that arrived while the streaming server was starting.
           for (const chunk of dictationPreviewBuffer) {
             stream.sendPcm16(chunk);
           }

@@ -290,7 +290,6 @@ class ParakeetWsServer {
     });
   }
 
-  // The online (streaming) server assumes its own configured sample rate, so
   // samplesBuffer must already be 16kHz float32.
   async _transcribeOnline(samplesBuffer) {
     const startTime = Date.now();
@@ -333,10 +332,6 @@ class ParakeetWsServer {
     }
   }
 
-  // Opens a persistent connection to the online (streaming) server so callers
-  // can feed PCM as it is captured and receive live transcript updates. Used
-  // by the dictation live preview and by _transcribeOnline; offline-runtime
-  // models keep the buffered chunk-by-chunk path.
   createOnlineStream({ onUpdate, onError } = {}) {
     if (!this.ready || !this.process) {
       throw new Error("parakeet-ws server is not running");

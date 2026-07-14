@@ -182,9 +182,6 @@ class ParakeetManager {
     return getModelRuntime(modelName) === "online";
   }
 
-  // Persistent live-transcription stream for online-runtime models (Nemotron).
-  // Ensures the streaming server is up for the model, then hands back a
-  // stream handle: { sendPcm16, sendFloat32, finish, abort }.
   async createOnlineStream(modelName, options = {}) {
     this.validateModelName(modelName);
     const started = await this.serverManager.startServer(modelName);

@@ -8,9 +8,7 @@ function parseOfflineMessage(message) {
   }
 }
 
-// Incremental accumulator over online (streaming) server messages: each raw
-// message is parsed once on arrival, finalized segments are deduped by segment
-// id, and text() returns the finalized text plus the trailing partial.
+// Dedupes finalized segments by id; text() is finalized text plus the trailing partial.
 function createOnlineAccumulator() {
   const finalizedSegments = new Set();
   let finalizedText = "";

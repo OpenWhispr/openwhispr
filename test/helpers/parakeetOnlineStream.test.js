@@ -7,9 +7,7 @@ const { WebSocketServer } = require("ws");
 const ParakeetWsServer = require("../../src/helpers/parakeetWsServer");
 const { pcm16ToFloat32 } = require("../../src/utils/audioUtils");
 
-// Minimal stand-in for the sherpa-onnx online websocket server protocol:
-// binary frames are float32 audio, text "Done" ends the stream, the server
-// replies with JSON results and finally the text "Done!".
+// Mock sherpa online WS protocol: float32 binary frames in, JSON results out, "Done"/"Done!" handshake.
 async function startMockOnlineServer({ onBinary, finalSegment = 0 }) {
   const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
   await once(wss, "listening");
@@ -82,8 +80,6 @@ test("online stream emits live updates and finish resolves with the final text",
 test("finalized segments accumulate across endpoints in live updates", async () => {
   let segment = 0;
   const mock = await startMockOnlineServer({
-    // The final flush after "Done" belongs to the segment following the two
-    // endpointed ones.
     finalSegment: 2,
     onBinary: (socket, _data, frameCount) => {
       // Simulate endpointing: every frame finalizes a segment.
