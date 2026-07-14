@@ -2177,7 +2177,6 @@
       "urlPlaceholder": "Вставьте URL YouTube или аудиофайла",
       "urlDownloading": "Загрузка аудио...",
       "urlResolving": "Определение URL...",
-      "urlConverting": "Обработка аудио...",
       "urlInvalid": "Недопустимый URL. Вставьте ссылку на YouTube или прямой URL аудиофайла.",
       "urlVideoUnavailable": "Это видео недоступно. Возможно, оно приватное, удалено или заблокировано в вашем регионе.",
       "urlPlaylistNotSupported": "Плейлисты не поддерживаются. Вставьте URL одного видео.",

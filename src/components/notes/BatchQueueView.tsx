@@ -98,8 +98,7 @@ export default function BatchQueueView({
               {item.name}
             </span>
 
-            {(item.status === "downloading" ||
-              item.status === "transcribing") && (
+            {item.status === "downloading" && (
               <div className="w-16 h-[2px] rounded-full bg-foreground/5 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-primary/50 transition-[width] duration-300"

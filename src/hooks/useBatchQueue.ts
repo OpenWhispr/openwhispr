@@ -105,11 +105,13 @@ export function useBatchQueue() {
   const cancelAll = useCallback(() => {
     cancelledRef.current = true;
     window.electronAPI.cancelUrlDownload();
+    // The in-flight item flips too: its result is discarded at the next
+    // checkpoint, so don't leave it spinning for however long that takes.
     applyQueue((prev) =>
       prev.map((item) =>
-        item.status === "queued"
-          ? { ...item, status: "error" as const, error: "batchCancelled" }
-          : item
+        item.status === "done" || item.status === "error"
+          ? item
+          : { ...item, status: "error" as const, error: "batchCancelled" }
       )
     );
   }, [applyQueue]);

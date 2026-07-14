@@ -2376,7 +2376,6 @@
       "urlPlaceholder": "Paste a YouTube or audio URL",
       "urlDownloading": "Downloading audio...",
       "urlResolving": "Resolving URL...",
-      "urlConverting": "Processing audio...",
       "urlInvalid": "Not a valid URL. Paste a YouTube link or a direct audio file URL.",
       "urlVideoUnavailable": "This video is unavailable. It may be private, removed, or geo-blocked.",
       "urlPlaylistNotSupported": "Playlists are not supported. Paste a single video URL.",

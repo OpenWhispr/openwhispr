@@ -2288,7 +2288,6 @@
       "urlPlaceholder": "Collez une URL YouTube ou audio",
       "urlDownloading": "Téléchargement de l'audio...",
       "urlResolving": "Résolution de l'URL...",
-      "urlConverting": "Traitement de l'audio...",
       "urlInvalid": "URL non valide. Collez un lien YouTube ou une URL directe de fichier audio.",
       "urlVideoUnavailable": "Cette vidéo n'est pas disponible. Elle est peut-être privée, supprimée ou géo-bloquée.",
       "urlPlaylistNotSupported": "Les playlists ne sont pas prises en charge. Collez l'URL d'une seule vidéo.",

@@ -2161,7 +2161,6 @@
       "urlPlaceholder": "YouTubeまたは音声URLを貼り付け",
       "urlDownloading": "音声をダウンロード中...",
       "urlResolving": "URLを解析中...",
-      "urlConverting": "音声を処理中...",
       "urlInvalid": "無効なURLです。YouTubeリンクまたは音声ファイルの直接URLを貼り付けてください。",
       "urlVideoUnavailable": "この動画は利用できません。非公開、削除済み、または地域制限されている可能性があります。",
       "urlPlaylistNotSupported": "プレイリストには対応していません。個別の動画URLを貼り付けてください。",

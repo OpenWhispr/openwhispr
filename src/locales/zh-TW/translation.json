@@ -2177,7 +2177,6 @@
       "urlPlaceholder": "貼上 YouTube 或音訊 URL",
       "urlDownloading": "正在下載音訊...",
       "urlResolving": "正在解析 URL...",
-      "urlConverting": "正在處理音訊...",
       "urlInvalid": "無效的 URL。請貼上 YouTube 連結或直接音訊檔案 URL。",
       "urlVideoUnavailable": "此影片無法使用。可能是私人、已移除或受地區限制。",
       "urlPlaylistNotSupported": "不支援播放清單。請貼上單一影片的 URL。",

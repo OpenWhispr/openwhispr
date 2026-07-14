@@ -79,6 +79,8 @@ export async function transcribeFile(
 }
 
 // OpenAI/Mistral BYOK handle diarization inside the transcription call itself.
+// Self-hosted mode routes to the user's own server, which doesn't — those users
+// get local diarization like everyone else.
 export function shouldUseByokDiarize(
   cfg: FileTranscriptionConfig,
   diarizationEnabled: boolean
@@ -87,6 +89,7 @@ export function shouldUseByokDiarize(
     diarizationEnabled &&
     !cfg.useLocalWhisper &&
     !cfg.isOpenWhisprCloud &&
+    cfg.transcriptionMode !== "self-hosted" &&
     (cfg.cloudTranscriptionProvider === "openai" ||
       cfg.cloudTranscriptionProvider === "mistral")
   );

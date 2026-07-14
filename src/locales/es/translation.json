@@ -2225,7 +2225,6 @@
       "urlPlaceholder": "Pega una URL de YouTube o de audio",
       "urlDownloading": "Descargando audio...",
       "urlResolving": "Resolviendo URL...",
-      "urlConverting": "Procesando audio...",
       "urlInvalid": "URL no válida. Pega un enlace de YouTube o una URL directa de archivo de audio.",
       "urlVideoUnavailable": "Este video no está disponible. Puede ser privado, eliminado o bloqueado geográficamente.",
       "urlPlaylistNotSupported": "Las listas de reproducción no son compatibles. Pega la URL de un solo video.",

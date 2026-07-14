@@ -729,7 +729,7 @@ declare global {
       deleteTempFile: (filePath: string) => Promise<{ success: boolean; error?: string }>;
       onUrlDownloadProgress?: (
         callback: (data: {
-          stage: "resolving" | "downloading" | "converting" | "ready";
+          stage: "resolving" | "downloading" | "ready";
           percent: number;
           title?: string;
           downloadId?: string;

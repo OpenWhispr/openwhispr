@@ -198,11 +198,17 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     window.electronAPI.getDiarizationModelStatus?.().then((status) => {
       const ready = status?.modelsDownloaded ?? false;
       setDiarizationModelsReady(ready);
-      // Heal a persisted-on toggle whose models were removed since.
+      // Heal a persisted-on toggle whose models were removed since; roll it back
+      // if the download fails so it can't sit ON while doing nothing.
       if (!ready && localStorage.getItem("uploadDiarizationEnabled") === "true") {
-        ensureDiarizationModels();
+        if (shouldUseByokDiarize(buildTranscriptionConfig(), true)) return;
+        ensureDiarizationModels().then((ok) => {
+          if (!ok) setDiarizationEnabled(false);
+        });
       }
     });
+    // Mount-only by design: heals persisted state against the models on disk.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
@@ -452,7 +458,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
 
   // Batch counterpart of the single-file size gating above; returns keys under notes.upload.*.
   const getBatchSizeErrorKey = (sizeBytes: number): string | null => {
-    if (useLocalWhisper || cloudTranscriptionProvider === "custom") return null;
+    if (useLocalWhisper || isSelfHosted || cloudTranscriptionProvider === "custom") return null;
     if (isByok) return sizeBytes > BYOK_MAX_FILE_SIZE ? "byokTooLarge" : null;
     if (sizeBytes > CLOUD_PRO_MAX_FILE_SIZE) return "fileTooLarge";
     if (!isProUser && sizeBytes > CLOUD_FREE_MAX_FILE_SIZE) return "paidPlanRequired";
@@ -542,6 +548,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     setChunkProgress(null);
     setUrlInput("");
     setDownloadProgress(null);
+    setBatchUrlNotice(null);
     const personal = findDefaultFolder(folders);
     if (personal) setSelectedFolderId(String(personal.id));
   };
@@ -632,6 +639,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           null,
           folderId
         );
+        if (runId !== runIdRef.current) return;
         if (noteRes.success && noteRes.note) setNoteId(noteRes.note.id);
         if (currentTempPath) {
           window.electronAPI.deleteTempFile(currentTempPath);
@@ -955,11 +963,12 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             </>
           )}
 
+          {batchUrlNotice && (
+            <p className="text-[10px] text-amber-500/60 mt-2 text-center">{batchUrlNotice}</p>
+          )}
+
           {batch.hasQueue && (
             <div className="mt-3">
-              {batchUrlNotice && (
-                <p className="text-[10px] text-amber-500/60 mb-2 text-center">{batchUrlNotice}</p>
-              )}
               <BatchQueueView
                 queue={batch.queue}
                 completedCount={batch.completedCount}
@@ -968,8 +977,13 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                 isProcessing={batch.isProcessing}
                 onRemoveItem={batch.removeItem}
                 onCancelAll={batch.cancelAll}
-                onClearQueue={batch.clearQueue}
-                onOpenNote={(noteId) => onNoteCreated?.(noteId, null)}
+                onClearQueue={() => {
+                  setBatchUrlNotice(null);
+                  batch.clearQueue();
+                }}
+                onOpenNote={(noteId) =>
+                  onNoteCreated?.(noteId, batchFolderId ? Number(batchFolderId) : null)
+                }
               />
 
               {!batch.isProcessing && batch.queue.some((i) => i.status === "queued") && (
@@ -1054,9 +1068,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               </div>
 
               <p className="text-xs text-foreground/50 font-medium">
-                {downloadProgress.stage === "resolving" && t("notes.upload.urlResolving")}
-                {downloadProgress.stage === "downloading" && t("notes.upload.urlDownloading")}
-                {downloadProgress.stage === "converting" && t("notes.upload.urlConverting")}
+                {downloadProgress.stage === "resolving"
+                  ? t("notes.upload.urlResolving")
+                  : t("notes.upload.urlDownloading")}
               </p>
 
               {downloadProgress.title && (
@@ -1125,12 +1139,14 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
                   if (diarizationDownloading) return;
                   const next = !diarizationEnabled;
                   setDiarizationEnabled(next);
-                  if (next && !diarizationModelsReady) {
+                  // BYOK-native diarization needs no local models — don't download them.
+                  if (
+                    next &&
+                    !diarizationModelsReady &&
+                    !shouldUseByokDiarize(buildTranscriptionConfig(), true)
+                  ) {
                     const ready = await ensureDiarizationModels();
-                    // BYOK-native diarization works without local models.
-                    if (!ready && !shouldUseByokDiarize(buildTranscriptionConfig(), true)) {
-                      setDiarizationEnabled(false);
-                    }
+                    if (!ready) setDiarizationEnabled(false);
                   }
                 }}
                 className={cn(
@@ -1152,19 +1168,19 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               </button>
             </div>
 
-            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
+            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud && !isSelfHosted &&
               cloudTranscriptionProvider === "openai" && (
               <p className="text-[10px] text-foreground/25 mt-1.5">
                 {t("notes.upload.openaiDiarizeNote")}
               </p>
             )}
-            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
+            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud && !isSelfHosted &&
               cloudTranscriptionProvider === "mistral" && (
               <p className="text-[10px] text-foreground/25 mt-1.5">
                 {t("notes.upload.mistralDiarizeNote")}
               </p>
             )}
-            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud &&
+            {diarizationEnabled && !useLocalWhisper && !isOpenWhisprCloud && !isSelfHosted &&
               cloudTranscriptionProvider === "groq" && (
               <p className="text-[10px] text-amber-500/60 mt-1.5">
                 {t("notes.upload.groqDiarizeNote")}
