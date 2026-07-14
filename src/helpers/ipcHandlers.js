@@ -6976,11 +6976,55 @@ class IPCHandlers {
       "transcribe-audio-file-byok",
       async (
         event,
-        { filePath, apiKey, baseUrl, model, provider, language, environment, tenant }
+        {
+          filePath,
+          apiKey,
+          baseUrl,
+          model,
+          provider,
+          language,
+          environment,
+          tenant,
+          transcriptionMode,
+          remoteTranscriptionUrl,
+          remoteTranscriptionModel,
+        }
       ) => {
         const fs = require("fs");
         const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024; // 25 MB
         try {
+          const { resolveSelfHostedRetryRoute } = await import("./retryTranscriptionRouting.js");
+          const selfHostedRoute = resolveSelfHostedRetryRoute({
+            transcriptionMode,
+            remoteTranscriptionUrl,
+            remoteTranscriptionModel,
+          });
+
+          // Fail closed: a misconfigured self-hosted setup must never fall through to BYOK.
+          if (selfHostedRoute?.kind === "configuration-error") {
+            return { success: false, error: selfHostedRoute.error };
+          }
+
+          if (selfHostedRoute?.kind === "self-hosted") {
+            // User's own server, so the 25 MB third-party cap does not apply.
+            const ext = path.extname(filePath).toLowerCase().replace(".", "");
+            const { body, boundary } = buildMultipartBody(
+              fs.readFileSync(filePath),
+              path.basename(filePath),
+              AUDIO_MIME_TYPES[ext] || "audio/mpeg",
+              { model: selfHostedRoute.model, language }
+            );
+            const data = await postMultipart(new URL(selfHostedRoute.endpoint), body, boundary);
+            if (data.statusCode !== 200) {
+              throw new Error(
+                data.data?.error?.message ||
+                  data.data?.error ||
+                  `Self-hosted API Error: ${data.statusCode}`
+              );
+            }
+            return { success: true, text: data.data.text };
+          }
+
           const fileSize = fs.statSync(filePath).size;
           if (fileSize > BYOK_FILE_SIZE_LIMIT) {
             return {

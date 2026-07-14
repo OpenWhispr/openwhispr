@@ -35,6 +35,22 @@ export type AgentStreamChunk =
     }
   | { type: "done"; finishReason?: string };
 
+// Old Ollama/strict proxies reject the `reasoning` object; drop it and retry once.
+async function fetchWithReasoningFieldFallback(
+  doFetch: () => Promise<Response>,
+  requestBody: Record<string, unknown>,
+  logEvent: string
+): Promise<Response> {
+  let res = await doFetch();
+  if (!res.ok && (res.status === 400 || res.status === 422) && requestBody.reasoning) {
+    logger.logReasoning(logEvent, { status: res.status });
+    delete requestBody.reasoning;
+    void res.body?.cancel();
+    res = await doFetch();
+  }
+  return res;
+}
+
 class ReasoningService extends BaseReasoningService {
   private apiKeyCache: SecureCache<string>;
   private static readonly MAX_TOOL_STEPS = 20;
@@ -213,12 +229,17 @@ class ReasoningService extends BaseReasoningService {
           headers["Authorization"] = `Bearer ${apiKey}`;
         }
 
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-        });
+        const res = await fetchWithReasoningFieldFallback(
+          () =>
+            fetch(endpoint, {
+              method: "POST",
+              headers,
+              body: JSON.stringify(requestBody),
+              signal: controller.signal,
+            }),
+          requestBody,
+          `${providerName.toUpperCase()}_REASONING_FIELD_RETRY`
+        );
 
         if (!res.ok) {
           const errorText = await res.text();
@@ -441,7 +462,7 @@ class ReasoningService extends BaseReasoningService {
       }
     }
 
-    applyThinkingSuppression(requestBody, model, provider, config);
+    applyThinkingSuppression(requestBody, model, isLanCleanup ? "lan" : provider, config);
 
     logger.logReasoning("AGENT_STREAM_REQUEST", {
       endpoint,
@@ -465,12 +486,17 @@ class ReasoningService extends BaseReasoningService {
 
     let response: Response;
     try {
-      response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-        signal: controller.signal,
-      });
+      response = await fetchWithReasoningFieldFallback(
+        () =>
+          fetch(endpoint, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(requestBody),
+            signal: controller.signal,
+          }),
+        requestBody,
+        "AGENT_STREAM_REASONING_FIELD_RETRY"
+      );
     } catch (error) {
       clearTimeout(timeoutId);
       if ((error as Error).name === "AbortError") {
