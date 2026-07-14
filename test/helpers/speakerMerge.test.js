@@ -147,3 +147,27 @@ test("mergeSpeakersWithText fallback duration matches sorted-input behavior when
   assert.equal(result[1].start, 10);
   assert.equal(result[1].end, 20);
 });
+
+test("empty-sentence fallback uses the max segment end, not the last segment's", () => {
+  const segments = [
+    { speaker: "spk_0", start: 0, end: 30 },
+    { speaker: "spk_1", start: 10, end: 15 },
+  ];
+  const merged = mergeSpeakersWithText(segments, "   ", 0);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].end, 30);
+});
+
+test("zero duration with unsorted segments still maps proportionally against the max end", () => {
+  // Overlap segment emitted last with an earlier end; a last-segment duration
+  // would compress the timeline to 15s and misassign the tail sentences.
+  const segments = [
+    { speaker: "spk_0", start: 0, end: 30 },
+    { speaker: "spk_1", start: 25, end: 40 },
+    { speaker: "spk_0", start: 10, end: 15 },
+  ];
+  const text = "First sentence here. Second sentence here. Third sentence here. Fourth sentence here.";
+  const merged = mergeSpeakersWithText(segments, text, 0);
+  const last = merged[merged.length - 1];
+  assert.equal(last.speaker, "spk_1", "tail sentences must map to the late segment");
+});

@@ -1262,4 +1262,8 @@ module.exports = {
   _setElectronNetForTests: (net) => { electronNetOverride = net; },
   // Test-only seam: exposes yt-dlp output selection to the regression tests.
   _selectYtDlpOutput: selectYtDlpOutput,
+  // Test-only seams: cache checksum verification and block-detection heuristics.
+  _resolveYtDlpBinary: resolveYtDlpBinary,
+  _recordCacheChecksum: recordCacheChecksum,
+  _looksLikeYouTubeBlock: looksLikeYouTubeBlock,
 };

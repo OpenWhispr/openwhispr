@@ -783,3 +783,86 @@ test("selectYtDlpOutput excludes -Frag fragment files", () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// --- fe80::/10 link-local range ---
+
+test("isPrivateIp covers the whole fe80::/10 link-local range", () => {
+  assert.equal(isPrivateIp("fe80::1"), true);
+  assert.equal(isPrivateIp("fe81::1"), true);
+  assert.equal(isPrivateIp("febf::1"), true);
+  assert.equal(isPrivateIp("fec0::1"), false);
+  assert.equal(isPrivateIp("fe00::1"), false);
+});
+
+// --- cache binary checksum verification ---
+
+test("resolveYtDlpBinary discards a cache copy whose checksum does not match", () => {
+  const cleanup = ensureCacheBinary();
+  const name = `yt-dlp-${process.platform}-${process.arch}${process.platform === "win32" ? ".exe" : ""}`;
+  const cachePath = path.join(YT_DLP_TEST_CACHE_DIR, name);
+  try {
+    downloader._recordCacheChecksum();
+    assert.equal(downloader._resolveYtDlpBinary(), cachePath, "verified cache copy must win");
+
+    fs.writeFileSync(cachePath, "#!/bin/sh\necho tampered\n");
+    const resolved = downloader._resolveYtDlpBinary();
+    assert.notEqual(resolved, cachePath, "tampered cache copy must not be executed");
+    assert.equal(fs.existsSync(cachePath), false, "tampered copy must be discarded");
+    assert.equal(fs.existsSync(`${cachePath}.sha256`), false, "stale checksum must be discarded");
+  } finally {
+    cleanup();
+  }
+});
+
+test("resolveYtDlpBinary ignores a cache copy that has no recorded checksum", () => {
+  const cleanup = ensureCacheBinary();
+  const name = `yt-dlp-${process.platform}-${process.arch}${process.platform === "win32" ? ".exe" : ""}`;
+  const cachePath = path.join(YT_DLP_TEST_CACHE_DIR, name);
+  try {
+    const resolved = downloader._resolveYtDlpBinary();
+    assert.notEqual(resolved, cachePath);
+    assert.equal(fs.existsSync(cachePath), false, "unverifiable copy must be discarded");
+  } finally {
+    cleanup();
+  }
+});
+
+test("maybeUpdateYtDlp updates on the nightly channel and re-records the checksum", async () => {
+  const cleanup = ensureCacheBinary();
+  const name = `yt-dlp-${process.platform}-${process.arch}${process.platform === "win32" ? ".exe" : ""}`;
+  const cachePath = path.join(YT_DLP_TEST_CACHE_DIR, name);
+  const origSpawn = childProcess.spawn;
+  let spawnArgs = null;
+  let child = null;
+  childProcess.spawn = (_bin, args) => {
+    spawnArgs = args;
+    child = makeFakeChild();
+    setImmediate(() => {
+      // Simulate the updater replacing the binary before exiting.
+      fs.writeFileSync(cachePath, "#!/bin/sh\necho updated\n");
+      child.emit("close", 0);
+    });
+    return child;
+  };
+  try {
+    await resolvesWithin(maybeUpdateYtDlp({ force: true }), 2000);
+    assert.deepEqual(spawnArgs, ["--update-to", "nightly"]);
+    assert.equal(downloader._resolveYtDlpBinary(), cachePath, "updated copy must pass verification");
+  } finally {
+    childProcess.spawn = origSpawn;
+    cleanup();
+  }
+});
+
+// --- YouTube network-block heuristic ---
+
+test("looksLikeYouTubeBlock matches bot checks, 403s, and login walls but not ordinary errors", () => {
+  const block = downloader._looksLikeYouTubeBlock;
+  assert.equal(block("ERROR: Sign in to confirm you're not a bot"), true);
+  assert.equal(block("HTTP Error 403: Forbidden"), true);
+  assert.equal(block("The following content is not available on this app (LOGIN_REQUIRED)"), true);
+  assert.equal(block("YouTube is forcing SABR streaming for this client"), true);
+  assert.equal(block("Video unavailable"), false);
+  assert.equal(block("This video is private"), false);
+  assert.equal(block(""), false);
+});
