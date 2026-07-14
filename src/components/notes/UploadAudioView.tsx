@@ -102,7 +102,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     cloudTranscriptionModel,
     cloudTranscriptionBaseUrl,
     cloudTranscriptionMode,
+    transcriptionMode,
   } = useSettingsStore(useShallow(selectResolvedUploadTranscription));
+
+  const remoteTranscriptionUrl = useSettingsStore((s) => s.remoteTranscriptionUrl);
+  const remoteTranscriptionModel = useSettingsStore((s) => s.remoteTranscriptionModel);
 
   const setUploadTranscriptionMode = useSettingsStore((s) => s.setUploadTranscriptionMode);
   const setUploadCloudTranscriptionMode = useSettingsStore(
@@ -125,6 +129,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     isSignedIn && cloudTranscriptionMode === "openwhispr" && !useLocalWhisper;
 
   // Mode detection
+  const isSelfHosted = transcriptionMode === "self-hosted" && !useLocalWhisper;
   const isByok = !useLocalWhisper && !isOpenWhisprCloud;
 
   // Mode-aware file size validation
@@ -141,8 +146,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   if (file) {
     if (useLocalWhisper) {
       // Local transcription: no file size restrictions
-    } else if (cloudTranscriptionProvider === "custom") {
-      // Custom endpoints (e.g. local whisper.cpp): no file size restrictions
+    } else if (isSelfHosted || cloudTranscriptionProvider === "custom") {
+      // Self-hosted / custom endpoints (e.g. local whisper.cpp): no file size restrictions
     } else if (isByok) {
       byokTooLarge = file.sizeBytes > BYOK_MAX_FILE_SIZE;
       if (byokTooLarge && !isSignedIn) {
@@ -178,7 +183,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
         return;
       }
       if (!useLocalWhisper) {
-        if (cloudTranscriptionProvider === "custom") {
+        if (isSelfHosted) {
+          if (!cancelled) setProviderReady(!!remoteTranscriptionUrl?.trim());
+        } else if (cloudTranscriptionProvider === "custom") {
           // Custom providers only need a base URL; API key is truly optional
           if (!cancelled) setProviderReady(!!cloudTranscriptionBaseUrl?.trim());
         } else if (cloudTranscriptionProvider === "corti") {
@@ -220,6 +227,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     };
   }, [
     isOpenWhisprCloud,
+    isSelfHosted,
+    remoteTranscriptionUrl,
     useLocalWhisper,
     localTranscriptionProvider,
     cloudTranscriptionProvider,
@@ -240,6 +249,10 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
       if (localTranscriptionProvider === "nvidia")
         return `Parakeet · ${parakeetModel || "default"}`;
       return `Whisper · ${whisperModel || "base"}`;
+    }
+    if (isSelfHosted) {
+      const name = t("settingsPage.transcription.modes.selfHosted");
+      return remoteTranscriptionModel ? `${name} · ${remoteTranscriptionModel}` : name;
     }
     const name =
       cloudTranscriptionProvider === "custom"
@@ -380,6 +393,8 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           model: localTranscriptionProvider === "nvidia" ? parakeetModel : whisperModel,
         });
       } else {
+        // Self-hosted fields make the handler route to the configured server
+        // (fail-closed on misconfiguration) instead of stale BYOK settings.
         res = await window.electronAPI.transcribeAudioFileByok!({
           filePath: file.path,
           apiKey: getActiveApiKey(),
@@ -389,6 +404,9 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
           language: getBaseLanguageCode(preferredLanguage) || "en",
           environment: cortiEnvironment,
           tenant: cortiTenant,
+          transcriptionMode,
+          remoteTranscriptionUrl,
+          remoteTranscriptionModel,
         });
       }
 
@@ -481,6 +499,11 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   const getTranscribingLabel = (): string => {
     if (isOpenWhisprCloud) return t("notes.upload.transcribingCloud");
     if (useLocalWhisper) return t("notes.upload.transcribingLocal");
+    if (isSelfHosted) {
+      return t("notes.upload.transcribingProvider", {
+        provider: t("settingsPage.transcription.modes.selfHosted"),
+      });
+    }
     return t("notes.upload.transcribingProvider", { provider: cloudTranscriptionProvider });
   };
 
