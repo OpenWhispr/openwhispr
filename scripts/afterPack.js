@@ -6,13 +6,18 @@
 //
 // 1. Strips non-target platform/arch binaries from onnxruntime-node
 //    (saves 150–180 MB per build).
-// 2. Wraps the Linux binary in a shell script that forces XWayland and
-//    reads user flags from ~/.config/open-whispr-flags.conf.
+// 2. Wraps the Linux binary in a shell script that forces XWayland, reads
+//    user flags from ~/.config/open-whispr-flags.conf, and falls back to
+//    --no-sandbox where the Chromium sandbox cannot work (AppImage/tar.gz
+//    on distros that restrict unprivileged user namespaces).
+// 3. Fails the build if required binaries (ffmpeg-static, ps-list vendor exe,
+//    onnx worker script) are missing from app.asar.unpacked/.
 
 const fs = require("fs");
 const path = require("path");
 const { execFileSync } = require("child_process");
 const { Arch } = require("app-builder-lib");
+const { buildLinuxWrapperScript } = require("./lib/linux-launcher");
 
 // ---------------------------------------------------------------------------
 // macOS resource binary signing
@@ -172,31 +177,7 @@ function wrapLinuxBinary(context) {
 
   fs.renameSync(binaryPath, realBinaryPath);
 
-  const wrapper = `#!/bin/bash
-# OpenWhispr launcher
-# User flags: ~/.config/${binaryName}-flags.conf (one per line, # = comment)
-
-HERE="$(dirname "$(readlink -f "\${BASH_SOURCE[0]}")")"
-FLAGS=()
-
-# Wayland: forces XWayland (overlay positioning requires X11)
-if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
-  FLAGS+=(--ozone-platform=x11)
-fi
-
-# User flags
-FLAGS_FILE="\${XDG_CONFIG_HOME:-$HOME/.config}/${binaryName}-flags.conf"
-if [ -f "$FLAGS_FILE" ]; then
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    [[ -z "$line" || "$line" =~ ^[[:space:]]*# ]] && continue
-    FLAGS+=("$line")
-  done < "$FLAGS_FILE"
-fi
-
-exec -a "$0" "$HERE/${binaryName}-app" "\${FLAGS[@]}" "$@"
-`;
-
-  fs.writeFileSync(binaryPath, wrapper, { mode: 0o755 });
+  fs.writeFileSync(binaryPath, buildLinuxWrapperScript(binaryName), { mode: 0o755 });
 }
 
 function verifyMeetingAecHelper(context) {
@@ -221,6 +202,47 @@ function verifyMeetingAecHelper(context) {
   }
 }
 
+function verifyUnpackedBinaries(context) {
+  const unpackedDir = path.join(resolveResourcesDir(context), "app.asar.unpacked");
+  const unpackedModulesDir = path.join(unpackedDir, "node_modules");
+
+  const isWindows = context.electronPlatformName === "win32";
+
+  const ffmpegPath = path.join(
+    unpackedModulesDir,
+    "ffmpeg-static",
+    isWindows ? "ffmpeg.exe" : "ffmpeg"
+  );
+  if (!fs.existsSync(ffmpegPath)) {
+    throw new Error(
+      `afterPack: missing ${ffmpegPath} — ffmpeg-static was not unpacked from app.asar (asarUnpack/packaging failure); the packed app cannot spawn FFmpeg`
+    );
+  }
+
+  const onnxWorkerPath = path.join(unpackedDir, "src", "workers", "onnxWorker.js");
+  if (!fs.existsSync(onnxWorkerPath)) {
+    throw new Error(
+      `afterPack: missing ${onnxWorkerPath} — src/workers was not unpacked from app.asar (asarUnpack/packaging failure); the ONNX utility process would crash-loop in the packed app`
+    );
+  }
+
+  // electron-builder strips *.exe from node_modules on non-Windows targets,
+  // so the ps-list vendor executable only exists in Windows builds.
+  if (isWindows) {
+    const psListVendorDir = path.join(unpackedModulesDir, "ps-list", "vendor");
+    const hasFastlist =
+      fs.existsSync(psListVendorDir) &&
+      fs.readdirSync(psListVendorDir).some((name) => /^fastlist-.*\.exe$/.test(name));
+    if (!hasFastlist) {
+      throw new Error(
+        `afterPack: no fastlist-*.exe in ${psListVendorDir} — ps-list vendor executable was not unpacked from app.asar (asarUnpack/packaging failure); Windows process detection would break`
+      );
+    }
+  }
+
+  console.log("  afterPack: verified unpacked bundled binaries");
+}
+
 // ---------------------------------------------------------------------------
 // Main hook
 // ---------------------------------------------------------------------------
@@ -229,5 +251,6 @@ exports.default = async function (context) {
   stripOnnxruntimeBinaries(context);
   wrapLinuxBinary(context);
   verifyMeetingAecHelper(context);
+  verifyUnpackedBinaries(context);
   registerMacResourceBinariesForSigning(context);
 };

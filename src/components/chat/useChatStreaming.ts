@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
+import { isEnterpriseProvider } from "../../models/ModelRegistry";
 import { getSettings } from "../../stores/settingsStore";
 import { getAgentSystemPrompt } from "../../config/prompts";
 import { createToolRegistry } from "../../services/tools";
@@ -99,9 +100,18 @@ export function useChatStreaming({
       const isLanAgent = chatAgentMode === "self-hosted" && !!settings.chatAgentRemoteUrl;
       const isCustomAgent =
         chatAgentMode === "providers" && settings.chatAgentProvider === "custom";
-      const isLocalProvider = !["openai", "groq", "custom", "anthropic", "gemini"].includes(
-        settings.chatAgentProvider
-      );
+      const isLocalProvider =
+        !isEnterpriseProvider(settings.chatAgentProvider) &&
+        ![
+          "openai",
+          "groq",
+          "custom",
+          "anthropic",
+          "gemini",
+          "tinfoil",
+          "openrouter",
+          "corti",
+        ].includes(settings.chatAgentProvider);
       const localModelCanUseTool =
         isLocalProvider && estimateModelSizeB(settings.chatAgentModel) >= LOCAL_TOOL_MIN_PARAMS_B;
       const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;

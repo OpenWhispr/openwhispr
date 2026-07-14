@@ -38,6 +38,8 @@ const PROVIDER_CONFIG: Record<string, ProviderConfig> = {
   anthropic: { label: "Anthropic", apiKeyStorageKey: "anthropicApiKey" },
   gemini: { label: "Gemini", apiKeyStorageKey: "geminiApiKey" },
   groq: { label: "Groq", apiKeyStorageKey: "groqApiKey" },
+  openrouter: { label: "OpenRouter", apiKeyStorageKey: "openrouterApiKey" },
+  tinfoil: { label: "Tinfoil", apiKeyStorageKey: "tinfoilApiKey" },
   openwhispr: { label: "OpenWhispr Cloud" },
   custom: {
     label: "Custom endpoint",
@@ -163,7 +165,12 @@ export default function PromptStudio({ className = "", kind = "cleanup" }: Promp
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.error("PromptStudio test failed", { error: errorMessage }, "prompt-studio");
-      setTestResult(t("promptStudio.test.failed", { error: errorMessage }));
+      const typed = error as { code?: string; provider?: string };
+      setTestResult(
+        typed?.code === "API_KEY_MISSING"
+          ? t("promptStudio.test.apiKeyMissing", { provider: typed.provider })
+          : t("promptStudio.test.failed", { error: errorMessage })
+      );
     } finally {
       setIsLoading(false);
     }

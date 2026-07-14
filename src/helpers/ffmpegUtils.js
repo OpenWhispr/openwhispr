@@ -37,8 +37,9 @@ function getFFmpegPath() {
       return unpackedPath;
     }
 
-    // Try original path (development or if not in ASAR)
-    if (fs.existsSync(ffmpegPath)) {
+    // Try original path (development or if not in ASAR). An in-asar path passes
+    // existsSync but can never be spawned, so fall through to system FFmpeg instead.
+    if (!unpackedPath && fs.existsSync(ffmpegPath)) {
       if (process.platform !== "win32") {
         try {
           fs.accessSync(ffmpegPath, fs.constants.X_OK);
@@ -113,7 +114,11 @@ function convertToWav(inputPath, outputPath, options = {}) {
   return new Promise((resolve, reject) => {
     const ffmpegPath = getFFmpegPath();
     if (!ffmpegPath) {
-      reject(new Error("FFmpeg not found - required for audio conversion"));
+      reject(
+        new Error(
+          "FFmpeg not found - the bundled FFmpeg is missing from this install and no system FFmpeg was found on PATH; reinstalling OpenWhispr should fix this"
+        )
+      );
       return;
     }
 

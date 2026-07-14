@@ -115,7 +115,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: resources/bin
-          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js') }}
+          # The system-audio helper source is in the key so a republished
+          # helper binary invalidates the cached copy.
+          key: windows-x64-bin-${{ hashFiles('scripts/download-*.js', 'resources/windows-system-audio-helper.c') }}
 
       - name: Download whisper.cpp binaries
         run: node scripts/download-whisper-cpp.js --current
@@ -161,6 +163,15 @@ jobs:
         run: node scripts/download-windows-mic-listener.js
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Download windows-system-audio-helper.exe
+        run: node scripts/download-windows-system-audio-helper.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Verify windows-system-audio-helper.exe
+        shell: bash
+        run: test -f resources/bin/windows-system-audio-helper.exe
 
       - name: Cache Electron
         uses: actions/cache@v4

@@ -2,12 +2,12 @@
 
 ## Quick Diagnostics
 
-| Check | Command |
-|-------|---------|
-| Host architecture | `uname -m` |
-| Node architecture | `node -p "process.arch"` |
+| Check               | Command                                |
+| ------------------- | -------------------------------------- |
+| Host architecture   | `uname -m`                             |
+| Node architecture   | `node -p "process.arch"`               |
 | whisper.cpp install | `which whisper` or `which whisper-cpp` |
-| FFmpeg availability | `ffmpeg -version` |
+| FFmpeg availability | `ffmpeg -version`                      |
 
 ## Common Issues
 
@@ -16,6 +16,7 @@
 **Symptoms:** Crashes on launch, "wrong architecture" errors
 
 **Fix:**
+
 1. Check if Node is x86_64 on arm64: `node -p "process.arch"` vs `uname -m`
 2. Uninstall mismatched Node and reinstall native build
 3. Run `rm -rf node_modules package-lock.json && npm ci`
@@ -28,18 +29,21 @@
 **Platform-specific fixes:**
 
 **macOS:**
+
 1. Open System Settings → Privacy & Security → Microphone
 2. Ensure OpenWhispr is listed and enabled
 3. If not listed, click "Grant Access" in the app to trigger the permission prompt
 4. You can also click "Open Microphone Privacy" button in the app
 
 **Windows:**
+
 1. Open Settings → Privacy → Microphone
 2. Ensure "Allow apps to access your microphone" is ON
 3. Ensure OpenWhispr is listed and enabled
 4. You can also click "Open Privacy Settings" button in the app
 
 **Linux:**
+
 1. Check your audio settings (e.g., `pavucontrol`)
 2. Ensure the correct input device is selected
 3. Linux doesn't have app-level microphone permissions like macOS/Windows
@@ -49,12 +53,14 @@
 **Symptoms:** History shows "you" or empty entries
 
 **Causes:**
+
 - Microphone permission revoked mid-session
 - Stale Whisper cache with corrupted clips
 - Hotkey triggering without audio input
 - Wrong audio input device selected
 
 **Fix:**
+
 1. Check microphone permissions (see above)
 2. Open sound settings and verify the correct input device is selected
 3. Clear caches: `rm -rf ~/.cache/whisper`
@@ -66,15 +72,28 @@
 **Symptoms:** "FFmpeg not found" error, transcription fails immediately
 
 **Fix:**
+
 1. Reinstall dependencies: `rm -rf node_modules && npm ci`
 2. If using packaged app, try reinstalling
 3. **Windows:** check that antivirus / Windows Defender hasn't quarantined the bundled FFmpeg binary
+
+### Electron Failed to Install Correctly
+
+**Symptoms:** Running `npm run dev` fails with "Electron failed to install correctly".
+
+**Fix:**
+
+1. Use Node.js 24: `node -v`
+2. Ensure npm install scripts are enabled: `npm config set ignore-scripts false`
+3. Rebuild Electron's platform binary: `npm rebuild electron`
+4. If `ELECTRON_SKIP_BINARY_DOWNLOAD` is set, unset it and run `npm install` again
 
 ### whisper.cpp Issues
 
 **Symptoms:** Local transcription fails, "whisper.cpp not found"
 
 **Fix:**
+
 1. The whisper.cpp binary is bundled with the app
 2. If running from source, download the current-platform binary: `npm run download:whisper-cpp`
 3. If bundled binary fails, install via package manager:
@@ -90,6 +109,7 @@
 **Cause:** Electron's main-process clipboard API uses X11 selections (via XWayland), which native Wayland apps cannot read.
 
 **Fix:**
+
 1. Install `wl-clipboard` for the most reliable Wayland clipboard support:
    - Debian/Ubuntu: `sudo apt install wl-clipboard`
    - Fedora/RHEL: `sudo dnf install wl-clipboard`
@@ -104,6 +124,7 @@ OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → rende
 **Symptoms:** Meeting transcription captures the microphone but not other participants, browser audio, or other system audio.
 
 **Fix:**
+
 1. Install PipeWire runtime libraries if they are not already present:
    - Debian/Ubuntu: `sudo apt install pipewire libpipewire-0.3-0`
    - Fedora/RHEL: `sudo dnf install pipewire pipewire-libs`
@@ -118,11 +139,19 @@ OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → rende
 **Symptoms:** Meeting detection not working, no transcription, audio not captured
 
 **macOS:**
+
 1. Grant Screen Recording permission: System Settings → Privacy & Security → Screen Recording → enable OpenWhispr
 2. Restart the app after granting permission
 3. Ensure Google Calendar is connected in Integrations
 
+**Windows:**
+
+1. System audio is captured by `windows-system-audio-helper.exe` (WASAPI process loopback), which hears every app on every output device — no permission prompt is needed
+2. If the helper is missing or fails (requires Windows 10 2004+), OpenWhispr automatically falls back to Chromium loopback, which only hears the _default_ output device — make sure your meeting app plays through the default device in that case
+3. If transcription shows "Continuing with microphone only", system audio capture failed entirely; check debug logs for `windows-system-audio-helper` entries
+
 **All Platforms:**
+
 1. Check that meeting detection is enabled in settings
 2. Verify your OpenAI API key is valid (required for Realtime API transcription)
 3. Ensure your meeting app (Zoom, Teams, FaceTime) is running — process detection looks for known meeting applications
@@ -133,6 +162,7 @@ OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → rende
 **Symptoms:** Agent overlay not appearing, no AI responses, streaming errors
 
 **Fix:**
+
 1. Ensure Agent Mode is enabled in Settings → Agent Mode
 2. Check that you have a valid API key for your selected provider
 3. Verify the agent hotkey doesn't conflict with other global shortcuts
@@ -142,6 +172,7 @@ OpenWhispr tries clipboard methods in order: `wl-copy` (most reliable) → rende
 ### Windows-Specific Issues
 
 **No window appears (process running in Task Manager but invisible):**
+
 1. Check the system tray (click the `^` caret) for the OpenWhispr icon
 2. Run with debug logging: `OpenWhispr.exe --log-level=debug`
 3. Try disabling GPU acceleration: `OpenWhispr.exe --disable-gpu`
@@ -157,6 +188,10 @@ Right-click OpenWhispr → Run as administrator (or set permanently in Propertie
 **Firewall blocking cloud mode:**
 
 Allow OpenWhispr through Windows Firewall when using cloud transcription providers.
+
+**Firewall prompt for sherpa-onnx (local Parakeet transcription):**
+
+Windows may ask whether to allow `sherpa-onnx-ws-win32-x64` on public and private networks the first time local Parakeet transcription starts. The bundled sherpa-onnx server only serves OpenWhispr itself over `127.0.0.1`, but it has no loopback-only bind option, so Windows sees it listening on all interfaces. Either choice is safe — Windows never filters loopback traffic, so transcription works even if you click Cancel. All-users installs register a firewall rule that blocks outside access and suppresses the prompt entirely; per-user and portable builds may still see it once.
 
 **Complete reset (after uninstalling):**
 

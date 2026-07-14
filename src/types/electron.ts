@@ -1,10 +1,12 @@
+import type { TinfoilCatalogModel } from "../models/tinfoilModels";
+
 export type LocalTranscriptionProvider = "whisper" | "nvidia";
 
 export type InferenceMode = "openwhispr" | "providers" | "local" | "self-hosted" | "enterprise";
 
 export type SelfHostedType = "openai-compatible" | "lan";
 
-export type TranscriptionStatus = "completed" | "failed" | "pending";
+export type TranscriptionStatus = "completed" | "failed" | "pending" | "discarded";
 
 export type TranscriptionErrorCode =
   | "TIMEOUT"
@@ -14,6 +16,7 @@ export type TranscriptionErrorCode =
   | "AUTH_EXPIRED"
   | "AUTH_REQUIRED"
   | "LIMIT_REACHED"
+  | "PROVIDER_RATE_LIMITED"
   | "API_KEY_MISSING"
   | "INVALID_KEY"
   | "MODEL_NOT_AVAILABLE"
@@ -97,6 +100,30 @@ export interface FolderItem {
   deleted_at: string | null;
   workspace_id?: string | null;
   team_id?: string | null;
+}
+
+export interface DictionaryEntryItem {
+  id: number;
+  word: string;
+  source: "manual" | "learned";
+  created_at: string;
+  updated_at: string;
+  client_dict_id: string;
+  cloud_id: string | null;
+  sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
+}
+
+export interface SnippetEntryItem {
+  id: number;
+  trigger: string;
+  replacement: string;
+  created_at: string;
+  updated_at: string;
+  client_snippet_id: string;
+  cloud_id: string | null;
+  sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
 }
 
 export type WorkspaceRole = "owner" | "admin" | "member";
@@ -205,6 +232,7 @@ export interface ActionItem {
 
 export interface GpuDevice {
   index: number;
+  uuid: string;
   name: string;
   vramMb: number;
 }
@@ -270,7 +298,8 @@ export interface AudioDiagnosticsResult {
 }
 
 export type SystemAudioMode = "native" | "loopback" | "portal" | "unsupported";
-export type SystemAudioStrategy = "native" | "loopback" | "pipewire-loopback" | "unsupported";
+export type SystemAudioStrategy =
+  "native" | "loopback" | "pipewire-loopback" | "wasapi-loopback" | "unsupported";
 
 export interface SystemAudioAccessResult {
   granted: boolean;
@@ -473,6 +502,7 @@ declare global {
       hideWindow: () => Promise<void>;
       showDictationPanel: () => Promise<void>;
       onToggleDictation: (callback: () => void) => () => void;
+      onToggleVoiceAgent?: (callback: () => void) => () => void;
       onStartDictation?: (callback: () => void) => () => void;
       onStopDictation?: (callback: () => void) => () => void;
 
@@ -504,7 +534,10 @@ declare global {
           clientTranscriptionId?: string;
         }
       ) => Promise<{ id: number; success: boolean; transcription?: TranscriptionItem }>;
-      getTranscriptions: (limit?: number) => Promise<TranscriptionItem[]>;
+      getTranscriptions: (
+        limit?: number,
+        options?: { includeDiscarded?: boolean }
+      ) => Promise<TranscriptionItem[]>;
       clearTranscriptions: () => Promise<{ cleared: number; success: boolean }>;
       deleteTranscription: (id: number) => Promise<{ success: boolean }>;
       getTranscriptionById: (id: number) => Promise<TranscriptionItem | null>;
@@ -553,6 +586,13 @@ declare global {
       getDictionary: () => Promise<string[]>;
       setDictionary: (words: string[]) => Promise<{ success: boolean }>;
       onDictionaryUpdated?: (callback: (words: string[]) => void) => () => void;
+      getSnippets?: () => Promise<Array<{ trigger: string; replacement: string }>>;
+      setSnippets?: (
+        snippets: Array<{ trigger: string; replacement: string }>
+      ) => Promise<{ success: boolean }>;
+      onSnippetsUpdated?: (
+        callback: (snippets: Array<{ trigger: string; replacement: string }>) => void
+      ) => () => void;
       setAutoLearnEnabled?: (enabled: boolean) => void;
       onCorrectionsLearned?: (callback: (words: string[]) => void) => () => void;
       undoLearnedCorrections?: (words: string[]) => Promise<{ success: boolean }>;
@@ -736,7 +776,7 @@ declare global {
       listGpus?: () => Promise<GpuDevice[]>;
       setGpuDeviceIndex?: (
         purpose: "transcription" | "intelligence",
-        index: number
+        uuid: string
       ) => Promise<{ success: boolean }>;
       getGpuDeviceIndex?: (purpose: "transcription" | "intelligence") => Promise<string>;
       detectGpu: () => Promise<GpuInfo>;
@@ -835,6 +875,27 @@ declare global {
         agentName: string | null,
         config: any
       ) => Promise<{ success: boolean; text?: string; error?: string; retryable?: boolean }>;
+      enterpriseStreamStart?: (payload: {
+        streamId: string;
+        provider: string;
+        modelId: string;
+        config: Record<string, string>;
+        options: Record<string, unknown>;
+      }) => Promise<{ success: boolean; error?: string }>;
+      enterpriseStreamCancel?: (streamId: string) => Promise<void>;
+      onEnterpriseStreamPart?: (
+        callback: (payload: {
+          streamId: string;
+          part?: unknown;
+          done?: boolean;
+          error?: string;
+        }) => void
+      ) => () => void;
+      listBedrockModels?: (config: Record<string, string>) => Promise<{
+        success: boolean;
+        models?: Array<{ value: string; label: string; vendor: string }>;
+        error?: string;
+      }>;
 
       // llama.cpp management
       llamaCppCheck: () => Promise<{ isInstalled: boolean; version?: string }>;
@@ -879,7 +940,6 @@ declare global {
       setNotificationInteractivity: (interactive: boolean) => Promise<void>;
 
       // App management
-      appQuit: () => Promise<void>;
       cleanupApp: () => Promise<{ success: boolean; message: string; errors?: string[] }>;
 
       // Update operations
@@ -906,16 +966,14 @@ declare global {
 
       // Hotkey management
       updateHotkey: (key: string) => Promise<{ success: boolean; message: string }>;
-      setHotkeyListeningMode?: (
-        enabled: boolean,
-        newHotkey?: string | null
-      ) => Promise<{ success: boolean }>;
+      setHotkeyListeningMode?: (enabled: boolean) => Promise<{ success: boolean }>;
       getHotkeyModeInfo?: () => Promise<{
         isUsingGnome: boolean;
         isUsingHyprland: boolean;
         isUsingNativeShortcut: boolean;
         supportsPushToTalk: boolean;
       }>;
+      getHyprlandConfigStatus?: () => Promise<{ canWrite: boolean; path: string } | null>;
 
       // Wayland paste diagnostics
       getYdotoolStatus?: () => Promise<{
@@ -961,6 +1019,8 @@ declare global {
       // Groq API key management
       getGroqKey: () => Promise<string | null>;
       saveGroqKey: (key: string) => Promise<void>;
+      getOpenrouterKey: () => Promise<string | null>;
+      saveOpenrouterKey: (key: string) => Promise<void>;
 
       // xAI API key management
       getXaiKey?: () => Promise<string | null>;
@@ -986,12 +1046,24 @@ declare global {
       saveCortiClientId?: (key: string) => Promise<void>;
       getCortiClientSecret?: () => Promise<string | null>;
       saveCortiClientSecret?: (key: string) => Promise<void>;
+      getCortiKey?: () => Promise<string | null>;
+      saveCortiKey?: (key: string) => Promise<void>;
       proxyCortiTranscription?: (data: {
         audioBuffer: ArrayBuffer;
         language: string;
         environment: string;
         tenant: string;
       }) => Promise<{ text: string }>;
+      getTinfoilKey?: () => Promise<string | null>;
+      saveTinfoilKey?: (key: string) => Promise<void>;
+      getTinfoilChatModels?: () => Promise<TinfoilCatalogModel[]>;
+      proxyTinfoilTranscription?: (data: {
+        audioBuffer: ArrayBuffer;
+        language?: string;
+        prompt?: string;
+      }) => Promise<
+        { text: string; model: string } | { error: string; code?: string; messageKey?: string }
+      >;
 
       // Custom endpoint API keys
       getCustomTranscriptionKey?: () => Promise<string | null>;
@@ -1104,6 +1176,7 @@ declare global {
       ) => Promise<{
         success: boolean;
         text?: string;
+        warning?: string;
         clientTranscriptionId?: string;
         wordsUsed?: number;
         wordsRemaining?: number;
@@ -1119,6 +1192,7 @@ declare global {
           customDictionary?: string[];
           customPrompt?: string;
           systemPrompt?: string;
+          promptMode?: "cleanup";
           language?: string;
           locale?: string;
         }
@@ -1226,6 +1300,7 @@ declare global {
       transcribeAudioFileCloud?: (filePath: string) => Promise<{
         success: boolean;
         text?: string;
+        warning?: string;
         error?: string;
         code?: string;
       }>;
@@ -1335,6 +1410,8 @@ declare global {
 
       // Agent Mode
       updateAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      updateVoiceAgentHotkey?: (hotkey: string) => Promise<{ success: boolean; message: string }>;
+      getVoiceAgentKey?: () => Promise<string>;
       getAgentKey?: () => Promise<string>;
       saveAgentKey?: (key: string) => Promise<void>;
       createAgentConversation?: (
@@ -1852,6 +1929,12 @@ declare global {
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
       upsertFolderFromCloud?: (cloudFolder: Record<string, unknown>) => Promise<FolderItem>;
       markFolderSynced?: (id: number, cloudId: string) => Promise<void>;
+      adoptFolderIdentity?: (
+        id: number,
+        clientFolderId: string,
+        cloudId: string,
+        updatedAt?: string
+      ) => Promise<void>;
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
@@ -1874,6 +1957,39 @@ declare global {
       markTranscriptionSynced?: (id: number, cloudId: string) => Promise<void>;
       getPendingTranscriptionDeletes?: () => Promise<TranscriptionItem[]>;
       hardDeleteTranscription?: (id: number) => Promise<{ success: boolean; id: number }>;
+
+      getPendingDictionary?: () => Promise<DictionaryEntryItem[]>;
+      getPendingDictionaryDeletes?: () => Promise<DictionaryEntryItem[]>;
+      getDictionaryByClientId?: (clientDictId: string) => Promise<DictionaryEntryItem | null>;
+      upsertDictionaryFromCloud?: (
+        cloudEntry: Record<string, unknown>
+      ) => Promise<DictionaryEntryItem | null>;
+      markDictionarySynced?: (
+        id: number,
+        cloudId: string
+      ) => Promise<{ success: boolean; changes: number }>;
+      hardDeleteDictionary?: (id: number) => Promise<{ success: boolean; id: number }>;
+      clearDictionaryCloudId?: (id: number) => Promise<{ success: boolean }>;
+      broadcastDictionaryUpdated?: () => Promise<{ success: boolean }>;
+
+      getPendingSnippets?: () => Promise<SnippetEntryItem[]>;
+      getPendingSnippetDeletes?: () => Promise<SnippetEntryItem[]>;
+      getSnippetForCloudMerge?: (
+        cloudEntry: Record<string, unknown>
+      ) => Promise<SnippetEntryItem | null>;
+      upsertSnippetFromCloud?: (
+        cloudEntry: Record<string, unknown>
+      ) => Promise<SnippetEntryItem | null>;
+      markSnippetSynced?: (
+        id: number,
+        cloudId: string,
+        serverUpdatedAt?: string,
+        expectedTrigger?: string,
+        expectedReplacement?: string
+      ) => Promise<{ success: boolean; changes: number }>;
+      hardDeleteSnippet?: (id: number) => Promise<{ success: boolean; id: number }>;
+      clearSnippetCloudId?: (id: number) => Promise<{ success: boolean }>;
+      broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
     };
 
     api?: {
