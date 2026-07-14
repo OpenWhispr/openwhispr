@@ -21,9 +21,9 @@ import {
   DialogDescription,
   DialogFooter,
 } from "../ui/dialog";
+import { EMAIL_REGEX } from "../../utils/validation";
 
 const MIN_PASSWORD_LENGTH = 8;
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const AUTH_ERROR_KEYS: Record<string, string> = {
   INVALID_PASSWORD: "settingsPage.account.profile.errors.invalidPassword",
@@ -34,6 +34,8 @@ const AUTH_ERROR_KEYS: Record<string, string> = {
 
 const INLINE_ERROR_CLASS =
   "px-2.5 py-1.5 rounded bg-destructive/5 border border-destructive/20 flex items-center gap-1.5";
+
+const DIALOG_LABEL_CLASS = "text-xs font-medium";
 
 interface ProfileSectionProps {
   name: string;
@@ -163,6 +165,41 @@ export default function ProfileSection({ name, email, onSessionRefresh }: Profil
   );
 }
 
+// Bumps a session token on every open/close so a response that resolves after
+// the dialog closed (or reopened) can't mutate the new session.
+function useDialogSession(
+  open: boolean,
+  onOpenChange: (next: boolean) => void,
+  resetFields: () => void
+) {
+  const openRef = useRef(open);
+  const sessionRef = useRef(0);
+  const resetRef = useRef(resetFields);
+  resetRef.current = resetFields;
+
+  useEffect(() => {
+    openRef.current = open;
+    sessionRef.current += 1;
+    if (open) resetRef.current();
+  }, [open]);
+
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) resetRef.current();
+      onOpenChange(next);
+    },
+    [onOpenChange]
+  );
+
+  const sessionToken = useCallback(() => sessionRef.current, []);
+  const isActive = useCallback(
+    (token: number) => openRef.current && sessionRef.current === token,
+    []
+  );
+
+  return { handleOpenChange, sessionToken, isActive };
+}
+
 function ChangeEmailDialog({
   open,
   onOpenChange,
@@ -175,28 +212,17 @@ function ChangeEmailDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
-  const openRef = useRef(open);
 
-  // Reset on open + track openness so a late response can't restore stale state after close.
-  useEffect(() => {
-    openRef.current = open;
-    if (open) {
-      setNewEmail("");
-      setError(null);
-      setSent(false);
-      setSubmitting(false);
-    }
-  }, [open]);
+  const { handleOpenChange, sessionToken, isActive } = useDialogSession(open, onOpenChange, () => {
+    setNewEmail("");
+    setError(null);
+    setSent(false);
+    setSubmitting(false);
+  });
 
-  const handleOpenChange = (next: boolean) => {
-    if (!next) {
-      onSessionRefresh();
-      setNewEmail("");
-      setError(null);
-      setSent(false);
-      setSubmitting(false);
-    }
-    onOpenChange(next);
+  const handleClose = (next: boolean) => {
+    if (!next && sent) onSessionRefresh();
+    handleOpenChange(next);
   };
 
   const trimmed = newEmail.trim();
@@ -206,10 +232,11 @@ function ChangeEmailDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || submitting) return;
+    const token = sessionToken();
     setSubmitting(true);
     setError(null);
     const { error: actionError } = await requestEmailChange(trimmed);
-    if (!openRef.current) return;
+    if (!isActive(token)) return;
     setSubmitting(false);
     if (actionError) {
       setError(describeError(actionError));
@@ -219,7 +246,7 @@ function ChangeEmailDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         {sent ? (
           <>
@@ -233,7 +260,7 @@ function ChangeEmailDialog({
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button onClick={() => handleOpenChange(false)}>
+              <Button onClick={() => handleClose(false)}>
                 {t("settingsPage.account.profile.email.close")}
               </Button>
             </DialogFooter>
@@ -247,7 +274,7 @@ function ChangeEmailDialog({
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-1.5">
-              <Label htmlFor="profile-new-email" className="text-xs font-medium">
+              <Label htmlFor="profile-new-email" className={DIALOG_LABEL_CLASS}>
                 {t("settingsPage.account.profile.email.newLabel")}
               </Label>
               <Input
@@ -270,7 +297,7 @@ function ChangeEmailDialog({
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => handleOpenChange(false)}
+                onClick={() => handleClose(false)}
                 disabled={submitting}
               >
                 {t("settingsPage.account.profile.email.cancel")}
@@ -302,32 +329,15 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: DialogBaseP
   const [revokeOtherSessions, setRevokeOtherSessions] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const openRef = useRef(open);
 
-  // Reset on open + track openness so a late response can't restore stale state after close.
-  useEffect(() => {
-    openRef.current = open;
-    if (open) {
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setRevokeOtherSessions(true);
-      setError(null);
-      setSubmitting(false);
-    }
-  }, [open]);
-
-  const handleOpenChange = (next: boolean) => {
-    if (!next) {
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setRevokeOtherSessions(true);
-      setError(null);
-      setSubmitting(false);
-    }
-    onOpenChange(next);
-  };
+  const { handleOpenChange, sessionToken, isActive } = useDialogSession(open, onOpenChange, () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setRevokeOtherSessions(true);
+    setError(null);
+    setSubmitting(false);
+  });
 
   const tooShort = newPassword.length > 0 && newPassword.length < MIN_PASSWORD_LENGTH;
   const mismatch = confirmPassword.length > 0 && confirmPassword !== newPassword;
@@ -340,6 +350,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: DialogBaseP
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
+    const token = sessionToken();
     setSubmitting(true);
     setError(null);
     const { error: actionError } = await changePassword({
@@ -347,7 +358,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: DialogBaseP
       newPassword,
       revokeOtherSessions,
     });
-    if (!openRef.current) return;
+    if (!isActive(token)) return;
     setSubmitting(false);
     if (actionError) {
       setError(describeError(actionError));
@@ -369,7 +380,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: DialogBaseP
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="profile-current-password" className="text-xs font-medium">
+              <Label htmlFor="profile-current-password" className={DIALOG_LABEL_CLASS}>
                 {t("settingsPage.account.profile.password.currentLabel")}
               </Label>
               <Input
@@ -383,7 +394,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: DialogBaseP
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="profile-new-password" className="text-xs font-medium">
+              <Label htmlFor="profile-new-password" className={DIALOG_LABEL_CLASS}>
                 {t("settingsPage.account.profile.password.newLabel")}
               </Label>
               <Input
@@ -402,7 +413,7 @@ function ChangePasswordDialog({ open, onOpenChange, describeError }: DialogBaseP
               )}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="profile-confirm-password" className="text-xs font-medium">
+              <Label htmlFor="profile-confirm-password" className={DIALOG_LABEL_CLASS}>
                 {t("settingsPage.account.profile.password.confirmLabel")}
               </Label>
               <Input

@@ -16,6 +16,7 @@ import { NoteSharingService } from "../../services/NoteSharingService.js";
 import { setShareCache, updateShareCache, useShareCacheEntry } from "../../stores/noteStore";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { emailDomain, isPersonalEmailDomain } from "../../utils/personalEmailDomains";
+import { EMAIL_REGEX } from "../../utils/validation";
 import type {
   NoteItem,
   NoteShareInvitation,
@@ -25,7 +26,6 @@ import type {
 
 const SHARE_VIEWER_BASE_URL = "https://notes.openwhispr.com";
 const LAST_VISIBILITY_KEY = "openwhispr.shareDefaultVisibility";
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface ShareNoteDialogProps {
   open: boolean;
