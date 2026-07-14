@@ -1320,6 +1320,9 @@ declare global {
         language?: string;
         environment?: string;
         tenant?: string;
+        transcriptionMode?: string;
+        remoteTranscriptionUrl?: string;
+        remoteTranscriptionModel?: string;
       }) => Promise<{
         success: boolean;
         text?: string;
