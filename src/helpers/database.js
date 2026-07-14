@@ -635,6 +635,109 @@ class DatabaseManager {
         "CREATE INDEX IF NOT EXISTS idx_snippets_pending_sync ON snippets(sync_status) WHERE sync_status = 'pending'"
       );
 
+      // Team spaces
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS spaces (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          client_space_id TEXT,
+          cloud_team_id   TEXT,
+          workspace_id    TEXT,
+          kind            TEXT NOT NULL DEFAULT 'team' CHECK (kind IN ('private','team')),
+          name            TEXT NOT NULL,
+          emoji           TEXT,
+          sort_order      INTEGER NOT NULL DEFAULT 0,
+          my_role         TEXT,
+          member_count    INTEGER,
+          sync_status     TEXT NOT NULL DEFAULT 'pending',
+          deleted_at      TEXT,
+          created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_client_space_id ON spaces(client_space_id)"
+      );
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_cloud_team_id ON spaces(cloud_team_id) WHERE cloud_team_id IS NOT NULL"
+      );
+
+      const privateSpaceCount = this.db
+        .prepare("SELECT COUNT(*) as count FROM spaces WHERE kind = 'private'")
+        .get();
+      if (privateSpaceCount.count === 0) {
+        this.db
+          .prepare(
+            "INSERT INTO spaces (client_space_id, kind, name, sort_order, sync_status) VALUES (?, 'private', 'Personal', 0, 'synced')"
+          )
+          .run(randomUUID());
+      }
+
+      try {
+        this.db.exec("ALTER TABLE notes ADD COLUMN space_id INTEGER");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE folders ADD COLUMN space_id INTEGER");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
+      // Rebuild folders to drop the table-level UNIQUE(name); per-space name
+      // uniqueness is enforced by idx_folders_space_name below.
+      const foldersTable = this.db
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'folders'")
+        .get();
+      if (foldersTable?.sql.includes("UNIQUE")) {
+        this.db.transaction(() => {
+          this.db.exec(`
+            CREATE TABLE folders_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL,
+              is_default INTEGER NOT NULL DEFAULT 0,
+              sort_order INTEGER NOT NULL DEFAULT 0,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              client_folder_id TEXT,
+              cloud_id TEXT,
+              sync_status TEXT DEFAULT 'pending',
+              deleted_at TEXT,
+              space_id INTEGER
+            )
+          `);
+          this.db.exec(`
+            INSERT INTO folders_new (id, name, is_default, sort_order, created_at, updated_at,
+              client_folder_id, cloud_id, sync_status, deleted_at, space_id)
+            SELECT id, name, is_default, sort_order, created_at, updated_at,
+              client_folder_id, cloud_id, sync_status, deleted_at, space_id
+            FROM folders
+          `);
+          this.db.exec("DROP TABLE folders");
+          this.db.exec("ALTER TABLE folders_new RENAME TO folders");
+          this.db.exec(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_client_folder_id ON folders(client_folder_id)"
+          );
+        })();
+      }
+      this.db.exec(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_space_name ON folders(space_id, name) WHERE deleted_at IS NULL"
+      );
+
+      const privateSpace = this.db.prepare("SELECT id FROM spaces WHERE kind = 'private'").get();
+      this.db
+        .prepare("UPDATE folders SET space_id = ? WHERE space_id IS NULL")
+        .run(privateSpace.id);
+      this.db.prepare("UPDATE notes SET space_id = ? WHERE space_id IS NULL").run(privateSpace.id);
+
+      this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_folder_id ON notes(folder_id)");
+      this.db.exec("CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at)");
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_notes_space_updated ON notes(space_id, updated_at)"
+      );
+      this.db.exec(
+        "CREATE INDEX IF NOT EXISTS idx_folders_space_sort ON folders(space_id, sort_order)"
+      );
+
       return true;
     } catch (error) {
       debugLogger.error("Database initialization failed", { error: error.message }, "database");
@@ -1397,22 +1500,28 @@ class DatabaseManager {
     noteType = "personal",
     sourceFile = null,
     audioDuration = null,
-    folderId = null
+    folderId = null,
+    spaceId = null
   ) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      if (!folderId) {
+      if (folderId) {
+        // D2: a note's space always follows its folder's space.
+        const folder = this.db.prepare("SELECT space_id FROM folders WHERE id = ?").get(folderId);
+        spaceId = folder?.space_id ?? spaceId ?? this.getPrivateSpaceId();
+      } else {
+        if (spaceId == null) spaceId = this.getPrivateSpaceId();
         const defaultFolderName = noteType === "meeting" ? "Meetings" : "Personal";
         const defaultFolder = this.db
-          .prepare("SELECT id FROM folders WHERE name = ? AND is_default = 1")
-          .get(defaultFolderName);
+          .prepare("SELECT id FROM folders WHERE name = ? AND is_default = 1 AND space_id = ?")
+          .get(defaultFolderName, spaceId);
         folderId = defaultFolder?.id || null;
       }
       const clientNoteId = randomUUID();
       const stmt = this.db.prepare(
-        "INSERT INTO notes (title, content, note_type, source_file, audio_duration_seconds, folder_id, client_note_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO notes (title, content, note_type, source_file, audio_duration_seconds, folder_id, space_id, client_note_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       );
       const result = stmt.run(
         title,
@@ -1421,6 +1530,7 @@ class DatabaseManager {
         sourceFile,
         audioDuration,
         folderId,
+        spaceId,
         clientNoteId
       );
 
@@ -1447,7 +1557,7 @@ class DatabaseManager {
     }
   }
 
-  getNotes(noteType = null, limit = 100, folderId = null) {
+  getNotes(noteType = null, limit = 100, folderId = null, spaceId = null) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
@@ -1458,9 +1568,13 @@ class DatabaseManager {
         conditions.push("note_type = ?");
         params.push(noteType);
       }
-      if (folderId) {
+      if (folderId != null) {
         conditions.push("folder_id = ?");
         params.push(folderId);
+      }
+      if (spaceId != null) {
+        conditions.push("space_id = ?");
+        params.push(spaceId);
       }
       const where = `WHERE ${conditions.join(" AND ")}`;
       const stmt = this.db.prepare(`SELECT * FROM notes ${where} ORDER BY updated_at DESC LIMIT ?`);
@@ -1475,6 +1589,13 @@ class DatabaseManager {
   updateNote(id, updates) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      if (updates.folder_id != null) {
+        // D2: a note's space always follows its folder's space.
+        const folder = this.db
+          .prepare("SELECT space_id FROM folders WHERE id = ?")
+          .get(updates.folder_id);
+        if (folder) updates = { ...updates, space_id: folder.space_id };
+      }
       const allowedFields = [
         "title",
         "content",
@@ -1482,6 +1603,7 @@ class DatabaseManager {
         "enhancement_prompt",
         "enhanced_at_content_hash",
         "folder_id",
+        "space_id",
         "transcript",
         "calendar_event_id",
         "participants",
@@ -1519,33 +1641,46 @@ class DatabaseManager {
     }
   }
 
-  getFolders() {
+  getFolders(spaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
+      const conditions = ["deleted_at IS NULL"];
+      const params = [];
+      if (spaceId != null) {
+        conditions.push("space_id = ?");
+        params.push(spaceId);
+      }
       return this.db
         .prepare(
-          "SELECT * FROM folders WHERE deleted_at IS NULL ORDER BY sort_order ASC, created_at ASC"
+          `SELECT * FROM folders WHERE ${conditions.join(" AND ")} ORDER BY sort_order ASC, created_at ASC`
         )
-        .all();
+        .all(...params);
     } catch (error) {
       debugLogger.error("Error getting folders", { error: error.message }, "notes");
       throw error;
     }
   }
 
-  createFolder(name) {
+  createFolder(name, spaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const trimmed = (name || "").trim();
       if (!trimmed) return { success: false, error: "Folder name is required" };
-      const existing = this.db.prepare("SELECT id FROM folders WHERE name = ?").get(trimmed);
+      if (spaceId == null) spaceId = this.getPrivateSpaceId();
+      const existing = this.db
+        .prepare("SELECT id FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL")
+        .get(trimmed, spaceId);
       if (existing) return { success: false, error: "A folder with that name already exists" };
-      const maxOrder = this.db.prepare("SELECT MAX(sort_order) as max_order FROM folders").get();
+      const maxOrder = this.db
+        .prepare("SELECT MAX(sort_order) as max_order FROM folders WHERE space_id = ?")
+        .get(spaceId);
       const sortOrder = (maxOrder?.max_order ?? 0) + 1;
       const clientFolderId = randomUUID();
       const result = this.db
-        .prepare("INSERT INTO folders (name, sort_order, client_folder_id) VALUES (?, ?, ?)")
-        .run(trimmed, sortOrder, clientFolderId);
+        .prepare(
+          "INSERT INTO folders (name, sort_order, space_id, client_folder_id) VALUES (?, ?, ?, ?)"
+        )
+        .run(trimmed, sortOrder, spaceId, clientFolderId);
       const folder = this.db
         .prepare("SELECT * FROM folders WHERE id = ?")
         .get(result.lastInsertRowid);
@@ -1593,8 +1728,10 @@ class DatabaseManager {
       const trimmed = (name || "").trim();
       if (!trimmed) return { success: false, error: "Folder name is required" };
       const existing = this.db
-        .prepare("SELECT id FROM folders WHERE name = ? AND id != ?")
-        .get(trimmed, id);
+        .prepare(
+          "SELECT id FROM folders WHERE name = ? AND space_id = ? AND deleted_at IS NULL AND id != ?"
+        )
+        .get(trimmed, folder.space_id, id);
       if (existing) return { success: false, error: "A folder with that name already exists" };
       this.db
         .prepare(
@@ -1619,6 +1756,188 @@ class DatabaseManager {
         .all();
     } catch (error) {
       debugLogger.error("Error getting folder note counts", { error: error.message }, "notes");
+      throw error;
+    }
+  }
+
+  getPrivateSpaceId() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db.prepare("SELECT id FROM spaces WHERE kind = 'private'").get()?.id ?? null;
+    } catch (error) {
+      debugLogger.error("Error getting private space id", { error: error.message }, "spaces");
+      throw error;
+    }
+  }
+
+  getSpaces() {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return this.db
+        .prepare(
+          "SELECT * FROM spaces WHERE deleted_at IS NULL ORDER BY CASE WHEN kind = 'private' THEN 0 ELSE 1 END, sort_order ASC, name ASC"
+        )
+        .all();
+    } catch (error) {
+      debugLogger.error("Error getting spaces", { error: error.message }, "spaces");
+      throw error;
+    }
+  }
+
+  createSpace({ name, emoji = null, kind = "team" } = {}) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const trimmed = (name || "").trim();
+      if (!trimmed) return { success: false, error: "Space name is required" };
+      const maxOrder = this.db.prepare("SELECT MAX(sort_order) as max_order FROM spaces").get();
+      const sortOrder = (maxOrder?.max_order ?? 0) + 1;
+      const result = this.db
+        .prepare(
+          "INSERT INTO spaces (client_space_id, kind, name, emoji, sort_order) VALUES (?, ?, ?, ?, ?)"
+        )
+        .run(randomUUID(), kind, trimmed, emoji, sortOrder);
+      const space = this.db
+        .prepare("SELECT * FROM spaces WHERE id = ?")
+        .get(result.lastInsertRowid);
+      return { success: true, space };
+    } catch (error) {
+      debugLogger.error("Error creating space", { error: error.message }, "spaces");
+      throw error;
+    }
+  }
+
+  updateSpace(id, { name, emoji } = {}) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const space = this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(id);
+      if (!space) return { success: false, error: "Space not found" };
+      const fields = [];
+      const values = [];
+      if (name !== undefined) {
+        if (space.kind === "private") {
+          return { success: false, error: "Cannot rename the private space" };
+        }
+        const trimmed = (name || "").trim();
+        if (!trimmed) return { success: false, error: "Space name is required" };
+        fields.push("name = ?");
+        values.push(trimmed);
+      }
+      if (emoji !== undefined) {
+        fields.push("emoji = ?");
+        values.push(emoji);
+      }
+      if (fields.length === 0) return { success: false };
+      fields.push("sync_status = 'pending'", "updated_at = datetime('now')");
+      values.push(id);
+      this.db.prepare(`UPDATE spaces SET ${fields.join(", ")} WHERE id = ?`).run(...values);
+      const updated = this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(id);
+      return { success: true, space: updated };
+    } catch (error) {
+      debugLogger.error("Error updating space", { error: error.message }, "spaces");
+      throw error;
+    }
+  }
+
+  renameSpace(id, name) {
+    return this.updateSpace(id, { name });
+  }
+
+  getSpaceByCloudTeamId(cloudTeamId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      return (
+        this.db.prepare("SELECT * FROM spaces WHERE cloud_team_id = ?").get(cloudTeamId) || null
+      );
+    } catch (error) {
+      debugLogger.error("Error getting space by cloud team id", { error: error.message }, "spaces");
+      throw error;
+    }
+  }
+
+  upsertSpaceFromCloud(team) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const updatedAt = team.updated_at || team.created_at || new Date().toISOString();
+      const existing = this.db.prepare("SELECT * FROM spaces WHERE cloud_team_id = ?").get(team.id);
+      if (existing) {
+        this.db
+          .prepare(
+            `UPDATE spaces SET workspace_id = ?, name = ?, emoji = ?, my_role = ?, member_count = ?,
+               sync_status = 'synced', deleted_at = NULL, updated_at = ? WHERE id = ?`
+          )
+          .run(
+            team.workspace_id ?? null,
+            team.name,
+            team.emoji ?? null,
+            team.my_role ?? null,
+            team.member_count ?? null,
+            updatedAt,
+            existing.id
+          );
+        return this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(existing.id);
+      }
+      const maxOrder = this.db.prepare("SELECT MAX(sort_order) as max_order FROM spaces").get();
+      const result = this.db
+        .prepare(
+          `INSERT INTO spaces (client_space_id, cloud_team_id, workspace_id, kind, name, emoji,
+             sort_order, my_role, member_count, sync_status, created_at, updated_at)
+           VALUES (?, ?, ?, 'team', ?, ?, ?, ?, ?, 'synced', ?, ?)`
+        )
+        .run(
+          randomUUID(),
+          team.id,
+          team.workspace_id ?? null,
+          team.name,
+          team.emoji ?? null,
+          (maxOrder?.max_order ?? 0) + 1,
+          team.my_role ?? null,
+          team.member_count ?? null,
+          team.created_at || updatedAt,
+          updatedAt
+        );
+      return this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(result.lastInsertRowid);
+    } catch (error) {
+      debugLogger.error("Error upserting space from cloud", { error: error.message }, "spaces");
+      throw error;
+    }
+  }
+
+  purgeSpace(localSpaceId) {
+    try {
+      if (!this.db) throw new Error("Database not initialized");
+      const space = this.db.prepare("SELECT * FROM spaces WHERE id = ?").get(localSpaceId);
+      if (!space) return { success: false, error: "Space not found" };
+      if (space.kind === "private") {
+        return { success: false, error: "Cannot purge the private space" };
+      }
+      const { noteIds, folderNames } = this.db.transaction(() => {
+        const ids = this.db
+          .prepare("SELECT id FROM notes WHERE space_id = ?")
+          .all(localSpaceId)
+          .map((row) => row.id);
+        const names = this.db
+          .prepare("SELECT name FROM folders WHERE space_id = ?")
+          .all(localSpaceId)
+          .map((row) => row.name);
+        // FKs are not enforced in this DB — clean speaker rows explicitly.
+        this.db
+          .prepare(
+            "DELETE FROM speaker_mappings WHERE note_id IN (SELECT id FROM notes WHERE space_id = ?)"
+          )
+          .run(localSpaceId);
+        this.db
+          .prepare(
+            "DELETE FROM note_speaker_embeddings WHERE note_id IN (SELECT id FROM notes WHERE space_id = ?)"
+          )
+          .run(localSpaceId);
+        this.db.prepare("DELETE FROM notes WHERE space_id = ?").run(localSpaceId);
+        this.db.prepare("DELETE FROM folders WHERE space_id = ?").run(localSpaceId);
+        this.db.prepare("DELETE FROM spaces WHERE id = ?").run(localSpaceId);
+        return { noteIds: ids, folderNames: names };
+      })();
+      return { success: true, noteIds, folderNames, spaceId: localSpaceId };
+    } catch (error) {
+      debugLogger.error("Error purging space", { error: error.message }, "spaces");
       throw error;
     }
   }
@@ -2104,7 +2423,7 @@ class DatabaseManager {
     }
   }
 
-  searchNotes(query, limit = 50) {
+  searchNotes(query, limit = 50, spaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const term = query
@@ -2112,18 +2431,25 @@ class DatabaseManager {
         .replace(/[^\w\s]/g, " ")
         .trim();
       if (!term) return [];
+      const params = [term + "*"];
+      let spaceFilter = "";
+      if (spaceId != null) {
+        spaceFilter = "AND n.space_id = ?";
+        params.push(spaceId);
+      }
+      params.push(limit);
       return this.db
         .prepare(
           `
         SELECT n.*
         FROM notes n
         JOIN notes_fts ON notes_fts.rowid = n.id
-        WHERE notes_fts MATCH ? AND n.deleted_at IS NULL
+        WHERE notes_fts MATCH ? AND n.deleted_at IS NULL ${spaceFilter}
         ORDER BY notes_fts.rank
         LIMIT ?
       `
         )
-        .all(term + "*", limit);
+        .all(...params);
     } catch (error) {
       debugLogger.error("Error searching notes", { error: error.message }, "database");
       throw error;
@@ -2266,13 +2592,15 @@ class DatabaseManager {
     }
   }
 
-  getMeetingsFolder() {
+  getMeetingsFolder(spaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return (
         this.db
-          .prepare("SELECT id FROM folders WHERE name = 'Meetings' AND is_default = 1")
-          .get() || null
+          .prepare(
+            "SELECT id FROM folders WHERE name = 'Meetings' AND is_default = 1 AND space_id = ?"
+          )
+          .get(spaceId ?? this.getPrivateSpaceId()) || null
       );
     } catch (error) {
       debugLogger.error("Error getting meetings folder", { error: error.message }, "gcal");
@@ -2701,15 +3029,15 @@ class DatabaseManager {
     }
   }
 
-  upsertNoteFromCloud(cloudNote, localFolderId) {
+  upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const stmt = this.db.prepare(`
         INSERT INTO notes (client_note_id, cloud_id, title, content, enhanced_content,
           enhancement_prompt, enhanced_at_content_hash, note_type, source_file,
-          audio_duration_seconds, transcript, folder_id, participants, calendar_event_id,
+          audio_duration_seconds, transcript, folder_id, space_id, participants, calendar_event_id,
           diarization_enabled, expected_speaker_count, sync_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)
         ON CONFLICT(client_note_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           title = excluded.title,
@@ -2719,6 +3047,7 @@ class DatabaseManager {
           enhanced_at_content_hash = excluded.enhanced_at_content_hash,
           transcript = excluded.transcript,
           folder_id = excluded.folder_id,
+          space_id = excluded.space_id,
           participants = COALESCE(excluded.participants, participants),
           calendar_event_id = COALESCE(excluded.calendar_event_id, calendar_event_id),
           diarization_enabled = COALESCE(excluded.diarization_enabled, diarization_enabled),
@@ -2739,6 +3068,7 @@ class DatabaseManager {
         cloudNote.audio_duration_seconds || null,
         cloudNote.transcript || null,
         localFolderId,
+        localSpaceId ?? this.getPrivateSpaceId(),
         cloudNote.participants || null,
         cloudNote.calendar_event_id || null,
         cloudNote.diarization_enabled ?? null,
@@ -2852,16 +3182,17 @@ class DatabaseManager {
     }
   }
 
-  upsertFolderFromCloud(cloudFolder) {
+  upsertFolderFromCloud(cloudFolder, localSpaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const stmt = this.db.prepare(`
-        INSERT INTO folders (client_folder_id, cloud_id, name, is_default, sort_order, sync_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 'synced', ?, ?)
+        INSERT INTO folders (client_folder_id, cloud_id, name, is_default, sort_order, space_id, sync_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'synced', ?, ?)
         ON CONFLICT(client_folder_id) DO UPDATE SET
           cloud_id = excluded.cloud_id,
           name = excluded.name,
           sort_order = excluded.sort_order,
+          space_id = excluded.space_id,
           sync_status = 'synced',
           updated_at = excluded.updated_at
       `);
@@ -2871,6 +3202,7 @@ class DatabaseManager {
         cloudFolder.name,
         cloudFolder.is_default ? 1 : 0,
         cloudFolder.sort_order || 0,
+        localSpaceId ?? this.getPrivateSpaceId(),
         cloudFolder.created_at,
         cloudFolder.updated_at || cloudFolder.created_at
       );

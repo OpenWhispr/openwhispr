@@ -52,6 +52,7 @@ export interface NoteItem {
   source_file: string | null;
   audio_duration_seconds: number | null;
   folder_id: number | null;
+  space_id: number;
   transcript: string | null;
   calendar_event_id: string | null;
   participants: string | null;
@@ -94,6 +95,7 @@ export interface FolderItem {
   name: string;
   is_default: number;
   sort_order: number;
+  space_id: number;
   created_at: string;
   updated_at: string;
   client_folder_id: string;
@@ -102,6 +104,23 @@ export interface FolderItem {
   deleted_at: string | null;
   workspace_id?: string | null;
   team_id?: string | null;
+}
+
+export interface SpaceItem {
+  id: number;
+  client_space_id: string;
+  cloud_team_id: string | null;
+  workspace_id: string | null;
+  kind: "private" | "team";
+  name: string;
+  emoji: string | null;
+  sort_order: number;
+  my_role: "admin" | "member" | null;
+  member_count: number | null;
+  sync_status: "synced" | "pending" | "error";
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DictionaryEntryItem {
@@ -607,13 +626,15 @@ declare global {
         noteType?: string,
         sourceFile?: string | null,
         audioDuration?: number | null,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceId?: number | null
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       getNote: (id: number) => Promise<NoteItem | null>;
       getNotes: (
         noteType?: string | null,
         limit?: number,
-        folderId?: number | null
+        folderId?: number | null,
+        spaceId?: number | null
       ) => Promise<NoteItem[]>;
       updateNote: (
         id: number,
@@ -624,6 +645,7 @@ declare global {
           enhancement_prompt?: string | null;
           enhanced_at_content_hash?: string | null;
           folder_id?: number | null;
+          space_id?: number;
           transcript?: string | null;
           calendar_event_id?: string | null;
           participants?: string | null;
@@ -641,8 +663,12 @@ declare global {
         format: "txt" | "srt" | "json" | "md"
       ) => Promise<{ success: boolean; error?: string }>;
       exportDictionary: (words: string[]) => Promise<{ success: boolean; error?: string }>;
-      searchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
-      semanticSearchNotes: (query: string, limit?: number) => Promise<NoteItem[]>;
+      searchNotes: (query: string, limit?: number, spaceId?: number | null) => Promise<NoteItem[]>;
+      semanticSearchNotes: (
+        query: string,
+        limit?: number,
+        spaceId?: number | null
+      ) => Promise<NoteItem[]>;
       semanticReindexAll: () => Promise<{ success: boolean; indexed?: number; error?: string }>;
       onSemanticReindexProgress: (
         callback: (data: { done: number; total: number }) => void
@@ -654,9 +680,10 @@ declare global {
       ) => Promise<NoteItem>;
 
       // Folder operations
-      getFolders: () => Promise<FolderItem[]>;
+      getFolders: (spaceId?: number | null) => Promise<FolderItem[]>;
       createFolder: (
-        name: string
+        name: string,
+        spaceId?: number | null
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
       deleteFolder: (id: number) => Promise<{ success: boolean; error?: string }>;
       renameFolder: (
@@ -664,6 +691,28 @@ declare global {
         name: string
       ) => Promise<{ success: boolean; folder?: FolderItem; error?: string }>;
       getFolderNoteCounts: () => Promise<Array<{ folder_id: number; count: number }>>;
+
+      // Space operations
+      getSpaces?: () => Promise<SpaceItem[]>;
+      createSpace?: (space: {
+        name: string;
+        emoji?: string | null;
+      }) => Promise<{ success: boolean; space?: SpaceItem; error?: string }>;
+      updateSpace?: (
+        id: number,
+        updates: { name?: string; emoji?: string | null }
+      ) => Promise<{ success: boolean; space?: SpaceItem; error?: string }>;
+      deleteSpace?: (id: number) => Promise<{ success: boolean; id?: number; error?: string }>;
+      purgeSpace?: (id: number) => Promise<{
+        success: boolean;
+        noteIds?: number[];
+        folderNames?: string[];
+        spaceId?: number;
+        error?: string;
+      }>;
+      getSpaceByCloudTeamId?: (cloudTeamId: string) => Promise<SpaceItem | null>;
+      upsertSpaceFromCloud?: (team: Record<string, unknown>) => Promise<SpaceItem>;
+      onSpacePurged?: (callback: (payload: { spaceId: number }) => void) => () => void;
 
       // Note files (markdown mirror)
       noteFilesSetEnabled?: (
@@ -1934,7 +1983,8 @@ declare global {
       getNoteByClientId?: (clientNoteId: string) => Promise<NoteItem | null>;
       upsertNoteFromCloud?: (
         cloudNote: Record<string, unknown>,
-        localFolderId: number | null
+        localFolderId: number | null,
+        localSpaceId?: number | null
       ) => Promise<NoteItem>;
       markNoteSynced?: (id: number, cloudId: string) => Promise<void>;
       markNoteSyncError?: (id: number) => Promise<void>;
@@ -1942,7 +1992,10 @@ declare global {
 
       getPendingFolders?: () => Promise<FolderItem[]>;
       getFolderByClientId?: (clientFolderId: string) => Promise<FolderItem | null>;
-      upsertFolderFromCloud?: (cloudFolder: Record<string, unknown>) => Promise<FolderItem>;
+      upsertFolderFromCloud?: (
+        cloudFolder: Record<string, unknown>,
+        localSpaceId?: number | null
+      ) => Promise<FolderItem>;
       markFolderSynced?: (id: number, cloudId: string) => Promise<void>;
       adoptFolderIdentity?: (
         id: number,

@@ -30,12 +30,12 @@ class VectorIndex {
     }
   }
 
-  async upsertNote(noteId, text) {
+  async upsertNote(noteId, text, payload = {}) {
     if (!this.client) return;
     try {
       const vector = await localEmbeddings.embedText(text);
       await this.client.upsert(this.collectionName, {
-        points: [{ id: noteId, vector: Array.from(vector), payload: {} }],
+        points: [{ id: noteId, vector: Array.from(vector), payload }],
       });
     } catch (err) {
       debugLogger.debug("Vector index upsert failed", { noteId, error: err.message });
@@ -51,13 +51,25 @@ class VectorIndex {
     }
   }
 
-  async search(queryText, limit = 5) {
+  async deleteBySpace(spaceId) {
+    if (!this.client) return;
+    try {
+      await this.client.delete(this.collectionName, {
+        filter: { must: [{ key: "space_id", match: { value: spaceId } }] },
+      });
+    } catch (err) {
+      debugLogger.debug("Vector index space delete failed", { spaceId, error: err.message });
+    }
+  }
+
+  async search(queryText, limit = 5, filter) {
     if (!this.client) return [];
     try {
       const vector = await localEmbeddings.embedText(queryText);
       const results = await this.client.search(this.collectionName, {
         vector: Array.from(vector),
         limit,
+        ...(filter ? { filter } : {}),
       });
       return results.map((r) => ({ noteId: r.id, score: r.score }));
     } catch (err) {
@@ -79,7 +91,7 @@ class VectorIndex {
         const points = batch.map((n, j) => ({
           id: n.id,
           vector: Array.from(vectors[j]),
-          payload: {},
+          payload: { space_id: n.space_id },
         }));
         await this.client.upsert(this.collectionName, { points });
       } catch (err) {
