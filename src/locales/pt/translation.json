@@ -1857,7 +1857,9 @@
     "descriptions": {
       "parakeet": {
         "parakeet_tdt_0_6b_v3": "ASR multilíngue rápido com detecção automática de idioma (25 idiomas)",
-        "parakeet_unified_en_0_6b": "ASR apenas em inglês com precisão de ponta (5,91% WER médio)"
+        "parakeet_unified_en_0_6b": "ASR apenas em inglês com precisão de ponta (5,91% WER médio)",
+        "nemotron_speech_streaming_en_0_6b": "ASR em inglês por streaming da NVIDIA Nemotron",
+        "nemotron_3_5_asr_streaming_0_6b": "ASR multilíngue por streaming da NVIDIA Nemotron com detecção automática de idioma (15 idiomas)"
       },
       "whisper": {
         "tiny": "Mais rápido, qualidade inferior",

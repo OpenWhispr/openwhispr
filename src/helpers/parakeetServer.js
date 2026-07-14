@@ -11,6 +11,7 @@ const {
 } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const ParakeetWsServer = require("./parakeetWsServer");
+const { getModelRuntime, REQUIRED_MODEL_FILES } = require("./parakeetModelInfo");
 
 const SAMPLE_RATE = 16000;
 const BYTES_PER_SAMPLE = 4; // float32
@@ -23,12 +24,16 @@ class ParakeetServerManager {
     this.wsServer = new ParakeetWsServer();
   }
 
-  getBinaryPath() {
-    return this.wsServer.getWsBinaryPath();
+  getBinaryPath(runtime) {
+    return this.wsServer.getWsBinaryPath(runtime);
   }
 
-  isAvailable() {
-    return this.wsServer.isAvailable();
+  isAvailable(runtime) {
+    return this.wsServer.isAvailable(runtime);
+  }
+
+  hasAnyWsBinary() {
+    return this.wsServer.hasAnyWsBinary();
   }
 
   getModelsDir() {
@@ -37,22 +42,9 @@ class ParakeetServerManager {
 
   isModelDownloaded(modelName) {
     const modelDir = path.join(this.getModelsDir(), modelName);
-    const requiredFiles = [
-      "encoder.int8.onnx",
-      "decoder.int8.onnx",
-      "joiner.int8.onnx",
-      "tokens.txt",
-    ];
-
     if (!fs.existsSync(modelDir)) return false;
 
-    for (const file of requiredFiles) {
-      if (!fs.existsSync(path.join(modelDir, file))) {
-        return false;
-      }
-    }
-
-    return true;
+    return REQUIRED_MODEL_FILES.every((file) => fs.existsSync(path.join(modelDir, file)));
   }
 
   async _ensureWav(audioBuffer) {
@@ -99,7 +91,7 @@ class ParakeetServerManager {
     const { wavBuffer, filesToCleanup } = await this._ensureWav(audioBuffer);
     try {
       if (!this.wsServer.ready || this.wsServer.modelName !== modelName) {
-        await this.wsServer.start(modelName, modelDir);
+        await this.wsServer.start(modelName, modelDir, getModelRuntime(modelName));
       }
 
       const samples = wavToFloat32Samples(wavBuffer);
@@ -168,7 +160,8 @@ class ParakeetServerManager {
   }
 
   async startServer(modelName) {
-    if (!this.wsServer.isAvailable()) {
+    const runtime = getModelRuntime(modelName);
+    if (!this.wsServer.isAvailable(runtime)) {
       return { success: false, reason: "parakeet WS server binary not found" };
     }
 
@@ -178,7 +171,7 @@ class ParakeetServerManager {
     }
 
     try {
-      await this.wsServer.start(modelName, modelDir);
+      await this.wsServer.start(modelName, modelDir, runtime);
       return { success: true, port: this.wsServer.port };
     } catch (error) {
       debugLogger.error("Failed to start parakeet WS server", { error: error.message });
@@ -194,12 +187,8 @@ class ParakeetServerManager {
     return this.wsServer.getStatus();
   }
 
-  getStatus() {
-    return {
-      available: this.isAvailable(),
-      binaryPath: this.getBinaryPath(),
-      modelsDir: this.getModelsDir(),
-    };
+  createOnlineStream(options) {
+    return this.wsServer.createOnlineStream(options);
   }
 }
 

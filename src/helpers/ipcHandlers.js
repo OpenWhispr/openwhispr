@@ -5508,11 +5508,20 @@ class IPCHandlers {
     let dictationPreviewLanguage = null;
     let dictationPreviewSessionActive = false;
     let dictationPreviewChunkCount = 0;
+    // Online-runtime models stream here instead of the 1.5s chunked path.
+    let dictationPreviewStream = null;
+    // Bumped on every reset so async preview work can detect a stale session.
+    let dictationPreviewGen = 0;
 
     const resetDictationPreviewState = ({ preserveSession = false } = {}) => {
+      dictationPreviewGen++;
       if (dictationPreviewTimer) {
         clearInterval(dictationPreviewTimer);
         dictationPreviewTimer = null;
+      }
+      if (dictationPreviewStream) {
+        dictationPreviewStream.abort();
+        dictationPreviewStream = null;
       }
       dictationPreviewMode = false;
       if (!preserveSession) {
@@ -6208,6 +6217,7 @@ class IPCHandlers {
 
     ipcMain.handle("start-dictation-preview", async (_event, { provider, model, language }) => {
       resetDictationPreviewState();
+      const gen = dictationPreviewGen;
       dictationPreviewMode = true;
       dictationPreviewSessionActive = true;
       dictationPreviewProvider = provider;
@@ -6215,6 +6225,35 @@ class IPCHandlers {
       dictationPreviewLanguage = language || null;
       dictationPreviewChunkCount = 0;
       this.windowManager.showTranscriptionPreview("");
+
+      if (provider === "nvidia" && this.parakeetManager.supportsOnlineStreaming(model)) {
+        try {
+          const stream = await this.parakeetManager.createOnlineStream(model, {
+            onUpdate: (text) => {
+              if (gen === dictationPreviewGen && text) {
+                this.windowManager.showTranscriptionPreview(text);
+              }
+            },
+          });
+          if (gen !== dictationPreviewGen) {
+            stream.abort();
+            return { success: true };
+          }
+          dictationPreviewStream = stream;
+          for (const chunk of dictationPreviewBuffer) {
+            stream.sendPcm16(chunk);
+          }
+          dictationPreviewBuffer = [];
+          return { success: true };
+        } catch (error) {
+          debugLogger.warn("Online preview stream unavailable, falling back to chunked preview", {
+            model,
+            error: error.message,
+          });
+        }
+      }
+
+      if (gen !== dictationPreviewGen) return { success: true };
       dictationPreviewTimer = setInterval(() => transcribeDictationPreviewChunk(), 1500);
       return { success: true };
     });
@@ -6229,9 +6268,12 @@ class IPCHandlers {
           bufferSize: dictationPreviewBuffer.length,
         });
       }
-      dictationPreviewBuffer.push(
-        Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer)
-      );
+      const pcm = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      if (dictationPreviewStream) {
+        dictationPreviewStream.sendPcm16(pcm);
+        return;
+      }
+      dictationPreviewBuffer.push(pcm);
     });
 
     ipcMain.handle("dismiss-dictation-preview", async () => {
@@ -6272,7 +6314,16 @@ class IPCHandlers {
       }
       clearInterval(dictationPreviewTimer);
       dictationPreviewTimer = null;
-      await transcribeDictationPreviewChunk();
+      if (dictationPreviewStream) {
+        const stream = dictationPreviewStream;
+        dictationPreviewStream = null;
+        const { text } = await stream.finish().catch(() => ({ text: "" }));
+        if (text && dictationPreviewSessionActive) {
+          this.windowManager.showTranscriptionPreview(text);
+        }
+      } else {
+        await transcribeDictationPreviewChunk();
+      }
       resetDictationPreviewState({ preserveSession: true });
       if (!dictationPreviewSessionActive) {
         return { success: true };

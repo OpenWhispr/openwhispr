@@ -179,6 +179,12 @@ OpenWhispr is an Electron-based desktop dictation application that uses whisper.
 - **Available Models**:
   - `parakeet-tdt-0.6b-v3`: Multilingual (25 languages), ~680MB
   - `parakeet-unified-en-0.6b`: English-only, ~631MB, state-of-the-art EN accuracy (5.91% avg WER on Open ASR Leaderboard)
+  - `nemotron-speech-streaming-en-0.6b`: English-only, ~632MB, cache-aware streaming FastConformer (`"runtime": "online"` in the registry)
+  - `nemotron-3.5-asr-streaming-0.6b`: Multilingual (15 transcription-ready languages, auto detection), ~650MB, cache-aware streaming FastConformer (`"runtime": "online"`)
+
+- **Runtimes**: Models are `offline` (default) or `online` per their registry `runtime` field. Offline models use the bundled `sherpa-onnx-ws-{platform}-{arch}` (offline websocket server); online models use `sherpa-onnx-online-ws-{platform}-{arch}` (online websocket server). Both are downloaded by `scripts/download-sherpa-onnx.js`. The final transcription path still records-then-transcribes; audio is chunked over the websocket and partial/final JSON results are merged by `parakeetWsResult.js`.
+
+- **Live Transcription Preview**: When the preview toggle is on and an online-runtime model is selected, the preview uses a persistent websocket stream (`createOnlineStream` in `parakeetWsServer.js`): worklet PCM is fed as it is captured (`sendPcm16` converts to the float32 wire format inside the ws layer), and partial results update the preview window live (replacing text via `showTranscriptionPreview`). Offline models keep the 1.5s buffered-chunk path (appending via `appendTranscriptionPreview`). If the stream can't start, the preview falls back to the chunked path. Tests: `test/helpers/parakeetOnlineStream.test.js` (mock websocket server).
 
 - **Download URLs**: Models from sherpa-onnx ASR models release on GitHub
 
