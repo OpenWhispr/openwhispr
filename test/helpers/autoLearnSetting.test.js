@@ -17,7 +17,7 @@ test("reports a change when disabling from enabled", () => {
   });
 });
 
-test("is idempotent when the value is unchanged (enabled)", () => {
+test("is idempotent when the value is unchanged (enabled) — #1080 dual-window mount sync", () => {
   assert.deepEqual(applyAutoLearnSetting(true, true), {
     changed: false,
     enabled: true,
@@ -38,13 +38,4 @@ test("coerces truthy/falsy incoming values to boolean", () => {
     changed: true,
     enabled: false,
   });
-});
-
-test("treats repeated mount-sync of the default as no-ops (#1080)", () => {
-  // Dual-window startup: both renderers sync the default `true` on mount.
-  // Neither should be treated as a change, so the handler stays quiet.
-  const first = applyAutoLearnSetting(true, true);
-  const second = applyAutoLearnSetting(first.enabled, true);
-  assert.equal(first.changed, false);
-  assert.equal(second.changed, false);
 });

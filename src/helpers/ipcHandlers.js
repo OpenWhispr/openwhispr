@@ -938,9 +938,7 @@ class IPCHandlers {
 
     // Dictionary handlers
     ipcMain.on("auto-learn-changed", (_event, enabled) => {
-      // Each renderer window re-syncs this on mount, so ignore redundant
-      // same-value updates (e.g. dual-window startup) to avoid duplicate work
-      // and log noise. See #1080.
+      // Both renderer windows re-sync this on mount — ignore same-value updates (#1080).
       const { changed, enabled: next } = applyAutoLearnSetting(this._autoLearnEnabled, enabled);
       if (!changed) return;
       this._autoLearnEnabled = next;
