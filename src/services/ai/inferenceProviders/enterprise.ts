@@ -1,7 +1,7 @@
 import type { InferenceProvider } from "./types";
 import {
-  getOpenAiApiConfig,
   isEnterpriseProvider,
+  supportsTemperature as supportsTemp,
   type EnterpriseProvider as EnterpriseProviderId,
 } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
@@ -26,7 +26,7 @@ export const enterpriseProvider: InferenceProvider = {
 
     const systemPrompt = config.systemPrompt || ctx.getSystemPrompt(agentName);
     const userContent = config.systemPrompt ? text : wrapCleanupTranscript(text);
-    const { supportsTemperature } = getOpenAiApiConfig(model);
+    const supportsTemperature = supportsTemp(model);
 
     const startTime = Date.now();
     const result = await window.electronAPI.processEnterpriseReasoning(

@@ -330,55 +330,64 @@
           "id": "claude-fable-5",
           "name": "Claude Fable 5",
           "description": "Anthropic's most capable model, Mythos-class, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_fable_5",
+          "supportsTemperature": false
         },
         {
           "id": "claude-sonnet-5",
           "name": "Claude Sonnet 5",
           "description": "Fast, capable agentic model at lower cost",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_5",
+          "supportsTemperature": false
         },
         {
           "id": "claude-sonnet-4-6",
           "name": "Claude Sonnet 4.6",
           "description": "Balanced performance",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_6",
+          "supportsTemperature": true
         },
         {
           "id": "claude-haiku-4-5",
           "name": "Claude Haiku 4.5",
           "description": "Fast with near-frontier intelligence",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_haiku_4_5",
+          "supportsTemperature": true
         },
         {
           "id": "claude-opus-4-8",
           "name": "Claude Opus 4.8",
           "description": "Powerful Opus model tuned for honesty and reliability, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_8",
+          "supportsTemperature": false
         },
         {
           "id": "claude-opus-4-7",
           "name": "Claude Opus 4.7",
           "description": "Powerful Opus model, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_7",
+          "supportsTemperature": false
         },
         {
           "id": "claude-opus-4-6",
           "name": "Claude Opus 4.6",
           "description": "Previous Opus generation, 1M context",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_6",
+          "supportsTemperature": true
         },
         {
           "id": "claude-sonnet-4-5",
           "name": "Claude Sonnet 4.5",
           "description": "Previous Sonnet generation",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_sonnet_4_5",
+          "supportsTemperature": true
         },
         {
           "id": "claude-opus-4-5",
           "name": "Claude Opus 4.5",
           "description": "Earlier Opus model",
-          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5"
+          "descriptionKey": "models.descriptions.cloud.anthropic_claude_opus_4_5",
+          "supportsTemperature": true
         }
       ]
     },
@@ -391,37 +400,43 @@
           "name": "Gemini 3.5 Flash",
           "description": "Latest fast, high-capability Gemini model",
           "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_5_flash",
+          "supportsTemperature": true,
           "supportsThinking": true
         },
         {
           "id": "gemini-3.1-pro-preview",
           "name": "Gemini 3.1 Pro",
           "description": "Next-gen flagship model for complex reasoning",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_1_pro_preview",
+          "supportsTemperature": true
         },
         {
           "id": "gemini-3-flash-preview",
           "name": "Gemini 3 Flash",
           "description": "Ultra-fast, high-capability next-gen model",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_3_flash_preview",
+          "supportsTemperature": true
         },
         {
           "id": "gemini-2.5-flash-lite",
           "name": "Gemini 2.5 Flash Lite",
           "description": "Lowest latency and cost",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemini_2_5_flash_lite"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemini_2_5_flash_lite",
+          "supportsTemperature": true
         },
         {
           "id": "gemma-4-31b-it",
           "name": "Gemma 4 31B",
           "description": "Google's largest Gemma 4, 31B dense, 256K context",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_31b_it"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_31b_it",
+          "supportsTemperature": true
         },
         {
           "id": "gemma-4-26b-a4b-it",
           "name": "Gemma 4 26B MoE",
           "description": "Google's Gemma 4 MoE, 4B active params, 256K context",
-          "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_26b_a4b_it"
+          "descriptionKey": "models.descriptions.cloud.gemini_gemma_4_26b_a4b_it",
+          "supportsTemperature": true
         }
       ]
     },
@@ -435,57 +450,66 @@
           "description": "Powerful reasoning model, 131K context",
           "disableThinking": true,
           "supportsThinking": true,
-          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b"
+          "descriptionKey": "models.descriptions.cloud.groq_qwen_qwen3_32b",
+          "supportsTemperature": true
         },
         {
           "id": "openai/gpt-oss-120b",
           "name": "GPT-OSS 120B",
           "description": "OpenAI's open-source flagship, 500 T/sec",
           "supportsThinking": true,
-          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b"
+          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_120b",
+          "supportsTemperature": true
         },
         {
           "id": "openai/gpt-oss-20b",
           "name": "GPT-OSS 20B",
           "description": "Fast open-source model, 1000 T/sec",
           "supportsThinking": true,
-          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b"
+          "descriptionKey": "models.descriptions.cloud.groq_openai_gpt_oss_20b",
+          "supportsTemperature": true
         },
         {
           "id": "llama-3.3-70b-versatile",
           "name": "LLaMA 3.3 70B",
           "description": "Meta's versatile model, 280 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_llama_3_3_70b_versatile"
+          "descriptionKey": "models.descriptions.cloud.groq_llama_3_3_70b_versatile",
+          "supportsTemperature": true
         },
         {
           "id": "llama-3.1-8b-instant",
           "name": "LLaMA 3.1 8B",
           "description": "Ultra-fast 560 T/sec, 131K context",
-          "descriptionKey": "models.descriptions.cloud.groq_llama_3_1_8b_instant"
+          "descriptionKey": "models.descriptions.cloud.groq_llama_3_1_8b_instant",
+          "supportsTemperature": true
         },
         {
           "id": "meta-llama/llama-4-scout-17b-16e-instruct",
           "name": "Llama 4 Scout",
           "description": "Meta's efficient multimodal, 750 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_llama_4_scout"
+          "descriptionKey": "models.descriptions.cloud.groq_llama_4_scout",
+          "supportsTemperature": true
         },
         {
           "id": "groq/compound",
           "name": "Compound",
           "description": "Groq's compound system, 450 T/sec",
-          "descriptionKey": "models.descriptions.cloud.groq_compound"
+          "descriptionKey": "models.descriptions.cloud.groq_compound",
+          "supportsTemperature": true
         },
         {
           "id": "groq/compound-mini",
           "name": "Compound Mini",
           "description": "Fast compound system, 3x lower latency",
-          "descriptionKey": "models.descriptions.cloud.groq_compound_mini"
+          "descriptionKey": "models.descriptions.cloud.groq_compound_mini",
+          "supportsTemperature": true
         },
         {
           "id": "moonshotai/kimi-k2-instruct-0905",
           "name": "Kimi K2 0905",
           "description": "Moonshot AI's 1T MoE, 256K context",
-          "descriptionKey": "models.descriptions.cloud.groq_kimi_k2_0905"
+          "descriptionKey": "models.descriptions.cloud.groq_kimi_k2_0905",
+          "supportsTemperature": true
         }
       ]
     },
@@ -498,8 +522,8 @@
           "name": "Kimi K2.6",
           "description": "Private long-horizon coding and multimodal model, 256K context",
           "tokenParam": "max_tokens",
-          "supportsTemperature": true,
           "descriptionKey": "models.descriptions.cloud.tinfoil_kimi_k2_6",
+          "supportsTemperature": true,
           "supportsThinking": true
         },
         {
@@ -507,8 +531,8 @@
           "name": "GLM-5.2",
           "description": "Private agentic engineering model in secure enclaves, 384K context",
           "tokenParam": "max_tokens",
-          "supportsTemperature": true,
           "descriptionKey": "models.descriptions.cloud.tinfoil_glm_5_2",
+          "supportsTemperature": true,
           "supportsThinking": true
         },
         {
@@ -516,8 +540,8 @@
           "name": "GPT-OSS 120B",
           "description": "Private open-weight reasoning model with tool use, 131K context",
           "tokenParam": "max_tokens",
-          "supportsTemperature": true,
           "descriptionKey": "models.descriptions.cloud.tinfoil_gpt_oss_120b",
+          "supportsTemperature": true,
           "supportsThinking": true
         },
         {
@@ -525,8 +549,8 @@
           "name": "Gemma 4 31B",
           "description": "Private multilingual reasoning model with tool calling, 256K context",
           "tokenParam": "max_tokens",
-          "supportsTemperature": true,
           "descriptionKey": "models.descriptions.cloud.tinfoil_gemma4_31b",
+          "supportsTemperature": true,
           "supportsThinking": true
         }
       ]
@@ -580,43 +604,50 @@
           "id": "us.anthropic.claude-fable-5",
           "name": "Claude Fable 5",
           "description": "Most capable Claude model, Mythos-class. Best for the hardest Agent Mode tasks.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_fable_5"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_fable_5",
+          "supportsTemperature": false
         },
         {
           "id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
           "name": "Claude Haiku 4.5",
           "description": "Fast and cheap. Great default for text cleanup.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_haiku_4_5"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_haiku_4_5",
+          "supportsTemperature": true
         },
         {
           "id": "us.anthropic.claude-sonnet-5",
           "name": "Claude Sonnet 5",
           "description": "Balanced workhorse. Best default for Agent Mode.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_5"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_sonnet_5",
+          "supportsTemperature": false
         },
         {
           "id": "us.anthropic.claude-opus-4-8",
           "name": "Claude Opus 4.8",
           "description": "Max intelligence. Best for complex Agent Mode tasks.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_opus_4_8"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_claude_opus_4_8",
+          "supportsTemperature": false
         },
         {
           "id": "openai.gpt-oss-120b-1:0",
           "name": "GPT-OSS 120B",
           "description": "Open-weight OpenAI model. Strong reasoning at low cost.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_gpt_oss_120b"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_gpt_oss_120b",
+          "supportsTemperature": true
         },
         {
           "id": "deepseek.v3.2",
           "name": "DeepSeek V3.2",
           "description": "Open-weight frontier model. Great value for Agent Mode.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_deepseek_v3_2"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_deepseek_v3_2",
+          "supportsTemperature": true
         },
         {
           "id": "qwen.qwen3-next-80b-a3b",
           "name": "Qwen3 Next 80B",
           "description": "Sparse open-weight model. Fast and multilingual.",
-          "descriptionKey": "models.descriptions.enterprise.bedrock_qwen3_next_80b"
+          "descriptionKey": "models.descriptions.enterprise.bedrock_qwen3_next_80b",
+          "supportsTemperature": true
         }
       ]
     },
@@ -635,13 +666,15 @@
           "id": "gemini-2.5-flash",
           "name": "Gemini 2.5 Flash",
           "description": "Fast multimodal model via Vertex",
-          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_2_5_flash"
+          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_2_5_flash",
+          "supportsTemperature": true
         },
         {
           "id": "gemini-2.5-pro",
           "name": "Gemini 2.5 Pro",
           "description": "Advanced reasoning via Vertex",
-          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_2_5_pro"
+          "descriptionKey": "models.descriptions.enterprise.vertex_gemini_2_5_pro",
+          "supportsTemperature": true
         }
       ]
     }

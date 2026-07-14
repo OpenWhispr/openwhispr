@@ -42,7 +42,7 @@ export interface CloudModelDefinition {
   disableThinking?: boolean;
   supportsThinking?: boolean;
   tokenParam?: "max_tokens" | "max_completion_tokens";
-  supportsTemperature?: boolean;
+  supportsTemperature: boolean;
 }
 
 export interface CloudProviderData {
@@ -441,26 +441,33 @@ export function getLocalModel(modelId: string): ModelDefinition | undefined {
 
 export interface OpenAiApiConfig {
   tokenParam: "max_tokens" | "max_completion_tokens";
-  supportsTemperature: boolean;
+}
+
+export function supportsTemperature(modelId: string): boolean {
+  const model = getCloudModel(modelId);
+  if (model) return model.supportsTemperature;
+
+  // Model not in the registry -- apply known prefix heuristics for
+  // unregistered models (custom providers, OpenRouter).
+  if (modelId.includes("claude")) return false;
+  if (modelId.startsWith("gpt-5")) return false;
+  return true;
 }
 
 export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiApiConfig {
   const model = getCloudModel(modelId);
   if (model?.tokenParam) {
-    return {
-      tokenParam: model.tokenParam,
-      supportsTemperature: model.supportsTemperature ?? true,
-    };
+    return { tokenParam: model.tokenParam };
   }
 
   // OpenRouter's vendor-prefixed ids (openai/gpt-4o, anthropic/claude-…) speak
   // standard Chat Completions. Scoped to the provider so vendor-prefixed ids on
   // custom endpoints keep the request shape they had before OpenRouter landed.
   if (provider === "openrouter" && modelId.includes("/")) {
-    return { tokenParam: "max_tokens", supportsTemperature: true };
+    return { tokenParam: "max_tokens" };
   }
 
-  // Fallback for models not in the registry (custom model IDs, etc.)
+  // Model not in registry — infer token param from ID prefix.
   const isLegacy =
     modelId.startsWith("gpt-3") ||
     modelId.startsWith("gpt-4o") ||
@@ -468,16 +475,10 @@ export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiAp
     modelId === "gpt-4";
 
   if (isLegacy) {
-    return { tokenParam: "max_tokens", supportsTemperature: true };
+    return { tokenParam: "max_tokens" };
   }
 
-  // gpt-4.1* supports temperature but uses max_completion_tokens
-  if (modelId.startsWith("gpt-4.1")) {
-    return { tokenParam: "max_completion_tokens", supportsTemperature: true };
-  }
-
-  // gpt-5* reasoning models: no temperature
-  return { tokenParam: "max_completion_tokens", supportsTemperature: false };
+  return { tokenParam: "max_completion_tokens" };
 }
 
 export function getParakeetModels(): ParakeetModelsMap {

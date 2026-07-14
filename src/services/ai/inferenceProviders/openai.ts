@@ -1,6 +1,6 @@
 import type { InferenceProvider } from "./types";
 import { API_ENDPOINTS, TOKEN_LIMITS, buildApiUrl } from "../../../config/constants";
-import { getOpenAiApiConfig } from "../../../models/ModelRegistry";
+import { getOpenAiApiConfig, supportsTemperature } from "../../../models/ModelRegistry";
 import { getSettings } from "../../../stores/settingsStore";
 import { withRetry, createApiRetryStrategy } from "../../../utils/retry";
 import logger from "../../../utils/logger";
@@ -214,7 +214,7 @@ export const openaiProvider: InferenceProvider = {
             applyThinkingSuppression(requestBody, model, resolvedProvider, config);
           }
 
-          if (apiConfig.supportsTemperature) {
+          if (supportsTemperature(model)) {
             requestBody.temperature = config.temperature ?? (config.systemPrompt ? 0.3 : 0);
           }
 

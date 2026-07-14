@@ -21,7 +21,11 @@ export function readCachedTinfoilModels(): CachedTinfoilModels {
 
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed?.models) || typeof parsed.fetchedAt !== "number") return EMPTY;
-    return { models: parsed.models, fetchedAt: parsed.fetchedAt };
+    const models: CloudModelDefinition[] = parsed.models.map((raw: CloudModelDefinition) => ({
+      ...raw,
+      supportsTemperature: raw.supportsTemperature ?? true,
+    }));
+    return { models, fetchedAt: parsed.fetchedAt };
   } catch {
     return EMPTY;
   }

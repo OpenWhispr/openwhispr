@@ -1,5 +1,6 @@
 import type { InferenceProvider } from "./types";
 import { wrapCleanupTranscript } from "../../../config/prompts";
+import { supportsTemperature } from "../../../models/ModelRegistry";
 import logger from "../../../utils/logger";
 
 export const anthropicProvider: InferenceProvider = {
@@ -23,6 +24,7 @@ export const anthropicProvider: InferenceProvider = {
       {
         ...config,
         systemPrompt,
+        supportsTemperature: supportsTemperature(model),
       }
     );
 
