@@ -103,7 +103,7 @@
     "autoprefixer": "^10.5.0",
     "concurrently": "^10.0.3",
     "cross-env": "^10.0.0",
-    "electron": "^41.2.0",
+    "electron": "^43.1.1",
     "electron-builder": "^26.4.0",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
