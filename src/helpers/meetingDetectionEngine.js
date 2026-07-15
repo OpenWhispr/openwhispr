@@ -163,6 +163,53 @@ class MeetingDetectionEngine {
     });
   }
 
+  showCalendarReminder(event) {
+    if (!event?.id) return;
+
+    const detectionId = `calendar:${event.id}`;
+
+    if (this._meetingModeActive) {
+      debugLogger.info(
+        "Suppressing calendar reminder — meeting mode already active",
+        { detectionId },
+        "meeting"
+      );
+      return;
+    }
+
+    if (this.activeDetections.has(detectionId)) {
+      debugLogger.debug("Calendar reminder already active, skipping", { detectionId }, "meeting");
+      return;
+    }
+
+    const title = event.summary || "Meeting";
+    const body = "Your meeting is starting. Want to take notes?";
+
+    this.activeDetections.set(detectionId, {
+      source: "calendar",
+      key: event.id,
+      data: {},
+      dismissed: false,
+      event,
+    });
+
+    const nPrefs = this.windowManager.notificationPrefs || {};
+    if (nPrefs.notificationsEnabled !== false && nPrefs.notifyCalendarReminders !== false) {
+      debugLogger.info("Showing calendar reminder notification", { detectionId, title }, "meeting");
+      this.windowManager.showMeetingNotification({
+        detectionId,
+        source: "calendar",
+        key: event.id,
+        title,
+        body,
+        event,
+      });
+    } else {
+      debugLogger.info("Calendar reminder suppressed by user preference", {}, "meeting");
+      this.activeDetections.delete(detectionId);
+    }
+  }
+
   async handleNotificationResponse(detectionId, action) {
     debugLogger.info("Notification response", { detectionId, action }, "meeting");
     try {

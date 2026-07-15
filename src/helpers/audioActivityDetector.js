@@ -194,6 +194,11 @@ class AudioActivityDetector extends EventEmitter {
       this._listenerProcess = null;
       if (this._running && this._eventDriven) {
         this._eventDriven = false;
+        debugLogger.warn(
+          `${label} unavailable — falling back to polling for mic detection`,
+          { platform: process.platform, intervalMs: CHECK_INTERVAL_MS },
+          "meeting"
+        );
         this._startPolling();
       }
     };
@@ -478,13 +483,45 @@ class AudioActivityDetector extends EventEmitter {
   }
 
   async _checkDarwin() {
+    // This is the best-effort polling fallback used only when the native
+    // macos-mic-listener binary is unavailable (missing / killed by Gatekeeper).
+    // The native path is input-only and precise; here we err toward sensitivity
+    // so we don't silently miss a mic that is in use on modern/Apple-Silicon
+    // macOS, where a single "IOAudioEngineState = 1" grep is unreliable.
+
+    // Primary signal: an audio engine that has active user clients means an app
+    // currently holds an I/O connection to it.
     try {
       const { stdout } = await execAsync(
-        "ioreg -l -w 0 | grep '\"IOAudioEngineState\" = 1'",
+        "ioreg -l -w 0 | grep 'IOAudioEngineNumActiveUserClients' || true",
+        EXEC_OPTS
+      );
+      const hasActiveClients = stdout.split("\n").some((line) => {
+        const match = line.match(/"IOAudioEngineNumActiveUserClients"\s*=\s*(\d+)/);
+        return match ? parseInt(match[1], 10) > 0 : false;
+      });
+      if (hasActiveClients) return true;
+    } catch (err) {
+      debugLogger.debug(
+        "macOS ioreg active-clients check failed",
+        { error: err?.message },
+        "meeting"
+      );
+    }
+
+    // Fallback signal: any audio engine reporting the running state.
+    try {
+      const { stdout } = await execAsync(
+        "ioreg -l -w 0 | grep '\"IOAudioEngineState\" = 1' || true",
         EXEC_OPTS
       );
       return stdout.trim().length > 0;
-    } catch {
+    } catch (err) {
+      debugLogger.debug(
+        "macOS ioreg engine-state check failed",
+        { error: err?.message },
+        "meeting"
+      );
       return false;
     }
   }

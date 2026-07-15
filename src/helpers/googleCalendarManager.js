@@ -1,4 +1,4 @@
-const { net, Notification, BrowserWindow } = require("electron");
+const { net, BrowserWindow } = require("electron");
 const debugLogger = require("./debugLogger");
 const GoogleCalendarOAuth = require("./googleCalendarOAuth");
 
@@ -8,6 +8,7 @@ class GoogleCalendarManager {
   constructor(databaseManager, windowManager) {
     this.databaseManager = databaseManager;
     this.windowManager = windowManager;
+    this.meetingDetectionEngine = null;
     this.oauth = new GoogleCalendarOAuth(databaseManager);
     this.accounts = new Map();
     this.syncInterval = null;
@@ -52,6 +53,10 @@ class GoogleCalendarManager {
       this.meetingEndTimer = null;
     }
     this.activeMeeting = null;
+  }
+
+  setMeetingDetectionEngine(engine) {
+    this.meetingDetectionEngine = engine;
   }
 
   isConnected() {
@@ -296,16 +301,12 @@ class GoogleCalendarManager {
     this.activeMeeting = event;
     this.notifiedMeetings.add(event.id);
 
-    const nPrefs = this.windowManager?.notificationPrefs || {};
-    if (nPrefs.notificationsEnabled !== false && nPrefs.notifyCalendarReminders !== false) {
-      const notif = new Notification({
-        title: event.summary || "Meeting",
-        body: "Meeting starting now",
-      });
-      notif.on("click", () => {
-        this.broadcastToWindows("gcal-start-recording", { event });
-      });
-      notif.show();
+    // Show the reminder through the same in-app overlay card the meeting
+    // detector uses, so it carries a real "Start Recording" CTA and behaves
+    // consistently with audio/process detection (previously this was a native
+    // OS Notification whose click broadcast an event nothing consumed).
+    if (this.meetingDetectionEngine) {
+      this.meetingDetectionEngine.showCalendarReminder(event);
     }
 
     this.broadcastToWindows("gcal-meeting-starting", { event });

@@ -49,14 +49,16 @@ export default function MeetingNotificationOverlay() {
     [data]
   );
 
+  // The overlay window is interactive by default (see windowManager
+  // showMeetingNotification), so hover is only used to reveal the dismiss "X".
+  // We no longer toggle click-through on hover — that made the "Start Recording"
+  // CTA unreliable on macOS.
   const handleMouseEnter = useCallback(() => {
     setIsHovered(true);
-    window.electronAPI?.setNotificationInteractivity?.(true);
   }, []);
 
   const handleMouseLeave = useCallback(() => {
     setIsHovered(false);
-    window.electronAPI?.setNotificationInteractivity?.(false);
   }, []);
 
   return (

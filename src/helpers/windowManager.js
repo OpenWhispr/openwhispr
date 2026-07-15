@@ -129,10 +129,12 @@ class WindowManager {
     if (!this.notificationWindow || this.notificationWindow.isDestroyed()) {
       return;
     }
+    // The notification window is interactive by default so the "Start Recording"
+    // CTA is always clickable. We never toggle it back to click-through — doing
+    // so on macOS previously made the button unreliable. Kept as a guarded
+    // no-op that only ever (re)asserts interactivity for backward compatibility.
     if (interactive) {
       this.notificationWindow.setIgnoreMouseEvents(false);
-    } else {
-      this.notificationWindow.setIgnoreMouseEvents(true, { forward: true });
     }
   }
 
@@ -1168,9 +1170,13 @@ class WindowManager {
       ...position,
     });
 
-    if (process.platform === "darwin") {
-      this.notificationWindow.setIgnoreMouseEvents(true, { forward: true });
-    }
+    // Note: unlike the update-notification overlay, this window intentionally
+    // does NOT start click-through. Previously it called
+    // setIgnoreMouseEvents(true, { forward: true }) on macOS, which made the
+    // "Start Recording" button unreliable — clicks only registered if the
+    // hover-driven setNotificationInteractivity re-enabled input at just the
+    // right moment. Keeping the window interactive by default (as on
+    // Windows/Linux and the update overlay) makes the CTA reliably clickable.
 
     WindowPositionUtil.setupAlwaysOnTop(this.notificationWindow);
 
