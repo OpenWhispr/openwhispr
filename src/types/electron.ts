@@ -1939,6 +1939,13 @@ declare global {
         detectionId: string,
         action: string
       ) => Promise<{ success: boolean }>;
+      showMeetingEndPrompt?: (options?: { countdownMs?: number }) => Promise<{ success: boolean }>;
+      dismissMeetingEndPrompt?: () => Promise<{ success: boolean }>;
+      getMeetingEndPromptData?: () => Promise<{ countdownMs: number } | null>;
+      meetingEndPromptReady?: () => Promise<void>;
+      meetingEndPromptRespond?: (action: string) => Promise<{ success: boolean }>;
+      onMeetingEndPromptData?: (callback: (data: any) => void) => () => void;
+      onMeetingEndResponse?: (callback: (data: { action: string }) => void) => () => void;
       joinCalendarMeeting?: (eventId: string) => Promise<{ success: boolean }>;
       getPendingMeetingNoteNavigation?: () => Promise<{
         noteId: number;

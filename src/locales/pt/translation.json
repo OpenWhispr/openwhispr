@@ -1446,6 +1446,8 @@
         "meetingDetectionDescription": "Notificar quando uma reunião for detectada para iniciar a gravação",
         "calendarReminders": "Lembretes do calendário",
         "calendarRemindersDescription": "Notificar quando uma reunião agendada está prestes a começar",
+        "autoEndMeeting": "Encerrar gravação automaticamente",
+        "autoEndMeetingDescription": "Pare a gravação após um período de silêncio (com uma contagem regressiva que você pode cancelar)",
         "updates": "Atualizações do app",
         "updatesDescription": "Notificar quando uma nova versão estiver disponível"
       },
@@ -3000,5 +3002,10 @@
     },
     "start": "Fazer anotações",
     "join": "Entrar e transcrever"
+  },
+  "meetingEndPrompt": {
+    "title": "A reunião terminou?",
+    "body": "Sem áudio há algum tempo — encerrando em {{seconds}} s",
+    "keep": "Continuar gravando"
   }
 }

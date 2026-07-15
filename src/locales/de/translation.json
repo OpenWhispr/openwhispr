@@ -1467,6 +1467,8 @@
         "meetingDetectionDescription": "Benachrichtigen, wenn ein Meeting erkannt wird, um die Aufnahme zu starten",
         "calendarReminders": "Kalendererinnerungen",
         "calendarRemindersDescription": "Benachrichtigen, wenn ein geplantes Meeting bald beginnt",
+        "autoEndMeeting": "Aufnahme automatisch beenden",
+        "autoEndMeetingDescription": "Beende die Aufnahme nach einer Phase der Stille (mit abbrechbarem Countdown)",
         "updates": "App-Updates",
         "updatesDescription": "Benachrichtigen, wenn eine neue Version verfügbar ist"
       },
@@ -3000,5 +3002,10 @@
     },
     "start": "Notizen aufnehmen",
     "join": "Beitreten & transkribieren"
+  },
+  "meetingEndPrompt": {
+    "title": "Meeting beendet?",
+    "body": "Seit einer Weile kein Ton — Ende in {{seconds}} s",
+    "keep": "Weiter aufnehmen"
   }
 }

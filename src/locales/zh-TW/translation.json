@@ -1462,6 +1462,8 @@
         "meetingDetectionDescription": "偵測到會議時通知您以便開始錄音",
         "calendarReminders": "行事曆提醒",
         "calendarRemindersDescription": "預定會議即將開始時通知您",
+        "autoEndMeeting": "自動結束會議錄製",
+        "autoEndMeetingDescription": "在一段時間靜音後停止錄製（附可取消的倒數計時）",
         "updates": "應用程式更新",
         "updatesDescription": "有新版本可用時通知您"
       },
@@ -2995,5 +2997,10 @@
     },
     "start": "開始記錄",
     "join": "加入並轉錄"
+  },
+  "meetingEndPrompt": {
+    "title": "會議結束了嗎？",
+    "body": "已有一段時間沒有聲音 — {{seconds}} 秒後結束",
+    "keep": "繼續錄製"
   }
 }

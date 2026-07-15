@@ -1,14 +1,22 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "./ui/useToast";
 import {
   getMicAnalyser,
   primeMeetingWorklet,
+  stopRecording as stopMeetingRecording,
   useMeetingRecordingStore,
 } from "../stores/meetingRecordingStore";
+import { useSettingsStore } from "../stores/settingsStore";
 
 const EMA_PREV = 0.5;
 const EMA_NEXT = 0.5;
+
+// Auto-end a meeting recording after this much silence (no mic or system-audio
+// speech). The overlay then shows an interruptible countdown.
+const SILENCE_THRESHOLD_MS = 60 * 1000;
+const SILENCE_CHECK_INTERVAL_MS = 2 * 1000;
+const END_COUNTDOWN_MS = 5 * 1000;
 
 export default function MeetingRecordingMount(): null {
   const { t } = useTranslation();
@@ -61,6 +69,75 @@ export default function MeetingRecordingMount(): null {
     return () => {
       cancelAnimationFrame(rafId);
       useMeetingRecordingStore.setState({ currentMicLevel: 0 });
+    };
+  }, [isRecording]);
+
+  // Silence-based auto-end: watch for mic/system speech activity; after
+  // SILENCE_THRESHOLD_MS with none, show the interruptible "ending?" overlay.
+  const lastActivityRef = useRef(0);
+  const promptShowingRef = useRef(false);
+
+  useEffect(() => {
+    if (!isRecording) return;
+
+    lastActivityRef.current = Date.now();
+    promptShowingRef.current = false;
+
+    const onActivity = () => {
+      lastActivityRef.current = Date.now();
+      // Speech resumed while the "ending?" prompt was up — cancel it and keep
+      // recording (no need to wait for the countdown).
+      if (promptShowingRef.current) {
+        promptShowingRef.current = false;
+        window.electronAPI?.dismissMeetingEndPrompt?.();
+      }
+    };
+
+    // A new mic/system partial or a newly finalized segment means someone just
+    // spoke. currentMicLevel changes every frame, so it is intentionally not
+    // treated as speech here (it would include ambient noise).
+    const unsubscribe = useMeetingRecordingStore.subscribe((state, prev) => {
+      if (
+        state.micPartial !== prev.micPartial ||
+        state.systemPartial !== prev.systemPartial ||
+        state.segments.length !== prev.segments.length
+      ) {
+        onActivity();
+      }
+    });
+
+    const interval = setInterval(() => {
+      if (promptShowingRef.current) return;
+      if (!useSettingsStore.getState().autoEndMeetingRecording) return;
+      if (!useMeetingRecordingStore.getState().isRecording) return;
+      if (Date.now() - lastActivityRef.current < SILENCE_THRESHOLD_MS) return;
+
+      promptShowingRef.current = true;
+      window.electronAPI?.showMeetingEndPrompt?.({ countdownMs: END_COUNTDOWN_MS });
+    }, SILENCE_CHECK_INTERVAL_MS);
+
+    const cleanupResponse = window.electronAPI?.onMeetingEndResponse?.(
+      (data: { action: string }) => {
+        promptShowingRef.current = false;
+        if (data?.action === "end") {
+          stopMeetingRecording().catch(() => {
+            // stop failures are surfaced via the recording store's error state
+          });
+        } else {
+          // "keep" — reset the silence window so we don't immediately re-prompt.
+          lastActivityRef.current = Date.now();
+        }
+      }
+    );
+
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+      cleanupResponse?.();
+      if (promptShowingRef.current) {
+        promptShowingRef.current = false;
+        window.electronAPI?.dismissMeetingEndPrompt?.();
+      }
     };
   }, [isRecording]);
 
