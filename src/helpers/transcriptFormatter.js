@@ -15,16 +15,17 @@ function resolveSpeaker(seg, speakerMappings) {
 
 function mergeSegments(segments) {
   const merged = [];
+  let lastTimestamp = null;
   for (const seg of segments) {
     if (!seg.text?.trim()) continue;
     const ts = seg.timestamp || 0;
     const last = merged[merged.length - 1];
-    if (last && last.speaker === (seg.speaker || "") && ts - last.timestamp < 2) {
+    if (last && last.speaker === (seg.speaker || "") && ts - lastTimestamp < 2) {
       last.text = last.text + " " + seg.text.trim();
-      last.timestamp = ts;
     } else {
       merged.push({ ...seg, timestamp: ts, text: seg.text.trim() });
     }
+    lastTimestamp = ts;
   }
   return merged;
 }
