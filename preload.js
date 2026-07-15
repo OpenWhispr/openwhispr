@@ -188,6 +188,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("note-deleted", listener);
     return () => ipcRenderer.removeListener("note-deleted", listener);
   },
+  onMeetingAutoStopRequest: (callback) => {
+    const listener = () => callback?.();
+    ipcRenderer.on("meeting-auto-stop-request", listener);
+    return () => ipcRenderer.removeListener("meeting-auto-stop-request", listener);
+  },
 
   onActionCreated: (callback) => {
     const listener = (_event, action) => callback?.(action);

@@ -528,6 +528,16 @@ export default function PersonalNotesView({
     onMeetingRecordingRequestHandled?.();
   }, [meetingRecordingRequest, activeNoteId, notes, onMeetingRecordingRequestHandled]);
 
+  // Auto-stop: the main process asks us to stop when an auto-started call ends.
+  useEffect(() => {
+    const unsubscribe = window.electronAPI.onMeetingAutoStopRequest?.(() => {
+      if (useMeetingRecordingStore.getState().isRecording) {
+        storeStopRecording();
+      }
+    });
+    return () => unsubscribe?.();
+  }, []);
+
   const prevTranscribingRef = useRef(false);
 
   useEffect(() => {

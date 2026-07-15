@@ -287,6 +287,8 @@ const LinuxPortalAudioManager = require("./src/helpers/linuxPortalAudioManager")
 const WindowsLoopbackAudioManager = require("./src/helpers/windowsLoopbackAudioManager");
 const MeetingAecManager = require("./src/helpers/meetingAecManager");
 const MeetingDetectionEngine = require("./src/helpers/meetingDetectionEngine");
+const CallStateDetector = require("./src/helpers/callStateDetector");
+const { checkForActiveMeetingUrl } = require("./src/helpers/browserMeetingUrlChecker");
 const { i18nMain, changeLanguage } = require("./src/helpers/i18nMain");
 const { ensureYdotool } = require("./src/helpers/ensureYdotool");
 const sidecarRegistry = require("./src/helpers/sidecarRegistry");
@@ -400,7 +402,8 @@ function initializeCoreManagers() {
     new MeetingProcessDetector(),
     new AudioActivityDetector(),
     windowManager,
-    databaseManager
+    databaseManager,
+    new CallStateDetector({ urlChecker: checkForActiveMeetingUrl })
   );
   windowManager.meetingDetectionEngine = meetingDetectionEngine;
   googleCalendarManager.meetingDetectionEngine = meetingDetectionEngine;

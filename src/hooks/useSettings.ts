@@ -309,6 +309,8 @@ function useSettingsInternal() {
     setNotificationsEnabled: store.setNotificationsEnabled,
     notifyMeetingDetection: store.notifyMeetingDetection,
     setNotifyMeetingDetection: store.setNotifyMeetingDetection,
+    autoStartRecordingOnMeeting: store.autoStartRecordingOnMeeting,
+    setAutoStartRecordingOnMeeting: store.setAutoStartRecordingOnMeeting,
     notifyCalendarReminders: store.notifyCalendarReminders,
     setNotifyCalendarReminders: store.setNotifyCalendarReminders,
     notifyUpdates: store.notifyUpdates,

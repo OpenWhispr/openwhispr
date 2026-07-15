@@ -139,6 +139,7 @@ const BOOLEAN_SETTINGS = new Set([
   "chatAgentDisableThinking",
   "notificationsEnabled",
   "notifyMeetingDetection",
+  "autoStartRecordingOnMeeting",
   "notifyCalendarReminders",
   "notifyUpdates",
   "gcalPrimaryOnly",
@@ -414,6 +415,7 @@ export interface SettingsState
   gcalEmail: string;
   notificationsEnabled: boolean;
   notifyMeetingDetection: boolean;
+  autoStartRecordingOnMeeting: boolean;
   notifyCalendarReminders: boolean;
   notifyUpdates: boolean;
   gcalPrimaryOnly: boolean;
@@ -638,6 +640,7 @@ export interface SettingsState
   setGcalAccounts: (accounts: GoogleCalendarAccount[]) => void;
   setNotificationsEnabled: (value: boolean) => void;
   setNotifyMeetingDetection: (value: boolean) => void;
+  setAutoStartRecordingOnMeeting: (value: boolean) => void;
   setNotifyCalendarReminders: (value: boolean) => void;
   setNotifyUpdates: (value: boolean) => void;
   setGcalPrimaryOnly: (value: boolean) => void;
@@ -985,6 +988,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   startMinimized: readBoolean("startMinimized", false),
   notificationsEnabled: readBoolean("notificationsEnabled", true),
   notifyMeetingDetection: readBoolean("notifyMeetingDetection", true),
+  autoStartRecordingOnMeeting: readBoolean("autoStartRecordingOnMeeting", false),
   notifyCalendarReminders: readBoolean("notifyCalendarReminders", true),
   notifyUpdates: readBoolean("notifyUpdates", true),
   ...(() => {
@@ -1542,6 +1546,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   setNotificationsEnabled: createBooleanSetter("notificationsEnabled"),
   setNotifyMeetingDetection: createBooleanSetter("notifyMeetingDetection"),
+  setAutoStartRecordingOnMeeting: createBooleanSetter("autoStartRecordingOnMeeting"),
   setNotifyCalendarReminders: createBooleanSetter("notifyCalendarReminders"),
   setNotifyUpdates: createBooleanSetter("notifyUpdates"),
   setGcalPrimaryOnly: (value: boolean) => {
@@ -2259,6 +2264,7 @@ export async function initializeSettings(): Promise<void> {
       const currentState = useSettingsStore.getState();
       await window.electronAPI.meetingDetectionSetPreferences?.({
         processDetection: currentState.meetingProcessDetection,
+        autoStartRecording: currentState.autoStartRecordingOnMeeting,
       });
     } catch (err) {
       logger.warn(

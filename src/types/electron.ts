@@ -741,6 +741,7 @@ declare global {
 
       // Note event listeners
       onNoteAdded?: (callback: (note: NoteItem) => void) => () => void;
+      onMeetingAutoStopRequest?: (callback: () => void) => () => void;
       onNoteUpdated?: (callback: (note: NoteItem) => void) => () => void;
       onNoteDeleted?: (callback: (payload: { id: number }) => void) => () => void;
 

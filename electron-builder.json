@@ -107,6 +107,7 @@
         "yt-dlp-*",
         "qdrant-*",
         "macos-audio-tap",
+        "macos-call-detector",
         "macos-globe-listener",
         "macos-fast-paste",
         "macos-mic-listener",

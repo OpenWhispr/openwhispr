@@ -723,6 +723,8 @@ export default function SettingsPage({
     setNotificationsEnabled,
     notifyMeetingDetection,
     setNotifyMeetingDetection,
+    autoStartRecordingOnMeeting,
+    setAutoStartRecordingOnMeeting,
     notifyCalendarReminders,
     setNotifyCalendarReminders,
     notifyUpdates,
@@ -2452,6 +2454,17 @@ export default function SettingsPage({
                       checked={notifyMeetingDetection}
                       onChange={setNotifyMeetingDetection}
                       disabled={!notificationsEnabled}
+                    />
+                  </SettingsRow>
+                </SettingsPanelRow>
+                <SettingsPanelRow>
+                  <SettingsRow
+                    label="Auto-start recording in meetings"
+                    description="When you join a call (camera or mic in use with an active meeting URL), automatically start recording in the background. macOS only."
+                  >
+                    <Toggle
+                      checked={autoStartRecordingOnMeeting}
+                      onChange={setAutoStartRecordingOnMeeting}
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
