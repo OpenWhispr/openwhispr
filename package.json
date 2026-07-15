@@ -113,7 +113,7 @@
     "tailwindcss": "^4.1.10",
     "typescript": "^6.0.2",
     "typescript-eslint": "^8.58.1",
-    "vite": "^8.0.16"
+    "vite": "^8.1.4"
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^4.0.93",
