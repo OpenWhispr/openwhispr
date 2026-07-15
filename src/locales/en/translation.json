@@ -1076,7 +1076,15 @@
     "selectPlaceholder": "Select a microphone",
     "systemDefault": "System Default",
     "unknownDevice": "Unknown Device",
-    "using": "Using: {{device}}"
+    "using": "Using: {{device}}",
+    "noiseSuppression": {
+      "label": "Noise Suppression",
+      "description": "Apply browser noise reduction (WebRTC pipeline). May soften some voice frequencies. Takes effect on the next recording."
+    },
+    "gain": {
+      "label": "Microphone Gain",
+      "description": "Boost input level — current: {{percent}}%. 100% = no change. Takes effect on the next recording."
+    }
   },
   "pasteToolsInfo": {
     "checking": "Checking system capabilities...",

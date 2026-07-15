@@ -226,6 +226,7 @@ class AudioManager {
     this._gateCtx = null;
     this._gateWorkletLoaded = false;
     this._gateSource = null;
+    this._gainNode = null;
     this._pcmCollector = null;
     this._pcmChunks = [];
     this._pcmFlushPromise = null;
@@ -385,13 +386,14 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
     const { preferBuiltInMic: preferBuiltIn, selectedMicDeviceId: selectedDeviceId } =
       getSettings();
 
-    // All browser audio processing disabled to avoid OS-level side-effects.
-    // AGC off: Chromium's AGC on Windows mutates the system mic volume via WASAPI (#476).
-    // Echo cancellation and noise suppression off to avoid latency and speech distortion.
+    // AGC always off: Chromium's AGC on Windows mutates the system mic volume via WASAPI (#476).
+    // Echo cancellation off to avoid latency and distortion.
+    // Noise suppression is user-configurable (WebRTC pipeline, similar to communication mode).
     // Stereo recording required — mono WebM breaks silence detection on Linux/PipeWire (#472).
+    const { micNoiseSuppression } = getSettings();
     const noProcessing = {
       echoCancellation: false,
-      noiseSuppression: false,
+      noiseSuppression: micNoiseSuppression || false,
       autoGainControl: false,
       channelCount: 2,
     };
@@ -516,9 +518,17 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
       try {
         const gateCtx = await this._getOrCreateGateContext();
         this._gateSource = gateCtx.createMediaStreamSource(micStream);
+
+        // Insert gain node so downstream nodes receive boosted signal.
+        // Value 1.0 = no change; user-configurable from 0.5x to 3.0x.
+        const micGain = getSettings().micGain ?? 1.0;
+        this._gainNode = gateCtx.createGain();
+        this._gainNode.gain.value = micGain;
+        this._gateSource.connect(this._gainNode);
+
         this._silenceAnalyser = gateCtx.createAnalyser();
         this._silenceAnalyser.fftSize = 2048;
-        this._gateSource.connect(this._silenceAnalyser);
+        this._gainNode.connect(this._silenceAnalyser);
         this._localSpeechGateState = createLocalSpeechGateState();
         const dataArray = new Uint8Array(this._silenceAnalyser.fftSize);
         this._silenceInterval = setInterval(() => {
@@ -658,7 +668,7 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
 
       // Connect PCM collector BEFORE starting MediaRecorder so the first frame
       // of audio is captured in PCM and nothing is lost to the async setup gap.
-      if (this._gateCtx && this._gateSource && this._pcmCollectorLoaded) {
+      if (this._gateCtx && this._gainNode && this._pcmCollectorLoaded) {
         try {
           this._pcmChunks = [];
           this._pcmCollector = new AudioWorkletNode(this._gateCtx, "pcm-collector-processor");
@@ -667,7 +677,7 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
               this._pcmChunks.push(new Int16Array(event.data));
             }
           };
-          this._gateSource.connect(this._pcmCollector);
+          this._gainNode.connect(this._pcmCollector);
         } catch (e) {
           logger.warn("PCM collector setup failed, will fall back to WebM", { error: e.message }, "audio");
           this._pcmCollector = null;
@@ -680,13 +690,13 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
       this.onStateChange?.({ isRecording: true, isProcessing: false });
 
       // Connect preview worklet after start (non-critical; small delay acceptable).
-      if (showTranscriptionPreview && useLocalWhisper && this._gateCtx && this._gateSource && this._gateWorkletLoaded) {
+      if (showTranscriptionPreview && useLocalWhisper && this._gateCtx && this._gainNode && this._gateWorkletLoaded) {
         try {
           this._previewProcessor = new AudioWorkletNode(this._gateCtx, "pcm-streaming-processor");
           this._previewProcessor.port.onmessage = (event) => {
             window.electronAPI?.sendDictationPreviewAudio?.(event.data);
           };
-          this._gateSource.connect(this._previewProcessor);
+          this._gainNode.connect(this._previewProcessor);
 
           const provider = localTranscriptionProvider === "nvidia" ? "nvidia" : "whisper";
           const model = provider === "nvidia" ? parakeetModel : whisperModel;
@@ -768,6 +778,10 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
     if (this._pcmCollector) {
       try { this._pcmCollector.disconnect(); } catch {}
       this._pcmCollector = null;
+    }
+    if (this._gainNode) {
+      try { this._gainNode.disconnect(); } catch {}
+      this._gainNode = null;
     }
     // If no preview worklet is active, cleanupPreview won't be called — disconnect source here.
     if (this._gateSource && !this._previewProcessor) {
@@ -3237,6 +3251,10 @@ registerProcessor("pcm-collector-processor", PCMCollectorProcessor);
       this._previewProcessor = null;
     }
     // Disconnect the shared gate source and suspend the persistent context.
+    if (this._gainNode) {
+      try { this._gainNode.disconnect(); } catch {}
+      this._gainNode = null;
+    }
     if (this._gateSource) {
       try { this._gateSource.disconnect(); } catch {}
       this._gateSource = null;

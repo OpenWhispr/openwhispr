@@ -645,6 +645,8 @@ export interface SettingsState
 
   setPreferBuiltInMic: (value: boolean) => void;
   setSelectedMicDeviceId: (value: string) => void;
+  setMicNoiseSuppression: (value: boolean) => void;
+  setMicGain: (value: number) => void;
 
   setTheme: (value: "light" | "dark" | "auto") => void;
   setCloudBackupEnabled: (value: boolean) => void;
@@ -982,6 +984,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   preferBuiltInMic: readBoolean("preferBuiltInMic", false),
   selectedMicDeviceId: readString("selectedMicDeviceId", ""),
+  micNoiseSuppression: readBoolean("micNoiseSuppression", false),
+  micGain: (() => {
+    const v = parseFloat(isBrowser ? localStorage.getItem("micGain") || "1" : "1");
+    return isNaN(v) ? 1.0 : Math.max(0.5, Math.min(3.0, v));
+  })(),
 
   theme: (() => {
     const v = readString("theme", "auto");
@@ -1477,6 +1484,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setPreferBuiltInMic: createBooleanSetter("preferBuiltInMic"),
   setSelectedMicDeviceId: createStringSetter("selectedMicDeviceId"),
+  setMicNoiseSuppression: createBooleanSetter("micNoiseSuppression"),
+  setMicGain: (value: number) => {
+    const clamped = Math.max(0.5, Math.min(3.0, value));
+    if (isBrowser) localStorage.setItem("micGain", String(clamped));
+    useSettingsStore.setState({ micGain: clamped });
+  },
 
   setTheme: (value: "light" | "dark" | "auto") => {
     if (isBrowser) localStorage.setItem("theme", value);

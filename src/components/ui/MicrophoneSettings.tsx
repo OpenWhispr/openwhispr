@@ -18,6 +18,10 @@ interface MicrophoneSettingsProps {
   selectedMicDeviceId: string;
   onPreferBuiltInChange: (value: boolean) => void;
   onDeviceSelect: (deviceId: string) => void;
+  micNoiseSuppression: boolean;
+  onMicNoiseSuppressionChange: (value: boolean) => void;
+  micGain: number;
+  onMicGainChange: (value: number) => void;
 }
 
 export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
@@ -25,6 +29,10 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
   selectedMicDeviceId,
   onPreferBuiltInChange,
   onDeviceSelect,
+  micNoiseSuppression,
+  onMicNoiseSuppressionChange,
+  micGain,
+  onMicGainChange,
 }) => {
   const { t } = useTranslation();
   const [devices, setDevices] = useState<AudioDevice[]>([]);
@@ -92,6 +100,8 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
 
   const builtInDevice = devices.find((d) => d.isBuiltIn);
   const selectedDevice = devices.find((d) => d.deviceId === selectedMicDeviceId);
+
+  const gainPercent = Math.round(micGain * 100);
 
   return (
     <div className="space-y-4">
@@ -171,6 +181,33 @@ export const MicrophoneSettings: React.FC<MicrophoneSettingsProps> = ({
           <p className="text-xs text-muted-foreground">{t("microphoneSettings.helpText")}</p>
         </div>
       )}
+
+      <SettingsRow
+        label={t("microphoneSettings.noiseSuppression.label")}
+        description={t("microphoneSettings.noiseSuppression.description")}
+      >
+        <Toggle checked={micNoiseSuppression} onChange={onMicNoiseSuppressionChange} />
+      </SettingsRow>
+
+      <SettingsRow
+        label={t("microphoneSettings.gain.label")}
+        description={t("microphoneSettings.gain.description", { percent: gainPercent })}
+      >
+        <div className="flex items-center gap-3 min-w-[160px]">
+          <input
+            type="range"
+            min={0.5}
+            max={3.0}
+            step={0.05}
+            value={micGain}
+            onChange={(e) => onMicGainChange(parseFloat(e.target.value))}
+            className="flex-1 h-2 rounded-lg appearance-none cursor-pointer accent-primary"
+          />
+          <span className="text-sm font-medium text-foreground w-12 text-right tabular-nums">
+            {gainPercent}%
+          </span>
+        </div>
+      </SettingsRow>
     </div>
   );
 };

@@ -967,7 +967,15 @@
     "selectPlaceholder": "Selecione um microfone",
     "systemDefault": "Padrão do sistema",
     "unknownDevice": "Dispositivo desconhecido",
-    "using": "Usando: {{device}}"
+    "using": "Usando: {{device}}",
+    "noiseSuppression": {
+      "label": "Supressão de ruído",
+      "description": "Aplica redução de ruído do browser (pipeline WebRTC). Pode suavizar algumas frequências de voz. Aplica-se na próxima gravação."
+    },
+    "gain": {
+      "label": "Ganho do microfone",
+      "description": "Amplifica o nível de entrada — atual: {{percent}}%. 100% = sem alteração. Aplica-se na próxima gravação."
+    }
   },
   "pasteToolsInfo": {
     "checking": "Verificando capacidades do sistema...",
