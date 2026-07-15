@@ -11,6 +11,7 @@ export interface ResolvePromptOptions {
   uiLanguage?: string;
   language?: string;
   customDictionary?: string[];
+  targetLanguageLabel?: string;
 }
 
 export function resolvePrompt(kind: PromptKind, opts: ResolvePromptOptions): string {
@@ -51,6 +52,10 @@ export function appendDictionarySuffix(
 function applySubstitutions(template: string, opts: ResolvePromptOptions): string {
   const name = opts.agentName?.trim() || "Assistant";
   let prompt = template.replace(/\{\{agentName\}\}/g, name);
+
+  if (opts.targetLanguageLabel) {
+    prompt = prompt.replace(/\{\{targetLanguage\}\}/g, opts.targetLanguageLabel);
+  }
 
   const langInstruction = getLanguageInstruction(opts.language);
   if (langInstruction) prompt += "\n\n" + langInstruction;
