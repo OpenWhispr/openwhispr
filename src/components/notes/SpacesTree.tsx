@@ -44,6 +44,8 @@ import { useAuth } from "../../hooks/useAuth";
 import { useWorkspace } from "../../hooks/useWorkspace";
 import { canManageSpace } from "../../lib/spacePermissions";
 import { TeamsService } from "../../services/TeamsService";
+import { NoteSharingService } from "../../services/NoteSharingService";
+import { markTeamSpacePurged } from "../../services/SyncService";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { cn } from "../lib/utils";
 import { formatRelativeTime } from "../../utils/dateFormatting";
@@ -56,6 +58,7 @@ import {
   useSpaces,
   useFolders,
   useFolderCounts,
+  useSpaceRootCounts,
   useNotesByContainer,
   useExpandedContainers,
   useActiveContext,
@@ -73,6 +76,10 @@ import {
   updateSpaceMeta,
   purgeSpace,
   getNoteFromStore,
+  getFoldersValue,
+  getSpacesValue,
+  updateShareCache,
+  persistNoteShareState,
 } from "../../stores/noteStore";
 
 const FOLDER_INPUT_CLASS =
@@ -216,6 +223,7 @@ function SpaceRow({
   isDropSuccess,
   dropHandlers,
   canManage,
+  canLeave,
   onActivate,
   onToggle,
   onNewFolder,
@@ -235,6 +243,7 @@ function SpaceRow({
   isDropSuccess: boolean;
   dropHandlers: DropHandlers;
   canManage: boolean;
+  canLeave: boolean;
   onActivate: () => void;
   onToggle: () => void;
   onNewFolder: () => void;
@@ -387,7 +396,7 @@ function SpaceRow({
                   </DropdownMenuItem>
                 </>
               )}
-              {space.cloud_team_id && (
+              {space.cloud_team_id && canLeave && (
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1022,6 +1031,7 @@ export default function SpacesTree({
   const spaces = useSpaces();
   const folders = useFolders();
   const folderCounts = useFolderCounts();
+  const spaceRootCounts = useSpaceRootCounts();
   const notesByContainer = useNotesByContainer();
   const expanded = useExpandedContainers();
   const activeContext = useActiveContext();
@@ -1060,6 +1070,14 @@ export default function SpacesTree({
     !space.cloud_team_id ||
     canManageSpace(space, workspaces.find((w) => w.id === space.workspace_id)?.role ?? null);
 
+  // Workspace owners/admins access every team implicitly (no team_members
+  // row), so a "leave" is a server no-op and the space would resurrect on the
+  // next sync pass — Leave is n/a for them (plan §4).
+  const hasImplicitSpaceAccess = (space: SpaceItem): boolean => {
+    const role = workspaces.find((w) => w.id === space.workspace_id)?.role;
+    return role === "owner" || role === "admin";
+  };
+
   const targetLabel = (target: NoteMoveTarget): string => {
     if (target.folderId != null) {
       return folders.find((f) => f.id === target.folderId)?.name ?? "";
@@ -1094,26 +1112,58 @@ export default function SpacesTree({
     fromSpaceId: number,
     toSpaceId: number,
     isFolder: boolean,
-    onConfirm: () => void
+    onConfirm: () => void,
+    willDisableShare = false
   ) => {
     const intoSpace = spaces.find((s) => s.id === toSpaceId);
     const fromSpace = spaces.find((s) => s.id === fromSpaceId);
     if (!intoSpace || !fromSpace) return;
     const movingIntoTeam = intoSpace.kind === "team";
+    const moveInDescription = t(
+      isFolder ? "notes.spaces.confirmMoveInFolder" : "notes.spaces.confirmMoveIn",
+      { space: intoSpace.name }
+    );
     showConfirmDialog({
       title: movingIntoTeam
         ? t("notes.spaces.confirmMoveInTitle", { space: intoSpace.name })
         : t("notes.spaces.confirmMoveOutTitle", { space: fromSpace.name }),
       description: movingIntoTeam
-        ? t(isFolder ? "notes.spaces.confirmMoveInFolder" : "notes.spaces.confirmMoveIn", {
-            space: intoSpace.name,
-          })
+        ? willDisableShare
+          ? `${moveInDescription} ${t("notes.spaces.confirmMoveInShared")}`
+          : moveInDescription
         : t(isFolder ? "notes.spaces.confirmMoveOutFolder" : "notes.spaces.confirmMoveOut", {
             space: fromSpace.name,
           }),
       confirmText: t("notes.spaces.moveConfirm"),
       onConfirm,
     });
+  };
+
+  // D8: team notes never carry a public web link — moving a web-shared note
+  // into a team space revokes its share (the confirm dialog announces it).
+  const willRevokeShare = (note: NoteItem, toSpaceId: number): boolean =>
+    Boolean(note.is_shared && note.cloud_id) &&
+    note.space_id !== toSpaceId &&
+    spaces.find((s) => s.id === toSpaceId)?.kind === "team";
+
+  const revokePublicShare = async (note: NoteItem) => {
+    const cloudId = note.cloud_id;
+    if (!cloudId) return;
+    try {
+      const res = await NoteSharingService.clearShare(cloudId);
+      updateShareCache(cloudId, (entry) => ({
+        share: res.share,
+        invitations: entry?.invitations ?? [],
+        rawToken: null,
+      }));
+      void persistNoteShareState(note.id, { is_shared: 0, share_token: null }).catch(
+        (err: unknown) => console.error("Share flag persist failed:", err)
+      );
+    } catch {
+      // Best effort — the move proceeds; the link stays revocable by moving
+      // the note back to Personal.
+      toast({ title: t("notes.spaces.shareRevokeFailed"), variant: "destructive" });
+    }
   };
 
   const moveNoteSafely = async (noteId: number, target: NoteMoveTarget): Promise<boolean> => {
@@ -1126,16 +1176,37 @@ export default function SpacesTree({
     }
   };
 
+  // The 8s undo window outlives the tree snapshot: the restore target may
+  // have been deleted (folder) or purged (space) meanwhile. Never restore a
+  // note into a container nothing renders — degrade to the space root.
+  const undoMoveNote = async (noteId: number, title: string, prev: NoteMoveTarget) => {
+    const prevSpace = getSpacesValue().find((s) => s.id === prev.spaceId);
+    if (!prevSpace) {
+      toast({ title: t("notes.spaces.couldNotMoveNote"), variant: "destructive" });
+      return;
+    }
+    const folderGone =
+      prev.folderId != null && !getFoldersValue().some((f) => f.id === prev.folderId);
+    const restore = folderGone ? { spaceId: prev.spaceId, folderId: null } : prev;
+    const moved = await moveNoteSafely(noteId, restore);
+    if (moved && folderGone) {
+      toast({ title: t("notes.spaces.moved", { title, target: spaceDisplayName(prevSpace, t) }) });
+    }
+  };
+
   const commitMoveNote = async (noteId: number, target: NoteMoveTarget) => {
     const note = getNoteFromStore(noteId);
     const prev: NoteMoveTarget | null = note
       ? { spaceId: note.space_id, folderId: note.folder_id }
       : null;
+    if (note && willRevokeShare(note, target.spaceId)) {
+      await revokePublicShare(note);
+    }
     const moved = await moveNoteSafely(noteId, target);
     if (moved && prev) {
       const title = note?.title || t("notes.list.untitled");
       // Undo silently restores the previous space/folder — no confirm, no new toast.
-      showUndoToast(title, targetLabel(target), () => void moveNoteSafely(noteId, prev));
+      showUndoToast(title, targetLabel(target), () => void undoMoveNote(noteId, title, prev));
     }
   };
 
@@ -1147,7 +1218,8 @@ export default function SpacesTree({
         note.space_id,
         target.spaceId,
         false,
-        () => void commitMoveNote(noteId, target)
+        () => void commitMoveNote(noteId, target),
+        willRevokeShare(note, target.spaceId)
       );
     } else {
       void commitMoveNote(noteId, target);
@@ -1196,8 +1268,16 @@ export default function SpacesTree({
 
   const { dragState, noteDragHandlers, dropTargetHandlers } = useNoteDragAndDrop({
     onMoveToTarget: commitMoveNote,
-    onCrossSpaceDrop: (note: DraggedNoteInfo, target, commit) =>
-      confirmCrossSpaceMove(note.spaceId, target.spaceId, false, commit),
+    onCrossSpaceDrop: (note: DraggedNoteInfo, target, commit) => {
+      const full = getNoteFromStore(note.id);
+      confirmCrossSpaceMove(
+        note.spaceId,
+        target.spaceId,
+        false,
+        commit,
+        full ? willRevokeShare(full, target.spaceId) : false
+      );
+    },
     onHoverTarget: (key) => setContainerExpanded(key, true),
   });
 
@@ -1320,6 +1400,8 @@ export default function SpacesTree({
         });
         return;
       }
+      // Park the team id so an in-flight pull can't resurrect purged rows.
+      markTeamSpacePurged(space.cloud_team_id);
     }
     const result = await purgeSpace(space.id);
     if (!result.success && result.error) {
@@ -1344,10 +1426,19 @@ export default function SpacesTree({
       variant: "destructive",
       onConfirm: async () => {
         try {
+          // The member DELETE succeeds even when no roster row exists, so an
+          // implicit workspace owner/admin "leave" would purge locally only to
+          // resurrect on the next pass — never purge for a server no-op.
+          const roster = await TeamsService.listMembers(teamId);
+          if (hasImplicitSpaceAccess(space) || !roster.some((m) => m.user_id === userId)) {
+            toast({ title: t("notes.spaces.members.implicitAdminCannotLeave") });
+            return;
+          }
           await TeamsService.removeMember(teamId, userId);
+          markTeamSpacePurged(teamId);
           await purgeSpace(space.id);
         } catch (err) {
-          // Server rejects e.g. a last-admin leave — surface its message.
+          // Server rejected the leave — surface its message.
           toast({
             title: t("common.error"),
             description: err instanceof Error ? err.message : t("common.unknownError"),
@@ -1618,9 +1709,11 @@ export default function SpacesTree({
     const spaceFolders = folders.filter((f) => f.space_id === space.id);
     const rootNotes = notesByContainer[spaceKey];
     const displayName = spaceDisplayName(space, t);
+    // DB-backed counts: space-root notes count before their container loads,
+    // and the root contribution isn't capped at the container's page size.
     const noteCount =
       spaceFolders.reduce((sum, f) => sum + (folderCounts[f.id] ?? 0), 0) +
-      (rootNotes?.length ?? 0);
+      (spaceRootCounts[space.id] ?? 0);
     const showSkeletons =
       space.kind === "team" &&
       space.sync_status === "pending" &&
@@ -1679,6 +1772,7 @@ export default function SpacesTree({
             isDropSuccess={dragState.dropSuccessKey === spaceKey}
             dropHandlers={dropTargetHandlers({ spaceId: space.id, folderId: null })}
             canManage={canManageTeamSpace(space)}
+            canLeave={!hasImplicitSpaceAccess(space)}
             onActivate={() => activateRow({ type: "space", key: spaceKey, space })}
             onToggle={() => toggleContainerExpanded(spaceKey)}
             onNewFolder={() => startCreateFolder(space)}

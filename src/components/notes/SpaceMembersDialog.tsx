@@ -11,6 +11,7 @@ import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import { cn } from "../lib/utils";
 import InviteTeammateDialog from "../InviteTeammateDialog";
 import { TeamsService } from "../../services/TeamsService";
+import { markTeamSpacePurged } from "../../services/SyncService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { loadSpaces, purgeSpace } from "../../stores/noteStore";
 import { canManageSpace } from "../../lib/spacePermissions";
@@ -42,6 +43,13 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
   const teamId = space.cloud_team_id;
   const canManage = canManageSpace(space, workspace?.role ?? null);
   const canInviteToWorkspace = workspace?.role === "owner" || workspace?.role === "admin";
+  // Workspace owners/admins access every team implicitly (no team_members
+  // row): the server's member DELETE no-ops (or leaves implicit access
+  // intact), so the space would resurrect on the next sync pass right after
+  // a local purge — Leave is n/a for them (plan §4).
+  const isImplicitAdmin = workspace?.role === "owner" || workspace?.role === "admin";
+  const isExplicitMember = members.some((m) => m.user_id === user?.id);
+  const canLeave = isExplicitMember && !isImplicitAdmin;
 
   const loadRoster = useCallback(async () => {
     if (!teamId) return;
@@ -135,6 +143,7 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
   };
 
   const confirmLeave = () => {
+    if (!canLeave) return;
     showConfirmDialog({
       title: t("notes.spaces.members.leaveConfirm", { space: space.name }),
       description: t("notes.spaces.members.leaveConfirmDescription"),
@@ -145,11 +154,12 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
         setIsLeaving(true);
         try {
           await TeamsService.removeMember(teamId, user.id);
+          markTeamSpacePurged(teamId);
           onOpenChange(false);
           // Local cleanup rides on the space-purged broadcast.
           await purgeSpace(space.id);
         } catch (err) {
-          // Server rejects e.g. a last-admin leave — surface its message.
+          // Server rejected the leave — surface its message.
           toast({
             title: t("common.error"),
             description: err instanceof Error ? err.message : t("common.unknownError"),
@@ -354,7 +364,8 @@ export default function SpaceMembersDialog({ space, open, onOpenChange }: SpaceM
           <button
             type="button"
             onClick={confirmLeave}
-            disabled={isLeaving}
+            disabled={isLeaving || !canLeave}
+            title={!canLeave ? t("notes.spaces.members.implicitAdminCannotLeave") : undefined}
             className={cn(
               "flex items-center gap-2 w-full px-4 h-10 rounded-lg",
               "border border-border/50 dark:border-border-subtle/70",

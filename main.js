@@ -1041,9 +1041,14 @@ async function startApp() {
         if (qdrantManager.isReady()) {
           const vectorIndex = require("./src/helpers/vectorIndex");
           vectorIndex.init(qdrantManager.getPort());
-          vectorIndex.ensureCollection().catch((err) => {
-            debugLogger.debug("Qdrant collection setup error (non-fatal)", { error: err.message });
-          });
+          vectorIndex
+            .ensureCollection()
+            .then(() => ipcHandlers?.drainPendingVectorPurges())
+            .catch((err) => {
+              debugLogger.debug("Qdrant collection setup error (non-fatal)", {
+                error: err.message,
+              });
+            });
         }
       })
       .catch((err) => {

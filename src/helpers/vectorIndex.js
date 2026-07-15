@@ -52,13 +52,15 @@ class VectorIndex {
   }
 
   async deleteBySpace(spaceId) {
-    if (!this.client) return;
+    if (!this.client) return false;
     try {
       await this.client.delete(this.collectionName, {
         filter: { must: [{ key: "space_id", match: { value: spaceId } }] },
       });
+      return true;
     } catch (err) {
       debugLogger.debug("Vector index space delete failed", { spaceId, error: err.message });
+      return false;
     }
   }
 
@@ -79,8 +81,9 @@ class VectorIndex {
   }
 
   async reindexAll(notes, onProgress) {
-    if (!this.client) return;
+    if (!this.client) return { failed: notes.length };
     const BATCH_SIZE = 50;
+    let failed = 0;
     for (let i = 0; i < notes.length; i += BATCH_SIZE) {
       const batch = notes.slice(i, i + BATCH_SIZE);
       const texts = batch.map((n) =>
@@ -95,10 +98,12 @@ class VectorIndex {
         }));
         await this.client.upsert(this.collectionName, { points });
       } catch (err) {
+        failed += batch.length;
         debugLogger.debug("Vector reindex batch failed", { offset: i, error: err.message });
       }
       if (onProgress) onProgress(Math.min(i + BATCH_SIZE, notes.length), notes.length);
     }
+    return { failed };
   }
 
   async ensureConversationChunksCollection() {

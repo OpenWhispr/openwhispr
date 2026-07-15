@@ -120,6 +120,8 @@ interface NoteEditorProps {
   folders?: FolderItem[];
   onMoveToFolder?: (noteId: number, folderId: number) => void;
   onCreateFolderAndMove?: (noteId: number, folderName: string) => void;
+  /** Cancels the owner's debounced autosaves before an external copy is applied. */
+  onCancelPendingSaves?: () => void;
 }
 
 export default function NoteEditor({
@@ -156,6 +158,7 @@ export default function NoteEditor({
   folders,
   onMoveToFolder,
   onCreateFolderAndMove,
+  onCancelPendingSaves,
 }: NoteEditorProps) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<MeetingViewMode>("raw");
@@ -623,14 +626,20 @@ export default function NoteEditor({
   // current local placement.
   const handleConflictRefresh = useCallback(async () => {
     if (!conflict) return;
+    // Cancel any queued autosave FIRST: a pending debounced save holds the
+    // pre-refresh buffer and would both block the editor resync and clobber
+    // the cloud copy in SQLite a second later.
+    onCancelPendingSaves?.();
     const fresh = await window.electronAPI.upsertNoteFromCloud?.(
       conflict as unknown as Record<string, unknown>,
       note.folder_id,
       note.space_id
     );
     clearNoteConflict(note.client_note_id);
+    // With no save pending, the owner's external-update resync applies the
+    // fresh copy to the visible editor buffer.
     if (fresh) updateNoteInStore(fresh);
-  }, [conflict, note.client_note_id, note.folder_id, note.space_id]);
+  }, [conflict, note.client_note_id, note.folder_id, note.space_id, onCancelPendingSaves]);
 
   // Keep the local edits; the next push wins last-write.
   const handleConflictKeep = useCallback(() => {

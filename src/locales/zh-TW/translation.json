@@ -1209,7 +1209,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最熱門",
-          "features": ["無限會議錄製", "代理模式", "與您的資料對話", "優先支援"],
+          "features": [
+            "無限會議錄製",
+            "代理模式",
+            "與您的資料對話",
+            "優先支援"
+          ],
           "cta": "開始使用",
           "switchToAnnual": "切換為年付"
         },
@@ -2186,12 +2191,14 @@
       "confirmMoveInTitle": "移動到 {{space}}？",
       "confirmMoveIn": "{{space}} 中的所有人都將能檢視和編輯這則筆記。",
       "confirmMoveInFolder": "{{space}} 中的所有人都將能檢視和編輯這個資料夾及其筆記。",
+      "confirmMoveInShared": "其公開連結將被停用。",
       "confirmMoveOutTitle": "移出 {{space}}？",
       "confirmMoveOut": "{{space}} 的成員將無法再存取這則筆記。",
       "confirmMoveOutFolder": "{{space}} 的成員將無法再存取這個資料夾及其筆記。",
       "moved": "已將「{{title}}」移動到 {{target}}",
       "couldNotMove": "無法移動資料夾",
       "couldNotMoveNote": "無法移動筆記",
+      "shareRevokeFailed": "無法停用公開連結",
       "folderNameTaken": "無法移動「{{name}}」：該位置已存在同名資料夾",
       "undo": "復原",
       "emptySpace": "還沒有筆記。這裡的筆記對 {{space}} 中的所有人可見。",
@@ -2216,6 +2223,7 @@
         "leave": "退出空間",
         "leaveConfirm": "要退出 {{space}} 嗎？",
         "leaveConfirmDescription": "你將無法再存取此空間的所有筆記。",
+        "implicitAdminCannotLeave": "工作區擁有者和管理員可以存取所有團隊空間,無法退出。",
         "inviteFooter": "邀請 {{email}} 加入工作區…",
         "empty": "尚未新增任何成員"
       },

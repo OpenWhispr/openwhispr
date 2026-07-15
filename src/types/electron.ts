@@ -68,6 +68,9 @@ export interface NoteItem {
   deleted_at: string | null;
   workspace_id?: string | null;
   team_id?: string | null;
+  // 1 while a cloud-backed row that left a team still owes its scope
+  // retraction push (D6); cleared when the row settles.
+  left_team?: number;
 }
 
 export type ShareVisibility = "private" | "link" | "domain" | "invited";
@@ -104,6 +107,9 @@ export interface FolderItem {
   deleted_at: string | null;
   workspace_id?: string | null;
   team_id?: string | null;
+  // 1 while a cloud-backed row that left a team still owes its scope
+  // retraction push (D6); cleared when the row settles.
+  left_team?: number;
 }
 
 export interface SpaceItem {
@@ -697,7 +703,9 @@ declare global {
         id: number,
         spaceId: number
       ) => Promise<{ success: boolean; folder?: FolderItem; notes?: NoteItem[]; error?: string }>;
-      getFolderNoteCounts: () => Promise<Array<{ folder_id: number; count: number }>>;
+      getFolderNoteCounts: () => Promise<
+        Array<{ space_id: number; folder_id: number | null; count: number }>
+      >;
 
       // Space operations
       getSpaces?: () => Promise<SpaceItem[]>;
@@ -715,6 +723,9 @@ declare global {
         noteIds?: number[];
         folderNames?: string[];
         spaceId?: number;
+        relocatedNotes?: NoteItem[];
+        relocatedCount?: number;
+        relocatedTitles?: string[];
         error?: string;
       }>;
       getSpaceByCloudTeamId?: (cloudTeamId: string) => Promise<SpaceItem | null>;
@@ -780,6 +791,13 @@ declare global {
       onNoteAdded?: (callback: (note: NoteItem) => void) => () => void;
       onNoteUpdated?: (callback: (note: NoteItem) => void) => () => void;
       onNoteDeleted?: (callback: (payload: { id: number }) => void) => () => void;
+      onNoteSynced?: (callback: (note: NoteItem) => void) => () => void;
+      onFolderSynced?: (callback: (folder: FolderItem) => void) => () => void;
+      onFolderDeleted?: (callback: (payload: { id: number }) => void) => () => void;
+
+      // Cross-window sync events
+      emitSyncEvent?: (name: string, payload?: unknown) => Promise<{ success: boolean }>;
+      onSyncEvent?: (callback: (event: { name: string; payload?: unknown }) => void) => () => void;
 
       // Database event listeners
       onTranscriptionAdded?: (callback: (item: TranscriptionItem) => void) => () => void;
@@ -1998,6 +2016,11 @@ declare global {
         localSpaceId?: number | null
       ) => Promise<NoteItem>;
       markNoteSynced?: (id: number, cloudId: string) => Promise<void>;
+      markNoteSyncedIfUnchanged?: (
+        id: number,
+        cloudId: string,
+        snapshotUpdatedAt: string
+      ) => Promise<{ success: boolean; changes: number }>;
       markNoteSyncError?: (id: number) => Promise<void>;
       hardDeleteNote?: (id: number) => Promise<void>;
 
@@ -2008,6 +2031,11 @@ declare global {
         localSpaceId?: number | null
       ) => Promise<FolderItem>;
       markFolderSynced?: (id: number, cloudId: string) => Promise<void>;
+      markFolderSyncedIfUnchanged?: (
+        id: number,
+        cloudId: string,
+        snapshotUpdatedAt: string
+      ) => Promise<{ success: boolean; changes: number }>;
       adoptFolderIdentity?: (
         id: number,
         clientFolderId: string,
@@ -2018,6 +2046,18 @@ declare global {
       getFolderIdMap?: () => Promise<FolderItem[]>;
       getPendingFolderDeletes?: () => Promise<FolderItem[]>;
       hardDeleteFolder?: (id: number) => Promise<{ success: boolean; id: number }>;
+      relocateRevokedFolder?: (
+        id: number,
+        privateSpaceId: number,
+        preserveFolder?: boolean
+      ) => Promise<{
+        success: boolean;
+        folder?: FolderItem | null;
+        folderName?: string;
+        relocatedNotes?: NoteItem[];
+        deletedNoteIds?: number[];
+        error?: string;
+      }>;
 
       getPendingConversations?: () => Promise<ConversationPreview[]>;
       getPendingConversationDeletes?: () => Promise<ConversationPreview[]>;

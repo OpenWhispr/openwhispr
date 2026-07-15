@@ -1209,7 +1209,12 @@
           "annualEquivalent": "$16.67",
           "includesPrefix": "所有 Pro 功能 +",
           "badge": "最受欢迎",
-          "features": ["无限会议录制", "代理模式", "与您的数据对话", "优先支持"],
+          "features": [
+            "无限会议录制",
+            "代理模式",
+            "与您的数据对话",
+            "优先支持"
+          ],
           "cta": "开始使用",
           "switchToAnnual": "切换为年付"
         },
@@ -2186,12 +2191,14 @@
       "confirmMoveInTitle": "移动到 {{space}}？",
       "confirmMoveIn": "{{space}} 中的所有人都将能查看和编辑此笔记。",
       "confirmMoveInFolder": "{{space}} 中的所有人都将能查看和编辑此文件夹及其笔记。",
+      "confirmMoveInShared": "其公开链接将被停用。",
       "confirmMoveOutTitle": "移出 {{space}}？",
       "confirmMoveOut": "{{space}} 的成员将无法再访问此笔记。",
       "confirmMoveOutFolder": "{{space}} 的成员将无法再访问此文件夹及其笔记。",
       "moved": "已将“{{title}}”移动到 {{target}}",
       "couldNotMove": "无法移动文件夹",
       "couldNotMoveNote": "无法移动笔记",
+      "shareRevokeFailed": "无法停用公开链接",
       "folderNameTaken": "无法移动“{{name}}”：该位置已存在同名文件夹",
       "undo": "撤销",
       "emptySpace": "还没有笔记。这里的笔记对 {{space}} 中的所有人可见。",
@@ -2216,6 +2223,7 @@
         "leave": "退出空间",
         "leaveConfirm": "退出 {{space}}？",
         "leaveConfirmDescription": "你将无法再访问此空间的所有笔记。",
+        "implicitAdminCannotLeave": "工作区所有者和管理员可以访问所有团队空间,无法退出。",
         "inviteFooter": "邀请 {{email}} 加入工作区…",
         "empty": "尚未添加任何成员"
       },

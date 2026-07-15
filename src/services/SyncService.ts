@@ -5,7 +5,7 @@ import type {
   TranscriptionItem,
   ConversationPreview,
 } from "../types/electron";
-import { NotesService } from "./NotesService.js";
+import { NotesService, type CloudNote } from "./NotesService.js";
 import { ConversationsService } from "./ConversationsService.js";
 import { FoldersService } from "./FoldersService.js";
 import { TeamsService, type MyTeam } from "./TeamsService.js";
@@ -75,6 +75,44 @@ function normalizeTimestamp(value: string | null | undefined): string {
   return (/\.\d+$/.test(iso) ? iso : `${iso}.000`) + "Z";
 }
 
+// Cross-window guard against a space purge racing an in-flight pull: every
+// purge initiator records the cloud team id here, and pull/upsert paths park
+// rows for recently purged teams instead of resurrecting them as orphaned
+// local rows nothing can ever clean up. Entries are pruned once a spaces pass
+// confirms the team is gone from /api/me/teams, or after a TTL so a failed
+// leave cannot hide a still-live team forever.
+const PURGED_TEAM_GUARD_KEY = "purgedTeamIds";
+const PURGED_TEAM_GUARD_TTL_MS = 15 * 60 * 1000;
+
+function readPurgedTeamIds(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(PURGED_TEAM_GUARD_KEY);
+    const parsed = raw ? (JSON.parse(raw) as Record<string, number>) : {};
+    const now = Date.now();
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, at]) => now - at < PURGED_TEAM_GUARD_TTL_MS)
+    );
+  } catch {
+    return {};
+  }
+}
+
+// Call BEFORE purgeSpace, from every purge path (sync revocation, sign-out,
+// and the UI's leave/delete-space flows).
+export function markTeamSpacePurged(cloudTeamId: string): void {
+  localStorage.setItem(
+    PURGED_TEAM_GUARD_KEY,
+    JSON.stringify({ ...readPurgedTeamIds(), [cloudTeamId]: Date.now() })
+  );
+}
+
+function prunePurgedTeamIds(liveCloudTeamIds: Set<string>): void {
+  const kept = Object.fromEntries(
+    Object.entries(readPurgedTeamIds()).filter(([id]) => liveCloudTeamIds.has(id))
+  );
+  localStorage.setItem(PURGED_TEAM_GUARD_KEY, JSON.stringify(kept));
+}
+
 class SyncService {
   private syncing = false;
   private syncAllPending = false;
@@ -127,6 +165,7 @@ class SyncService {
       for (const space of spaces) {
         if (space.kind !== "team") continue;
         try {
+          if (space.cloud_team_id) markTeamSpacePurged(space.cloud_team_id);
           await window.electronAPI.purgeSpace?.(space.id);
         } catch (err) {
           console.error(`Purging space ${space.id} on sign-out failed:`, err);
@@ -139,6 +178,9 @@ class SyncService {
     localStorage.removeItem("teamSpacesCapability.probedAt");
     localStorage.removeItem("lastSyncedAt.notes.team");
     localStorage.removeItem("lastSyncedAt.folders.team");
+    // The guard protected any pass still in flight during the purge; drop it
+    // so the next account (possibly a member of the same teams) starts clean.
+    localStorage.removeItem(PURGED_TEAM_GUARD_KEY);
   }
 
   // lastSyncedAt is written only when a syncAll() pass completes, and
@@ -298,7 +340,10 @@ class SyncService {
       if (!note) return;
       if (!note.is_shared) {
         const ctx = await this.buildSpaceContext();
-        if (ctx.byId.get(note.space_id)?.kind !== "team") return;
+        // A note that just left a team still owes its scope retraction (D6):
+        // the server row stays visible to teammates until the PATCH lands.
+        const leftTeam = !!note.left_team && !!note.cloud_id;
+        if (ctx.byId.get(note.space_id)?.kind !== "team" && !leftTeam) return;
       }
       return this.pushNote(entityId);
     }
@@ -318,6 +363,11 @@ class SyncService {
     const folders = (await window.electronAPI.getFolders?.()) ?? [];
     const folder = folders.find((f) => f.id === id);
     if (!folder) return;
+    if (folder.left_team && folder.cloud_id && !this.hasTeamSpacesCapability()) {
+      // The retraction PATCH needs team-scope support; without it the push
+      // would settle the row and erase the pending scope change.
+      return;
+    }
 
     const ctx = await this.buildSpaceContext();
     const scope = this.pushScopeFields(ctx.byId.get(folder.space_id));
@@ -333,6 +383,16 @@ class SyncService {
           sort_order: folder.sort_order,
           ...scope,
         });
+        // Settle like the batch path: a delivered row left pending would both
+        // block its notes' pushes (blockedFolderIds) and re-PATCH stale state
+        // over a teammate's newer rename on the next pass. Guarded settle: a
+        // rename landing mid-flight stays pending so it still pushes (a blind
+        // settle would let the next pull's LWW revert it).
+        await window.electronAPI.markFolderSyncedIfUnchanged?.(
+          folder.id,
+          folder.cloud_id,
+          folder.updated_at
+        );
       } catch (err) {
         if (!isFolderNameTakenError(err)) throw err;
         this.dispatchFolderNameTaken(folder.name);
@@ -345,7 +405,19 @@ class SyncService {
         sort_order: folder.sort_order,
         ...scope,
       });
-      await window.electronAPI.markFolderSynced?.(folder.id, cloud.id);
+      // On a same-name collision the API returns the WINNER's existing row;
+      // adopt its identity (as the batch path does) so later pulls of that
+      // row match this folder instead of inserting a colliding duplicate.
+      if (cloud.client_folder_id && cloud.client_folder_id !== folder.client_folder_id) {
+        await window.electronAPI.adoptFolderIdentity?.(
+          folder.id,
+          cloud.client_folder_id,
+          cloud.id,
+          cloud.updated_at
+        );
+      } else {
+        await window.electronAPI.markFolderSynced?.(folder.id, cloud.id);
+      }
     }
   }
 
@@ -376,18 +448,39 @@ class SyncService {
     const note = await window.electronAPI.getNote?.(id);
     if (!note) return;
 
-    const folderMap = await this.buildLocalToCloudFolderMap();
+    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
+    if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
+      // The folder's own changes haven't landed (e.g. a cross-space move that
+      // 409'd on a name conflict): the server would reject this note's
+      // folder_id as out of scope. Stay pending; the note retries after the
+      // folder settles.
+      return;
+    }
+    if (note.left_team && note.cloud_id && !this.hasTeamSpacesCapability()) {
+      // The retraction PATCH needs team-scope support; without it the push
+      // would settle the row and erase the pending scope change. Defer until
+      // the capability probe recovers.
+      return;
+    }
     const ctx = await this.buildSpaceContext();
     const scope = this.pushScopeFields(ctx.byId.get(note.space_id));
     if (!scope) {
       console.warn(`Skipping note ${note.id} push: its team space has no cloud team yet`);
       return;
     }
-    const cloudFolderId = note.folder_id ? (folderMap.get(note.folder_id) ?? null) : null;
+    const cloudFolderId = note.folder_id ? (localToCloud.get(note.folder_id) ?? null) : null;
 
     try {
       if (note.cloud_id) {
         await NotesService.update(note.cloud_id, this.notePushPayload(note, cloudFolderId, scope));
+        // Settle only if the row wasn't edited while the PATCH was in flight;
+        // a blind settle would leave the delivered snapshot pending and let a
+        // later pass re-PATCH it over a teammate's newer edit.
+        await window.electronAPI.markNoteSyncedIfUnchanged?.(
+          note.id,
+          note.cloud_id,
+          note.updated_at
+        );
       } else {
         const cloud = await NotesService.create({
           client_note_id: note.client_note_id,
@@ -478,16 +571,26 @@ class SyncService {
     }
     this.cacheTeamSpacesCapability(true);
 
+    const cloudIds = new Set(teams.map((t) => t.id));
+    // Teams confirmed gone can no longer resurrect through pulls — their
+    // purge-race guard entries are done.
+    prunePurgedTeamIds(cloudIds);
+
     const prior = (await window.electronAPI.getSpaces?.()) ?? [];
     const backfillIds = await this.upsertTeamSpaces(teams, prior);
 
-    const cloudIds = new Set(teams.map((t) => t.id));
     for (const space of prior) {
       if (space.kind !== "team" || !space.cloud_team_id || cloudIds.has(space.cloud_team_id)) {
         continue;
       }
-      await window.electronAPI.purgeSpace?.(space.id);
+      markTeamSpacePurged(space.cloud_team_id);
+      const purged = await window.electronAPI.purgeSpace?.(space.id);
       this.dispatchSpaceRevoked(space.name);
+      // Never-synced notes survive the purge in Personal (plan §10.6) —
+      // surface them, never silently.
+      for (const title of purged?.relocatedTitles ?? []) {
+        this.dispatchNoteRelocated(title, space.name);
+      }
     }
 
     if (backfillIds.length > 0) {
@@ -513,8 +616,12 @@ class SyncService {
     const priorByCloudId = new Map(
       prior.filter((s) => s.cloud_team_id).map((s) => [s.cloud_team_id!, s])
     );
+    const purged = readPurgedTeamIds();
     const backfillIds: number[] = [];
     for (const team of teams) {
+      // A purge racing this pass (leave/delete just clicked, or the server
+      // hasn't processed it yet) must not resurrect the space.
+      if (purged[team.id]) continue;
       const existing = priorByCloudId.get(team.id);
       const space = await window.electronAPI.upsertSpaceFromCloud?.(
         team as unknown as Record<string, unknown>
@@ -549,6 +656,9 @@ class SyncService {
     ctx: SpaceSyncContext
   ): Promise<SpaceItem | null> {
     if (!teamId) return ctx.privateSpace;
+    // Live read on every row: a purge can land mid-pass (this ctx would still
+    // hold the deleted space), and writing the row would orphan it forever.
+    if (readPurgedTeamIds()[teamId]) return null;
     const known = ctx.byCloudTeamId.get(teamId);
     if (known) return known;
     if (ctx.refreshedSpaces) return null;
@@ -603,20 +713,38 @@ class SyncService {
     }
   }
 
+  // Sync passes run in whichever window holds the web lock (often the always-
+  // on dictation overlay), so pass-raised UI signals rebroadcast to every
+  // window through the main process instead of window-local CustomEvents.
+  private emitSyncUiEvent(name: string, payload: Record<string, unknown>): void {
+    void window.electronAPI.emitSyncEvent?.(name, payload)?.catch(console.error);
+  }
+
   private dispatchSpaceRevoked(spaceName: string | null): void {
-    window.dispatchEvent(new CustomEvent("openwhispr:space-revoked", { detail: { spaceName } }));
+    this.emitSyncUiEvent("space-revoked", { spaceName });
   }
 
   private dispatchNoteRelocated(title: string | null, spaceName: string | null | undefined): void {
-    window.dispatchEvent(
-      new CustomEvent("openwhispr:note-relocated", {
-        detail: { title, spaceName: spaceName ?? null },
-      })
-    );
+    this.emitSyncUiEvent("note-relocated", { title, spaceName: spaceName ?? null });
   }
 
   private dispatchFolderNameTaken(name: string): void {
-    window.dispatchEvent(new CustomEvent("openwhispr:folder-name-taken", { detail: { name } }));
+    this.emitSyncUiEvent("folder-name-taken", { name });
+  }
+
+  // Conflicts land in this window's store (the pull may run here) AND
+  // rebroadcast, so the editor window's banner shows no matter which window
+  // detected them.
+  private async surfaceNoteConflict(clientNoteId: string, cloudNote: CloudNote): Promise<void> {
+    const { setNoteConflict } = await import("../stores/noteStore.js");
+    setNoteConflict(clientNoteId, cloudNote);
+    this.emitSyncUiEvent("note-conflict", { clientNoteId, cloudNote });
+  }
+
+  private async settleNoteConflict(clientNoteId: string): Promise<void> {
+    const { clearNoteConflict } = await import("../stores/noteStore.js");
+    clearNoteConflict(clientNoteId);
+    this.emitSyncUiEvent("note-conflict-clear", { clientNoteId });
   }
 
   private async syncFolders(teamOnly = false): Promise<void> {
@@ -687,10 +815,15 @@ class SyncService {
       (await window.electronAPI.getPendingFolders?.(teamOnly ? "team" : undefined)) ?? [];
     if (pending.length === 0) return;
 
-    const { byId } = await this.buildSpaceContext();
+    const ctx = await this.buildSpaceContext();
     const pushable: Array<{ folder: FolderItem; scope: PushScopeFields }> = [];
     for (const folder of pending) {
-      const scope = this.pushScopeFields(byId.get(folder.space_id));
+      if (folder.left_team && folder.cloud_id && !this.hasTeamSpacesCapability()) {
+        // The retraction PATCH needs team-scope support; without it the push
+        // would settle the row and erase the pending scope change.
+        continue;
+      }
+      const scope = this.pushScopeFields(ctx.byId.get(folder.space_id));
       if (!scope) {
         console.warn(`Skipping folder ${folder.id} push: its team space has no cloud team yet`);
         continue;
@@ -704,11 +837,24 @@ class SyncService {
     for (const { folder, scope } of migration) {
       try {
         await FoldersService.update(folder.cloud_id!, { name: folder.name, ...scope });
-        await window.electronAPI.markFolderSynced?.(folder.id, folder.cloud_id!);
+        // Settle only if the row wasn't edited while the PATCH was in flight.
+        await window.electronAPI.markFolderSyncedIfUnchanged?.(
+          folder.id,
+          folder.cloud_id!,
+          folder.updated_at
+        );
       } catch (err) {
         if (isFolderNameTakenError(err)) {
           // Leave the row pending; retried on the next pass.
           this.dispatchFolderNameTaken(folder.name);
+        } else if (isTeamAccessError(err)) {
+          // The server row moved to a scope we can't write; PATCHing it would
+          // fail forever. Preserve the dirty folder in Personal with a forked
+          // identity so the next push re-creates it as personal (plan §7.2).
+          if (ctx.privateSpace) {
+            await window.electronAPI.relocateRevokedFolder?.(folder.id, ctx.privateSpace.id, true);
+            this.dispatchNoteRelocated(folder.name, ctx.byId.get(folder.space_id)?.name);
+          }
         } else {
           console.error("Folder migration sync failed:", err);
         }
@@ -762,97 +908,146 @@ class SyncService {
       const cursorKey = teamOnly ? "lastSyncedAt.folders.team" : "lastSyncedAt.folders";
       const since = snapshot ? undefined : (localStorage.getItem(cursorKey) ?? undefined);
       const syncStartedAt = new Date().toISOString();
-      const scope = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability() ? "all" : undefined;
+      const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
+      const scope = teamCapable ? "all" : undefined;
       const { folders: cloudFolders } = await FoldersService.list(since, scope);
       const ctx = await this.buildSpaceContext();
+      // Parked or failed rows must retry: they hold the cursor back (and fail
+      // a backfill) so one bad row never drops the rest of the delta.
+      let dirtyRows = 0;
 
       for (const cloudFolder of cloudFolders) {
-        const local = await window.electronAPI.getFolderByClientId?.(
-          cloudFolder.client_folder_id ?? ""
-        );
-
-        // Redacted stub: the folder moved out of one of our teams. Clean local
-        // copies are no longer ours to keep; dirty ones move to the private
-        // space so unpushed work survives (plan §7.2).
-        if (cloudFolder.access_removed) {
-          if (!local) continue;
-          if (local.sync_status === "pending" && !local.deleted_at && ctx.privateSpace) {
-            const moved = await window.electronAPI.moveFolderToSpace?.(
-              local.id,
-              ctx.privateSpace.id
-            );
-            if (moved?.success) {
-              // Fork identity: the server row now belongs to a scope we can't
-              // write, so pushing under the old ids would be rejected forever.
-              // The next push creates the folder as a new personal one.
-              await window.electronAPI.forkFolderIdentity?.(local.id);
-              this.dispatchNoteRelocated(
-                local.name,
-                ctx.byCloudTeamId.get(cloudFolder.previous_team_id ?? "")?.name
-              );
-            } else {
-              console.warn(`Could not relocate revoked folder ${local.id}:`, moved?.error);
-            }
-          } else {
-            await window.electronAPI.hardDeleteFolder?.(local.id);
-          }
-          continue;
-        }
-
-        if (teamOnly && !cloudFolder.team_id) continue;
-
-        if (cloudFolder.deleted_at) {
-          if (local) await window.electronAPI.hardDeleteFolder?.(local.id);
-          continue;
-        }
-
-        const space = await this.resolveSpaceForCloudRow(cloudFolder.team_id, ctx);
-        if (!space) {
-          console.warn(`Parking folder ${cloudFolder.id}: unknown team ${cloudFolder.team_id}`);
-          continue;
-        }
-
-        // A default folder created on another platform arrives with an
-        // unknown client_folder_id; inserting it would violate the per-space
-        // unique folder name. Match it by name within the private space and
-        // adopt its identity (team folders never adopt by name).
-        if (!local && cloudFolder.is_default && !cloudFolder.team_id) {
-          const allFolders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
-          const nameMatch = allFolders.find(
-            (f) =>
-              f.is_default &&
-              f.space_id === space.id &&
-              f.name.toLowerCase() === cloudFolder.name.toLowerCase()
+        try {
+          const local = await window.electronAPI.getFolderByClientId?.(
+            cloudFolder.client_folder_id ?? ""
           );
-          if (nameMatch) {
-            await window.electronAPI.adoptFolderIdentity?.(
-              nameMatch.id,
-              cloudFolder.client_folder_id ?? nameMatch.client_folder_id,
-              cloudFolder.id,
-              cloudFolder.updated_at
-            );
+
+          // Redacted stub: the folder moved out of one of our teams. Clean
+          // local copies (folder and child notes) are no longer ours to keep;
+          // dirty ones move to the private space with forked identities so
+          // unpushed work survives (plan §7.2).
+          if (cloudFolder.access_removed) {
+            if (!local) continue;
+            if (ctx.privateSpace) {
+              const preserveFolder = local.sync_status === "pending" && !local.deleted_at;
+              const result = await window.electronAPI.relocateRevokedFolder?.(
+                local.id,
+                ctx.privateSpace.id,
+                preserveFolder
+              );
+              if (result?.success) {
+                const teamName = ctx.byCloudTeamId.get(cloudFolder.previous_team_id ?? "")?.name;
+                if (result.folder) {
+                  this.dispatchNoteRelocated(result.folder.name, teamName);
+                } else {
+                  for (const note of result.relocatedNotes ?? []) {
+                    this.dispatchNoteRelocated(note.title, teamName);
+                  }
+                }
+              } else {
+                dirtyRows++;
+                console.warn(`Could not relocate revoked folder ${local.id}:`, result?.error);
+              }
+            } else {
+              await window.electronAPI.hardDeleteFolder?.(local.id);
+            }
             continue;
           }
-        }
 
-        if (local?.deleted_at) continue;
-        if (!local || cloudFolder.updated_at > local.updated_at) {
-          await window.electronAPI.upsertFolderFromCloud?.(
-            cloudFolder as unknown as Record<string, unknown>,
-            space.id
-          );
+          if (teamOnly && !cloudFolder.team_id) {
+            // A personal row whose local copy still sits in a team space
+            // announces a team→personal transition — apply it, or a later
+            // edit's push would re-team the privatized folder.
+            if (
+              local &&
+              !local.deleted_at &&
+              ctx.byId.get(local.space_id)?.kind === "team" &&
+              ctx.privateSpace
+            ) {
+              if (cloudFolder.deleted_at) {
+                await window.electronAPI.hardDeleteFolder?.(local.id);
+              } else if (
+                normalizeTimestamp(cloudFolder.updated_at) > normalizeTimestamp(local.updated_at)
+              ) {
+                await window.electronAPI.upsertFolderFromCloud?.(
+                  cloudFolder as unknown as Record<string, unknown>,
+                  ctx.privateSpace.id
+                );
+              }
+            }
+            continue;
+          }
+
+          if (cloudFolder.deleted_at) {
+            if (local) await window.electronAPI.hardDeleteFolder?.(local.id);
+            continue;
+          }
+
+          const space = await this.resolveSpaceForCloudRow(cloudFolder.team_id, ctx);
+          if (!space) {
+            dirtyRows++;
+            console.warn(`Parking folder ${cloudFolder.id}: unknown team ${cloudFolder.team_id}`);
+            continue;
+          }
+
+          // A default folder created on another platform arrives with an
+          // unknown client_folder_id; inserting it would violate the per-space
+          // unique folder name. Match it by name within the private space and
+          // adopt its identity (team folders never adopt by name).
+          if (!local && cloudFolder.is_default && !cloudFolder.team_id) {
+            const allFolders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
+            const nameMatch = allFolders.find(
+              (f) =>
+                f.is_default &&
+                f.space_id === space.id &&
+                f.name.toLowerCase() === cloudFolder.name.toLowerCase()
+            );
+            if (nameMatch) {
+              await window.electronAPI.adoptFolderIdentity?.(
+                nameMatch.id,
+                cloudFolder.client_folder_id ?? nameMatch.client_folder_id,
+                cloudFolder.id,
+                cloudFolder.updated_at
+              );
+              continue;
+            }
+          }
+
+          if (local?.deleted_at) continue;
+          // Pending rows are never overwritten by pull: an unpushed change
+          // (e.g. a team→private move awaiting its scope PATCH) must win over
+          // a teammate's rename, or the move silently snaps back (D2).
+          if (
+            !local ||
+            (local.sync_status !== "pending" &&
+              normalizeTimestamp(cloudFolder.updated_at) > normalizeTimestamp(local.updated_at))
+          ) {
+            await window.electronAPI.upsertFolderFromCloud?.(
+              cloudFolder as unknown as Record<string, unknown>,
+              space.id
+            );
+          }
+        } catch (err) {
+          dirtyRows++;
+          console.error(`Folder pull failed for cloud folder ${cloudFolder.id}:`, err);
         }
       }
 
-      // A backfill snapshot never sees tombstones or stubs, so it must not
-      // advance the delta cursors.
-      if (!snapshot) {
-        localStorage.setItem(cursorKey, syncStartedAt);
-        // Full pulls cover team rows too; keep the team cursor current so a
-        // later backup-off pass doesn't re-pull from the distant past.
-        if (!teamOnly) localStorage.setItem("lastSyncedAt.folders.team", syncStartedAt);
+      // A backfill snapshot never sees tombstones or stubs, and a dirty pass
+      // must re-see its parked/failed rows, so neither advances the cursors.
+      if (!snapshot && dirtyRows === 0) {
+        // A degraded (own-rows-only) pull never saw team rows; advancing
+        // would permanently skip teammate edits once the capability probe
+        // recovers.
+        const hasTeamSpaces = [...ctx.byId.values()].some((s) => s.kind === "team");
+        if (teamCapable || !hasTeamSpaces) {
+          localStorage.setItem(cursorKey, syncStartedAt);
+          // Full pulls cover team rows too; keep the team cursor current so a
+          // later backup-off pass doesn't re-pull from the distant past.
+          if (!teamOnly) localStorage.setItem("lastSyncedAt.folders.team", syncStartedAt);
+        }
       }
-      return true;
+      return dirtyRows === 0;
     } catch (err) {
       console.error("Folder pull failed:", err);
       return false;
@@ -870,10 +1065,22 @@ class SyncService {
       (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
     if (pending.length === 0) return;
 
-    const folderMap = await this.buildLocalToCloudFolderMap();
+    const { localToCloud, blockedFolderIds } = await this.buildLocalToCloudFolderMap();
     const ctx = await this.buildSpaceContext();
     const pushable: Array<{ note: NoteItem; scope: PushScopeFields }> = [];
     for (const note of pending) {
+      if (note.folder_id && blockedFolderIds.has(note.folder_id)) {
+        // The folder's own changes haven't landed (e.g. a cross-space move
+        // that 409'd on a name conflict): the server would reject the note's
+        // folder_id as out of scope, stranding it in 'error'. Stay pending;
+        // folder and notes push together once the conflict resolves.
+        continue;
+      }
+      if (note.left_team && note.cloud_id && !this.hasTeamSpacesCapability()) {
+        // The retraction PATCH needs team-scope support; without it the push
+        // would settle the row and erase the pending scope change.
+        continue;
+      }
       const scope = this.pushScopeFields(ctx.byId.get(note.space_id));
       if (!scope) {
         console.warn(`Skipping note ${note.id} push: its team space has no cloud team yet`);
@@ -892,12 +1099,17 @@ class SyncService {
         // this PATCH marks the row synced — settling it without content
         // would strand the edit locally and hand the next pull a stale-but-
         // newer cloud copy to overwrite it with.
-        const cloudFolderId = note.folder_id ? (folderMap.get(note.folder_id) ?? null) : null;
+        const cloudFolderId = note.folder_id ? (localToCloud.get(note.folder_id) ?? null) : null;
         await NotesService.update(note.cloud_id!, {
           client_note_id: note.client_note_id,
           ...this.notePushPayload(note, cloudFolderId, scope),
         });
-        await window.electronAPI.markNoteSynced?.(note.id, note.cloud_id!);
+        // Settle only if the row wasn't edited while the PATCH was in flight.
+        await window.electronAPI.markNoteSyncedIfUnchanged?.(
+          note.id,
+          note.cloud_id!,
+          note.updated_at
+        );
       } catch (err) {
         if (isTeamAccessError(err)) {
           await this.handleRevokedNotePush(note, ctx);
@@ -922,7 +1134,7 @@ class SyncService {
             source_file: n.source_file,
             audio_duration_seconds: n.audio_duration_seconds,
             transcript: n.transcript,
-            folder_id: n.folder_id ? (folderMap.get(n.folder_id) ?? undefined) : undefined,
+            folder_id: n.folder_id ? (localToCloud.get(n.folder_id) ?? undefined) : undefined,
             created_at: n.created_at,
             updated_at: n.updated_at,
             ...scope,
@@ -970,7 +1182,8 @@ class SyncService {
       const { cloudToLocal, defaultFolderId } = await this.buildCloudToLocalFolderMap(
         ctx.privateSpace?.id ?? null
       );
-      const scope = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability() ? "all" : undefined;
+      const teamCapable = this.canSyncTeamSpaces() && this.hasTeamSpacesCapability();
+      const scope = teamCapable ? "all" : undefined;
 
       let cursor: string | undefined = since;
       while (true) {
@@ -1013,7 +1226,34 @@ class SyncService {
             continue;
           }
 
-          if (teamOnly && !cloudNote.team_id) continue;
+          if (teamOnly && !cloudNote.team_id) {
+            // A personal row whose local copy still sits in a team space
+            // announces a team→personal transition — apply it, or a later
+            // edit's push would re-team the privatized note.
+            if (local && !local.deleted_at && ctx.byId.get(local.space_id)?.kind === "team") {
+              if (cloudNote.deleted_at) {
+                await window.electronAPI.hardDeleteNote?.(local.id);
+              } else if (
+                normalizeTimestamp(cloudNote.updated_at) > normalizeTimestamp(local.updated_at)
+              ) {
+                if (local.sync_status === "pending") {
+                  await this.surfaceNoteConflict(local.client_note_id, cloudNote);
+                } else if (ctx.privateSpace) {
+                  await window.electronAPI.upsertNoteFromCloud?.(
+                    cloudNote as unknown as Record<string, unknown>,
+                    this.resolveLocalFolderId(
+                      cloudNote,
+                      ctx.privateSpace,
+                      cloudToLocal,
+                      defaultFolderId
+                    ),
+                    ctx.privateSpace.id
+                  );
+                }
+              }
+            }
+            continue;
+          }
 
           if (cloudNote.deleted_at) {
             if (local) await window.electronAPI.hardDeleteNote?.(local.id);
@@ -1026,30 +1266,25 @@ class SyncService {
             continue;
           }
 
-          if (!local || cloudNote.updated_at > local.updated_at) {
+          if (
+            !local ||
+            normalizeTimestamp(cloudNote.updated_at) > normalizeTimestamp(local.updated_at)
+          ) {
             if (local?.sync_status === "pending") {
               // A newer cloud copy over unpushed local edits: surface the
               // conflict to the editor banner instead of silently dropping
               // the local edit (plan §7.3).
-              const { setNoteConflict } = await import("../stores/noteStore.js");
-              setNoteConflict(local.client_note_id, cloudNote);
+              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
               continue;
             }
-            // Unmapped folders fall back to the space root for team rows and
-            // to the default folder for personal rows — never across spaces.
-            const fallbackFolderId = cloudNote.team_id ? null : defaultFolderId;
-            const localFolderId = cloudNote.folder_id
-              ? (cloudToLocal.get(cloudNote.folder_id) ?? fallbackFolderId)
-              : fallbackFolderId;
             await window.electronAPI.upsertNoteFromCloud?.(
               cloudNote as unknown as Record<string, unknown>,
-              localFolderId,
+              this.resolveLocalFolderId(cloudNote, space, cloudToLocal, defaultFolderId),
               space.id
             );
             if (local) {
               // Applying cloud over a clean row settles any stale conflict.
-              const { clearNoteConflict } = await import("../stores/noteStore.js");
-              clearNoteConflict(local.client_note_id);
+              await this.settleNoteConflict(local.client_note_id);
             }
           }
         }
@@ -1064,10 +1299,16 @@ class SyncService {
       // A backfill snapshot never sees tombstones or stubs, so it must not
       // advance the delta cursors.
       if (!snapshot) {
-        localStorage.setItem(cursorKey, syncStartedAt);
-        // Full pulls cover team rows too; keep the team cursor current so a
-        // later backup-off pass doesn't re-pull from the distant past.
-        if (!teamOnly) localStorage.setItem("lastSyncedAt.notes.team", syncStartedAt);
+        // A degraded (own-rows-only) pull never saw team rows; advancing
+        // would permanently skip teammate edits once the capability probe
+        // recovers.
+        const hasTeamSpaces = [...ctx.byId.values()].some((s) => s.kind === "team");
+        if (teamCapable || !hasTeamSpaces) {
+          localStorage.setItem(cursorKey, syncStartedAt);
+          // Full pulls cover team rows too; keep the team cursor current so a
+          // later backup-off pass doesn't re-pull from the distant past.
+          if (!teamOnly) localStorage.setItem("lastSyncedAt.notes.team", syncStartedAt);
+        }
       }
       return true;
     } catch (err) {
@@ -1158,7 +1399,10 @@ class SyncService {
             continue;
           }
 
-          if (!local || cloudConv.updated_at > local.updated_at) {
+          if (
+            !local ||
+            normalizeTimestamp(cloudConv.updated_at) > normalizeTimestamp(local.updated_at)
+          ) {
             await window.electronAPI.upsertConversationFromCloud?.(
               cloudConv as unknown as Record<string, unknown>,
               (cloudConv.messages ?? []) as unknown as Array<Record<string, unknown>>
@@ -1656,21 +1900,52 @@ class SyncService {
     }
   }
 
-  private async buildLocalToCloudFolderMap(): Promise<Map<number, string>> {
+  private async buildLocalToCloudFolderMap(): Promise<{
+    localToCloud: Map<number, string>;
+    // Cloud-backed folders with unpushed changes: their migration PATCH
+    // failed or hasn't run yet (folders push before notes in a pass), so
+    // pushing a child note's folder_id + scope now could be rejected as out
+    // of scope. Those notes defer and stay pending.
+    blockedFolderIds: Set<number>;
+  }> {
     const folders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
-    return new Map(folders.filter((f) => f.cloud_id).map((f) => [f.id, f.cloud_id!]));
+    return {
+      localToCloud: new Map(folders.filter((f) => f.cloud_id).map((f) => [f.id, f.cloud_id!])),
+      blockedFolderIds: new Set(
+        folders.filter((f) => f.cloud_id && f.sync_status === "pending").map((f) => f.id)
+      ),
+    };
   }
 
   private async buildCloudToLocalFolderMap(privateSpaceId: number | null): Promise<{
-    cloudToLocal: Map<string, number>;
+    cloudToLocal: Map<string, { id: number; space_id: number }>;
     defaultFolderId: number | null;
   }> {
     const folders = (await window.electronAPI.getFolderIdMap?.()) ?? [];
-    const cloudToLocal = new Map(folders.filter((f) => f.cloud_id).map((f) => [f.cloud_id!, f.id]));
+    const cloudToLocal = new Map(
+      folders
+        .filter((f) => f.cloud_id)
+        .map((f) => [f.cloud_id!, { id: f.id, space_id: f.space_id }])
+    );
     const personalFolder = folders.find(
       (f) => f.is_default && f.name === "Personal" && f.space_id === privateSpaceId
     );
     return { cloudToLocal, defaultFolderId: personalFolder?.id ?? null };
+  }
+
+  // Unmapped folders fall back to the space root for team rows and to the
+  // default folder for personal rows; a mapped folder sitting in ANOTHER
+  // local space (e.g. mid-move after a 409) falls back the same way — a note
+  // never files across spaces (D2).
+  private resolveLocalFolderId(
+    cloudNote: CloudNote,
+    space: SpaceItem,
+    cloudToLocal: Map<string, { id: number; space_id: number }>,
+    defaultFolderId: number | null
+  ): number | null {
+    const fallback = cloudNote.team_id ? null : defaultFolderId;
+    const mapped = cloudNote.folder_id ? cloudToLocal.get(cloudNote.folder_id) : undefined;
+    return mapped && mapped.space_id === space.id ? mapped.id : fallback;
   }
 }
 

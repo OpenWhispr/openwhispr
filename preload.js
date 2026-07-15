@@ -194,6 +194,27 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("note-deleted", listener);
     return () => ipcRenderer.removeListener("note-deleted", listener);
   },
+  onNoteSynced: (callback) => {
+    const listener = (_event, note) => callback?.(note);
+    ipcRenderer.on("note-synced", listener);
+    return () => ipcRenderer.removeListener("note-synced", listener);
+  },
+  onFolderSynced: (callback) => {
+    const listener = (_event, folder) => callback?.(folder);
+    ipcRenderer.on("folder-synced", listener);
+    return () => ipcRenderer.removeListener("folder-synced", listener);
+  },
+  onFolderDeleted: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("folder-deleted", listener);
+    return () => ipcRenderer.removeListener("folder-deleted", listener);
+  },
+  emitSyncEvent: (name, payload) => ipcRenderer.invoke("broadcast-sync-event", name, payload),
+  onSyncEvent: (callback) => {
+    const listener = (_event, data) => callback?.(data);
+    ipcRenderer.on("sync-event", listener);
+    return () => ipcRenderer.removeListener("sync-event", listener);
+  },
 
   onActionCreated: (callback) => {
     const listener = (_event, action) => callback?.(action);
@@ -846,6 +867,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId) =>
     ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId),
   markNoteSynced: (id, cloudId) => ipcRenderer.invoke("db-mark-note-synced", id, cloudId),
+  markNoteSyncedIfUnchanged: (id, cloudId, snapshotUpdatedAt) =>
+    ipcRenderer.invoke("db-mark-note-synced-if-unchanged", id, cloudId, snapshotUpdatedAt),
   markNoteSyncError: (id) => ipcRenderer.invoke("db-mark-note-sync-error", id),
   hardDeleteNote: (id) => ipcRenderer.invoke("db-hard-delete-note", id),
 
@@ -855,12 +878,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   upsertFolderFromCloud: (cloudFolder, localSpaceId) =>
     ipcRenderer.invoke("db-upsert-folder-from-cloud", cloudFolder, localSpaceId),
   markFolderSynced: (id, cloudId) => ipcRenderer.invoke("db-mark-folder-synced", id, cloudId),
+  markFolderSyncedIfUnchanged: (id, cloudId, snapshotUpdatedAt) =>
+    ipcRenderer.invoke("db-mark-folder-synced-if-unchanged", id, cloudId, snapshotUpdatedAt),
   adoptFolderIdentity: (id, clientFolderId, cloudId, updatedAt) =>
     ipcRenderer.invoke("db-adopt-folder-identity", id, clientFolderId, cloudId, updatedAt),
   forkFolderIdentity: (id) => ipcRenderer.invoke("db-fork-folder-identity", id),
   getFolderIdMap: () => ipcRenderer.invoke("db-get-folder-id-map"),
   getPendingFolderDeletes: () => ipcRenderer.invoke("db-get-pending-folder-deletes"),
   hardDeleteFolder: (id) => ipcRenderer.invoke("db-hard-delete-folder", id),
+  relocateRevokedFolder: (id, privateSpaceId, preserveFolder) =>
+    ipcRenderer.invoke("db-relocate-revoked-folder", id, privateSpaceId, preserveFolder),
 
   getPendingConversations: () => ipcRenderer.invoke("db-get-pending-conversations"),
   getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),

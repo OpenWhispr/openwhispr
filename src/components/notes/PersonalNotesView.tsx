@@ -252,6 +252,21 @@ export default function PersonalNotesView({
     }
   }, [activeNote]);
 
+  // Conflict-banner Refresh applies an external cloud copy: a queued
+  // debounced save would clobber it with the pre-refresh buffer, so the
+  // editor cancels pending saves before the copy is applied. With the timers
+  // cleared, the external-update resync effect above picks up the fresh note.
+  const cancelPendingSaves = useCallback(() => {
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    if (enhancedSaveTimeoutRef.current) {
+      clearTimeout(enhancedSaveTimeoutRef.current);
+      enhancedSaveTimeoutRef.current = null;
+    }
+  }, []);
+
   const debouncedSave = useCallback((noteId: number, title: string, content: string) => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
@@ -658,6 +673,7 @@ export default function PersonalNotesView({
               folders={editorFolders}
               onMoveToFolder={handleMoveToFolder}
               onCreateFolderAndMove={handleCreateFolderAndMove}
+              onCancelPendingSaves={cancelPendingSaves}
               actionProcessingState={actionProcessingState}
               actionName={actionName}
               actionPicker={
@@ -832,12 +848,16 @@ export default function PersonalNotesView({
                     <Plus size={11} />
                     {t("notes.empty.createNote")}
                   </button>
-                  <button
-                    onClick={() => setShowAddNotesDialog(true)}
-                    className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
-                  >
-                    {t("notes.addToFolder.addExisting")}
-                  </button>
+                  {/* AddNotesToFolderDialog only mounts for folder contexts —
+                      space-root empty states offer just "Create note". */}
+                  {activeFolderId != null && (
+                    <button
+                      onClick={() => setShowAddNotesDialog(true)}
+                      className="flex items-center gap-1.5 px-4 h-7 rounded-md border border-foreground/8 dark:border-white/8 text-xs text-foreground/40 hover:text-foreground/60 hover:border-foreground/15 hover:bg-foreground/3 dark:hover:bg-white/3 transition-colors"
+                    >
+                      {t("notes.addToFolder.addExisting")}
+                    </button>
+                  )}
                 </div>
               </>
             ) : (

@@ -28,6 +28,9 @@ interface NoteState {
   spaces: SpaceItem[];
   folders: FolderItem[];
   folderCounts: Record<number, number>;
+  // Notes sitting at a space root (folder_id NULL), keyed by space id — the
+  // tree's space rows show true totals without loading containers.
+  spaceRootCounts: Record<number, number>;
   notesByContainer: Record<string, NoteItem[]>;
   expandedContainers: Set<string>;
   activeContext: ActiveContext | null;
@@ -65,6 +68,7 @@ const useNoteStore = create<NoteState>()(() => ({
   spaces: [],
   folders: [],
   folderCounts: {},
+  spaceRootCounts: {},
   notesByContainer: {},
   expandedContainers: readExpandedContainers(),
   activeContext: null,
@@ -158,9 +162,11 @@ function ensureIpcListeners() {
         }
         // Sharing is per-note consent, and so is team-space membership: edits
         // to a shared or team note must reach the cloud promptly even when
-        // the global backup toggle is off (teammates poll for them).
+        // the global backup toggle is off (teammates poll for them). A note
+        // that just LEFT a team also pushes promptly — the server row stays
+        // visible to teammates until its scope retraction lands (D6).
         const spaceKind = useNoteStore.getState().spaces.find((s) => s.id === note.space_id)?.kind;
-        if (note.is_shared || spaceKind === "team") {
+        if (note.is_shared || spaceKind === "team" || (note.left_team && note.cloud_id)) {
           syncService.debouncedPush("note", note.id);
         }
       }
@@ -177,6 +183,101 @@ function ensureIpcListeners() {
       // Push the tombstone right away so a shared link stops serving now,
       // not at the next ambient pass ("manual" bypasses the throttle).
       syncService.requestSyncAll("manual");
+    });
+    if (typeof dispose === "function") {
+      disposers.push(dispose);
+    }
+  }
+
+  // Cloud-origin rows applied by a sync pull. Unlike onNoteUpdated, these
+  // must NEVER trigger debouncedPush — they were just pulled from the cloud.
+  // Routing through updateNoteInStore also refreshes an open clean editor
+  // (PersonalNotesView's external-update resync); a dirty editor keeps its
+  // buffer and the conflict-banner path covers it.
+  if (window.electronAPI?.onNoteSynced) {
+    const dispose = window.electronAPI.onNoteSynced((note) => {
+      if (!note) return;
+      const state = useNoteStore.getState();
+      // Backfilled team content can reference a space the store hasn't seen.
+      if (!state.spaces.some((s) => s.id === note.space_id)) void loadSpaces();
+      const previous = findNoteInState(state, note.id);
+      if (previous) {
+        updateNoteInStore(note);
+        if (noteContainerKey(previous) !== noteContainerKey(note)) void loadFolders();
+      } else {
+        addNote(note);
+        void loadFolders();
+      }
+    });
+    if (typeof dispose === "function") {
+      disposers.push(dispose);
+    }
+  }
+
+  if (window.electronAPI?.onFolderSynced) {
+    const dispose = window.electronAPI.onFolderSynced((folder) => {
+      if (!folder) return;
+      void loadFolders();
+      void loadSpaces();
+      // A pulled folder change (rename, space move, revocation relocation)
+      // can invalidate its cached container — re-read it if loaded.
+      const key = folderContainerKey(folder.id);
+      if (useNoteStore.getState().notesByContainer[key]) void loadContainerNotes(key);
+    });
+    if (typeof dispose === "function") {
+      disposers.push(dispose);
+    }
+  }
+
+  // Folder hard-deletes (pulled tombstones, revocation cascades, and the
+  // echo of local deletes) — drop the container and refresh counts. The
+  // UI-originated deleteFolder already cleaned up by the time the echo
+  // arrives, so every step here is idempotent.
+  if (window.electronAPI?.onFolderDeleted) {
+    const dispose = window.electronAPI.onFolderDeleted(({ id }) => {
+      if (id == null) return;
+      const state = useNoteStore.getState();
+      const key = folderContainerKey(id);
+      const removedNotes = state.notesByContainer[key];
+      const notesByContainer = { ...state.notesByContainer };
+      delete notesByContainer[key];
+      const expanded = new Set(state.expandedContainers);
+      if (expanded.delete(key)) persistExpandedContainers(expanded);
+      const extra: Partial<NoteState> = { expandedContainers: expanded };
+      if (state.activeNoteId != null && removedNotes?.some((n) => n.id === state.activeNoteId)) {
+        extra.activeNoteId = null;
+      }
+      let fallbackContext: ActiveContext | null = null;
+      if (state.activeContext?.folderId === id) {
+        // The active folder vanished under us — degrade to its space root.
+        fallbackContext = { spaceId: state.activeContext.spaceId, folderId: null };
+        extra.activeContext = fallbackContext;
+        extra.activeFolderId = null;
+        extra.notes = notesByContainer[contextContainerKey(fallbackContext)] ?? [];
+      }
+      useNoteStore.setState({ notesByContainer, ...extra });
+      if (fallbackContext) void ensureContainerLoaded(contextContainerKey(fallbackContext));
+      void loadFolders();
+    });
+    if (typeof dispose === "function") {
+      disposers.push(dispose);
+    }
+  }
+
+  // Conflict signals rebroadcast through the main process because the sync
+  // pull usually runs in the overlay window, not the one showing the editor.
+  // Broadcasts echo to the emitting window; both setters are idempotent.
+  if (window.electronAPI?.onSyncEvent) {
+    const dispose = window.electronAPI.onSyncEvent(({ name, payload }) => {
+      if (name === "note-conflict") {
+        const data = payload as { clientNoteId?: string; cloudNote?: CloudNote } | undefined;
+        if (data?.clientNoteId && data.cloudNote) {
+          setNoteConflict(data.clientNoteId, data.cloudNote);
+        }
+      } else if (name === "note-conflict-clear") {
+        const data = payload as { clientNoteId?: string } | undefined;
+        if (data?.clientNoteId) clearNoteConflict(data.clientNoteId);
+      }
     });
     if (typeof dispose === "function") {
       disposers.push(dispose);
@@ -211,10 +312,12 @@ export async function loadFolders(): Promise<FolderItem[]> {
     window.electronAPI.getFolderNoteCounts(),
   ]);
   const folderCounts: Record<number, number> = {};
+  const spaceRootCounts: Record<number, number> = {};
   counts.forEach((c) => {
     if (c.folder_id != null) folderCounts[c.folder_id] = c.count;
+    else if (c.space_id != null) spaceRootCounts[c.space_id] = c.count;
   });
-  useNoteStore.setState({ folders: items, folderCounts });
+  useNoteStore.setState({ folders: items, folderCounts, spaceRootCounts });
   return items;
 }
 
@@ -414,6 +517,7 @@ export function removeNote(id: number): void {
 
 function handleSpacePurged(spaceId: number): void {
   const state = useNoteStore.getState();
+  const purgedTeamId = state.spaces.find((s) => s.id === spaceId)?.cloud_team_id ?? null;
   const removedKeys = new Set<string>([spaceContainerKey(spaceId)]);
   state.folders.forEach((f) => {
     if (f.space_id === spaceId) removedKeys.add(folderContainerKey(f.id));
@@ -427,14 +531,42 @@ function handleSpacePurged(spaceId: number): void {
   state.folders.forEach((f) => {
     if (f.space_id === spaceId) delete folderCounts[f.id];
   });
+  const spaceRootCounts = { ...state.spaceRootCounts };
+  delete spaceRootCounts[spaceId];
   const expanded = new Set([...state.expandedContainers].filter((key) => !removedKeys.has(key)));
   persistExpandedContainers(expanded);
+
+  // Purge completeness (plan §5.4): purged notes' share-cache entries (which
+  // can hold raw link tokens) and conflict banners (which hold full cloud
+  // copies) must not outlive the space in renderer memory. Conflicts are
+  // matched by the team's cloud id too, since their notes' containers may
+  // never have been loaded.
+  const purgedCloudIds = new Set<string>();
+  const purgedClientIds = new Set<string>();
+  removedKeys.forEach((key) => {
+    (state.notesByContainer[key] ?? []).forEach((n) => {
+      if (n.cloud_id) purgedCloudIds.add(n.cloud_id);
+      purgedClientIds.add(n.client_note_id);
+    });
+  });
+  const shareByCloudId = new Map(state.shareByCloudId);
+  purgedCloudIds.forEach((id) => shareByCloudId.delete(id));
+  const noteConflicts = Object.fromEntries(
+    Object.entries(state.noteConflicts).filter(
+      ([clientId, cloudNote]) =>
+        !purgedClientIds.has(clientId) &&
+        (purgedTeamId == null || cloudNote.team_id !== purgedTeamId)
+    )
+  );
 
   const extra: Partial<NoteState> = {
     spaces: state.spaces.filter((s) => s.id !== spaceId),
     folders: state.folders.filter((f) => f.space_id !== spaceId),
     folderCounts,
+    spaceRootCounts,
     expandedContainers: expanded,
+    shareByCloudId,
+    noteConflicts,
   };
   const activeNote = state.activeNoteId != null ? findNoteInState(state, state.activeNoteId) : null;
   if (activeNote?.space_id === spaceId) {
@@ -455,6 +587,16 @@ function handleSpacePurged(spaceId: number): void {
   }
   useNoteStore.setState({ notesByContainer, ...extra });
   if (fallbackContext) void ensureContainerLoaded(contextContainerKey(fallbackContext));
+  // The purge relocates never-synced notes to the private space root —
+  // refresh counts, and the root container when it's already cached.
+  void loadFolders();
+  const privateSpace = state.spaces.find((s) => s.kind === "private" && s.id !== spaceId);
+  if (privateSpace) {
+    const privateRootKey = spaceContainerKey(privateSpace.id);
+    if (useNoteStore.getState().notesByContainer[privateRootKey]) {
+      void loadContainerNotes(privateRootKey);
+    }
+  }
 }
 
 export async function createFolder(
@@ -600,6 +742,15 @@ export function getActiveFolderIdValue(): number | null {
   return useNoteStore.getState().activeFolderId;
 }
 
+/** Live (non-hook) reads for deferred callbacks like undo toasts. */
+export function getFoldersValue(): FolderItem[] {
+  return useNoteStore.getState().folders;
+}
+
+export function getSpacesValue(): SpaceItem[] {
+  return useNoteStore.getState().spaces;
+}
+
 export function useNotes(): NoteItem[] {
   return useNoteStore((state) => state.notes);
 }
@@ -614,6 +765,10 @@ export function useFolders(): FolderItem[] {
 
 export function useFolderCounts(): Record<number, number> {
   return useNoteStore((state) => state.folderCounts);
+}
+
+export function useSpaceRootCounts(): Record<number, number> {
+  return useNoteStore((state) => state.spaceRootCounts);
 }
 
 export function useNotesByContainer(): Record<string, NoteItem[]> {

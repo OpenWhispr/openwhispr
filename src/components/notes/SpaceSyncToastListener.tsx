@@ -7,6 +7,9 @@ const DEDUPE_MS = 15_000;
 /**
  * Headless. Mount once inside ToastProvider so team-space access changes
  * raised by sync surface even when the user is outside the notes view.
+ * Sync passes run in whichever window holds the web lock (often the always-on
+ * dictation overlay), so the signals arrive via the main-process 'sync-event'
+ * rebroadcast rather than window-local CustomEvents.
  * A rejected push and the following spaces-pass purge can both announce the
  * same space, so access-revoked toasts dedupe by space name; folder name
  * conflicts recur every sync pass while unresolved, so they dedupe too.
@@ -19,50 +22,43 @@ export default function SpaceSyncToastListener() {
     const lastRevokedAt = new Map<string, number>();
     const lastFolderConflictAt = new Map<string, number>();
 
-    const onSpaceRevoked = (event: Event) => {
-      const { spaceName } = (event as CustomEvent<{ spaceName: string | null }>).detail;
-      if (!spaceName) return;
-      const now = Date.now();
-      if (now - (lastRevokedAt.get(spaceName) ?? 0) < DEDUPE_MS) return;
-      lastRevokedAt.set(spaceName, now);
-      toast({
-        title: t("notes.spaces.accessRevoked", { space: spaceName }),
-        variant: "destructive",
-      });
-    };
+    const dispose = window.electronAPI?.onSyncEvent?.(({ name, payload }) => {
+      if (name === "space-revoked") {
+        const { spaceName } = (payload ?? {}) as { spaceName?: string | null };
+        if (!spaceName) return;
+        const now = Date.now();
+        if (now - (lastRevokedAt.get(spaceName) ?? 0) < DEDUPE_MS) return;
+        lastRevokedAt.set(spaceName, now);
+        toast({
+          title: t("notes.spaces.accessRevoked", { space: spaceName }),
+          variant: "destructive",
+        });
+      } else if (name === "folder-name-taken") {
+        const { name: folderName } = (payload ?? {}) as { name?: string };
+        if (!folderName) return;
+        const now = Date.now();
+        if (now - (lastFolderConflictAt.get(folderName) ?? 0) < DEDUPE_MS) return;
+        lastFolderConflictAt.set(folderName, now);
+        toast({
+          title: t("notes.spaces.folderNameTaken", { name: folderName }),
+          variant: "destructive",
+        });
+      } else if (name === "note-relocated") {
+        const { title, spaceName } = (payload ?? {}) as {
+          title?: string | null;
+          spaceName?: string | null;
+        };
+        if (!spaceName) return;
+        toast({
+          title: t("notes.spaces.movedToPersonal", {
+            space: spaceName,
+            title: title || t("notes.list.untitled"),
+          }),
+        });
+      }
+    });
 
-    const onFolderNameTaken = (event: Event) => {
-      const { name } = (event as CustomEvent<{ name: string }>).detail;
-      const now = Date.now();
-      if (now - (lastFolderConflictAt.get(name) ?? 0) < DEDUPE_MS) return;
-      lastFolderConflictAt.set(name, now);
-      toast({
-        title: t("notes.spaces.folderNameTaken", { name }),
-        variant: "destructive",
-      });
-    };
-
-    const onNoteRelocated = (event: Event) => {
-      const { title, spaceName } = (
-        event as CustomEvent<{ title: string | null; spaceName: string | null }>
-      ).detail;
-      if (!spaceName) return;
-      toast({
-        title: t("notes.spaces.movedToPersonal", {
-          space: spaceName,
-          title: title || t("notes.list.untitled"),
-        }),
-      });
-    };
-
-    window.addEventListener("openwhispr:space-revoked", onSpaceRevoked);
-    window.addEventListener("openwhispr:note-relocated", onNoteRelocated);
-    window.addEventListener("openwhispr:folder-name-taken", onFolderNameTaken);
-    return () => {
-      window.removeEventListener("openwhispr:space-revoked", onSpaceRevoked);
-      window.removeEventListener("openwhispr:note-relocated", onNoteRelocated);
-      window.removeEventListener("openwhispr:folder-name-taken", onFolderNameTaken);
-    };
+    return () => dispose?.();
   }, [toast, t]);
 
   return null;

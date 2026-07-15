@@ -451,6 +451,32 @@ class IPCHandlers {
     });
   }
 
+  // Space vector purges are persisted (pending_vector_purges) so a purge that
+  // lands while Qdrant is booting or down is retried once the index is ready.
+  drainPendingVectorPurges() {
+    setImmediate(async () => {
+      const vectorIndex = require("./vectorIndex");
+      if (!vectorIndex.isReady()) return;
+      for (const { space_id } of this.databaseManager.getPendingVectorPurges()) {
+        if (await vectorIndex.deleteBySpace(space_id)) {
+          this.databaseManager.clearPendingVectorPurge(space_id);
+        }
+      }
+    });
+  }
+
+  _mirrorDeleteFolderIfUnshared(folderName) {
+    if (!this._noteFilesEnabled) return;
+    // Folder names are only unique per space — a live same-named folder in
+    // another space shares the mirror directory, so leave it on disk.
+    const stillLive = this.databaseManager.db
+      .prepare("SELECT 1 FROM folders WHERE name = ? AND deleted_at IS NULL")
+      .get(folderName);
+    if (stillLive) return;
+    const markdownMirror = require("./markdownMirror");
+    markdownMirror.deleteFolder(folderName);
+  }
+
   _asyncMirrorWrite(note) {
     if (!this._noteFilesEnabled) {
       debugLogger.debug(
@@ -1206,11 +1232,12 @@ class IPCHandlers {
 
       const notes = this.databaseManager.getNotes(null, 100000);
       let done = 0;
-      await vectorIndex.reindexAll(notes, (completed, total) => {
+      const { failed } = await vectorIndex.reindexAll(notes, (completed, total) => {
         done = completed;
         this.broadcastToWindows("semantic-reindex-progress", { done: completed, total });
       });
-      return { success: true, indexed: done };
+      // Report failed batches so callers only latch their done-flag on a clean pass.
+      return { success: failed === 0, indexed: done - failed };
     });
 
     ipcMain.handle("db-update-note-cloud-id", async (event, id, cloudId) => {
@@ -1252,10 +1279,7 @@ class IPCHandlers {
         }
         setImmediate(() => {
           this.broadcastToWindows("folder-deleted", { id });
-          if (this._noteFilesEnabled && folderName) {
-            const markdownMirror = require("./markdownMirror");
-            markdownMirror.deleteFolder(folderName);
-          }
+          if (folderName) this._mirrorDeleteFolderIfUnshared(folderName);
         });
       }
       return result;
@@ -1316,21 +1340,19 @@ class IPCHandlers {
     ipcMain.handle("db-purge-space", async (event, id) => {
       const result = this.databaseManager.purgeSpace(id);
       if (result?.success) {
-        setImmediate(() => {
-          const vectorIndex = require("./vectorIndex");
-          if (!vectorIndex.isReady()) return;
-          vectorIndex.deleteBySpace(result.spaceId).catch(() => {});
-        });
+        this.databaseManager.addPendingVectorPurge(result.spaceId);
+        this.drainPendingVectorPurges();
+        for (const note of result.relocatedNotes ?? []) {
+          this._asyncVectorUpsert(note);
+          this._asyncMirrorWrite(note);
+        }
         for (const noteId of result.noteIds ?? []) {
           this._asyncMirrorDelete(noteId);
         }
         setImmediate(() => {
           this.broadcastToWindows("space-purged", { spaceId: result.spaceId });
-          if (this._noteFilesEnabled) {
-            const markdownMirror = require("./markdownMirror");
-            for (const folderName of result.folderNames ?? []) {
-              markdownMirror.deleteFolder(folderName);
-            }
+          for (const folderName of result.folderNames ?? []) {
+            this._mirrorDeleteFolderIfUnshared(folderName);
           }
         });
       }
@@ -1489,11 +1511,16 @@ class IPCHandlers {
     ipcMain.handle("db-get-note-by-client-id", (_, clientNoteId) =>
       this.databaseManager.getNoteByClientId(clientNoteId)
     );
-    ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) =>
-      this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId)
-    );
+    ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) => {
+      const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
+      if (note) setImmediate(() => this.broadcastToWindows("note-synced", note));
+      return note;
+    });
     ipcMain.handle("db-mark-note-synced", (_, id, cloudId) =>
       this.databaseManager.markNoteSynced(id, cloudId)
+    );
+    ipcMain.handle("db-mark-note-synced-if-unchanged", (_, id, cloudId, snapshotUpdatedAt) =>
+      this.databaseManager.markNoteSyncedIfUnchanged(id, cloudId, snapshotUpdatedAt)
     );
     ipcMain.handle("db-mark-note-sync-error", (_, id) =>
       this.databaseManager.markNoteSyncError(id)
@@ -1515,11 +1542,16 @@ class IPCHandlers {
     ipcMain.handle("db-get-folder-by-client-id", (_, clientFolderId) =>
       this.databaseManager.getFolderByClientId(clientFolderId)
     );
-    ipcMain.handle("db-upsert-folder-from-cloud", (_, cloudFolder, localSpaceId) =>
-      this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId)
-    );
+    ipcMain.handle("db-upsert-folder-from-cloud", (_, cloudFolder, localSpaceId) => {
+      const folder = this.databaseManager.upsertFolderFromCloud(cloudFolder, localSpaceId);
+      if (folder) setImmediate(() => this.broadcastToWindows("folder-synced", folder));
+      return folder;
+    });
     ipcMain.handle("db-mark-folder-synced", (_, id, cloudId) =>
       this.databaseManager.markFolderSynced(id, cloudId)
+    );
+    ipcMain.handle("db-mark-folder-synced-if-unchanged", (_, id, cloudId, snapshotUpdatedAt) =>
+      this.databaseManager.markFolderSyncedIfUnchanged(id, cloudId, snapshotUpdatedAt)
     );
     ipcMain.handle("db-adopt-folder-identity", (_, id, clientFolderId, cloudId, updatedAt) =>
       this.databaseManager.adoptFolderIdentity(id, clientFolderId, cloudId, updatedAt)
@@ -1539,13 +1571,47 @@ class IPCHandlers {
         }
         setImmediate(() => {
           this.broadcastToWindows("folder-deleted", { id });
-          if (this._noteFilesEnabled && result.name) {
-            const markdownMirror = require("./markdownMirror");
-            markdownMirror.deleteFolder(result.name);
+          if (result.name) this._mirrorDeleteFolderIfUnshared(result.name);
+        });
+      }
+      return result;
+    });
+    ipcMain.handle("db-relocate-revoked-folder", (_, id, privateSpaceId, preserveFolder) => {
+      const result = this.databaseManager.relocateRevokedFolder(id, privateSpaceId, preserveFolder);
+      if (result?.success) {
+        // Qdrant payloads carry space_id and the markdown mirror files by
+        // folder — refresh relocated notes, drop the server-owned ones.
+        for (const note of result.relocatedNotes ?? []) {
+          this._asyncVectorUpsert(note);
+          this._asyncMirrorWrite(note);
+        }
+        for (const noteId of result.deletedNoteIds ?? []) {
+          this._asyncVectorDelete(noteId);
+          this._asyncMirrorDelete(noteId);
+        }
+        setImmediate(() => {
+          if (result.folder) this.broadcastToWindows("folder-synced", result.folder);
+          else this.broadcastToWindows("folder-deleted", { id });
+          for (const note of result.relocatedNotes ?? []) {
+            this.broadcastToWindows("note-updated", note);
+          }
+          for (const noteId of result.deletedNoteIds ?? []) {
+            this.broadcastToWindows("note-deleted", { id: noteId });
+          }
+          const folderGone = !result.folder || result.folder.name !== result.folderName;
+          if (result.folderName && folderGone) {
+            this._mirrorDeleteFolderIfUnshared(result.folderName);
           }
         });
       }
       return result;
+    });
+
+    // Renderer-side sync events (conflicts, revocation toasts, …) happen in
+    // whichever window ran the pass — rebroadcast them to ALL windows.
+    ipcMain.handle("broadcast-sync-event", (_, name, payload) => {
+      this.broadcastToWindows("sync-event", { name, payload });
+      return { success: true };
     });
 
     // Spaces sync
