@@ -1848,6 +1848,7 @@
       "tabs": {
         "dictationCleanup": "Dictation Cleanup",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "Translation",
         "noteFormatting": "Note Formatting",
         "chatIntelligence": "Chat"
       }

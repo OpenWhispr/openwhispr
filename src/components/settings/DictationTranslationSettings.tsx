@@ -21,12 +21,7 @@ export default function DictationTranslationSettings() {
   const setTranslationTargetLanguage = useSettingsStore((s) => s.setTranslationTargetLanguage);
 
   return (
-    <div className="border-t border-border/40 pt-6 space-y-5">
-      <SectionHeader
-        title={t("dictationTranslation.title")}
-        description={t("dictationTranslation.description")}
-      />
-
+    <div className="space-y-4">
       <SettingsPanel>
         <SettingsPanelRow>
           <SettingsRow

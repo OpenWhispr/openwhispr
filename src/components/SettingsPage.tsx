@@ -34,6 +34,7 @@ import {
   FileAudio,
   Wand2,
   Upload,
+  Languages,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { AUTH_URL, signOut, deleteAccount } from "../lib/auth";
@@ -472,12 +473,18 @@ function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModel
 }
 
 type SpeechTab = "dictation" | "noteRecording" | "upload";
-type LlmTab = "dictationCleanup" | "dictationAgent" | "noteFormatting" | "chatIntelligence";
+type LlmTab =
+  | "dictationCleanup"
+  | "dictationAgent"
+  | "dictationTranslation"
+  | "noteFormatting"
+  | "chatIntelligence";
 
 const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording", "upload"];
 const LLM_TABS: LlmTab[] = [
   "dictationCleanup",
   "dictationAgent",
+  "dictationTranslation",
   "noteFormatting",
   "chatIntelligence",
 ];
@@ -569,12 +576,14 @@ function LlmsTabs({
   initialTab,
   renderDictationCleanup,
   renderDictationAgent,
+  renderDictationTranslation,
   renderNoteFormatting,
   renderChatIntelligence,
 }: {
   initialTab?: LlmTab;
   renderDictationCleanup: () => React.ReactNode;
   renderDictationAgent: () => React.ReactNode;
+  renderDictationTranslation: () => React.ReactNode;
   renderNoteFormatting: () => React.ReactNode;
   renderChatIntelligence: () => React.ReactNode;
 }) {
@@ -584,6 +593,7 @@ function LlmsTabs({
   const subTabs = [
     { id: "dictationCleanup", name: t("settingsPage.llms.tabs.dictationCleanup") },
     { id: "dictationAgent", name: t("settingsPage.llms.tabs.dictationAgent") },
+    { id: "dictationTranslation", name: t("settingsPage.llms.tabs.dictationTranslation") },
     { id: "noteFormatting", name: t("settingsPage.llms.tabs.noteFormatting") },
     { id: "chatIntelligence", name: t("settingsPage.llms.tabs.chatIntelligence") },
   ];
@@ -601,12 +611,14 @@ function LlmsTabs({
         renderIcon={(id) => {
           if (id === "dictationCleanup") return <Wand2 className="w-3.5 h-3.5" />;
           if (id === "dictationAgent") return <Sparkles className="w-3.5 h-3.5" />;
+          if (id === "dictationTranslation") return <Languages className="w-3.5 h-3.5" />;
           if (id === "noteFormatting") return <BookOpen className="w-3.5 h-3.5" />;
           return <MessageSquare className="w-3.5 h-3.5" />;
         }}
       />
       <TabPanel active={tab === "dictationCleanup"}>{renderDictationCleanup()}</TabPanel>
       <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
+      <TabPanel active={tab === "dictationTranslation"}>{renderDictationTranslation()}</TabPanel>
       <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
       <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
     </div>
@@ -4084,12 +4096,8 @@ EOF`,
                 </div>
               </div>
             )}
-            renderDictationAgent={() => (
-              <div className="space-y-6">
-                <DictationAgentSettings />
-                <DictationTranslationSettings />
-              </div>
-            )}
+            renderDictationAgent={() => <DictationAgentSettings />}
+            renderDictationTranslation={() => <DictationTranslationSettings />}
             renderNoteFormatting={() => <NoteFormattingSettings />}
           />
         </TabPanel>

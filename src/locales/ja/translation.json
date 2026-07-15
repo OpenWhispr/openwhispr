@@ -1675,6 +1675,7 @@
       "tabs": {
         "dictationCleanup": "ディクテーションのクリーンアップ",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "翻訳",
         "noteFormatting": "ノートのフォーマット",
         "chatIntelligence": "チャット"
       }

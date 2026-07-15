@@ -1723,6 +1723,7 @@
       "tabs": {
         "dictationCleanup": "Nettoyage de la dictée",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "Traduction",
         "noteFormatting": "Mise en forme des notes",
         "chatIntelligence": "Chat"
       }

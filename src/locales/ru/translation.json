@@ -1675,6 +1675,7 @@
       "tabs": {
         "dictationCleanup": "Очистка диктовки",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "Перевод",
         "noteFormatting": "Форматирование заметок",
         "chatIntelligence": "Чат"
       }

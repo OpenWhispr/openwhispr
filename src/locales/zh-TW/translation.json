@@ -1670,6 +1670,7 @@
       "tabs": {
         "dictationCleanup": "聽寫清理",
         "dictationAgent": "Voice Agent",
+        "dictationTranslation": "翻譯",
         "noteFormatting": "筆記格式化",
         "chatIntelligence": "聊天"
       }
