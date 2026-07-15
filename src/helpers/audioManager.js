@@ -934,7 +934,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Send original audio to main process - FFmpeg in main process handles conversion
       // (renderer-side AudioContext conversion was unreliable with WebM/Opus format)
       const arrayBuffer = await audioBlob.arrayBuffer();
-      const language = getBaseLanguageCode(getSettings().preferredLanguage);
+      const language = getBaseLanguageCode(this.getEffectiveSttLanguage(getSettings()));
       const options = { model };
       if (language) {
         options.language = language;
@@ -1385,11 +1385,58 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       try {
         const route = resolveReasoningRoute(
           normalizedText,
-          getSettings(),
+          settings,
           agentName,
-          this.voiceAgentRequested
+          this.voiceAgentRequested,
+          this.translationRequested
         );
         if (route.kind === "skip") return normalizedText;
+
+        if (route.kind === "translation") {
+          let translatedText = normalizedText;
+          // Step 1: the configured cleanup, in the spoken language (soft-fails to raw).
+          if (route.cleanupReachable) {
+            try {
+              const cleaned = await this.processWithReasoningModel(
+                translatedText,
+                cleanupModel,
+                agentName,
+                route.cleanupConfig
+              );
+              if (cleaned) translatedText = cleaned;
+            } catch (cleanupError) {
+              logger.warn(
+                "Cleanup step failed in translation chain, translating raw transcript",
+                { source, error: cleanupError.message },
+                "notes"
+              );
+            }
+          }
+
+          // Step 2: translate, unless an explicit source equals the target.
+          const sourceLanguage = settings.translationSourceLanguage || "auto";
+          if (
+            sourceLanguage === "auto" ||
+            sourceLanguage !== settings.translationTargetLanguage
+          ) {
+            const translated = await this.processWithReasoningModel(
+              translatedText,
+              route.model,
+              agentName,
+              route.config
+            );
+            if (translated) translatedText = translated;
+          }
+
+          logger.logReasoning("REASONING_SUCCESS", {
+            resultLength: translatedText.length,
+            resultPreview:
+              translatedText.substring(0, 100) + (translatedText.length > 100 ? "..." : ""),
+            processingTime: new Date().toISOString(),
+          });
+
+          return translatedText;
+        }
 
         const targetModel = route.kind === "agent" ? route.model : cleanupModel;
         const reasoningConfig = route.config;
@@ -2918,17 +2965,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // 4. Connect WebSocket — audio is already flowing from the pipeline above,
       //    so Deepgram receives data immediately (no idle timeout).
       const result = await withSessionRefresh(async () => {
+        const streamingSettings = getSettings();
         const {
-          preferredLanguage: preferredLang,
           cloudTranscriptionModel,
           cloudTranscriptionMode,
           cortiEnvironment,
           cortiTenant,
           useLocalWhisper,
-        } = getSettings();
+        } = streamingSettings;
+        const sttLanguage = this.getEffectiveSttLanguage(streamingSettings);
         const res = await provider.start({
           sampleRate: 16000,
-          language: preferredLang && preferredLang !== "auto" ? preferredLang : undefined,
+          language: sttLanguage && sttLanguage !== "auto" ? sttLanguage : undefined,
           keyterms: this.getKeyterms(),
           model: cloudTranscriptionModel,
           mode: cloudTranscriptionMode === "byok" ? "byok" : "openwhispr",

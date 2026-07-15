@@ -1798,7 +1798,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       settings.cleanupCloudMode ?? s.cleanupCloudMode,
       settings.cleanupProvider ?? s.cleanupProvider
     );
-    const { dictationCleanup, noteFormatting, dictationAgent, chatIntelligence } =
+    const { dictationCleanup, noteFormatting, dictationAgent, chatIntelligence, dictationTranslation } =
       buildReasoningScopePatches(settings, mode);
     s.updateCleanupSettings(dictationCleanup);
     s.setCleanupMode(dictationCleanup.cleanupMode);
@@ -1820,6 +1820,12 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     if (chatIntelligence.cloudMode !== undefined)
       s.setChatAgentCloudMode(chatIntelligence.cloudMode);
     s.setChatAgentMode(mode);
+    if (dictationTranslation.provider !== undefined)
+      s.setTranslationProvider(dictationTranslation.provider);
+    if (dictationTranslation.model !== undefined) s.setTranslationModel(dictationTranslation.model);
+    if (dictationTranslation.cloudMode !== undefined)
+      s.setTranslationCloudMode(dictationTranslation.cloudMode);
+    s.setTranslationMode(mode);
   },
 
   updateApiKeys: (keys: Partial<ApiKeySettings>) => {
