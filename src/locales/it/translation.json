@@ -2949,7 +2949,7 @@
       "starting": "La tua riunione sta per iniziare. Vuoi prendere appunti?",
       "underway": "Sembra che la tua riunione sia già in corso. Vuoi prendere appunti?"
     },
-    "start": "Avvia registrazione",
-    "join": "Partecipa"
+    "start": "Prendi appunti",
+    "join": "Partecipa e trascrivi"
   }
 }

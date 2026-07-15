@@ -2949,7 +2949,7 @@
       "starting": "Sua reunião está começando. Quer fazer anotações?",
       "underway": "Parece que sua reunião já está em andamento. Quer fazer anotações?"
     },
-    "start": "Começar a gravar",
-    "join": "Entrar"
+    "start": "Fazer anotações",
+    "join": "Entrar e transcrever"
   }
 }
