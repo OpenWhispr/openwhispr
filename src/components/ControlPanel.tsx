@@ -43,6 +43,7 @@ import { fetchProviders as fetchStreamingProviders } from "../stores/streamingPr
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
 import { syncService } from "../services/SyncService.js";
+import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
 import {
   consumePendingInvitationToken,
@@ -512,8 +513,87 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
           const rawText = result.transcription.text;
           let finalTranscription = result.transcription;
 
+          // A translation dictation must re-run cleanup-then-translate on retry, not plain cleanup.
+          const routeKind =
+            result.transcription.route_kind ??
+            history.find((item) => item.id === id)?.route_kind ??
+            null;
+
+          let handledTranslation = false;
+          if (routeKind === "translation") {
+            handledTranslation = true;
+            try {
+              const [
+                { default: ReasoningService },
+                { resolveReasoningRoute },
+                { getEffectiveCleanupModel },
+              ] = await Promise.all([
+                import("../services/ReasoningService"),
+                import("../helpers/audioManager"),
+                import("../stores/settingsStore"),
+              ]);
+              const settings = useSettingsStore.getState();
+              const agentName = localStorage.getItem("agentName") || null;
+              const route = resolveReasoningRoute(rawText, settings, agentName, false, true);
+              if (route.kind === "translation") {
+                let text = rawText;
+                // Step 1: optional cleanup, soft-fail keeps the raw transcript.
+                if (route.cleanupReachable) {
+                  try {
+                    const cleaned = await ReasoningService.processText(
+                      rawText,
+                      getEffectiveCleanupModel(),
+                      agentName,
+                      route.cleanupConfig
+                    );
+                    if (cleaned) text = cleaned;
+                  } catch {
+                    // Cleanup failed — translate the raw transcript
+                  }
+                }
+                // Step 2: translate unless an explicit source equals the target language.
+                const sourceLanguage = settings.translationSourceLanguage || "auto";
+                if (
+                  sourceLanguage === "auto" ||
+                  sourceLanguage !== settings.translationTargetLanguage
+                ) {
+                  const translated = await ReasoningService.processText(
+                    text,
+                    route.model,
+                    agentName,
+                    route.config
+                  );
+                  if (translated) {
+                    text = translated;
+                  } else {
+                    logger.warn(
+                      "Translation step returned empty text, keeping previous text",
+                      {},
+                      "transcription"
+                    );
+                  }
+                }
+                if (text !== rawText) {
+                  const updated = await window.electronAPI.updateTranscriptionText(
+                    id,
+                    text,
+                    rawText
+                  );
+                  if (updated.success && updated.transcription) {
+                    finalTranscription = updated.transcription;
+                  }
+                }
+              } else {
+                // Translation disabled/unreachable since recording — fall through to cleanup.
+                handledTranslation = false;
+              }
+            } catch {
+              // Reasoning failed — keep the raw STT result
+            }
+          }
+
           // Apply AI reasoning if enabled
-          if (useCleanupModel) {
+          if (!handledTranslation && useCleanupModel) {
             try {
               const [
                 { default: ReasoningService },
@@ -567,7 +647,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         });
       }
     },
-    [toast, t, useCleanupModel]
+    [toast, t, useCleanupModel, history]
   );
 
   const toggleShowDiscarded = useCallback(() => {

@@ -1409,7 +1409,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         agentName,
         route.config
       );
-      if (translated) out = translated;
+      if (translated) {
+        out = translated;
+      } else {
+        const { channel } = cleanup.log || {};
+        logger.warn("Translation step returned empty text, keeping previous text", {}, channel);
+      }
       if (route.config?.provider === "openwhispr") usedCloudReasoning = true;
     }
 
@@ -2586,6 +2591,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       const result = await window.electronAPI.saveTranscription(text, rawText, {
         clientTranscriptionId,
+        routeKind: this.translationRequested ? "translation" : null,
       });
       if (result?.id) syncService.debouncedPush("transcription", result.id);
 
@@ -2625,6 +2631,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         status: "failed",
         errorMessage,
         errorCode,
+        routeKind: this.translationRequested ? "translation" : null,
       });
       if (result?.id) syncService.debouncedPush("transcription", result.id);
 
@@ -2667,6 +2674,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       const result = await window.electronAPI.saveTranscription("", null, {
         status: "discarded",
+        routeKind: this.translationRequested ? "translation" : null,
       });
       if (!result?.id) return;
       savedId = result.id;
@@ -3622,4 +3630,5 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 }
 
+export { resolveReasoningRoute };
 export default AudioManager;
